@@ -8,8 +8,10 @@ import { build } from 'esbuild';
 
 const root = `${import.meta.dirname}/`;
 const ZOD_IMPORT = /^zod$/;
+const HOST_MODULE = /(^|\/)loader\/src\/host\//;
 
 const result = await build({
+  metafile: true,
   entryPoints: [`${root}src/runtime/main.ts`],
   outfile: `${root}src/generated/runtime.iife.js`,
   bundle: true,
@@ -40,4 +42,16 @@ const result = await build({
 
 if (result.errors.length > 0) {
   throw new Error('runtime bundle failed');
+}
+
+// The GM_* globals are declared ambient project-wide so the host can reference
+// them, which removes the compiler's protection against the runtime doing the
+// same. Nothing under host/ may reach the page realm, so the module graph is
+// what enforces it.
+const hostModules = Object.keys(result.metafile.inputs).filter((input) => HOST_MODULE.test(input));
+if (hostModules.length > 0) {
+  throw new Error(
+    `host modules must not reach the runtime bundle: ${hostModules.join(', ')}. ` +
+      'Move the shared part into loader/src/shared/.',
+  );
 }

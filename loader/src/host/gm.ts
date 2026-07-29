@@ -10,7 +10,14 @@
 // caller maps the real globals onto GmSource, which keeps this module free of
 // ambient declarations and makes every path testable.
 
+import { diagError } from '../shared/diag.ts';
+
 type Listener = (key: string, oldValue: unknown, newValue: unknown, remote: boolean) => void;
+
+type ListenerId = number | string;
+
+/** Tampermonkey's promise-based listener API resolves the id instead of returning it. */
+type ListenerHandle = ListenerId | Promise<ListenerId>;
 
 type RawGet = (key: string, fallback?: unknown) => unknown;
 type RawSet = (key: string, value: unknown) => void | Promise<void>;
@@ -169,6 +176,17 @@ export interface GmAdapter {
   readonly capabilities: GmCapabilities;
 }
 
+/** The `GM` object, reduced to the members this adapter uses. */
+export interface GmObject {
+  getValue?: ((key: string, fallback?: unknown) => Promise<unknown>) | undefined;
+  setValue?: ((key: string, value: unknown) => Promise<void>) | undefined;
+  deleteValue?: ((key: string) => Promise<void>) | undefined;
+  listValues?: (() => Promise<string[]>) | undefined;
+  addValueChangeListener?: ((key: string, cb: Listener) => ListenerHandle) | undefined;
+  removeValueChangeListener?: ((id: ListenerId) => Promise<void> | void) | undefined;
+  registerMenuCommand?: ((label: string, run: () => void) => void) | undefined;
+}
+
 /**
  * The manager APIs this adapter reads, mapped by the caller from the real
  * globals. `legacy*` members correspond to the `GM_*` globals and `gm` is the
@@ -176,23 +194,15 @@ export interface GmAdapter {
  * this an ordinary interface with no ambient dependency.
  */
 export interface GmSource {
-  gm?: {
-    getValue?: (key: string, fallback?: unknown) => Promise<unknown>;
-    setValue?: (key: string, value: unknown) => Promise<void>;
-    deleteValue?: (key: string) => Promise<void>;
-    listValues?: () => Promise<string[]>;
-    addValueChangeListener?: (key: string, cb: Listener) => number | string;
-    removeValueChangeListener?: (id: number | string) => void;
-    registerMenuCommand?: (label: string, run: () => void) => void;
-  };
-  legacyGetValue?: (key: string, fallback?: unknown) => unknown;
-  legacySetValue?: (key: string, value: unknown) => void;
-  legacyDeleteValue?: (key: string) => void;
-  legacyListValues?: () => string[];
-  legacyAddValueChangeListener?: (key: string, cb: Listener) => number | string;
-  legacyRemoveValueChangeListener?: (id: number | string) => void;
-  legacyRegisterMenuCommand?: (label: string, run: () => void) => void;
-  broadcastChannel?: typeof BroadcastChannel;
+  gm?: GmObject | undefined;
+  legacyGetValue?: ((key: string, fallback?: unknown) => unknown) | undefined;
+  legacySetValue?: ((key: string, value: unknown) => void) | undefined;
+  legacyDeleteValue?: ((key: string) => void) | undefined;
+  legacyListValues?: (() => string[]) | undefined;
+  legacyAddValueChangeListener?: ((key: string, cb: Listener) => ListenerId) | undefined;
+  legacyRemoveValueChangeListener?: ((id: ListenerId) => void) | undefined;
+  legacyRegisterMenuCommand?: ((label: string, run: () => void) => void) | undefined;
+  broadcastChannel?: typeof BroadcastChannel | undefined;
 }
 
 export const BROADCAST_CHANNEL = 'woc-addons-values';
@@ -225,12 +235,28 @@ export function createGmAdapter(src: GmSource): GmAdapter {
 
     onValueChange: (key, handler) => {
       const native = src.gm?.addValueChangeListener ?? src.legacyAddValueChangeListener;
-      if (typeof native === 'function') {
+      // Gated on the detected capability rather than on the function being
+      // present, so subscribing and setValue's broadcast cannot disagree about
+      // which path is live and deliver a change twice.
+      if (capabilities.valueChange === 'native' && typeof native === 'function') {
         const remove = src.gm?.removeValueChangeListener ?? src.legacyRemoveValueChangeListener;
-        const id = native(key, (changedKey, oldValue, newValue, remote) => {
+        const handle = native(key, (changedKey, oldValue, newValue, remote) => {
           handler({ key: changedKey, oldValue, newValue, remote });
         });
-        return () => remove?.(id);
+        // The legacy API returns the id while the promise-based one resolves it.
+        // The synchronous path stays synchronous: deferring it would leave a
+        // window in which an unsubscribed handler still receives a change.
+        return () => {
+          if (typeof handle === 'number' || typeof handle === 'string') {
+            remove?.(handle);
+            return;
+          }
+          handle
+            .then((id) => remove?.(id))
+            .catch((err: unknown) => {
+              diagError('could not remove a value-change listener', err);
+            });
+        };
       }
 
       const set = bus.handlers.get(key) ?? new Set();

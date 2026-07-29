@@ -1,122 +1,18 @@
 import { describe, expect, it, vi } from 'vitest';
 
-/** A callback that must never fire, without an empty block. */
-const noop = (): undefined => undefined;
-
-/** Store read shared by the fakes: the stored value, else the caller's fallback. */
-function read(store: Map<string, unknown>, key: string, fallback: unknown): unknown {
-  if (store.has(key)) {
-    return store.get(key);
-  }
-  return fallback;
-}
-
+import { createGmAdapter, detectCapabilities } from '../loader/src/host/gm.ts';
 import {
-  BROADCAST_CHANNEL,
-  createGmAdapter,
-  detectCapabilities,
-  type GmSource,
-} from '../loader/src/host/gm.ts';
-
-type NativeListener = (key: string, oldValue: unknown, newValue: unknown, remote: boolean) => void;
-
-/** Tampermonkey and Violentmonkey: both GM.* and the legacy GM_* names. */
-function fullSource(): GmSource {
-  const store = new Map<string, unknown>();
-  const listeners = new Map<number, { key: string; cb: NativeListener }>();
-  let nextId = 1;
-  return {
-    gm: {
-      getValue: (k, f) => Promise.resolve(read(store, k, f)),
-      setValue: (k, v) => {
-        store.set(k, v);
-        return Promise.resolve();
-      },
-      deleteValue: (k) => {
-        store.delete(k);
-        return Promise.resolve();
-      },
-      listValues: () => Promise.resolve([...store.keys()]),
-      addValueChangeListener: (key, cb) => {
-        const id = nextId;
-        nextId += 1;
-        listeners.set(id, { key, cb });
-        return id;
-      },
-      removeValueChangeListener: (id) => {
-        listeners.delete(id as number);
-      },
-      registerMenuCommand: noop,
-    },
-    legacyGetValue: (k, f) => read(store, k, f),
-    legacySetValue: (k, v) => {
-      store.set(k, v);
-    },
-    legacyRegisterMenuCommand: noop,
-  };
-}
-
-/** Greasemonkey 4: GM.* only, no value-change listener. */
-function greasemonkeySource(overrides: Partial<GmSource> = {}): GmSource {
-  const store = new Map<string, unknown>();
-  return {
-    gm: {
-      getValue: (k, f) => Promise.resolve(read(store, k, f)),
-      setValue: (k, v) => {
-        store.set(k, v);
-        return Promise.resolve();
-      },
-      deleteValue: (k) => {
-        store.delete(k);
-        return Promise.resolve();
-      },
-      listValues: () => Promise.resolve([...store.keys()]),
-      registerMenuCommand: noop,
-    },
-    ...overrides,
-  };
-}
-
-/** A manager exposing only the legacy synchronous names. */
-function legacyOnlySource(): GmSource {
-  const store = new Map<string, unknown>();
-  return {
-    legacyGetValue: (k, f) => read(store, k, f),
-    legacySetValue: (k, v) => {
-      store.set(k, v);
-    },
-    legacyDeleteValue: (k) => {
-      store.delete(k);
-    },
-    legacyListValues: () => [...store.keys()],
-    legacyAddValueChangeListener: () => 1,
-    legacyRemoveValueChangeListener: noop,
-  };
-}
+  fakeChannelCtor,
+  fullSource,
+  greasemonkeySource,
+  legacyOnlySource,
+  noop,
+  tampermonkeySource,
+  violentmonkeySource,
+} from './fakes/gm.ts';
 
 const byName = (a: string, b: string): number => a.localeCompare(b);
 const NO_STORE_MESSAGE = /no GM value store/;
-
-class FakeChannel {
-  static open: FakeChannel[] = [];
-  onmessage: ((e: MessageEvent) => void) | null = null;
-  readonly name: string;
-
-  constructor(name: string) {
-    this.name = name;
-    FakeChannel.open.push(this);
-  }
-  postMessage(data: unknown): void {
-    for (const other of FakeChannel.open) {
-      if (other !== this) {
-        other.onmessage?.({ data } as MessageEvent);
-      }
-    }
-  }
-  close(): undefined {
-    FakeChannel.open = FakeChannel.open.filter((ch) => ch !== this);
-  }
-}
 
 describe('detectCapabilities', () => {
   it('prefers the promise API when both are present', () => {
@@ -134,9 +30,7 @@ describe('detectCapabilities', () => {
   });
 
   it('selects the broadcast fallback when no listener API exists', () => {
-    const caps = detectCapabilities(
-      greasemonkeySource({ broadcastChannel: FakeChannel as unknown as typeof BroadcastChannel }),
-    );
+    const caps = detectCapabilities(greasemonkeySource({ broadcastChannel: fakeChannelCtor }));
     expect(caps.valueStore).toBe('gm4');
     expect(caps.valueChange).toBe('broadcast');
   });
@@ -156,6 +50,17 @@ describe('detectCapabilities', () => {
   it('reports menu commands from either surface', () => {
     expect(detectCapabilities(greasemonkeySource()).menuCommand).toBe(true);
     expect(detectCapabilities({ ...legacyOnlySource() }).menuCommand).toBe(false);
+  });
+
+  // Pinned against Violentmonkey 2.45 as observed, not as assumed: its GM object
+  // stops at registerMenuCommand, so the promise store pairs with the legacy
+  // listener. This mix is what the loader runs on in production.
+  it('pairs the promise store with the legacy listener on Violentmonkey', () => {
+    expect(detectCapabilities(violentmonkeySource())).toEqual({
+      valueStore: 'gm4',
+      valueChange: 'native',
+      menuCommand: true,
+    });
   });
 });
 
@@ -210,73 +115,108 @@ describe('createGmAdapter', () => {
     expect(remove).toHaveBeenCalledOnce();
   });
 
-  describe('broadcast fallback', () => {
-    it('delivers a change to another tab', async () => {
-      FakeChannel.open = [];
-      const Ch = FakeChannel as unknown as typeof BroadcastChannel;
-      const writer = createGmAdapter(greasemonkeySource({ broadcastChannel: Ch }));
-      const reader = createGmAdapter(greasemonkeySource({ broadcastChannel: Ch }));
-
-      const seen = vi.fn();
-      reader.onValueChange('k', seen);
-      // The writer only broadcasts for keys it knows are watched.
-      writer.onValueChange('k', noop);
-      await writer.setValue('k', 'new');
-
-      expect(seen).toHaveBeenCalledOnce();
-      expect(seen.mock.calls[0]?.[0]).toMatchObject({ key: 'k', newValue: 'new', remote: true });
+  // Pinned against Tampermonkey 5.5 as observed. Both managers report a native
+  // listener, but they reach it through different surfaces, so the capability
+  // value alone cannot tell them apart.
+  describe('on Tampermonkey', () => {
+    it('detects the same capabilities as Violentmonkey', () => {
+      expect(detectCapabilities(tampermonkeySource())).toEqual({
+        valueStore: 'gm4',
+        valueChange: 'native',
+        menuCommand: true,
+      });
     });
 
-    it('does not deliver a change back to the tab that wrote it', async () => {
-      FakeChannel.open = [];
-      const Ch = FakeChannel as unknown as typeof BroadcastChannel;
-      const gm = createGmAdapter(greasemonkeySource({ broadcastChannel: Ch }));
+    it('subscribes through the GM object rather than the legacy name', () => {
+      const src = tampermonkeySource();
+      const viaGm = vi.fn(src.gm?.addValueChangeListener);
+      const viaLegacy = vi.fn(src.legacyAddValueChangeListener);
+      src.gm = { ...src.gm, addValueChangeListener: viaGm };
+      src.legacyAddValueChangeListener = viaLegacy;
 
+      createGmAdapter(src).onValueChange('k', noop);
+
+      expect(viaGm).toHaveBeenCalledOnce();
+      expect(viaLegacy).not.toHaveBeenCalled();
+    });
+
+    // The id arrives as a promise here, so unsubscribing has to await it. This
+    // branch runs on no other manager.
+    it('unsubscribes through the id the promise resolves to', async () => {
+      const src = tampermonkeySource();
+      const remove = vi.fn(src.gm?.removeValueChangeListener);
+      src.gm = { ...src.gm, removeValueChangeListener: remove };
+      const gm = createGmAdapter(src);
       const seen = vi.fn();
+
+      gm.onValueChange('k', seen)();
+      await vi.waitFor(() => expect(remove).toHaveBeenCalledOnce());
+      src.emit('k', 'fromAnotherTab');
+
+      expect(remove).toHaveBeenCalledExactlyOnceWith(1);
+      expect(seen).not.toHaveBeenCalled();
+    });
+
+    it('passes the echo of a local write through with remote false', async () => {
+      const src = tampermonkeySource();
+      const gm = createGmAdapter(src);
+      const seen = vi.fn();
+
       gm.onValueChange('k', seen);
-      await gm.setValue('k', 'new');
+      await gm.setValue('k', 'mine');
 
-      expect(seen).not.toHaveBeenCalled();
+      expect(seen).toHaveBeenCalledExactlyOnceWith({
+        key: 'k',
+        oldValue: undefined,
+        newValue: 'mine',
+        remote: false,
+      });
+    });
+  });
+
+  // The mixed Violentmonkey path routes reads through GM.* and change
+  // notification through GM_addValueChangeListener. Nothing else covers a store
+  // and a listener coming from different surfaces of the same manager.
+  describe('on Violentmonkey', () => {
+    it('round-trips a value through the promise store', async () => {
+      const gm = createGmAdapter(violentmonkeySource());
+
+      await gm.setValue('k', { a: 1 });
+
+      expect(await gm.getValue('k', null)).toEqual({ a: 1 });
     });
 
-    it('stops delivering after unsubscribe', async () => {
-      FakeChannel.open = [];
-      const Ch = FakeChannel as unknown as typeof BroadcastChannel;
-      const writer = createGmAdapter(greasemonkeySource({ broadcastChannel: Ch }));
-      const reader = createGmAdapter(greasemonkeySource({ broadcastChannel: Ch }));
-
+    it('delivers a remote change through the legacy listener', () => {
+      const src = violentmonkeySource();
+      const gm = createGmAdapter(src);
       const seen = vi.fn();
-      reader.onValueChange('k', seen)();
-      writer.onValueChange('k', noop);
-      await writer.setValue('k', 'new');
 
-      expect(seen).not.toHaveBeenCalled();
+      gm.onValueChange('k', seen);
+      src.emit('k', 'fromAnotherTab');
+
+      expect(seen).toHaveBeenCalledExactlyOnceWith({
+        key: 'k',
+        oldValue: undefined,
+        newValue: 'fromAnotherTab',
+        remote: true,
+      });
     });
 
-    it('names the channel consistently so tabs meet on it', () => {
-      FakeChannel.open = [];
-      const Ch = FakeChannel as unknown as typeof BroadcastChannel;
-      const gm = createGmAdapter(greasemonkeySource({ broadcastChannel: Ch }));
-      gm.onValueChange('k', noop);
-      expect(FakeChannel.open[0]?.name).toBe(BROADCAST_CHANNEL);
-    });
-
-    it('writes normally when nothing is watching', async () => {
-      FakeChannel.open = [];
-      const gm = createGmAdapter(
-        greasemonkeySource({ broadcastChannel: FakeChannel as unknown as typeof BroadcastChannel }),
-      );
-      await gm.setValue('k', 1);
-      expect(await gm.getValue('k', null)).toBe(1);
-      expect(FakeChannel.open).toHaveLength(0);
-    });
-
-    it('degrades to a no-op subscription with no BroadcastChannel', async () => {
-      const gm = createGmAdapter(greasemonkeySource());
+    // A BroadcastChannel exists here too, so only the detected capability keeps
+    // the adapter off the fallback. Asserting the remover ran is what makes this
+    // about path selection: the fallback also stops delivery, so an unobserved
+    // handler would pass either way.
+    it('unsubscribes through the legacy remover rather than the fallback', () => {
+      const src = violentmonkeySource();
+      const remove = vi.fn(src.legacyRemoveValueChangeListener);
+      src.legacyRemoveValueChangeListener = remove;
+      const gm = createGmAdapter(src);
       const seen = vi.fn();
-      const off = gm.onValueChange('k', seen);
-      await gm.setValue('k', 'new');
-      off();
+
+      gm.onValueChange('k', seen)();
+      src.emit('k', 'fromAnotherTab');
+
+      expect(remove).toHaveBeenCalledOnce();
       expect(seen).not.toHaveBeenCalled();
     });
   });

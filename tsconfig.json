@@ -5,7 +5,10 @@
     "module": "ESNext",
     "moduleResolution": "bundler",
     "moduleDetection": "force",
-    "types": ["vitest/globals"],
+    // tampermonkey declares the GM_* and GM globals. They land ambient
+    // project-wide, so loader/build-runtime.mjs enforces at build time that no
+    // host module reaches the page-realm bundle.
+    "types": ["vitest/globals", "tampermonkey"],
 
     "strict": true,
     "noUncheckedIndexedAccess": true,

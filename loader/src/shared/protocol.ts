@@ -4,6 +4,7 @@
 // MessageChannel; the runtime holds it as Comlink.wrap<HostApi>(port). Every
 // member is therefore async across the realm boundary.
 
+import type * as Comlink from 'comlink';
 import type { MarketplaceRef } from './marketplace.ts';
 // Type-only: erased at build, so zod never reaches the runtime bundle.
 import type { AddonManifest } from './schema.ts';
@@ -64,6 +65,21 @@ export interface HostApi {
   market: MarketApi;
   storage: StorageApi;
   /** The callback must be wrapped in Comlink.proxy() by the caller. */
+  subscribe: (onEvent: (event: HostEvent) => void) => Promise<void>;
+}
+
+/**
+ * The runtime's view of HostApi.
+ *
+ * Comlink's proxy resolves a whole property path at call time, so
+ * `host.storage.get(...)` works, but Remote<HostApi> types a nested object
+ * property as a promise of the object. Naming the facets as remotes describes
+ * what the proxy actually does.
+ */
+export interface RemoteHostApi {
+  registry: Comlink.Remote<RegistryApi>;
+  market: Comlink.Remote<MarketApi>;
+  storage: Comlink.Remote<StorageApi>;
   subscribe: (onEvent: (event: HostEvent) => void) => Promise<void>;
 }
 
