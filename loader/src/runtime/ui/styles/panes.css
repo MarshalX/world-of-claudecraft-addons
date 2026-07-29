@@ -1,0 +1,254 @@
+/* The manager's own content: headings, notes, rows, controls, and the log tail.
+ *
+ * Second of the three sheets runtime/ui/styles/index.ts concatenates. The shared
+ * .woc-btn lives here rather than with the chrome because it is a labelled
+ * control the panes are made of, not part of a window's frame.
+ */
+
+#woc-addons .woc-subhead {
+  font-family: var(--title-font, serif);
+  color: var(--gold-dim, rgb(200 168 56));
+  font-size: 14px;
+  margin: 12px 0 4px;
+}
+
+#woc-addons .woc-note {
+  color: var(--color-text-muted, rgb(153 141 106));
+  font-size: 14px;
+  line-height: 1.5;
+  margin: 8px 0;
+}
+
+#woc-addons .woc-note-bad {
+  color: var(--color-text-error, rgb(255 143 133));
+}
+
+#woc-addons .woc-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+#woc-addons .woc-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px;
+  border: 1px solid var(--color-border-default, rgb(78 61 29));
+  border-radius: var(--radius-sm, 4px);
+  background: rgb(0 0 0 / 25%);
+}
+
+#woc-addons .woc-row-main {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+#woc-addons .woc-row-name {
+  color: var(--gold, rgb(255 209 0));
+}
+
+#woc-addons .woc-row-meta,
+#woc-addons .woc-row-desc {
+  color: var(--color-text-muted, rgb(153 141 106));
+  font-size: 13px;
+}
+
+#woc-addons .woc-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  min-height: 40px;
+  white-space: nowrap;
+}
+
+#woc-addons .woc-kv-list {
+  display: grid;
+  grid-template-columns: minmax(90px, auto) 1fr;
+  gap: 4px 12px;
+  margin: 0;
+  font-size: 14px;
+}
+
+/* The rows are a display: contents wrapper so the dt and dd land in the grid. */
+#woc-addons .woc-kv {
+  display: contents;
+}
+
+#woc-addons .woc-kv dt {
+  color: var(--color-text-muted, rgb(153 141 106));
+}
+
+#woc-addons .woc-kv dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+#woc-addons .woc-anchors {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 13px;
+}
+
+#woc-addons .woc-anchors li {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+#woc-addons .woc-anchor-ok span {
+  color: var(--color-text-success, rgb(127 220 79));
+}
+
+#woc-addons .woc-anchor-missing span {
+  color: var(--color-text-muted, rgb(153 141 106));
+}
+
+#woc-addons .woc-row-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+/* The shared button. .woc-close in chrome.css stays separate: it is a glyph in
+   a square, not a labelled control, and sharing padding with this would stretch
+   it. */
+#woc-addons .woc-btn {
+  background: rgb(255 255 255 / 6%);
+  border: 1px solid var(--color-border-default, rgb(78 61 29));
+  border-radius: var(--radius-sm, 4px);
+  color: var(--color-text-light, rgb(240 235 216));
+  cursor: pointer;
+  font-family: inherit;
+  /* 16px keeps iOS Safari from auto-zooming the page, and 40px is the tap-target
+     floor the game itself holds to. */
+  font-size: 16px;
+  min-height: 40px;
+  padding: 4px 12px;
+  white-space: nowrap;
+}
+
+#woc-addons .woc-btn:hover:not(:disabled) {
+  color: var(--gold, rgb(255 209 0));
+  border-color: var(--color-border-focus, rgb(200 168 56));
+}
+
+#woc-addons .woc-btn:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+
+#woc-addons .woc-btn-primary {
+  color: var(--gold, rgb(255 209 0));
+  border-color: var(--color-border-focus, rgb(200 168 56));
+}
+
+/* The combo button is a value the player reads as much as a control they press,
+   so it is monospaced to keep 'Alt+D' and 'Ctrl+Shift+F' the same shape. */
+#woc-addons .woc-combo {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  min-width: 120px;
+}
+
+#woc-addons .woc-back {
+  margin-bottom: 8px;
+}
+
+#woc-addons .woc-form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+#woc-addons .woc-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+#woc-addons .woc-field-inline {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  min-height: 40px;
+}
+
+#woc-addons .woc-field-label {
+  color: var(--color-text-muted, rgb(153 141 106));
+  font-size: 14px;
+}
+
+#woc-addons .woc-input {
+  background: rgb(0 0 0 / 35%);
+  border: 1px solid var(--color-border-default, rgb(78 61 29));
+  border-radius: var(--radius-sm, 4px);
+  color: var(--color-text-light, rgb(240 235 216));
+  font-family: inherit;
+  font-size: 16px;
+  min-height: 40px;
+  padding: 4px 8px;
+  /* Without this an <input> in a flex column stretches to the widest sibling
+     and then refuses to shrink when the window is narrowed. */
+  min-width: 0;
+}
+
+/* A field JOINS its focus ring rather than sitting inside a second one.
+   The kit's general :focus-visible rule holds the ring 2px clear of the
+   element, which is right for a button and wrong for a control that already
+   has a border: the dim border then reads as a second, competing line just
+   inside the bright one. The game draws exactly this distinction, and the
+   below is its own treatment for a text field (.mail-field and .cal-form in
+   components.css): the ring tightens to 1px and the border is recoloured to
+   match it, so the two read as one thicker ring. Buttons keep the gap, in the
+   game and here. */
+#woc-addons .woc-input:focus-visible {
+  outline-offset: 1px;
+  border-color: var(--color-border-focus, rgb(200 168 56));
+}
+
+#woc-addons .woc-note-warn {
+  color: var(--gold-dim, rgb(200 168 56));
+}
+
+#woc-addons .woc-log {
+  list-style: none;
+  margin: 0;
+  padding: 8px;
+  background: rgb(0 0 0 / 35%);
+  border: 1px solid var(--color-border-default, rgb(78 61 29));
+  border-radius: var(--radius-sm, 4px);
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 12px;
+  max-height: 200px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+#woc-addons .woc-log-line {
+  /* A logged object is one long line; wrapping beats a horizontal scrollbar
+     inside a pane that already scrolls vertically. */
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+#woc-addons .woc-log-warn {
+  color: var(--gold-dim, rgb(200 168 56));
+}
+
+#woc-addons .woc-log-error {
+  color: var(--color-text-error, rgb(255 143 133));
+}

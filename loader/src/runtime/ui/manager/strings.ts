@@ -19,6 +19,27 @@ export const UI_TEXT = {
   disabled: 'Disabled',
   by: 'by',
 
+  configure: 'Configure',
+  back: 'Back to the list',
+  configLoading: "Reading this addon's settings.",
+
+  settingsHeading: 'Settings',
+  settingsNone: 'This addon declares no settings.',
+
+  keybindsHeading: 'Keys',
+  keybindsNone: 'This addon declares no keybinds.',
+  rebind: 'Change the key for',
+  resetBind: 'Reset',
+  pressAKey: 'Press a key',
+  comboUnusable: 'That combination cannot be bound.',
+  conflictPrefix: 'Also bound to',
+  conflictApproximate:
+    'Read from saved bindings only, so keys the player has never changed are not listed.',
+
+  logsHeading: 'Log',
+  logsEmpty: 'This addon has not logged anything.',
+
+
   anchorsHeading: 'Game anchors',
   anchorsNote:
     'The game owes the loader no compatibility for these. One that is not present is ' +

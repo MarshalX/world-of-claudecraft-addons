@@ -13,6 +13,7 @@ import type { InstalledRegistry } from '../loader/src/runtime/ui/manager/store.t
 import { UI_TEXT } from '../loader/src/runtime/ui/manager/strings.ts';
 import { TABS } from '../loader/src/runtime/ui/manager/tabs.ts';
 import type { InstalledAddon } from '../loader/src/shared/protocol.ts';
+import { managerServices } from './fakes/ui-deps.ts';
 
 const READING: DiagnosticsReading = {
   origin: 'https://pbe.worldofclaudecraft.com',
@@ -63,6 +64,7 @@ function open(registry: InstalledRegistry | null) {
     storage: null,
     channel: 'pbe',
     readDiagnostics: () => READING,
+    ...managerServices(document),
   });
   manager.open();
   return manager;
@@ -102,6 +104,7 @@ describe('opening and closing', () => {
       storage: null,
       channel: 'pbe',
       readDiagnostics: () => READING,
+      ...managerServices(document),
     });
 
     expect(document.querySelector('.woc-window')).toBeNull();

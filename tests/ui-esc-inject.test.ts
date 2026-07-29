@@ -8,7 +8,11 @@
 // the callback does what the callback does.
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { menuInsertionPoint, mountMenuEntry } from '../loader/src/runtime/ui/esc-inject.ts';
+import {
+  ENTRY_ID,
+  menuInsertionPoint,
+  mountMenuEntry,
+} from '../loader/src/runtime/ui/esc-inject.ts';
 import { type GameDom, mountGameMenu } from './fakes/game-dom.ts';
 
 const LABEL = 'Addons';
@@ -21,7 +25,7 @@ async function settle(): Promise<void> {
 }
 
 function mount(game: GameDom, onOpen = (): undefined => undefined) {
-  return mountMenuEntry({ doc: game.doc, label: LABEL, onOpen });
+  return mountMenuEntry({ doc: game.doc, id: ENTRY_ID, label: LABEL, onOpen });
 }
 
 const teardown: Array<() => void> = [];
@@ -38,7 +42,7 @@ describe('menuInsertionPoint', () => {
     const game = mountGameMenu(document);
     game.renderMainView();
 
-    expect(menuInsertionPoint(game.menu)?.className).toBe('opt-list');
+    expect(menuInsertionPoint(game.menu, ENTRY_ID)?.className).toBe('opt-list');
   });
 
   // A sub-view is told from the root by its back control, not by the absence of
@@ -50,13 +54,13 @@ describe('menuInsertionPoint', () => {
     list.className = 'opt-list';
     game.menu.appendChild(list);
 
-    expect(menuInsertionPoint(game.menu)).toBeNull();
+    expect(menuInsertionPoint(game.menu, ENTRY_ID)).toBeNull();
   });
 
   it('declines a menu that is not rendered at all', () => {
     const game = mountGameMenu(document);
 
-    expect(menuInsertionPoint(game.menu)).toBeNull();
+    expect(menuInsertionPoint(game.menu, ENTRY_ID)).toBeNull();
   });
 
   it('declines once the entry is already there', () => {
@@ -64,7 +68,7 @@ describe('menuInsertionPoint', () => {
     game.renderMainView();
     teardown.push(mount(game).dispose);
 
-    expect(menuInsertionPoint(game.menu)).toBeNull();
+    expect(menuInsertionPoint(game.menu, ENTRY_ID)).toBeNull();
   });
 });
 
@@ -150,7 +154,12 @@ describe('the game menu entry', () => {
   it('is inert when the menu anchor is gone', () => {
     document.body.innerHTML = '<div id="ui"></div>';
 
-    const entry = mountMenuEntry({ doc: document, label: LABEL, onOpen: () => undefined });
+    const entry = mountMenuEntry({
+      doc: document,
+      id: ENTRY_ID,
+      label: LABEL,
+      onOpen: () => undefined,
+    });
 
     expect(entry.inject()).toBe(false);
     expect(() => {

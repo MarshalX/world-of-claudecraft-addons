@@ -5,9 +5,24 @@
 // smaller monitor) are decided somewhere a Node test can reach, rather than
 // inside a pointer handler.
 
-/** Below this the window is not usable, and the tab strip starts wrapping badly. */
+/**
+ * Below this the manager is not usable, and its tab strip starts wrapping badly.
+ *
+ * A default rather than the law: an addon frame is often far smaller (a DPS
+ * readout is a number and a label), so clampBox takes its own minimum and falls
+ * back to these only when none is given.
+ */
 const MIN_WIDTH = 360;
 const MIN_HEIGHT = 220;
+
+/**
+ * The floor no frame may go below whatever it asks for.
+ *
+ * A frame smaller than this cannot be reliably grabbed by its title bar, which
+ * on a frame with no other chrome means it cannot be moved again.
+ */
+const FLOOR_WIDTH = 72;
+const FLOOR_HEIGHT = 28;
 
 /** The share of the viewport a window that has never been moved takes. */
 const DEFAULT_WIDTH_SHARE = 0.5;
@@ -66,15 +81,28 @@ function isFrameBox(value: unknown): value is FrameBox {
  * Size is clamped before position, since the position bounds depend on the
  * clamped size: doing it the other way lets a too-wide window pin itself to the
  * left edge and then keep its width.
+ *
+ * `min` is the caller's own minimum. It is floored, so an addon asking for a
+ * 4-pixel frame does not get one it can never grab again, and it is CAPPED at
+ * the viewport, so a frame asking to be wider than the screen can still shrink
+ * to fit it. Without that cap the requested size becomes its own floor and a
+ * 900-pixel frame stays 900 pixels wide on a phone.
  */
-function clampBox(box: FrameBox, viewport: Viewport): FrameBox {
-  const w = clampNumber(box.w, MIN_WIDTH, Math.max(MIN_WIDTH, viewport.w));
-  const h = clampNumber(box.h, MIN_HEIGHT, Math.max(MIN_HEIGHT, viewport.h));
+function clampBox(box: FrameBox, viewport: Viewport, min?: Viewport): FrameBox {
+  const wanted = min ?? { w: MIN_WIDTH, h: MIN_HEIGHT };
+  const minW = Math.max(FLOOR_WIDTH, Math.min(wanted.w, viewport.w));
+  const minH = Math.max(FLOOR_HEIGHT, Math.min(wanted.h, viewport.h));
+  const w = clampNumber(box.w, minW, Math.max(minW, viewport.w));
+  const h = clampNumber(box.h, minH, Math.max(minH, viewport.h));
 
   // Leftward, the window may hang off screen as long as a grabbable strip of
   // title bar remains; rightward it may not pass the edge by more than that.
-  const minX = Math.min(0, KEEP_VISIBLE_X - w);
-  const maxX = Math.max(minX, viewport.w - KEEP_VISIBLE_X);
+  // The strip is capped at the frame's own width: without that cap a frame
+  // narrower than the strip could never touch either edge, so a small addon
+  // readout would refuse to sit in the corner every HUD element wants.
+  const keepX = Math.min(KEEP_VISIBLE_X, w);
+  const minX = Math.min(0, keepX - w);
+  const maxX = Math.max(minX, viewport.w - keepX);
   const maxY = Math.max(0, viewport.h - TITLE_BAR_HEIGHT);
 
   return {
@@ -95,5 +123,25 @@ function defaultBox(viewport: Viewport): FrameBox {
   );
 }
 
+/**
+ * Where an addon frame opens the first time, given the size it asked for.
+ *
+ * Centred horizontally and near the top, the same placement the manager uses,
+ * so a frame with no saved position lands somewhere the player will see it
+ * rather than under the HUD's own furniture at an edge.
+ */
+function initialBox(viewport: Viewport, size: Viewport): FrameBox {
+  return clampBox(
+    {
+      w: size.w,
+      h: size.h,
+      x: Math.round((viewport.w - size.w) / HALF),
+      y: Math.round(viewport.h * DEFAULT_TOP_SHARE),
+    },
+    viewport,
+    size,
+  );
+}
+
 export type { FrameBox, Viewport };
-export { clampBox, defaultBox, isFrameBox, MIN_HEIGHT, MIN_WIDTH };
+export { clampBox, defaultBox, initialBox, isFrameBox, MIN_HEIGHT, MIN_WIDTH };

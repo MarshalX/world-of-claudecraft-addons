@@ -10,8 +10,12 @@
 // `panel` and supplies its own layout.
 
 import { useEffect, useState } from 'preact/hooks';
+import type { InstalledAddon } from '../../../shared/protocol.ts';
 import type { DiagnosticsReading } from '../../diagnostics.ts';
+import type { LogEntry } from '../../log/buffer.ts';
 import type { FrameBox } from '../frame/geometry.ts';
+import type { AddonConfig, ConflictReading } from './config.ts';
+import { DetailPane } from './detail.tsx';
 import { DiagnosticsPane } from './diagnostics.tsx';
 import { InstalledPane } from './installed.tsx';
 import type { InstalledState } from './store.ts';
@@ -27,6 +31,15 @@ interface ManagerAppProps {
   /** Null until the player has moved or resized the window. */
   box: FrameBox | null;
   onGeometry: (box: FrameBox) => void;
+  /** The addon whose own page is open, or null for the list. */
+  openAddon: InstalledAddon | null;
+  /** Null while that addon's stores are still hydrating. */
+  openConfig: AddonConfig | null;
+  onOpenAddon: (fqid: string) => void;
+  onCloseAddon: () => void;
+  conflicts: (combo: string) => ConflictReading;
+  capture: () => Promise<string | null>;
+  logs: (fqid: string) => readonly LogEntry[];
 }
 
 function tabClass(active: boolean): string {
@@ -34,6 +47,30 @@ function tabClass(active: boolean): string {
     return 'woc-tab woc-tab-active';
   }
   return 'woc-tab';
+}
+
+/**
+ * The Installed tab is two views: the list, and one addon's own page.
+ *
+ * Which one is showing lives in the manager rather than in component state, so
+ * the stores an open page reads can be loaded before it renders and a repaint
+ * driven from outside the tree does not reset it to the list.
+ */
+function InstalledTab(props: { app: ManagerAppProps }) {
+  const { app } = props;
+  if (app.openAddon !== null) {
+    return (
+      <DetailPane
+        addon={app.openAddon}
+        config={app.openConfig}
+        conflicts={app.conflicts}
+        capture={app.capture}
+        logs={app.logs(app.openAddon.fqid)}
+        onBack={app.onCloseAddon}
+      />
+    );
+  }
+  return <InstalledPane state={app.installed} onToggle={app.onToggle} onOpen={app.onOpenAddon} />;
 }
 
 function Pane(props: { tab: TabId; app: ManagerAppProps }) {
@@ -44,7 +81,7 @@ function Pane(props: { tab: TabId; app: ManagerAppProps }) {
   if (props.tab === 'diagnostics') {
     return <DiagnosticsPane read={props.app.readDiagnostics} />;
   }
-  return <InstalledPane state={props.app.installed} onToggle={props.app.onToggle} />;
+  return <InstalledTab app={props.app} />;
 }
 
 function TabStrip(props: { active: TabId; onPick: (id: TabId) => void }) {

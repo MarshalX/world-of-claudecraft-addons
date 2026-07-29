@@ -1,0 +1,167 @@
+// Everything built once and shared by every addon.
+//
+// One storage hub, one sound engine and AudioContext, one keydown listener, one
+// log buffer. The per-addon object in api/index.ts is a facade over these
+// bound to that addon's disposal bag, which is what makes disabling an addon
+// cheap and complete: nothing here is torn down, only the addon's hold on it.
+//
+// Built after the UI kit, because the kit is part of it, and before any addon
+// exists, because the socket hook and the keydown listener both have to be in
+// place before the thing they observe happens.
+
+import type { Channel } from '../shared/hosts.ts';
+import type { StorageApi } from '../shared/protocol.ts';
+import type { SharedServices } from './api/index.ts';
+import { characterId } from './character.ts';
+import { parseGameVersion } from './game-version.ts';
+import { createKeyDispatcher, type KeyDispatcher } from './keys/dispatcher.ts';
+import { createGameBindings, type GameBindings } from './keys/game-bindings.ts';
+import { createLogBuffer, type LogBuffer } from './log/buffer.ts';
+import { createSoundEngine, type SoundEngine } from './sound/engine.ts';
+import { createVolumeReader, SETTINGS_KEY } from './sound/volume.ts';
+import { createWebAudioSink, fetchBytes, fetchJson } from './sound/web-audio.ts';
+import { createStorageHub, type StorageHub } from './storage/hub.ts';
+import type { GameSurfaces } from './surfaces.ts';
+import { ANCHORS } from './ui/anchors.ts';
+import type { UiKit } from './ui/mount.ts';
+import type { WorldBackend } from './world/backend.ts';
+
+interface ServicesDeps {
+  scope: Window;
+  surfaces: GameSurfaces;
+  channel: Channel;
+  /** Null when the bridge handshake failed. Storage then rejects rather than lying. */
+  storage: StorageApi | null;
+}
+
+/**
+ * Built before the UI, because the manager reads addon settings and keybinds out
+ * of the same storage hub an addon does, and the UI kit is itself a service. The
+ * kit is therefore attached afterwards rather than passed in.
+ */
+interface RuntimeServices {
+  /** Complete the shared services once the UI kit exists. */
+  withKit: (kit: UiKit) => SharedServices;
+  storage: StorageHub;
+  dispatcher: KeyDispatcher;
+  sound: SoundEngine;
+  logs: LogBuffer;
+  gameBindings: GameBindings;
+  dispose: () => void;
+}
+
+/** localStorage throws rather than returning null in a locked-down profile. */
+function safeLocalStorage(scope: Window): Storage | null {
+  try {
+    return scope.localStorage;
+  } catch {
+    return null;
+  }
+}
+
+function buildSoundEngine(scope: Window): SoundEngine {
+  return createSoundEngine({
+    sink: createWebAudioSink(),
+    fetchJson,
+    fetchBytes,
+    volume: createVolumeReader({
+      read: () => safeLocalStorage(scope)?.getItem(SETTINGS_KEY) ?? null,
+    }),
+    now: () => scope.performance.now(),
+    // A family cue picks a variant the way the game does. There is no
+    // determinism requirement here: this is the loader, not the sim.
+    pick: (count) => Math.floor(Math.random() * count),
+  });
+}
+
+function readGameVersion(doc: Document): { version: string | null; build: string | null } {
+  const parsed = parseGameVersion(doc.querySelector(ANCHORS.gameVersion)?.textContent);
+  // `build` is legitimately null on a parsed version, before the game has filled
+  // the footer in, so the two nulls are told apart rather than coalesced into
+  // one shape.
+  if (parsed === null) {
+    return { version: null, build: null };
+  }
+  return { version: parsed.version, build: parsed.build };
+}
+
+/** The live player's name, or null before the player entity exists. */
+function playerName(backend: WorldBackend): unknown {
+  const player = backend.player as { name?: unknown } | null;
+  if (player === null) {
+    return null;
+  }
+  return player.name;
+}
+
+/**
+ * The character in play, or null before world entry.
+ *
+ * Resolved per call: the loader boots at document-start, long before there is a
+ * character, and every consumer of this reads it lazily for that reason.
+ */
+function characterKey(surfaces: GameSurfaces): string | null {
+  const backend = surfaces.world.backend();
+  if (backend === null) {
+    return null;
+  }
+  return characterId(surfaces.net.state().realm, playerName(backend));
+}
+
+function createRuntimeServices(deps: ServicesDeps): RuntimeServices {
+  const { scope, surfaces } = deps;
+  const doc = scope.document;
+
+  const storage = createStorageHub(deps.storage);
+  const logs = createLogBuffer();
+  const dispatcher = createKeyDispatcher({ target: scope, doc });
+
+  const sound = buildSoundEngine(scope);
+  const disarm = sound.arm(scope);
+
+  const gameBindings = createGameBindings({
+    game: () => surfaces.world.game(),
+    storage: () => safeLocalStorage(scope),
+  });
+
+  const withoutKit = {
+    doc,
+    window: scope,
+    net: surfaces.net,
+    world: surfaces.world,
+    storage,
+    sound,
+    dispatcher,
+    gameBindings,
+    logs,
+    channel: deps.channel,
+    host: scope.location.origin,
+
+    gameVersion: () => readGameVersion(doc),
+
+    character: () => characterKey(surfaces),
+
+    now: () => scope.performance.now(),
+    wallClock: () => Date.now(),
+    viewport: () => ({ w: scope.innerWidth, h: scope.innerHeight }),
+    pick: (count: number) => Math.floor(Math.random() * count),
+  };
+
+  return {
+    withKit: (kit) => ({ ...withoutKit, kit }),
+    storage,
+    dispatcher,
+    sound,
+    logs,
+    gameBindings,
+    dispose: () => {
+      disarm();
+      sound.dispose();
+      dispatcher.dispose();
+      logs.dispose();
+    },
+  };
+}
+
+export type { RuntimeServices, ServicesDeps };
+export { createRuntimeServices, safeLocalStorage };

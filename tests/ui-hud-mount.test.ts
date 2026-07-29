@@ -14,6 +14,7 @@ import type { DiagnosticsReading } from '../loader/src/runtime/diagnostics.ts';
 import { whenHudMounts } from '../loader/src/runtime/ui/hud-mount.ts';
 import { mountUi } from '../loader/src/runtime/ui/mount.ts';
 import { enterWorld, mountStartScreen } from './fakes/game-dom.ts';
+import { uiServices } from './fakes/ui-deps.ts';
 
 const READING = {
   origin: 'https://pbe.worldofclaudecraft.com',
@@ -168,6 +169,7 @@ describe('the composed UI', () => {
       storage: null,
       channel: 'pbe',
       readDiagnostics: () => READING,
+      ...uiServices(document),
     });
 
     expect(document.getElementById('woc-addons')).not.toBeNull();
@@ -189,6 +191,7 @@ describe('the composed UI', () => {
       storage: null,
       channel: 'pbe',
       readDiagnostics: () => READING,
+      ...uiServices(document),
     });
     enterWorld(document);
     await settle();
@@ -210,6 +213,7 @@ describe('the composed UI', () => {
       storage: null,
       channel: 'pbe',
       readDiagnostics: () => READING,
+      ...uiServices(document),
     });
 
     ui.dispose();

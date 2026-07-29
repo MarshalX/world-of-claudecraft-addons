@@ -11,6 +11,11 @@ export interface AddonInfo {
 export interface GameInfo {
   readonly host: string;
   readonly channel: 'live' | 'pbe' | 'pbe2';
-  readonly version: string;
-  readonly build: string;
+  /**
+   * The running client version, with the patch the game's own formatter drops
+   * restored, or null before the page's footer is readable.
+   */
+  readonly version: string | null;
+  /** Null until the game has filled its footer in. */
+  readonly build: string | null;
 }

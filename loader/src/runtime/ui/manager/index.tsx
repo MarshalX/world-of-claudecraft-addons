@@ -5,15 +5,19 @@
 // its Escape handler live, which would swallow the game's own close key while
 // nothing is on screen to explain why.
 //
-// The store loads outside the component tree, so opening the window paints
+// The stores load outside the component tree, so opening the window paints
 // whatever is already loaded and a reload triggered by another tab does not need
-// the window to be open.
+// the window to be open. Which addon's own page is showing lives outside it for
+// the same reason, in selection.ts.
 
 // biome-ignore lint/suspicious/noDeprecatedImports: preact's render is current, only its third replaceNode parameter is deprecated, and this call passes two arguments
 import { render } from 'preact';
 import type { DiagnosticsReading } from '../../diagnostics.ts';
+import type { LogBuffer } from '../../log/buffer.ts';
 import { ManagerApp } from './app.tsx';
+import type { ConfigService, ConflictReading } from './config.ts';
 import { createGeometryStore, type GeometryStorage, type GeometryStore } from './geometry-store.ts';
+import { type AddonSelection, createSelection } from './selection.ts';
 import type { InstalledRegistry, InstalledStore } from './store.ts';
 import { createInstalledStore } from './store.ts';
 
@@ -27,6 +31,11 @@ interface ManagerDeps {
   storage: GeometryStorage | null;
   channel: string;
   readDiagnostics: () => DiagnosticsReading;
+  /** Builds the settings and keybind stores an addon's own page edits. */
+  config: ConfigService | null;
+  /** Swallow the next key press, for the keybind editor. */
+  capture: () => Promise<string | null>;
+  logs: LogBuffer;
 }
 
 interface Manager {
@@ -43,14 +52,60 @@ interface Frame {
   container: HTMLElement;
   store: InstalledStore;
   geometry: GeometryStore;
-  paint: () => void;
   close: () => void;
   isOpen: () => boolean;
   show: () => void;
+  closeAddon: () => void;
+}
+
+/** Everything one render of the window's contents reads. */
+interface FrameView {
+  store: InstalledStore;
+  geometry: GeometryStore;
+  selection: AddonSelection;
+  onClose: () => void;
+}
+
+const NO_CONFLICTS: ConflictReading = { actions: [], addons: [], source: 'none' };
+
+/**
+ * Conflicts, or an empty reading when the bridge never connected.
+ *
+ * Empty rather than absent, and labelled `none`: the editor renders the source
+ * alongside the answer, so a player sees that nothing was read rather than that
+ * nothing was found.
+ */
+function readConflicts(deps: ManagerDeps, combo: string): ConflictReading {
+  if (deps.config === null) {
+    return NO_CONFLICTS;
+  }
+  return deps.config.conflicts(combo);
+}
+
+/** One render of the window's contents into its container. */
+function renderApp(deps: ManagerDeps, view: FrameView, container: HTMLElement): void {
+  render(
+    <ManagerApp
+      installed={view.store.state()}
+      onToggle={view.store.setEnabled}
+      readDiagnostics={deps.readDiagnostics}
+      onClose={view.onClose}
+      box={view.geometry.box()}
+      onGeometry={view.geometry.save}
+      openAddon={view.selection.addon()}
+      openConfig={view.selection.config()}
+      onOpenAddon={view.selection.open}
+      onCloseAddon={view.selection.close}
+      conflicts={(combo) => readConflicts(deps, combo)}
+      capture={deps.capture}
+      logs={deps.logs.tail}
+    />,
+    container,
+  );
 }
 
 /**
- * The window's own state: its container, its store, and the open flag.
+ * The window's own state: its container, its stores, and the open flag.
  *
  * Split out so mountManager stays a wiring function. The mutual reference
  * between paint and close is why the two are built together rather than passed
@@ -71,6 +126,13 @@ function createFrame(deps: ManagerDeps): Frame {
     },
   });
   const geometry = createGeometryStore({ storage: deps.storage, channel: deps.channel });
+  const selection = createSelection({
+    config: deps.config,
+    find: (fqid) => store.state().rows.find((row) => row.fqid === fqid) ?? null,
+    repaint: () => {
+      paint();
+    },
+  });
 
   const close = (): void => {
     open = false;
@@ -82,17 +144,7 @@ function createFrame(deps: ManagerDeps): Frame {
       render(null, container);
       return;
     }
-    render(
-      <ManagerApp
-        installed={store.state()}
-        onToggle={store.setEnabled}
-        readDiagnostics={deps.readDiagnostics}
-        onClose={close}
-        box={geometry.box()}
-        onGeometry={geometry.save}
-      />,
-      container,
-    );
+    renderApp(deps, { store, geometry, selection, onClose: close }, container);
   };
 
   // Loaded on open rather than at boot: a player who never opens the manager
@@ -107,23 +159,39 @@ function createFrame(deps: ManagerDeps): Frame {
     paint();
   };
 
-  return { container, store, geometry, paint, close, isOpen: () => open, show };
+  return {
+    container,
+    store,
+    geometry,
+    close,
+    isOpen: () => open,
+    show,
+    closeAddon: selection.close,
+  };
 }
 
 function mountManager(deps: ManagerDeps): Manager {
-  const { container, store, geometry, close, isOpen, show } = createFrame(deps);
+  const { container, store, geometry, close, isOpen, show, closeAddon } = createFrame(deps);
 
   // Read once at mount rather than on every open, so the first open does not
   // wait on a bridge round trip and later ones use what is already in hand.
   geometry.load().catch(() => undefined);
 
+  // The list is where the manager reopens. A player who closed the window on one
+  // addon's page and came back for a different one would otherwise have to find
+  // their way out of a page they did not choose.
+  const closeAll = (): void => {
+    closeAddon();
+    close();
+  };
+
   return {
     open: show,
-    close,
+    close: closeAll,
 
     toggle: () => {
       if (isOpen()) {
-        close();
+        closeAll();
         return;
       }
       show();

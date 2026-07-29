@@ -1,14 +1,14 @@
 // @vitest-environment happy-dom
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { mountMicroButton } from '../loader/src/runtime/ui/micro-button.ts';
+import { BUTTON_ID, mountMicroButton } from '../loader/src/runtime/ui/micro-button.ts';
 import { mountGameRail } from './fakes/game-dom.ts';
 
 const LABEL = 'Addons';
 const BUTTON = '#woc-addons-micro-button';
 
 function mount(onOpen = (): undefined => undefined) {
-  return mountMicroButton({ doc: document, label: LABEL, onOpen });
+  return mountMicroButton({ doc: document, id: BUTTON_ID, label: LABEL, onOpen });
 }
 
 afterEach(() => {

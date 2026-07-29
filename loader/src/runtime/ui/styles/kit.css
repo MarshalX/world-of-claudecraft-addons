@@ -1,0 +1,152 @@
+/* What addons themselves draw with: frames, toasts, modals, and the tooltip.
+ *
+ * Last of the three sheets runtime/ui/styles/index.ts concatenates, so a frame
+ * rule here can refine the window chrome the first sheet set up without needing
+ * extra specificity to do it. The rail glyph and the reduced-motion floor close
+ * the sheet: both are floors for anything the loader puts on screen.
+ */
+
+/* Addon frames. The window chrome in chrome.css is shared; these are the
+   differences a light HUD frame needs. */
+#woc-addons .woc-addon-frame {
+  padding: 8px;
+  gap: 6px;
+}
+
+#woc-addons .woc-frame-body {
+  overflow: auto;
+  overscroll-behavior: contain;
+  min-height: 0;
+}
+
+/* A frame is sized by its content, so it must not inherit the manager window's
+   width floor or its flex-fill body. */
+#woc-addons .woc-chrome-frame {
+  width: auto;
+  max-height: none;
+}
+
+#woc-addons .woc-chrome-window .woc-frame-body {
+  flex: 1;
+}
+
+#woc-addons .woc-hidden {
+  display: none;
+}
+
+#woc-toasts {
+  position: fixed;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  /* The stack is a layout box over the middle of the screen. Letting it take
+     clicks would put a dead strip across the top of the world. */
+  pointer-events: none;
+  z-index: 1;
+}
+
+#woc-addons .woc-toast {
+  background-color: var(--panel-base, rgb(21 21 31));
+  background-image: var(--panel-bg);
+  border: 1px solid var(--color-border-default, rgb(78 61 29));
+  border-radius: var(--radius-sm, 4px);
+  color: var(--color-text-light, rgb(240 235 216));
+  padding: 8px 14px;
+  font-size: 14px;
+  max-width: min(520px, 90vw);
+  pointer-events: auto;
+}
+
+#woc-addons .woc-toast-warn {
+  border-color: var(--gold-dim, rgb(200 168 56));
+}
+
+#woc-addons .woc-toast-error {
+  border-color: var(--color-text-error, rgb(255 143 133));
+}
+
+#woc-addons .woc-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgb(0 0 0 / 55%);
+  /* Above the manager, which a modal may be asked from. */
+  z-index: 2;
+}
+
+#woc-addons .woc-modal {
+  background-color: var(--panel-base, rgb(21 21 31));
+  background-image: var(--panel-bg);
+  border-radius: var(--radius-md, 8px);
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: min(440px, 92vw);
+}
+
+#woc-addons .woc-modal-title {
+  font-family: var(--title-font, serif);
+  color: var(--gold, rgb(255 209 0));
+  font-size: 16px;
+  margin: 0;
+}
+
+#woc-addons .woc-modal-message {
+  margin: 0;
+  line-height: 1.5;
+  font-size: 14px;
+}
+
+#woc-addons .woc-modal-buttons {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+#woc-tooltip {
+  position: fixed;
+  background-color: var(--panel-base, rgb(21 21 31));
+  background-image: var(--panel-bg);
+  border-radius: var(--radius-sm, 4px);
+  padding: 6px 10px;
+  font-size: 13px;
+  max-width: 280px;
+  /* A tooltip that took the pointer would flicker: entering it would leave the
+     element that opened it. */
+  pointer-events: none;
+  z-index: 3;
+}
+
+/* Rail-button glyphs, sized to match the game's own micro-button icons.
+   These two selectors are the only unscoped rules in the sheet, because these
+   are the only loader elements that live inside the game's own DOM rather than
+   under #woc-addons. Both are pinned to the loader's id namespace, so neither
+   can match anything the game owns. */
+[id^="woc-addon-micro-"] svg,
+#woc-addons-micro-button svg {
+  width: 20px;
+  height: 20px;
+  fill: none;
+  stroke: currentcolor;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* The kit animates nothing today, so this is the floor rather than an override:
+   it holds for anything added later without needing !important, because an
+   unlayered rule already outranks whatever the game's layers say. */
+@media (prefers-reduced-motion: reduce) {
+  #woc-addons * {
+    transition: none;
+    animation: none;
+  }
+}

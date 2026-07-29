@@ -1,0 +1,138 @@
+/* The addon root and the window chrome every loader window is built from.
+ *
+ * First of the three sheets runtime/ui/styles/index.ts concatenates, so its
+ * rules are the base the other two layer over. Scoping, tokens, and why the
+ * whole sheet is injected unlayered are all documented there.
+ */
+
+#woc-addons {
+  position: fixed;
+  inset: 0;
+  /* Above every game surface. The game's own ceiling is 100000. */
+  z-index: 100001;
+  /* The root is a full-screen layer so a window can be centered in it, but it
+     must not eat clicks meant for the world: only the windows inside take them. */
+  pointer-events: none;
+  font-family: var(--font-ui, system-ui, sans-serif);
+  color: var(--color-text-light, rgb(240 235 216));
+}
+
+#woc-addons > * {
+  pointer-events: auto;
+}
+
+#woc-addons .woc-window {
+  /* The game's own --panel-bg is a gradient whose stops are 95% opaque, which is
+     fine for the game because it closes one window when it opens another. The
+     manager opens OVER whatever is already up, most often the game menu it was
+     launched from, and 5% bleed-through of gold-on-dark menu text lands right
+     under our body copy. Backing the theme's own gradient with the theme's own
+     opaque base keeps the look exactly and stops the bleed. Both are game
+     tokens, so a theme switch still retunes the pair together. */
+  background-color: var(--panel-base, rgb(21 21 31));
+  background-image: var(--panel-bg);
+  position: absolute;
+  left: 50%;
+  top: 8vh;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  width: min(720px, 92vw);
+  max-height: 80vh;
+  padding: 12px;
+  gap: 10px;
+  border-radius: var(--radius-md, 8px);
+  /* interactjs resizes from the left and bottom edges, which a padding-box
+     measurement makes jump by twice the padding on the first pointer move. */
+  box-sizing: border-box;
+}
+
+/* Once the player has moved or resized it, the frame primitive owns the box.
+   The centring transform has to go with it, or every left/top it writes is
+   offset by half the window's width. max-height goes too, since an explicit
+   height is now the point. */
+#woc-addons .woc-window[data-positioned] {
+  transform: none;
+  max-height: none;
+}
+
+#woc-addons .woc-titlebar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  cursor: move;
+  /* A drag that selects the title text instead of moving the window reads as
+     the drag having failed. */
+  user-select: none;
+}
+
+#woc-addons .woc-title {
+  font-family: var(--title-font, serif);
+  font-size: 15px;
+  letter-spacing: 0.5px;
+}
+
+#woc-addons .woc-close {
+  background: none;
+  border: 1px solid var(--color-border-default, rgb(78 61 29));
+  border-radius: var(--radius-sm, 4px);
+  color: var(--color-text-muted, rgb(153 141 106));
+  cursor: pointer;
+  /* The mobile tap-target floor the game itself holds to. */
+  min-width: 40px;
+  min-height: 40px;
+  font-size: 16px;
+}
+
+#woc-addons .woc-close:hover,
+#woc-addons .woc-close:focus-visible {
+  color: var(--gold, rgb(255 209 0));
+  border-color: var(--color-border-focus, rgb(200 168 56));
+}
+
+#woc-addons .woc-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  /* --color-border-default rather than the --color-border-showcase that
+     .panel-title uses: this is a tab strip, not a title rule, and only the
+     former is one of the vars the game's theme system rewrites. */
+  border-bottom: 1px solid var(--color-border-default, rgb(78 61 29));
+  padding-bottom: 6px;
+}
+
+#woc-addons .woc-tab {
+  background: none;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm, 4px);
+  color: var(--color-text-muted, rgb(153 141 106));
+  cursor: pointer;
+  font-family: inherit;
+  /* 16px keeps iOS Safari from auto-zooming the page, the same floor the game
+     holds every control to. */
+  font-size: 16px;
+  min-height: 40px;
+  padding: 4px 12px;
+}
+
+#woc-addons .woc-tab:hover {
+  color: var(--color-text-light, rgb(240 235 216));
+}
+
+#woc-addons .woc-tab-active {
+  color: var(--gold, rgb(255 209 0));
+  border-color: var(--color-border-default, rgb(78 61 29));
+  background: rgb(255 255 255 / 6%);
+}
+
+/* Steady and drawn from a token, never animated away. */
+#woc-addons :focus-visible {
+  outline: 2px solid var(--color-border-focus, rgb(200 168 56));
+  outline-offset: 2px;
+}
+
+#woc-addons .woc-pane {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}

@@ -129,3 +129,43 @@ describe('findConflicts', () => {
     expect(findConflicts('Hyper+KeyD', game, addons)).toEqual({ game: [], addons: [] });
   });
 });
+
+// The game has two kinds of action and the stored string does not say which one
+// a row belongs to. A HELD action (movement) is polled per frame against the
+// physical code with modifiers ignored, so a game binding of 'KeyW' still walks
+// the player forward while Alt is down. An EDGE action matches the whole chord.
+//
+// This matters because the loader's dispatcher calls stopImmediatePropagation on
+// a match, which stops the keydown that populates the game's held-key set: an
+// addon on 'Alt+KeyW' does not merely collide with forward movement, it silently
+// takes it away. Reporting the collision is the only warning a player gets.
+describe('findConflicts against held game bindings', () => {
+  const game = { moveForward: 'KeyW', screenshot: 'Ctrl+Alt+KeyD' };
+
+  it('reports a bare game binding as conflicting with a modified combo', () => {
+    expect(findConflicts('Alt+KeyW', game, {}).game).toEqual(['moveForward']);
+  });
+
+  it('still reports the exact match', () => {
+    expect(findConflicts('KeyW', game, {}).game).toEqual(['moveForward']);
+  });
+
+  // The rule is one-way. A binding stored WITH modifiers is an edge action,
+  // which the game matches on the full chord, so a bare press is not a conflict.
+  it('does not report a modified game binding against a bare combo', () => {
+    expect(findConflicts('KeyD', game, {}).game).toEqual([]);
+  });
+
+  it('does not report a modified game binding against a different chord', () => {
+    expect(findConflicts('Alt+KeyD', game, {}).game).toEqual([]);
+  });
+
+  // Addon bindings have no such ambiguity: the loader's own dispatcher matches
+  // the whole chord, so the bare-code rule must not leak into that half.
+  it('leaves the addon half on exact matching', () => {
+    const addons = { 'official/a:toggle': 'KeyW' };
+
+    expect(findConflicts('Alt+KeyW', {}, addons).addons).toEqual([]);
+    expect(findConflicts('KeyW', {}, addons).addons).toEqual(['official/a:toggle']);
+  });
+});

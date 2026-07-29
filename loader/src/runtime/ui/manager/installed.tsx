@@ -4,12 +4,14 @@
 // has no effects and no fetch of its own.
 
 import type { InstalledAddon } from '../../../shared/protocol.ts';
+import { ErrorNote } from './error-note.tsx';
 import type { InstalledState } from './store.ts';
 import { UI_TEXT } from './strings.ts';
 
 interface RowProps {
   addon: InstalledAddon;
   onToggle: (fqid: string, on: boolean) => void;
+  onOpen: (fqid: string) => void;
 }
 
 function toggleLabel(enabled: boolean): string {
@@ -30,30 +32,36 @@ function AddonRow(props: RowProps) {
         </span>
         <span className="woc-row-desc">{addon.manifest.description}</span>
       </div>
-      <label className="woc-toggle">
-        <input
-          type="checkbox"
-          checked={addon.enabled}
-          onChange={(event) => {
-            props.onToggle(addon.fqid, (event.currentTarget as HTMLInputElement).checked);
+      <div className="woc-row-actions">
+        <button
+          type="button"
+          className="woc-btn"
+          aria-label={`${UI_TEXT.configure} ${addon.manifest.name}`}
+          onClick={() => {
+            props.onOpen(addon.fqid);
           }}
-        />
-        <span>{toggleLabel(addon.enabled)}</span>
-      </label>
+        >
+          {UI_TEXT.configure}
+        </button>
+        <label className="woc-toggle">
+          <input
+            type="checkbox"
+            checked={addon.enabled}
+            onChange={(event) => {
+              props.onToggle(addon.fqid, (event.currentTarget as HTMLInputElement).checked);
+            }}
+          />
+          <span>{toggleLabel(addon.enabled)}</span>
+        </label>
+      </div>
     </li>
   );
-}
-
-function Problem(props: { error: string | null }) {
-  if (props.error === null) {
-    return null;
-  }
-  return <p className="woc-note woc-note-bad">{props.error}</p>;
 }
 
 interface InstalledPaneProps {
   state: InstalledState;
   onToggle: (fqid: string, on: boolean) => void;
+  onOpen: (fqid: string) => void;
 }
 
 export function InstalledPane(props: InstalledPaneProps) {
@@ -73,10 +81,15 @@ export function InstalledPane(props: InstalledPaneProps) {
 
   return (
     <>
-      <Problem error={state.error} />
+      <ErrorNote error={state.error} />
       <ul className="woc-list">
         {state.rows.map((addon) => (
-          <AddonRow key={addon.fqid} addon={addon} onToggle={props.onToggle} />
+          <AddonRow
+            key={addon.fqid}
+            addon={addon}
+            onToggle={props.onToggle}
+            onOpen={props.onOpen}
+          />
         ))}
       </ul>
     </>

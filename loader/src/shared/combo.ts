@@ -27,6 +27,36 @@ const MODIFIER_CODES = new Set([
   'MetaRight',
 ]);
 
+/**
+ * Whether a stored game binding would also fire on `target`.
+ *
+ * The game has two kinds of action and the stored string does not say which one
+ * it belongs to. An EDGE action (an ability slot, a window toggle) matches the
+ * whole chord, so 'Shift+Digit1' and 'Digit1' are distinct bindings. A HELD
+ * action (movement) is polled per frame against the physical code with the
+ * modifiers deliberately ignored, so a game binding of 'KeyW' still walks the
+ * player forward while Alt is held.
+ *
+ * Held actions are saved bare, but so is an ability slot sitting on its default
+ * key, so bareness does not identify the kind. Matching on either rule
+ * over-reports rather than under-reports, which is the safe direction for a
+ * warning that never blocks: the cost of a false positive is a sentence the
+ * player can ignore, and the cost of a false negative is an addon silently
+ * eating a movement key. `runtime/keys/game-bindings.ts` uses the game's own
+ * matcher when the live profile is reachable and only falls back to this.
+ */
+function bindingMatches(target: ComboParts, stored: string): boolean {
+  const parts = parseCombo(stored);
+  if (parts === null) {
+    return false;
+  }
+  if (makeCombo(parts) === makeCombo(target)) {
+    return true;
+  }
+  const bare = !(parts.ctrl || parts.alt || parts.shift || parts.meta);
+  return bare && parts.code === target.code;
+}
+
 /** Escape is reserved: binding it would shadow the game's menu close. */
 export const UNBINDABLE_CODES = new Set(['Escape']);
 
@@ -128,10 +158,10 @@ export interface ConflictReport {
 /**
  * Find everything already bound to `combo`.
  *
- * `gameBindings` maps the game's action ids to combos, read from
- * localStorage['woc_keybinds:<scope>'] and never written back. `addonBindings`
- * maps '<fqid>:<bindId>' to combo. Comparison is on normalized form, so storage
- * written in a different modifier order still matches.
+ * `gameBindings` maps the game's action ids to combos, read from the game's own
+ * keybind profile and never written back. `addonBindings` maps '<fqid>:<bindId>'
+ * to combo, and compares on exact normalized form: the loader's own dispatcher
+ * matches the whole chord, so it has none of the ambiguity above.
  */
 export function findConflicts(
   combo: string,
@@ -139,14 +169,15 @@ export function findConflicts(
   addonBindings: Readonly<Record<string, string>>,
   ignoreAddonKey?: string,
 ): ConflictReport {
-  const target = normalizeCombo(combo);
-  if (target === null) {
+  const parts = parseCombo(combo);
+  if (parts === null) {
     return { game: [], addons: [] };
   }
+  const target = makeCombo(parts);
 
   const game: string[] = [];
   for (const [action, bound] of Object.entries(gameBindings)) {
-    if (normalizeCombo(bound) === target) {
+    if (bindingMatches(parts, bound)) {
       game.push(action);
     }
   }

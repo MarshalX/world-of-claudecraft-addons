@@ -1,4 +1,4 @@
-// The "Addons" entry in the game menu.
+// An entry in the game menu.
 //
 // The game rebuilds #options-menu with innerHTML on every view change, so the
 // entry is re-added by a MutationObserver rather than inserted once. Nothing
@@ -10,26 +10,32 @@
 // above .opt-version without referencing it: the version line is a SIBLING of
 // the list rather than a child, so appending to the list already places the
 // entry ahead of it in document order.
+//
+// The id is a parameter rather than a constant because `woc.ui.menuEntry` hands
+// the same mechanism to addons, and every entry present has to be distinguished
+// from every other for the already-there check to mean anything.
 
 import { ANCHORS, GAME_MENU_BUTTON_CLASS } from './anchors.ts';
 
+/** The loader's own entry, the one that opens the manager. */
 const ENTRY_ID = 'woc-addons-menu-entry';
-const ENTRY_SELECTOR = `#${ENTRY_ID}`;
 
-function buildEntry(doc: Document, label: string, onOpen: () => void): HTMLButtonElement {
-  const button = doc.createElement('button');
+function buildEntry(deps: MenuEntryDeps): HTMLButtonElement {
+  const button = deps.doc.createElement('button');
   button.type = 'button';
-  button.id = ENTRY_ID;
+  button.id = deps.id;
   // The game's own classes, so the entry inherits the menu's look rather than
   // carrying a copy of it that a restyle would leave behind.
   button.className = GAME_MENU_BUTTON_CLASS;
-  button.textContent = label;
-  button.addEventListener('click', onOpen);
+  button.textContent = deps.label;
+  button.addEventListener('click', deps.onOpen);
   return button;
 }
 
 export interface MenuEntryDeps {
   doc: Document;
+  /** Unique per entry: the loader's own, plus one per addon that asks for one. */
+  id: string;
   label: string;
   onOpen: () => void;
 }
@@ -44,14 +50,14 @@ export interface MenuEntry {
  * Where the entry belongs in the menu as currently rendered, or null.
  *
  * Three distinct reasons to decline: the menu is showing a sub-view, the menu is
- * not showing its button list at all, or the entry is already there.
+ * not showing its button list at all, or this entry is already there.
  */
-export function menuInsertionPoint(menu: ParentNode): Element | null {
+export function menuInsertionPoint(menu: ParentNode, entryId: string): Element | null {
   if (menu.querySelector(ANCHORS.optionsBack) !== null) {
     return null;
   }
   const list = menu.querySelector(ANCHORS.optionsList);
-  if (list === null || list.querySelector(ENTRY_SELECTOR) !== null) {
+  if (list === null || list.querySelector(`#${entryId}`) !== null) {
     return null;
   }
   return list;
@@ -71,13 +77,13 @@ export function mountMenuEntry(deps: MenuEntryDeps): MenuEntry {
     if (injecting) {
       return false;
     }
-    const list = menuInsertionPoint(menu);
+    const list = menuInsertionPoint(menu, deps.id);
     if (list === null) {
       return false;
     }
     injecting = true;
     try {
-      list.appendChild(buildEntry(deps.doc, deps.label, deps.onOpen));
+      list.appendChild(buildEntry(deps));
     } finally {
       injecting = false;
     }
@@ -95,7 +101,9 @@ export function mountMenuEntry(deps: MenuEntryDeps): MenuEntry {
     inject,
     dispose: () => {
       observer.disconnect();
-      menu.querySelector(ENTRY_SELECTOR)?.remove();
+      menu.querySelector(`#${deps.id}`)?.remove();
     },
   };
 }
+
+export { ENTRY_ID };
