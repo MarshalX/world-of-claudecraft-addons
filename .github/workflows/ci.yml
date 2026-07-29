@@ -1,0 +1,35 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      # Corepack must come before setup-node's pnpm cache, which needs pnpm on PATH.
+      - name: Enable corepack
+        run: corepack enable
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Typecheck, lint, test, validate manifests
+        run: pnpm check
+
+      - run: pnpm build
+
+      # Uploaded so a pull request can be installed and tried without a local build.
+      - uses: actions/upload-artifact@v4
+        with:
+          name: woc-loader-userscript
+          path: loader/dist/woc-loader.user.js
+          if-no-files-found: error

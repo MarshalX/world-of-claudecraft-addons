@@ -1,0 +1,6 @@
+node_modules/
+*.log
+
+# The built userscript is committed on release tags only, never from an ordinary
+# working-tree build.
+loader/dist/

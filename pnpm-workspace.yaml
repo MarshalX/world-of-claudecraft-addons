@@ -1,0 +1,10 @@
+packages:
+  - loader
+  - packages/*
+
+# esbuild fetches its platform binary in a postinstall script.
+allowBuilds:
+  esbuild: true
+
+# addons/ is not a workspace: addons are plain JS with no dependencies and no
+# build step.

@@ -1,0 +1,46 @@
+{
+  "name": "world-of-claudecraft-addons",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "license": "MIT",
+  "description": "Addon loader and official marketplace for World of ClaudeCraft",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/MarshalX/world-of-claudecraft-addons.git"
+  },
+  "packageManager": "pnpm@11.8.0",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "vite",
+    "build": "node loader/build-runtime.mjs && vite build",
+    "build:runtime": "node loader/build-runtime.mjs",
+    "check": "pnpm run check:ts && pnpm run lint && pnpm run test && pnpm run validate",
+    "check:ts": "tsc --noEmit",
+    "lint": "biome check --error-on-warnings .",
+    "fix": "biome check --write --error-on-warnings .",
+    "test": "vitest run",
+    "validate": "node tools/validate.mjs",
+    "index": "node tools/index.mjs"
+  },
+  "dependencies": {
+    "comlink": "^4.4.2",
+    "interactjs": "^1.10.27",
+    "preact": "^10.29.7",
+    "semver": "^7.8.5",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.5.5",
+    "@types/semver": "^7.7.1",
+    "@types/tampermonkey": "^5.0.5",
+    "esbuild": "^0.28.1",
+    "happy-dom": "^20.11.1",
+    "typescript": "^7.0.2",
+    "vite": "^8.1.5",
+    "vite-plugin-monkey": "^8.1.0",
+    "vitest": "^4.1.10"
+  }
+}

@@ -1,0 +1,54 @@
+name: Marketplace index
+
+# marketplace.json is GENERATED from addons/*/addon.json, never hand-edited.
+# Regenerating it here is what keeps the index from drifting from the folders.
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'addons/**'
+      - 'loader/src/shared/schema.ts'
+      - 'tools/index.mjs'
+      - 'tools/validate.mjs'
+
+permissions:
+  contents: write
+
+jobs:
+  index:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Enable corepack
+        run: corepack enable
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - run: pnpm validate
+
+      - name: Regenerate the index
+        # Stamp `generated` from the commit so rebuilding the same commit is
+        # byte-identical and never produces an empty diff commit.
+        run: pnpm index -- --timestamp=$(git log -1 --pretty=%ct)
+
+      - name: Commit if changed
+        run: |
+          if git diff --quiet -- marketplace.json; then
+            echo "index unchanged"
+            exit 0
+          fi
+
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add marketplace.json
+          git commit -m "Regenerate marketplace index
+
+          Rebuilt marketplace.json from the addon manifests after an addons/
+          change, so the index cannot drift from the folders on disk."
+          git push
