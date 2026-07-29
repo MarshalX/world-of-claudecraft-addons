@@ -16,6 +16,7 @@
 // Takes paths: `pnpm lint loader/src/host/fetcher.ts` while writing that file.
 
 import { spawn, spawnSync } from 'node:child_process';
+import { existsSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import process, { argv, exit, stderr, stdout } from 'node:process';
 import { fileURLToPath } from 'node:url';
@@ -47,6 +48,44 @@ function targetPaths() {
   }
   return ['.'];
 }
+
+/** The runtime bundle host/boot.ts imports, and the script that writes it. */
+const RUNTIME_ARTIFACT = fileURLToPath(
+  new URL('../loader/src/generated/runtime.iife.js', import.meta.url),
+);
+const BUILD_RUNTIME = fileURLToPath(new URL('../loader/build-runtime.mjs', import.meta.url));
+
+/**
+ * Build the runtime bundle if it is missing, because the lint verdict depends on it.
+ *
+ * Not a convenience. `host/boot.ts` imports the bundle with Vite's `?raw`, and
+ * Biome's answer about that import flips on whether the file is on disk:
+ *
+ * - Present: the path exists but the file is git-ignored, and biome.json sets
+ *   `vcs.useIgnoreFile`, so it is not in Biome's module graph and
+ *   `noUnresolvedImports` fires. The suppression on that line is USED.
+ * - Absent: Biome declines to judge a specifier carrying a loader query it
+ *   cannot resolve, reports nothing, and the same suppression is UNUSED, which
+ *   `suppressions/unused` raises and `--error-on-warnings` turns into a failure.
+ *
+ * So the same tree passed locally, where a dev build had always run, and failed
+ * in CI, which lints before it builds. Ensuring the artifact removes the
+ * variable instead of silencing the rule for that file: the rule stays on
+ * everywhere, and the suppression stays true in every tree.
+ */
+function ensureRuntimeArtifact() {
+  if (existsSync(RUNTIME_ARTIFACT)) {
+    return;
+  }
+  const built = spawnSync(process.execPath, [BUILD_RUNTIME], { cwd: ROOT, encoding: 'utf8' });
+  if (built.status === 0) {
+    return;
+  }
+  stderr.write(`lint: could not build the runtime bundle first\n${built.stderr ?? ''}\n`);
+  exit(built.status ?? 1);
+}
+
+ensureRuntimeArtifact();
 
 const paths = targetPaths();
 const FLAGS = ['check', '--error-on-warnings', '--diagnostic-level=info'];

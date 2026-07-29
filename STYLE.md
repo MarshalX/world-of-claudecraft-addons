@@ -168,6 +168,8 @@ import SOURCE from '../addons/dev-harness/main.js?raw';
 
 **An unused suppression is itself an error** (`suppressions/unused`). Do not add one speculatively. In particular, `new Function` is not flagged by `noGlobalEval` in Biome 2.5.5, so a suppression for it is dead weight that fails the check.
 
+A suppression can also be used in one tree and unused in another, which reads as a lint failure that only CI sees. `noUnresolvedImports` is the case: Biome reports a `?raw` import of a git-ignored build artifact when the artifact is on disk (the path resolves but the file is outside Biome's module graph, since `biome.json` sets `vcs.useIgnoreFile`) and reports nothing when it is missing (it declines to judge a specifier carrying a loader query it cannot resolve). `host/boot.ts` imports the runtime bundle exactly that way, so `pnpm lint` builds the bundle first if it is missing. The fix for this shape is to make the artifact's presence deterministic, never to turn the rule off for the file: the rule stays on and the suppression stays true everywhere.
+
 ## Before you run Biome
 
 A quick pass over a new module catches most of it:
