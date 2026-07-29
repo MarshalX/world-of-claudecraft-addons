@@ -4,21 +4,36 @@
 // has no effects and no fetch of its own.
 
 import type { InstalledAddon } from '../../../shared/protocol.ts';
+import type { AddonStatus } from '../../supervisor.ts';
+import { EnableToggle } from './enable-toggle.tsx';
 import { ErrorNote } from './error-note.tsx';
+import { statusView } from './status.ts';
 import type { InstalledState } from './store.ts';
 import { UI_TEXT } from './strings.ts';
 
 interface RowProps {
   addon: InstalledAddon;
+  statuses: readonly AddonStatus[];
   onToggle: (fqid: string, on: boolean) => void;
   onOpen: (fqid: string) => void;
 }
 
-function toggleLabel(enabled: boolean): string {
-  if (enabled) {
-    return UI_TEXT.enabled;
+/**
+ * The run state, which is not the enable state.
+ *
+ * An addon can be enabled and not running, and the row has to be able to say so:
+ * the toggle reports what the player asked for and this reports what happened.
+ */
+function StatusBadge(props: { statuses: readonly AddonStatus[]; fqid: string }) {
+  const view = statusView(props.statuses, props.fqid);
+  if (view === null) {
+    return null;
   }
-  return UI_TEXT.disabled;
+  return (
+    <span className={`woc-badge woc-badge-${view.tone}`} title={view.detail ?? undefined}>
+      {view.label}
+    </span>
+  );
 }
 
 function AddonRow(props: RowProps) {
@@ -26,7 +41,9 @@ function AddonRow(props: RowProps) {
   return (
     <li className="woc-row">
       <div className="woc-row-main">
-        <span className="woc-row-name">{addon.manifest.name}</span>
+        <span className="woc-row-name">
+          {addon.manifest.name} <StatusBadge statuses={props.statuses} fqid={addon.fqid} />
+        </span>
         <span className="woc-row-meta">
           {addon.manifest.version} {UI_TEXT.by} {addon.manifest.author}
         </span>
@@ -43,16 +60,13 @@ function AddonRow(props: RowProps) {
         >
           {UI_TEXT.configure}
         </button>
-        <label className="woc-toggle">
-          <input
-            type="checkbox"
-            checked={addon.enabled}
-            onChange={(event) => {
-              props.onToggle(addon.fqid, (event.currentTarget as HTMLInputElement).checked);
-            }}
-          />
-          <span>{toggleLabel(addon.enabled)}</span>
-        </label>
+        <EnableToggle
+          enabled={addon.enabled}
+          label={`${UI_TEXT.enabled} ${addon.manifest.name}`}
+          onToggle={(on) => {
+            props.onToggle(addon.fqid, on);
+          }}
+        />
       </div>
     </li>
   );
@@ -60,6 +74,7 @@ function AddonRow(props: RowProps) {
 
 interface InstalledPaneProps {
   state: InstalledState;
+  statuses: readonly AddonStatus[];
   onToggle: (fqid: string, on: boolean) => void;
   onOpen: (fqid: string) => void;
 }
@@ -87,6 +102,7 @@ export function InstalledPane(props: InstalledPaneProps) {
           <AddonRow
             key={addon.fqid}
             addon={addon}
+            statuses={props.statuses}
             onToggle={props.onToggle}
             onOpen={props.onOpen}
           />

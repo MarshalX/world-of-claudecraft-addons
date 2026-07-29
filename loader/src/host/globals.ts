@@ -40,6 +40,13 @@ function readGmObject(): GmObject | undefined {
   if (typeof GM.registerMenuCommand === 'function') {
     object.registerMenuCommand = (label, run) => GM.registerMenuCommand(label, run);
   }
+  // Note the casing: the promise-based surface spells it xmlHttpRequest while
+  // the legacy global is GM_xmlhttpRequest. Reaching for the wrong one finds
+  // undefined and degrades silently to "no marketplace is reachable".
+  if (typeof GM.xmlHttpRequest === 'function') {
+    object.xmlHttpRequest = (details) =>
+      GM.xmlHttpRequest(details as Parameters<typeof GM.xmlHttpRequest>[0]);
+  }
   return object;
 }
 
@@ -70,6 +77,10 @@ export function readGmSource(): GmSource {
   }
   if (typeof GM_registerMenuCommand === 'function') {
     source.legacyRegisterMenuCommand = GM_registerMenuCommand;
+  }
+  if (typeof GM_xmlhttpRequest === 'function') {
+    source.legacyXmlHttpRequest = (details) =>
+      GM_xmlhttpRequest(details as Parameters<typeof GM_xmlhttpRequest>[0]);
   }
   if (typeof BroadcastChannel === 'function') {
     source.broadcastChannel = BroadcastChannel;

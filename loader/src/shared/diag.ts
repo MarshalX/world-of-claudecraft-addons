@@ -13,3 +13,17 @@ export function diagInfo(message: string, ...details: unknown[]): void {
 export function diagError(message: string, ...details: unknown[]): void {
   console.error(PREFIX, message, ...details);
 }
+
+/**
+ * One line of text for anything that was thrown.
+ *
+ * Both realms render caught errors into UI, and a rejection that crossed the
+ * Comlink bridge arrives as an Error while one from a JSON parse may not be, so
+ * the non-Error case is the ordinary one rather than a defensive branch.
+ */
+export function describeError(err: unknown): string {
+  if (err instanceof Error) {
+    return err.message;
+  }
+  return String(err);
+}

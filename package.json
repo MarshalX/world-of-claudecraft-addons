@@ -14,13 +14,14 @@
     "node": ">=22"
   },
   "scripts": {
-    "dev": "vite",
+    "dev": "node loader/build-runtime.mjs && node tools/dev.mjs",
+    "serve": "node tools/serve.mjs",
     "build": "node loader/build-runtime.mjs && vite build",
     "build:runtime": "node loader/build-runtime.mjs",
     "build:runtime:debug": "node loader/build-runtime.mjs --sourcemap",
     "check": "pnpm run check:ts && pnpm run lint && pnpm run test && pnpm run validate",
     "check:ts": "tsc --noEmit",
-    "lint": "biome check --error-on-warnings .",
+    "lint": "node tools/lint.mjs",
     "fix": "biome check --write --error-on-warnings .",
     "test": "vitest run",
     "validate": "node tools/validate.mjs",
@@ -35,6 +36,7 @@
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.5",
+    "@types/node": "^26.1.2",
     "@types/semver": "^7.7.1",
     "@types/tampermonkey": "^5.0.5",
     "esbuild": "^0.28.1",

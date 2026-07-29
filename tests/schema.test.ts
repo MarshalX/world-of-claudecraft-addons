@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-
-import { API_VERSION, validateIndex, validateManifest } from '../loader/src/shared/schema.ts';
+import { API_VERSION } from '../loader/src/shared/api-version.ts';
+import { validateIndex, validateManifest } from '../loader/src/shared/schema.ts';
 
 const valid = {
   id: 'dps-meter',

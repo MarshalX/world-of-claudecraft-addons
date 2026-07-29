@@ -7,19 +7,12 @@
 // BEFORE the addon's first line, and one disposal releases everything at once.
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { createAddonApi, type SharedServices } from '../loader/src/runtime/api/index.ts';
+import { createAddonApi } from '../loader/src/runtime/api/index.ts';
 import { DisposalBag } from '../loader/src/runtime/disposal.ts';
-import { createKeyDispatcher } from '../loader/src/runtime/keys/dispatcher.ts';
-import { createGameBindings } from '../loader/src/runtime/keys/game-bindings.ts';
-import { createLogBuffer } from '../loader/src/runtime/log/buffer.ts';
-import { createNetHub } from '../loader/src/runtime/net/hub.ts';
-import { createSoundEngine } from '../loader/src/runtime/sound/engine.ts';
-import { createGameInjector } from '../loader/src/runtime/ui/kit/injections.ts';
-import { createToaster } from '../loader/src/runtime/ui/kit/toast.ts';
-import { createTooltips } from '../loader/src/runtime/ui/kit/tooltip.ts';
-import { createWorldHub } from '../loader/src/runtime/world/hub.ts';
-import { type AddonManifest, API_VERSION } from '../loader/src/shared/schema.ts';
+import { API_VERSION } from '../loader/src/shared/api-version.ts';
+import type { AddonManifest } from '../loader/src/shared/schema.ts';
 import { configNamespace, SETTINGS_KEY } from '../loader/src/shared/storage-keys.ts';
+import { createSharedServices } from './fakes/shared-services.ts';
 import { createFakeStorage, type FakeStorage } from './fakes/storage.ts';
 
 const FQID = 'official/dps-meter';
@@ -45,67 +38,11 @@ afterEach(() => {
   document.body.innerHTML = '';
 });
 
-function shared(hub: FakeStorage): SharedServices {
-  const root = document.createElement('div');
-  root.id = 'woc-addons';
-  document.body.appendChild(root);
-
-  const injector = createGameInjector({ doc: document });
-  teardown.push(injector.dispose);
-
-  return {
-    doc: document,
-    window: globalThis as unknown as SharedServices['window'],
-    net: createNetHub({ now: () => 0, install: () => () => undefined }),
-    world: createWorldHub({
-      // Never resolves: the addon must be usable before world entry.
-      game: new Promise(() => undefined),
-      schedule: () => 0,
-      cancel: () => undefined,
-    }),
-    storage: hub,
-    sound: createSoundEngine({
-      sink: {
-        running: () => true,
-        resume: async () => undefined,
-        decode: async () => ({}),
-        start: () => undefined,
-        close: () => undefined,
-      },
-      fetchJson: () => Promise.resolve({ format: 'woc-sfx-runtime-pack', version: 1, clips: {} }),
-      fetchBytes: async () => new ArrayBuffer(8),
-      volume: () => 1,
-      now: () => 0,
-      pick: () => 0,
-    }),
-    dispatcher: createKeyDispatcher({ target: new EventTarget(), doc: document }),
-    gameBindings: createGameBindings({ game: () => null, storage: () => null }),
-    logs: createLogBuffer(),
-    kit: {
-      root,
-      injector,
-      toaster: createToaster({
-        doc: document,
-        root,
-        setTimer: () => 0,
-        clearTimer: () => undefined,
-      }),
-      tooltips: createTooltips({ doc: document, root, viewport: () => ({ w: 800, h: 600 }) }),
-    },
-    channel: 'pbe',
-    host: 'https://pbe.worldofclaudecraft.com',
-    gameVersion: () => ({ version: '0.31.0', build: '202607290011' }),
-    character: () => 'Claudemoon/Marshal',
-    now: () => 1234,
-    wallClock: () => 1_700_000_000_000,
-    viewport: () => ({ w: 800, h: 600 }),
-    pick: () => 0,
-  };
-}
-
 function open(hub: FakeStorage = createFakeStorage(), manifest = MANIFEST) {
   const bag = new DisposalBag();
-  const api = createAddonApi(shared(hub), {
+  const harness = createSharedServices(document, hub);
+  teardown.push(harness.dispose);
+  const api = createAddonApi(harness.shared, {
     manifest,
     fqid: FQID,
     marketplace: 'official',
@@ -257,7 +194,9 @@ describe('disposal', () => {
 describe('logging', () => {
   it("writes into the addon's own tail with a wall-clock stamp", () => {
     const hub = createFakeStorage();
-    const services = shared(hub);
+    const harness = createSharedServices(document, hub);
+    teardown.push(harness.dispose);
+    const services = harness.shared;
     const bag = new DisposalBag();
     const api = createAddonApi(services, {
       manifest: MANIFEST,

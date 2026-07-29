@@ -7,6 +7,7 @@ import {
   type InstalledRegistry,
 } from '../loader/src/runtime/ui/manager/store.ts';
 import type { InstalledAddon } from '../loader/src/shared/protocol.ts';
+import { fakeRegistry } from './fakes/ui-deps.ts';
 
 const FQID = 'official/minimap';
 
@@ -31,13 +32,13 @@ function addon(fqid = FQID): InstalledAddon {
 /** A registry whose list() resolves only when the test says so. */
 function deferredRegistry() {
   const pending: Array<(rows: InstalledAddon[]) => void> = [];
-  const registry: InstalledRegistry = {
+  const registry: InstalledRegistry = fakeRegistry({
     list: () =>
       new Promise<InstalledAddon[]>((resolve) => {
         pending.push(resolve);
       }),
     setEnabled: () => Promise.resolve(),
-  };
+  });
   return { registry, settle: (index: number, rows: InstalledAddon[]) => pending[index]?.(rows) };
 }
 
@@ -45,7 +46,7 @@ describe('loading', () => {
   it('starts idle and does not read until told to', () => {
     const list = vi.fn();
     const store = createInstalledStore({
-      registry: { list, setEnabled: vi.fn() },
+      registry: fakeRegistry({ list, setEnabled: vi.fn() }),
       onChange: vi.fn(),
     });
 
@@ -55,7 +56,7 @@ describe('loading', () => {
 
   it('reports the rows it loaded', async () => {
     const store = createInstalledStore({
-      registry: { list: () => Promise.resolve([addon()]), setEnabled: vi.fn() },
+      registry: fakeRegistry({ list: () => Promise.resolve([addon()]), setEnabled: vi.fn() }),
       onChange: vi.fn(),
     });
 
@@ -68,7 +69,10 @@ describe('loading', () => {
 
   it('reports a failed read with the reason', async () => {
     const store = createInstalledStore({
-      registry: { list: () => Promise.reject(new Error('port closed')), setEnabled: vi.fn() },
+      registry: fakeRegistry({
+        list: () => Promise.reject(new Error('port closed')),
+        setEnabled: vi.fn(),
+      }),
       onChange: vi.fn(),
     });
 
@@ -112,7 +116,7 @@ describe('loading', () => {
   it('reports every transition to its subscriber', async () => {
     const onChange = vi.fn();
     const store = createInstalledStore({
-      registry: { list: () => Promise.resolve([]), setEnabled: vi.fn() },
+      registry: fakeRegistry({ list: () => Promise.resolve([]), setEnabled: vi.fn() }),
       onChange,
     });
 
@@ -130,7 +134,7 @@ describe('toggling', () => {
   it('forwards the flip to the registry', () => {
     const setEnabled = vi.fn(() => Promise.resolve());
     const store = createInstalledStore({
-      registry: { list: () => Promise.resolve([]), setEnabled },
+      registry: fakeRegistry({ list: () => Promise.resolve([]), setEnabled }),
       onChange: vi.fn(),
     });
 
@@ -144,7 +148,10 @@ describe('toggling', () => {
   // may have refused.
   it('does not move the row until a reload says so', () => {
     const store = createInstalledStore({
-      registry: { list: () => Promise.resolve([addon()]), setEnabled: () => Promise.resolve() },
+      registry: fakeRegistry({
+        list: () => Promise.resolve([addon()]),
+        setEnabled: () => Promise.resolve(),
+      }),
       onChange: vi.fn(),
     });
 
@@ -157,10 +164,10 @@ describe('toggling', () => {
   // snaps back with no explanation.
   it('reports a rejected write without dropping the rows', async () => {
     const store = createInstalledStore({
-      registry: {
+      registry: fakeRegistry({
         list: () => Promise.resolve([addon()]),
         setEnabled: () => Promise.reject(new Error('not installed')),
-      },
+      }),
       onChange: vi.fn(),
     });
     store.reload();

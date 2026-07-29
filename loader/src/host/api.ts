@@ -1,26 +1,21 @@
 // Assembles the object the host exposes over the bridge.
 //
-// Members whose service does not exist yet reject rather than answering with an
-// empty result, so a caller cannot mistake "not built" for "nothing installed".
+// Build order is a dependency chain rather than a preference: the fetcher needs
+// the GM request surface, the marketplace service needs the fetcher, the
+// registry needs the marketplace service to know where an addon's files are, and
+// the dev watcher needs both the registry and the marketplace service to know
+// which bodies to poll.
 
 import { diagError } from '../shared/diag.ts';
-import type { HostApi, HostEvent, MarketApi } from '../shared/protocol.ts';
+import type { DevApi, HostApi, HostEvent } from '../shared/protocol.ts';
+import { createDevWatch, type DevWatch } from './dev-watch.ts';
+import { createFetcher } from './fetcher.ts';
+import type { GmAdapter } from './gm.ts';
+import { createMarketService, type MarketService } from './marketplace.ts';
 import { createRegistry } from './registry.ts';
 import type { HostStorage } from './storage.ts';
 
 type Subscriber = (event: HostEvent) => void;
-
-/** Rejects rather than throwing, for the reason spelled out in host/registry.ts. */
-function pending(member: string): Promise<never> {
-  return Promise.reject(new Error(`not implemented: ${member}`));
-}
-
-const market: MarketApi = {
-  list: () => pending('market.list'),
-  add: () => pending('market.add'),
-  remove: () => pending('market.remove'),
-  refresh: () => pending('market.refresh'),
-};
 
 /**
  * A subscriber is a Comlink proxy back into the page realm, so a delivery can
@@ -37,17 +32,73 @@ function publish(subscribers: ReadonlySet<Subscriber>, event: HostEvent): void {
   }
 }
 
-export interface HostServices {
+interface HostServices {
   api: HostApi;
   /** Publish a host-originated event, such as the userscript menu command. */
   emit: (event: HostEvent) => void;
+  watch: DevWatch;
+  dispose: () => void;
+}
+
+interface HostApiDeps {
+  storage: HostStorage;
+  gm: GmAdapter;
+  setTimer: (handler: () => void, ms: number) => number;
+  clearTimer: (id: number) => void;
+  now: () => number;
+}
+
+/** The dependency chain, built in the one order it can be built in. */
+function buildServices(deps: HostApiDeps, emit: (event: HostEvent) => void) {
+  const { storage, gm } = deps;
+  const fetcher = createFetcher({ request: gm.request, cache: gm });
+  const market = createMarketService({ storage, fetcher, emit, now: deps.now });
+  const registry = createRegistry({
+    storage,
+    market,
+    fetcher,
+    onChanged: () => {
+      emit({ k: 'registry.changed' });
+    },
+  });
+  const watch = createDevWatch({
+    registry,
+    market,
+    fetcher,
+    emit,
+    setTimer: deps.setTimer,
+    clearTimer: deps.clearTimer,
+  });
+  return { market, registry, watch };
+}
+
+/**
+ * Every dev change re-syncs the watcher.
+ *
+ * Both switches decide whether it should be running, and the host is where that
+ * is enforced: the runtime can turn dev mode on through the bridge and must not
+ * also have to remember to restart the timer.
+ */
+function wrapDev(market: MarketService, watch: DevWatch): DevApi {
+  return {
+    state: market.dev.state,
+    setEnabled: async (on) => {
+      await market.dev.setEnabled(on);
+      watch.sync();
+    },
+    setHotReload: async (on) => {
+      await market.dev.setHotReload(on);
+      watch.sync();
+    },
+  };
 }
 
 /**
  * The storage members are forwarded one by one rather than spread, so onChange
  * and dispose stay on this side of the bridge.
  */
-export function createHostApi(storage: HostStorage): HostServices {
+function createHostApi(deps: HostApiDeps): HostServices {
+  const { storage } = deps;
   const subscribers = new Set<Subscriber>();
   const emit = (event: HostEvent): void => {
     publish(subscribers, event);
@@ -59,19 +110,19 @@ export function createHostApi(storage: HostStorage): HostServices {
     emit({ k: 'storage.changed', ns, key, value });
   });
 
-  const registry = createRegistry({
-    storage,
-    onChanged: () => {
-      emit({ k: 'registry.changed' });
-    },
-  });
+  const { market, registry, watch } = buildServices(deps, emit);
+  // Started from the persisted setting rather than from a call, so hot reload
+  // survives a page reload the same way every other setting does.
+  watch.sync();
 
   return {
     emit,
+    watch,
 
     api: {
       registry,
-      market,
+      market: market.api,
+      dev: wrapDev(market, watch),
 
       storage: {
         get: (ns, key) => storage.get(ns, key),
@@ -87,5 +138,13 @@ export function createHostApi(storage: HostStorage): HostServices {
         return Promise.resolve();
       },
     },
+
+    dispose: () => {
+      watch.dispose();
+      subscribers.clear();
+    },
   };
 }
+
+export type { HostApiDeps, HostServices };
+export { createHostApi };

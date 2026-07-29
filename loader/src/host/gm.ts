@@ -11,18 +11,18 @@
 // ambient declarations and makes every path testable.
 
 import { diagError } from '../shared/diag.ts';
-
-type Listener = (key: string, oldValue: unknown, newValue: unknown, remote: boolean) => void;
-
-type ListenerId = number | string;
-
-/** Tampermonkey's promise-based listener API resolves the id instead of returning it. */
-type ListenerHandle = ListenerId | Promise<ListenerId>;
-
-type RawGet = (key: string, fallback?: unknown) => unknown;
-type RawSet = (key: string, value: unknown) => void | Promise<void>;
-type RawDelete = (key: string) => void | Promise<void>;
-type RawList = () => string[] | Promise<string[]>;
+import { detectCapabilities } from './capabilities.ts';
+import type {
+  GmCapabilities,
+  GmSource,
+  ListenerHandle,
+  RawDelete,
+  RawGet,
+  RawList,
+  RawSet,
+  ValueChange,
+} from './gm-source.ts';
+import { type HttpRequest, type HttpResponse, resolveRequester } from './http.ts';
 
 interface BroadcastMessage {
   key: string;
@@ -43,29 +43,6 @@ interface BroadcastBus {
 }
 
 const UNKNOWN_VERSION = 'unknown';
-
-function detectValueStore(src: GmSource): GmCapabilities['valueStore'] {
-  if (typeof src.gm?.getValue === 'function' && typeof src.gm.setValue === 'function') {
-    return 'gm4';
-  }
-  if (typeof src.legacyGetValue === 'function' && typeof src.legacySetValue === 'function') {
-    return 'legacy';
-  }
-  return 'none';
-}
-
-function detectValueChange(src: GmSource): GmCapabilities['valueChange'] {
-  if (
-    typeof src.gm?.addValueChangeListener === 'function' ||
-    typeof src.legacyAddValueChangeListener === 'function'
-  ) {
-    return 'native';
-  }
-  if (typeof src.broadcastChannel === 'function') {
-    return 'broadcast';
-  }
-  return 'none';
-}
 
 /**
  * Bind the concrete functions once, so no call site re-decides which surface it
@@ -207,20 +184,6 @@ function createValueWatcher(
   };
 }
 
-export interface ValueChange {
-  key: string;
-  oldValue: unknown;
-  newValue: unknown;
-  /** True when the write came from another tab. */
-  remote: boolean;
-}
-
-export interface GmCapabilities {
-  valueStore: 'gm4' | 'legacy' | 'none';
-  valueChange: 'native' | 'broadcast' | 'none';
-  menuCommand: boolean;
-}
-
 export interface GmAdapter {
   getValue: <T>(key: string, fallback: T) => Promise<T>;
   setValue: (key: string, value: unknown) => Promise<void>;
@@ -229,59 +192,27 @@ export interface GmAdapter {
   /** Watch one key. Returns an unsubscribe function. */
   onValueChange: (key: string, handler: (change: ValueChange) => void) => () => void;
   registerMenuCommand: (label: string, run: () => void) => void;
+  /**
+   * A cross-origin GET, bounded by the userscript's @connect list.
+   *
+   * The loader's one way out of the sandbox. It exists rather than a `fetch`
+   * because the page is https and the dev server is http localhost, and because
+   * raw.githubusercontent.com sends no CORS headers a page could use.
+   */
+  request: (req: HttpRequest) => Promise<HttpResponse>;
   /** The installed userscript's version, or 'unknown' if the manager withholds it. */
   readonly scriptVersion: string;
   readonly capabilities: GmCapabilities;
 }
 
-/** The `GM` object, reduced to the members this adapter uses. */
-export interface GmObject {
-  getValue?: ((key: string, fallback?: unknown) => Promise<unknown>) | undefined;
-  setValue?: ((key: string, value: unknown) => Promise<void>) | undefined;
-  deleteValue?: ((key: string) => Promise<void>) | undefined;
-  listValues?: (() => Promise<string[]>) | undefined;
-  addValueChangeListener?: ((key: string, cb: Listener) => ListenerHandle) | undefined;
-  removeValueChangeListener?: ((id: ListenerId) => Promise<void> | void) | undefined;
-  registerMenuCommand?: ((label: string, run: () => void) => void) | undefined;
-}
-
-/**
- * The manager APIs this adapter reads, mapped by the caller from the real
- * globals. `legacy*` members correspond to the `GM_*` globals and `gm` is the
- * `GM` object. Naming them here rather than mirroring the global spellings keeps
- * this an ordinary interface with no ambient dependency.
- */
-export interface GmSource {
-  gm?: GmObject | undefined;
-  legacyGetValue?: ((key: string, fallback?: unknown) => unknown) | undefined;
-  legacySetValue?: ((key: string, value: unknown) => void) | undefined;
-  legacyDeleteValue?: ((key: string) => void) | undefined;
-  legacyListValues?: (() => string[]) | undefined;
-  legacyAddValueChangeListener?: ((key: string, cb: Listener) => ListenerId) | undefined;
-  legacyRemoveValueChangeListener?: ((id: ListenerId) => void) | undefined;
-  legacyRegisterMenuCommand?: ((label: string, run: () => void) => void) | undefined;
-  broadcastChannel?: typeof BroadcastChannel | undefined;
-  /** The installed userscript's version, from GM_info. */
-  scriptVersion?: string | undefined;
-}
-
 export const BROADCAST_CHANNEL = 'woc-addons-values';
-
-export function detectCapabilities(src: GmSource): GmCapabilities {
-  return {
-    valueStore: detectValueStore(src),
-    valueChange: detectValueChange(src),
-    menuCommand:
-      typeof src.gm?.registerMenuCommand === 'function' ||
-      typeof src.legacyRegisterMenuCommand === 'function',
-  };
-}
 
 export function createGmAdapter(src: GmSource): GmAdapter {
   const capabilities = detectCapabilities(src);
   const store = resolveStore(src);
   const bus = createBroadcastBus(src, capabilities);
   const { getValue, setValue } = createValueApi(store, bus, capabilities);
+  const send = src.gm?.xmlHttpRequest ?? src.legacyXmlHttpRequest;
 
   return {
     getValue,
@@ -300,7 +231,19 @@ export function createGmAdapter(src: GmSource): GmAdapter {
       register?.(label, run);
     },
 
+    // A missing grant costs marketplaces, not the loader: it rejects at the call
+    // rather than throwing at boot.
+    request: resolveRequester(send),
+
     scriptVersion: src.scriptVersion ?? UNKNOWN_VERSION,
     capabilities,
   };
 }
+
+export type {
+  GmCapabilities,
+  GmObject,
+  GmSource,
+  ValueChange,
+} from './gm-source.ts';
+export type { HttpRequest, HttpResponse } from './http.ts';

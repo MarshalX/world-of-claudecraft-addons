@@ -13,7 +13,7 @@ import type { InstalledRegistry } from '../loader/src/runtime/ui/manager/store.t
 import { UI_TEXT } from '../loader/src/runtime/ui/manager/strings.ts';
 import { TABS } from '../loader/src/runtime/ui/manager/tabs.ts';
 import type { InstalledAddon } from '../loader/src/shared/protocol.ts';
-import { managerServices } from './fakes/ui-deps.ts';
+import { fakeRegistry, managerServices } from './fakes/ui-deps.ts';
 
 const READING: DiagnosticsReading = {
   origin: 'https://pbe.worldofclaudecraft.com',
@@ -53,14 +53,22 @@ function addon(): InstalledAddon {
   };
 }
 
-function open(registry: InstalledRegistry | null) {
+/** Null stands for a bridge that never connected; a partial fills in the rest. */
+function asRegistry(registry: Partial<InstalledRegistry> | null): InstalledRegistry | null {
+  if (registry === null) {
+    return null;
+  }
+  return fakeRegistry(registry);
+}
+
+function open(registry: Partial<InstalledRegistry> | null) {
   const root = document.createElement('div');
   root.id = 'woc-addons';
   document.body.appendChild(root);
   const manager = mountManager({
     doc: document,
     root,
-    registry,
+    registry: asRegistry(registry),
     storage: null,
     channel: 'pbe',
     readDiagnostics: () => READING,

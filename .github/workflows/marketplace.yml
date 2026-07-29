@@ -8,6 +8,8 @@ on:
     paths:
       - 'addons/**'
       - 'loader/src/shared/schema.ts'
+      - 'loader/src/shared/api-version.ts'
+      - 'tools/manifests.ts'
       - 'tools/index.mjs'
       - 'tools/validate.mjs'
 

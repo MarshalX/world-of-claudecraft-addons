@@ -4,6 +4,7 @@
 // says which global each one reads. Reflect.set rather than an assignment cast
 // keeps the WebSocket swap from needing a type that names a global.
 
+import { clearTimer, setTimer } from './dom-timers.ts';
 import { fieldValue } from './net/frames.ts';
 import { installSocketHook, type SocketCtor } from './net/hook.ts';
 import { createNetHub, type NetHub } from './net/hub.ts';
@@ -43,8 +44,8 @@ export function createGameSurfaces(): GameSurfaces {
   const wait = waitForGame({
     doc: globalThis.document,
     readGame: () => fieldValue(globalThis, GAME_GLOBAL),
-    setTimer: (handler, ms) => globalThis.setTimeout(handler, ms),
-    clearTimer: (id) => globalThis.clearTimeout(id),
+    setTimer,
+    clearTimer,
   });
 
   const world = createWorldHub({

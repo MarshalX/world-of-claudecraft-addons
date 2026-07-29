@@ -7,7 +7,7 @@ import { join } from 'node:path';
 import process from 'node:process';
 import { fileURLToPath } from 'node:url';
 import { validateIndex } from '../loader/src/shared/schema.ts';
-import { addonDirs, readAddon } from './validate.mjs';
+import { addonDirs, readAddon } from './manifests.ts';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const OUT = join(ROOT, 'marketplace.json');

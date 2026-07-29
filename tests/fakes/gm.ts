@@ -13,10 +13,20 @@ function read(store: Map<string, unknown>, key: string, fallback: unknown): unkn
 }
 
 /** A callback that must never fire, without an empty block. */
-export const noop = (): undefined => undefined;
+const noop = (): undefined => undefined;
 
 /** Tampermonkey and Violentmonkey: both GM.* and the legacy GM_* names. */
-export function fullSource(): GmSource {
+/**
+ * A request surface that answers nothing.
+ *
+ * These fakes exist to pin which SURFACE each manager exposes a capability on,
+ * not to serve bodies: the suites that fetch use tests/fakes/http.ts. Which arm
+ * each source carries follows the GM-object-versus-legacy split that fake
+ * already encodes, since the metadata block grants both spellings.
+ */
+const noRequest = (): void => undefined;
+
+function fullSource(): GmSource {
   const store = new Map<string, unknown>();
   const listeners = new Map<number, { key: string; cb: NativeListener }>();
   let nextId = 1;
@@ -42,12 +52,14 @@ export function fullSource(): GmSource {
         listeners.delete(id as number);
       },
       registerMenuCommand: noop,
+      xmlHttpRequest: noRequest,
     },
     legacyGetValue: (k, f) => read(store, k, f),
     legacySetValue: (k, v) => {
       store.set(k, v);
     },
     legacyRegisterMenuCommand: noop,
+    legacyXmlHttpRequest: noRequest,
   };
 }
 
@@ -58,7 +70,7 @@ export function fullSource(): GmSource {
  * with the legacy value-change listener. That mix is the shape the loader
  * actually runs on, and neither fullSource nor legacyOnlySource covers it.
  */
-export interface TampermonkeySource extends GmSource {
+interface TampermonkeySource extends GmSource {
   /** A write from another tab. Own writes echo by themselves, as the real one does. */
   emit: (key: string, value: unknown) => void;
 }
@@ -71,7 +83,7 @@ export interface TampermonkeySource extends GmSource {
  * calling tab's own writes back with remote false, which Violentmonkey does not,
  * so setValue below fires listeners the same way.
  */
-export function tampermonkeySource(): TampermonkeySource {
+function tampermonkeySource(): TampermonkeySource {
   const store = new Map<string, unknown>();
   const listeners = new Map<number, { key: string; cb: NativeListener }>();
   let nextId = 1;
@@ -109,6 +121,7 @@ export function tampermonkeySource(): TampermonkeySource {
         return Promise.resolve();
       },
       registerMenuCommand: noop,
+      xmlHttpRequest: noRequest,
     },
     legacyGetValue: (k, f) => read(store, k, f),
     legacySetValue: (k, v) => {
@@ -133,12 +146,12 @@ export function tampermonkeySource(): TampermonkeySource {
   };
 }
 
-export interface ViolentmonkeySource extends GmSource {
+interface ViolentmonkeySource extends GmSource {
   /** Fires the way GM_addValueChangeListener does for a write in another tab. */
   emit: (key: string, value: unknown) => void;
 }
 
-export function violentmonkeySource(): ViolentmonkeySource {
+function violentmonkeySource(): ViolentmonkeySource {
   const store = new Map<string, unknown>();
   const listeners = new Map<number, { key: string; cb: NativeListener }>();
   let nextId = 1;
@@ -174,6 +187,7 @@ export function violentmonkeySource(): ViolentmonkeySource {
       listeners.delete(id as number);
     },
     legacyRegisterMenuCommand: noop,
+    legacyXmlHttpRequest: noRequest,
     broadcastChannel: FakeChannel as unknown as typeof BroadcastChannel,
     emit: (key, value) => {
       for (const { key: watched, cb } of listeners.values()) {
@@ -186,7 +200,7 @@ export function violentmonkeySource(): ViolentmonkeySource {
 }
 
 /** Greasemonkey 4: GM.* only, no value-change listener. */
-export function greasemonkeySource(overrides: Partial<GmSource> = {}): GmSource {
+function greasemonkeySource(overrides: Partial<GmSource> = {}): GmSource {
   const store = new Map<string, unknown>();
   return {
     gm: {
@@ -201,13 +215,14 @@ export function greasemonkeySource(overrides: Partial<GmSource> = {}): GmSource 
       },
       listValues: () => Promise.resolve([...store.keys()]),
       registerMenuCommand: noop,
+      xmlHttpRequest: noRequest,
     },
     ...overrides,
   };
 }
 
 /** A manager exposing only the legacy synchronous names. */
-export function legacyOnlySource(): GmSource {
+function legacyOnlySource(): GmSource {
   const store = new Map<string, unknown>();
   return {
     legacyGetValue: (k, f) => read(store, k, f),
@@ -224,7 +239,7 @@ export function legacyOnlySource(): GmSource {
 }
 
 /** Delivers to every other open channel, the way a real one crosses tabs. */
-export class FakeChannel {
+class FakeChannel {
   static open: FakeChannel[] = [];
   onmessage: ((e: MessageEvent) => void) | null = null;
   readonly name: string;
@@ -248,4 +263,16 @@ export class FakeChannel {
 }
 
 /** FakeChannel where a BroadcastChannel constructor is expected. */
-export const fakeChannelCtor = FakeChannel as unknown as typeof BroadcastChannel;
+const fakeChannelCtor = FakeChannel as unknown as typeof BroadcastChannel;
+
+export type { TampermonkeySource, ViolentmonkeySource };
+export {
+  FakeChannel,
+  fakeChannelCtor,
+  fullSource,
+  greasemonkeySource,
+  legacyOnlySource,
+  noop,
+  tampermonkeySource,
+  violentmonkeySource,
+};

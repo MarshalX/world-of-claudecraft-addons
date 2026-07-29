@@ -27,6 +27,9 @@ importers:
       '@biomejs/biome':
         specifier: 2.5.5
         version: 2.5.5
+      '@types/node':
+        specifier: ^26.1.2
+        version: 26.1.2
       '@types/semver':
         specifier: ^7.7.1
         version: 7.7.1

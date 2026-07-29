@@ -6,7 +6,14 @@
 // with a sentence in it reads as a loader that is not finished, which is the
 // truth.
 
-export const TAB_IDS = ['installed', 'browse', 'marketplaces', 'updates', 'diagnostics'] as const;
+export const TAB_IDS = [
+  'installed',
+  'browse',
+  'marketplaces',
+  'updates',
+  'dev',
+  'diagnostics',
+] as const;
 
 export type TabId = (typeof TAB_IDS)[number];
 
@@ -38,6 +45,7 @@ export const TABS: readonly TabDef[] = [
     built: false,
     pending: 'Update badges need a cached index to compare against.',
   },
+  { id: 'dev', label: 'Dev', built: true },
   { id: 'diagnostics', label: 'Diagnostics', built: true },
 ];
 

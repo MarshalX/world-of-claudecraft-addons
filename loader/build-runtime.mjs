@@ -12,6 +12,17 @@ const root = `${import.meta.dirname}/`;
 const ZOD_IMPORT = /^zod$/;
 const HOST_MODULE = /(^|\/)loader\/src\/host\//;
 
+/**
+ * Anything Node-only, by import specifier.
+ *
+ * `node:` covers the prefixed form and the bare list covers the legacy one.
+ * @types/node is ambient project-wide because tools/*.ts needs it, which means
+ * the compiler will happily accept `readFileSync` in a runtime module; this is
+ * what stops it, the same way HOST_MODULE stops a GM reference.
+ */
+const NODE_IMPORT =
+  /^(node:|(fs|path|url|crypto|http|https|os|child_process|worker_threads|process|util|stream|buffer|events|zlib|net|tls|dns|readline|assert|module|v8|vm|perf_hooks)$)/;
+
 /** Whatever precedes a `{` that opens a rule body, which is its selector list. */
 const RULE_HEAD = /(^|\})\s*([^{}@]+?)\s*\{/g;
 const COMMENT = /\/\*[\s\S]*?\*\//g;
@@ -69,6 +80,13 @@ const result = await build({
           errors: [
             {
               text: `zod must not reach the runtime bundle (imported from ${args.importer}). Import types from shared/schema.ts with \`import type\`.`,
+            },
+          ],
+        }));
+        b.onResolve({ filter: NODE_IMPORT }, (args) => ({
+          errors: [
+            {
+              text: `${args.path} is a Node module and must not reach the runtime bundle (imported from ${args.importer}). The runtime is injected into a page.`,
             },
           ],
         }));

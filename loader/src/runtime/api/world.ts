@@ -8,9 +8,21 @@ import type { DisposalBag } from '../disposal.ts';
 import type { Unsubscribe } from '../net/bus.ts';
 import type { WorldBackend } from '../world/backend.ts';
 import type { WorldHub } from '../world/hub.ts';
+import { readonlyMapView } from '../world/readonly-map.ts';
 import { isWorldKey, WORLD_KEYS } from '../world/signature.ts';
 
-const EMPTY_ENTITIES: ReadonlyMap<number, unknown> = new Map<number, unknown>();
+/**
+ * The roster before the game exists.
+ *
+ * A read-only view rather than a bare Map, and built per read rather than
+ * shared. A bare Map would break the published contract for the whole window
+ * between an addon's first line and world entry, so `entities.clear()` would
+ * throw after entry and quietly succeed before it. Sharing one would be worse:
+ * a write from one addon would land in what every other addon reads.
+ */
+function emptyEntities(): ReadonlyMap<number, unknown> {
+  return readonlyMapView(new Map<number, unknown>());
+}
 
 /** Every read answers null before the game exists, rather than throwing at an addon. */
 function fromBackend(hub: WorldHub, read: (backend: WorldBackend) => unknown): unknown {
@@ -56,7 +68,7 @@ export function createWorld(hub: WorldHub, bag: DisposalBag): WorldApi {
     get entities(): ReadonlyMap<number, unknown> {
       const backend = hub.backend();
       if (backend === null) {
-        return EMPTY_ENTITIES;
+        return emptyEntities();
       }
       return backend.entities;
     },

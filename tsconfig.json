@@ -14,7 +14,12 @@
     // tampermonkey declares the GM_* and GM globals. They land ambient
     // project-wide, so loader/build-runtime.mjs enforces at build time that no
     // host module reaches the page-realm bundle.
-    "types": ["vitest/globals", "tampermonkey"],
+    // `node` is here for tools/*.ts only. Those run under Node's built-in type
+    // stripping so the manifest schema has one definition across CI, the dev
+    // server, and the loader; typing them means the node builtins have to
+    // resolve. loader/build-runtime.mjs is what keeps a node import out of the
+    // page-realm bundle, since ambient types cannot.
+    "types": ["vitest/globals", "tampermonkey", "node"],
 
     "strict": true,
     "noUncheckedIndexedAccess": true,

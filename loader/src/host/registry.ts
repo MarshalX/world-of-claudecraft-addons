@@ -1,27 +1,29 @@
-// Installed addon set and enable state, persisted in GM storage.
+// Installed addon set, enable state, and the cached entry source.
 //
-// The state half is real. The members that need a marketplace fetch (install,
-// update, source) are not built yet and reject rather than answering, so a
-// caller cannot mistake "not built" for "nothing to do".
+// Install is the only thing that fetches code. What is persisted afterwards is
+// the manifest, the enable flag, and the source body, so enabling an addon is a
+// storage read rather than a network call and a marketplace that goes offline
+// does not take every addon installed from it down with it.
+//
+// The local dev source is the deliberate exception, and only for the body: it is
+// re-fetched on every read so that reopening the game picks up whatever is on
+// disk now. That is the entire point of pointing the loader at a dev server, and
+// it is bounded to `localhost` by shared/marketplace.ts.
 
 import { diagError } from '../shared/diag.ts';
+import { fileUrl, LOCAL_ID, type MarketplaceRef, splitFqid } from '../shared/marketplace.ts';
 import type { InstalledAddon, RegistryApi, StorageApi } from '../shared/protocol.ts';
 import { InstalledAddon as InstalledAddonSchema, validate } from '../shared/schema.ts';
+import type { Fetcher } from './fetcher.ts';
+import type { MarketService } from './marketplace.ts';
 
 /** The loader's own storage namespace, alongside the per-addon `addon:<fqid>` ones. */
 const REGISTRY_NS = 'loader';
 const INSTALLED_KEY = 'installed';
 
-/**
- * Rejects rather than throwing.
- *
- * Every member here is typed as returning a promise, and a synchronous throw
- * from one is a different failure for a direct caller than for a bridged one:
- * Comlink turns a throw into a rejection, so the bridge hides the difference and
- * the manager, which holds the registry directly when it can, does not.
- */
-function pending(member: string): Promise<never> {
-  return Promise.reject(new Error(`not implemented: ${member}`));
+/** One addon's cached entry body. Kept off the installed list, which stays small. */
+function sourceKey(fqid: string): string {
+  return `source:${fqid}`;
 }
 
 /**
@@ -54,16 +56,142 @@ async function readInstalled(storage: RegistryStorage): Promise<InstalledAddon[]
   return kept;
 }
 
-export type RegistryStorage = Pick<StorageApi, 'get' | 'set'>;
+/** Where one addon's entry file lives in its marketplace. */
+function entryUrl(market: MarketplaceRef, path: string, entry: string): string {
+  return fileUrl(market, `${path}/${entry}`);
+}
 
-export interface RegistryDeps {
+type RegistryStorage = Pick<StorageApi, 'get' | 'set' | 'delete'>;
+
+/** One addon's registry row and the body that goes with it. */
+interface Acquired {
+  row: InstalledAddon;
+  source: string;
+}
+
+interface RegistryDeps {
   storage: RegistryStorage;
+  market: Pick<MarketService, 'entry'>;
+  fetcher: Pick<Fetcher, 'get' | 'forget'>;
   /** Called after a write that changed something, so the manager can refresh. */
   onChanged: () => void;
 }
 
-export function createRegistry(deps: RegistryDeps): RegistryApi {
+/** Fetch one addon's manifest and body from its marketplace, or throw. */
+async function acquire(deps: RegistryDeps, fqid: string): Promise<Acquired> {
+  const found = await deps.market.entry(fqid);
+  if (found === null) {
+    throw new Error(`${fqid} is not offered by any marketplace in the list`);
+  }
+  const { market: source, row } = found;
+  const url = entryUrl(source, row.path, row.entry);
+  const { body } = await deps.fetcher.get(url);
+  if (body.trim().length === 0) {
+    throw new Error(`${url} is empty, so there is nothing to install`);
+  }
+
+  // `path` is the index's own field and is not part of a manifest, so it is
+  // dropped rather than persisted: it is re-read from the index on update, and a
+  // stale copy of it would send the next fetch to the wrong directory.
+  const { path: _path, ...manifest } = row;
+  return {
+    row: { fqid, marketplace: source.id, manifest, enabled: false, pin: null },
+    source: body,
+  };
+}
+
+/** The URL an addon's body comes from, or null if no source offers it. */
+async function originOf(deps: RegistryDeps, fqid: string): Promise<string | null> {
+  const found = await deps.market.entry(fqid);
+  if (found === null) {
+    return null;
+  }
+  return entryUrl(found.market, found.row.path, found.row.entry);
+}
+
+/**
+ * Re-read a dev-server addon, falling back to the cached body.
+ *
+ * The dev source is the deliberate exception to reading from the cache:
+ * reopening the game has to pick up whatever is on disk now, which is the entire
+ * point of pointing the loader at a dev server. A server that is not running
+ * must leave the last body it served working rather than disabling the addon,
+ * so a failure here is a diagnostic and not a rejection.
+ */
+async function refetchLocal(deps: RegistryDeps, fqid: string): Promise<string | null> {
+  try {
+    const url = await originOf(deps, fqid);
+    if (url === null) {
+      return null;
+    }
+    const { body } = await deps.fetcher.get(url);
+    await deps.storage.set(REGISTRY_NS, sourceKey(fqid), body);
+    return body;
+  } catch (err) {
+    diagError(`could not re-read ${fqid} from the dev server, using the cached body`, err);
+    return null;
+  }
+}
+
+type Write = (rows: readonly InstalledAddon[]) => Promise<void>;
+
+/** Fetch and persist an addon that is not installed yet. */
+async function install(deps: RegistryDeps, write: Write, fqid: string): Promise<void> {
+  const rows = await readInstalled(deps.storage);
+  if (rows.some((candidate) => candidate.fqid === fqid)) {
+    throw new Error(`${fqid} is already installed`);
+  }
+  const { row, source } = await acquire(deps, fqid);
+  // The body first: a record with no cached source would show in the list as
+  // installed and fail on every enable.
+  await deps.storage.set(REGISTRY_NS, sourceKey(fqid), source);
+  await write([...rows, row]);
+}
+
+/**
+ * Drop the record and its cached body, keeping the addon's own data.
+ *
+ * Uninstalling to fix something and reinstalling is the common case, and it
+ * should not silently cost the player their settings and window positions.
+ */
+async function uninstall(deps: RegistryDeps, write: Write, fqid: string): Promise<void> {
+  const rows = await readInstalled(deps.storage);
+  const kept = rows.filter((candidate) => candidate.fqid !== fqid);
+  if (kept.length === rows.length) {
+    throw new Error(`${fqid} is not installed`);
+  }
+  await deps.storage.delete(REGISTRY_NS, sourceKey(fqid));
+  const url = await originOf(deps, fqid);
+  if (url !== null) {
+    // Otherwise a reinstall would issue a conditional request, get a 304, and be
+    // served the body from before the uninstall.
+    await deps.fetcher.forget(url);
+  }
+  await write(kept);
+}
+
+/** Replace the manifest and body, keeping the enable flag and the pin. */
+async function update(deps: RegistryDeps, write: Write, fqid: string): Promise<void> {
+  const rows = await readInstalled(deps.storage);
+  const at = rows.findIndex((candidate) => candidate.fqid === fqid);
+  const current = rows[at];
+  if (current === undefined) {
+    throw new Error(`${fqid} is not installed`);
+  }
+  const { row, source } = await acquire(deps, fqid);
+  await deps.storage.set(REGISTRY_NS, sourceKey(fqid), source);
+  // Only what the marketplace owns is replaced.
+  rows[at] = { ...row, enabled: current.enabled, pin: current.pin };
+  await write(rows);
+}
+
+function createRegistry(deps: RegistryDeps): RegistryApi {
   const { storage } = deps;
+
+  const write: Write = async (rows) => {
+    await storage.set(REGISTRY_NS, INSTALLED_KEY, rows);
+    deps.onChanged();
+  };
 
   return {
     list: () => readInstalled(storage),
@@ -81,13 +209,28 @@ export function createRegistry(deps: RegistryDeps): RegistryApi {
         return;
       }
       row.enabled = on;
-      await storage.set(REGISTRY_NS, INSTALLED_KEY, rows);
-      deps.onChanged();
+      await write(rows);
     },
 
-    install: () => pending('registry.install'),
-    uninstall: () => pending('registry.uninstall'),
-    update: () => pending('registry.update'),
-    source: () => pending('registry.source'),
+    install: (fqid) => install(deps, write, fqid),
+    uninstall: (fqid) => uninstall(deps, write, fqid),
+    update: (fqid) => update(deps, write, fqid),
+
+    source: async (fqid) => {
+      if (splitFqid(fqid)?.marketplace === LOCAL_ID) {
+        const fresh = await refetchLocal(deps, fqid);
+        if (fresh !== null) {
+          return fresh;
+        }
+      }
+      const cached = await storage.get(REGISTRY_NS, sourceKey(fqid));
+      if (typeof cached === 'string' && cached.length > 0) {
+        return cached;
+      }
+      throw new Error(`no cached source for ${fqid}: reinstall or update it`);
+    },
   };
 }
+
+export type { RegistryDeps, RegistryStorage };
+export { createRegistry, INSTALLED_KEY, REGISTRY_NS, sourceKey };

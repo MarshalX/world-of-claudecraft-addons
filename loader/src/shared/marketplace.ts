@@ -2,7 +2,14 @@
 //
 // A marketplace is a GitHub repository with an addons/ directory. Only GitHub is
 // accepted, which is what bounds the userscript's @connect list: no marketplace
-// URL can aim GM_xmlhttpRequest at another host.
+// URL a user can paste will aim GM_xmlhttpRequest at another host.
+//
+// The one exception is the local dev server, and it is an exception because it
+// is not user input at all. Its origin is a constant in this file, so the set of
+// hosts the loader can reach is still fixed at build time. Source is therefore a
+// union rather than an optional field: a caller that builds a URL has to say
+// which kind of source it is looking at, instead of a `raw.githubusercontent.com`
+// path quietly appearing for something that is not a repository.
 
 const RAW_BASE = 'https://raw.githubusercontent.com';
 const API_BASE = 'https://api.github.com';
@@ -68,16 +75,39 @@ function parseShorthand(raw: string): ParseResult {
   return { ok: true, value: { owner, repo, ref: 'HEAD' } };
 }
 
-/** Reserved: normalizeMarketplaceUrl never produces this id. */
+/** The base every file in a marketplace hangs off. */
+function marketplaceBase(source: MarketplaceSource): string {
+  if (source.kind === 'local') {
+    return source.origin;
+  }
+  return `${RAW_BASE}/${source.owner}/${source.repo}/${source.ref}`;
+}
+
+/** Reserved: normalizeMarketplaceUrl never produces either of these ids. */
 export const OFFICIAL_ID = 'official';
+export const LOCAL_ID = 'local';
+
+/**
+ * Where the local dev server listens, and the whole reason `localhost` is in the
+ * userscript's @connect list. A constant rather than a setting: a configurable
+ * origin would turn the allowlist into user input.
+ */
+export const LOCAL_ORIGIN = 'http://localhost:5180';
+
+/**
+ * Where a marketplace's files come from.
+ *
+ * The `local` arm exists only for the dev server. It is never persisted and
+ * never constructed from anything a user typed.
+ */
+export type MarketplaceSource =
+  | { kind: 'github'; owner: string; repo: string; ref: string }
+  | { kind: 'local'; origin: string };
 
 export interface MarketplaceRef {
   id: string;
-  owner: string;
-  repo: string;
-  /** Branch, tag, or commit. 'HEAD' resolves to the repository default branch. */
-  ref: string;
   name: string;
+  source: MarketplaceSource;
 }
 
 /**
@@ -89,30 +119,122 @@ export interface MarketplaceRef {
  */
 export const OFFICIAL: MarketplaceRef = Object.freeze({
   id: OFFICIAL_ID,
-  owner: 'MarshalX',
-  repo: 'world-of-claudecraft-addons',
-  ref: 'HEAD',
   name: 'Official Marketplace',
-});
+  source: Object.freeze({
+    kind: 'github',
+    owner: 'MarshalX',
+    repo: 'world-of-claudecraft-addons',
+    ref: 'HEAD',
+  }),
+} as const);
+
+/**
+ * The ephemeral dev source, present only while dev mode is on.
+ *
+ * Never written to the persisted marketplace list, so turning dev mode off is
+ * what removes it. `tools/serve.mjs` generates its index from addons/ on every
+ * request, which is what makes an edit to a manifest visible without a rebuild.
+ */
+export const LOCAL: MarketplaceRef = Object.freeze({
+  id: LOCAL_ID,
+  name: 'Local dev server',
+  source: Object.freeze({ kind: 'local', origin: LOCAL_ORIGIN }),
+} as const);
 
 export type NormalizeResult = { ok: true; ref: MarketplaceRef } | { ok: false; error: string };
+
+/**
+ * What the host persists for one user-added marketplace.
+ *
+ * Deliberately not the whole ref. A stored ref would carry an `id` and a
+ * `source.kind` that a hand-edited GM value could set to anything, and the id is
+ * the storage namespace for every addon installed from it. Persisting only the
+ * three fields the user actually chose means reading the list back runs the
+ * same validation that accepting it did, and the id is re-derived rather than
+ * trusted.
+ */
+export interface StoredMarketplace {
+  owner: string;
+  repo: string;
+  ref: string;
+}
+
+/** True for the two sources that ship with the loader and cannot be removed. */
+export function isBuiltinMarketplace(id: string): boolean {
+  return id === OFFICIAL_ID || id === LOCAL_ID;
+}
 
 export function marketplaceId(owner: string, repo: string): string {
   return `gh:${owner}/${repo}`;
 }
 
+/** Validate a GitHub owner, repo, and ref, and build the marketplace they name. */
+export function githubMarketplace(owner: string, repo: string, ref: string): NormalizeResult {
+  if (!(NAME_RE.test(owner) && NAME_RE.test(repo))) {
+    return { ok: false, error: 'invalid owner or repository name' };
+  }
+  if (!REF_RE.test(ref)) {
+    return { ok: false, error: 'invalid branch, tag, or commit' };
+  }
+
+  const id = marketplaceId(owner, repo);
+  if (isBuiltinMarketplace(id)) {
+    return { ok: false, error: 'that id is reserved' };
+  }
+
+  return {
+    ok: true,
+    ref: { id, name: `${owner}/${repo}`, source: { kind: 'github', owner, repo, ref } },
+  };
+}
+
+/** The persistable form of a user-added marketplace, or null for a built-in one. */
+export function toStored(market: MarketplaceRef): StoredMarketplace | null {
+  const { source } = market;
+  if (source.kind === 'local' || isBuiltinMarketplace(market.id)) {
+    return null;
+  }
+  return { owner: source.owner, repo: source.repo, ref: source.ref };
+}
+
+/** One persisted record, re-validated. Null for anything that no longer parses. */
+export function fromStored(value: unknown): MarketplaceRef | null {
+  if (value === null || typeof value !== 'object') {
+    return null;
+  }
+  const { owner, repo, ref } = value as Partial<StoredMarketplace>;
+  if (typeof owner !== 'string' || typeof repo !== 'string' || typeof ref !== 'string') {
+    return null;
+  }
+  const built = githubMarketplace(owner, repo, ref);
+  if (!built.ok) {
+    return null;
+  }
+  return built.ref;
+}
+
 export function indexUrl(market: MarketplaceRef): string {
-  return `${RAW_BASE}/${market.owner}/${market.repo}/${market.ref}/marketplace.json`;
+  return `${marketplaceBase(market.source)}/marketplace.json`;
 }
 
 export function fileUrl(market: MarketplaceRef, path: string): string {
-  return `${RAW_BASE}/${market.owner}/${market.repo}/${market.ref}/${path}`;
+  return `${marketplaceBase(market.source)}/${path}`;
 }
 
-/** Fallback enumeration, used only when a repository has no marketplace.json. */
-export function contentsApiUrl(market: MarketplaceRef): string {
-  const ref = encodeURIComponent(market.ref);
-  return `${API_BASE}/repos/${market.owner}/${market.repo}/contents/addons?ref=${ref}`;
+/**
+ * Fallback enumeration for a repository with no marketplace.json.
+ *
+ * Null for the local source, which has no such fallback and needs none: the dev
+ * server builds its index from the directory on every request, so an index is
+ * always there and always current.
+ */
+export function contentsApiUrl(market: MarketplaceRef): string | null {
+  const { source } = market;
+  if (source.kind === 'local') {
+    return null;
+  }
+  const ref = encodeURIComponent(source.ref);
+  return `${API_BASE}/repos/${source.owner}/${source.repo}/contents/addons?ref=${ref}`;
 }
 
 /** Storage namespace, registry key, and keybind scope. Marketplaces may share an addon id. */
@@ -132,7 +254,9 @@ export function splitFqid(value: string): { marketplace: string; addonId: string
  * Reduce anything a user might paste to a MarketplaceRef.
  *
  * Accepts `owner/repo`, a github.com URL, a `.git` clone URL, and a tree or blob
- * URL carrying a branch or tag. Every non-GitHub host is rejected.
+ * URL carrying a branch or tag. Every non-GitHub host is rejected, including the
+ * dev server's own origin: the local source is a build-time constant and is not
+ * reachable through this door.
  */
 export function normalizeMarketplaceUrl(input: string): NormalizeResult {
   const raw = input.trim();
@@ -152,19 +276,5 @@ export function normalizeMarketplaceUrl(input: string): NormalizeResult {
   }
 
   const { owner, ref } = parsed.value;
-  const repo = parsed.value.repo.replace(GIT_SUFFIX_RE, '');
-
-  if (!(NAME_RE.test(owner) && NAME_RE.test(repo))) {
-    return { ok: false, error: 'invalid owner or repository name' };
-  }
-  if (!REF_RE.test(ref)) {
-    return { ok: false, error: 'invalid branch, tag, or commit' };
-  }
-
-  const id = marketplaceId(owner, repo);
-  if (id === OFFICIAL_ID) {
-    return { ok: false, error: 'that id is reserved' };
-  }
-
-  return { ok: true, ref: { id, owner, repo, ref, name: `${owner}/${repo}` } };
+  return githubMarketplace(owner, parsed.value.repo.replace(GIT_SUFFIX_RE, ''), ref);
 }

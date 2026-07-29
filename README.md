@@ -59,7 +59,19 @@ woc.keys.bind('toggle', () => {
 
 No registration call and no cleanup code. Everything the API creates is torn down automatically when the addon is disabled.
 
-The full API surface is typed in [`packages/types/index.d.ts`](packages/types/index.d.ts), and the manifest schema is [`loader/src/shared/schema.ts`](loader/src/shared/schema.ts).
+The full API surface is typed in [`packages/types/index.d.ts`](packages/types/index.d.ts), and the manifest schema is [`loader/src/shared/schema.ts`](loader/src/shared/schema.ts). [`addons/dev-harness`](addons/dev-harness) is a working example that touches every part of the API and reports what it found, which is also how the loader itself gets checked against a live game.
+
+### Writing one
+
+Run the dev server, install your addon from it once, and from then on a save is a reload.
+
+```sh
+pnpm dev        # watch build, plus the addon dev server on :5180
+```
+
+In the game, open **Addons**, go to the **Dev** tab, and turn the local dev server on. It serves `addons/` from this repository and lists whatever is in there; install yours and enable it. Turn the reload switch on as well and the loader picks up each save without a page refresh: it polls each running local addon and re-evaluates only the ones whose file actually changed.
+
+Nothing about that path is special-cased. Your addon is fetched, validated, evaluated, and disposed exactly the way one from a published marketplace is, so an addon that works against the dev server works once it is published.
 
 ### What addons may not do
 
@@ -72,12 +84,13 @@ corepack enable
 pnpm install
 pnpm check      # typecheck, lint, test, validate manifests
 pnpm build      # emits loader/dist/woc-loader.user.js
-pnpm dev        # live-reloading userscript
+pnpm dev        # watch build, plus the addon dev server on :5180
+pnpm serve      # the addon dev server on its own
 ```
 
 Develop against `pbe` or `pbe2`. They run ahead of live, so game drift shows up there first.
 
-Working instructions are in [AGENTS.md](AGENTS.md).
+Working instructions are in [AGENTS.md](AGENTS.md), and the lint and type rules worth knowing before you write a module are in [STYLE.md](STYLE.md).
 
 ## License
 

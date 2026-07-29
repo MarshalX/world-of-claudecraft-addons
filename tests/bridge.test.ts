@@ -25,8 +25,7 @@ const VERSION = '1.4.2';
 
 const RUNTIME_TIMEOUT = /runtime handshake timed out/;
 const HOST_TIMEOUT = /host handshake timed out/;
-const NO_INSTALL = /not implemented: registry.install/;
-const NO_MARKET = /not implemented: market.list/;
+const NOT_OFFERED = /not offered by any marketplace/;
 
 const cleanups: Array<() => void> = [];
 
@@ -106,8 +105,12 @@ function memoryGm(): GmAdapter {
     listValues: () => Promise.resolve([...store.keys()]),
     onValueChange: () => () => undefined,
     registerMenuCommand: () => undefined,
+    // No marketplace fetching in either of these suites: they are about the
+    // value store and the bridge, and a request here would be a request the
+    // code under test never makes.
+    request: () => Promise.reject(new Error('no http in this fake')),
     scriptVersion: VERSION,
-    capabilities: { valueStore: 'gm4', valueChange: 'none', menuCommand: false },
+    capabilities: { valueStore: 'gm4', valueChange: 'none', menuCommand: false, http: false },
   };
 }
 
@@ -156,7 +159,19 @@ async function connectBoth(): Promise<Handshake & { connection: HostConnection }
   const handshake = startHandshake();
   const [port, connection] = await Promise.all([handshake.hostPort, handshake.runtime]);
 
-  expose(createHostApi(createHostStorage(memoryGm())).api, port);
+  const gm = memoryGm();
+  expose(
+    createHostApi({
+      storage: createHostStorage(gm),
+      gm,
+      setTimer: (handler, ms) => globalThis.setTimeout(handler, ms) as unknown as number,
+      clearTimer: (id) => {
+        globalThis.clearTimeout(id);
+      },
+      now: () => 0,
+    }).api,
+    port,
+  );
   cleanups.push(() => {
     connection.dispose();
   });
@@ -294,12 +309,38 @@ describe('host API over the bridge', () => {
     await expect(connection.host.registry.list()).resolves.toEqual([]);
   });
 
-  // An empty answer would read as "there is nothing to install" rather than
-  // "this half is not built yet", and the manager UI would render it as such.
-  it('rejects the members whose service does not exist yet', async () => {
+  // The official source is merged in from the loader build rather than read from
+  // storage, so it is there on the first call with nothing installed and nothing
+  // fetched. `fetchedAt: null` is what says the index has not been read yet, and
+  // it is a different state from an index that was read and was empty.
+  it('carries the built-in marketplace across the bridge', async () => {
     const { connection } = await connectBoth();
 
-    await expect(connection.host.registry.install('official/minimap')).rejects.toThrow(NO_INSTALL);
-    await expect(connection.host.market.list()).rejects.toThrow(NO_MARKET);
+    const markets = await connection.host.market.list();
+
+    expect(markets.map((entry) => entry.ref.id)).toEqual(['official']);
+    expect(markets[0]?.builtin).toBe(true);
+    expect(markets[0]?.fetchedAt).toBeNull();
+  });
+
+  // The manager holds the registry directly when it can, so a synchronous throw
+  // would be a different failure for it than for a bridged caller. Comlink turns
+  // a throw into a rejection either way, which is what hides the difference.
+  it('rejects rather than answering emptily for an addon no source offers', async () => {
+    const { connection } = await connectBoth();
+
+    await expect(connection.host.registry.install('official/minimap')).rejects.toThrow(NOT_OFFERED);
+  });
+
+  // Dev mode is off until the player turns it on, so the local source is not in
+  // the list above and nothing polls localhost on an ordinary session.
+  it('reports dev mode off by default', async () => {
+    const { connection } = await connectBoth();
+
+    await expect(connection.host.dev.state()).resolves.toMatchObject({
+      enabled: false,
+      hotReload: false,
+      origin: 'http://localhost:5180',
+    });
   });
 });

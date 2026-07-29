@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { createGmAdapter, detectCapabilities } from '../loader/src/host/gm.ts';
+import { detectCapabilities } from '../loader/src/host/capabilities.ts';
+import { createGmAdapter } from '../loader/src/host/gm.ts';
 import {
   fakeChannelCtor,
   fullSource,
@@ -20,6 +21,7 @@ describe('detectCapabilities', () => {
       valueStore: 'gm4',
       valueChange: 'native',
       menuCommand: true,
+      http: true,
     });
   });
 
@@ -52,6 +54,15 @@ describe('detectCapabilities', () => {
     expect(detectCapabilities({ ...legacyOnlySource() }).menuCommand).toBe(false);
   });
 
+  // A missing request grant costs marketplaces and nothing else: the manager
+  // and every already-installed addon work from cached source without it, so it
+  // is a capability rather than a boot condition.
+  it('reports the request surface from either spelling', () => {
+    expect(detectCapabilities(greasemonkeySource()).http).toBe(true);
+    expect(detectCapabilities(violentmonkeySource()).http).toBe(true);
+    expect(detectCapabilities({ ...legacyOnlySource() }).http).toBe(false);
+  });
+
   // Pinned against Violentmonkey 2.45 as observed, not as assumed: its GM object
   // stops at registerMenuCommand, so the promise store pairs with the legacy
   // listener. This mix is what the loader runs on in production.
@@ -60,6 +71,7 @@ describe('detectCapabilities', () => {
       valueStore: 'gm4',
       valueChange: 'native',
       menuCommand: true,
+      http: true,
     });
   });
 });
@@ -124,6 +136,7 @@ describe('createGmAdapter', () => {
         valueStore: 'gm4',
         valueChange: 'native',
         menuCommand: true,
+        http: true,
       });
     });
 

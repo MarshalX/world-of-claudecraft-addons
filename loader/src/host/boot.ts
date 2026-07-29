@@ -23,6 +23,8 @@ const MENU_COMMAND_LABEL = 'Open the Addons manager';
 export interface HostScope extends MessageScope {
   readonly crypto: Pick<Crypto, 'getRandomValues'>;
   readonly document: Document;
+  readonly setTimeout: (handler: () => void, ms: number) => number;
+  readonly clearTimeout: (id: number) => void;
 }
 
 /**
@@ -35,7 +37,15 @@ export function bootHost(scope: HostScope): void {
   }
 
   const gm = createGmAdapter(readGmSource());
-  const services = createHostApi(createHostStorage(gm));
+  const services = createHostApi({
+    storage: createHostStorage(gm),
+    gm,
+    setTimer: (handler, ms) => scope.setTimeout(handler, ms),
+    clearTimer: (id) => {
+      scope.clearTimeout(id);
+    },
+    now: () => Date.now(),
+  });
   const nonce = createNonce(scope.crypto);
 
   // Registered whether or not the runtime ever connects. This entry is the one

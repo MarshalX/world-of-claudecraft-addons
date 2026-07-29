@@ -104,10 +104,17 @@
       "linter": {
         "rules": {
           "style": {
-            "noMagicNumbers": "off"
+            "noMagicNumbers": "off",
+            "noExcessiveLinesPerFile": "off"
           },
           "security": {
             "noSecrets": "off"
+          },
+          "performance": {
+            "useTopLevelRegex": "off"
+          },
+          "suspicious": {
+            "noMisplacedAssertion": "off"
           },
           "complexity": {
             "noExcessiveLinesPerFunction": {
@@ -124,6 +131,13 @@
       "includes": ["addons/**"],
       "javascript": {
         "globals": ["woc"]
+      },
+      "linter": {
+        "rules": {
+          "style": {
+            "noExcessiveLinesPerFile": "off"
+          }
+        }
       }
     }
   ]

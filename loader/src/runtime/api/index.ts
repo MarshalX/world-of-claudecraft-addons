@@ -10,8 +10,9 @@
 // that throws) is runtime/loader.ts and arrives with M5. This builds the surface
 // that lifecycle hands over.
 
+import { API_VERSION } from '../../shared/api-version.ts';
 import type { Channel } from '../../shared/hosts.ts';
-import { type AddonManifest, API_VERSION } from '../../shared/schema.ts';
+import type { AddonManifest } from '../../shared/schema.ts';
 import type { DisposalBag, Teardown } from '../disposal.ts';
 import type { KeyDispatcher } from '../keys/dispatcher.ts';
 import type { GameBindings } from '../keys/game-bindings.ts';

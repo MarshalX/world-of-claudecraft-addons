@@ -6,6 +6,7 @@
 // registry) is an ordinary method call rather than a prop that exists only to
 // invalidate an effect.
 
+import { describeError } from '../../../shared/diag.ts';
 import type { InstalledAddon } from '../../../shared/protocol.ts';
 
 type InstalledStatus = 'idle' | 'loading' | 'ready' | 'failed';
@@ -20,6 +21,8 @@ interface InstalledState {
 interface InstalledRegistry {
   list: () => Promise<InstalledAddon[]>;
   setEnabled: (fqid: string, on: boolean) => Promise<void>;
+  install: (fqid: string) => Promise<void>;
+  uninstall: (fqid: string) => Promise<void>;
 }
 
 interface InstalledStoreDeps {
@@ -32,16 +35,11 @@ interface InstalledStore {
   state: () => InstalledState;
   reload: () => void;
   setEnabled: (fqid: string, on: boolean) => void;
+  /** Remove the addon and its cached source. Its stored data is kept. */
+  uninstall: (fqid: string) => void;
 }
 
 const IDLE: InstalledState = { status: 'idle', rows: [], error: null };
-
-function describe(err: unknown): string {
-  if (err instanceof Error) {
-    return err.message;
-  }
-  return String(err);
-}
 
 function createInstalledStore(deps: InstalledStoreDeps): InstalledStore {
   let state = IDLE;
@@ -72,7 +70,7 @@ function createInstalledStore(deps: InstalledStoreDeps): InstalledStore {
       })
       .catch((err: unknown) => {
         if (mine === ticket) {
-          commit({ status: 'failed', rows: [], error: describe(err) });
+          commit({ status: 'failed', rows: [], error: describeError(err) });
         }
       });
   };
@@ -90,7 +88,20 @@ function createInstalledStore(deps: InstalledStoreDeps): InstalledStore {
         return;
       }
       registry.setEnabled(fqid, on).catch((err: unknown) => {
-        commit({ ...state, error: describe(err) });
+        commit({ ...state, error: describeError(err) });
+      });
+    },
+
+    // Also no optimistic removal: the host emits registry.changed on a write
+    // that landed, and that is what takes the row away. A row that vanished and
+    // came back would read as the uninstall having failed silently.
+    uninstall: (fqid) => {
+      const { registry } = deps;
+      if (registry === null) {
+        return;
+      }
+      registry.uninstall(fqid).catch((err: unknown) => {
+        commit({ ...state, error: describeError(err) });
       });
     },
   };

@@ -1,4 +1,4 @@
-// The two non-TypeScript module shapes the loader imports as text.
+// The non-TypeScript module shapes this project imports as text.
 //
 // `*.js?raw` is Vite's raw suffix, which the host uses to inline the pre-bundled
 // runtime; declaring it as a wildcard means a typecheck run does not need the
@@ -6,6 +6,11 @@
 // loader/build-runtime.mjs loads as text so it can be injected as one <style>.
 
 declare module '*.js?raw' {
+  const source: string;
+  export default source;
+}
+
+declare module '*.json?raw' {
   const source: string;
   export default source;
 }

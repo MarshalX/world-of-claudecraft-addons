@@ -22,6 +22,7 @@ import { UI_TEXT } from '../loader/src/runtime/ui/manager/strings.ts';
 import type { InstalledAddon } from '../loader/src/shared/protocol.ts';
 import { configNamespace, KEYBINDS_KEY } from '../loader/src/shared/storage-keys.ts';
 import { createFakeStorage, type FakeStorage } from './fakes/storage.ts';
+import { fakeRegistry, supervisorServices } from './fakes/ui-deps.ts';
 
 const FQID = 'official/dps-meter';
 const SETTLE_TURNS = 6;
@@ -114,10 +115,10 @@ interface OpenOptions {
 
 function open(options: OpenOptions = {}) {
   const hub = options.hub ?? createFakeStorage();
-  const registry: InstalledRegistry = {
+  const registry: InstalledRegistry = fakeRegistry({
     list: async () => [options.installed ?? addon()],
     setEnabled: async () => undefined,
-  };
+  });
   const root = document.createElement('div');
   root.id = 'woc-addons';
   document.body.appendChild(root);
@@ -141,6 +142,9 @@ function open(options: OpenOptions = {}) {
     config,
     capture: options.capture ?? (() => Promise.resolve(null)),
     logs: createLogBuffer(),
+    market: null,
+    dev: null,
+    ...supervisorServices(),
   });
   const repaint = (): void => {
     if (manager.isOpen()) {

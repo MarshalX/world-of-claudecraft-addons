@@ -56,7 +56,11 @@ function fakeGm(): FakeGm {
       return () => set.delete(handler);
     },
     registerMenuCommand: () => undefined,
-    capabilities: { valueStore: 'gm4', valueChange: 'native', menuCommand: true },
+    // No marketplace fetching in either of these suites: they are about the
+    // value store and the bridge, and a request here would be a request the
+    // code under test never makes.
+    request: () => Promise.reject(new Error('no http in this fake')),
+    capabilities: { valueStore: 'gm4', valueChange: 'native', menuCommand: true, http: false },
   };
 }
 

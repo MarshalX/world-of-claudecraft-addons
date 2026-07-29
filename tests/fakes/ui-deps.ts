@@ -9,7 +9,7 @@ import { createKeyDispatcher } from '../../loader/src/runtime/keys/dispatcher.ts
 import { createGameBindings } from '../../loader/src/runtime/keys/game-bindings.ts';
 import { createLogBuffer } from '../../loader/src/runtime/log/buffer.ts';
 import { createConfigService } from '../../loader/src/runtime/ui/manager/config.ts';
-import type { ManagerDeps } from '../../loader/src/runtime/ui/manager/index.tsx';
+import type { InstalledRegistry, ManagerDeps } from '../../loader/src/runtime/ui/manager/index.tsx';
 import type { UiDeps } from '../../loader/src/runtime/ui/mount.ts';
 import { createFakeStorage, type FakeStorage } from './storage.ts';
 
@@ -33,13 +33,57 @@ function createUiHarness(doc: Document): UiHarness {
   };
 }
 
+/**
+ * A registry that answers, for a suite that is not about the registry.
+ *
+ * Every member is present because the manager's type demands all of them, and a
+ * suite that only cares about `list` should not have to say what `install` does
+ * to make the compiler let it through.
+ */
+function fakeRegistry(overrides: Partial<InstalledRegistry> = {}): InstalledRegistry {
+  return {
+    list: () => Promise.resolve([]),
+    setEnabled: () => Promise.resolve(),
+    install: () => Promise.resolve(),
+    uninstall: () => Promise.resolve(),
+    ...overrides,
+  };
+}
+
+/** The supervisor's half of ManagerDeps, with nothing running. */
+function supervisorServices(): Pick<
+  ManagerDeps,
+  'statuses' | 'reload' | 'reloadAll' | 'formatTime'
+> {
+  return {
+    statuses: () => [],
+    reload: () => Promise.resolve(),
+    reloadAll: () => Promise.resolve(),
+    // Fixed rather than locale-dependent: a suite asserting on rendered text
+    // must not depend on the machine's regional settings.
+    formatTime: (at) => `t+${String(at)}`,
+  };
+}
+
 /** The extra half of UiDeps, for a suite that supplies the half it cares about. */
 function uiServices(
   doc: Document,
   harness = createUiHarness(doc),
 ): Pick<
   UiDeps,
-  'setTimer' | 'clearTimer' | 'viewport' | 'storageHub' | 'gameBindings' | 'dispatcher' | 'logs'
+  | 'setTimer'
+  | 'clearTimer'
+  | 'viewport'
+  | 'storageHub'
+  | 'gameBindings'
+  | 'dispatcher'
+  | 'logs'
+  | 'market'
+  | 'dev'
+  | 'statuses'
+  | 'reload'
+  | 'reloadAll'
+  | 'formatTime'
 > {
   return {
     setTimer: (handler, ms) => globalThis.setTimeout(handler, ms) as unknown as number,
@@ -51,6 +95,9 @@ function uiServices(
     gameBindings: harness.gameBindings,
     dispatcher: harness.dispatcher,
     logs: harness.logs,
+    market: null,
+    dev: null,
+    ...supervisorServices(),
   };
 }
 
@@ -58,7 +105,18 @@ function uiServices(
 function managerServices(
   doc: Document,
   harness = createUiHarness(doc),
-): Pick<ManagerDeps, 'config' | 'capture' | 'logs'> {
+): Pick<
+  ManagerDeps,
+  | 'config'
+  | 'capture'
+  | 'logs'
+  | 'market'
+  | 'dev'
+  | 'statuses'
+  | 'reload'
+  | 'reloadAll'
+  | 'formatTime'
+> {
   return {
     config: createConfigService({
       hub: harness.storage,
@@ -68,8 +126,11 @@ function managerServices(
     }),
     capture: () => harness.dispatcher.capture().done,
     logs: harness.logs,
+    market: null,
+    dev: null,
+    ...supervisorServices(),
   };
 }
 
 export type { UiHarness };
-export { createUiHarness, managerServices, uiServices, VIEWPORT };
+export { createUiHarness, fakeRegistry, managerServices, supervisorServices, uiServices, VIEWPORT };

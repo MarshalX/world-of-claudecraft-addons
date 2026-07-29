@@ -54,6 +54,38 @@
   color: var(--gold, rgb(255 209 0));
 }
 
+/* The run state, which is not the enable state, so it reads as an annotation on
+   the name rather than as another control next to the toggle. */
+#woc-addons .woc-badge {
+  border: 1px solid var(--color-border-default, rgb(78 61 29));
+  border-radius: var(--radius-sm, 4px);
+  font-size: 11px;
+  padding: 1px 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+  vertical-align: middle;
+}
+
+#woc-addons .woc-badge-ok {
+  color: var(--color-text-success, rgb(127 220 79));
+}
+
+#woc-addons .woc-badge-muted {
+  color: var(--color-text-muted, rgb(153 141 106));
+}
+
+#woc-addons .woc-badge-bad {
+  color: var(--color-text-error, rgb(255 143 133));
+  border-color: var(--color-text-error, rgb(255 143 133));
+}
+
+#woc-addons .woc-dev {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
 #woc-addons .woc-row-meta,
 #woc-addons .woc-row-desc {
   color: var(--color-text-muted, rgb(153 141 106));

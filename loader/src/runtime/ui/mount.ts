@@ -17,11 +17,13 @@
 // without a boolean that was true once at mount and has been stale since.
 
 import { diagError } from '../../shared/diag.ts';
+import type { DevApi, MarketApi } from '../../shared/protocol.ts';
 import type { DiagnosticsReading } from '../diagnostics.ts';
 import type { KeyDispatcher } from '../keys/dispatcher.ts';
 import type { GameBindings } from '../keys/game-bindings.ts';
 import type { LogBuffer } from '../log/buffer.ts';
 import type { StorageHub } from '../storage/hub.ts';
+import type { AddonStatus } from '../supervisor.ts';
 import { ANCHORS, ANCHORS_REQUIRED_IN_GAME } from './anchors.ts';
 import { ENTRY_ID } from './esc-inject.ts';
 import { createGameInjector, type GameInjector } from './kit/injections.ts';
@@ -86,9 +88,15 @@ function mountManagerPair(deps: UiDeps, root: HTMLElement): ManagerPair {
     doc: deps.doc,
     root,
     registry: deps.registry,
+    market: deps.market,
+    dev: deps.dev,
     storage: deps.storage,
     channel: deps.channel,
     readDiagnostics: deps.readDiagnostics,
+    statuses: deps.statuses,
+    reload: deps.reload,
+    reloadAll: deps.reloadAll,
+    formatTime: deps.formatTime,
     config,
     capture: () => {
       const capture = deps.dispatcher.capture();
@@ -145,12 +153,19 @@ export interface UiDeps {
   doc: Document;
   /** The loader stylesheet, bundled as text. */
   css: string;
-  /** Null when the bridge never connected. */
+  /** All three are null together when the bridge never connected. */
   registry: InstalledRegistry | null;
+  market: Pick<MarketApi, 'list' | 'refresh'> | null;
+  dev: DevApi | null;
   /** Null when the bridge never connected. Only the window position uses it. */
   storage: GeometryStorage | null;
   channel: string;
   readDiagnostics: () => DiagnosticsReading;
+  /** The supervisor's view, for the run-status badges and the Reload controls. */
+  statuses: () => readonly AddonStatus[];
+  reload: (fqid: string) => Promise<void>;
+  reloadAll: () => Promise<void>;
+  formatTime: (at: number) => string;
   setTimer: (handler: () => void, ms: number) => number;
   clearTimer: (id: number) => void;
   viewport: () => { w: number; h: number };

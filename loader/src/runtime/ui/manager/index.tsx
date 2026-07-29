@@ -12,10 +12,13 @@
 
 // biome-ignore lint/suspicious/noDeprecatedImports: preact's render is current, only its third replaceNode parameter is deprecated, and this call passes two arguments
 import { render } from 'preact';
+import type { DevApi, MarketApi } from '../../../shared/protocol.ts';
 import type { DiagnosticsReading } from '../../diagnostics.ts';
 import type { LogBuffer } from '../../log/buffer.ts';
+import type { AddonStatus } from '../../supervisor.ts';
 import { ManagerApp } from './app.tsx';
 import type { ConfigService, ConflictReading } from './config.ts';
+import { createDevStore, type DevStore } from './dev-store.ts';
 import { createGeometryStore, type GeometryStorage, type GeometryStore } from './geometry-store.ts';
 import { type AddonSelection, createSelection } from './selection.ts';
 import type { InstalledRegistry, InstalledStore } from './store.ts';
@@ -27,15 +30,23 @@ interface ManagerDeps {
   root: HTMLElement;
   /** Null when the bridge never connected. The pane reports that as its own state. */
   registry: InstalledRegistry | null;
+  market: Pick<MarketApi, 'list' | 'refresh'> | null;
+  dev: DevApi | null;
   /** Null when the bridge never connected. The window then never persists its position. */
   storage: GeometryStorage | null;
   channel: string;
   readDiagnostics: () => DiagnosticsReading;
+  /** Which addons are actually running, from the supervisor. */
+  statuses: () => readonly AddonStatus[];
+  reload: (fqid: string) => Promise<void>;
+  reloadAll: () => Promise<void>;
   /** Builds the settings and keybind stores an addon's own page edits. */
   config: ConfigService | null;
   /** Swallow the next key press, for the keybind editor. */
   capture: () => Promise<string | null>;
   logs: LogBuffer;
+  /** Renders a wall-clock reading. Injected so the pure panes stay locale-free. */
+  formatTime: (at: number) => string;
 }
 
 interface Manager {
@@ -45,15 +56,25 @@ interface Manager {
   isOpen: () => boolean;
   /** Reload what the panes read. Called when the host reports the registry changed. */
   invalidate: () => void;
+  /**
+   * Redraw without re-reading anything.
+   *
+   * What the supervisor reports changes far more often than the registry does,
+   * and re-reading the registry on every status change would put a bridge round
+   * trip behind each one.
+   */
+  repaint: () => void;
   dispose: () => void;
 }
 
 interface Frame {
   container: HTMLElement;
   store: InstalledStore;
+  dev: DevStore;
   geometry: GeometryStore;
   close: () => void;
   isOpen: () => boolean;
+  paint: () => void;
   show: () => void;
   closeAddon: () => void;
 }
@@ -61,6 +82,7 @@ interface Frame {
 /** Everything one render of the window's contents reads. */
 interface FrameView {
   store: InstalledStore;
+  dev: DevStore;
   geometry: GeometryStore;
   selection: AddonSelection;
   onClose: () => void;
@@ -87,7 +109,20 @@ function renderApp(deps: ManagerDeps, view: FrameView, container: HTMLElement): 
   render(
     <ManagerApp
       installed={view.store.state()}
+      statuses={deps.statuses()}
       onToggle={view.store.setEnabled}
+      onUninstall={view.store.uninstall}
+      onReload={(fqid) => {
+        // The supervisor records its own failures as addon status, so there is
+        // nothing here to await or to catch.
+        deps.reload(fqid).catch(() => undefined);
+      }}
+      onReloadAll={() => {
+        deps.reloadAll().catch(() => undefined);
+      }}
+      dev={view.dev.state()}
+      devStore={view.dev}
+      formatTime={deps.formatTime}
       readDiagnostics={deps.readDiagnostics}
       onClose={view.onClose}
       box={view.geometry.box()}
@@ -111,6 +146,30 @@ function renderApp(deps: ManagerDeps, view: FrameView, container: HTMLElement): 
  * between paint and close is why the two are built together rather than passed
  * to each other.
  */
+/**
+ * The four stores the window reads, all repainting through one callback.
+ *
+ * They load outside the component tree, so opening the window paints whatever is
+ * already loaded and a reload driven from another tab does not need the window
+ * to be open.
+ */
+function createStores(deps: ManagerDeps, repaint: () => void) {
+  const store = createInstalledStore({ registry: deps.registry, onChange: repaint });
+  const dev = createDevStore({
+    dev: deps.dev,
+    market: deps.market,
+    registry: deps.registry,
+    onChange: repaint,
+  });
+  const geometry = createGeometryStore({ storage: deps.storage, channel: deps.channel });
+  const selection = createSelection({
+    config: deps.config,
+    find: (fqid) => store.state().rows.find((row) => row.fqid === fqid) ?? null,
+    repaint,
+  });
+  return { store, dev, geometry, selection };
+}
+
 function createFrame(deps: ManagerDeps): Frame {
   const container = deps.doc.createElement('div');
   container.className = 'woc-manager';
@@ -119,19 +178,8 @@ function createFrame(deps: ManagerDeps): Frame {
   let open = false;
   let paint = (): void => undefined;
 
-  const store = createInstalledStore({
-    registry: deps.registry,
-    onChange: () => {
-      paint();
-    },
-  });
-  const geometry = createGeometryStore({ storage: deps.storage, channel: deps.channel });
-  const selection = createSelection({
-    config: deps.config,
-    find: (fqid) => store.state().rows.find((row) => row.fqid === fqid) ?? null,
-    repaint: () => {
-      paint();
-    },
+  const { store, dev, geometry, selection } = createStores(deps, () => {
+    paint();
   });
 
   const close = (): void => {
@@ -144,34 +192,43 @@ function createFrame(deps: ManagerDeps): Frame {
       render(null, container);
       return;
     }
-    renderApp(deps, { store, geometry, selection, onClose: close }, container);
+    renderApp(deps, { store, dev, geometry, selection, onClose: close }, container);
   };
 
   // Loaded on open rather than at boot: a player who never opens the manager
-  // should not pay for a bridge round trip. reload() commits synchronously and
-  // so paints already; the explicit paint covers a future reload that does not.
+  // should not pay for a bridge round trip. Both loads commit synchronously and
+  // so paint already; the explicit paint covers a future one that does not.
   const show = (): void => {
     if (open) {
       return;
     }
     open = true;
     store.reload();
+    // The dev reading is three storage reads and no network, so it is loaded
+    // whether or not that tab is the one being opened. Deferring it to the tab
+    // would mean the pane's first paint is always its loading state.
+    dev.load();
     paint();
   };
 
   return {
     container,
     store,
+    dev,
     geometry,
     close,
     isOpen: () => open,
+    paint: () => {
+      paint();
+    },
     show,
     closeAddon: selection.close,
   };
 }
 
 function mountManager(deps: ManagerDeps): Manager {
-  const { container, store, geometry, close, isOpen, show, closeAddon } = createFrame(deps);
+  const { container, store, dev, geometry, close, isOpen, paint, show, closeAddon } =
+    createFrame(deps);
 
   // Read once at mount rather than on every open, so the first open does not
   // wait on a bridge round trip and later ones use what is already in hand.
@@ -201,7 +258,10 @@ function mountManager(deps: ManagerDeps): Manager {
 
     invalidate: () => {
       store.reload();
+      dev.load();
     },
+
+    repaint: paint,
 
     dispose: () => {
       render(null, container);

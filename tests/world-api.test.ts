@@ -87,6 +87,29 @@ describe('before the game exists', () => {
     expect([...world.entities]).toEqual([]);
   });
 
+  // Found by running the dev-harness addon through the real loader. The empty
+  // roster used to be a bare Map, so before world entry the published contract
+  // ("set, delete, and clear throw") did not hold, and the surface changed shape
+  // under an addon the moment the game arrived.
+  it('refuses a write to the empty roster, exactly as the live one does', () => {
+    const { world } = harness();
+    const entities = world.entities as Map<number, unknown>;
+
+    expect(() => entities.set(1, {})).toThrow(TypeError);
+    expect(() => entities.delete(1)).toThrow(TypeError);
+    expect(() => entities.clear()).toThrow(TypeError);
+  });
+
+  // The worse half of the same defect: the fallback was one module-level Map
+  // shared by every addon, so a write from one before world entry would have
+  // been visible to all of them.
+  it('does not hand every addon the same roster object', () => {
+    const first = harness().world.entities;
+    const second = harness().world.entities;
+
+    expect(Object.is(first, second)).toBe(false);
+  });
+
   it('accepts a subscription that fires once the world arrives', async () => {
     const h = harness();
     const seen = vi.fn();

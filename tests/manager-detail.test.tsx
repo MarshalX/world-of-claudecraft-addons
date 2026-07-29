@@ -8,7 +8,7 @@
 // one a player turns off first and reconfigures second, so a settings screen needing the
 // addon running would be unavailable exactly then. Nothing here runs any addon code.
 
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { DiagnosticsReading } from '../loader/src/runtime/diagnostics.ts';
 import { createGameBindings } from '../loader/src/runtime/keys/game-bindings.ts';
 import { createLogBuffer } from '../loader/src/runtime/log/buffer.ts';
@@ -19,6 +19,7 @@ import { UI_TEXT } from '../loader/src/runtime/ui/manager/strings.ts';
 import type { InstalledAddon } from '../loader/src/shared/protocol.ts';
 import { configNamespace, SETTINGS_KEY } from '../loader/src/shared/storage-keys.ts';
 import { createFakeStorage, type FakeStorage } from './fakes/storage.ts';
+import { fakeRegistry, supervisorServices } from './fakes/ui-deps.ts';
 
 const FQID = 'official/dps-meter';
 const SETTLE_TURNS = 6;
@@ -44,7 +45,7 @@ const READING: DiagnosticsReading = {
 };
 
 /** Deliberately DISABLED: the page has to work for an addon that is not running. */
-function addon(): InstalledAddon {
+function addon(overrides: Partial<InstalledAddon> = {}): InstalledAddon {
   return {
     fqid: FQID,
     marketplace: 'official',
@@ -72,6 +73,7 @@ function addon(): InstalledAddon {
       ],
       keybinds: [{ id: 'toggle', label: 'Toggle DPS window', default: 'Alt+KeyD' }],
     },
+    ...overrides,
   };
 }
 
@@ -97,15 +99,16 @@ interface OpenOptions {
   hub?: FakeStorage;
   installed?: InstalledAddon;
   logs?: ReturnType<typeof createLogBuffer>;
+  setEnabled?: (fqid: string, on: boolean) => Promise<void>;
 }
 
 function open(options: OpenOptions = {}) {
   const hub = options.hub ?? createFakeStorage();
   const logs = options.logs ?? createLogBuffer();
-  const registry: InstalledRegistry = {
+  const registry: InstalledRegistry = fakeRegistry({
     list: async () => [options.installed ?? addon()],
-    setEnabled: async () => undefined,
-  };
+    setEnabled: options.setEnabled ?? (async () => undefined),
+  });
   const root = document.createElement('div');
   root.id = 'woc-addons';
   document.body.appendChild(root);
@@ -129,6 +132,9 @@ function open(options: OpenOptions = {}) {
     config,
     capture: () => Promise.resolve(null),
     logs,
+    market: null,
+    dev: null,
+    ...supervisorServices(),
   });
   const repaint = (): void => {
     if (manager.isOpen()) {
@@ -297,3 +303,70 @@ describe('the log tail', () => {
     expect(text()).not.toContain('not mine');
   });
 });
+
+// Found in the game, on the first real install. Installing does not enable, so
+// the addon's own page opens reading STOPPED; before this it had Reload and
+// Uninstall and no way to start the thing, and Reload itself is a no-op on a
+// stopped addon because there is no running copy to re-evaluate. The page was a
+// dead end that looked like a broken loader.
+describe('starting a stopped addon from its own page', () => {
+  it('offers an enable toggle', async () => {
+    open({ installed: addon({ enabled: false }) });
+    await settle();
+    clickLabelled(UI_TEXT.configure);
+    await settle();
+
+    expect(document.querySelector('.woc-detail .woc-toggle input')).not.toBeNull();
+  });
+
+  it('sends the flip to the registry', async () => {
+    const setEnabled = vi.fn(async () => undefined);
+    open({ installed: addon({ enabled: false }), setEnabled });
+    await settle();
+    clickLabelled(UI_TEXT.configure);
+    await settle();
+
+    document.querySelector<HTMLInputElement>('.woc-detail .woc-toggle input')?.click();
+
+    expect(setEnabled).toHaveBeenCalledWith(FQID, true);
+  });
+
+  it('shows the toggle reflecting the enable state', async () => {
+    open({ installed: addon({ enabled: true }) });
+    await settle();
+    clickLabelled(UI_TEXT.configure);
+    await settle();
+
+    const box = document.querySelector<HTMLInputElement>('.woc-detail .woc-toggle input');
+    expect(box?.checked).toBe(true);
+  });
+
+  // A button that answers a click with no visible effect reads as a broken
+  // loader, which is exactly how this was reported.
+  it('disables Reload while the addon is stopped, and says why', async () => {
+    open({ installed: addon({ enabled: false }) });
+    await settle();
+    clickLabelled(UI_TEXT.configure);
+    await settle();
+
+    const reload = buttonNamed(UI_TEXT.reload);
+    expect(reload?.disabled).toBe(true);
+    expect(reload?.title).toBe(UI_TEXT.reloadNeedsEnabled);
+  });
+
+  it('enables Reload once the addon is running', async () => {
+    open({ installed: addon({ enabled: true }) });
+    await settle();
+    clickLabelled(UI_TEXT.configure);
+    await settle();
+
+    expect(buttonNamed(UI_TEXT.reload)?.disabled).toBe(false);
+  });
+});
+
+/** One of the detail page's own buttons, by its visible label. */
+function buttonNamed(label: string): HTMLButtonElement | undefined {
+  return [...document.querySelectorAll<HTMLButtonElement>('.woc-detail button')].find(
+    (button) => button.textContent === label,
+  );
+}

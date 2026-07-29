@@ -19,9 +19,6 @@ const ENTRY_RE = /^[A-Za-z0-9._-]+(?:\/[A-Za-z0-9._-]+)*$/;
 
 const AddonId = z.string().regex(ID_RE, 'must be lower-case kebab-case, e.g. "dps-meter"');
 
-/** The loader API major version this build implements. */
-export const API_VERSION = 1;
-
 export const PERMISSIONS = ['net.read', 'world.read', 'ui', 'sound', 'keys', 'storage'] as const;
 
 export const KeybindDecl = z.object({
