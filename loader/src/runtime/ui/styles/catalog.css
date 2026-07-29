@@ -1,0 +1,94 @@
+/* Browse, Marketplaces, Updates, and the install confirmation.
+ *
+ * Split from panes.css, which had outgrown a file anyone reads top to bottom.
+ * The seam is by SUBJECT rather than by line count: panes.css holds what every
+ * pane is made of (notes, rows, badges, buttons, fields), and this holds the
+ * four surfaces that are about marketplaces. Nothing here is referenced from
+ * outside those four.
+ *
+ * Third of the sheets runtime/ui/styles/index.ts concatenates, after panes.css,
+ * because the rules below refine elements panes.css defines.
+ */
+
+#woc-addons .woc-browse,
+#woc-addons .woc-markets,
+#woc-addons .woc-updates,
+#woc-addons .woc-confirm {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* Wraps rather than scrolls: the manager window is resizable and narrow is a
+   normal width for it, where a fixed two-column filter bar would clip the tag
+   control off the right edge. */
+#woc-addons .woc-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+}
+
+#woc-addons .woc-filters .woc-field {
+  flex: 1 1 160px;
+  min-width: 0;
+}
+
+#woc-addons .woc-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 2px;
+}
+
+/* A category, not a state: no border, so it does not read as another status
+   badge sitting under the description. */
+#woc-addons .woc-tag {
+  color: var(--color-text-muted, rgb(153 141 106));
+  background: rgb(255 255 255 / 6%);
+  border-radius: var(--radius-sm, 4px);
+  font-size: 11px;
+  padding: 1px 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+/* A source is a block rather than a .woc-row: its readout, its notes, and its
+   controls each want a full line, and the ref field pushes past what a row's
+   trailing action group can hold at a narrow width. */
+#woc-addons .woc-market {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px;
+  border: 1px solid var(--color-border-default, rgb(78 61 29));
+  border-radius: var(--radius-sm, 4px);
+  background: rgb(0 0 0 / 25%);
+}
+
+#woc-addons .woc-market .woc-row-actions {
+  flex-wrap: wrap;
+}
+
+/* The description is the main thing this screen is asking about, so it reads at
+   the pane's body size rather than at the size it takes in a list row. */
+#woc-addons .woc-confirm .woc-row-desc {
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+#woc-addons .woc-perms {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 14px;
+}
+
+/* A dash rather than a bullet, so each line reads as a claim the author made
+   rather than as an item in a feature list. */
+#woc-addons .woc-perms li::before {
+  content: "\2014\00a0";
+  color: var(--color-text-muted, rgb(153 141 106));
+}

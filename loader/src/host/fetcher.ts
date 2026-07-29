@@ -87,14 +87,29 @@ function readEntry(raw: unknown): CacheEntry | null {
 }
 
 /**
- * A message that names the status and the URL.
+ * A failed response, carrying its status.
  *
  * The status is the diagnosis often enough to be worth carrying verbatim: 404 on
  * a raw.githubusercontent.com URL is a private or renamed repository, and 403 is
- * the unauthenticated rate limit.
+ * the unauthenticated rate limit. It is a field rather than only a substring of
+ * the message because one caller branches on it: a marketplace with no
+ * marketplace.json falls back to enumerating the repository, and it must do that
+ * for a missing file and NOT for a rate limit, which would spend the rest of the
+ * hour's quota discovering it is out of quota.
  */
-function statusError(url: string, status: number): Error {
-  return new Error(`HTTP ${status} from ${url}`);
+class HttpError extends Error {
+  readonly status: number;
+
+  constructor(url: string, status: number) {
+    super(`HTTP ${status} from ${url}`);
+    this.name = 'HttpError';
+    this.status = status;
+  }
+}
+
+/** Whether a rejection is a response with this status, rather than a transport failure. */
+function isHttpStatus(err: unknown, status: number): boolean {
+  return err instanceof HttpError && err.status === status;
 }
 
 /** What a 2xx response established, gathered so it is one argument. */
@@ -156,7 +171,7 @@ function createFetcher(deps: FetcherDeps): Fetcher {
       return { body: entry.body, changed: false };
     }
     if (res.status < OK_MIN || res.status > OK_MAX) {
-      throw statusError(url, res.status);
+      throw new HttpError(url, res.status);
     }
     return await storeFresh({
       cache,
@@ -186,4 +201,4 @@ function createFetcher(deps: FetcherDeps): Fetcher {
 }
 
 export type { CacheStore, Fetcher, FetcherDeps, FetchOutcome };
-export { CACHE_PREFIX, createFetcher };
+export { CACHE_PREFIX, createFetcher, HttpError, isHttpStatus };

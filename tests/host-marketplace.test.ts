@@ -176,6 +176,148 @@ describe('removing a source', () => {
   });
 });
 
+describe('pinning a source to a tag', () => {
+  const stored = [{ owner: 'someone', repo: 'their-addons', ref: 'HEAD' }];
+  const tagged = 'https://raw.githubusercontent.com/someone/their-addons/v2.0.0/marketplace.json';
+
+  it('rewrites the persisted ref and re-reads from it', async () => {
+    const { market, storage, http } = open({
+      stored,
+      files: { [THIRD_PARTY]: indexBody(), [tagged]: indexBody([entry({ id: 'theirs' })]) },
+    });
+    await market.api.refresh();
+
+    await market.api.setRef('gh:someone/their-addons', 'v2.0.0');
+
+    expect(storage.cells.get(`${MARKET_NS}:${MARKETS_KEY}`)).toEqual([
+      { owner: 'someone', repo: 'their-addons', ref: 'v2.0.0' },
+    ]);
+    expect(http.calls).toContain(tagged);
+  });
+
+  // The id is derived from owner and repo, so everything installed from this
+  // source keeps its fqid and therefore its settings, keybinds, and data.
+  it('leaves the id alone, so nothing installed from it loses its storage', async () => {
+    const { market } = open({ stored, files: { [tagged]: indexBody() } });
+
+    await market.api.setRef('gh:someone/their-addons', 'v2.0.0');
+
+    expect((await market.api.list()).map((state) => state.ref.id)).toEqual([
+      OFFICIAL_ID,
+      'gh:someone/their-addons',
+    ]);
+  });
+
+  // Otherwise a failed read of the new tag would leave the old tag's addons on
+  // screen under the new tag's name.
+  it('drops the rows the old ref published, even if the new one cannot be read', async () => {
+    const { market } = open({ stored, files: { [THIRD_PARTY]: indexBody() } });
+    await market.api.refresh();
+
+    await market.api.setRef('gh:someone/their-addons', 'v2.0.0');
+
+    const state = (await market.api.list()).find((row) => row.ref.id === 'gh:someone/their-addons');
+    expect(state?.addons).toEqual([]);
+    expect(state?.error).toContain('HTTP 404');
+  });
+
+  it.each([OFFICIAL_ID, LOCAL_ID])('refuses to repoint %s', async (id) => {
+    await expect(open().market.api.setRef(id, 'v2.0.0')).rejects.toThrow(/ships with the loader/);
+  });
+
+  it('rejects a ref that is not a valid branch, tag, or commit', async () => {
+    const { market } = open({ stored });
+
+    await expect(market.api.setRef('gh:someone/their-addons', 'a ref')).rejects.toThrow(
+      /invalid branch, tag, or commit/,
+    );
+  });
+
+  it('rejects a source that is not in the list', async () => {
+    await expect(open().market.api.setRef('gh:nobody/nothing', 'v1')).rejects.toThrow(
+      /no such marketplace/,
+    );
+  });
+});
+
+describe('a repository with no marketplace.json', () => {
+  const stored = [{ owner: 'someone', repo: 'their-addons', ref: 'HEAD' }];
+  const contents = 'https://api.github.com/repos/someone/their-addons/contents/addons?ref=HEAD';
+  const manifestFile =
+    'https://raw.githubusercontent.com/someone/their-addons/HEAD/addons/theirs/addon.json';
+
+  function theirManifest(): string {
+    return JSON.stringify({
+      id: 'theirs',
+      name: 'Theirs',
+      version: '1.0.0',
+      apiVersion: 1,
+      author: 'someone',
+      description: 'An addon.',
+      entry: 'main.js',
+    });
+  }
+
+  it('falls back to enumerating it, and says the reading is degraded', async () => {
+    const { market } = open({
+      stored,
+      files: {
+        [contents]: JSON.stringify([{ name: 'theirs', type: 'dir' }]),
+        [manifestFile]: theirManifest(),
+      },
+    });
+
+    await market.api.refresh('gh:someone/their-addons');
+
+    const state = (await market.api.list()).find((row) => row.ref.id === 'gh:someone/their-addons');
+    expect(state?.addons.map((row) => row.id)).toEqual(['theirs']);
+    expect(state?.degraded).toBe(true);
+    expect(state?.error).toBeNull();
+  });
+
+  it('reports a source read from a real index as not degraded', async () => {
+    const { market } = open();
+
+    await market.api.refresh(OFFICIAL_ID);
+
+    expect((await market.api.list())[0]?.degraded).toBe(false);
+  });
+
+  // A repository that answers 404 for its listing too is one the loader cannot
+  // see at all, so the message is about the index the player was looking for
+  // rather than about an endpoint they never asked for.
+  it('reports the index failure, not the contents API, for a repository it cannot see', async () => {
+    const { market } = open({ files: {} });
+
+    await market.api.refresh(OFFICIAL_ID);
+
+    expect((await market.api.list())[0]?.error).toContain('marketplace.json');
+  });
+
+  // Answering a rate limit by issuing one request per addon would spend what is
+  // left of the hour finding out there is none.
+  it('does not enumerate when the index failed for any reason but a 404', async () => {
+    const { market, http } = open({ stored, files: { [THIRD_PARTY]: '{ not json' } });
+
+    await market.api.refresh('gh:someone/their-addons');
+
+    expect(http.calls).not.toContain(contents);
+  });
+
+  // An index that is present but invalid is not a fallback case: the source did
+  // publish one, and what it published is the thing to report.
+  it('does not enumerate a source whose index is present and malformed', async () => {
+    const { market, http } = open({
+      stored,
+      files: { [THIRD_PARTY]: JSON.stringify({ schema: 9 }) },
+    });
+
+    await market.api.refresh('gh:someone/their-addons');
+
+    expect(http.calls).not.toContain(contents);
+  });
+});
+
 describe('refreshing an index', () => {
   it('parses it and reports the addons', async () => {
     const { market } = open();

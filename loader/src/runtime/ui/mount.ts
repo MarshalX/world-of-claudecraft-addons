@@ -31,7 +31,7 @@ import { createToaster, type Toaster } from './kit/toast.ts';
 import { createTooltips, type Tooltips } from './kit/tooltip.ts';
 import { type ConfigService, createConfigService } from './manager/config.ts';
 import type { GeometryStorage } from './manager/geometry-store.ts';
-import { type InstalledRegistry, type Manager, mountManager } from './manager/index.tsx';
+import { type Manager, type ManagerRegistry, mountManager } from './manager/index.tsx';
 import { BUTTON_ID } from './micro-button.ts';
 import { mountRoot } from './root.ts';
 
@@ -154,8 +154,8 @@ export interface UiDeps {
   /** The loader stylesheet, bundled as text. */
   css: string;
   /** All three are null together when the bridge never connected. */
-  registry: InstalledRegistry | null;
-  market: Pick<MarketApi, 'list' | 'refresh'> | null;
+  registry: ManagerRegistry | null;
+  market: MarketApi | null;
   dev: DevApi | null;
   /** Null when the bridge never connected. Only the window position uses it. */
   storage: GeometryStorage | null;

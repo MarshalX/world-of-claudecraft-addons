@@ -16,8 +16,8 @@ import type { DiagnosticsReading } from '../loader/src/runtime/diagnostics.ts';
 import { createGameBindings } from '../loader/src/runtime/keys/game-bindings.ts';
 import { createLogBuffer } from '../loader/src/runtime/log/buffer.ts';
 import { createConfigService } from '../loader/src/runtime/ui/manager/config.ts';
+import type { ManagerRegistry } from '../loader/src/runtime/ui/manager/index.tsx';
 import { mountManager } from '../loader/src/runtime/ui/manager/index.tsx';
-import type { InstalledRegistry } from '../loader/src/runtime/ui/manager/store.ts';
 import { UI_TEXT } from '../loader/src/runtime/ui/manager/strings.ts';
 import type { InstalledAddon } from '../loader/src/shared/protocol.ts';
 import { configNamespace, KEYBINDS_KEY } from '../loader/src/shared/storage-keys.ts';
@@ -115,7 +115,7 @@ interface OpenOptions {
 
 function open(options: OpenOptions = {}) {
   const hub = options.hub ?? createFakeStorage();
-  const registry: InstalledRegistry = fakeRegistry({
+  const registry: ManagerRegistry = fakeRegistry({
     list: async () => [options.installed ?? addon()],
     setEnabled: async () => undefined,
   });

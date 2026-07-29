@@ -9,7 +9,7 @@ import { createKeyDispatcher } from '../../loader/src/runtime/keys/dispatcher.ts
 import { createGameBindings } from '../../loader/src/runtime/keys/game-bindings.ts';
 import { createLogBuffer } from '../../loader/src/runtime/log/buffer.ts';
 import { createConfigService } from '../../loader/src/runtime/ui/manager/config.ts';
-import type { InstalledRegistry, ManagerDeps } from '../../loader/src/runtime/ui/manager/index.tsx';
+import type { ManagerDeps, ManagerRegistry } from '../../loader/src/runtime/ui/manager/index.tsx';
 import type { UiDeps } from '../../loader/src/runtime/ui/mount.ts';
 import { createFakeStorage, type FakeStorage } from './storage.ts';
 
@@ -40,12 +40,15 @@ function createUiHarness(doc: Document): UiHarness {
  * suite that only cares about `list` should not have to say what `install` does
  * to make the compiler let it through.
  */
-function fakeRegistry(overrides: Partial<InstalledRegistry> = {}): InstalledRegistry {
+function fakeRegistry(overrides: Partial<ManagerRegistry> = {}): ManagerRegistry {
   return {
     list: () => Promise.resolve([]),
     setEnabled: () => Promise.resolve(),
     install: () => Promise.resolve(),
     uninstall: () => Promise.resolve(),
+    update: () => Promise.resolve(),
+    setPin: () => Promise.resolve(),
+    updates: () => Promise.resolve([]),
     ...overrides,
   };
 }

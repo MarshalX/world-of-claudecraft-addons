@@ -10,6 +10,7 @@
 import { z } from 'zod';
 import { isValidRange } from './gameversion.ts';
 import { CHANNELS } from './hosts.ts';
+import { PERMISSIONS } from './permissions.ts';
 
 /** Addon ids form the storage namespace and cannot change once published. */
 const ID_RE = /^[a-z0-9]+(-[a-z0-9]+)*$/;
@@ -19,7 +20,8 @@ const ENTRY_RE = /^[A-Za-z0-9._-]+(?:\/[A-Za-z0-9._-]+)*$/;
 
 const AddonId = z.string().regex(ID_RE, 'must be lower-case kebab-case, e.g. "dps-meter"');
 
-export const PERMISSIONS = ['net.read', 'world.read', 'ui', 'sound', 'keys', 'storage'] as const;
+/** Browse renders one filter control per distinct tag across every source. */
+const MAX_TAGS = 6;
 
 export const KeybindDecl = z.object({
   id: AddonId,
@@ -81,6 +83,13 @@ export const AddonManifest = z.object({
     .refine((p) => !p.includes('..'), 'must not traverse outside the addon directory'),
   icon: z.string().min(1).optional(),
   homepage: z.string().url().optional(),
+  /**
+   * Browse's filter categories. Same shape as an addon id, so the filter can
+   * compare them without normalizing and two authors cannot publish 'Combat'
+   * and 'combat' as different tags. Bounded because the filter renders one
+   * control per distinct tag across every source in the list.
+   */
+  tags: z.array(AddonId).max(MAX_TAGS).optional(),
   gameVersion: z
     .string()
     .refine(isValidRange, 'must be a semver range, e.g. ">=0.31.0" or "^0.31.0"')

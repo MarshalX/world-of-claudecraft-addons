@@ -1,15 +1,17 @@
-// The Dev pane: the local dev server, and what it offers.
+// The Dev pane: the two switches that decide whether the local source exists.
 //
 // Pure render over dev-store.ts. This is the surface that makes an addon
-// editable without a publish step: turn the server on, install from it once, and
-// from then on a save is a reload.
+// editable without a publish step: turn the server on, install it from Browse
+// once, and from then on a save is a reload.
 //
-// It is deliberately not the Browse pane. Browse is cross-marketplace search
-// with permissions and update badges; this is one source, always the same one,
-// with the two switches that decide whether it exists at all.
+// It used to list what the server offered, with an Install on each row. That was
+// right while it was the only way to install anything, and it is duplication now
+// that Browse exists: dev mode merges the local source into the marketplace
+// list, so Browse already shows those rows, with the same install confirmation
+// and the same source badge as everything else. Two lists of one thing go out of
+// step, and the one with fewer eyes on it is the one that rots. What is left
+// here is what nothing else owns.
 
-import { LOCAL_ID, fqid as makeFqid } from '../../../shared/marketplace.ts';
-import type { MarketplaceEntry } from '../../../shared/protocol.ts';
 import type { DevPaneState, DevStore } from './dev-store.ts';
 import { ErrorNote } from './error-note.tsx';
 import { UI_TEXT } from './strings.ts';
@@ -32,69 +34,6 @@ function Toggle(props: ToggleProps) {
       />
       <span>{props.label}</span>
     </label>
-  );
-}
-
-/** Install or Uninstall, from the registry rather than from the index. */
-function rowAction(installed: boolean) {
-  if (installed) {
-    return { label: UI_TEXT.uninstall, className: 'woc-btn' };
-  }
-  return { label: UI_TEXT.devInstall, className: 'woc-btn woc-btn-primary' };
-}
-
-function OfferedRow(props: { entry: MarketplaceEntry; state: DevPaneState; store: DevStore }) {
-  const { entry, state } = props;
-  const fqid = makeFqid(LOCAL_ID, entry.id);
-  const installed = state.installed.has(fqid);
-  const busy = state.busy === fqid;
-  const action = rowAction(installed);
-
-  return (
-    <li className="woc-row">
-      <div className="woc-row-main">
-        <span className="woc-row-name">{entry.name}</span>
-        <span className="woc-row-meta">
-          {entry.version} {UI_TEXT.by} {entry.author}
-        </span>
-        <span className="woc-row-desc">{entry.description}</span>
-      </div>
-      <div className="woc-row-actions">
-        <button
-          type="button"
-          className={action.className}
-          disabled={busy}
-          aria-label={`${action.label} ${entry.name}`}
-          onClick={() => {
-            if (installed) {
-              props.store.uninstall(fqid);
-            } else {
-              props.store.install(entry.id);
-            }
-          }}
-        >
-          {action.label}
-        </button>
-      </div>
-    </li>
-  );
-}
-
-function Offered(props: { state: DevPaneState; store: DevStore }) {
-  const { state } = props;
-  if (state.dev?.enabled !== true) {
-    return <p className="woc-note">{UI_TEXT.devOff}</p>;
-  }
-  if (state.offered.length === 0) {
-    // Only reached with no error, so the server answered and the folder is empty.
-    return <p className="woc-note">{UI_TEXT.devEmpty}</p>;
-  }
-  return (
-    <ul className="woc-list">
-      {state.offered.map((entry) => (
-        <OfferedRow key={entry.id} entry={entry} state={state} store={props.store} />
-      ))}
-    </ul>
   );
 }
 
@@ -123,6 +62,14 @@ function Readout(props: { state: DevPaneState; format: (at: number) => string })
       </div>
     </dl>
   );
+}
+
+/** Where the addons this server offers actually are, now that they are in Browse. */
+function WhereToInstall(props: { enabled: boolean }) {
+  if (props.enabled) {
+    return <p className="woc-note">{UI_TEXT.devInBrowse}</p>;
+  }
+  return <p className="woc-note">{UI_TEXT.devOff}</p>;
 }
 
 interface DevPaneProps {
@@ -169,8 +116,7 @@ export function DevPane(props: DevPaneProps) {
         </button>
       </div>
 
-      <h4 className="woc-subhead">{UI_TEXT.devHeading}</h4>
-      <Offered state={state} store={store} />
+      <WhereToInstall enabled={enabled} />
     </section>
   );
 }

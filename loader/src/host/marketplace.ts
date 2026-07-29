@@ -11,11 +11,12 @@
 
 import { describeError } from '../shared/diag.ts';
 import {
-  indexUrl,
+  githubMarketplace,
   isBuiltinMarketplace,
   LOCAL,
   LOCAL_ORIGIN,
   type MarketplaceRef,
+  type NormalizeResult,
   normalizeMarketplaceUrl,
   splitFqid,
 } from '../shared/marketplace.ts';
@@ -26,22 +27,21 @@ import type {
   MarketApi,
   MarketplaceState,
 } from '../shared/protocol.ts';
-import type { MarketplaceEntry, ValidationIssue } from '../shared/schema.ts';
-import { validateIndex } from '../shared/schema.ts';
+import type { MarketplaceEntry } from '../shared/schema.ts';
 import { inSeries } from '../shared/sequence.ts';
 import type { DevSettings } from './dev-settings.ts';
 import { readDevSettings, writeDevSettings } from './dev-settings.ts';
 import type { Fetcher } from './fetcher.ts';
+import { readRows } from './market-index.ts';
 import type { ListStorage } from './market-list.ts';
-import { readAll, readStored, writeStored } from './market-list.ts';
+import { addStored, readAll, removeStored, repointStored } from './market-list.ts';
 
-/** How many index issues to quote before the message stops being readable. */
-const MAX_QUOTED_ISSUES = 3;
-
-/** The mutable half of MarketplaceState: what a fetch produces. */
+/** The mutable half of MarketplaceState: what a read of one source produces. */
 interface IndexState {
   fetchedAt: number | null;
   addons: MarketplaceEntry[];
+  /** The rows came from enumerating the repository rather than from an index. */
+  degraded: boolean;
   error: string | null;
 }
 
@@ -66,19 +66,7 @@ interface MarketService {
   devSettings: () => Promise<DevSettings>;
 }
 
-const EMPTY: IndexState = { fetchedAt: null, addons: [], error: null };
-
-/** A validation failure rendered as one line, since it lands in a pane, not a log. */
-function indexIssues(issues: readonly ValidationIssue[]): string {
-  const quoted = issues
-    .slice(0, MAX_QUOTED_ISSUES)
-    .map((issue) => `${issue.path || '(root)'}: ${issue.message}`)
-    .join('; ');
-  if (issues.length > MAX_QUOTED_ISSUES) {
-    return `${quoted}; and ${issues.length - MAX_QUOTED_ISSUES} more`;
-  }
-  return quoted;
-}
+const EMPTY: IndexState = { fetchedAt: null, addons: [], degraded: false, error: null };
 
 /** The per-session index cache, and the one operation that fills it. */
 function createIndexes(deps: MarketDeps) {
@@ -95,24 +83,17 @@ function createIndexes(deps: MarketDeps) {
   };
 
   /**
-   * Fetch and parse one index, replacing that source's state either way.
+   * Read one source, replacing its state either way.
    *
-   * A source that publishes a bad index keeps whatever rows it published last:
-   * it should not also take away what a player is looking at.
+   * A source that fails keeps whatever rows it published last: it should not
+   * also take away what a player is looking at.
    */
   const load = async (ref: MarketplaceRef): Promise<void> => {
     deps.emit({ k: 'market.progress', id: ref.id, state: 'fetching' });
     try {
-      const { value } = await deps.fetcher.getJson(indexUrl(ref));
-      const parsed = validateIndex(value);
-      if (parsed.ok) {
-        indexes.set(ref.id, { fetchedAt: deps.now(), addons: parsed.value.addons, error: null });
-        report(ref.id, 'ok');
-        return;
-      }
-      const error = `the index is not valid: ${indexIssues(parsed.issues)}`;
-      indexes.set(ref.id, { ...stateFor(ref.id), error });
-      report(ref.id, 'error', error);
+      const { addons, degraded } = await readRows(deps.fetcher, ref);
+      indexes.set(ref.id, { fetchedAt: deps.now(), addons, degraded, error: null });
+      report(ref.id, 'ok');
     } catch (err) {
       const error = describeError(err);
       indexes.set(ref.id, { ...stateFor(ref.id), error });
@@ -123,15 +104,75 @@ function createIndexes(deps: MarketDeps) {
   return { indexes, stateFor, load };
 }
 
-/** The four MarketApi members, over the list and the index cache. */
+/** A normalized source moved onto an explicit ref, or left where the URL put it. */
+function pinRef(ref: MarketplaceRef, wanted: string | undefined): NormalizeResult {
+  const trimmed = wanted?.trim() ?? '';
+  if (trimmed.length === 0 || ref.source.kind !== 'github') {
+    return { ok: true, ref };
+  }
+  return githubMarketplace(ref.source.owner, ref.source.repo, trimmed);
+}
+
+/**
+ * The three writes to the source list.
+ *
+ * Every one of them is refused in the host rather than hidden in the UI. Hiding
+ * a control is presentation; this is what makes a hand-crafted call from the
+ * runtime fail too. market-list.ts holds the storage half and the refusals; what
+ * is here is what the rest of the host has to be told about a change.
+ */
+function createListApi(
+  deps: MarketDeps,
+  indexes: ReturnType<typeof createIndexes>,
+): Pick<MarketApi, 'add' | 'remove' | 'setRef'> {
+  const { storage, emit } = deps;
+
+  return {
+    add: async (url, ref) => {
+      const parsed = normalizeMarketplaceUrl(url);
+      if (!parsed.ok) {
+        throw new Error(parsed.error);
+      }
+      // An explicit ref wins over whatever the URL carried, so pasting a tree
+      // URL and then typing a tag pins to the tag rather than silently to the
+      // branch that was in the URL.
+      const pinned = pinRef(parsed.ref, ref);
+      if (!pinned.ok) {
+        throw new Error(pinned.error);
+      }
+      await addStored(storage, pinned.ref);
+      emit({ k: 'market.changed', id: pinned.ref.id });
+      await indexes.load(pinned.ref);
+    },
+
+    remove: async (id) => {
+      await removeStored(storage, id);
+      indexes.indexes.delete(id);
+      emit({ k: 'market.changed', id });
+    },
+
+    setRef: async (id, ref) => {
+      const moved = await repointStored(storage, id, ref);
+      // The cached rows came from the ref this source no longer points at, so
+      // they are not its contents any more. Dropping them rather than leaving
+      // them to be replaced means a failed load reports nothing rather than the
+      // previous tag's addons under the new tag's name.
+      indexes.indexes.delete(id);
+      emit({ k: 'market.changed', id });
+      await indexes.load(moved);
+    },
+  };
+}
+
+/** The MarketApi, over the source list and the index cache. */
 function createMarketApi(
   deps: MarketDeps,
   indexes: ReturnType<typeof createIndexes>,
   refs: () => Promise<MarketplaceRef[]>,
 ): MarketApi {
-  const { storage, emit } = deps;
-
   return {
+    ...createListApi(deps, indexes),
+
     list: async () =>
       (await refs()).map(
         (ref): MarketplaceState => ({
@@ -140,37 +181,6 @@ function createMarketApi(
           ...indexes.stateFor(ref.id),
         }),
       ),
-
-    add: async (url) => {
-      const parsed = normalizeMarketplaceUrl(url);
-      if (!parsed.ok) {
-        throw new Error(parsed.error);
-      }
-      const stored = await readStored(storage);
-      if (stored.some((ref) => ref.id === parsed.ref.id)) {
-        throw new Error(`${parsed.ref.name} is already in the list`);
-      }
-      await writeStored(storage, [...stored, parsed.ref]);
-      emit({ k: 'market.changed', id: parsed.ref.id });
-      await indexes.load(parsed.ref);
-    },
-
-    // Built-ins are refused here rather than in the UI. Hiding the control is
-    // presentation; this is what makes a hand-crafted call from the runtime fail
-    // too.
-    remove: async (id) => {
-      if (isBuiltinMarketplace(id)) {
-        throw new Error(`${id} ships with the loader and cannot be removed`);
-      }
-      const stored = await readStored(storage);
-      const kept = stored.filter((ref) => ref.id !== id);
-      if (kept.length === stored.length) {
-        throw new Error(`no such marketplace: ${id}`);
-      }
-      await writeStored(storage, kept);
-      indexes.indexes.delete(id);
-      emit({ k: 'market.changed', id });
-    },
 
     refresh: async (id) => {
       const all = await refs();

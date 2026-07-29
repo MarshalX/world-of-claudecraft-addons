@@ -17,6 +17,8 @@ import type { DiagnosticsReading } from '../../diagnostics.ts';
 import type { LogBuffer } from '../../log/buffer.ts';
 import type { AddonStatus } from '../../supervisor.ts';
 import { ManagerApp } from './app.tsx';
+import type { CatalogRegistry } from './catalog-actions.ts';
+import { type CatalogStore, createCatalogStore } from './catalog-store.ts';
 import type { ConfigService, ConflictReading } from './config.ts';
 import { createDevStore, type DevStore } from './dev-store.ts';
 import { createGeometryStore, type GeometryStorage, type GeometryStore } from './geometry-store.ts';
@@ -24,13 +26,23 @@ import { type AddonSelection, createSelection } from './selection.ts';
 import type { InstalledRegistry, InstalledStore } from './store.ts';
 import { createInstalledStore } from './store.ts';
 
+/**
+ * Every registry member the manager's panes reach for.
+ *
+ * An intersection rather than one widened interface, so each store keeps saying
+ * what it actually calls: the Installed pane's list is InstalledRegistry, the
+ * catalog panes' is CatalogRegistry, and a suite that fakes one does not have to
+ * satisfy the other.
+ */
+type ManagerRegistry = InstalledRegistry & CatalogRegistry;
+
 interface ManagerDeps {
   doc: Document;
   /** The #woc-addons root. See runtime/ui/root.ts. */
   root: HTMLElement;
   /** Null when the bridge never connected. The pane reports that as its own state. */
-  registry: InstalledRegistry | null;
-  market: Pick<MarketApi, 'list' | 'refresh'> | null;
+  registry: ManagerRegistry | null;
+  market: MarketApi | null;
   dev: DevApi | null;
   /** Null when the bridge never connected. The window then never persists its position. */
   storage: GeometryStorage | null;
@@ -71,6 +83,7 @@ interface Frame {
   container: HTMLElement;
   store: InstalledStore;
   dev: DevStore;
+  catalog: CatalogStore;
   geometry: GeometryStore;
   close: () => void;
   isOpen: () => boolean;
@@ -83,6 +96,7 @@ interface Frame {
 interface FrameView {
   store: InstalledStore;
   dev: DevStore;
+  catalog: CatalogStore;
   geometry: GeometryStore;
   selection: AddonSelection;
   onClose: () => void;
@@ -122,6 +136,7 @@ function renderApp(deps: ManagerDeps, view: FrameView, container: HTMLElement): 
       }}
       dev={view.dev.state()}
       devStore={view.dev}
+      catalogStore={view.catalog}
       formatTime={deps.formatTime}
       readDiagnostics={deps.readDiagnostics}
       onClose={view.onClose}
@@ -147,7 +162,7 @@ function renderApp(deps: ManagerDeps, view: FrameView, container: HTMLElement): 
  * to each other.
  */
 /**
- * The four stores the window reads, all repainting through one callback.
+ * The stores the window reads, all repainting through one callback.
  *
  * They load outside the component tree, so opening the window paints whatever is
  * already loaded and a reload driven from another tab does not need the window
@@ -155,8 +170,8 @@ function renderApp(deps: ManagerDeps, view: FrameView, container: HTMLElement): 
  */
 function createStores(deps: ManagerDeps, repaint: () => void) {
   const store = createInstalledStore({ registry: deps.registry, onChange: repaint });
-  const dev = createDevStore({
-    dev: deps.dev,
+  const dev = createDevStore({ dev: deps.dev, market: deps.market, onChange: repaint });
+  const catalog = createCatalogStore({
     market: deps.market,
     registry: deps.registry,
     onChange: repaint,
@@ -167,7 +182,7 @@ function createStores(deps: ManagerDeps, repaint: () => void) {
     find: (fqid) => store.state().rows.find((row) => row.fqid === fqid) ?? null,
     repaint,
   });
-  return { store, dev, geometry, selection };
+  return { store, dev, catalog, geometry, selection };
 }
 
 function createFrame(deps: ManagerDeps): Frame {
@@ -178,7 +193,7 @@ function createFrame(deps: ManagerDeps): Frame {
   let open = false;
   let paint = (): void => undefined;
 
-  const { store, dev, geometry, selection } = createStores(deps, () => {
+  const { store, dev, catalog, geometry, selection } = createStores(deps, () => {
     paint();
   });
 
@@ -192,7 +207,7 @@ function createFrame(deps: ManagerDeps): Frame {
       render(null, container);
       return;
     }
-    renderApp(deps, { store, dev, geometry, selection, onClose: close }, container);
+    renderApp(deps, { store, dev, catalog, geometry, selection, onClose: close }, container);
   };
 
   // Loaded on open rather than at boot: a player who never opens the manager
@@ -204,10 +219,13 @@ function createFrame(deps: ManagerDeps): Frame {
     }
     open = true;
     store.reload();
-    // The dev reading is three storage reads and no network, so it is loaded
-    // whether or not that tab is the one being opened. Deferring it to the tab
-    // would mean the pane's first paint is always its loading state.
+    // Neither of these goes to the network: the dev reading is three storage
+    // reads, and the catalog answers from the indexes as they were last read.
+    // Both are loaded whether or not their tab is the one being opened, since
+    // deferring to the tab would mean its first paint is always the loading
+    // state. Refresh is what fetches.
     dev.load();
+    catalog.load();
     paint();
   };
 
@@ -215,6 +233,7 @@ function createFrame(deps: ManagerDeps): Frame {
     container,
     store,
     dev,
+    catalog,
     geometry,
     close,
     isOpen: () => open,
@@ -227,7 +246,7 @@ function createFrame(deps: ManagerDeps): Frame {
 }
 
 function mountManager(deps: ManagerDeps): Manager {
-  const { container, store, dev, geometry, close, isOpen, paint, show, closeAddon } =
+  const { container, store, dev, catalog, geometry, close, isOpen, paint, show, closeAddon } =
     createFrame(deps);
 
   // Read once at mount rather than on every open, so the first open does not
@@ -259,6 +278,7 @@ function mountManager(deps: ManagerDeps): Manager {
     invalidate: () => {
       store.reload();
       dev.load();
+      catalog.load();
     },
 
     repaint: paint,
@@ -271,5 +291,5 @@ function mountManager(deps: ManagerDeps): Manager {
 }
 
 export type { InstalledRegistry } from './store.ts';
-export type { Manager, ManagerDeps };
+export type { Manager, ManagerDeps, ManagerRegistry };
 export { mountManager };

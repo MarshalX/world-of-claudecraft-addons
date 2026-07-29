@@ -1,4 +1,4 @@
-// The loader's UI kit, assembled from its three sheets into one string.
+// The loader's UI kit, assembled from its four sheets into one string.
 //
 // Concatenated here rather than chained with @import: loader/build-runtime.mjs
 // loads a .css import as TEXT, and a text load never follows an @import inside
@@ -6,10 +6,11 @@
 // against the game's own origin at runtime. One string is also what root.ts
 // needs, since exactly one <style> element is injected and adopted.
 //
-// The order is the cascade. Every rule in all three is scoped to a loader-owned
+// The order is the cascade. Every rule in all four is scoped to a loader-owned
 // element and none of them collide across the seams, but the sheets are still
-// written to be read in this order: chrome sets a window up, panes fill it, and
-// the kit refines both for what an addon draws.
+// written to be read in this order: chrome sets a window up, panes fill it,
+// catalog refines the four marketplace surfaces, and the kit refines all of them
+// for what an addon draws.
 //
 // Injected UNLAYERED by runtime/ui/root.ts. Every game rule lives inside
 // @layer base or @layer components, and an unlayered rule beats any layered one
@@ -35,12 +36,13 @@
 // copy of theme.ts's ensureReadable in sync.
 
 // biome-ignore-start lint/correctness/noUnresolvedImports: loader/build-runtime.mjs loads .css as text, which a static resolver does not model
+import catalog from './catalog.css';
 import chrome from './chrome.css';
 import kit from './kit.css';
 import panes from './panes.css';
 
-// biome-ignore-end lint/correctness/noUnresolvedImports: the three sheets above are the whole of it
+// biome-ignore-end lint/correctness/noUnresolvedImports: the four sheets above are the whole of it
 
-const LOADER_CSS = [chrome, panes, kit].join('\n');
+const LOADER_CSS = [chrome, panes, catalog, kit].join('\n');
 
 export { LOADER_CSS };

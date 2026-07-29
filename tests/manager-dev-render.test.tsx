@@ -5,6 +5,11 @@
 // A separate suite from manager-render because it needs the market and dev
 // halves of the bridge, which every other pane passes as null.
 //
+// The pane no longer lists what the local server offers: dev mode merges that
+// source into the marketplace list, so Browse shows those rows with the same
+// confirmation and the same badge as every other source. What is checked here is
+// what is left, which is what nothing else owns.
+//
 // It exists because of how M4's settings pane failed: the code was right in
 // isolation and the pane came up blank in the game, because a read that threw
 // during render unmounted it. Nothing catches that except rendering.
@@ -20,6 +25,7 @@ import type {
   MarketplaceEntry,
   MarketplaceState,
 } from '../loader/src/shared/protocol.ts';
+import { fakeMarketApi, marketState } from './fakes/market.ts';
 import { fakeRegistry, managerServices } from './fakes/ui-deps.ts';
 
 const READING: DiagnosticsReading = {
@@ -85,10 +91,7 @@ afterEach(() => {
 });
 
 function markets(addons: MarketplaceEntry[]): MarketplaceState[] {
-  return [
-    { ref: OFFICIAL, builtin: true, fetchedAt: null, addons: [], error: null },
-    { ref: LOCAL, builtin: true, fetchedAt: 1, addons, error: null },
-  ];
+  return [marketState(OFFICIAL, [], { fetchedAt: null }), marketState(LOCAL, addons)];
 }
 
 async function open(options: Options = {}) {
@@ -115,10 +118,9 @@ async function open(options: Options = {}) {
     channel: 'pbe',
     readDiagnostics: () => READING,
     ...managerServices(document),
-    market: {
+    market: fakeMarketApi({
       list: () => Promise.resolve(markets(options.addons ?? [offered()])),
-      refresh: () => Promise.resolve(),
-    },
+    }),
     dev: {
       state: () => Promise.resolve(options.dev ?? devState()),
       setEnabled: calls.setEnabled,
@@ -149,10 +151,8 @@ const buttonNamed = (label: string): HTMLButtonElement | undefined =>
   );
 
 describe('the tab', () => {
-  it('is in the strip and is built', () => {
-    const dev = TABS.find((tab) => tab.id === 'dev');
-
-    expect(dev?.built).toBe(true);
+  it('is in the strip', () => {
+    expect(TABS.map((tab) => tab.id)).toContain('dev');
   });
 });
 
@@ -171,31 +171,23 @@ describe('the pane', () => {
     });
   });
 
-  it('lists what the dev server offers', async () => {
-    await open();
-
-    await vi.waitFor(() => {
-      expect(text()).toContain('Dev Harness');
-    });
-    expect(text()).toContain('1.0.0');
-  });
-
-  // Only the local source. The official one is in the same market.list()
-  // response and belongs to the Browse pane, not this one.
-  it('does not list the other sources addons', async () => {
-    await open({ addons: [offered('a'), offered('b')] });
-
-    await vi.waitFor(() => {
-      expect(document.querySelectorAll('.woc-dev .woc-row')).toHaveLength(2);
-    });
-  });
-
   it('says so plainly when dev mode is off', async () => {
     await open({ dev: devState({ enabled: false }) });
 
     await vi.waitFor(() => {
       expect(text()).toContain(UI_TEXT.devOff);
     });
+  });
+
+  // Two lists of one thing go out of step, and the one with fewer eyes on it is
+  // the one that rots. The pane points at the list that is maintained.
+  it('points at Browse for what the server offers rather than listing it again', async () => {
+    await open();
+
+    await vi.waitFor(() => {
+      expect(text()).toContain(UI_TEXT.devInBrowse);
+    });
+    expect(document.querySelectorAll('.woc-dev .woc-row')).toHaveLength(0);
   });
 
   it('reports a dev server that is not running', async () => {
@@ -231,40 +223,6 @@ describe('the controls', () => {
     });
   });
 
-  it('installs the row it was pressed on', async () => {
-    const { calls } = await open();
-
-    await vi.waitFor(() => {
-      expect(buttonNamed(UI_TEXT.devInstall)).toBeDefined();
-    });
-    buttonNamed(UI_TEXT.devInstall)?.click();
-
-    await vi.waitFor(() => {
-      expect(calls.install).toHaveBeenCalledWith('local/dev-harness');
-    });
-  });
-
-  // The row draws its control from the registry, not from the index: an addon
-  // the dev server offers and the player already has needs Uninstall, not a
-  // second Install.
-  it('offers Uninstall instead once the addon is installed', async () => {
-    await open({ installed: ['local/dev-harness'] });
-
-    await vi.waitFor(() => {
-      expect(buttonNamed(UI_TEXT.uninstall)).toBeDefined();
-    });
-    expect(buttonNamed(UI_TEXT.devInstall)).toBeUndefined();
-  });
-
-  it('offers Install for one the player does not have', async () => {
-    await open({ installed: [] });
-
-    await vi.waitFor(() => {
-      expect(buttonNamed(UI_TEXT.devInstall)).toBeDefined();
-    });
-    expect(buttonNamed(UI_TEXT.uninstall)).toBeUndefined();
-  });
-
   // Refresh has nothing to refresh with the source switched off, and offering it
   // reads as a way to turn the source on, which it is not.
   it('disables Refresh while dev mode is off', async () => {
@@ -272,19 +230,6 @@ describe('the controls', () => {
 
     await vi.waitFor(() => {
       expect(buttonNamed(UI_TEXT.devRefresh)?.disabled).toBe(true);
-    });
-  });
-
-  it('shows why an install failed rather than doing nothing visible', async () => {
-    await open({ install: () => Promise.reject(new Error('HTTP 404 from localhost')) });
-
-    await vi.waitFor(() => {
-      expect(buttonNamed(UI_TEXT.devInstall)).toBeDefined();
-    });
-    buttonNamed(UI_TEXT.devInstall)?.click();
-
-    await vi.waitFor(() => {
-      expect(text()).toContain('HTTP 404');
     });
   });
 });

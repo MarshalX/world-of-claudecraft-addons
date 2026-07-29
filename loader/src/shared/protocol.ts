@@ -25,7 +25,27 @@ export interface MarketplaceState {
    * Install needs the path, so the entry is kept whole rather than reduced.
    */
   addons: MarketplaceEntry[];
+  /**
+   * The rows came from enumerating the repository rather than from an index.
+   *
+   * A supported marketplace publishes marketplace.json. The fallback costs one
+   * request per addon against an unauthenticated rate limit, so the manager says
+   * so rather than presenting a degraded source as an ordinary one.
+   */
+  degraded: boolean;
   error: string | null;
+}
+
+/** One installed addon that its marketplace now offers a newer version of. */
+export interface UpdateRow {
+  fqid: string;
+  name: string;
+  /** The marketplace id, for the source badge. */
+  marketplace: string;
+  installed: string;
+  available: string;
+  /** The version the player pinned to, or null when the addon tracks the index. */
+  pin: string | null;
 }
 
 export type HostEvent =
@@ -62,6 +82,23 @@ export interface RegistryApi {
   uninstall: (fqid: string) => Promise<void>;
   update: (fqid: string) => Promise<void>;
   /**
+   * Hold an addon at a version, or null to let it track its marketplace again.
+   *
+   * A pin does not fetch anything. A marketplace serves one version per ref, so
+   * there is no older body to go back to; what the pin does is stop the addon
+   * being offered an update, which is what a player who has decided to stay put
+   * is asking for.
+   */
+  setPin: (fqid: string, version: string | null) => Promise<void>;
+  /**
+   * Everything installed that its marketplace now offers a newer version of.
+   *
+   * Answered from the indexes as they were last read, with no fetch of its own.
+   * Auto-update is off for every marketplace including the official one, so
+   * nothing acts on this: it is what the Updates pane draws.
+   */
+  updates: () => Promise<UpdateRow[]>;
+  /**
    * The addon's entry source, from the cache written at install.
    *
    * Cached rather than re-fetched so a marketplace that goes offline does not
@@ -73,9 +110,26 @@ export interface RegistryApi {
 
 export interface MarketApi {
   list: () => Promise<MarketplaceState[]>;
-  add: (url: string) => Promise<void>;
+  /**
+   * Accept a source, optionally pinned.
+   *
+   * The ref is a separate argument rather than something the player has to
+   * express by pasting a tree URL, because pinning a third party to a tag is the
+   * recommended posture and the add form is where it is offered. Omitted or
+   * empty means the ref the URL itself carried, and HEAD if it carried none.
+   */
+  add: (url: string, ref?: string) => Promise<void>;
   /** Rejects any built-in id. */
   remove: (id: string) => Promise<void>;
+  /**
+   * Repoint a user-added source at another branch, tag, or commit.
+   *
+   * Pinning to a tag is the recommended posture for a third party, since a ref
+   * of HEAD means the source's code can change under an installed addon at any
+   * time. Rejects a built-in id: the official source's ref comes from the loader
+   * build, so moving it means shipping a loader.
+   */
+  setRef: (id: string, ref: string) => Promise<void>;
   refresh: (id?: string) => Promise<void>;
 }
 

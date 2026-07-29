@@ -1,33 +1,15 @@
-// What the Dev pane reads, and the actions it drives.
+// What the Dev pane reads, and the three actions it drives.
 //
-// Offered and installed are kept apart on purpose: one comes from the dev
-// server's index and the other from the registry, and they go out of date at
-// different moments. Uninstalling changes the second; saving a new addon.json
-// changes the first.
+// It used to hold the local server's offered list and the installed set too, so
+// the pane could install from it. Browse covers that for every source including
+// this one, so those cases moved to manager-catalog-store and what is left here
+// is the pair of switches nothing else owns, plus the explicit index refresh the
+// watcher deliberately does not do on its own.
 
 import { describe, expect, it, vi } from 'vitest';
 import { createDevStore, type DevStoreDeps } from '../loader/src/runtime/ui/manager/dev-store.ts';
-import { LOCAL, LOCAL_ORIGIN, OFFICIAL } from '../loader/src/shared/marketplace.ts';
-import type {
-  DevState,
-  MarketplaceEntry,
-  MarketplaceState,
-} from '../loader/src/shared/protocol.ts';
-
-const LOCAL_FQID = 'local/dev-harness';
-
-function entry(id = 'dev-harness'): MarketplaceEntry {
-  return {
-    id,
-    name: 'Dev Harness',
-    version: '1.0.0',
-    apiVersion: 1,
-    author: 'MarshalX',
-    description: 'Checks the API.',
-    entry: 'main.js',
-    path: `addons/${id}`,
-  };
-}
+import { LOCAL_ID, LOCAL_ORIGIN } from '../loader/src/shared/marketplace.ts';
+import type { DevState } from '../loader/src/shared/protocol.ts';
 
 function devState(overrides: Partial<DevState> = {}): DevState {
   return {
@@ -40,136 +22,117 @@ function devState(overrides: Partial<DevState> = {}): DevState {
   };
 }
 
-function markets(addons: MarketplaceEntry[]): MarketplaceState[] {
-  return [
-    { ref: OFFICIAL, builtin: true, fetchedAt: null, addons: [], error: null },
-    { ref: LOCAL, builtin: true, fetchedAt: 1, addons, error: null },
-  ];
-}
-
 interface Options {
   dev?: DevState;
-  addons?: MarketplaceEntry[];
-  installed?: string[];
   bridged?: boolean;
 }
 
 function open(options: Options = {}) {
   const calls = {
-    setEnabled: vi.fn(() => Promise.resolve()),
-    setHotReload: vi.fn(() => Promise.resolve()),
-    refresh: vi.fn(() => Promise.resolve()),
-    install: vi.fn(() => Promise.resolve()),
-    uninstall: vi.fn(() => Promise.resolve()),
+    state: vi.fn<() => Promise<DevState>>(() => Promise.resolve(options.dev ?? devState())),
+    setEnabled: vi.fn<(on: boolean) => Promise<void>>(() => Promise.resolve()),
+    setHotReload: vi.fn<(on: boolean) => Promise<void>>(() => Promise.resolve()),
+    refresh: vi.fn<(id?: string) => Promise<void>>(() => Promise.resolve()),
   };
-  const installed = options.installed ?? [];
 
-  // Null when the handshake failed, and all three together: the pane's
-  // unreachable state is the case where none of them is there.
-  const bridged = options.bridged !== false;
-  const deps: DevStoreDeps = {
-    dev: null,
-    market: null,
-    registry: null,
-    onChange: vi.fn(),
-  };
-  if (bridged) {
+  // Both null together, which is the state the manager is in when the bridge
+  // handshake never completed.
+  const deps: DevStoreDeps = { dev: null, market: null, onChange: () => undefined };
+  if (options.bridged !== false) {
     deps.dev = {
-      state: () => Promise.resolve(options.dev ?? devState()),
+      state: calls.state,
       setEnabled: calls.setEnabled,
       setHotReload: calls.setHotReload,
     };
-    deps.market = {
-      list: () => Promise.resolve(markets(options.addons ?? [entry()])),
-      refresh: calls.refresh,
-    };
-    deps.registry = {
-      list: () => Promise.resolve(installed.map((fqid) => ({ fqid }))),
-      install: calls.install,
-      uninstall: calls.uninstall,
-    };
+    deps.market = { refresh: calls.refresh };
   }
-
-  return {
-    store: createDevStore(deps),
-    calls,
-    onChange: deps.onChange as ReturnType<typeof vi.fn>,
-  };
+  return { store: createDevStore(deps), calls };
 }
 
-/**
- * The store commits asynchronously, so a suite waits for a load to finish.
- *
- * Waiting for a terminal status rather than for "not loading": an action commits
- * its busy flag before it starts loading, so "not loading" is also true in the
- * moment before the reload it triggers has begun.
- */
-async function settled(store: ReturnType<typeof open>['store']) {
-  await vi.waitFor(() => {
+/** Wait for something to become true, rather than for a fixed number of turns. */
+const until = (assertion: () => void): Promise<void> => vi.waitFor(assertion);
+
+function settled(store: ReturnType<typeof open>['store']): Promise<void> {
+  return until(() => {
     expect(['ready', 'failed']).toContain(store.state().status);
   });
-  return store.state();
 }
 
 describe('loading', () => {
-  it('starts idle rather than claiming an empty dev server', () => {
-    expect(open().store.state()).toMatchObject({ status: 'idle', dev: null, offered: [] });
+  it('starts idle rather than claiming the dev server is off', () => {
+    expect(open().store.state()).toMatchObject({ status: 'idle', dev: null });
   });
 
-  it('reads the dev settings, the local index, and the installed set', async () => {
-    const { store } = open({ installed: [LOCAL_FQID] });
+  it('reads the dev settings', async () => {
+    const { store } = open({ dev: devState({ hotReload: true, polledAt: 42 }) });
+
     store.load();
+    await settled(store);
 
-    const state = await settled(store);
-
-    expect(state.status).toBe('ready');
-    expect(state.dev?.origin).toBe(LOCAL_ORIGIN);
-    expect(state.offered.map((row) => row.id)).toEqual(['dev-harness']);
-    expect(state.installed.has(LOCAL_FQID)).toBe(true);
+    expect(store.state().dev).toMatchObject({ enabled: true, hotReload: true, polledAt: 42 });
   });
 
-  it('reads only the local source addons, not the official ones', async () => {
-    const { store } = open({ addons: [entry('a'), entry('b')] });
-    store.load();
-
-    expect((await settled(store)).offered).toHaveLength(2);
-  });
-
-  // A dev server that is not running is the ordinary state, and the reading that
-  // says so comes from the host rather than from the last action's failure.
+  // What a dev server that is not running looks like, which is the state this
+  // pane exists to make visible.
   it('surfaces the local source own fetch error', async () => {
-    const { store } = open({ dev: devState({ error: 'HTTP 404 from localhost' }) });
-    store.load();
+    const { store } = open({ dev: devState({ error: 'HTTP 404 from http://localhost:5180' }) });
 
-    expect((await settled(store)).error).toContain('404');
+    store.load();
+    await settled(store);
+
+    expect(store.state().error).toContain('404');
   });
 
-  // With dev mode off there is nothing to be unreachable, so an error left over
-  // from a previous session must not sit in the pane.
   it('hides that error while dev mode is off', async () => {
-    const { store } = open({ dev: devState({ enabled: false, error: 'HTTP 404' }) });
-    store.load();
+    const { store } = open({ dev: devState({ enabled: false, error: 'connection refused' }) });
 
-    expect((await settled(store)).error).toBeNull();
+    store.load();
+    await settled(store);
+
+    expect(store.state().error).toBeNull();
   });
 
   it('reports a bridge that never connected as failed with nothing read', async () => {
     const { store } = open({ bridged: false });
-    store.load();
 
-    const state = await settled(store);
-    expect(state.status).toBe('failed');
-    expect(state.dev).toBeNull();
+    store.load();
+    await settled(store);
+
+    expect(store.state()).toMatchObject({ status: 'failed', dev: null });
   });
 
-  // Without the ticket a slow first load lands after a fast refresh and puts the
-  // older reading back.
-  it('lets only the newest load write', async () => {
-    const { store } = open();
-    store.load();
-    store.load();
+  // Not just an error: the status has to leave `loading`, or the pane keeps
+  // reporting a read that is never going to finish.
+  it('records a rejection as a failure rather than a read still in flight', async () => {
+    const { store, calls } = open();
+    calls.state.mockImplementation(() => Promise.reject(new Error('the port is closed')));
 
-    expect((await settled(store)).status).toBe('ready');
+    store.load();
+    await settled(store);
+
+    expect(store.state().status).toBe('failed');
+    expect(store.state().error).toContain('the port is closed');
+  });
+
+  it('lets only the newest load write', async () => {
+    const { store, calls } = open();
+    let release = (): void => undefined;
+    calls.state.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          release = () => {
+            resolve(devState({ hotReload: true }));
+          };
+        }),
+    );
+
+    store.load();
+    store.load();
+    await settled(store);
+    release();
+    await Promise.resolve();
+
+    expect(store.state().dev?.hotReload).toBe(false);
   });
 });
 
@@ -178,8 +141,7 @@ describe('the two switches', () => {
     const { store, calls } = open();
 
     store.setEnabled(true);
-
-    await vi.waitFor(() => {
+    await until(() => {
       expect(calls.setEnabled).toHaveBeenCalledWith(true);
     });
   });
@@ -188,106 +150,59 @@ describe('the two switches', () => {
     const { store, calls } = open();
 
     store.setHotReload(true);
-
-    await vi.waitFor(() => {
+    await until(() => {
       expect(calls.setHotReload).toHaveBeenCalledWith(true);
     });
   });
 
-  // Otherwise the pane still shows the list from before the switch moved.
+  // The host decides what a switch actually became, so the pane re-reads rather
+  // than showing the value it asked for.
   it('reloads after the switch lands', async () => {
     const { store, calls } = open();
 
     store.setEnabled(true);
-
-    await vi.waitFor(() => {
-      expect(calls.setEnabled).toHaveBeenCalled();
+    await until(() => {
+      expect(calls.state).toHaveBeenCalled();
     });
-    expect((await settled(store)).status).toBe('ready');
   });
-});
 
-describe('installing', () => {
-  it('installs under the fully-qualified id, not the short one', async () => {
+  it('shows the reason when a switch fails', async () => {
     const { store, calls } = open();
+    calls.setEnabled.mockImplementation(() => Promise.reject(new Error('storage is unwritable')));
 
-    store.install('dev-harness');
-
-    await vi.waitFor(() => {
-      expect(calls.install).toHaveBeenCalledWith(LOCAL_FQID);
-    });
-  });
-
-  it('marks the row busy while the install is in flight', () => {
-    const { store } = open();
-
-    store.install('dev-harness');
-
-    expect(store.state().busy).toBe(LOCAL_FQID);
-  });
-
-  it('clears busy and reloads once it lands', async () => {
-    const { store } = open({ installed: [LOCAL_FQID] });
-
-    store.install('dev-harness');
-
-    const state = await settled(store);
-    expect(state.busy).toBeNull();
-    expect(state.installed.has(LOCAL_FQID)).toBe(true);
-  });
-
-  it('shows the reason when it fails', async () => {
-    const { store, calls } = open();
-    calls.install.mockReturnValue(Promise.reject(new Error('HTTP 404 from localhost')));
-
-    store.install('dev-harness');
-
-    await vi.waitFor(() => {
-      expect(store.state().error).toContain('404');
-    });
-    expect(store.state().busy).toBeNull();
-  });
-});
-
-describe('uninstalling', () => {
-  it('sends the fqid through', async () => {
-    const { store, calls } = open({ installed: [LOCAL_FQID] });
-
-    store.uninstall(LOCAL_FQID);
-
-    await vi.waitFor(() => {
-      expect(calls.uninstall).toHaveBeenCalledWith(LOCAL_FQID);
+    store.setEnabled(true);
+    await until(() => {
+      expect(store.state().error).toContain('storage is unwritable');
     });
   });
 });
 
+// The watcher polls addon BODIES and never the index, so a new addon directory
+// or an edited manifest needs an explicit refresh. This is that control.
 describe('refresh', () => {
   it('refreshes the local source only', async () => {
     const { store, calls } = open();
 
     store.refresh();
-
-    await vi.waitFor(() => {
-      expect(calls.refresh).toHaveBeenCalledWith('local');
+    await until(() => {
+      expect(calls.refresh).toHaveBeenCalledWith(LOCAL_ID);
     });
   });
 });
 
 describe('without a bridge', () => {
-  it.each(['setEnabled', 'setHotReload', 'refresh', 'install', 'uninstall'] as const)(
-    '%s does nothing rather than throwing',
-    (action) => {
-      const { store } = open({ bridged: false });
+  // The pane already reports the unreachable state; a rejection out of a click
+  // handler would be a second report of the same fact with nowhere to go.
+  it('does nothing rather than throwing', async () => {
+    const { store, calls } = open({ bridged: false });
 
-      expect(() => {
-        if (action === 'setEnabled' || action === 'setHotReload') {
-          store[action](true);
-        } else if (action === 'refresh') {
-          store.refresh();
-        } else {
-          store[action]('dev-harness');
-        }
-      }).not.toThrow();
-    },
-  );
+    store.setEnabled(true);
+    store.setHotReload(true);
+    store.refresh();
+    await Promise.resolve();
+
+    expect(calls.setEnabled).not.toHaveBeenCalled();
+    expect(calls.setHotReload).not.toHaveBeenCalled();
+    expect(calls.refresh).not.toHaveBeenCalled();
+  });
 });

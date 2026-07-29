@@ -1,10 +1,13 @@
 // The manager's tab table.
 //
-// Kept as data rather than as markup so the shell can say plainly which panes
-// are built and which are not. A tab that is not built still renders, with the
-// reason: a missing tab reads as a loader that is broken, where an empty one
-// with a sentence in it reads as a loader that is not finished, which is the
-// truth.
+// Kept as data rather than as markup so the strip is one list to read and the
+// order is one line to change.
+//
+// It carried a `built` flag and a `pending` sentence while the panes were being
+// written, so an unfinished tab could say what it was waiting for: a missing tab
+// reads as a loader that is broken, where an empty one with a sentence in it
+// reads as one that is not finished. Every tab is built now, and a flag with no
+// false case is a branch nothing takes, so both are gone.
 
 export const TAB_IDS = [
   'installed',
@@ -20,41 +23,15 @@ export type TabId = (typeof TAB_IDS)[number];
 export interface TabDef {
   id: TabId;
   label: string;
-  /** False while the pane is a placeholder. `pending` says what it is waiting on. */
-  built: boolean;
-  pending?: string;
 }
 
 export const TABS: readonly TabDef[] = [
-  { id: 'installed', label: 'Installed', built: true },
-  {
-    id: 'browse',
-    label: 'Browse',
-    built: false,
-    pending: 'Browsing and installing arrive with the marketplace index.',
-  },
-  {
-    id: 'marketplaces',
-    label: 'Marketplaces',
-    built: false,
-    pending: 'Adding and removing sources arrives with the marketplace index.',
-  },
-  {
-    id: 'updates',
-    label: 'Updates',
-    built: false,
-    pending: 'Update badges need a cached index to compare against.',
-  },
-  { id: 'dev', label: 'Dev', built: true },
-  { id: 'diagnostics', label: 'Diagnostics', built: true },
+  { id: 'installed', label: 'Installed' },
+  { id: 'browse', label: 'Browse' },
+  { id: 'marketplaces', label: 'Marketplaces' },
+  { id: 'updates', label: 'Updates' },
+  { id: 'dev', label: 'Dev' },
+  { id: 'diagnostics', label: 'Diagnostics' },
 ];
 
 export const DEFAULT_TAB: TabId = 'installed';
-
-export function findTab(id: TabId): TabDef {
-  const tab = TABS.find((candidate) => candidate.id === id);
-  if (tab === undefined) {
-    throw new Error(`no such manager tab: ${id}`);
-  }
-  return tab;
-}

@@ -2,7 +2,7 @@
   "schema": 1,
   "name": "Official Marketplace",
   "maintainer": "MarshalX",
-  "generated": "2026-07-29T17:04:10.000Z",
+  "generated": "2026-07-29T17:52:31.645Z",
   "addons": [
     {
       "id": "dev-harness",
@@ -13,6 +13,9 @@
       "description": "Exercises every part of the addon API and reports what worked, so a loader change can be checked in the game rather than only in a test.",
       "entry": "main.js",
       "homepage": "https://github.com/MarshalX/world-of-claudecraft-addons",
+      "tags": [
+        "development"
+      ],
       "permissions": [
         "net.read",
         "world.read",

@@ -7,6 +7,7 @@
   "description": "Exercises every part of the addon API and reports what worked, so a loader change can be checked in the game rather than only in a test.",
   "entry": "main.js",
   "homepage": "https://github.com/MarshalX/world-of-claudecraft-addons",
+  "tags": ["development"],
   "permissions": ["net.read", "world.read", "ui", "sound", "keys", "storage"],
   "keybinds": [
     { "id": "toggle", "label": "Toggle the harness window", "default": "Alt+KeyH" },

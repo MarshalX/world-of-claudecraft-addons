@@ -16,6 +16,7 @@ import type { InstalledAddon, RegistryApi, StorageApi } from '../shared/protocol
 import { InstalledAddon as InstalledAddonSchema, validate } from '../shared/schema.ts';
 import type { Fetcher } from './fetcher.ts';
 import type { MarketService } from './marketplace.ts';
+import { computeUpdates } from './updates.ts';
 
 /** The loader's own storage namespace, alongside the per-addon `addon:<fqid>` ones. */
 const REGISTRY_NS = 'loader';
@@ -71,7 +72,12 @@ interface Acquired {
 
 interface RegistryDeps {
   storage: RegistryStorage;
-  market: Pick<MarketService, 'entry'>;
+  /**
+   * `entry` says where an addon's files are; `api.list` is what update rows are
+   * compared against, and it answers from the indexes as they were last read
+   * rather than fetching.
+   */
+  market: Pick<MarketService, 'entry' | 'api'>;
   fetcher: Pick<Fetcher, 'get' | 'forget'>;
   /** Called after a write that changed something, so the manager can refresh. */
   onChanged: () => void;
@@ -95,7 +101,7 @@ async function acquire(deps: RegistryDeps, fqid: string): Promise<Acquired> {
   // stale copy of it would send the next fetch to the wrong directory.
   const { path: _path, ...manifest } = row;
   return {
-    row: { fqid, marketplace: source.id, manifest, enabled: false, pin: null },
+    row: { fqid, marketplace: source.id, manifest, enabled: true, pin: null },
     source: body,
   };
 }
@@ -135,7 +141,22 @@ async function refetchLocal(deps: RegistryDeps, fqid: string): Promise<string | 
 
 type Write = (rows: readonly InstalledAddon[]) => Promise<void>;
 
-/** Fetch and persist an addon that is not installed yet. */
+/**
+ * Fetch and persist an addon that is not installed yet, ready to run.
+ *
+ * It lands ENABLED. The design's original lifecycle had install fetch only the
+ * manifest and enable go and get the code, which made "installed but off" a
+ * state that meant something: nothing had been downloaded. This implementation
+ * caches the body at install so that enabling is never a network call, so by the
+ * time the row exists the code is already on disk and the separation protects
+ * nothing. What it cost was real: the player accepts a confirmation that says to
+ * install only what they would trust as a browser extension, and then nothing
+ * runs.
+ *
+ * Nothing unsafe follows from starting it. The supervisor records a throw as
+ * `failed` and badges it, and an addon declaring an apiVersion or gameVersion
+ * this loader cannot honour is marked `incompatible` and never evaluated.
+ */
 async function install(deps: RegistryDeps, write: Write, fqid: string): Promise<void> {
   const rows = await readInstalled(deps.storage);
   if (rows.some((candidate) => candidate.fqid === fqid)) {
@@ -168,6 +189,41 @@ async function uninstall(deps: RegistryDeps, write: Write, fqid: string): Promis
     await deps.fetcher.forget(url);
   }
   await write(kept);
+}
+
+/**
+ * Hold an addon at a version, or release it back to tracking its marketplace.
+ *
+ * Nothing is fetched. A marketplace serves one version per ref, so there is no
+ * older body to go back to and a pin cannot mean "install that instead"; what it
+ * means is that this addon stops being offered an update. Validation runs
+ * through the registry's own schema rather than a second copy of the version
+ * pattern, so a pin can only ever be a shape the record itself would accept.
+ */
+async function setPin(
+  deps: RegistryDeps,
+  write: Write,
+  fqid: string,
+  version: string | null,
+): Promise<void> {
+  const rows = await readInstalled(deps.storage);
+  const at = rows.findIndex((candidate) => candidate.fqid === fqid);
+  const current = rows[at];
+  if (current === undefined) {
+    throw new Error(`cannot pin an addon that is not installed: ${fqid}`);
+  }
+  if (current.pin === version) {
+    return;
+  }
+
+  const next = { ...current, pin: version };
+  const parsed = validate(InstalledAddonSchema, next);
+  if (!parsed.ok) {
+    const reasons = parsed.issues.map((issue) => issue.message).join('; ');
+    throw new Error(`cannot pin ${fqid}: ${reasons}`);
+  }
+  rows[at] = parsed.value;
+  await write(rows);
 }
 
 /** Replace the manifest and body, keeping the enable flag and the pin. */
@@ -215,6 +271,15 @@ function createRegistry(deps: RegistryDeps): RegistryApi {
     install: (fqid) => install(deps, write, fqid),
     uninstall: (fqid) => uninstall(deps, write, fqid),
     update: (fqid) => update(deps, write, fqid),
+    setPin: (fqid, version) => setPin(deps, write, fqid, version),
+
+    updates: async () => {
+      const [installed, markets] = await Promise.all([
+        readInstalled(storage),
+        deps.market.api.list(),
+      ]);
+      return computeUpdates(installed, markets);
+    },
 
     source: async (fqid) => {
       if (splitFqid(fqid)?.marketplace === LOCAL_ID) {

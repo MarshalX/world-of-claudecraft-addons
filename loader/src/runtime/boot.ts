@@ -4,11 +4,12 @@ import { proxy } from 'comlink';
 import { diagError, diagInfo } from '../shared/diag.ts';
 import { type MessageScope, takeBootPayload } from '../shared/handshake.ts';
 import { type Channel, channelForOrigin } from '../shared/hosts.ts';
-import type { HostEvent, RemoteHostApi } from '../shared/protocol.ts';
+import type { RemoteHostApi } from '../shared/protocol.ts';
 import type { SharedServices } from './api/index.ts';
 import { connectHost, type HostConnection } from './bridge.ts';
 import { type DiagnosticsReading, readDiagnostics } from './diagnostics.ts';
 import { clearTimer, setTimer } from './dom-timers.ts';
+import { createHostEventHandler } from './host-events.ts';
 import { type GameProbe, probeGame } from './probe.ts';
 import { waitForDocument } from './ready.ts';
 import { createRuntimeServices, type RuntimeServices } from './services.ts';
@@ -96,40 +97,6 @@ function supervisorSlot() {
     reload: (fqid: string): void => {
       supervisor?.reload(fqid).catch(() => undefined);
     },
-  };
-}
-
-/** What one host event can reach. See hostEventHandler. */
-interface EventTargets {
-  ui: MountedUi;
-  services: RuntimeServices;
-  resync: () => void;
-  reload: (fqid: string) => void;
-}
-
-/**
- * The one place a host event turns into a runtime action.
- *
- * The registry is the desired set, so every write to it is what tells the
- * supervisor to start or stop something. That includes a write made in another
- * tab, which is why the sync hangs off the event rather than off the toggle that
- * caused it.
- */
-function hostEventHandler(targets: EventTargets): (event: HostEvent) => void {
-  const { ui, services } = targets;
-  return (event) => {
-    if (event.k === 'ui.open') {
-      ui.manager.open();
-    } else if (event.k === 'registry.changed') {
-      ui.manager.invalidate();
-      targets.resync();
-    } else if (event.k === 'addon.reload') {
-      targets.reload(event.fqid);
-    } else if (event.k === 'market.changed' || event.k === 'dev.changed') {
-      ui.manager.repaint();
-    } else if (event.k === 'storage.changed') {
-      services.storage.deliver(event.ns, event.key, event.value);
-    }
   };
 }
 
@@ -227,7 +194,16 @@ async function startUi(deps: UiStartDeps): Promise<StartedRuntime> {
   // are the reason it exists for anything but the manager: an addon's settings
   // written in one tab have to reach its running copy in every other.
   await host?.subscribe(
-    proxy(hostEventHandler({ ui, services, resync: slot.resync, reload: slot.reload })),
+    proxy(
+      createHostEventHandler({
+        manager: ui.manager,
+        resync: slot.resync,
+        reload: slot.reload,
+        deliverStorage: (ns, key, value) => {
+          services.storage.deliver(ns, key, value);
+        },
+      }),
+    ),
   );
 
   // The first reconcile. Everything an enabled addon needs is in place by now:

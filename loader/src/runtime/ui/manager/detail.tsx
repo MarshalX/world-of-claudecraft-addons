@@ -204,10 +204,10 @@ interface ActionProps {
  * The three controls, with the enable toggle first because it is the one that
  * decides whether the others mean anything.
  *
- * The toggle is here as well as on the Installed row on purpose. Installing does
- * not enable, so an addon reaches this page STOPPED, and a page that shows that
- * badge with no way to start it is a dead end: the control that fixes what the
- * badge reports has to be next to the badge.
+ * The toggle is here as well as on the Installed row on purpose. An addon
+ * reaches this page in whatever state it is in, and a page that reports STOPPED
+ * or FAILED with no way to act on it is a dead end: the control that fixes what
+ * the badge says has to be next to the badge.
  *
  * Reload is disabled while the addon is stopped rather than silently doing
  * nothing. It re-evaluates a RUNNING addon, so with nothing running there is

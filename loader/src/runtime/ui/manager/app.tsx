@@ -15,16 +15,20 @@ import type { DiagnosticsReading } from '../../diagnostics.ts';
 import type { LogEntry } from '../../log/buffer.ts';
 import type { AddonStatus } from '../../supervisor.ts';
 import type { FrameBox } from '../frame/geometry.ts';
+import { BrowsePane } from './browse.tsx';
+import type { CatalogStore } from './catalog-store.ts';
 import type { AddonConfig, ConflictReading } from './config.ts';
 import { DetailPane } from './detail.tsx';
 import { DevPane } from './dev.tsx';
 import type { DevPaneState, DevStore } from './dev-store.ts';
 import { DiagnosticsPane } from './diagnostics.tsx';
 import { InstalledPane } from './installed.tsx';
+import { MarketsPane } from './markets.tsx';
 import { statusView } from './status.ts';
 import type { InstalledState } from './store.ts';
 import { UI_TEXT } from './strings.ts';
-import { DEFAULT_TAB, findTab, TABS, type TabId } from './tabs.ts';
+import { DEFAULT_TAB, TABS, type TabId } from './tabs.ts';
+import { UpdatesPane } from './updates.tsx';
 import { useInteractiveFrame } from './use-frame.ts';
 
 interface ManagerAppProps {
@@ -36,6 +40,15 @@ interface ManagerAppProps {
   onReloadAll: () => void;
   dev: DevPaneState;
   devStore: DevStore;
+  /**
+   * Passed whole rather than as a state prop plus a store prop.
+   *
+   * Three panes read it and each reads a different part, so splitting it would
+   * mean three pairs of props threaded through a component that renders one tab
+   * at a time. The store is a plain object with no reactivity of its own; a
+   * repaint is what makes a read of it current.
+   */
+  catalogStore: CatalogStore;
   formatTime: (at: number) => string;
   readDiagnostics: () => DiagnosticsReading;
   onClose: () => void;
@@ -105,11 +118,22 @@ function InstalledTab(props: { app: ManagerAppProps }) {
   );
 }
 
-function Pane(props: { tab: TabId; app: ManagerAppProps }) {
-  const def = findTab(props.tab);
-  if (!def.built) {
-    return <p className="woc-note">{def.pending}</p>;
+/** Browse, Marketplaces, and Updates: the three views of one catalog reading. */
+function CatalogTab(props: { tab: TabId; app: ManagerAppProps }) {
+  const { app } = props;
+  const state = app.catalogStore.state();
+  if (props.tab === 'browse') {
+    return <BrowsePane state={state} store={app.catalogStore} />;
   }
+  if (props.tab === 'marketplaces') {
+    return <MarketsPane state={state} store={app.catalogStore} format={app.formatTime} />;
+  }
+  return <UpdatesPane state={state} store={app.catalogStore} />;
+}
+
+const CATALOG_TABS: readonly TabId[] = ['browse', 'marketplaces', 'updates'];
+
+function Pane(props: { tab: TabId; app: ManagerAppProps }) {
   if (props.tab === 'diagnostics') {
     return <DiagnosticsPane read={props.app.readDiagnostics} />;
   }
@@ -122,6 +146,9 @@ function Pane(props: { tab: TabId; app: ManagerAppProps }) {
         format={props.app.formatTime}
       />
     );
+  }
+  if (CATALOG_TABS.includes(props.tab)) {
+    return <CatalogTab tab={props.tab} app={props.app} />;
   }
   return <InstalledTab app={props.app} />;
 }

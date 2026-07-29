@@ -10,13 +10,18 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createFetcher } from '../loader/src/host/fetcher.ts';
-import type { MarketService } from '../loader/src/host/marketplace.ts';
+import type { RegistryDeps } from '../loader/src/host/registry.ts';
 import { createRegistry, sourceKey } from '../loader/src/host/registry.ts';
 import { LOCAL, OFFICIAL } from '../loader/src/shared/marketplace.ts';
-import type { InstalledAddon, MarketplaceEntry } from '../loader/src/shared/protocol.ts';
+import type {
+  InstalledAddon,
+  MarketplaceEntry,
+  MarketplaceState,
+} from '../loader/src/shared/protocol.ts';
 import { type CapturedDiag, captureDiag } from './fakes/diag.ts';
 import { createFakeHostStorage } from './fakes/host-storage.ts';
 import { createFakeHttp, createFakeValues } from './fakes/http.ts';
+import { marketState } from './fakes/market.ts';
 
 const NS = 'loader';
 const KEY = 'installed';
@@ -53,8 +58,19 @@ function indexRow(overrides: Partial<MarketplaceEntry> = {}): MarketplaceEntry {
   return { ...MANIFEST, path: 'addons/minimap', ...overrides };
 }
 
-/** A market that offers `minimap` from the official source and from the dev one. */
-function fakeMarket(row: MarketplaceEntry = indexRow()): Pick<MarketService, 'entry'> {
+/**
+ * A market that offers `minimap` from the official source and from the dev one.
+ *
+ * `api.list` is the reading update rows are compared against, so it is the one
+ * MarketApi member with a real answer. The three that write the source list
+ * reject: the registry has no business calling them, and a rejection says so
+ * where a no-op would let a version that did call one pass.
+ */
+function fakeMarket(
+  row: MarketplaceEntry = indexRow(),
+  states: MarketplaceState[] = [],
+): RegistryDeps['market'] {
+  const unused = () => Promise.reject(new Error('the registry does not write the source list'));
   return {
     entry: (fqid) => {
       if (fqid === FQID) {
@@ -65,6 +81,13 @@ function fakeMarket(row: MarketplaceEntry = indexRow()): Pick<MarketService, 'en
       }
       return Promise.resolve(null);
     },
+    api: {
+      list: () => Promise.resolve(states),
+      add: unused,
+      remove: unused,
+      setRef: unused,
+      refresh: unused,
+    },
   };
 }
 
@@ -72,6 +95,8 @@ interface HarnessOpts {
   installed?: InstalledAddon[];
   files?: Record<string, string>;
   row?: MarketplaceEntry;
+  /** What the sources' indexes last said, for the update comparison. */
+  markets?: MarketplaceState[];
 }
 
 function harness(opts: HarnessOpts = {}) {
@@ -85,7 +110,7 @@ function harness(opts: HarnessOpts = {}) {
   const onChanged = vi.fn();
   const registry = createRegistry({
     storage,
-    market: fakeMarket(opts.row),
+    market: fakeMarket(opts.row, opts.markets),
     fetcher,
     onChanged,
   });
@@ -183,19 +208,23 @@ describe('install', () => {
 
     await registry.install(FQID);
 
-    expect(await registry.list()).toEqual([addon({ enabled: false })]);
+    expect(await registry.list()).toEqual([addon({ enabled: true })]);
     expect(storage.cells.get(`${NS}:${sourceKey(FQID)}`)).toBe('woc.log("hi")');
     expect(onChanged).toHaveBeenCalledTimes(1);
   });
 
-  // Installing must not turn the addon on. Evaluating third-party code is the
-  // player's decision and it is a separate one from acquiring it.
-  it('installs disabled', async () => {
-    const { registry } = harness();
+  // Enabled, so the supervisor starts it on the registry.changed this write
+  // emits. Installing used to leave the addon off, which was right when install
+  // fetched only the manifest and enable went and got the code. The body is
+  // cached at install now, so nothing was left to defer and the player was made
+  // to press a second control to get what they had already confirmed.
+  it('installs enabled, and announces the change that starts it', async () => {
+    const { registry, onChanged } = harness();
 
     await registry.install(FQID);
 
-    expect((await registry.list())[0]?.enabled).toBe(false);
+    expect((await registry.list())[0]?.enabled).toBe(true);
+    expect(onChanged).toHaveBeenCalledTimes(1);
   });
 
   // `path` belongs to the index row, not to a manifest. A stale copy of it would
@@ -361,6 +390,96 @@ describe('uninstall', () => {
 
   it('rejects an addon that is not installed', async () => {
     await expect(harness().registry.uninstall(FQID)).rejects.toThrow(NOT_INSTALLED);
+  });
+});
+
+describe('pinning an addon to a version', () => {
+  it('records the pin and leaves everything else alone', async () => {
+    const { registry, storage } = harness({ installed: [addon()] });
+
+    await registry.setPin(FQID, '1.2.0');
+
+    const [row] = storage.cells.get(`${NS}:${KEY}`) as InstalledAddon[];
+    expect(row?.pin).toBe('1.2.0');
+    expect(row?.enabled).toBe(true);
+    expect(row?.manifest.version).toBe('1.2.0');
+  });
+
+  it('releases the addon back to tracking its marketplace', async () => {
+    const { registry } = harness({ installed: [addon({ pin: '1.2.0' })] });
+
+    await registry.setPin(FQID, null);
+
+    expect((await registry.list())[0]?.pin).toBeNull();
+  });
+
+  // A marketplace serves one version per ref, so a pin cannot mean "install
+  // that instead": there is no older body to go back to.
+  it('fetches nothing', async () => {
+    const { registry, http } = harness({ installed: [addon()] });
+
+    await registry.setPin(FQID, '1.2.0');
+
+    expect(http.calls).toEqual([]);
+  });
+
+  it('rejects a version that is not semver', async () => {
+    const { registry } = harness({ installed: [addon()] });
+
+    await expect(registry.setPin(FQID, 'latest')).rejects.toThrow(/must be semver/);
+    expect((await registry.list())[0]?.pin).toBeNull();
+  });
+
+  it('rejects an addon that is not installed', async () => {
+    await expect(harness().registry.setPin(FQID, '1.2.0')).rejects.toThrow(NOT_INSTALLED);
+  });
+
+  // A no-op write still wakes every other tab through the value-change listener.
+  it('does not write when the pin is already what was asked for', async () => {
+    const { registry, onChanged } = harness({ installed: [addon({ pin: '1.2.0' })] });
+
+    await registry.setPin(FQID, '1.2.0');
+
+    expect(onChanged).not.toHaveBeenCalled();
+  });
+});
+
+describe('updates', () => {
+  it('reports an addon its marketplace has moved ahead of', async () => {
+    const { registry } = harness({
+      installed: [addon()],
+      markets: [marketState(OFFICIAL, [indexRow({ version: '1.3.0' })], { builtin: true })],
+    });
+
+    await expect(registry.updates()).resolves.toEqual([
+      {
+        fqid: FQID,
+        name: 'Better Minimap',
+        marketplace: 'official',
+        installed: '1.2.0',
+        available: '1.3.0',
+        pin: null,
+      },
+    ]);
+  });
+
+  // The badge must never be the thing that decides to go to the network, or
+  // opening the manager would cost a request per source before it could draw.
+  it('fetches nothing', async () => {
+    const { registry, http } = harness({
+      installed: [addon()],
+      markets: [marketState(OFFICIAL, [indexRow({ version: '1.3.0' })])],
+    });
+
+    await registry.updates();
+
+    expect(http.calls).toEqual([]);
+  });
+
+  it('reports nothing when no index has been read', async () => {
+    const { registry } = harness({ installed: [addon()] });
+
+    await expect(registry.updates()).resolves.toEqual([]);
   });
 });
 

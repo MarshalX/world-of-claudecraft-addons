@@ -1,17 +1,20 @@
-// What the Dev pane reads and the actions it drives, loaded outside the tree.
+// The two dev switches and what the local source last reported.
 //
-// Same shape as manager/store.ts and for the same reason: a plain object a Node
-// test can drive without rendering, and a reload triggered from outside the tree
-// is a method call rather than a prop that exists to invalidate an effect.
+// Same shape as manager/store.ts and manager/catalog-store.ts, and for the same
+// reason: a plain object a Node test can drive without rendering, and a reload
+// triggered from outside the tree is a method call rather than a prop that
+// exists to invalidate an effect.
 //
-// It holds the offered list and the installed set separately rather than one
-// merged list. Whether an addon is installed comes from the registry, whether it
-// is offered comes from the dev server, and the two go out of date at different
-// moments: uninstalling changes one, saving a new addon.json changes the other.
+// It used to hold the local server's offered list and the installed set as well,
+// so the Dev pane could install from it directly. Browse does that now, for
+// every source including this one, so what was two views of the same rows became
+// one: this reads only DevApi, and the pane points at Browse. What is left here
+// is what nothing else owns, which is the pair of switches that decide whether
+// the local source exists at all.
 
 import { describeError } from '../../../shared/diag.ts';
-import { LOCAL_ID, fqid as makeFqid } from '../../../shared/marketplace.ts';
-import type { DevApi, DevState, MarketApi, MarketplaceEntry } from '../../../shared/protocol.ts';
+import { LOCAL_ID } from '../../../shared/marketplace.ts';
+import type { DevApi, DevState, MarketApi } from '../../../shared/protocol.ts';
 
 type DevStatus = 'idle' | 'loading' | 'ready' | 'failed';
 
@@ -19,39 +22,30 @@ interface DevPaneState {
   status: DevStatus;
   /** Null until the first load, and whenever the bridge is not there. */
   dev: DevState | null;
-  /** What the local dev server currently offers, from its index. */
-  offered: readonly MarketplaceEntry[];
-  /** fqids of everything installed, so a row knows which control to draw. */
-  installed: ReadonlySet<string>;
-  /** The fqid of an install or uninstall in flight, so its row can disable. */
-  busy: string | null;
   error: string | null;
 }
 
-interface DevRegistry {
-  list: () => Promise<{ fqid: string }[]>;
-  install: (fqid: string) => Promise<void>;
-  uninstall: (fqid: string) => Promise<void>;
-}
-
 interface DevStoreDeps {
-  /** All three are null together when the bridge never connected. */
+  /** Both are null together when the bridge never connected. */
   dev: DevApi | null;
-  market: Pick<MarketApi, 'list' | 'refresh'> | null;
-  registry: DevRegistry | null;
+  market: Pick<MarketApi, 'refresh'> | null;
   onChange: () => void;
 }
 
 interface DevStore {
   state: () => DevPaneState;
-  /** Read the dev settings, the local index, and the installed set. */
   load: () => void;
   setEnabled: (on: boolean) => void;
   setHotReload: (on: boolean) => void;
-  /** Re-fetch the local index, then reload. */
+  /**
+   * Re-read the local index, then reload.
+   *
+   * Kept here even though the Marketplaces pane can refresh any source: the
+   * watcher polls addon BODIES and never the index, so a new addon directory or
+   * an edited manifest needs an explicit refresh, and this is the pane an author
+   * is already on when that happens.
+   */
   refresh: () => void;
-  install: (addonId: string) => void;
-  uninstall: (fqid: string) => void;
 }
 
 /** The local source's fetch error, but only while that source exists. */
@@ -62,17 +56,10 @@ function localError(settings: DevState): string | null {
   return settings.error;
 }
 
-const IDLE: DevPaneState = {
-  status: 'idle',
-  dev: null,
-  offered: [],
-  installed: new Set(),
-  busy: null,
-  error: null,
-};
+const IDLE: DevPaneState = { status: 'idle', dev: null, error: null };
 
 /**
- * The five things the pane can do, each a no-op without a bridge.
+ * The three things the pane can do, each a no-op without a bridge.
  *
  * Doing nothing rather than throwing: the pane already reports the unreachable
  * state, and a rejection from a click handler would be a second report of the
@@ -80,73 +67,42 @@ const IDLE: DevPaneState = {
  */
 function createActions(
   deps: DevStoreDeps,
-  act: (busy: string | null, run: () => Promise<void>) => void,
-): Pick<DevStore, 'setEnabled' | 'setHotReload' | 'refresh' | 'install' | 'uninstall'> {
+  act: (run: () => Promise<void>) => void,
+): Pick<DevStore, 'setEnabled' | 'setHotReload' | 'refresh'> {
   return {
     setEnabled: (on) => {
       const { dev } = deps;
       if (dev !== null) {
-        act(null, () => dev.setEnabled(on));
+        act(() => dev.setEnabled(on));
       }
     },
 
     setHotReload: (on) => {
       const { dev } = deps;
       if (dev !== null) {
-        act(null, () => dev.setHotReload(on));
+        act(() => dev.setHotReload(on));
       }
     },
 
     refresh: () => {
       const { market } = deps;
       if (market !== null) {
-        act(null, () => market.refresh(LOCAL_ID));
-      }
-    },
-
-    // The pane offers a short addon id, because that is what the index row
-    // carries; the registry is keyed on the fully-qualified one.
-    install: (addonId) => {
-      const { registry } = deps;
-      if (registry !== null) {
-        const id = makeFqid(LOCAL_ID, addonId);
-        act(id, () => registry.install(id));
-      }
-    },
-
-    uninstall: (fqid) => {
-      const { registry } = deps;
-      if (registry !== null) {
-        act(fqid, () => registry.uninstall(fqid));
+        act(() => market.refresh(LOCAL_ID));
       }
     },
   };
 }
 
-/**
- * One reading of everything the pane shows.
- *
- * Offered and installed are read together but kept apart: one comes from the dev
- * server's index and the other from the registry, and they go out of date at
- * different moments.
- */
+/** One reading of the dev settings, plus what the local source last reported. */
 async function read(deps: DevStoreDeps): Promise<DevPaneState> {
-  const { dev, market, registry } = deps;
-  if (dev === null || market === null || registry === null) {
+  const { dev } = deps;
+  if (dev === null) {
     return { ...IDLE, status: 'failed' };
   }
-  const [settings, markets, rows] = await Promise.all([
-    dev.state(),
-    market.list(),
-    registry.list(),
-  ]);
-  const local = markets.find((entry) => entry.ref.id === LOCAL_ID);
+  const settings = await dev.state();
   return {
     status: 'ready',
     dev: settings,
-    offered: local?.addons ?? [],
-    installed: new Set(rows.map((row) => row.fqid)),
-    busy: null,
     // The dev reading carries the local source's own fetch error, which is what
     // a dev server that is not running looks like, so it is shown rather than
     // only the last action's failure.
@@ -165,8 +121,14 @@ function createDevStore(deps: DevStoreDeps): DevStore {
     deps.onChange();
   };
 
+  /**
+   * Record a failure, and stop claiming a read is still in flight.
+   *
+   * Same reasoning as catalog-store.ts: a rejected load that left `loading`
+   * behind would have the pane reporting a read that is never going to finish.
+   */
   const fail = (err: unknown): void => {
-    commit({ ...state, busy: null, error: describeError(err) });
+    commit({ ...state, status: 'failed', error: describeError(err) });
   };
 
   const load = (): void => {
@@ -187,13 +149,13 @@ function createDevStore(deps: DevStoreDeps): DevStore {
   };
 
   /** Run one action, then reload, so the pane reflects what the host now holds. */
-  const act = (busy: string | null, run: () => Promise<void>): void => {
-    commit({ ...state, busy, error: null });
+  const act = (run: () => Promise<void>): void => {
+    commit({ ...state, error: null });
     run().then(load).catch(fail);
   };
 
   return { state: () => state, load, ...createActions(deps, act) };
 }
 
-export type { DevPaneState, DevRegistry, DevStatus, DevStore, DevStoreDeps };
+export type { DevPaneState, DevStatus, DevStore, DevStoreDeps };
 export { createDevStore };

@@ -9,6 +9,7 @@ on:
       - 'addons/**'
       - 'loader/src/shared/schema.ts'
       - 'loader/src/shared/api-version.ts'
+      - 'loader/src/shared/permissions.ts'
       - 'tools/manifests.ts'
       - 'tools/index.mjs'
       - 'tools/validate.mjs'

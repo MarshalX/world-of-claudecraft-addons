@@ -8,8 +8,8 @@
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { DiagnosticsReading } from '../loader/src/runtime/diagnostics.ts';
+import type { ManagerRegistry } from '../loader/src/runtime/ui/manager/index.tsx';
 import { mountManager } from '../loader/src/runtime/ui/manager/index.tsx';
-import type { InstalledRegistry } from '../loader/src/runtime/ui/manager/store.ts';
 import { UI_TEXT } from '../loader/src/runtime/ui/manager/strings.ts';
 import { TABS } from '../loader/src/runtime/ui/manager/tabs.ts';
 import type { InstalledAddon } from '../loader/src/shared/protocol.ts';
@@ -54,14 +54,14 @@ function addon(): InstalledAddon {
 }
 
 /** Null stands for a bridge that never connected; a partial fills in the rest. */
-function asRegistry(registry: Partial<InstalledRegistry> | null): InstalledRegistry | null {
+function asRegistry(registry: Partial<ManagerRegistry> | null): ManagerRegistry | null {
   if (registry === null) {
     return null;
   }
   return fakeRegistry(registry);
 }
 
-function open(registry: Partial<InstalledRegistry> | null) {
+function open(registry: Partial<ManagerRegistry> | null) {
   const root = document.createElement('div');
   root.id = 'woc-addons';
   document.body.appendChild(root);
@@ -254,17 +254,18 @@ describe('the tabs', () => {
     expect(text()).toContain('132 ms');
   });
 
-  // A tab that renders nothing reads as a broken loader. One that says what it
-  // is waiting for reads as an unfinished one, which is the truth.
-  it('says what an unbuilt pane is waiting for', async () => {
-    open(null);
+  // A tab that renders nothing reads as a broken loader, so every one of them
+  // has to put SOMETHING on screen, including with no bridge behind it. The
+  // per-pane suites check what; this checks that none is a blank rectangle.
+  it.each(TABS.map((tab) => tab.label))(
+    'draws something on the %s tab, with no bridge connected',
+    async (label) => {
+      open(null);
 
-    await clickTab('Browse');
+      await clickTab(label);
 
-    expect(activeTab()).toBe('Browse');
-
-    const pending = TABS.find((tab) => tab.id === 'browse')?.pending ?? '';
-    expect(pending).not.toBe('');
-    expect(text()).toContain(pending);
-  });
+      expect(activeTab()).toBe(label);
+      expect(text().trim()).not.toBe('');
+    },
+  );
 });

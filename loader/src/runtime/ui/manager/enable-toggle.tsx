@@ -1,9 +1,12 @@
 // The enable switch, which two panes render identically.
 //
 // It is on the Installed row AND on the addon's own page. That is not
-// redundancy: installing does not enable, so an addon reaches its own page
-// reading STOPPED, and a page that shows that badge with no control to change it
-// is a dead end. The control that answers the badge belongs next to the badge.
+// redundancy: an addon reaches its own page in whatever state it is in, and a
+// page that shows a STOPPED or FAILED badge with no control to change it is a
+// dead end. The control that answers the badge belongs next to the badge.
+//
+// It stopped being the step that gets a freshly installed addon running, since
+// install now lands enabled, and is what turns one off and back on again.
 //
 // What it reports is the player's INTENT, which is not the same as the run
 // status beside it: an addon can be enabled and still not running because it
