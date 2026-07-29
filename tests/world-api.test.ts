@@ -1,0 +1,239 @@
+import { describe, expect, it, vi } from 'vitest';
+
+import { createWorld, type WorldApi } from '../loader/src/runtime/api/world.ts';
+import { DisposalBag } from '../loader/src/runtime/disposal.ts';
+import { createWorldHub, type WorldHub } from '../loader/src/runtime/world/hub.ts';
+import { at, PLAYER_ENTITY, setAt } from './fakes/frames.ts';
+
+const NO_WORLD_MEMBER = /no world member/;
+const UNKNOWN_KEY = /unknown key/;
+const NAMES_PLAYER = /player/;
+
+interface Harness {
+  world: WorldApi;
+  hub: WorldHub;
+  bag: DisposalBag;
+  enterWorld: () => void;
+  live: Record<string, unknown>;
+  frame: () => void;
+}
+
+function harness(game: Record<string, unknown> | null = null): Harness {
+  const live: Record<string, unknown> = {
+    player: { ...PLAYER_ENTITY },
+    entities: new Map<number, unknown>([[661, { ...PLAYER_ENTITY }]]),
+    partyInfo: null,
+    inventory: [{ itemId: 'ore', count: 2 }],
+    questLog: new Map(),
+    questsDone: new Set<string>(),
+  };
+  let enter: (hook: unknown) => void = () => undefined;
+  const pending = new Promise<unknown>((resolve) => {
+    enter = resolve;
+  });
+  const scheduled = new Map<number, () => void>();
+  let next = 1;
+
+  const hub = createWorldHub({
+    game: pending,
+    schedule: (fn) => {
+      const id = next;
+      next += 1;
+      scheduled.set(id, fn);
+      return id;
+    },
+    cancel: (id) => {
+      scheduled.delete(id);
+    },
+  });
+  const bag = new DisposalBag();
+
+  return {
+    world: createWorld(hub, bag),
+    hub,
+    bag,
+    live,
+    enterWorld: () => enter(game ?? { world: live }),
+    frame: () => {
+      for (const run of [...scheduled.values()]) {
+        scheduled.clear();
+        run();
+      }
+    },
+  };
+}
+
+// An addon holds woc.world from its first line, which may be minutes before the
+// player enters the world. Every read has to answer rather than throw.
+describe('before the game exists', () => {
+  it('answers null for every state read', () => {
+    const { world } = harness();
+
+    expect(world.player).toBeNull();
+    expect(world.target).toBeNull();
+    expect(world.party).toBeNull();
+    expect(world.inventory).toBeNull();
+    expect(world.quests).toBeNull();
+    expect(world.cooldowns).toBeNull();
+    expect(world.auras).toBeNull();
+    expect(world.raw).toBeNull();
+    expect(world.game).toBeNull();
+  });
+
+  it('answers an empty roster rather than null, so iteration still works', () => {
+    const { world } = harness();
+
+    expect(world.entities.size).toBe(0);
+    expect([...world.entities]).toEqual([]);
+  });
+
+  it('accepts a subscription that fires once the world arrives', async () => {
+    const h = harness();
+    const seen = vi.fn();
+    h.world.on('player', seen);
+
+    h.enterWorld();
+    await h.world.ready;
+    h.frame();
+
+    expect(seen).toHaveBeenCalledOnce();
+  });
+});
+
+describe('once the game exists', () => {
+  it('reads through to the live world', async () => {
+    const h = harness();
+    h.enterWorld();
+    await h.world.ready;
+
+    expect(h.world.player).toMatchObject({ name: 'Marshal' });
+    expect(h.world.entities.size).toBe(1);
+    expect(h.world.inventory).toHaveLength(1);
+  });
+
+  it('exposes the real IWorld and the real hook as the escape hatches', async () => {
+    const h = harness();
+    h.enterWorld();
+    await h.world.ready;
+
+    expect(h.world.raw).toBe(h.live);
+    expect(at(h.world.game, 'world')).toBe(h.live);
+  });
+
+  it('reads live rather than caching', async () => {
+    const h = harness();
+    h.enterWorld();
+    await h.world.ready;
+
+    setAt(at(h.live, 'player'), 'hp', 3);
+
+    expect(at(h.world.player, 'hp')).toBe(3);
+  });
+
+  it('splits quests into the log and the finished set', async () => {
+    const h = harness();
+    h.enterWorld();
+    await h.world.ready;
+
+    expect(h.world.quests).toMatchObject({
+      log: at(h.live, 'questLog'),
+      done: at(h.live, 'questsDone'),
+    });
+  });
+});
+
+describe('world.ready', () => {
+  it('resolves once the backend is live', async () => {
+    const h = harness();
+    h.enterWorld();
+
+    await expect(h.world.ready).resolves.toBeUndefined();
+  });
+
+  // A hook with no world member cannot back the API, and saying so is better
+  // than answering null forever and looking like an empty world.
+  it('rejects when __game carries no world', async () => {
+    const h = harness({ renderer: {} });
+    h.enterWorld();
+
+    await expect(h.world.ready).rejects.toThrow(NO_WORLD_MEMBER);
+  });
+
+  it('is the same promise however often it is read', () => {
+    const { world } = harness();
+
+    expect(world.ready).toBe(world.ready);
+  });
+});
+
+describe('world.on', () => {
+  it('rejects a key it does not know, naming the ones it does', () => {
+    const { world } = harness();
+
+    expect(() => world.on('healthbar', vi.fn())).toThrow(UNKNOWN_KEY);
+    expect(() => world.on('healthbar', vi.fn())).toThrow(NAMES_PLAYER);
+  });
+
+  it('registers in the disposal bag', () => {
+    const h = harness();
+    h.world.on('player', vi.fn());
+
+    expect(h.bag.size).toBe(1);
+  });
+
+  it('releases every subscription when the addon is disabled', async () => {
+    const h = harness();
+    const seen = vi.fn();
+    h.world.on('player', seen);
+    h.enterWorld();
+    await h.world.ready;
+
+    h.bag.dispose();
+    setAt(at(h.live, 'player'), 'hp', 3);
+    h.hub.watcher.poll();
+
+    expect(seen).not.toHaveBeenCalled();
+  });
+
+  it('does not leave a dead bag entry when the addon unsubscribes itself', () => {
+    const h = harness();
+    const off = h.world.on('player', vi.fn());
+
+    off();
+
+    expect(h.bag.size).toBe(0);
+  });
+
+  it('shares one watcher across addons', async () => {
+    const h = harness();
+    const second = new DisposalBag();
+    const a = vi.fn();
+    const b = vi.fn();
+    h.world.on('player', a);
+    createWorld(h.hub, second).on('player', b);
+    h.enterWorld();
+    await h.world.ready;
+
+    setAt(at(h.live, 'player'), 'hp', 3);
+    h.hub.watcher.poll();
+
+    expect(a).toHaveBeenCalledOnce();
+    expect(b).toHaveBeenCalledOnce();
+  });
+});
+
+describe('hub.dispose', () => {
+  it('stops the watcher', async () => {
+    const h = harness();
+    const seen = vi.fn();
+    h.world.on('player', seen);
+    h.enterWorld();
+    await h.world.ready;
+
+    h.hub.dispose();
+    setAt(at(h.live, 'player'), 'hp', 3);
+    h.hub.watcher.poll();
+
+    expect(seen).not.toHaveBeenCalled();
+  });
+});

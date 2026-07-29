@@ -32,7 +32,7 @@ export type {
   ToastOpts,
   UiApi,
 } from './ui.js';
-export type { WorldApi } from './world.js';
+export type { WorldApi, WorldKey, WorldQuests } from './world.js';
 
 export interface WocApi {
   readonly addon: AddonInfo;

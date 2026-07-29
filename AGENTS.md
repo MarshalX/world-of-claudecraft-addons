@@ -71,13 +71,16 @@ TypeScript runs `strict` plus `noUncheckedIndexedAccess`, `noImplicitOverride`, 
 | `addons/` | The official marketplace content. Plain JS, no build step, deliberately not a pnpm workspace. |
 | `tools/` | `validate.mjs` and `index.mjs`, both importing the same schema the loader uses. |
 | `tests/` | Vitest. Node environment by default. |
-| `tests/fakes/` | Shared stand-ins (the userscript managers). Not a suite; the glob only picks up `*.test.ts`. |
+| `tests/fakes/` | Shared stand-ins: the userscript managers, the page's WebSocket, and frame and entity shapes captured from a live client. Not a suite; the glob only picks up `*.test.ts`. |
 
 ## Rules that are load-bearing
 
 - **zod must never reach the runtime bundle.** `loader/src/shared/schema.ts` is the only zod dependant. The runtime imports its types with `import type`, which `verbatimModuleSyntax` erases. `loader/build-runtime.mjs` fails the build if zod resolves there.
 - **`net` is read-only.** No send API, no synthetic input, no automation. The game's terms prohibit automating play and it runs a bot detector whose heuristics are not public.
 - **Never read `localStorage['woc_session']`.** It holds the account bearer token.
+- **Outbound frames are redacted before any addon sees them.** The client's first frame on every socket, including every reconnect, carries that same bearer token as `{t:'auth-world-N', token, clientSeed}`. `redactOutbound` in `runtime/net/frames.ts` blanks it, matched on the field name rather than the frame type so a version bump or a new frame cannot slip past. Anything added to `net.onSend` goes through it.
+- **A tap runs inside the game's own stack.** The socket hook's `send` override is synchronous in the game's call, so every tap is guarded. A throw in loader code must never break the frame the game was sending.
+- **Read the wire from the wire, not from the declarations.** They disagree silently and both directions have already bitten: the input ack rides `snap.self`, not the snapshot head, and an Entity carries `maxHp`/`resource` where the snapshot that delivered it said `mhp`/`res`. Reading the wrong one finds nothing, raises nothing, and looks exactly like a value that never changes. `tests/fakes/frames.ts` holds shapes captured from a live client; add to it from a real session rather than from `src/sim/types.ts`.
 - **The official marketplace cannot be removed.** `canRemoveMarketplace` is called in the host, not the UI, so a hand-crafted call from the runtime still fails.
 - **No host module may reach the runtime bundle.** The GM globals are declared ambient project-wide so the sandbox half can reference them, which removes the compiler's protection against the page half doing the same. `loader/build-runtime.mjs` inspects the esbuild module graph and fails on any input under `loader/src/host/`. Shared code goes in `loader/src/shared/`.
 - **`host/globals.ts` is the only module that names a GM function.** Everything else goes through `host/gm.ts`, which feature-detects on the shape `readGmSource()` returns. The ambient tampermonkey types declare the full surface, so they say nothing about what a given manager ships: a direct call is what breaks Greasemonkey, and the failure only shows up on a browser nobody tested.
@@ -99,7 +102,7 @@ Pure modules in `shared/` and `runtime/disposal.ts` are unit tested. DOM-touchin
 // @vitest-environment happy-dom
 ```
 
-The bootstrap handshake and the `__game` probe are verified by hand against a running PBE client. Mocking them would test the mock.
+**Anything that touches the game's wire or its live state is verified by hand against a running PBE client before it is called done.** Mocking those would test the mock, and the failures they produce are silent: a field read at the wrong nesting level, or under the wire's name instead of the entity's, simply never matches and never complains. Build a throwaway userscript that imports the real modules, run it against a live session, and turn what it observed into a fixture. That is how the bootstrap handshake, the `__game` probe, the socket hook, and the `world.on` signatures were each checked.
 
 Write tests that fail on regression, not tests that restate the implementation. When fixing a bug, add the failing test first.
 
