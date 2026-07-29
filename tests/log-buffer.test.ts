@@ -14,7 +14,7 @@ import {
   MAX_TEXT_LENGTH,
 } from '../loader/src/runtime/log/buffer.ts';
 
-const A = 'official/dps-meter';
+const A = 'official/combat-meter';
 const B = 'official/cooldown-bars';
 
 describe('the log buffer', () => {

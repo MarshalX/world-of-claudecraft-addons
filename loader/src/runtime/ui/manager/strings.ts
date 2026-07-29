@@ -10,7 +10,6 @@ export const UI_TEXT = {
   title: 'Addons',
   close: 'Close',
   /** The accessible name is `close`; this is only what the button draws. */
-  closeGlyph: '×',
 
   installedLoading: 'Reading the registry.',
   installedEmpty: 'No addons installed yet.',

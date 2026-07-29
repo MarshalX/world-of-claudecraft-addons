@@ -6,7 +6,29 @@
 
 import { diagError } from '../../shared/diag.ts';
 import { createGameBackend, type WorldBackend } from './backend.ts';
+import { checkEntityShape } from './shape.ts';
 import { createWorldWatcher, type WorldWatcher } from './watch.ts';
+
+/**
+ * Report a live player that does not look like what addons are typed against.
+ *
+ * `game-types.ts` describes a repository this one cannot compile against, so
+ * every read in the backend is an assertion, and this is the only thing that
+ * tests it. Once per session rather than per read: the cost of being wrong is an
+ * author writing against a field the game renamed, and a diagnostic is a far
+ * better way to learn that than an addon that silently does nothing.
+ *
+ * Reported, never thrown. The world is still readable when one field moved, and
+ * taking every addon down over it would be the worse failure.
+ */
+function reportShapeDrift(backend: WorldBackend): void {
+  const problems = checkEntityShape(backend.player);
+  if (problems.length > 0) {
+    diagError('the game entity no longer matches the world types addons are written against', {
+      problems,
+    });
+  }
+}
 
 export interface WorldHubDeps {
   /** Resolves with the __game object. See runtime/ready.ts. */
@@ -41,6 +63,7 @@ export function createWorldHub(deps: WorldHubDeps): WorldHub {
     if (backend === null) {
       throw new Error('__game has no world member, so the world API cannot be backed');
     }
+    reportShapeDrift(backend);
   });
 
   return {

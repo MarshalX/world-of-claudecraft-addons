@@ -14,6 +14,7 @@ import { createLogBuffer } from '../../loader/src/runtime/log/buffer.ts';
 import { createNetHub } from '../../loader/src/runtime/net/hub.ts';
 import { createSoundEngine } from '../../loader/src/runtime/sound/engine.ts';
 import { createGameInjector } from '../../loader/src/runtime/ui/kit/injections.ts';
+import { createStacking } from '../../loader/src/runtime/ui/kit/stacking.ts';
 import { createToaster } from '../../loader/src/runtime/ui/kit/toast.ts';
 import { createTooltips } from '../../loader/src/runtime/ui/kit/tooltip.ts';
 import { createWorldHub } from '../../loader/src/runtime/world/hub.ts';
@@ -72,7 +73,25 @@ interface SharedHarness {
   shared: SharedServices;
   hub: FakeStorage;
   root: HTMLElement;
+  /** What the key dispatcher listens on, so a suite can press a key at it. */
+  keyTarget: EventTarget;
+  /** Press a combo, in the manifest's own spelling, e.g. 'Alt+Shift+KeyD'. */
+  press: (combo: string) => void;
+  /** Deliver one inbound frame, as the socket hook would. */
+  inbound: (frame: unknown) => void;
+  /** Move the addon-visible clock. Reads `woc.now()`, not wall clock. */
+  advance: (ms: number) => void;
   dispose: () => void;
+}
+
+interface SharedOptions {
+  /**
+   * The __game handle, so a suite can bring the world up.
+   *
+   * Defaults to a promise that never resolves, because an addon has to be usable
+   * before world entry and a suite that waited for this would hang, not fail.
+   */
+  game?: Promise<unknown>;
 }
 
 /**
@@ -81,25 +100,40 @@ interface SharedHarness {
 function createSharedServices(
   doc: Document,
   hub: FakeStorage = createFakeStorage(),
+  options: SharedOptions = {},
 ): SharedHarness {
   const root = doc.createElement('div');
   root.id = 'woc-addons';
   doc.body.appendChild(root);
 
+  // One clock behind both the net hub and woc.now(), so a suite that advances
+  // time moves what an addon measures with and what the bus timestamps by.
+  let clock = NOW_MS;
+  const now = (): number => clock;
+  let deliver: ((data: unknown) => void) | null = null;
+
   const injector = createGameInjector({ doc });
   const toaster = createToaster({ doc, root, setTimer: () => 0, clearTimer: () => undefined });
   const tooltips = createTooltips({ doc, root, viewport: () => VIEWPORT });
-  const dispatcher = createKeyDispatcher({ target: new EventTarget(), doc });
+  const keyTarget = new EventTarget();
+  const dispatcher = createKeyDispatcher({ target: keyTarget, doc });
   const logs = createLogBuffer();
+  const stacking = createStacking({ root });
 
   const shared: SharedServices = {
     doc,
     window: globalThis as unknown as SharedServices['window'],
-    net: createNetHub({ now: () => 0, install: () => () => undefined }),
+    net: createNetHub({
+      now,
+      install: (taps) => {
+        deliver = taps.onMessage;
+        return () => {
+          deliver = null;
+        };
+      },
+    }),
     world: createWorldHub({
-      // Never resolves: an addon has to be usable before world entry, and a
-      // suite that waited for this would hang rather than fail.
-      game: new Promise(() => undefined),
+      game: options.game ?? new Promise(() => undefined),
       schedule: () => 0,
       cancel: () => undefined,
     }),
@@ -121,12 +155,12 @@ function createSharedServices(
     dispatcher,
     gameBindings: createGameBindings({ game: () => null, storage: () => null }),
     logs,
-    kit: { root, injector, toaster, tooltips },
+    kit: { root, injector, toaster, tooltips, stacking },
     channel: 'pbe',
     host: 'https://pbe.worldofclaudecraft.com',
     gameVersion: () => ({ version: '0.31.0', build: '202607290011' }),
     character: () => 'Claudemoon/Marshal',
-    now: () => NOW_MS,
+    now,
     wallClock: () => WALL_CLOCK_MS,
     viewport: () => VIEWPORT,
     pick: () => 0,
@@ -136,16 +170,38 @@ function createSharedServices(
     shared,
     hub,
     root,
+    keyTarget,
+    press: (combo) => {
+      const parts = combo.split('+');
+      // The last segment is the physical key; everything before it is a
+      // modifier, which is the order the combo strings are written in.
+      const code = parts.at(-1) ?? '';
+      keyTarget.dispatchEvent(
+        new KeyboardEvent('keydown', {
+          code,
+          altKey: parts.includes('Alt'),
+          ctrlKey: parts.includes('Ctrl'),
+          shiftKey: parts.includes('Shift'),
+        }),
+      );
+    },
+    inbound: (frame) => {
+      deliver?.(JSON.stringify(frame));
+    },
+    advance: (ms) => {
+      clock += ms;
+    },
     dispose: () => {
       injector.dispose();
       tooltips.dispose();
       toaster.dispose();
       dispatcher.dispose();
       logs.dispose();
+      stacking.dispose();
       root.remove();
     },
   };
 }
 
-export type { SharedHarness };
+export type { SharedHarness, SharedOptions };
 export { createSharedServices, NOW_MS, VIEWPORT, WALL_CLOCK_MS };

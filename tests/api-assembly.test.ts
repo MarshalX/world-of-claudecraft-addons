@@ -15,11 +15,11 @@ import { configNamespace, SETTINGS_KEY } from '../loader/src/shared/storage-keys
 import { createSharedServices } from './fakes/shared-services.ts';
 import { createFakeStorage, type FakeStorage } from './fakes/storage.ts';
 
-const FQID = 'official/dps-meter';
+const FQID = 'official/combat-meter';
 
 const MANIFEST: AddonManifest = {
-  id: 'dps-meter',
-  name: 'DPS Meter',
+  id: 'combat-meter',
+  name: 'Combat Meter',
   version: '1.2.0',
   apiVersion: 1,
   author: 'MarshalX',
@@ -82,9 +82,9 @@ describe('what an addon is handed', () => {
     const { api } = open();
 
     expect(api.woc.addon).toEqual({
-      id: 'dps-meter',
+      id: 'combat-meter',
       fqid: FQID,
-      name: 'DPS Meter',
+      name: 'Combat Meter',
       version: '1.2.0',
       marketplace: 'official',
     });

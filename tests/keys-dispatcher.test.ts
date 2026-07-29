@@ -17,7 +17,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createKeyDispatcher, isEditing } from '../loader/src/runtime/keys/dispatcher.ts';
 
-const KEY = 'official/dps-meter:toggle';
+const KEY = 'official/combat-meter:toggle';
 
 interface Press {
   code: string;

@@ -24,7 +24,7 @@ import { configNamespace, KEYBINDS_KEY } from '../loader/src/shared/storage-keys
 import { createFakeStorage, type FakeStorage } from './fakes/storage.ts';
 import { fakeRegistry, supervisorServices } from './fakes/ui-deps.ts';
 
-const FQID = 'official/dps-meter';
+const FQID = 'official/combat-meter';
 const SETTLE_TURNS = 6;
 
 const READING: DiagnosticsReading = {
@@ -55,8 +55,8 @@ function addon(): InstalledAddon {
     enabled: false,
     pin: null,
     manifest: {
-      id: 'dps-meter',
-      name: 'DPS Meter',
+      id: 'combat-meter',
+      name: 'Combat Meter',
       version: '1.2.0',
       apiVersion: 1,
       author: 'MarshalX',

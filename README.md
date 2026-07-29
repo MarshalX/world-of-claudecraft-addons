@@ -59,7 +59,64 @@ woc.keys.bind('toggle', () => {
 
 No registration call and no cleanup code. Everything the API creates is torn down automatically when the addon is disabled.
 
-The full API surface is typed in [`packages/types/index.d.ts`](packages/types/index.d.ts), and the manifest schema is [`loader/src/shared/schema.ts`](loader/src/shared/schema.ts). [`addons/dev-harness`](addons/dev-harness) is a working example that touches every part of the API and reports what it found, which is also how the loader itself gets checked against a live game.
+### Read these
+
+| Addon | What it is |
+|---|---|
+| [`addons/cooldown-bars`](addons/cooldown-bars) | **The example to copy.** Small enough to read in a sitting, and it teaches the one thing that is not obvious from the API: `world.on` says WHICH cooldowns are running, and a frame loop draws how full each bar is. Subscribe for the change, animate from the read. |
+| [`addons/combat-meter`](addons/combat-meter) | **A real addon**, and the argument for the platform. The game has its own meter, so this does not compete on party totals or threat; it answers what nothing in the game answers, which is what your damage and healing are made of. Per-ability rows with crit rate, average and biggest, your real miss and dodge rates, and what is hitting you. Bigger than an example, and worth reading second. |
+| [`addons/dev-harness`](addons/dev-harness) | Every surface at once. It runs a check against each part of the API and reports what it found, which is also how the loader gets checked against a live game. |
+
+The full surface is typed in [`packages/types`](packages/types), published as [`@woc-addons/types`](packages/types/README.md).
+
+One thing worth internalising from the meter's history: a field can be declared on the game's entity, be readable, and never be sent. `inCombat` is one, and it holds `false` for a whole session. Check what you read against the wire, not against a type.
+
+### The manifest
+
+`addon.json` sits next to your entry file. The schema that validates it is [`loader/src/shared/schema.ts`](loader/src/shared/schema.ts), which is the same module CI, the dev server, and the loader all use, so a manifest that passes `pnpm validate` cannot fail at install.
+
+```json
+{
+  "id": "my-addon",
+  "name": "My Addon",
+  "version": "1.0.0",
+  "apiVersion": 1,
+  "author": "you",
+  "description": "What it does, in one line.",
+  "entry": "main.js"
+}
+```
+
+| Field | Required | Notes |
+|---|---|---|
+| `id` | yes | Lower-case kebab-case. It is your storage namespace and your keybind scope, so it cannot change once published: a rename orphans every installed player's settings, keybinds and window position, and reads in Browse as a different addon that installs alongside the old one. Get it right before anyone has it. |
+| `name`, `author`, `description` | yes | The description is what Browse shows and what the install confirmation repeats. |
+| `version` | yes | Semver. The marketplace serves one version, so this is what an update compares against. |
+| `apiVersion` | yes | `1`. A loader that cannot honour it marks the addon incompatible and never evaluates it. |
+| `entry` | yes | A relative path inside your directory. |
+| `permissions` | no | What you use, out of `net.read`, `world.read`, `ui`, `sound`, `keys`, `storage`. Shown one line each on the install confirmation, so ask for what you use and nothing else. |
+| `keybinds` | no | `{ id, label, default }`. You can only bind an id you declared. |
+| `settings` | no | `boolean`, `number` (with optional `min`/`max`), `string`, or `select` (with `options`). The manager renders the form; you read `woc.settings`. |
+| `tags` | no | Up to six, kebab-case. They become Browse's filters. |
+| `gameVersion` | no | A semver range, e.g. `">=0.31.0"`. Outside it, the addon is incompatible rather than broken. |
+| `channels` | no | Restrict to `live`, `pbe`, or `pbe2`. |
+| `icon`, `homepage` | no | |
+
+Settings and keybinds are hydrated before your first line runs, so `woc.settings.window` is there immediately. Changes arrive through `woc.onSettingsChange`, and a rebind moves your live binding for you.
+
+### Density
+
+`woc.ui.frame` and `woc.ui.window` take `density: 'comfortable' | 'compact'`.
+
+Comfortable is the default: 16px labels on a 40px minimum, the tap-target floor the game itself holds to. Use it for anything a player operates. Compact is for a dense readout they glance at, where that floor makes the title bar and close button the loudest things in the panel; it gives the floor up, so pick it for a desktop readout rather than a form.
+
+It reaches your own controls too. Give a button `class="woc-btn"` or a tab `class="woc-tab"` and it is drawn at the frame's density, with the loader's hover and focus treatment, instead of an imitation of it. `addons/combat-meter` does exactly that.
+
+### What you never write
+
+The loader tracks everything the API creates in a disposal bag, and drains it when the addon is disabled: frames are removed, subscriptions released, keys unbound, timers cleared, sounds stopped. Use `woc.setTimeout` and friends rather than the page's, and register `woc.onDispose(fn)` for anything the API did not create.
+
+Enable and disable are fully hot. There is no reload for any addon operation, so a disabled addon has to leave nothing behind, and one that throws is disabled and badged rather than left to spam.
 
 ### Writing one
 
@@ -72,6 +129,12 @@ pnpm dev        # watch build, plus the addon dev server on :5180
 In the game, open **Addons**, go to the **Dev** tab, and turn the local dev server on. It serves `addons/` from this repository and lists whatever is in there; install yours and enable it. Turn the reload switch on as well and the loader picks up each save without a page refresh: it polls each running local addon and re-evaluates only the ones whose file actually changed.
 
 Nothing about that path is special-cased. Your addon is fetched, validated, evaluated, and disposed exactly the way one from a published marketplace is, so an addon that works against the dev server works once it is published.
+
+### Publishing one
+
+A marketplace is a GitHub repository with an `addons/` directory and a generated `marketplace.json` at its root. To publish through this one, open a pull request adding your directory; to run your own, copy [`.github/workflows/marketplace.yml`](.github/workflows/marketplace.yml), which regenerates the index from the `addon.json` files on every push so the two cannot drift.
+
+Players add a third-party marketplace by owner and repository, and the loader warns them plainly at that point. Pin yours to a tag rather than a branch if you want installs to be reproducible.
 
 ### What addons may not do
 
@@ -86,7 +149,11 @@ pnpm check      # typecheck, lint, test, validate manifests
 pnpm build      # emits loader/dist/woc-loader.user.js
 pnpm dev        # watch build, plus the addon dev server on :5180
 pnpm serve      # the addon dev server on its own
+pnpm index      # regenerate marketplace.json from the addon.json files
+pnpm cues       # regenerate the sound-cue union from a deployed game's pack
 ```
+
+`packages/types` is published by hand, from that directory: `npm publish`. It is versioned against the loader's `apiVersion` rather than against the loader, so it only needs a release when the addon API surface changes.
 
 Develop against `pbe` or `pbe2`. They run ahead of live, so game drift shows up there first.
 

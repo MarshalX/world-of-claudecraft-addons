@@ -2,8 +2,113 @@
   "schema": 1,
   "name": "Official Marketplace",
   "maintainer": "MarshalX",
-  "generated": "2026-07-29T18:18:51.000Z",
+  "generated": "2026-07-29T23:30:56.925Z",
   "addons": [
+    {
+      "id": "combat-meter",
+      "name": "Combat Meter",
+      "version": "1.0.0",
+      "apiVersion": 1,
+      "author": "MarshalX",
+      "description": "What your damage and healing are made of: a row per ability with crit rate, average and biggest hit, plus your real miss and dodge rates and what is hitting you.",
+      "entry": "main.js",
+      "homepage": "https://github.com/MarshalX/world-of-claudecraft-addons",
+      "tags": [
+        "combat"
+      ],
+      "permissions": [
+        "net.read",
+        "world.read",
+        "ui",
+        "keys"
+      ],
+      "keybinds": [
+        {
+          "id": "toggle",
+          "label": "Show or hide the meter",
+          "default": "Alt+KeyD"
+        },
+        {
+          "id": "reset",
+          "label": "Reset the fight",
+          "default": "Alt+Shift+KeyD"
+        }
+      ],
+      "settings": [
+        {
+          "id": "fight-timeout",
+          "type": "number",
+          "label": "Seconds without damage before the fight is over",
+          "default": 5,
+          "min": 2,
+          "max": 60
+        },
+        {
+          "id": "max-rows",
+          "type": "number",
+          "label": "Most ability rows to show",
+          "default": 10,
+          "min": 3,
+          "max": 40
+        },
+        {
+          "id": "show-detail",
+          "type": "boolean",
+          "label": "Show hits, crit rate, average and biggest under each row",
+          "default": true
+        },
+        {
+          "id": "show-outcomes",
+          "type": "boolean",
+          "label": "Show your miss, dodge and parry rates",
+          "default": true
+        }
+      ],
+      "path": "addons/combat-meter"
+    },
+    {
+      "id": "cooldown-bars",
+      "name": "Cooldown Bars (Example)",
+      "version": "1.0.0",
+      "apiVersion": 1,
+      "author": "MarshalX",
+      "description": "A draining bar for every ability you have on cooldown, soonest ready at the top.",
+      "entry": "main.js",
+      "homepage": "https://github.com/MarshalX/world-of-claudecraft-addons",
+      "tags": [
+        "combat",
+        "interface"
+      ],
+      "permissions": [
+        "world.read",
+        "ui",
+        "keys"
+      ],
+      "keybinds": [
+        {
+          "id": "toggle",
+          "label": "Show or hide the bars",
+          "default": "Alt+KeyC"
+        }
+      ],
+      "settings": [
+        {
+          "id": "max-bars",
+          "type": "number",
+          "label": "Most bars to show at once",
+          "default": 8,
+          "min": 1,
+          "max": 20
+        },
+        {
+          "id": "hide-short",
+          "type": "boolean",
+          "label": "Hide cooldowns shorter than the global cooldown",
+          "default": true
+        }
+      ],
+      "path": "addons/cooldown-bars"
+    },
     {
       "id": "dev-harness",
       "name": "Dev Harness",

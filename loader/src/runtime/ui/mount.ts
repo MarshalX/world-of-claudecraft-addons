@@ -27,16 +27,26 @@ import type { AddonStatus } from '../supervisor.ts';
 import { ANCHORS, ANCHORS_REQUIRED_IN_GAME } from './anchors.ts';
 import { ENTRY_ID } from './esc-inject.ts';
 import { createGameInjector, type GameInjector } from './kit/injections.ts';
+import { createStacking, type Stacking } from './kit/stacking.ts';
 import { createToaster, type Toaster } from './kit/toast.ts';
 import { createTooltips, type Tooltips } from './kit/tooltip.ts';
 import { type ConfigService, createConfigService } from './manager/config.ts';
 import type { GeometryStorage } from './manager/geometry-store.ts';
 import { type Manager, type ManagerRegistry, mountManager } from './manager/index.tsx';
 import { BUTTON_ID } from './micro-button.ts';
-import { mountRoot } from './root.ts';
+import { mountRoot, NO_HUD_CLASS } from './root.ts';
 
 /** The one label both in-game entry points carry. */
 const LABEL = 'Addons';
+
+/**
+ * The manager's own window, by a stable hook rather than by its classes.
+ *
+ * `.woc-window` matches every addon frame too, so there has to be something that
+ * says which one is the manager's. An attribute rather than another class,
+ * matching how a frame is found by `data-woc-frame`.
+ */
+const MANAGER_SELECTOR = '[data-woc-manager]';
 
 /**
  * Report any anchor that should be there and is not.
@@ -124,11 +134,36 @@ function mountManagerPair(deps: UiDeps, root: HTMLElement): ManagerPair {
  * before any addon's, which is what keeps the loader's own entry at the top of
  * the rail and of the game menu.
  */
+/**
+ * The manager, opening in front of whatever is already up.
+ *
+ * Both in-game routes to it are buttons in the game's own DOM, outside the root,
+ * so the click that opens the manager is not one the stacking listener sees. A
+ * manager that opened behind an addon frame would be the same bug the listener
+ * exists to fix, reached by the one path the listener cannot cover.
+ */
+function raisingManager(manager: Manager, raise: () => void): Manager {
+  return {
+    ...manager,
+    open: () => {
+      manager.open();
+      raise();
+    },
+    toggle: () => {
+      manager.toggle();
+      raise();
+    },
+  };
+}
+
 function buildKit(deps: UiDeps, root: HTMLElement, manager: Manager): UiKit {
   const injector = createGameInjector({
     doc: deps.doc,
     onHud: () => {
       reportMissingAnchors(deps.doc);
+    },
+    onPresence: (present) => {
+      root.classList.toggle(NO_HUD_CLASS, !present);
     },
   });
 
@@ -145,8 +180,9 @@ function buildKit(deps: UiDeps, root: HTMLElement, manager: Manager): UiKit {
     clearTimer: deps.clearTimer,
   });
   const tooltips = createTooltips({ doc: deps.doc, root, viewport: deps.viewport });
+  const stacking = createStacking({ root });
 
-  return { root, toaster, tooltips, injector };
+  return { root, toaster, tooltips, injector, stacking };
 }
 
 export interface UiDeps {
@@ -188,6 +224,8 @@ export interface UiKit {
   toaster: Toaster;
   tooltips: Tooltips;
   injector: GameInjector;
+  /** Which loader window is in front. Shared with the manager. */
+  stacking: Stacking;
 }
 
 export interface MountedUi {
@@ -201,15 +239,22 @@ export function mountUi(deps: UiDeps): MountedUi {
   const root = mountRoot({ doc: deps.doc, css: deps.css });
   const { manager, config } = mountManagerPair(deps, root.el);
   const kit = buildKit(deps, root.el, manager);
+  const raised = raisingManager(manager, () => {
+    const el = root.el.querySelector(MANAGER_SELECTOR);
+    if (el instanceof HTMLElement) {
+      kit.stacking.raise(el);
+    }
+  });
 
   return {
-    manager,
+    manager: raised,
     config,
     kit,
     dispose: () => {
       kit.injector.dispose();
       kit.tooltips.dispose();
       kit.toaster.dispose();
+      kit.stacking.dispose();
       config.dispose();
       manager.dispose();
       root.dispose();

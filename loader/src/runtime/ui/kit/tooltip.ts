@@ -71,48 +71,160 @@ function place(tip: HTMLElement, anchor: Element, view: { w: number; h: number }
   tip.style.top = `${top}px`;
 }
 
+/** One live attachment, and whether its anchor has ever been in the document. */
+interface Attachment {
+  el: Element;
+  detach: Teardown;
+  /**
+   * True once the anchor has been seen connected.
+   *
+   * Load-bearing. An addon may attach BEFORE inserting the element, which is the
+   * natural order when building a row: create it, describe it, then append it.
+   * Reaping anything disconnected would kill exactly those, so nothing is reaped
+   * until it has been seen in the document at least once.
+   */
+  seen: boolean;
+}
+
+interface Attachments {
+  add: (el: Element, detach: Teardown) => Attachment;
+  drop: (entry: Attachment) => void;
+  /** Release every attachment whose anchor has left the document. */
+  reap: () => void;
+  all: () => readonly Attachment[];
+}
+
+/**
+ * The live attachments, and the reaping of the dead ones.
+ *
+ * Swept rather than observed continuously. The removal observer in
+ * `createTooltips` runs only while a tooltip is visible, and running one
+ * permanently to catch a leak would be a standing cost against a set that only
+ * grows when rows are created; so `attach` sweeps, because that is the one moment
+ * a rebuild is definitely happening.
+ */
+function createAttachments(): Attachments {
+  const live = new Set<Attachment>();
+  return {
+    add: (el, detach) => {
+      const entry: Attachment = { el, detach, seen: el.isConnected };
+      live.add(entry);
+      return entry;
+    },
+    drop: (entry) => {
+      live.delete(entry);
+    },
+    reap: () => {
+      for (const entry of [...live]) {
+        if (entry.el.isConnected) {
+          entry.seen = true;
+        } else if (entry.seen) {
+          entry.detach();
+        }
+      }
+    },
+    all: () => [...live],
+  };
+}
+
+/** What one attachment needs from the tooltip that owns it. */
+interface AttachContext {
+  deps: TooltipDeps;
+  attachments: Attachments;
+  /** Draw the tip for this anchor and remember that it is the visible one. */
+  showFor: (el: Element, text: string) => void;
+  hide: () => void;
+  /** Whether the visible tooltip belongs to this anchor. */
+  isShown: (el: Element) => boolean;
+}
+
+function attachTooltip(ctx: AttachContext, el: Element, text: string): Teardown {
+  ctx.attachments.reap();
+
+  const show = (): void => {
+    ctx.showFor(el, text);
+  };
+
+  el.addEventListener('pointerenter', show);
+  el.addEventListener('pointerleave', ctx.hide);
+  el.addEventListener('focusin', show);
+  el.addEventListener('focusout', ctx.hide);
+
+  const detach = (): void => {
+    el.removeEventListener('pointerenter', show);
+    el.removeEventListener('pointerleave', ctx.hide);
+    el.removeEventListener('focusin', show);
+    el.removeEventListener('focusout', ctx.hide);
+    ctx.attachments.drop(entry);
+    // Only if it is THIS anchor's tooltip on screen. Detaching one row while
+    // another row's tooltip is up would otherwise blank the wrong one.
+    if (ctx.isShown(el)) {
+      ctx.hide();
+    }
+  };
+  const entry = ctx.attachments.add(el, detach);
+  return detach;
+}
+
 function createTooltips(deps: TooltipDeps): Tooltips {
-  /** Every live attachment, so dispose() can detach them without the caller. */
-  const detachers = new Set<Teardown>();
+  const attachments = createAttachments();
+  /** The anchor the visible tooltip belongs to, or null when nothing is shown. */
+  let shown: Element | null = null;
+  /**
+   * Watches for the shown anchor being removed. Runs ONLY while one is shown.
+   *
+   * Scoped to the loader's own root rather than to the document: addon DOM lives
+   * there and the game's HUD does not, so the mutations it wakes for are the ones
+   * that can actually take an anchor away. A body-level subtree observer would
+   * fire on every HUD change the game makes at snapshot rate to answer the same
+   * one question.
+   */
+  let watcher: MutationObserver | null = null;
+
+  const hide = (): void => {
+    shown = null;
+    watcher?.disconnect();
+    watcher = null;
+    const tip = deps.doc.getElementById(TOOLTIP_ID);
+    if (tip !== null) {
+      tip.hidden = true;
+    }
+  };
+
+  const showFor = (el: Element, text: string): void => {
+    const tip = ensureTip(deps);
+    tip.textContent = text;
+    tip.hidden = false;
+    // Placed after unhiding: a hidden element measures as zero, so the first
+    // placement would put every tooltip in the same wrong spot.
+    place(tip, el, deps.viewport());
+    shown = el;
+    if (watcher === null) {
+      watcher = new MutationObserver(() => {
+        if (shown !== null && !shown.isConnected) {
+          hide();
+        }
+        attachments.reap();
+      });
+      watcher.observe(deps.root, { childList: true, subtree: true });
+    }
+  };
+
+  const ctx: AttachContext = {
+    deps,
+    attachments,
+    showFor,
+    hide,
+    isShown: (el) => shown === el,
+  };
 
   return {
-    attach: (el, text) => {
-      const show = (): void => {
-        const tip = ensureTip(deps);
-        tip.textContent = text;
-        tip.hidden = false;
-        // Placed after unhiding: a hidden element measures as zero, so the
-        // first placement would put every tooltip in the same wrong spot.
-        place(tip, el, deps.viewport());
-      };
-      const hide = (): void => {
-        const tip = deps.doc.getElementById(TOOLTIP_ID);
-        if (tip !== null) {
-          tip.hidden = true;
-        }
-      };
-
-      el.addEventListener('pointerenter', show);
-      el.addEventListener('pointerleave', hide);
-      el.addEventListener('focusin', show);
-      el.addEventListener('focusout', hide);
-
-      const detach = (): void => {
-        el.removeEventListener('pointerenter', show);
-        el.removeEventListener('pointerleave', hide);
-        el.removeEventListener('focusin', show);
-        el.removeEventListener('focusout', hide);
-        detachers.delete(detach);
-        hide();
-      };
-      detachers.add(detach);
-      return detach;
-    },
-
+    attach: (el, text) => attachTooltip(ctx, el, text),
     dispose: () => {
-      for (const detach of [...detachers]) {
-        detach();
+      for (const entry of attachments.all()) {
+        entry.detach();
       }
+      hide();
       deps.doc.getElementById(TOOLTIP_ID)?.remove();
     },
   };

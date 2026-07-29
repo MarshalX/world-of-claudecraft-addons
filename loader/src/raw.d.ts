@@ -15,6 +15,13 @@ declare module '*.json?raw' {
   export default source;
 }
 
+// A generated declaration file read as TEXT, which is how the suite that guards
+// it against hand-edits compares it with what its generator writes.
+declare module '*.d.ts?raw' {
+  const source: string;
+  export default source;
+}
+
 declare module '*.css' {
   const source: string;
   export default source;

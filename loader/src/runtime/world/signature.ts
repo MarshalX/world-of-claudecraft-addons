@@ -25,18 +25,13 @@ const KEYS = [
  * These are the Entity's own names, which are not the terse wire names: an
  * entity carries `maxHp` and `resource`, while the snapshot that delivered it
  * used `mhp` and `res`. Position is excluded because it moves constantly.
+ *
+ * `inCombat` was here and is not on the wire, so it read false for the whole
+ * session and this signature never once changed because of it. Watching a field
+ * the server does not send is not merely useless: it tells an addon author the
+ * loader will report something it cannot.
  */
-const PLAYER_FIELDS = [
-  'id',
-  'level',
-  'hp',
-  'maxHp',
-  'resource',
-  'maxResource',
-  'dead',
-  'inCombat',
-  'targetId',
-];
+const PLAYER_FIELDS = ['id', 'level', 'hp', 'maxHp', 'resource', 'maxResource', 'dead', 'targetId'];
 
 /** Party rows arrive from the wire, so these are the terse names, not the Entity's. */
 const PARTY_MEMBER_FIELDS = ['pid', 'hp', 'mhp', 'dead', 'group'];

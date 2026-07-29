@@ -20,11 +20,11 @@ import {
 import { createSharedServices } from './fakes/shared-services.ts';
 import { createFakeStorage, type FakeStorage } from './fakes/storage.ts';
 
-const FQID = 'official/dps-meter';
+const FQID = 'official/combat-meter';
 
 const MANIFEST: AddonManifest = {
-  id: 'dps-meter',
-  name: 'DPS Meter',
+  id: 'combat-meter',
+  name: 'Combat Meter',
   version: '1.2.0',
   apiVersion: 1,
   author: 'MarshalX',

@@ -29,10 +29,10 @@ const NOTHING = new Set<string>();
 function twoSources() {
   return [
     marketState(OFFICIAL, [
-      marketEntry({ id: 'dps-meter', name: 'DPS Meter', tags: ['combat'] }),
+      marketEntry({ id: 'combat-meter', name: 'Combat Meter', tags: ['combat'] }),
       marketEntry({ id: 'bag-sort', name: 'Bag Sorter', author: 'Ada', tags: ['bags'] }),
     ]),
-    marketState(THIRD_PARTY, [marketEntry({ id: 'dps-meter', name: 'Their DPS Meter' })], {
+    marketState(THIRD_PARTY, [marketEntry({ id: 'combat-meter', name: 'Their Combat Meter' })], {
       builtin: false,
     }),
   ];
@@ -43,9 +43,9 @@ describe('browseRows', () => {
     const rows = browseRows(twoSources(), NOTHING);
 
     expect(rows.map((row) => row.fqid)).toEqual([
-      'official/dps-meter',
+      'official/combat-meter',
       'official/bag-sort',
-      'gh:someone/their-addons/dps-meter',
+      'gh:someone/their-addons/combat-meter',
     ]);
   });
 
@@ -62,12 +62,12 @@ describe('browseRows', () => {
   // The whole reason the fqid exists. Marking one installed must not mark the
   // other, or a player would be told they already have an addon they do not.
   it('marks only the copy that is installed when two sources share an id', () => {
-    const rows = browseRows(twoSources(), new Set(['official/dps-meter']));
+    const rows = browseRows(twoSources(), new Set(['official/combat-meter']));
 
     expect(rows.map((row) => [row.fqid, row.installed])).toEqual([
-      ['official/dps-meter', true],
+      ['official/combat-meter', true],
       ['official/bag-sort', false],
-      ['gh:someone/their-addons/dps-meter', false],
+      ['gh:someone/their-addons/combat-meter', false],
     ]);
   });
 
@@ -91,9 +91,15 @@ describe('browseRows', () => {
     });
 
     it('matches a tag', () => {
-      const rows = browseRows(twoSources(), NOTHING, { query: 'combat', tag: null });
+      // A word that appears in no id, name, author or description, so a hit can
+      // only have come from the tag list. 'combat' stopped being usable for that
+      // the moment the meter's id became combat-meter, and the test went on
+      // passing for the wrong reason until the rename made it match two rows.
+      const tagged = [marketState(OFFICIAL, [marketEntry({ id: 'bag-sort', tags: ['raiding'] })])];
 
-      expect(rows.map((row) => row.fqid)).toEqual(['official/dps-meter']);
+      const rows = browseRows(tagged, NOTHING, { query: 'raiding', tag: null });
+
+      expect(rows.map((row) => row.fqid)).toEqual(['official/bag-sort']);
     });
 
     // Two words is a player naming two things they remember, not quoting a
@@ -123,7 +129,7 @@ describe('browseRows', () => {
     it('drops rows with no tags at all', () => {
       const rows = browseRows(twoSources(), NOTHING, { query: '', tag: 'combat' });
 
-      expect(rows.map((row) => row.fqid)).toEqual(['official/dps-meter']);
+      expect(rows.map((row) => row.fqid)).toEqual(['official/combat-meter']);
     });
 
     it('combines with the search rather than replacing it', () => {
@@ -155,8 +161,8 @@ describe('catalogTags', () => {
 describe('pendingUpdates', () => {
   function row(overrides: Partial<UpdateRow> = {}): UpdateRow {
     return {
-      fqid: 'official/dps-meter',
-      name: 'DPS Meter',
+      fqid: 'official/combat-meter',
+      name: 'Combat Meter',
       marketplace: 'official',
       installed: '1.2.0',
       available: '1.3.0',
@@ -170,7 +176,7 @@ describe('pendingUpdates', () => {
   it('leaves out anything the player pinned', () => {
     const rows = [row(), row({ fqid: 'official/bag-sort', pin: '1.2.0' })];
 
-    expect(pendingUpdates(rows).map((each) => each.fqid)).toEqual(['official/dps-meter']);
+    expect(pendingUpdates(rows).map((each) => each.fqid)).toEqual(['official/combat-meter']);
   });
 
   it('is empty when every row is pinned', () => {

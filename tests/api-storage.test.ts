@@ -10,7 +10,7 @@ import { createStorage } from '../loader/src/runtime/api/storage.ts';
 import { addonNamespace, configNamespace } from '../loader/src/shared/storage-keys.ts';
 import { createFakeStorage } from './fakes/storage.ts';
 
-const FQID = 'official/dps-meter';
+const FQID = 'official/combat-meter';
 const OTHER = 'official/cooldown-bars';
 
 describe('the addon key-value store', () => {

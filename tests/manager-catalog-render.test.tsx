@@ -48,7 +48,7 @@ const THIRD_PARTY: MarketplaceRef = {
   source: { kind: 'github', owner: 'someone', repo: 'their-addons', ref: 'v2.0.0' },
 };
 
-const FQID = 'official/dps-meter';
+const FQID = 'official/combat-meter';
 
 function installedRow(fqid = FQID): InstalledAddon {
   const { path: _path, ...manifest } = marketEntry();
@@ -169,7 +169,7 @@ describe('the Browse pane', () => {
     });
 
     await until(() => {
-      expect(text()).toContain('DPS Meter');
+      expect(text()).toContain('Combat Meter');
     });
     expect(text()).toContain('Theirs');
     expect(text()).toContain(OFFICIAL.name);
@@ -187,7 +187,7 @@ describe('the Browse pane', () => {
   it('reports an unmatched search differently from an unread source', async () => {
     await browse();
     await until(() => {
-      expect(text()).toContain('DPS Meter');
+      expect(text()).toContain('Combat Meter');
     });
 
     type('.woc-filters input[type="search"]', 'unicorn');
@@ -214,10 +214,10 @@ describe('the Browse pane', () => {
       markets: [marketState(OFFICIAL, [marketEntry({ permissions: ['net.read', 'storage'] })])],
     });
     await until(() => {
-      expect(text()).toContain('DPS Meter');
+      expect(text()).toContain('Combat Meter');
     });
 
-    buttonNamed(`${UI_TEXT.browseInstall} DPS Meter`)?.click();
+    buttonNamed(`${UI_TEXT.browseInstall} Combat Meter`)?.click();
     await Promise.resolve();
 
     expect(calls.install).not.toHaveBeenCalled();
@@ -234,10 +234,10 @@ describe('the Browse pane', () => {
       ],
     });
     await until(() => {
-      expect(text()).toContain('DPS Meter');
+      expect(text()).toContain('Combat Meter');
     });
 
-    buttonNamed(`${UI_TEXT.browseInstall} DPS Meter`)?.click();
+    buttonNamed(`${UI_TEXT.browseInstall} Combat Meter`)?.click();
     await Promise.resolve();
 
     expect(document.querySelector('.woc-confirm')).not.toBeNull();
@@ -249,9 +249,9 @@ describe('the Browse pane', () => {
   it('installs by fqid once the confirmation is accepted', async () => {
     const { calls } = await browse();
     await until(() => {
-      expect(text()).toContain('DPS Meter');
+      expect(text()).toContain('Combat Meter');
     });
-    buttonNamed(`${UI_TEXT.browseInstall} DPS Meter`)?.click();
+    buttonNamed(`${UI_TEXT.browseInstall} Combat Meter`)?.click();
     await Promise.resolve();
 
     buttonNamed(UI_TEXT.confirmInstall)?.click();
@@ -263,9 +263,9 @@ describe('the Browse pane', () => {
   it('installs nothing when the confirmation is cancelled', async () => {
     const { calls } = await browse();
     await until(() => {
-      expect(text()).toContain('DPS Meter');
+      expect(text()).toContain('Combat Meter');
     });
-    buttonNamed(`${UI_TEXT.browseInstall} DPS Meter`)?.click();
+    buttonNamed(`${UI_TEXT.browseInstall} Combat Meter`)?.click();
     await Promise.resolve();
 
     buttonNamed(UI_TEXT.confirmCancel)?.click();
@@ -379,7 +379,7 @@ describe('the Marketplaces pane', () => {
 describe('the Updates pane', () => {
   const pending: UpdateRow = {
     fqid: FQID,
-    name: 'DPS Meter',
+    name: 'Combat Meter',
     marketplace: 'official',
     installed: '1.2.0',
     available: '1.3.0',
@@ -426,10 +426,10 @@ describe('the Updates pane', () => {
   it('updates one addon by fqid', async () => {
     const { calls } = await updates({ updates: [pending] });
     await until(() => {
-      expect(buttonNamed(`${UI_TEXT.updatesUpdate} DPS Meter`)).toBeDefined();
+      expect(buttonNamed(`${UI_TEXT.updatesUpdate} Combat Meter`)).toBeDefined();
     });
 
-    buttonNamed(`${UI_TEXT.updatesUpdate} DPS Meter`)?.click();
+    buttonNamed(`${UI_TEXT.updatesUpdate} Combat Meter`)?.click();
 
     expect(calls.update).toHaveBeenCalledWith(FQID);
   });
@@ -437,10 +437,10 @@ describe('the Updates pane', () => {
   it('pins an addon at the version it already has', async () => {
     const { calls } = await updates({ updates: [pending] });
     await until(() => {
-      expect(buttonNamed(`${UI_TEXT.updatesPin} DPS Meter`)).toBeDefined();
+      expect(buttonNamed(`${UI_TEXT.updatesPin} Combat Meter`)).toBeDefined();
     });
 
-    buttonNamed(`${UI_TEXT.updatesPin} DPS Meter`)?.click();
+    buttonNamed(`${UI_TEXT.updatesPin} Combat Meter`)?.click();
 
     expect(calls.setPin).toHaveBeenCalledWith(FQID, '1.2.0');
   });
@@ -453,8 +453,8 @@ describe('the Updates pane', () => {
     await until(() => {
       expect(text()).toContain(UI_TEXT.updatesPinned);
     });
-    expect(buttonNamed(`${UI_TEXT.updatesUnpin} DPS Meter`)).toBeDefined();
-    expect(buttonNamed(`${UI_TEXT.updatesUpdate} DPS Meter`)).toBeUndefined();
+    expect(buttonNamed(`${UI_TEXT.updatesUnpin} Combat Meter`)).toBeDefined();
+    expect(buttonNamed(`${UI_TEXT.updatesUpdate} Combat Meter`)).toBeUndefined();
   });
 
   it('leaves a pinned row out of Update all', async () => {

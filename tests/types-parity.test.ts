@@ -19,11 +19,20 @@ import type { KeysApi } from '../loader/src/runtime/api/keys.ts';
 import type { SoundApi } from '../loader/src/runtime/api/sound.ts';
 import type { AddonStorageApi } from '../loader/src/runtime/api/storage.ts';
 import type { UiApi } from '../loader/src/runtime/api/ui.ts';
+import type { WorldApi } from '../loader/src/runtime/api/world.ts';
+import type { Entity, WorldValues } from '../loader/src/runtime/world/game-types.ts';
+import type { WorldKey } from '../loader/src/runtime/world/signature.ts';
 import type { GameInfo } from '../packages/types/addon.js';
 import type { KeysApi as PublicKeysApi } from '../packages/types/keys.js';
 import type { SoundApi as PublicSoundApi } from '../packages/types/sound.js';
 import type { StorageApi as PublicStorageApi } from '../packages/types/storage.js';
 import type { UiApi as PublicUiApi } from '../packages/types/ui.js';
+import type {
+  Entity as PublicEntity,
+  WorldApi as PublicWorldApi,
+  WorldKey as PublicWorldKey,
+  WorldValues as PublicWorldValues,
+} from '../packages/types/world.js';
 
 /**
  * True only when every member of `From` satisfies `To`.
@@ -50,6 +59,37 @@ const publishedIsStorage: Assignable<PublicStorageApi, AddonStorageApi> = true;
 const gameIsPublished: Assignable<GameIdentity, GameInfo> = true;
 const publishedIsGame: Assignable<GameInfo, GameIdentity> = true;
 
+const worldIsPublished: Assignable<WorldApi, PublicWorldApi> = true;
+const publishedIsWorld: Assignable<PublicWorldApi, WorldApi> = true;
+
+/**
+ * The world's own shapes, checked separately from the API that returns them.
+ *
+ * `WorldApi` compares structurally, so an entity field declared here and dropped
+ * there would surface as one confusing error deep inside a map type. Comparing
+ * the shapes directly names the thing that actually moved.
+ *
+ * These declarations are the one part of the published surface that describes
+ * ANOTHER repository. Nothing at compile time can confirm the game still looks
+ * like this; `loader/src/runtime/world/shape.ts` is what checks it against a
+ * live game, and the hub reports drift once per session.
+ */
+const entityIsPublished: Assignable<Entity, PublicEntity> = true;
+const publishedIsEntity: Assignable<PublicEntity, Entity> = true;
+const valuesArePublished: Assignable<WorldValues, PublicWorldValues> = true;
+const publishedAreValues: Assignable<PublicWorldValues, WorldValues> = true;
+
+/**
+ * The watchable keys against the runtime's own list.
+ *
+ * `signature.ts` owns the keys: it holds the array `world.on` validates against
+ * and the capture logic behind each one. The published `WorldKey` derives from
+ * `WorldValues` instead, so this is what stops a key being added to one and not
+ * the other, which would typecheck everywhere and throw at the addon.
+ */
+const keysArePublished: Assignable<WorldKey, PublicWorldKey> = true;
+const publishedAreKeys: Assignable<PublicWorldKey, WorldKey> = true;
+
 /**
  * The whole object an addon receives satisfies each published facet.
  *
@@ -60,6 +100,7 @@ const wocCarriesUi: Assignable<WocApi['ui'], PublicUiApi> = true;
 const wocCarriesSound: Assignable<WocApi['sound'], PublicSoundApi> = true;
 const wocCarriesKeys: Assignable<WocApi['keys'], PublicKeysApi> = true;
 const wocCarriesStorage: Assignable<WocApi['storage'], PublicStorageApi> = true;
+const wocCarriesWorld: Assignable<WocApi['world'], PublicWorldApi> = true;
 
 describe('the published types', () => {
   it('match the implementation in both directions', () => {
@@ -74,10 +115,29 @@ describe('the published types', () => {
       publishedIsStorage,
       gameIsPublished,
       publishedIsGame,
+      worldIsPublished,
+      publishedIsWorld,
+    ]).not.toContain(false);
+  });
+
+  it('describe the world shapes and the keys that watch them', () => {
+    expect([
+      entityIsPublished,
+      publishedIsEntity,
+      valuesArePublished,
+      publishedAreValues,
+      keysArePublished,
+      publishedAreKeys,
     ]).not.toContain(false);
   });
 
   it('describe every domain the assembled woc object carries', () => {
-    expect([wocCarriesUi, wocCarriesSound, wocCarriesKeys, wocCarriesStorage]).not.toContain(false);
+    expect([
+      wocCarriesUi,
+      wocCarriesSound,
+      wocCarriesKeys,
+      wocCarriesStorage,
+      wocCarriesWorld,
+    ]).not.toContain(false);
   });
 });

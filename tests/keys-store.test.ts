@@ -13,7 +13,7 @@ import type { KeybindDecl } from '../loader/src/shared/schema.ts';
 import { configNamespace, KEYBINDS_KEY } from '../loader/src/shared/storage-keys.ts';
 import { createFakeStorage, type FakeStorage } from './fakes/storage.ts';
 
-const FQID = 'official/dps-meter';
+const FQID = 'official/combat-meter';
 const NS = configNamespace(FQID);
 
 const DECLS: KeybindDecl[] = [

@@ -143,3 +143,18 @@ export function enterWorld(doc: Document): void {
   doc.body.insertBefore(template.content.cloneNode(true), startScreen);
   doc.body.classList.add('game-active');
 }
+
+/**
+ * Logout, as a soft navigation performs it: the cloned HUD goes, the page stays.
+ *
+ * The loader's own root is a sibling of #ui precisely so a HUD re-render cannot
+ * take it away, which means nothing takes addon UI away when the HUD legitimately
+ * goes. A live session found the result: an addon's window sitting on top of the
+ * game's landing page, over the PLAY button.
+ */
+export function leaveWorld(doc: Document): void {
+  for (const id of ['ui', 'options-menu', 'side-buttons-col-b']) {
+    doc.getElementById(id)?.remove();
+  }
+  doc.body.classList.remove('game-active');
+}

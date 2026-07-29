@@ -18,7 +18,7 @@ const SEMVER_RE = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/;
 /** Relative path inside the addon directory: no traversal, no absolute, no scheme. */
 const ENTRY_RE = /^[A-Za-z0-9._-]+(?:\/[A-Za-z0-9._-]+)*$/;
 
-const AddonId = z.string().regex(ID_RE, 'must be lower-case kebab-case, e.g. "dps-meter"');
+const AddonId = z.string().regex(ID_RE, 'must be lower-case kebab-case, e.g. "combat-meter"');
 
 /** Browse renders one filter control per distinct tag across every source. */
 const MAX_TAGS = 6;

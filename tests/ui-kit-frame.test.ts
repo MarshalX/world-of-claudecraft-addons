@@ -7,13 +7,14 @@
 // which is the part a player notices across a login.
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { FrameOpts } from '../loader/src/runtime/ui/kit/frame.ts';
+import { CLOSE_PATH } from '../loader/src/runtime/ui/kit/close-glyph.ts';
 import { createAddonFrame, HIDDEN_CLASS } from '../loader/src/runtime/ui/kit/frame.ts';
+import type { FrameOpts } from '../loader/src/runtime/ui/kit/frame-chrome.ts';
 import { createFrameStateStore } from '../loader/src/runtime/ui/kit/frame-state.ts';
 import { frameKey, uiNamespace } from '../loader/src/shared/storage-keys.ts';
 import { createFakeStorage, type FakeStorage } from './fakes/storage.ts';
 
-const FQID = 'official/dps-meter';
+const FQID = 'official/combat-meter';
 const CHARACTER = 'Claudemoon/Marshal';
 const VIEW = { w: 1280, h: 800 };
 
@@ -284,5 +285,143 @@ describe('destroy', () => {
 
     expect(frame.visible).toBe(false);
     expect(document.querySelector('[data-woc-frame="meter"]')).toBeNull();
+  });
+});
+
+// The density variant, which is the one thing about a frame's chrome an addon
+// chooses rather than inherits.
+//
+// An enum rather than a `compact: true` flag: the axis has more than two useful
+// positions and a boolean cannot grow one. What the test pins is that the choice
+// reaches the element as a class, since everything the variant does is CSS, and
+// that an unrecognised value falls back to the ACCESSIBLE default rather than to
+// the compact one. Getting that backwards would let a typo silently take the
+// tap-target floor away.
+describe('density', () => {
+  it('defaults to comfortable, which is the accessible sizing', () => {
+    const frame = open({ id: 'meter' });
+
+    expect(frame.el.classList.contains('woc-density-comfortable')).toBe(true);
+    expect(frame.el.classList.contains('woc-density-compact')).toBe(false);
+  });
+
+  it('marks a compact frame so the stylesheet can find it', () => {
+    const frame = open({ id: 'meter', density: 'compact' });
+
+    expect(frame.el.classList.contains('woc-density-compact')).toBe(true);
+  });
+
+  // A value from a manifest-driven addon is untrusted input like anything else,
+  // and the failure mode to avoid is silently dropping the tap-target floor.
+  it('falls back to comfortable for a value it does not know', () => {
+    const frame = open({ id: 'meter', density: 'tiny' as 'compact' });
+
+    expect(frame.el.classList.contains('woc-density-comfortable')).toBe(true);
+  });
+});
+
+// The close button's mark.
+//
+// It was the `×` character, which inherits the title bar's serif font and so
+// renders at whatever weight and optical size that font gives it: thin,
+// off-centre, and visibly not the mark the game's own close buttons use. A
+// stroked path is the same shape at every size.
+describe('the close button', () => {
+  // Named against the shared constant, not against a copy of the path: the
+  // manager renders the same mark from the same place, and the failure this
+  // guards is one of the two renderers quietly going its own way.
+  it('draws the shared glyph rather than a text character', () => {
+    const frame = open({ id: 'meter' }, 'window');
+    const close = frame.el.querySelector('.woc-close');
+
+    expect(close?.querySelector('path')?.getAttribute('d')).toBe(CLOSE_PATH);
+    expect(close?.textContent).toBe('');
+  });
+
+  // currentColor is what makes it take the gold on hover from the same rule the
+  // text version did. A hard-coded fill would go dead against the theme.
+  it('strokes with currentColor so the hover state still reaches it', () => {
+    const frame = open({ id: 'meter' }, 'window');
+    const path = frame.el.querySelector('.woc-close path');
+
+    expect(path?.getAttribute('stroke')).toBe('currentColor');
+  });
+
+  it('is still named for a screen reader, which the glyph cannot be', () => {
+    const frame = open({ id: 'meter' }, 'window');
+    const close = frame.el.querySelector('.woc-close');
+
+    expect(close?.getAttribute('aria-label')).toBe('Close');
+    expect(close?.querySelector('svg')?.getAttribute('aria-hidden')).toBe('true');
+  });
+
+  // A frame is HUD furniture with no close button at all: one there would offer
+  // to close something the player can only get back through the manager.
+  it('is absent on a frame', () => {
+    const frame = open({ id: 'meter' }, 'frame');
+
+    expect(frame.el.querySelector('.woc-close')).toBeNull();
+  });
+});
+
+// A new window opens in front.
+//
+// A click raises a window, but a window nobody has clicked yet holds no z-index
+// at all, so without this a brand-new frame would open UNDER every window that
+// had been clicked since the session began. Showing a hidden one is the same
+// case: it has been out of the stack and has to come back to the top of it.
+describe('stacking', () => {
+  function raising() {
+    const raised: HTMLElement[] = [];
+    const store = stateStore(null);
+    const make = (opts: FrameOpts, chrome: 'frame' | 'window' = 'window') =>
+      createAddonFrame({
+        doc: document,
+        root: root(),
+        fqid: FQID,
+        chrome,
+        opts,
+        store,
+        viewport: () => VIEW,
+        window: globalThis,
+        raise: (el) => raised.push(el),
+      });
+    return { raised, make };
+  }
+
+  it('raises a frame the moment it is built', () => {
+    const { raised, make } = raising();
+    const frame = make({ id: 'meter' });
+
+    expect(raised).toEqual([frame.el]);
+  });
+
+  it('raises it again when a hidden one is shown', () => {
+    const { raised, make } = raising();
+    const frame = make({ id: 'meter', visible: false });
+    raised.length = 0;
+
+    frame.show();
+
+    expect(raised).toEqual([frame.el]);
+  });
+
+  // Hiding is not a stacking event: nothing about the order of what is left
+  // changes, and raising on the way out would put a window players just dismissed
+  // at the top of the order for the next time it opens.
+  it('does not raise on hide', () => {
+    const { raised, make } = raising();
+    const frame = make({ id: 'meter' });
+    raised.length = 0;
+
+    frame.hide();
+
+    expect(raised).toEqual([]);
+  });
+
+  // Optional, because the frame kit is also driven by suites that have no
+  // stacking service and by any future caller that does not want one.
+  it('works with no raise at all', () => {
+    expect(() => open({ id: 'meter' }, 'window')).not.toThrow();
   });
 });

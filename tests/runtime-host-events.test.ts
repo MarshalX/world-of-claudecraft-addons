@@ -93,9 +93,9 @@ describe('the other events', () => {
   it('hands a storage write to the addons watching that key', () => {
     const { handle, calls } = harness();
 
-    handle({ k: 'storage.changed', ns: 'addon:official/dps-meter', key: 'seen', value: 7 });
+    handle({ k: 'storage.changed', ns: 'addon:official/combat-meter', key: 'seen', value: 7 });
 
-    expect(calls.deliverStorage).toHaveBeenCalledWith('addon:official/dps-meter', 'seen', 7);
+    expect(calls.deliverStorage).toHaveBeenCalledWith('addon:official/combat-meter', 'seen', 7);
   });
 
   // Restarting every addon because one of them wrote a storage key would be a

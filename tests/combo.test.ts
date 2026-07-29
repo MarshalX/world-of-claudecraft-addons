@@ -98,7 +98,7 @@ describe('describeCombo', () => {
 
 describe('findConflicts', () => {
   const game = { moveForward: 'KeyW', openBags: 'KeyB', screenshot: 'Ctrl+Alt+KeyD' };
-  const addons = { 'official/dps-meter:toggle': 'Alt+KeyD' };
+  const addons = { 'official/combat-meter:toggle': 'Alt+KeyD' };
 
   it('finds a game binding on the same combo', () => {
     expect(findConflicts('KeyB', game, addons)).toEqual({ game: ['openBags'], addons: [] });
@@ -106,7 +106,7 @@ describe('findConflicts', () => {
 
   it('finds an addon binding on the same combo', () => {
     const r = findConflicts('Alt+KeyD', game, addons);
-    expect(r.addons).toEqual(['official/dps-meter:toggle']);
+    expect(r.addons).toEqual(['official/combat-meter:toggle']);
     expect(r.game).toEqual([]);
   });
 
@@ -121,7 +121,7 @@ describe('findConflicts', () => {
 
   // Re-binding a key to the action that already owns it is not a conflict.
   it('ignores the binding being edited', () => {
-    const r = findConflicts('Alt+KeyD', game, addons, 'official/dps-meter:toggle');
+    const r = findConflicts('Alt+KeyD', game, addons, 'official/combat-meter:toggle');
     expect(r.addons).toEqual([]);
   });
 

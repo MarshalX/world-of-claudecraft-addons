@@ -12,13 +12,13 @@ import type { InstalledAddon } from '../loader/src/shared/protocol.ts';
 import type { AddonManifest } from '../loader/src/shared/schema.ts';
 import { createSharedServices } from './fakes/shared-services.ts';
 
-const FQID = 'official/dps-meter';
+const FQID = 'official/combat-meter';
 const OTHER = 'official/cooldowns';
 
 function manifest(overrides: Partial<AddonManifest> = {}): AddonManifest {
   return {
-    id: 'dps-meter',
-    name: 'DPS Meter',
+    id: 'combat-meter',
+    name: 'Combat Meter',
     version: '1.2.0',
     apiVersion: 1,
     author: 'MarshalX',

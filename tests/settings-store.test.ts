@@ -13,7 +13,7 @@ import type { SettingDecl } from '../loader/src/shared/schema.ts';
 import { configNamespace, SETTINGS_KEY } from '../loader/src/shared/storage-keys.ts';
 import { createFakeStorage, type FakeStorage } from './fakes/storage.ts';
 
-const FQID = 'official/dps-meter';
+const FQID = 'official/combat-meter';
 const NS = configNamespace(FQID);
 
 const DECLS: SettingDecl[] = [

@@ -18,7 +18,7 @@ import { OFFICIAL } from '../loader/src/shared/marketplace.ts';
 import type { InstalledAddon, MarketApi, UpdateRow } from '../loader/src/shared/protocol.ts';
 import { fakeMarketApi, marketEntry, marketState } from './fakes/market.ts';
 
-const FQID = 'official/dps-meter';
+const FQID = 'official/combat-meter';
 
 function installedRow(fqid = FQID): InstalledAddon {
   const { path: _path, ...manifest } = marketEntry();
@@ -28,7 +28,7 @@ function installedRow(fqid = FQID): InstalledAddon {
 function updateRow(overrides: Partial<UpdateRow> = {}): UpdateRow {
   return {
     fqid: FQID,
-    name: 'DPS Meter',
+    name: 'Combat Meter',
     marketplace: 'official',
     installed: '1.2.0',
     available: '1.3.0',

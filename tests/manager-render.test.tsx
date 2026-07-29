@@ -8,6 +8,7 @@
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { DiagnosticsReading } from '../loader/src/runtime/diagnostics.ts';
+import { CLOSE_PATH } from '../loader/src/runtime/ui/kit/close-glyph.ts';
 import type { ManagerRegistry } from '../loader/src/runtime/ui/manager/index.tsx';
 import { mountManager } from '../loader/src/runtime/ui/manager/index.tsx';
 import { UI_TEXT } from '../loader/src/runtime/ui/manager/strings.ts';
@@ -268,4 +269,38 @@ describe('the tabs', () => {
       expect(text().trim()).not.toBe('');
     },
   );
+});
+
+// The close mark, which drifted once and was reported from a live session: the
+// frame builder had been moved to a stroked path and the manager still rendered
+// the `×` character from its strings module, so one loader showed two different
+// close buttons on screen at the same time.
+//
+// Nothing pinned the manager's, which is exactly why. Both renderers now read one
+// geometry from kit/close-glyph.ts, and each has a test naming that constant, so a
+// renderer that stops using it fails here rather than in a screenshot.
+describe('the close button', () => {
+  it('draws the shared glyph rather than a text character', () => {
+    const manager = open(null);
+    const close = document.querySelector('.woc-close');
+
+    expect(close?.querySelector('path')?.getAttribute('d')).toBe(CLOSE_PATH);
+    expect(close?.textContent).toBe('');
+    manager.dispose();
+  });
+
+  // A glyph is not text. It sat in the strings module, which is the one place a
+  // future translation pass would look, and a translated close mark is nonsense.
+  it('is not carried in the strings module', () => {
+    expect(Object.keys(UI_TEXT)).not.toContain('closeGlyph');
+  });
+
+  it('keeps the accessible name the mark cannot carry', () => {
+    const manager = open(null);
+    const close = document.querySelector('.woc-close');
+
+    expect(close?.getAttribute('aria-label')).toBe(UI_TEXT.close);
+    expect(close?.querySelector('svg')?.getAttribute('aria-hidden')).toBe('true');
+    manager.dispose();
+  });
 });

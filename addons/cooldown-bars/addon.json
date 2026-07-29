@@ -1,0 +1,35 @@
+{
+  "id": "cooldown-bars",
+  "name": "Cooldown Bars (Example)",
+  "version": "1.0.0",
+  "apiVersion": 1,
+  "author": "MarshalX",
+  "description": "A draining bar for every ability you have on cooldown, soonest ready at the top.",
+  "entry": "main.js",
+  "homepage": "https://github.com/MarshalX/world-of-claudecraft-addons",
+  "tags": ["combat", "interface"],
+  "permissions": ["world.read", "ui", "keys"],
+  "keybinds": [
+    {
+      "id": "toggle",
+      "label": "Show or hide the bars",
+      "default": "Alt+KeyC"
+    }
+  ],
+  "settings": [
+    {
+      "id": "max-bars",
+      "type": "number",
+      "label": "Most bars to show at once",
+      "default": 8,
+      "min": 1,
+      "max": 20
+    },
+    {
+      "id": "hide-short",
+      "type": "boolean",
+      "label": "Hide cooldowns shorter than the global cooldown",
+      "default": true
+    }
+  ]
+}

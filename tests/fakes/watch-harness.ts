@@ -5,6 +5,7 @@
 // make every assertion a race.
 
 import type { WorldBackend } from '../../loader/src/runtime/world/backend.ts';
+import type { Aura, Entity, WorldQuests } from '../../loader/src/runtime/world/game-types.ts';
 import { createWorldWatcher, type WorldWatcher } from '../../loader/src/runtime/world/watch.ts';
 import { PLAYER_ENTITY } from './frames.ts';
 
@@ -29,30 +30,33 @@ export function watchHarness(): WatchHarness {
   const scheduled = new Map<number, () => void>();
   let nextFrame = 1;
 
+  // `live` stays loose so a test can move one field at a time, including into a
+  // shape the game would never produce, which is half of what these suites are
+  // for. The backend asserts at its own boundary exactly as the real one does.
   const backend = {
     kind: 'test',
-    get player(): unknown {
-      return live.player;
+    get player(): Entity | null {
+      return live.player as unknown as Entity;
     },
-    get target(): unknown {
+    get target(): Entity | null {
       return null;
     },
-    get entities(): ReadonlyMap<number, unknown> {
-      return live.entities;
+    get entities(): ReadonlyMap<number, Entity> {
+      return live.entities as ReadonlyMap<number, Entity>;
     },
-    get party(): unknown {
+    get party(): null {
       return null;
     },
-    get inventory(): unknown {
+    get inventory(): null {
       return null;
     },
-    get quests(): { log: unknown; done: unknown } {
+    get quests(): WorldQuests {
       return { log: null, done: null };
     },
-    get cooldowns(): unknown {
+    get cooldowns(): null {
       return null;
     },
-    get auras(): unknown {
+    get auras(): readonly Aura[] | null {
       return null;
     },
     raw: live,

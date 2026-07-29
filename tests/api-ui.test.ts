@@ -12,12 +12,13 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createUi, elementId } from '../loader/src/runtime/api/ui.ts';
 import { DisposalBag } from '../loader/src/runtime/disposal.ts';
 import { createGameInjector } from '../loader/src/runtime/ui/kit/injections.ts';
+import { createStacking } from '../loader/src/runtime/ui/kit/stacking.ts';
 import { createToaster } from '../loader/src/runtime/ui/kit/toast.ts';
 import { createTooltips } from '../loader/src/runtime/ui/kit/tooltip.ts';
 import type { UiKit } from '../loader/src/runtime/ui/mount.ts';
 import { enterWorld, mountStartScreen } from './fakes/game-dom.ts';
 
-const FQID = 'official/dps-meter';
+const FQID = 'official/combat-meter';
 const VIEW = { w: 1280, h: 800 };
 
 /** Everything a DOM id may contain. */
@@ -57,6 +58,7 @@ function open() {
       },
     }),
     tooltips: createTooltips({ doc: document, root, viewport: () => VIEW }),
+    stacking: createStacking({ root }),
   };
 
   const bag = new DisposalBag();

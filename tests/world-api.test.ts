@@ -190,11 +190,18 @@ describe('world.ready', () => {
 });
 
 describe('world.on', () => {
+  // The key is typed now, so an author compiling against @woc-addons/types is
+  // told at their desk. The runtime check is still the one that matters:
+  // addons are plain JavaScript evaluated as a function body, with no build
+  // step, so nothing else stands between a typo and a subscription that would
+  // silently never fire. The cast is how the test reaches that path.
+  const unknownKey = 'healthbar' as 'player';
+
   it('rejects a key it does not know, naming the ones it does', () => {
     const { world } = harness();
 
-    expect(() => world.on('healthbar', vi.fn())).toThrow(UNKNOWN_KEY);
-    expect(() => world.on('healthbar', vi.fn())).toThrow(NAMES_PLAYER);
+    expect(() => world.on(unknownKey, vi.fn())).toThrow(UNKNOWN_KEY);
+    expect(() => world.on(unknownKey, vi.fn())).toThrow(NAMES_PLAYER);
   });
 
   it('registers in the disposal bag', () => {

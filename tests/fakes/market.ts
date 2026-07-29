@@ -15,14 +15,14 @@ import type {
 
 /** A valid index row. The defaults are a real manifest, not a minimal one. */
 function marketEntry(overrides: Partial<MarketplaceEntry> = {}): MarketplaceEntry {
-  const id = overrides.id ?? 'dps-meter';
+  const id = overrides.id ?? 'combat-meter';
   return {
     id,
-    name: 'DPS Meter',
+    name: 'Combat Meter',
     version: '1.2.0',
     apiVersion: 1,
     author: 'MarshalX',
-    description: 'Rolling damage per second.',
+    description: 'What your damage is made of.',
     entry: 'main.js',
     path: `addons/${id}`,
     ...overrides,

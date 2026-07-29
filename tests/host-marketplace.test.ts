@@ -27,14 +27,14 @@ const THIRD_PARTY = 'https://raw.githubusercontent.com/someone/their-addons/HEAD
 
 function entry(overrides: Partial<MarketplaceEntry> = {}): MarketplaceEntry {
   return {
-    id: 'dps-meter',
-    name: 'DPS Meter',
+    id: 'combat-meter',
+    name: 'Combat Meter',
     version: '1.2.0',
     apiVersion: 1,
     author: 'MarshalX',
     description: 'Rolling damage per second.',
     entry: 'main.js',
-    path: 'addons/dps-meter',
+    path: 'addons/combat-meter',
     ...overrides,
   };
 }
@@ -325,7 +325,7 @@ describe('refreshing an index', () => {
     await market.api.refresh(OFFICIAL_ID);
 
     const [state] = await market.api.list();
-    expect(state?.addons.map((row) => row.id)).toEqual(['dps-meter']);
+    expect(state?.addons.map((row) => row.id)).toEqual(['combat-meter']);
     expect(state?.fetchedAt).toBe(1_700_000_000_000);
     expect(state?.error).toBeNull();
   });
@@ -361,7 +361,7 @@ describe('refreshing an index', () => {
 
     const [state] = await market.api.list();
     expect(state?.error).toContain('the index is not valid');
-    expect(state?.addons.map((row) => row.id)).toEqual(['dps-meter']);
+    expect(state?.addons.map((row) => row.id)).toEqual(['combat-meter']);
   });
 
   it('clears a previous error once a refresh succeeds', async () => {
@@ -485,10 +485,10 @@ describe('finding one addon', () => {
   it('answers the marketplace and the index row', async () => {
     const { market } = open();
 
-    const found = await market.entry('official/dps-meter');
+    const found = await market.entry('official/combat-meter');
 
     expect(found?.market.id).toBe(OFFICIAL_ID);
-    expect(found?.row.path).toBe('addons/dps-meter');
+    expect(found?.row.path).toBe('addons/combat-meter');
   });
 
   // So installing works straight after adding a source, without the caller
@@ -496,7 +496,7 @@ describe('finding one addon', () => {
   it('loads the index on demand when it has never been read', async () => {
     const { market, http } = open();
 
-    await market.entry('official/dps-meter');
+    await market.entry('official/combat-meter');
 
     expect(http.calls).toEqual([OFFICIAL_INDEX]);
   });
@@ -505,7 +505,7 @@ describe('finding one addon', () => {
     const { market, http } = open();
     await market.api.refresh(OFFICIAL_ID);
 
-    await market.entry('official/dps-meter');
+    await market.entry('official/combat-meter');
 
     expect(http.calls).toHaveLength(1);
   });

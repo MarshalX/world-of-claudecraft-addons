@@ -37,7 +37,7 @@ function installed(
   };
 }
 
-/** The official source, read, offering `dps-meter` at the version given. */
+/** The official source, read, offering `combat-meter` at the version given. */
 function offering(version: string) {
   return [marketState(OFFICIAL, [marketEntry({ version })])];
 }
@@ -48,8 +48,8 @@ describe('computeUpdates', () => {
 
     expect(rows).toEqual([
       {
-        fqid: 'official/dps-meter',
-        name: 'DPS Meter',
+        fqid: 'official/combat-meter',
+        name: 'Combat Meter',
         marketplace: 'official',
         installed: '1.2.0',
         available: '1.3.0',
@@ -111,7 +111,7 @@ describe('computeUpdates', () => {
       ]),
     ];
 
-    expect(computeUpdates(both, markets).map((row) => row.fqid)).toEqual(['official/dps-meter']);
+    expect(computeUpdates(both, markets).map((row) => row.fqid)).toEqual(['official/combat-meter']);
   });
 
   it('reports nothing when the installed version cannot be parsed', () => {

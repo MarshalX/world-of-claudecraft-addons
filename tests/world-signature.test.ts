@@ -60,10 +60,15 @@ describe('player', () => {
     expect(changed('player', entity(), entity({ [field]: value }))).toBe(true);
   });
 
-  // dead and inCombat are booleans. Read with a number-only reader they resolve
-  // to nothing, and the signature silently stops watching them.
-  it.each([['dead'], ['inCombat']])('notices the boolean %s flipping', (field) => {
-    expect(changed('player', entity({ [field]: false }), entity({ [field]: true }))).toBe(true);
+  // `dead` is a boolean. Read with a number-only reader it resolves to nothing,
+  // and the signature silently stops watching it.
+  //
+  // `inCombat` was in this list and has been dropped from the watched fields:
+  // it is not on the wire, so on a client it holds its constructed `false` for
+  // the whole session. Watching it was worse than useless, because it told an
+  // addon author the loader would report a transition it can never see.
+  it('notices the boolean dead flipping', () => {
+    expect(changed('player', entity({ dead: false }), entity({ dead: true }))).toBe(true);
   });
 
   it('does not confuse a false flag with a missing one', () => {

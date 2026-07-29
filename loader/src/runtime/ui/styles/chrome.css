@@ -136,3 +136,73 @@
   overflow-y: auto;
   overscroll-behavior: contain;
 }
+
+/* The compact density (ui.frame/ui.window `density: 'compact'`).
+ *
+ * `comfortable` is the default and needs no rules of its own: it is what
+ * everything above is already drawn at, 16px labels on a 40px minimum, which is
+ * the mobile tap-target floor the game itself holds to. That floor is right for
+ * the manager and for anything a player OPERATES, and wrong for a dense readout
+ * they glance at, where it makes the loader's own chrome the loudest thing in the
+ * panel. The game's own combat meter is drawn at roughly these numbers.
+ *
+ * Opting in gives up the tap floor, which is why it is opt-in and why the
+ * default is the other one: an addon that has not thought about it keeps the
+ * accessible sizing. Compact is a desktop readout's trade to make.
+ *
+ * Selectors carry both classes so specificity beats the base `.woc-window`
+ * rules whatever order the sheets are concatenated in.
+ */
+#woc-addons .woc-window.woc-density-compact {
+  padding: 8px;
+  gap: 6px;
+}
+
+#woc-addons .woc-density-compact .woc-titlebar {
+  padding-bottom: 2px;
+}
+
+#woc-addons .woc-density-compact .woc-title {
+  font-size: 13px;
+}
+
+#woc-addons .woc-density-compact .woc-close {
+  min-width: 24px;
+  min-height: 24px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+#woc-addons .woc-density-compact .woc-tabs {
+  gap: 3px;
+  padding-bottom: 4px;
+}
+
+/* .woc-btn is declared in panes.css; the compact override lives here with the
+   rest of the density variant, because what it belongs to is the variant. */
+#woc-addons .woc-density-compact .woc-tab,
+#woc-addons .woc-density-compact .woc-btn {
+  font-size: 12px;
+  min-height: 24px;
+  padding: 2px 8px;
+}
+
+/* No game HUD in the document: the start screen, the character selector, or
+ * after a logout that did not reload the page.
+ *
+ * Addon frames only. The manager stays reachable, because it is how a player
+ * finds out the loader is broken and one of its three routes in is host-side and
+ * works with no game at all.
+ *
+ * `display: none` rather than removing them, because a frame carries live state
+ * an addon is still writing to: its position, what is on screen in it, and the
+ * addon's own tallies. Addons deliberately keep running before world entry, so
+ * they can subscribe and prepare while `world.ready` is still pending; what they
+ * must not do is put a window over the game's landing page. ui/root.ts sets this
+ * at mount and ui/mount.ts clears it on the HUD's first appearance, so the safe
+ * state is the one that needs no event to be correct. */
+#woc-addons.woc-no-hud .woc-addon-frame {
+  display: none;
+}

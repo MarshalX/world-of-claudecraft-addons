@@ -13,8 +13,9 @@
 import type { DisposalBag, Teardown } from '../disposal.ts';
 import type { AlertOpts } from '../ui/kit/alert.ts';
 import { openAlert } from '../ui/kit/alert.ts';
-import type { AddonFrame, FrameOpts } from '../ui/kit/frame.ts';
+import type { AddonFrame } from '../ui/kit/frame.ts';
 import { createAddonFrame } from '../ui/kit/frame.ts';
+import type { FrameOpts } from '../ui/kit/frame-chrome.ts';
 import type { FrameStateStore } from '../ui/kit/frame-state.ts';
 import type { InjectionSpec } from '../ui/kit/injections.ts';
 import type { ToastOpts } from '../ui/kit/toast.ts';
@@ -119,6 +120,7 @@ function createUi(deps: UiDeps): UiApi {
       store: storeFor(deps, opts),
       viewport: deps.viewport,
       window: deps.window,
+      raise: kit.stacking.raise,
     });
     bag.add(() => {
       frame.destroy();

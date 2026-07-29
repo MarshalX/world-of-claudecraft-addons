@@ -56,8 +56,8 @@ function open(files: Record<string, string>) {
 /** A repository with two ordinary addons in it. */
 function twoAddons(): Record<string, string> {
   return {
-    [CONTENTS]: listing(['cooldown-bars', 'dps-meter']),
-    [manifestUrl('dps-meter')]: manifest('dps-meter'),
+    [CONTENTS]: listing(['cooldown-bars', 'combat-meter']),
+    [manifestUrl('combat-meter')]: manifest('combat-meter'),
     [manifestUrl('cooldown-bars')]: manifest('cooldown-bars'),
   };
 }
@@ -68,9 +68,11 @@ describe('enumerating a repository with no index', () => {
 
     const addons = await enumerateAddons(fetcher, MARKET);
 
+    // Sorted by directory name, which is why combat-meter leads: the listing
+    // order the API happens to answer in is not what the manager shows.
     expect(addons.map((row) => [row.id, row.path])).toEqual([
+      ['combat-meter', 'addons/combat-meter'],
       ['cooldown-bars', 'addons/cooldown-bars'],
-      ['dps-meter', 'addons/dps-meter'],
     ]);
   });
 
@@ -79,21 +81,25 @@ describe('enumerating a repository with no index', () => {
 
     await enumerateAddons(fetcher, MARKET);
 
-    expect(http.calls).toEqual([CONTENTS, manifestUrl('cooldown-bars'), manifestUrl('dps-meter')]);
+    expect(http.calls).toEqual([
+      CONTENTS,
+      manifestUrl('combat-meter'),
+      manifestUrl('cooldown-bars'),
+    ]);
   });
 
   it('ignores anything in the listing that is not a directory', async () => {
     const { fetcher } = open({
       [CONTENTS]: JSON.stringify([
         { name: 'README.md', type: 'file' },
-        { name: 'dps-meter', type: 'dir' },
+        { name: 'combat-meter', type: 'dir' },
       ]),
-      [manifestUrl('dps-meter')]: manifest('dps-meter'),
+      [manifestUrl('combat-meter')]: manifest('combat-meter'),
     });
 
     const addons = await enumerateAddons(fetcher, MARKET);
 
-    expect(addons.map((row) => row.id)).toEqual(['dps-meter']);
+    expect(addons.map((row) => row.id)).toEqual(['combat-meter']);
   });
 
   // One broken addon in a third-party repository must not hide the rest of it.
@@ -101,14 +107,14 @@ describe('enumerating a repository with no index', () => {
     const capture = captureDiag();
     try {
       const { fetcher } = open({
-        [CONTENTS]: listing(['broken', 'dps-meter']),
+        [CONTENTS]: listing(['broken', 'combat-meter']),
         [manifestUrl('broken')]: JSON.stringify({ id: 'broken' }),
-        [manifestUrl('dps-meter')]: manifest('dps-meter'),
+        [manifestUrl('combat-meter')]: manifest('combat-meter'),
       });
 
       const addons = await enumerateAddons(fetcher, MARKET);
 
-      expect(addons.map((row) => row.id)).toEqual(['dps-meter']);
+      expect(addons.map((row) => row.id)).toEqual(['combat-meter']);
       expect(capture.errors()).toHaveLength(1);
     } finally {
       capture.restore();
@@ -119,13 +125,13 @@ describe('enumerating a repository with no index', () => {
     const capture = captureDiag();
     try {
       const { fetcher } = open({
-        [CONTENTS]: listing(['docs', 'dps-meter']),
-        [manifestUrl('dps-meter')]: manifest('dps-meter'),
+        [CONTENTS]: listing(['docs', 'combat-meter']),
+        [manifestUrl('combat-meter')]: manifest('combat-meter'),
       });
 
       const addons = await enumerateAddons(fetcher, MARKET);
 
-      expect(addons.map((row) => row.id)).toEqual(['dps-meter']);
+      expect(addons.map((row) => row.id)).toEqual(['combat-meter']);
     } finally {
       capture.restore();
     }
@@ -138,8 +144,8 @@ describe('enumerating a repository with no index', () => {
     const capture = captureDiag();
     try {
       const { fetcher } = open({
-        [CONTENTS]: listing(['dps-meter']),
-        [manifestUrl('dps-meter')]: manifest('something-else'),
+        [CONTENTS]: listing(['combat-meter']),
+        [manifestUrl('combat-meter')]: manifest('something-else'),
       });
 
       const addons = await enumerateAddons(fetcher, MARKET);

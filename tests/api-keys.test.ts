@@ -18,7 +18,7 @@ import type { KeybindDecl } from '../loader/src/shared/schema.ts';
 import { liveGame } from './fakes/game-keybinds.ts';
 import { createFakeStorage } from './fakes/storage.ts';
 
-const FQID = 'official/dps-meter';
+const FQID = 'official/combat-meter';
 
 const DECLS: KeybindDecl[] = [
   { id: 'toggle', label: 'Toggle DPS window', default: 'Alt+KeyD' },

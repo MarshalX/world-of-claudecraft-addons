@@ -11,6 +11,19 @@
 
 const ROOT_ID = 'woc-addons';
 const STYLE_ID = 'woc-addons-style';
+/**
+ * On the root while the game HUD is not in the document.
+ *
+ * The stylesheet hides addon frames under it, and only addon frames: the manager
+ * has to stay reachable from the start screen, since it is how a player finds out
+ * the loader is broken and one of its three routes in is host-side and works with
+ * no game at all.
+ *
+ * Exported rather than written twice. `ui/mount.ts` is what clears and re-sets it
+ * from the HUD presence signal, and a second copy of the string there would be a
+ * class one file sets and another styles with nothing holding them together.
+ */
+const NO_HUD_CLASS = 'woc-no-hud';
 
 interface RootDeps {
   doc: Document;
@@ -47,6 +60,12 @@ function mountRoot(deps: RootDeps): AddonRoot {
   const el = doc.getElementById(ROOT_ID) ?? doc.createElement('div');
   if (el.id !== ROOT_ID) {
     el.id = ROOT_ID;
+    // Addon frames are hidden until the HUD is seen. The safe default, not a
+    // waiting state: a frame with a saved visibility is restored as soon as its
+    // addon starts, which is at document-start on the landing page, and the
+    // failure that produced this was a meter window sitting over the PLAY
+    // button. ui/mount.ts clears it on the first presence report.
+    el.classList.add(NO_HUD_CLASS);
     doc.body.appendChild(el);
   }
 
@@ -60,4 +79,4 @@ function mountRoot(deps: RootDeps): AddonRoot {
 }
 
 export type { AddonRoot, RootDeps };
-export { mountRoot, ROOT_ID };
+export { mountRoot, NO_HUD_CLASS, ROOT_ID };

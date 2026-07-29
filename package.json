@@ -25,7 +25,8 @@
     "fix": "biome check --write --error-on-warnings .",
     "test": "vitest run",
     "validate": "node tools/validate.mjs",
-    "index": "node tools/index.mjs"
+    "index": "node tools/index.mjs",
+    "cues": "node tools/cues.mjs"
   },
   "dependencies": {
     "comlink": "^4.4.2",

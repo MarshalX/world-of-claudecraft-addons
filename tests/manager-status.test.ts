@@ -9,7 +9,7 @@ import type { AddonStatus } from '../loader/src/runtime/supervisor.ts';
 import { statusView } from '../loader/src/runtime/ui/manager/status.ts';
 import { UI_TEXT } from '../loader/src/runtime/ui/manager/strings.ts';
 
-const FQID = 'official/dps-meter';
+const FQID = 'official/combat-meter';
 
 function status(overrides: Partial<AddonStatus> = {}): AddonStatus {
   return { fqid: FQID, state: 'running', error: null, ...overrides };

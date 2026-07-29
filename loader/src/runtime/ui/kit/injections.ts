@@ -12,7 +12,7 @@
 
 import type { Teardown } from '../../disposal.ts';
 import { mountMenuEntry } from '../esc-inject.ts';
-import { whenHudMounts } from '../hud-mount.ts';
+import { type HudWaitDeps, whenHudMounts } from '../hud-mount.ts';
 import { type MicroButtonDeps, mountMicroButton } from '../micro-button.ts';
 
 type InjectionKind = 'menu' | 'micro';
@@ -42,6 +42,8 @@ interface InjectorDeps {
   doc: Document;
   /** Called once per HUD attach, before the injections go in. */
   onHud?: () => void;
+  /** Whether the game HUD is in the document, on every change. See hud-mount.ts. */
+  onPresence?: (present: boolean) => void;
 }
 
 function mountOne(doc: Document, spec: InjectionSpec): Mounted {
@@ -68,7 +70,7 @@ function createGameInjector(deps: InjectorDeps): GameInjector {
     mounted.delete(id);
   };
 
-  const hud = whenHudMounts({
+  const hudDeps: HudWaitDeps = {
     doc: deps.doc,
     attach: () => {
       deps.onHud?.();
@@ -81,7 +83,13 @@ function createGameInjector(deps: InjectorDeps): GameInjector {
         detachOne(id);
       }
     },
-  });
+  };
+  // Assigned rather than spread for the same reason `glyph` is above:
+  // exactOptionalPropertyTypes rejects an explicit undefined on an optional.
+  if (deps.onPresence !== undefined) {
+    hudDeps.onPresence = deps.onPresence;
+  }
+  const hud = whenHudMounts(hudDeps);
 
   return {
     add: (spec) => {

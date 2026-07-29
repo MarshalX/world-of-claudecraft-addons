@@ -15,6 +15,7 @@ import type { DiagnosticsReading } from '../../diagnostics.ts';
 import type { LogEntry } from '../../log/buffer.ts';
 import type { AddonStatus } from '../../supervisor.ts';
 import type { FrameBox } from '../frame/geometry.ts';
+import { CLOSE_PATH, CLOSE_SIZE, CLOSE_STROKE_WIDTH, CLOSE_VIEWBOX } from '../kit/close-glyph.ts';
 import { BrowsePane } from './browse.tsx';
 import type { CatalogStore } from './catalog-store.ts';
 import type { AddonConfig, ConflictReading } from './config.ts';
@@ -194,13 +195,45 @@ function useEscapeToClose(onClose: () => void): void {
   }, [onClose]);
 }
 
+/**
+ * The close mark, as JSX.
+ *
+ * The second of two renderers over one geometry: the frame builder needs the same
+ * mark as a markup string and this one needs elements, and handing preact raw
+ * markup would mean `dangerouslySetInnerHTML` for something that does not need
+ * it. Everything visible comes from kit/close-glyph.ts, so the two cannot drift.
+ *
+ * `aria-hidden` because the button already carries the accessible name.
+ */
+function CloseGlyph() {
+  return (
+    <svg viewBox={CLOSE_VIEWBOX} width={CLOSE_SIZE} height={CLOSE_SIZE} aria-hidden="true">
+      <path
+        d={CLOSE_PATH}
+        stroke="currentColor"
+        strokeWidth={CLOSE_STROKE_WIDTH}
+        strokeLinecap="round"
+        fill="none"
+      />
+    </svg>
+  );
+}
+
 function ManagerApp(props: ManagerAppProps) {
   const [tab, setTab] = useState<TabId>(DEFAULT_TAB);
   useEscapeToClose(props.onClose);
   const refs = useInteractiveFrame({ box: props.box, onGeometry: props.onGeometry });
 
   return (
-    <section ref={refs.frame} className="woc-window panel" role="dialog" aria-label={UI_TEXT.title}>
+    <section
+      ref={refs.frame}
+      className="woc-window panel"
+      // The one hook that says which window is the manager's: `.woc-window` is
+      // every addon frame as well. ui/mount.ts raises it on open.
+      data-woc-manager=""
+      role="dialog"
+      aria-label={UI_TEXT.title}
+    >
       <header ref={refs.handle} className="woc-titlebar panel-title">
         <span className="woc-title">{UI_TEXT.title}</span>
         <button
@@ -209,7 +242,7 @@ function ManagerApp(props: ManagerAppProps) {
           aria-label={UI_TEXT.close}
           onClick={props.onClose}
         >
-          {UI_TEXT.closeGlyph}
+          <CloseGlyph />
         </button>
       </header>
       <TabStrip active={tab} onPick={setTab} />

@@ -46,7 +46,10 @@
   /* The stack is a layout box over the middle of the screen. Letting it take
      clicks would put a dead strip across the top of the world. */
   pointer-events: none;
-  z-index: 1;
+  /* The three overlay bands start one above kit/stacking.ts's WINDOW_Z_CEILING,
+     which the stacking counter renormalises rather than exceeds. So these are
+     above EVERY possible window, not just above the ones anyone expects. */
+  z-index: 100001;
 }
 
 #woc-addons .woc-toast {
@@ -76,8 +79,9 @@
   align-items: center;
   justify-content: center;
   background: rgb(0 0 0 / 55%);
-  /* Above the manager, which a modal may be asked from. */
-  z-index: 2;
+  /* Above the manager, which a modal may be asked from, and above every addon
+     window whatever order they were clicked in. See the note on .woc-toasts. */
+  z-index: 100002;
 }
 
 #woc-addons .woc-modal {
@@ -122,7 +126,7 @@
   /* A tooltip that took the pointer would flicker: entering it would leave the
      element that opened it. */
   pointer-events: none;
-  z-index: 3;
+  z-index: 100003;
 }
 
 /* Rail-button glyphs, sized to match the game's own micro-button icons.

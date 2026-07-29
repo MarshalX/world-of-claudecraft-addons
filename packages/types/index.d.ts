@@ -20,19 +20,38 @@ declare global {
 }
 
 export type { AddonInfo, GameInfo, Unsubscribe } from './addon.js';
+export type { KnownCue } from './cues.generated.js';
 export type { ConflictReport, KeysApi } from './keys.js';
 export type { FrameType, NetApi, NetState, SubscribeOpts } from './net.js';
-export type { PlayOpts, SoundApi } from './sound.js';
+export type { Cue, PlayOpts, SoundApi } from './sound.js';
 export type { StorageApi } from './storage.js';
 export type {
   AlertOpts,
   Frame,
+  FrameDensity,
   FrameOpts,
   MicroButtonOpts,
   ToastOpts,
   UiApi,
 } from './ui.js';
-export type { WorldApi, WorldKey, WorldQuests } from './world.js';
+export type {
+  Aura,
+  AuraKind,
+  Entity,
+  EntityKind,
+  InvSlot,
+  PartyInfo,
+  PartyMember,
+  PartyMemberAura,
+  QuestProgress,
+  ResourceType,
+  School,
+  Vec3,
+  WorldApi,
+  WorldKey,
+  WorldQuests,
+  WorldValues,
+} from './world.js';
 
 export interface WocApi {
   readonly addon: AddonInfo;

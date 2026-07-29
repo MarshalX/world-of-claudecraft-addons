@@ -15,10 +15,10 @@ import type { HostEvent, InstalledAddon, MarketplaceEntry } from '../loader/src/
 import { createFakeHttp, createFakeValues } from './fakes/http.ts';
 
 const LOCAL_FQID = 'local/dev-harness';
-const OFFICIAL_FQID = 'official/dps-meter';
+const OFFICIAL_FQID = 'official/combat-meter';
 const LOCAL_URL = 'http://localhost:5180/addons/dev-harness/main.js';
 const OFFICIAL_URL =
-  'https://raw.githubusercontent.com/MarshalX/world-of-claudecraft-addons/HEAD/addons/dps-meter/main.js';
+  'https://raw.githubusercontent.com/MarshalX/world-of-claudecraft-addons/HEAD/addons/combat-meter/main.js';
 
 const MANIFEST = {
   id: 'dev-harness',

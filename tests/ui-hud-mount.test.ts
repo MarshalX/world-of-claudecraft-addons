@@ -13,7 +13,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { DiagnosticsReading } from '../loader/src/runtime/diagnostics.ts';
 import { whenHudMounts } from '../loader/src/runtime/ui/hud-mount.ts';
 import { mountUi } from '../loader/src/runtime/ui/mount.ts';
-import { enterWorld, mountStartScreen } from './fakes/game-dom.ts';
+import { enterWorld, leaveWorld, mountStartScreen } from './fakes/game-dom.ts';
 import { uiServices } from './fakes/ui-deps.ts';
 
 const READING = {
@@ -221,5 +221,178 @@ describe('the composed UI', () => {
     await settle();
 
     expect(document.getElementById('woc-addons-micro-button')).toBeNull();
+  });
+});
+
+// Addon UI must not be on screen when the game is not.
+//
+// This is a defect a live session found, and the cause is a deliberate design
+// choice one step upstream: the loader's root is a sibling of #ui specifically so
+// a HUD re-render cannot take it away, and the cost is that nothing takes it away
+// when the HUD legitimately goes. An addon frame with a saved visibility is
+// restored the moment its addon starts, which is at document-start, so a meter
+// window appeared over the landing page's PLAY button before the player had even
+// logged in.
+//
+// The fix is a class on the root, so this is about the SIGNAL: that the default
+// is the safe one before anything has been observed, that it falls on logout as
+// well as rising on entry, and that it never reaches the manager, which has to
+// stay reachable with no game at all.
+describe('addon UI against the HUD', () => {
+  const NoHud = 'woc-no-hud';
+
+  function root(): HTMLElement {
+    const el = document.getElementById('woc-addons');
+    if (el === null) {
+      throw new Error('the addon root did not mount');
+    }
+    return el;
+  }
+
+  function mount() {
+    return mountUi({
+      doc: document,
+      css: '',
+      registry: null,
+      storage: null,
+      channel: 'pbe',
+      readDiagnostics: () => READING,
+      ...uiServices(document),
+    });
+  }
+
+  // The state that needs no event to be correct: on the landing page nothing has
+  // mutated yet, so a default of "shown" would flash addon UI over the page.
+  it('starts hidden, before anything has been observed', () => {
+    mountStartScreen(document);
+    const ui = mount();
+
+    expect(root().classList.contains(NoHud)).toBe(true);
+    ui.dispose();
+  });
+
+  it('shows addon UI once world entry clones the HUD in', async () => {
+    mountStartScreen(document);
+    const ui = mount();
+
+    enterWorld(document);
+    await settle();
+
+    expect(root().classList.contains(NoHud)).toBe(false);
+    ui.dispose();
+  });
+
+  // The reported bug. Before the fix the class was never set again and the frame
+  // stayed on screen over the landing page.
+  it('hides it again when logout takes the HUD away', async () => {
+    mountStartScreen(document);
+    const ui = mount();
+    enterWorld(document);
+    await settle();
+
+    leaveWorld(document);
+    await settle();
+
+    expect(root().classList.contains(NoHud)).toBe(true);
+    ui.dispose();
+  });
+
+  it('shows it again on the next world entry', async () => {
+    mountStartScreen(document);
+    const ui = mount();
+    enterWorld(document);
+    await settle();
+    leaveWorld(document);
+    await settle();
+
+    enterWorld(document);
+    await settle();
+
+    expect(root().classList.contains(NoHud)).toBe(false);
+    ui.dispose();
+  });
+
+  // The manager is how a player finds out the loader is broken, and one of its
+  // three routes in is host-side and works with no game at all. Hiding the whole
+  // root would have taken that away, which is why the rule names addon frames
+  // rather than the root's children.
+  //
+  // Asserted on the CLASS the stylesheet keys on, in both directions, because
+  // that is the whole mechanism: the manager's window must not carry it, and an
+  // addon's must. Checking only the manager would pass just as well if the class
+  // had been renamed and nothing carried it at all.
+  it('marks addon frames and not the manager', () => {
+    mountStartScreen(document);
+    const ui = mount();
+    ui.manager.open();
+
+    const manager = root().querySelector('.woc-window');
+    const frame = ui.kit.root.querySelector('.woc-addon-frame');
+
+    expect(manager).not.toBeNull();
+    expect(manager?.classList.contains('woc-addon-frame')).toBe(false);
+    // No addon has opened one here, so the count is the point: the selector the
+    // rule uses is real and is not accidentally matching the manager.
+    expect(frame).toBeNull();
+    ui.dispose();
+  });
+});
+
+// The manager opening in front.
+//
+// Both in-game routes to it are buttons in the game's own DOM, outside the root,
+// so the click that opens the manager is not one the stacking listener sees. A
+// manager that opened behind an addon frame would be the same bug the listener
+// exists to fix, reached by the one path the listener cannot cover.
+describe('the manager and the window order', () => {
+  function managerEl(): HTMLElement | null {
+    return document.querySelector('[data-woc-manager]');
+  }
+
+  function mount() {
+    return mountUi({
+      doc: document,
+      css: '',
+      registry: null,
+      storage: null,
+      channel: 'pbe',
+      readDiagnostics: () => READING,
+      ...uiServices(document),
+    });
+  }
+
+  it('raises the manager when it is opened', () => {
+    mountStartScreen(document);
+    const ui = mount();
+
+    ui.manager.open();
+
+    expect(Number(managerEl()?.style.zIndex)).toBeGreaterThan(0);
+    ui.dispose();
+  });
+
+  // The one hook that says which window is the manager's, since `.woc-window` is
+  // every addon frame as well.
+  it('marks its own window so it can be found', () => {
+    mountStartScreen(document);
+    const ui = mount();
+
+    ui.manager.open();
+
+    expect(managerEl()?.classList.contains('woc-window')).toBe(true);
+    ui.dispose();
+  });
+
+  it('raises it on toggle too, which is what both in-game routes call', () => {
+    mountStartScreen(document);
+    const ui = mount();
+    ui.manager.open();
+    const opened = Number(managerEl()?.style.zIndex);
+    ui.manager.close();
+
+    ui.manager.toggle();
+
+    expect(Number(managerEl()?.style.zIndex)).toBeGreaterThan(opened);
+    ui.dispose();
   });
 });

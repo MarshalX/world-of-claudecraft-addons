@@ -133,8 +133,8 @@ describe('urls', () => {
   });
 
   it('builds a file URL under the ref', () => {
-    expect(fileUrl(OFFICIAL, 'addons/dps-meter/main.js')).toBe(
-      'https://raw.githubusercontent.com/MarshalX/world-of-claudecraft-addons/HEAD/addons/dps-meter/main.js',
+    expect(fileUrl(OFFICIAL, 'addons/combat-meter/main.js')).toBe(
+      'https://raw.githubusercontent.com/MarshalX/world-of-claudecraft-addons/HEAD/addons/combat-meter/main.js',
     );
   });
 
@@ -150,24 +150,24 @@ describe('urls', () => {
 
 describe('fqid', () => {
   it('round-trips through splitFqid', () => {
-    const id = fqid('gh:someone/their-addons', 'dps-meter');
-    expect(id).toBe('gh:someone/their-addons/dps-meter');
+    const id = fqid('gh:someone/their-addons', 'combat-meter');
+    expect(id).toBe('gh:someone/their-addons/combat-meter');
     expect(splitFqid(id)).toEqual({
       marketplace: 'gh:someone/their-addons',
-      addonId: 'dps-meter',
+      addonId: 'combat-meter',
     });
   });
 
   it('splits the official namespace', () => {
-    expect(splitFqid('official/dps-meter')).toEqual({
+    expect(splitFqid('official/combat-meter')).toEqual({
       marketplace: 'official',
-      addonId: 'dps-meter',
+      addonId: 'combat-meter',
     });
   });
 
   // Two marketplaces shipping the same addon id must stay distinct.
   it('keeps colliding addon ids apart', () => {
-    expect(fqid('official', 'dps-meter')).not.toBe(fqid('gh:someone/x', 'dps-meter'));
+    expect(fqid('official', 'combat-meter')).not.toBe(fqid('gh:someone/x', 'combat-meter'));
   });
 
   it.each(['', 'nosep', '/leading', 'trailing/'])('rejects malformed fqid %j', (input) => {

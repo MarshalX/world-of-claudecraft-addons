@@ -3,8 +3,8 @@ import { API_VERSION } from '../loader/src/shared/api-version.ts';
 import { validateIndex, validateManifest } from '../loader/src/shared/schema.ts';
 
 const valid = {
-  id: 'dps-meter',
-  name: 'DPS Meter',
+  id: 'combat-meter',
+  name: 'Combat Meter',
   version: '1.2.0',
   apiVersion: 1,
   author: 'Marshal',
@@ -150,7 +150,7 @@ describe('validateIndex', () => {
     schema: 1,
     name: 'Official Marketplace',
     generated: '2026-07-29T00:00:00Z',
-    addons: [{ ...valid, path: 'addons/dps-meter' }],
+    addons: [{ ...valid, path: 'addons/combat-meter' }],
   };
 
   it('accepts a well-formed index', () => {

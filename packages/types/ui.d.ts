@@ -1,5 +1,7 @@
 import type { Unsubscribe } from './addon.js';
 
+export type FrameDensity = 'comfortable' | 'compact';
+
 export interface FrameOpts {
   /** Unique within your addon. It is the persistence key, so keep it stable. */
   id: string;
@@ -18,6 +20,21 @@ export interface FrameOpts {
   visible?: boolean;
   /** Added to the frame element, so you can style your own. */
   className?: string;
+  /**
+   * How tightly the loader's own chrome is drawn. Defaults to 'comfortable'.
+   *
+   * 'comfortable' is 16px labels on a 40px minimum, which is the tap-target
+   * floor the game itself holds to, and is right for anything a player OPERATES.
+   * 'compact' is for a dense readout they glance at, where that floor makes the
+   * title bar and close button the loudest things in the panel. Compact gives up
+   * the tap floor, which is why it is opt-in: pick it for a desktop readout, not
+   * for a form.
+   *
+   * It also reaches your own controls: a `.woc-btn` or `.woc-tab` inside a
+   * compact frame is drawn compact too, so reusing those classes gets you the
+   * matching density for free.
+   */
+  density?: FrameDensity;
 }
 
 export interface Frame {
