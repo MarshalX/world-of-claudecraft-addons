@@ -5,8 +5,9 @@
 // Only the first of those raises anything observable, so one poll covering all
 // three is simpler than a MutationObserver that still has to poll for the last.
 
+import { ANCHORS } from './ui/anchors.ts';
+
 const READY_CLASS = 'game-active';
-const HUD_ROOT = '#ui';
 const DEFAULT_POLL_MS = 50;
 
 export interface ReadyDeps {
@@ -33,10 +34,35 @@ export function readGameNow(deps: ReadyDeps): unknown {
   if (!deps.doc.body?.classList.contains(READY_CLASS)) {
     return null;
   }
-  if (deps.doc.querySelector(HUD_ROOT) === null) {
+  if (deps.doc.querySelector(ANCHORS.hudRoot) === null) {
     return null;
   }
   return deps.readGame() ?? null;
+}
+
+export interface DocumentReadyDeps {
+  doc: Pick<Document, 'readyState' | 'addEventListener' | 'removeEventListener'>;
+}
+
+/**
+ * Resolves once the document has been parsed.
+ *
+ * The loader's own root and manager mount here rather than at world entry,
+ * because the manager has to be reachable from the start screen too. It says
+ * nothing about the game's HUD, which is cloned out of a template later: the two
+ * in-game injection points wait separately, in ui/hud-mount.ts.
+ */
+export function waitForDocument(deps: DocumentReadyDeps): Promise<void> {
+  if (deps.doc.readyState !== 'loading') {
+    return Promise.resolve();
+  }
+  return new Promise<void>((resolve) => {
+    const onReady = (): void => {
+      deps.doc.removeEventListener('DOMContentLoaded', onReady);
+      resolve();
+    };
+    deps.doc.addEventListener('DOMContentLoaded', onReady);
+  });
 }
 
 export function waitForGame(deps: ReadyDeps): GameWait {

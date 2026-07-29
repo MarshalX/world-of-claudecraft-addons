@@ -113,11 +113,28 @@ export const MarketplaceIndex = z.object({
   addons: z.array(MarketplaceEntry),
 });
 
+/**
+ * One installed addon, as the registry persists it.
+ *
+ * Validated on read as well as on write. The record lives in GM storage, which
+ * the player can edit and which an older loader may have written in a different
+ * shape, so what comes back out is untrusted input like anything else.
+ */
+export const InstalledAddon = z.object({
+  fqid: z.string().min(1),
+  marketplace: z.string().min(1),
+  manifest: AddonManifest,
+  enabled: z.boolean(),
+  /** Pinned version, or null to track the marketplace index. */
+  pin: z.string().regex(SEMVER_RE, 'must be semver, e.g. "1.2.0"').nullable(),
+});
+
 export type KeybindDecl = z.infer<typeof KeybindDecl>;
 export type SettingDecl = z.infer<typeof SettingDecl>;
 export type AddonManifest = z.infer<typeof AddonManifest>;
 export type MarketplaceEntry = z.infer<typeof MarketplaceEntry>;
 export type MarketplaceIndex = z.infer<typeof MarketplaceIndex>;
+export type InstalledAddon = z.infer<typeof InstalledAddon>;
 
 export interface ValidationIssue {
   path: string;

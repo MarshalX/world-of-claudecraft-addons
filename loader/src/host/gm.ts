@@ -42,6 +42,8 @@ interface BroadcastBus {
   open: () => BroadcastChannel | null;
 }
 
+const UNKNOWN_VERSION = 'unknown';
+
 function detectValueStore(src: GmSource): GmCapabilities['valueStore'] {
   if (typeof src.gm?.getValue === 'function' && typeof src.gm.setValue === 'function') {
     return 'gm4';
@@ -151,6 +153,60 @@ function createValueApi(store: ResolvedStore, bus: BroadcastBus, capabilities: G
   return { getValue, setValue };
 }
 
+/**
+ * Watch one key, over the manager's native listener where there is one and over
+ * the broadcast fallback otherwise.
+ *
+ * Gated on the detected capability rather than on the function merely being
+ * present, so subscribing and setValue's broadcast cannot disagree about which
+ * path is live and deliver a change twice.
+ */
+function createValueWatcher(
+  src: GmSource,
+  bus: BroadcastBus,
+  capabilities: GmCapabilities,
+): GmAdapter['onValueChange'] {
+  const native = src.gm?.addValueChangeListener ?? src.legacyAddValueChangeListener;
+  const remove = src.gm?.removeValueChangeListener ?? src.legacyRemoveValueChangeListener;
+
+  // The legacy API returns the listener id while the promise-based one resolves
+  // it. The synchronous path stays synchronous: deferring it would leave a
+  // window in which an unsubscribed handler still receives a change.
+  const stopNative = (handle: ListenerHandle) => (): void => {
+    if (typeof handle === 'number' || typeof handle === 'string') {
+      remove?.(handle);
+      return;
+    }
+    handle
+      .then((id) => remove?.(id))
+      .catch((err: unknown) => {
+        diagError('could not remove a value-change listener', err);
+      });
+  };
+
+  return (key, handler) => {
+    if (capabilities.valueChange === 'native' && typeof native === 'function') {
+      return stopNative(
+        native(key, (changedKey, oldValue, newValue, remote) => {
+          handler({ key: changedKey, oldValue, newValue, remote });
+        }),
+      );
+    }
+
+    const set = bus.handlers.get(key) ?? new Set();
+    set.add(handler);
+    bus.handlers.set(key, set);
+    bus.open();
+
+    return () => {
+      set.delete(handler);
+      if (set.size === 0) {
+        bus.handlers.delete(key);
+      }
+    };
+  };
+}
+
 export interface ValueChange {
   key: string;
   oldValue: unknown;
@@ -173,6 +229,8 @@ export interface GmAdapter {
   /** Watch one key. Returns an unsubscribe function. */
   onValueChange: (key: string, handler: (change: ValueChange) => void) => () => void;
   registerMenuCommand: (label: string, run: () => void) => void;
+  /** The installed userscript's version, or 'unknown' if the manager withholds it. */
+  readonly scriptVersion: string;
   readonly capabilities: GmCapabilities;
 }
 
@@ -203,6 +261,8 @@ export interface GmSource {
   legacyRemoveValueChangeListener?: ((id: ListenerId) => void) | undefined;
   legacyRegisterMenuCommand?: ((label: string, run: () => void) => void) | undefined;
   broadcastChannel?: typeof BroadcastChannel | undefined;
+  /** The installed userscript's version, from GM_info. */
+  scriptVersion?: string | undefined;
 }
 
 export const BROADCAST_CHANNEL = 'woc-addons-values';
@@ -233,50 +293,14 @@ export function createGmAdapter(src: GmSource): GmAdapter {
 
     listValues: async (): Promise<string[]> => (await store.list?.()) ?? [],
 
-    onValueChange: (key, handler) => {
-      const native = src.gm?.addValueChangeListener ?? src.legacyAddValueChangeListener;
-      // Gated on the detected capability rather than on the function being
-      // present, so subscribing and setValue's broadcast cannot disagree about
-      // which path is live and deliver a change twice.
-      if (capabilities.valueChange === 'native' && typeof native === 'function') {
-        const remove = src.gm?.removeValueChangeListener ?? src.legacyRemoveValueChangeListener;
-        const handle = native(key, (changedKey, oldValue, newValue, remote) => {
-          handler({ key: changedKey, oldValue, newValue, remote });
-        });
-        // The legacy API returns the id while the promise-based one resolves it.
-        // The synchronous path stays synchronous: deferring it would leave a
-        // window in which an unsubscribed handler still receives a change.
-        return () => {
-          if (typeof handle === 'number' || typeof handle === 'string') {
-            remove?.(handle);
-            return;
-          }
-          handle
-            .then((id) => remove?.(id))
-            .catch((err: unknown) => {
-              diagError('could not remove a value-change listener', err);
-            });
-        };
-      }
-
-      const set = bus.handlers.get(key) ?? new Set();
-      set.add(handler);
-      bus.handlers.set(key, set);
-      bus.open();
-
-      return () => {
-        set.delete(handler);
-        if (set.size === 0) {
-          bus.handlers.delete(key);
-        }
-      };
-    },
+    onValueChange: createValueWatcher(src, bus, capabilities),
 
     registerMenuCommand: (label, run) => {
       const register = src.gm?.registerMenuCommand ?? src.legacyRegisterMenuCommand;
       register?.(label, run);
     },
 
+    scriptVersion: src.scriptVersion ?? UNKNOWN_VERSION,
     capabilities,
   };
 }

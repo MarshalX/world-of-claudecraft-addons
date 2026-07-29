@@ -1,9 +1,16 @@
-// Vite's ?raw suffix, which the host uses to inline the pre-bundled runtime.
+// The two non-TypeScript module shapes the loader imports as text.
 //
-// Declared as a wildcard module so a typecheck run does not need the generated
-// bundle to exist yet.
+// `*.js?raw` is Vite's raw suffix, which the host uses to inline the pre-bundled
+// runtime; declaring it as a wildcard means a typecheck run does not need the
+// generated bundle to exist yet. `*.css` is the loader stylesheet, which
+// loader/build-runtime.mjs loads as text so it can be injected as one <style>.
 
 declare module '*.js?raw' {
+  const source: string;
+  export default source;
+}
+
+declare module '*.css' {
   const source: string;
   export default source;
 }

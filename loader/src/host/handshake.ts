@@ -1,6 +1,7 @@
 // Sandbox half of the bootstrap: inject the runtime, then hand it a port.
 
 import {
+  type BootPayload,
   bootScript,
   HANDSHAKE_TIMEOUT_MS,
   isHello,
@@ -13,7 +14,7 @@ interface ConnectRuntimeOpts {
   doc: Document;
   /** The pre-bundled runtime IIFE. */
   source: string;
-  nonce: string;
+  payload: BootPayload;
   timeoutMs?: number;
 }
 
@@ -23,9 +24,9 @@ interface ConnectRuntimeOpts {
  *
  * At document-start `documentElement` can still be null, hence the fallbacks.
  */
-function injectRuntime(doc: Document, nonce: string, source: string): void {
+function injectRuntime(doc: Document, payload: BootPayload, source: string): void {
   const script = doc.createElement('script');
-  script.textContent = bootScript({ nonce }, source);
+  script.textContent = bootScript(payload, source);
   const mount = doc.head ?? doc.documentElement ?? doc;
   mount.appendChild(script);
   script.remove();
@@ -38,7 +39,8 @@ function injectRuntime(doc: Document, nonce: string, source: string): void {
  * from the top of the very script being injected.
  */
 export function connectRuntime(opts: ConnectRuntimeOpts): Promise<MessagePort> {
-  const { win, doc, source, nonce } = opts;
+  const { win, doc, source, payload } = opts;
+  const { nonce } = payload;
   const timeoutMs = opts.timeoutMs ?? HANDSHAKE_TIMEOUT_MS;
 
   return new Promise<MessagePort>((resolve, reject) => {
@@ -63,6 +65,6 @@ export function connectRuntime(opts: ConnectRuntimeOpts): Promise<MessagePort> {
     }, timeoutMs);
 
     win.addEventListener('message', onMessage);
-    injectRuntime(doc, nonce, source);
+    injectRuntime(doc, payload, source);
   });
 }

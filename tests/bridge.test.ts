@@ -21,10 +21,11 @@ const SETTLE_MS = 20;
 const NS = 'addon:official/minimap';
 const byName = (a: string, b: string): number => a.localeCompare(b);
 const RUNTIME_SOURCE = '/* runtime */';
+const VERSION = '1.4.2';
 
 const RUNTIME_TIMEOUT = /runtime handshake timed out/;
 const HOST_TIMEOUT = /host handshake timed out/;
-const NO_REGISTRY = /not implemented: registry.list/;
+const NO_INSTALL = /not implemented: registry.install/;
 const NO_MARKET = /not implemented: market.list/;
 
 const cleanups: Array<() => void> = [];
@@ -105,6 +106,7 @@ function memoryGm(): GmAdapter {
     listValues: () => Promise.resolve([...store.keys()]),
     onValueChange: () => () => undefined,
     registerMenuCommand: () => undefined,
+    scriptVersion: VERSION,
     capabilities: { valueStore: 'gm4', valueChange: 'none', menuCommand: false },
   };
 }
@@ -132,7 +134,7 @@ function startHandshake(runtimeNonce?: string): Handshake {
     win: globalThis,
     doc: document,
     source: RUNTIME_SOURCE,
-    nonce,
+    payload: { nonce, version: VERSION },
     timeoutMs: TIMEOUT_MS,
   });
   const runtime = connectHost({
@@ -154,7 +156,7 @@ async function connectBoth(): Promise<Handshake & { connection: HostConnection }
   const handshake = startHandshake();
   const [port, connection] = await Promise.all([handshake.hostPort, handshake.runtime]);
 
-  expose(createHostApi(createHostStorage(memoryGm())), port);
+  expose(createHostApi(createHostStorage(memoryGm())).api, port);
   cleanups.push(() => {
     connection.dispose();
   });
@@ -165,7 +167,7 @@ describe('runtime injection', () => {
   it('injects the boot payload ahead of the bundle in one script', async () => {
     const { injected, nonce } = await connectBoth();
 
-    expect(injected.text()).toBe(bootScript({ nonce }, RUNTIME_SOURCE));
+    expect(injected.text()).toBe(bootScript({ nonce, version: VERSION }, RUNTIME_SOURCE));
   });
 
   // The script has already run by the time it is removed, so leaving it in the
@@ -220,7 +222,7 @@ describe('handshake', () => {
       win: globalThis,
       doc: document,
       source: RUNTIME_SOURCE,
-      nonce: createNonce(crypto),
+      payload: { nonce: createNonce(crypto), version: VERSION },
       timeoutMs: TIMEOUT_MS,
     });
 
@@ -284,12 +286,20 @@ describe('host API over the bridge', () => {
     expect(events[0]).toEqual({ k: 'storage.changed', ns: NS, key: 'scale', value: 3 });
   });
 
-  // An empty answer would read as "nothing is installed" rather than "this half
-  // is not built yet", and the manager UI would render it as such.
+  // The registry's state half is real, so an empty answer here means the store
+  // is empty rather than that the member is missing.
+  it('answers the registry list from an empty store', async () => {
+    const { connection } = await connectBoth();
+
+    await expect(connection.host.registry.list()).resolves.toEqual([]);
+  });
+
+  // An empty answer would read as "there is nothing to install" rather than
+  // "this half is not built yet", and the manager UI would render it as such.
   it('rejects the members whose service does not exist yet', async () => {
     const { connection } = await connectBoth();
 
-    await expect(connection.host.registry.list()).rejects.toThrow(NO_REGISTRY);
+    await expect(connection.host.registry.install('official/minimap')).rejects.toThrow(NO_INSTALL);
     await expect(connection.host.market.list()).rejects.toThrow(NO_MARKET);
   });
 });

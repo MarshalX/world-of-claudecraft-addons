@@ -17,6 +17,7 @@ const HEX_RADIX = 16;
 const HEX_DIGITS_PER_BYTE = 2;
 const HELLO_KEY = '__wocHello';
 const PORT_KEY = '__wocPort';
+const UNKNOWN_VERSION = 'unknown';
 
 function ownString(data: unknown, key: string): string | null {
   if (typeof data !== 'object' || data === null || !Object.hasOwn(data, key)) {
@@ -52,6 +53,14 @@ export const BOOT_GLOBAL = '__wocBoot';
 
 export interface BootPayload {
   nonce: string;
+  /**
+   * The installed userscript's version, read from GM_info by the host.
+   *
+   * Carried here rather than compiled into the runtime so the manager reports
+   * the version the player actually has installed, which is the one that
+   * matters when the answer is "your loader is out of date".
+   */
+  version: string;
 }
 
 export interface HelloMessage {
@@ -99,7 +108,9 @@ export function takeBootPayload(scope: Record<string, unknown>): BootPayload | n
   if (nonce === null || nonce.length === 0) {
     return null;
   }
-  return { nonce };
+  // The nonce is what the handshake rests on, so its absence is fatal. A missing
+  // version only costs one line of the Diagnostics pane.
+  return { nonce, version: ownString(raw, 'version') ?? UNKNOWN_VERSION };
 }
 
 export function helloMessage(nonce: string): HelloMessage {

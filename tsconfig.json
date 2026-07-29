@@ -5,6 +5,12 @@
     "module": "ESNext",
     "moduleResolution": "bundler",
     "moduleDetection": "force",
+    // The manager UI is preact. The automatic runtime keeps component files free
+    // of a factory import, and jsxImportSource aims the generated import at
+    // preact, since react is not a dependency here. Kept in step with the same
+    // two settings in vitest.config.ts and loader/build-runtime.mjs.
+    "jsx": "react-jsx",
+    "jsxImportSource": "preact",
     // tampermonkey declares the GM_* and GM globals. They land ambient
     // project-wide, so loader/build-runtime.mjs enforces at build time that no
     // host module reaches the page-realm bundle.

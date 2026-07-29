@@ -17,6 +17,7 @@ const NONCE = 'a1b2c3d4e5f60718293a4b5c6d7e8f90';
 const OTHER = '00000000000000000000000000000000';
 /** Where the fake runtime stashes what it saw. */
 const SEEN = 'seenByRuntime';
+const VERSION = '1.4.2';
 
 /** Runs the composed script the way the injected <script> does. */
 function runBootScript(script: string, scope: Record<string, unknown>): void {
@@ -52,16 +53,16 @@ describe('boot payload', () => {
   it('hands the runtime the payload', () => {
     const scope: Record<string, unknown> = {};
     const claim = `globalThis[${JSON.stringify(SEEN)}] = globalThis.__wocBoot;`;
-    runBootScript(bootScript({ nonce: NONCE }, claim), scope);
+    runBootScript(bootScript({ nonce: NONCE, version: VERSION }, claim), scope);
 
-    expect(scope[SEEN]).toEqual({ nonce: NONCE });
+    expect(scope[SEEN]).toEqual({ nonce: NONCE, version: VERSION });
   });
 
   // A leftover key is both a fingerprint and a handle for page code, so the
   // property has to be gone rather than set to undefined.
   it('removes the global rather than blanking it', () => {
     const scope: Record<string, unknown> = {};
-    runBootScript(bootScript({ nonce: NONCE }, ''), scope);
+    runBootScript(bootScript({ nonce: NONCE, version: VERSION }, ''), scope);
 
     expect(Object.hasOwn(scope, BOOT_GLOBAL)).toBe(false);
   });
@@ -72,7 +73,10 @@ describe('boot payload', () => {
     const scope: Record<string, unknown> = {};
 
     expect(() => {
-      runBootScript(bootScript({ nonce: NONCE }, 'throw new Error("runtime died");'), scope);
+      runBootScript(
+        bootScript({ nonce: NONCE, version: VERSION }, 'throw new Error("runtime died");'),
+        scope,
+      );
     }).toThrow(RUNTIME_DIED);
     expect(Object.hasOwn(scope, BOOT_GLOBAL)).toBe(false);
   });

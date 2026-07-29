@@ -7,18 +7,15 @@
 import type * as Comlink from 'comlink';
 import type { MarketplaceRef } from './marketplace.ts';
 // Type-only: erased at build, so zod never reaches the runtime bundle.
-import type { AddonManifest } from './schema.ts';
+import type { AddonManifest, InstalledAddon } from './schema.ts';
+
+/**
+ * Re-exported rather than declared here, so the shape the registry validates on
+ * read and the shape the bridge carries cannot drift apart.
+ */
+export type { InstalledAddon } from './schema.ts';
 
 export const OFFICIAL_ID = 'official';
-
-export interface InstalledAddon {
-  fqid: string;
-  marketplace: string;
-  manifest: AddonManifest;
-  enabled: boolean;
-  /** Pinned version, or null to track the marketplace index. */
-  pin: string | null;
-}
 
 export interface MarketplaceState {
   ref: MarketplaceRef;
@@ -33,7 +30,17 @@ export type HostEvent =
   | { k: 'storage.changed'; ns: string; key: string; value: unknown }
   | { k: 'registry.changed' }
   | { k: 'market.changed'; id: string }
-  | { k: 'market.progress'; id: string; state: 'fetching' | 'ok' | 'error'; error?: string };
+  | { k: 'market.progress'; id: string; state: 'fetching' | 'ok' | 'error'; error?: string }
+  /**
+   * Open the manager.
+   *
+   * The only host-originated UI command. GM_registerMenuCommand exists solely in
+   * the sandbox, and the manager lives solely in the page realm, so the
+   * userscript popup entry has no other way to reach it. That entry is the one
+   * route that still works when in-game injection fails, which is what keeps the
+   * loader from becoming unreachable after a game update.
+   */
+  | { k: 'ui.open' };
 
 export interface RegistryApi {
   list: () => Promise<InstalledAddon[]>;

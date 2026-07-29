@@ -32,6 +32,7 @@ function fakeGm(): FakeGm {
     watched: () => [...listeners.keys()].filter((key) => (listeners.get(key)?.size ?? 0) > 0),
     emitRemote: (key, value) => fire(key, value, true),
     emitEcho: (key, value) => fire(key, value, false),
+    scriptVersion: '1.4.2',
 
     getValue: <T>(key: string, fallback: T) => {
       if (store.has(key)) {

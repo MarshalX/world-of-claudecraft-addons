@@ -74,5 +74,11 @@ export function readGmSource(): GmSource {
   if (typeof BroadcastChannel === 'function') {
     source.broadcastChannel = BroadcastChannel;
   }
+  // GM_info needs no grant and every manager defines it, but it is read through
+  // the same guard as the rest: a manager that omits it costs one diagnostic
+  // line rather than a boot failure.
+  if (typeof GM_info === 'object') {
+    source.scriptVersion = GM_info.script.version;
+  }
   return source;
 }

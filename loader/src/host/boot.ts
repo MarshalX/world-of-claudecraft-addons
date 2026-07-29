@@ -12,6 +12,14 @@ import { createGmAdapter } from './gm.ts';
 import { connectRuntime } from './handshake.ts';
 import { createHostStorage } from './storage.ts';
 
+/**
+ * The userscript popup entry, and deliberately not localized.
+ *
+ * It renders in the manager's own chrome rather than in the game, so it is
+ * outside the game's language setting either way.
+ */
+const MENU_COMMAND_LABEL = 'Open the Addons manager';
+
 export interface HostScope extends MessageScope {
   readonly crypto: Pick<Crypto, 'getRandomValues'>;
   readonly document: Document;
@@ -27,12 +35,25 @@ export function bootHost(scope: HostScope): void {
   }
 
   const gm = createGmAdapter(readGmSource());
-  const api = createHostApi(createHostStorage(gm));
+  const services = createHostApi(createHostStorage(gm));
   const nonce = createNonce(scope.crypto);
 
-  connectRuntime({ win: scope, doc: scope.document, source: runtimeSource, nonce })
+  // Registered whether or not the runtime ever connects. This entry is the one
+  // route that still works when in-game injection fails, so gating it on the
+  // handshake would take the manager away exactly when it is needed. Emitting
+  // with nothing subscribed is a harmless no-op.
+  gm.registerMenuCommand(MENU_COMMAND_LABEL, () => {
+    services.emit({ k: 'ui.open' });
+  });
+
+  connectRuntime({
+    win: scope,
+    doc: scope.document,
+    source: runtimeSource,
+    payload: { nonce, version: gm.scriptVersion },
+  })
     .then((port) => {
-      expose(api, port);
+      expose(services.api, port);
     })
     .catch((err: unknown) => {
       diagError('runtime handshake failed, addons will not load', err);

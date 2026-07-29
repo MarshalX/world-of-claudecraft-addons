@@ -17,6 +17,7 @@
     "dev": "vite",
     "build": "node loader/build-runtime.mjs && vite build",
     "build:runtime": "node loader/build-runtime.mjs",
+    "build:runtime:debug": "node loader/build-runtime.mjs --sourcemap",
     "check": "pnpm run check:ts && pnpm run lint && pnpm run test && pnpm run validate",
     "check:ts": "tsc --noEmit",
     "lint": "biome check --error-on-warnings .",

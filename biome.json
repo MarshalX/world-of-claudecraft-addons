@@ -60,12 +60,30 @@
           "GM_addValueChangeListener",
           "GM_deleteValue",
           "GM_getValue",
+          "GM_info",
           "GM_listValues",
           "GM_registerMenuCommand",
           "GM_removeValueChangeListener",
           "GM_setValue",
           "GM_xmlhttpRequest"
         ]
+      }
+    },
+    {
+      "includes": ["**/*.tsx"],
+      "linter": {
+        "rules": {
+          "suspicious": {
+            "noReactSpecificProps": "off"
+          },
+          "correctness": {
+            "noSolidDestructuredProps": "off"
+          },
+          "performance": {
+            "noJsxPropsBind": "off",
+            "useSolidForComponent": "off"
+          }
+        }
       }
     },
     {

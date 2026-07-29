@@ -4,11 +4,29 @@
 // self-contained: no imports, no code splitting. Run before `vite build`, which
 // inlines the output through a ?raw import.
 
+import { argv } from 'node:process';
 import { build } from 'esbuild';
 
 const root = `${import.meta.dirname}/`;
 const ZOD_IMPORT = /^zod$/;
 const HOST_MODULE = /(^|\/)loader\/src\/host\//;
+
+/**
+ * Source maps are opt-in, and inline when asked for.
+ *
+ * Inline is the only form that can work here: the host injects this bundle as
+ * <script> textContent, so the script has no src and an external .map has no URL
+ * to resolve against. That constraint is real, but it does not follow that the
+ * map should always be there. It costs 8x the bundle (149 kB to 1.18 MB), and
+ * that is not a download-once cost: the host re-injects the whole string on
+ * every page load, so every player pays it on every visit to run a map nobody
+ * reads. Pass --sourcemap when debugging the runtime.
+ *
+ * Read from argv rather than an env var on purpose. This script deliberately has
+ * no process.env dependency (see AGENTS.md), and a flag is what a build script
+ * takes anyway.
+ */
+const sourcemap = argv.includes('--sourcemap') && 'inline';
 
 const result = await build({
   metafile: true,
@@ -18,8 +36,15 @@ const result = await build({
   format: 'iife',
   target: 'es2022',
   platform: 'browser',
+  // The manager UI is preact. Kept in step with the same pair of settings in
+  // tsconfig.json and vitest.config.ts.
+  jsx: 'automatic',
+  jsxImportSource: 'preact',
+  // The loader stylesheet is bundled as text and injected as one <style>, rather
+  // than emitted as a CSS file the userscript would have no way to ship.
+  loader: { '.css': 'text' },
   minify: true,
-  sourcemap: 'inline',
+  sourcemap,
   legalComments: 'none',
   logLevel: 'info',
   // A value import from shared/schema.ts would pull zod into the page realm.
