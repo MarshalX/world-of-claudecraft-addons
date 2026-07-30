@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>banner</title>
+<!--
+  The source for screenshots/banner.png, the README header.
+
+  Same recipe as og.html, and here for the same reason: kept in site/content/,
+  which is never copied to the output, so the file is the RECIPE and the PNG is
+  what ships. Regenerate by copying it into site/dist, opening it against
+  `pnpm site:dev`, screenshotting #banner at 1:1, and writing the result to
+  screenshots/banner.png.
+
+  Deliberately SHORT. og.png is 1200x630 because a social card is a fixed shape;
+  a README header at that ratio renders 462px tall at the width GitHub gives it
+  and pushes every word below the fold. This is 1200x300.
+-->
+<style>
+@font-face {
+  font-family: 'Cinzel';
+  src: url('/assets/fonts/cinzel-700.woff2') format('woff2');
+  font-weight: 700;
+}
+@font-face {
+  font-family: 'Alegreya Sans';
+  src: url('/assets/fonts/alegreya-sans-400.woff2') format('woff2');
+  font-weight: 400;
+}
+html, body { margin: 0; padding: 0; background: rgb(18 18 26); }
+#banner {
+  width: 1200px;
+  height: 300px;
+  box-sizing: border-box;
+  background: rgb(12 12 17);
+  border-bottom: 5px solid rgb(255 209 0);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 20px;
+  font-family: 'Alegreya Sans', system-ui, sans-serif;
+  color: rgb(240 235 216);
+  position: relative;
+  overflow: hidden;
+}
+/* One soft pool of gold so the strip is not a flat rectangle. */
+#banner::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: -260px;
+  width: 760px;
+  height: 520px;
+  margin-left: -380px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgb(255 209 0 / 11%), transparent 70%);
+}
+.lockup { display: flex; align-items: center; gap: 22px; }
+.mark {
+  width: 34px;
+  height: 34px;
+  background: rgb(255 209 0);
+  transform: rotate(45deg);
+}
+.wordmark {
+  font-family: 'Cinzel', Georgia, serif;
+  font-weight: 700;
+  font-size: 62px;
+  letter-spacing: 0.05em;
+  line-height: 1;
+}
+.tagline {
+  margin: 0;
+  font-size: 25px;
+  color: rgb(240 235 216);
+}
+.foot {
+  display: flex;
+  gap: 16px;
+  font-family: ui-monospace, sfmono-regular, menlo, monospace;
+  font-size: 16px;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: rgb(153 141 106);
+}
+.dot { color: rgb(199 163 0); }
+</style>
+</head>
+<body>
+<div id="banner">
+  <div class="lockup">
+    <span class="mark"></span>
+    <span class="wordmark">ClaudeCraft Addons</span>
+  </div>
+  <p class="tagline">An addon platform for World of ClaudeCraft, running as a userscript.</p>
+  <div class="foot">
+    <span>external to the game</span>
+    <span class="dot">·</span>
+    <span>read-only</span>
+    <span class="dot">·</span>
+    <span>MIT</span>
+  </div>
+</div>
+</body>
+</html>
