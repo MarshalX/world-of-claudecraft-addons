@@ -1,16 +1,16 @@
 // What each manifest field is for, in prose, keyed by the field name.
 //
-// SITE.md 4.2 wanted this as `.describe()` calls inside shared/schema.ts so the
-// schema would be the single source. It is here instead for two reasons: the
+// The obvious home for this is `.describe()` calls inside shared/schema.ts, so
+// the schema would be the single source. It is here instead for two reasons: the
 // prose is long enough to double that file against a 300-line limit, and schema.ts
 // is a validator that the loader, the dev server and CI all import, so filling it
 // with documentation would make every one of them carry text only the site reads.
 //
-// The guarantee is unchanged, because tests/site-manifest-docs.test.ts asserts
-// that the keys here and the keys of AddonManifest are the SAME SET. A field added
-// to the schema without a line here fails `pnpm check`, and so does a line here
-// for a field that no longer exists. That is the drift the plan was worried about,
-// caught in the fast suite rather than at a deploy.
+// The guarantee that alternative was after is unchanged, because
+// tests/site-manifest-docs.test.ts asserts that the keys here and the keys of
+// AddonManifest are the SAME SET. A field added to the schema without a line here
+// fails `pnpm check`, and so does a line here for a field that no longer exists.
+// The drift is caught in the fast suite rather than at a deploy.
 
 /** Fields a manifest cannot omit. Derived from the schema by the test, not here. */
 const REQUIRED = new Set(['id', 'name', 'version', 'apiVersion', 'author', 'description', 'entry']);

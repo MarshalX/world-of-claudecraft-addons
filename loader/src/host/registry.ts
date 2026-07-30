@@ -144,7 +144,7 @@ type Write = (rows: readonly InstalledAddon[]) => Promise<void>;
 /**
  * Fetch and persist an addon that is not installed yet, ready to run.
  *
- * It lands ENABLED. The design's original lifecycle had install fetch only the
+ * It lands ENABLED. The lifecycle this replaced had install fetch only the
  * manifest and enable go and get the code, which made "installed but off" a
  * state that meant something: nothing had been downloaded. This implementation
  * caches the body at install so that enabling is never a network call, so by the

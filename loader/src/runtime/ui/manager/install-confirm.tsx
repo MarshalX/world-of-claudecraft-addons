@@ -9,7 +9,8 @@
 // the page realm with the page's globals in scope, so a manifest that declares
 // nothing is not thereby prevented from doing anything. The warning under the
 // list says exactly that, because a list of permissions with nothing beside it
-// reads as a sandbox, and there is not one. See DESIGN.md section 12.
+// reads as a sandbox, and there is not one. The wording of each line is in
+// permissions.ts.
 
 import type { BrowseRow } from './catalog.ts';
 import { describePermissions } from './permissions.ts';

@@ -10,7 +10,7 @@
 // confirmation and the same badge as every other source. What is checked here is
 // what is left, which is what nothing else owns.
 //
-// It exists because of how M4's settings pane failed: the code was right in
+// It exists because of how the settings pane failed: the code was right in
 // isolation and the pane came up blank in the game, because a read that threw
 // during render unmounted it. Nothing catches that except rendering.
 

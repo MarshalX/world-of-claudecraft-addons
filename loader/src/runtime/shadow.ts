@@ -1,7 +1,7 @@
 // The globals an addon's closure is built with shadowed.
 //
 // This is a guardrail, not a sandbox, and the difference is worth stating where
-// the code is rather than only in the design doc. Addon source is evaluated in
+// the code is rather than only in the authoring docs. Addon source is evaluated in
 // the page realm, so `Function('return this')()` reaches the real global object
 // in one line and every name below with it. What shadowing buys is that reaching
 // for `localStorage` out of habit fails loudly and says which API to use
@@ -9,7 +9,7 @@
 // storage keys. It stops accident and laziness. It stops nothing deliberate, and
 // the manager's docs say so.
 //
-// `document.cookie` is on the design's list and is deliberately NOT here.
+// `document.cookie` is the obvious next candidate and is deliberately NOT here.
 // Shadowing it would mean handing addons a proxied `document`, which breaks
 // every identity comparison in the DOM: `el.ownerDocument === document` becomes
 // false, and so does anything else that compares node references. A guardrail

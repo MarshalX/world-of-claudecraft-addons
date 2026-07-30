@@ -38,6 +38,6 @@ Moving a source to a different tag never changes its id, so everything installed
 
 ## Updates, and pins
 
-The loader compares your published version against what a player has and offers an update. It never installs one by itself, and auto-update stays off by default.
+The loader compares your published version against what a player has and offers an update. It never installs one by itself. There is no auto-update to switch on, for any marketplace including the official one: an update is always a player pressing a button.
 
 A player can **pin** an addon, which means "stop offering", not "install that instead". A marketplace serves one version per ref, so there is no older body to go back to. The row stays visible carrying its pin, because the only thing a pin needs a UI for is saying that an update exists and the player's own decision is holding it back.

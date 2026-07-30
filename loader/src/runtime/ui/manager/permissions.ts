@@ -8,8 +8,9 @@
 // realm with the page's globals in scope, so a manifest that declares nothing
 // is not thereby prevented from doing anything: what the list says is what the
 // author says their addon is for. The pane states that alongside it rather than
-// letting the list imply a boundary the loader does not have. See DESIGN.md
-// section 12.
+// letting the list imply a boundary the loader does not have.
+// site/content/docs/manifest.md says the same thing to the author writing the
+// list, so neither side of it can read as a sandbox.
 
 // From shared/permissions.ts, never from shared/schema.ts: this is a value
 // import, and one out of a zod module would pull the library into the page.

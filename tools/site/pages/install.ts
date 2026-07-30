@@ -6,8 +6,8 @@
 // which branch they are in. Step 2 gets the most room on the page for one reason:
 // it is where an install silently does nothing, with no error anywhere.
 //
-// One correction to the design's copy: it named the artifact `woc-addons.user.js`.
-// The file the release workflow actually produces is `woc-loader.user.js`, and a
+// One correction to the copy this page was drafted from: it named the artifact
+// `woc-addons.user.js`. The release workflow produces `woc-loader.user.js`, and a
 // download button naming a file that does not exist is the worst possible typo on
 // this particular page.
 

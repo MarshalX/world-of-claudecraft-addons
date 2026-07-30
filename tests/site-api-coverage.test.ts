@@ -3,7 +3,7 @@ import { apiSurface, EXEMPT } from '../tools/site/api-surface.ts';
 import { loadDocs } from '../tools/site/docs-source.ts';
 
 /**
- * The guard SITE.md 6.4 asks for: a member added to the published API and never
+ * The guard the docs rest on: a member added to the published API and never
  * written about fails here, in the fast suite, rather than at a deploy.
  *
  * It proves nothing was FORGOTTEN. It cannot prove anything is right: a paragraph

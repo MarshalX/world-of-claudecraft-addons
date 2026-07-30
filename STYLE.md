@@ -2,7 +2,7 @@
 
 Biome runs with `preset: "all"` and `--error-on-warnings`, and the TypeScript config turns on every strictness flag that exists. Both are deliberate. The cost is that a lot of ordinary-looking code is rejected, and finding that out at the end of a change is expensive: the fix is usually a real restructuring, not a formatting pass.
 
-This file is the list of rules that actually fire here, with the idiom that satisfies each. It is written from the violations a real milestone produced, not from Biome's rule index. Read it before writing a module, not after.
+This file is the list of rules that actually fire here, with the idiom that satisfies each. It is written from the violations real work produced, not from Biome's rule index. Read it before writing a module, not after.
 
 `pnpm fix` formats and applies the safe fixes. Everything below is what it cannot fix for you.
 
@@ -119,7 +119,7 @@ if (opts.glyph !== undefined) {
 const server: { issuesEtags: boolean } = { issuesEtags: true };
 ```
 
-**`verbatimModuleSyntax` means `import type` is load-bearing, not cosmetic.** A value import is emitted; a type import is erased. That is what keeps zod out of the page bundle, and it is what let a single `API_VERSION` value import drag the whole library in during M5. If you only need the type, say `import type`.
+**`verbatimModuleSyntax` means `import type` is load-bearing, not cosmetic.** A value import is emitted; a type import is erased. That is what keeps zod out of the page bundle, and it is what let a single `API_VERSION` value import drag the whole library in once already. If you only need the type, say `import type`.
 
 ## Errors and async
 

@@ -109,8 +109,8 @@ function PinControl(props: { current: string; busy: boolean; onPin: (ref: string
  *
  * Official to this loader, not to the game: the game is a separate project under
  * a different owner and does not endorse this. That sentence goes on the pane
- * rather than only in the design doc, because this list is where a player forms
- * the impression it corrects.
+ * rather than only in the README, because this list is where a player forms the
+ * impression it corrects.
  */
 function BuiltinNote(props: { state: MarketplaceState }) {
   if (!props.state.builtin) {

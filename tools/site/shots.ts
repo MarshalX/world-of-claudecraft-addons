@@ -25,7 +25,7 @@ const PORTRAIT_MAX_HEIGHT = 470;
 const ShotSchema = z.object({
   /** Relative to screenshots/. PNG is the file of record; derivatives are built. */
   file: z.string().min(1),
-  /** The widest display box this shot appears in, times two. SITE.md 3.3. */
+  /** The widest display box this shot appears in, times two for a retina display. */
   minWidth: z.int().positive(),
   caption: z.string().min(1),
   alt: z.string().min(1),

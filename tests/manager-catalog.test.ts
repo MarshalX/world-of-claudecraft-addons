@@ -1,7 +1,7 @@
 // Merging every source's index into the list Browse draws.
 //
 // The case worth the most here is two marketplaces publishing the same addon id,
-// which is legitimate and which the design says the loader has to survive. If a
+// which is legitimate and which the loader has to survive. If a
 // row's identity were the short id rather than the fqid, one would silently
 // stand in for the other in the list, in the install call, and in the check for
 // whether it is installed already.

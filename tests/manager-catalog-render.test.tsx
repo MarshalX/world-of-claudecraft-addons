@@ -2,7 +2,7 @@
 
 // Browse, Marketplaces, and Updates as they actually render.
 //
-// Rendered rather than asserted on the store, for the reason M4's settings pane
+// Rendered rather than asserted on the store, for the reason the settings pane
 // established: the code was right in isolation and the pane came up blank in the
 // game, because a read that threw during render unmounted it. Nothing catches
 // that except rendering.

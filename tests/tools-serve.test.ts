@@ -35,7 +35,7 @@ describe('the generated index', () => {
     }
   });
 
-  it('offers the dev harness, which is what M5 is checked with', () => {
+  it('offers the dev harness, which is what the loader is checked with', () => {
     expect(buildIndex().addons.map((addon) => addon.id)).toContain('dev-harness');
   });
 

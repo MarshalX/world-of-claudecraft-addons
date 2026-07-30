@@ -1,6 +1,6 @@
 /* The palette, the type stack and the two theme overrides.
  *
- * The three-way structure is the design's own and is load-bearing: :root carries
+ * The three-way structure is load-bearing: :root carries
  * dark, [data-theme] is the explicit choice a visitor made, and the media query
  * covers everyone who has not chosen. The attribute selector must come BEFORE
  * the media query so an explicit choice wins over the system preference at equal
@@ -11,8 +11,8 @@
  * sit alongside.
  */
 
-/* Cinzel and Alegreya Sans are self-hosted rather than fetched from Google, which
- * is what the design drew: the site makes no third-party request at all, and a
+/* Cinzel and Alegreya Sans are self-hosted rather than fetched from Google, so
+ * the site makes no third-party request at all, and a
  * page explaining why an addon can read your session token has no business
  * loading a font from a tracker-adjacent CDN. Both are OFL; OFL.txt ships beside
  * the files. The mono stack is the system's, so there is nothing to download.

@@ -6,9 +6,10 @@
 // releases its listeners, frames, keybinds, timers, and toasts without the
 // addon writing any cleanup.
 //
-// The addon lifecycle itself (fetching source, evaluating it, auto-disabling one
-// that throws) is runtime/loader.ts and arrives with M5. This builds the surface
-// that lifecycle hands over.
+// The lifecycle itself lives elsewhere: runtime/loader.ts hydrates and evaluates
+// one addon's source, and runtime/supervisor.ts decides which addons are running
+// and records a throw as `failed` while LEAVING THE ROW ENABLED. This file only
+// builds the surface that lifecycle hands over.
 
 import { API_VERSION } from '../../shared/api-version.ts';
 import type { Channel } from '../../shared/hosts.ts';

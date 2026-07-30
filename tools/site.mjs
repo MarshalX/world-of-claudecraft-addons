@@ -129,7 +129,9 @@ async function main() {
   console.log(`site: ${pages.length} pages into ${OUT}`);
   console.log(describeRelease(release));
   if (warnings.length > 0) {
-    console.log(`  ${warnings.length} screenshot(s) under their slot; see SITE.md 3.3`);
+    console.log(
+      `  ${warnings.length} screenshot(s) under their slot; minWidth is set per shot in site/content/shots.json`,
+    );
   }
 }
 

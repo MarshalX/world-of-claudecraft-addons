@@ -5,8 +5,8 @@
 //
 // This is an ordinary addon. It is fetched over the marketplace path, evaluated
 // as a function body with `woc` in scope, and has no access to anything the
-// loader does not publish, which is the point: if a milestone can be checked
-// from here, it can be checked by anyone's addon. Its counterpart, the unit
+// loader does not publish, which is the point: if a surface can be checked from
+// here, it can be checked by anyone's addon. Its counterpart, the unit
 // suite, tests the loader's modules in isolation, and the two failures it cannot
 // see are exactly the ones this catches: something in the live game that is not
 // the shape the fakes assume, and a surface that was never wired to the object

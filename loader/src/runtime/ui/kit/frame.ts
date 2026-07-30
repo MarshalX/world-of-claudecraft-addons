@@ -6,8 +6,8 @@
 // something the player can only get back through the manager. A window is a
 // panel the player opens and closes, so it is resizable and has the button.
 //
-// Both take the drag and clamp rules built for the manager in M3 rather than
-// carrying their own, so "a window cannot be dragged somewhere it cannot be
+// Both take the drag and clamp rules built for the manager rather than carrying
+// their own, so "a window cannot be dragged somewhere it cannot be
 // dragged back from" is one rule with one test, not one per surface.
 
 import type { Teardown } from '../../disposal.ts';

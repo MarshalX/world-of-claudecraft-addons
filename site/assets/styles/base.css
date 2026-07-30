@@ -1,7 +1,7 @@
 /* Reset, document defaults, and the type scale.
  *
- * The scale is the design's, and the note it carries is a real constraint rather
- * than a preference: Cinzel has no lowercase and renders as small caps at text
+ * The note the scale carries is a real constraint rather than a
+ * preference: Cinzel has no lowercase and renders as small caps at text
  * sizes, so it is headings, labels and buttons only, never below 16px and never
  * body copy. Every rule here that sets --display also sets a size at or above
  * that floor.

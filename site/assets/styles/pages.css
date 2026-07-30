@@ -1,13 +1,13 @@
 /* The compositions each page arranges its components into.
  *
  * Every grid here is `auto-fit` with a minimum rather than a breakpoint, which is
- * what the design drew and is why there are so few media queries: a two-column
- * row becomes one column when its own content runs out of room, not when the
- * viewport crosses a number somebody guessed.
+ * why there are so few media queries: a two-column row becomes one column when
+ * its own content runs out of room, not when the viewport crosses a number
+ * somebody guessed.
  *
  * The widths are load-bearing in one direction: the minimums decide the column a
- * screenshot is displayed in, and SITE.md 3.3 derives every capture target from
- * them. Changing a minmax here changes what a screenshot has to be.
+ * screenshot is displayed in, and every `minWidth` in site/content/shots.json is
+ * one of them doubled. Changing a minmax here changes what a screenshot has to be.
  */
 
 .hero {

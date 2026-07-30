@@ -1,9 +1,9 @@
 // The landing page: what it is, what ships with it, the trust section, and how
 // small an addon is. One screen for a player who will not read.
 //
-// Three corrections to the design's copy, each because the design was drawn from
-// screenshots rather than from the repository, and all three are the kind of thing
-// the generated-from-truth rule exists to prevent:
+// Three corrections to the copy this page was first drafted from, which was
+// written against screenshots rather than against the repository. All three are
+// the kind of thing the generated-from-truth rule exists to prevent:
 //
 //   - Its code sample used an API that does not exist (`woc.addon(...)`,
 //     `api.ui.panel`, `api.on('cooldown:tick')`). The real surface has no

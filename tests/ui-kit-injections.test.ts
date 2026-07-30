@@ -5,8 +5,8 @@
 // The case this exists for is an addon ENABLED WHILE THE PLAYER IS ALREADY IN
 // THE WORLD. The HUD mount event has already happened and will not happen
 // again, so an injection that only ever attached on that event would be
-// permanently missing, silently, exactly as M3's two routes were before the HUD
-// template was understood.
+// permanently missing, silently, exactly as the game-menu entry and the rail
+// button both were before the HUD template was understood.
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { InjectorDeps } from '../loader/src/runtime/ui/kit/injections.ts';

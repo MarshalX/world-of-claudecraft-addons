@@ -3,7 +3,7 @@
 // The game-menu entry, driven through a real MutationObserver against a fake
 // that rebuilds the menu the way the game does.
 //
-// The observer is not stubbed on purpose. What M3 has to prove is that the entry
+// The observer is not stubbed on purpose. What has to be proved is that the entry
 // survives the game's re-render, and a stubbed observer would only prove that
 // the callback does what the callback does.
 
@@ -81,8 +81,8 @@ describe('the game menu entry', () => {
     expect(game.entryLabels().at(-1)).toBe(LABEL);
   });
 
-  // The whole point of M3: the game wipes #options-menu with innerHTML on every
-  // view change, so an entry inserted once is gone by the second render.
+  // The whole point of the observer: the game wipes #options-menu with innerHTML
+  // on every view change, so an entry inserted once is gone by the second render.
   it('comes back after the game rebuilds the menu', async () => {
     const game = mountGameMenu(document);
     teardown.push(mount(game).dispose);

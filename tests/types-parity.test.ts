@@ -3,7 +3,7 @@
 // `packages/types` is what addon authors compile against, and nothing links it
 // to the runtime: it is hand-written declarations describing another file's
 // behaviour. That is exactly the shape of thing that drifts silently, and it
-// already had. When M4 landed, the published `keys.capture()` promised
+// already had, twice at once: the published `keys.capture()` promised
 // `Promise<string>` where the loader resolves null on a cancelled prompt, and
 // `ui.alert()` promised `Promise<string>` where the loader resolves null when
 // there is no cancel button. An author would have written code that never
