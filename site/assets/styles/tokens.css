@@ -1,0 +1,140 @@
+/* The palette, the type stack and the two theme overrides.
+ *
+ * The three-way structure is the design's own and is load-bearing: :root carries
+ * dark, [data-theme] is the explicit choice a visitor made, and the media query
+ * covers everyone who has not chosen. The attribute selector must come BEFORE
+ * the media query so an explicit choice wins over the system preference at equal
+ * specificity; reordering these two blocks silently breaks the theme toggle.
+ *
+ * Concatenated first by tools/site.mjs. Nothing here is layered or scoped: the
+ * site owns its whole document, unlike the loader's sheet which has a game to
+ * sit alongside.
+ */
+
+/* Cinzel and Alegreya Sans are self-hosted rather than fetched from Google, which
+ * is what the design drew: the site makes no third-party request at all, and a
+ * page explaining why an addon can read your session token has no business
+ * loading a font from a tracker-adjacent CDN. Both are OFL; OFL.txt ships beside
+ * the files. The mono stack is the system's, so there is nothing to download.
+ *
+ * Cinzel 600 and Alegreya Sans 500 are deliberately absent. Both appear in the
+ * design's Google Fonts request and NEITHER is used by a single rule, in the six
+ * designed pages or here: they were over-requested. That is 42 kB of a 300 kB
+ * budget spent on type nothing asks for. Adding a rule that wants either weight
+ * means adding the file and the @font-face back, which is the cheap direction. */
+@font-face {
+  font-family: "Cinzel";
+  src: url("/assets/fonts/cinzel-400.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Cinzel";
+  src: url("/assets/fonts/cinzel-700.woff2") format("woff2");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Alegreya Sans";
+  src: url("/assets/fonts/alegreya-sans-400.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Alegreya Sans";
+  src: url("/assets/fonts/alegreya-sans-700.woff2") format("woff2");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+:root {
+  --display: "Cinzel", "Palatino Linotype", Palatino, Georgia, serif;
+  --ui: "Alegreya Sans", "Segoe UI", system-ui, "Helvetica Neue", sans-serif;
+  --mono: ui-monospace, sfmono-regular, menlo, consolas, monospace;
+
+  --gold: rgb(255 209 0);
+  --gold-dim: rgb(199 163 0);
+
+  /* The plate every screenshot sits on. Near-black in BOTH themes by design: on
+     light it reads as a deliberate window rather than a mis-exported image. */
+  --figure: rgb(12 12 17);
+
+  --bg: rgb(12 12 17);
+  --bg-alt: rgb(18 18 26);
+  --panel: rgb(21 21 31);
+  --panel-2: rgb(26 26 37);
+
+  --text: rgb(240 235 216);
+  --muted: rgb(153 141 106);
+  --border: rgb(83 68 32);
+  --hairline: rgb(38 35 26);
+
+  /* Gold is unreadable as link text on the light parchment, so the ink role is
+     separate from the accent itself and darkens while --gold does not. */
+  --accent-ink: rgb(255 209 0);
+  --code-bg: rgb(16 16 24);
+
+  --ok: rgb(127 220 79);
+  --err: rgb(255 143 133);
+
+  /* The game's own debuff palette, inherited so a school reads the same on the
+     site as it does on an aura icon in game. */
+  --arcane: rgb(63 140 255);
+  --fire: rgb(232 114 42);
+  --frost: rgb(74 163 223);
+  --holy: rgb(216 181 107);
+  --nature: rgb(53 168 53);
+  --shadow: rgb(155 89 208);
+
+  --radius-sm: 4px;
+  --radius-md: 8px;
+
+  /* The tap-target floor the game holds every control to, and the loader's
+     comfortable density. Nothing a person operates goes below it. */
+  --tap: 40px;
+
+  /* The install funnel's sticky bar: one row plus its two hairline rules. Both
+     halves are here so scroll-padding-top cannot drift from the real height, which
+     is what left a sliver of the page header showing above a stuck bar. */
+  --steps-row: 56px;
+  --steps-h: calc(var(--steps-row) + 2px);
+
+  --column: 1120px;
+  --column-narrow: 1000px;
+  --column-wide: 1320px;
+}
+
+:root[data-theme="light"] {
+  --bg: rgb(247 243 232);
+  --bg-alt: rgb(239 233 215);
+  --panel: rgb(255 253 245);
+  --panel-2: rgb(244 238 220);
+  --text: rgb(36 31 22);
+  --muted: rgb(106 96 70);
+  --border: rgb(213 198 154);
+  --hairline: rgb(229 220 194);
+  --accent-ink: rgb(122 90 0);
+  --code-bg: rgb(242 236 217);
+}
+
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme]) {
+    --bg: rgb(247 243 232);
+    --bg-alt: rgb(239 233 215);
+    --panel: rgb(255 253 245);
+    --panel-2: rgb(244 238 220);
+    --text: rgb(36 31 22);
+    --muted: rgb(106 96 70);
+    --border: rgb(213 198 154);
+    --hairline: rgb(229 220 194);
+    --accent-ink: rgb(122 90 0);
+    --code-bg: rgb(242 236 217);
+  }
+}

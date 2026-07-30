@@ -141,6 +141,12 @@
       }
     },
     {
+      "includes": ["site/content/examples/**"],
+      "javascript": {
+        "globals": ["woc"]
+      }
+    },
+    {
       "includes": ["**/*.generated.d.ts"],
       "linter": {
         "rules": {

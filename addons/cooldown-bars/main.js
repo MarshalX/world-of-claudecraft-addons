@@ -114,6 +114,7 @@ function playerClass() {
   return woc.world.player?.templateId ?? '';
 }
 
+// #region frame
 const frame = woc.ui.frame({
   id: 'bars',
   title: 'Cooldowns',
@@ -127,6 +128,7 @@ list.style.display = 'flex';
 list.style.flexDirection = 'column';
 list.style.gap = '3px';
 frame.body.appendChild(list);
+// #endregion
 
 /**
  * One row, from the kit rather than hand-built.
@@ -138,6 +140,7 @@ frame.body.appendChild(list);
  * The kit hides its own icon slot when an image fails, so passing a URL that may
  * not resolve is the intended usage rather than something to guard against here.
  */
+// #region bar
 function createBar(abilityId) {
   const name = readable(abilityId);
   const bar = woc.ui.bar({
@@ -150,6 +153,7 @@ function createBar(abilityId) {
   woc.ui.tooltip(bar.el, name);
   return bar;
 }
+// #endregion
 
 /**
  * The shortest cooldown worth a bar.
@@ -320,6 +324,7 @@ function draw() {
   }
 }
 
+// #region subscribe-and-animate
 // The cooldown set changes here; the numbers move in the frame loop below.
 // Sampling the set every frame instead would be a Map walk per frame to notice
 // nothing. Charges are the other way round, and the frame loop says why.
@@ -341,11 +346,14 @@ function tick() {
   woc.requestAnimationFrame(tick);
 }
 woc.requestAnimationFrame(tick);
+// #endregion
 
 syncBars();
 
+// #region keybind
 woc.keys.bind('toggle', () => {
   frame.toggle();
 });
+// #endregion
 
 woc.onSettingsChange(syncBars);

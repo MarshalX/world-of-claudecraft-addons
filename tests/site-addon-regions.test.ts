@@ -1,0 +1,70 @@
+import { describe, expect, it } from 'vitest';
+// biome-ignore-start lint/correctness/noUnresolvedImports: Vite's ?raw suffix is a loader directive a static resolver does not model, and an addon file is a function BODY with no exports at all. Same reason as the addon suites.
+import combatMeter from '../addons/combat-meter/main.js?raw';
+import cooldownBars from '../addons/cooldown-bars/main.js?raw';
+// biome-ignore-end lint/correctness/noUnresolvedImports: both addons, and nothing else here is loaded as text
+import { extractRegion, regionNames } from '../tools/site/regions.ts';
+
+// The docs quote these passages by name. A rename or a delete in an addon has to
+// fail HERE, in the fast suite, rather than in the site build: the addons are
+// edited far more often than the docs are, and `pnpm check` is what an addon
+// change actually runs.
+//
+// Each entry names what the region is quoted FOR, because that is the thing that
+// decides whether a future edit still belongs inside the markers. Adding a region
+// means adding a line here.
+const QUOTED = [
+  {
+    file: 'addons/cooldown-bars/main.js',
+    source: cooldownBars,
+    regions: {
+      /** Quickstart, and the API page for `woc.ui.frame`. */
+      frame: ['woc.ui.frame', 'frame.body.appendChild'],
+      /** The API page for `woc.ui.bar`, icons and tooltips. */
+      bar: ['woc.ui.bar', 'woc.ui.icon.ability', 'woc.ui.tooltip'],
+      /** Patterns, item 1, and the single most important example in the docs. */
+      'subscribe-and-animate': ["woc.world.on('cooldowns'", 'woc.requestAnimationFrame'],
+      /** The API page for `woc.keys.bind`. */
+      keybind: ["woc.keys.bind('toggle'"],
+    },
+  },
+  {
+    file: 'addons/combat-meter/main.js',
+    source: combatMeter,
+    regions: {
+      /** Patterns, item 2: a heal is attributed from heal2, and cueOnly is a FLAG. */
+      'heal-attribution': ["woc.net.onEvent('heal2'", 'event.sourceId', 'cueOnly'],
+      /** The API page for a bar's school tinting. */
+      'school-tint': ['woc.ui.bar', 'school'],
+    },
+  },
+] as const;
+
+describe.each(QUOTED)('$file', ({ source, regions }) => {
+  it.each(Object.entries(regions))('has region %s carrying what the docs quote', (name, must) => {
+    const body = extractRegion(source, name, 'addon');
+    for (const fragment of must) {
+      expect(body).toContain(fragment);
+    }
+  });
+
+  it('declares each region exactly once', () => {
+    const names = regionNames(source);
+    expect(names).toHaveLength(new Set(names).size);
+  });
+
+  it('opens and closes every region it declares', () => {
+    for (const name of regionNames(source)) {
+      expect(() => extractRegion(source, name, 'addon')).not.toThrow();
+    }
+  });
+
+  // A region that grew to swallow the file is a region nobody curated, and the
+  // docs would quote a wall. Any real cap is arbitrary; this one is loose enough
+  // that only a genuine mistake reaches it.
+  it('keeps every region short enough to read in a docs page', () => {
+    for (const name of regionNames(source)) {
+      expect(extractRegion(source, name, 'addon').split('\n').length).toBeLessThan(40);
+    }
+  });
+});

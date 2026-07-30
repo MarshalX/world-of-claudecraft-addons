@@ -1,0 +1,135 @@
+/* The docs sidebar, the on-this-page aside, and the prev/next pagination.
+ *
+ * All three generate from one place: the `order` in each docs page's frontmatter
+ * gives the sidebar and the pagination, and the h2s give the aside. There is no
+ * hand-maintained list anywhere, which is what stops a docs section from rotting
+ * the first time somebody adds a page and forgets the index.
+ */
+
+.doc-nav p {
+  font-family: var(--mono);
+  font-size: 12.5px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin: 0 0 12px;
+}
+
+.doc-nav ol {
+  list-style: none;
+  margin: 0 0 20px;
+  padding: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.doc-nav a {
+  display: flex;
+  align-items: center;
+  min-height: var(--tap);
+  padding: 6px 12px;
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  text-decoration: none;
+  font-size: 16px;
+  border-left: 2px solid transparent;
+}
+
+.doc-nav a:hover {
+  background: var(--panel);
+  color: var(--accent-ink);
+}
+
+.doc-nav a[aria-current="page"] {
+  color: var(--accent-ink);
+  background: var(--panel);
+  border-left-color: var(--gold-dim);
+}
+
+/* `.doc-nav p` is a class plus an element, so it outranks a bare class and the
+   note rendered as uppercase prose. Scoped here to win. This is the second time
+   the same shape has bitten (see .steps-wrap .steps in pages.css): a broad
+   element-scoped rule beats a specific single-class one. */
+.doc-nav .doc-nav-note {
+  font-family: var(--ui);
+  font-size: 14.5px;
+  letter-spacing: normal;
+  text-transform: none;
+  line-height: 1.5;
+}
+
+.toc p {
+  font-family: var(--mono);
+  font-size: 12.5px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin: 0 0 10px;
+}
+
+.toc ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 4px;
+  border-left: 1px solid var(--hairline);
+}
+
+.toc a {
+  display: block;
+  padding: 6px 0 6px 14px;
+  color: var(--muted);
+  text-decoration: none;
+  font-size: 15px;
+  line-height: 1.4;
+}
+
+.toc a:hover {
+  color: var(--accent-ink);
+}
+
+.doc-pager {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 16px;
+  margin-top: 64px;
+  padding-top: 28px;
+  border-top: 1px solid var(--hairline);
+}
+
+.doc-pager a {
+  display: grid;
+  gap: 4px;
+  align-content: center;
+  min-height: 64px;
+  padding: 12px 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  text-decoration: none;
+  color: var(--text);
+}
+
+.doc-pager a:hover {
+  border-color: var(--gold-dim);
+  color: var(--text);
+}
+
+.doc-pager-next {
+  text-align: right;
+}
+
+.doc-pager-dir {
+  font-family: var(--mono);
+  font-size: 12px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.doc-pager-title {
+  font-family: var(--display);
+  font-size: 17px;
+  letter-spacing: 0.04em;
+  color: var(--accent-ink);
+}

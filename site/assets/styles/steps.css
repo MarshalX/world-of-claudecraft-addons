@@ -1,0 +1,100 @@
+/* The install funnel's step indicator.
+ *
+ * Its own file for two reasons: components.css had reached its 300-line ceiling,
+ * and this component has an ORDER requirement the others do not. The `:target`
+ * rules marking the current step are far more specific than the base rules they
+ * override, so every base rule has to come first. Otherwise noDescendingSpecificity
+ * fires, and the real problem it warns about is that a low-specificity rule
+ * written later silently loses to a high-specificity one written earlier.
+ *
+ * Base first, state last. Keep it that way.
+ */
+
+/* Sticky, anchors only, no JavaScript. The current step is FILLED rather than
+   marked with an icon, so it survives with styles off and with images off. */
+.steps {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  background: var(--bg-alt);
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+}
+
+/* Separators BETWEEN cells only. `border-left` on every child drew a stray
+   hairline floating 24px in from each end, because the list carries the column's
+   gutter while the bar behind it is full-bleed. */
+.steps > li {
+  flex: 1;
+}
+
+.steps > li + li {
+  border-left: 1px solid var(--hairline);
+}
+
+.steps a {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  min-height: var(--steps-row);
+  padding: 8px 14px;
+  text-decoration: none;
+  color: var(--muted);
+}
+
+.step-n {
+  font-family: var(--mono);
+  font-size: 12px;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-sm);
+  padding: 2px 6px;
+}
+
+.step-name {
+  font-family: var(--display);
+  font-size: 15px;
+  letter-spacing: 0.05em;
+}
+
+.step-qualifier {
+  font-family: var(--mono);
+  font-size: 11.5px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+/* Below this the names go and only the numbers remain. The QUALIFIER has to go
+   with them: on its own it read as "2 Chromium only", the qualifier describing
+   nothing. */
+@media (width <= 620px) {
+  .step-name,
+  .step-qualifier {
+    display: none;
+  }
+
+  .steps a {
+    justify-content: center;
+  }
+}
+
+/* The current step, taken from `:target` rather than from an attribute in the
+   markup. All three sections live on one page, so which step you are on is a
+   scroll position; marking one in the HTML meant step 1 claimed to be current
+   even while you were reading step 3. The first selector is the default before
+   anything has been clicked, and the rest track the ids in install-data.ts. */
+body:not(:has(:target)) .steps a[href="#step-1"],
+body:has(#step-1:target) .steps a[href="#step-1"],
+body:has(#step-2:target) .steps a[href="#step-2"],
+body:has(#step-3:target) .steps a[href="#step-3"] {
+  color: var(--accent-ink);
+  background: var(--panel-2);
+}
+
+body:not(:has(:target)) .steps a[href="#step-1"] .step-n,
+body:has(#step-1:target) .steps a[href="#step-1"] .step-n,
+body:has(#step-2:target) .steps a[href="#step-2"] .step-n,
+body:has(#step-3:target) .steps a[href="#step-3"] .step-n {
+  border-color: var(--border);
+}

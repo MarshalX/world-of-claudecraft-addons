@@ -1,0 +1,200 @@
+/* The page column, the header and footer, and the docs shell.
+ *
+ * Three column widths, all from the design: 1120px for the landing and catalog,
+ * 1000px for /install (a funnel reads better narrow), and 1320px for /docs, which
+ * is the only three-column page. The Mobile design page is not a page; it is the
+ * responsive spec for / and /install, so it lives here and in components.css as
+ * media queries rather than as a seventh template.
+ */
+
+.column {
+  max-width: var(--column);
+  margin: 0 auto;
+  padding-inline: 24px;
+}
+
+.column-narrow {
+  max-width: var(--column-narrow);
+}
+
+.column-wide {
+  max-width: var(--column-wide);
+}
+
+.site-header {
+  border-bottom: 1px solid var(--hairline);
+  background: var(--bg);
+}
+
+.site-header > .column {
+  padding-block: 14px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.lockup {
+  font-family: var(--display);
+  font-size: 19px;
+  letter-spacing: 0.06em;
+  color: var(--text);
+  text-decoration: none;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: var(--tap);
+}
+
+/* The rotated gold square, which is also the favicon. One mark, two renderers. */
+.lockup::before {
+  content: "";
+  width: 10px;
+  height: 10px;
+  background: var(--gold);
+  transform: rotate(45deg);
+}
+
+.site-nav {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+}
+
+.site-nav a {
+  font-family: var(--display);
+  font-size: 16px;
+  letter-spacing: 0.05em;
+  padding: 10px 14px;
+  min-height: var(--tap);
+  display: flex;
+  align-items: center;
+  color: var(--text);
+  text-decoration: none;
+  border-radius: var(--radius-sm);
+}
+
+.site-nav a:hover {
+  color: var(--accent-ink);
+  background: var(--panel);
+}
+
+.site-nav a[aria-current="page"] {
+  color: var(--accent-ink);
+}
+
+.site-footer {
+  border-top: 1px solid var(--hairline);
+  color: var(--muted);
+  font-size: 15.5px;
+}
+
+/* Two blocks rather than three equal columns. As a three-up grid the middle cell
+   was the only one whose text did not fit, so it alone wrapped to two lines and
+   the row read as ragged rather than as three items. The legal block now stacks
+   its two lines ON PURPOSE and the links sit opposite. */
+.site-footer > .column {
+  padding-block: 32px 44px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px 48px;
+  align-items: baseline;
+  justify-content: space-between;
+}
+
+.site-footer-legal {
+  display: grid;
+  gap: 6px;
+}
+
+.site-footer-legal p {
+  margin: 0;
+}
+
+.site-footer-links {
+  white-space: nowrap;
+}
+
+.section {
+  padding-block: 64px 0;
+}
+
+.section-tight {
+  padding-block: 40px 0;
+}
+
+/* Docs: nav, prose, and the on-this-page aside. The prose column is capped at a
+   readable measure rather than filling, so a wide monitor does not produce
+   90-character lines in the one place people actually read at length. */
+.docs {
+  display: grid;
+  grid-template-columns: minmax(210px, 240px) minmax(0, 1fr) minmax(180px, 220px);
+  gap: 48px;
+  padding-block: 40px 72px;
+  align-items: start;
+}
+
+.docs-prose {
+  font-size: 17.5px;
+  line-height: 1.62;
+  min-width: 0;
+}
+
+.docs-prose > p,
+.docs-prose > ul,
+.docs-prose > ol {
+  max-width: 36em;
+}
+
+.docs-prose h2 {
+  margin-top: 48px;
+  margin-bottom: 16px;
+  scroll-margin-top: 24px;
+}
+
+.docs-prose h3 {
+  margin-top: 32px;
+  margin-bottom: 12px;
+  scroll-margin-top: 24px;
+}
+
+/* The sidebar and the aside both stick; the prose does not. */
+.docs-side {
+  position: sticky;
+  top: 24px;
+  align-self: start;
+}
+
+@media (width <= 1100px) {
+  /* The on-this-page aside is the first thing to go: it is a convenience over
+     content that is still reachable by scrolling. */
+  .docs {
+    grid-template-columns: minmax(200px, 230px) minmax(0, 1fr);
+    gap: 36px;
+  }
+
+  .docs > .toc {
+    display: none;
+  }
+}
+
+@media (width <= 780px) {
+  .docs {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 28px;
+  }
+
+  .docs-side {
+    position: static;
+  }
+
+  .section {
+    padding-block: 44px 0;
+  }
+
+  .column {
+    padding-inline: 16px;
+  }
+}

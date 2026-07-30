@@ -1,0 +1,41 @@
+{
+  "$comment": "Every screenshot the site and the README use, keyed by id. Hand-written, and content rather than provenance: no stage, no scene, no timestamp, no game version. Files of record live in screenshots/ as PNG, which is what the README links so GitHub can render them. They sit at the repository root rather than under docs/ because they are neither documentation nor site-only: the README and the site both consume them, and a docs/ holding nothing but images collided with site/content/docs/, which holds the actual authoring pages. the site generates its own AVIF and WebP derivatives at build time and never commits them. `minWidth` is what the shot needs to supply. For a full window it is the widest display box it appears in, times two for a retina display (SITE.md 3.3). For a fixed-size HUD panel captured at 2x it is the capture itself, because such a panel CANNOT be captured wider without zooming the game, and holding it to a column width would report a permanent shortfall nobody can act on; the build warns when a file is narrower and caps the figure at natural size so it renders smaller and sharp rather than upscaled and soft. Alt text is written once, here, and never in a template.",
+  "shots": {
+    "addons-installed": {
+      "file": "addons-installed.png",
+      "minWidth": 1000,
+      "caption": "The Addons window · Installed tab",
+      "alt": "The Addons window inside the game, on the Installed tab beside Browse, Marketplaces, Updates, Dev and Diagnostics. Combat Meter, Cooldown Bars and Dev Harness are each listed as RUNNING with their version, author and description, a Configure button and a ticked Enabled checkbox."
+    },
+    "combat-meter": {
+      "file": "combat-meter.png",
+      "minWidth": 710,
+      "caption": "Rows tinted by damage school",
+      "alt": "The Combat Meter panel on its Damage tab, reading 2,542 damage in 22s, last fight. Seven ability rows (Auto Shot, Measured Shot, Fell Shot, Fevered Draw, Venom Barb, Rattling Shot, Chain Arc) each show hits, crit rate, average and max, with the fill behind each row tinted by damage school, and a summary line reading hit 100%."
+    },
+    "cooldown-bars": {
+      "file": "cooldown-bars.png",
+      "minWidth": 350,
+      "caption": "Soonest ready at the top",
+      "alt": "The Cooldowns panel, five draining bars ordered by time remaining: Rapid Fire 4.4s, Volley 5.8s, Counter Shot 10.4s, Wildheart 97.5s and Shellskin 155.5s, each with the ability's own icon."
+    },
+    "game-menu": {
+      "file": "game-menu.png",
+      "minWidth": 840,
+      "caption": "Game Menu · Addons, added by the loader",
+      "alt": "The in-game Game Menu listing Key Bindings, Controller, Graphics, Interface, Audio, Performance Overlay, Report a Bug, Unstuck, Logout and Return to Game, with a new Addons entry at the bottom, above the game's version readout."
+    },
+    "install-confirm": {
+      "file": "install-confirm.png",
+      "minWidth": 950,
+      "caption": "The install prompt, in the game",
+      "alt": "The Browse tab showing an install confirmation for Cooldown Bars. It lists what the addon says it needs to do, then a gold warning that the declared list is what the author says the addon is for, not a limit the loader enforces, and that addon code runs with the same access to the page as the game itself, including your login token."
+    },
+    "chrome-user-scripts": {
+      "file": "chrome-user-scripts.png",
+      "minWidth": 1200,
+      "caption": "Chrome 150 · the toggle you need, on",
+      "alt": "The Allow User Scripts row on a Chrome extension's details page, switched on, with Chrome's own warning that the extension will be able to run code which has not been reviewed by Google."
+    }
+  }
+}

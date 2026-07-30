@@ -1,0 +1,170 @@
+/* Reset, document defaults, and the type scale.
+ *
+ * The scale is the design's, and the note it carries is a real constraint rather
+ * than a preference: Cinzel has no lowercase and renders as small caps at text
+ * sizes, so it is headings, labels and buttons only, never below 16px and never
+ * body copy. Every rule here that sets --display also sets a size at or above
+ * that floor.
+ */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  /* Breathing room above an anchored heading on an ordinary page. */
+  scroll-padding-top: 24px;
+}
+
+/* On a page carrying the sticky step bar the offset has to be EXACTLY the bar's
+   height. At 80px against a 58px bar the anchor landed before the bar had stuck,
+   which left a 22px sliver of the site header above it; at less than the height
+   the bar covers the heading it just jumped to. Keyed off the bar's presence
+   rather than off the page, so any future page with one is right by default. */
+html:has(.steps-wrap) {
+  scroll-padding-top: var(--steps-h);
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--ui);
+  /* The landing page sits a step above docs body: players read one paragraph,
+     not twenty. Docs drop to 17.5px in layout.css. */
+  font-size: 18px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+
+h1,
+h2,
+h3,
+h4 {
+  font-family: var(--display);
+  font-weight: 700;
+  margin: 0;
+}
+
+h1 {
+  font-size: clamp(38px, 5vw, 62px);
+  line-height: 1.06;
+}
+
+h2 {
+  font-size: 30px;
+  letter-spacing: 0.04em;
+}
+
+h3 {
+  font-size: 20px;
+  letter-spacing: 0.05em;
+}
+
+h4 {
+  font-size: 17px;
+  letter-spacing: 0.05em;
+}
+
+p {
+  margin: 0 0 16px;
+}
+
+a {
+  color: var(--accent-ink);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  text-decoration-thickness: 1px;
+}
+
+a:hover {
+  color: var(--gold-dim);
+}
+
+:focus-visible {
+  outline: 2px solid var(--gold-dim);
+  outline-offset: 3px;
+}
+
+::selection {
+  background: var(--gold);
+  color: rgb(12 12 17);
+}
+
+img {
+  max-width: 100%;
+}
+
+code {
+  font-family: var(--mono);
+  font-size: 0.92em;
+}
+
+hr {
+  border: 0;
+  border-top: 1px solid var(--hairline);
+  margin: 40px 0;
+}
+
+/* The lead paragraph: one paragraph doing the work of a whole page. */
+.lead {
+  font-size: 21px;
+  line-height: 1.55;
+  max-width: 34em;
+}
+
+/* Eyebrows, captions and version stamps. The only thing allowed under 15px, and
+   the reason it is allowed is that it is mono and never carries prose. */
+.eyebrow {
+  margin: 0 0 10px;
+  font-family: var(--mono);
+  font-size: 12.5px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.muted {
+  color: var(--muted);
+}
+
+/* Reachable by keyboard and by a screen reader, invisible until focused. */
+.skip-link {
+  position: absolute;
+  left: -9999px;
+  top: 0;
+  background: var(--panel);
+  border: 1px solid var(--gold-dim);
+  border-radius: var(--radius-sm);
+  padding: 12px 18px;
+  z-index: 10;
+}
+
+.skip-link:focus {
+  left: 12px;
+}
+
+/* The reduced-motion floor, over everything the site draws. Same shape and same
+   reasoning as the loader's in runtime/ui/styles/kit.css: an accessibility floor
+   is the one thing that has to outrank every later rule, and !important is the
+   case that exists for. The site has less to animate than the loader does, but
+   shiki's code blocks and the theme toggle both transition. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    /* biome-ignore lint/complexity/noImportantStyles: an accessibility floor must outrank every rule that comes after it, which is what !important is for. */
+    transition: none !important;
+    /* biome-ignore lint/complexity/noImportantStyles: same, for the animation half. */
+    animation: none !important;
+    /* biome-ignore lint/complexity/noImportantStyles: same, for smooth scrolling, which the anchored install steps would otherwise animate. */
+    scroll-behavior: auto !important;
+  }
+}

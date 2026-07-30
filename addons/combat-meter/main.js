@@ -274,6 +274,7 @@ woc.net.onEvent('damage', (event) => {
   }
 });
 
+// #region heal-attribution
 // `heal2`, not `heal`: only the former carries a `sourceId`, so it is the only one
 // a heal can be attributed from.
 woc.net.onEvent('heal2', (event) => {
@@ -293,6 +294,7 @@ woc.net.onEvent('heal2', (event) => {
     record('healed', labelOf(event), event);
   }
 });
+// #endregion
 
 const panel = woc.ui.window({
   id: 'meter',
@@ -379,12 +381,14 @@ const tabButtons = TABLES.map(createTab);
  * event carries that does not depend on the id, and it is what tells two rows apart now
  * that the art cannot. Healing rows pass nothing, because `heal2` carries no school.
  */
+// #region school-tint
 function createRow(label, school) {
   const bar = woc.ui.bar({ label, school, className: 'woc-meter-row' });
   bar.el.dataset.ability = label;
   woc.ui.tooltip(bar.el, label);
   return bar;
 }
+// #endregion
 
 /** The tallies for the table on screen, biggest first and capped. */
 function tableRows() {

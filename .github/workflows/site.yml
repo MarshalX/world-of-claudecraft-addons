@@ -1,0 +1,88 @@
+# Build and deploy woc.marshal.dev to GitHub Pages.
+#
+# Separate from release.yml on purpose. The site reads the latest release at build
+# time, so it has to redeploy when one is published, but a broken site build must
+# never fail a release that has already produced a correct artifact. Two workflows,
+# one direction of dependency.
+#
+# The `pages: write` and `id-token: write` permissions are on the deploy job alone.
+# The build job needs neither, and a build step that can publish is a build step
+# that can publish by accident.
+
+name: Site
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'site/**'
+      - 'tools/site/**'
+      - 'tools/site.mjs'
+      - 'screenshots/**'
+      - 'addons/**'
+      - 'packages/types/**'
+      - 'loader/src/shared/schema.ts'
+      - 'CHANGELOG.md'
+      - '.github/workflows/site.yml'
+  # A published release changes the install button's version, size and date.
+  release:
+    types: [published]
+  workflow_dispatch:
+
+# A deploy that starts while another is running would race for the same site.
+# Queue rather than cancel: the newer commit still deploys, just after.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      # Corepack must come before setup-node's pnpm cache, which needs pnpm on PATH.
+      - name: Enable corepack
+        run: corepack enable
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      # Reads the latest release for the install button. GITHUB_TOKEN raises the
+      # unauthenticated rate limit, which a busy runner can otherwise hit.
+      - name: Build the site
+        run: pnpm site
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # The custom domain only works if CNAME is inside the artifact. It is emitted
+      # by the build from site/static/, so this is a check rather than a step that
+      # creates it: a missing file here means the domain would quietly stop
+      # resolving on deploy, which is worth failing for.
+      - name: Verify the artifact carries CNAME
+        run: |
+          test -f site/dist/CNAME || { echo "site/dist/CNAME missing"; exit 1; }
+          echo "CNAME: $(cat site/dist/CNAME)"
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site/dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

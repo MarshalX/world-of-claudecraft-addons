@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>og</title>
+<!--
+  The source for site/static/og.png, the social preview card.
+
+  Kept here in site/content/ rather than in site/static/ because content/ is never
+  copied to the output: this file is the RECIPE, and og.png is what ships. To
+  regenerate, copy it into site/dist, open it against `pnpm site:dev`, screenshot
+  #card at 1:1, and write the result to site/static/og.png at exactly 1200x630.
+
+  It is a real page rather than a hand-drawn image so the card cannot drift from
+  the site's own palette and type: the fonts and colours below are the same files
+  and the same values tokens.css uses, and a link preview that looked like a
+  different product would undo the point of having one.
+-->
+<style>
+@font-face {
+  font-family: 'Cinzel';
+  src: url('/assets/fonts/cinzel-700.woff2') format('woff2');
+  font-weight: 700;
+}
+@font-face {
+  font-family: 'Alegreya Sans';
+  src: url('/assets/fonts/alegreya-sans-400.woff2') format('woff2');
+  font-weight: 400;
+}
+html, body { margin: 0; padding: 0; background: rgb(18 18 26); }
+#card {
+  width: 1200px;
+  height: 630px;
+  box-sizing: border-box;
+  background: rgb(12 12 17);
+  border-bottom: 6px solid rgb(255 209 0);
+  padding: 76px 88px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  font-family: 'Alegreya Sans', system-ui, sans-serif;
+  color: rgb(240 235 216);
+  position: relative;
+  overflow: hidden;
+}
+/* A single soft pool of gold behind the type, so the card is not a flat
+   rectangle at the small size a link preview actually renders at. */
+#card::after {
+  content: '';
+  position: absolute;
+  right: -180px;
+  top: -180px;
+  width: 620px;
+  height: 620px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgb(255 209 0 / 13%), transparent 68%);
+}
+.lockup { display: flex; align-items: center; gap: 20px; }
+.mark {
+  width: 30px;
+  height: 30px;
+  background: rgb(255 209 0);
+  transform: rotate(45deg);
+}
+.wordmark {
+  font-family: 'Cinzel', Georgia, serif;
+  font-weight: 700;
+  font-size: 34px;
+  letter-spacing: 0.07em;
+}
+/* The break is EXPLICIT rather than left to a measure cap. At 15ch the title wrapped
+   to three lines and split "World of ClaudeCraft" across two of them, which reads
+   like splitting a proper noun. The game's name stays whole on one line; a fixed
+   1200x630 card has no reason to leave that to chance.
+
+   70px rather than 78: at 78 the long line measured 1018px against 1024px of
+   available width, which fits and would overflow on any rendering that came out a
+   fraction wider. The break is only deterministic if it has room to be. */
+h1 {
+  font-family: 'Cinzel', Georgia, serif;
+  font-weight: 700;
+  font-size: 70px;
+  line-height: 1.06;
+  letter-spacing: 0.02em;
+  margin: 0 0 22px;
+}
+/* No measure cap: the tagline is ~56 characters and the card is 1024px wide
+   inside its padding, so it sits on ONE line. At 30ch it broke after "entry" and
+   left "to the game menu." alone on a second line, which reads as an accident at
+   the size a link preview actually renders. `balance` is insurance if the copy
+   ever grows past one line. */
+p {
+  margin: 0;
+  font-size: 27px;
+  line-height: 1.45;
+  color: rgb(240 235 216);
+  text-wrap: balance;
+}
+.foot {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  font-family: ui-monospace, sfmono-regular, menlo, monospace;
+  font-size: 19px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: rgb(153 141 106);
+}
+.dot { color: rgb(199 163 0); }
+</style>
+</head>
+<body>
+<div id="card">
+  <div class="lockup">
+    <span class="mark"></span>
+    <span class="wordmark">ClaudeCraft Addons</span>
+  </div>
+  <div>
+    <h1>Addons for<br />World of ClaudeCraft</h1>
+    <p>One install button adds an Addons entry to the game menu.</p>
+  </div>
+  <div class="foot">
+    <span>woc.marshal.dev</span>
+    <span class="dot">·</span>
+    <span>userscript</span>
+    <span class="dot">·</span>
+    <span>read-only</span>
+  </div>
+</div>
+</body>
+</html>
