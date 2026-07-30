@@ -68,8 +68,6 @@ jobs:
           test -f site/dist/CNAME || { echo "site/dist/CNAME missing"; exit 1; }
           echo "CNAME: $(cat site/dist/CNAME)"
 
-      - uses: actions/configure-pages@v5
-
       - uses: actions/upload-pages-artifact@v3
         with:
           path: site/dist
