@@ -131,9 +131,50 @@ describe('the shape table', () => {
       critChance: true,
       dodgeChance: true,
       blockChance: true,
+      swingTimer: true,
+      comboPoints: true,
+      stats: true,
+      weapon: true,
+      abilityCharges: true,
     };
 
     expect(Object.keys(ENTITY_SHAPE).sort()).toEqual(Object.keys(declared).sort());
+  });
+});
+
+// A rename inside `stats` or `weapon` is the drift a top-level 'object' check
+// cannot see, and it is the likelier kind: the client builds both with a full set
+// of defaults before the server sends anything, so the field is there, is an
+// object, and every member an addon reads off it is quietly gone.
+describe('the objects the checker walks into', () => {
+  it('reports a renamed member under the field it was found in', () => {
+    // Written without `armor` rather than with it undefined: an absent KEY is what
+    // a rename produces, and the checker draws that distinction on purpose.
+    const renamed = { str: 12, agi: 8, sta: 20, int: 5, spi: 5, pvpOffense: 0, pvpDefense: 0 };
+    const player = livePlayer({ set: { stats: renamed } });
+
+    expect(checkEntityShape(player)).toEqual(['stats.armor is missing, expected number']);
+  });
+
+  it('reports a member whose kind changed', () => {
+    const player = livePlayer({ set: { weapon: { min: 1, max: 2, speed: '2.0' } } });
+
+    expect(checkEntityShape(player)).toEqual(['weapon.speed is string, expected number']);
+  });
+
+  it('accepts the optional member the game omits on most weapons', () => {
+    const player = livePlayer({ set: { weapon: { min: 1, max: 2, speed: 2 } } });
+
+    expect(checkEntityShape(player)).toEqual([]);
+  });
+
+  // A top-level problem hides the nested pass entirely. Walking into a field the
+  // game has replaced wholesale would report every member of it as missing, which
+  // buries the one line that says what actually happened.
+  it('says nothing about members when the field itself is the wrong kind', () => {
+    const player = livePlayer({ set: { stats: [] } });
+
+    expect(checkEntityShape(player)).toEqual(['stats is array, expected object']);
   });
 });
 

@@ -34,6 +34,8 @@ woc.world.on('cooldowns', (cooldowns) => {
 const player = woc.world.player; // Entity | null, null before world entry
 ```
 
+One of these is worth knowing about before you go looking for it. `net.onEvent('castStart')` fires for a PLAYER cast, a pet, gathering and fishing, and for nothing else: a mob's mechanic sets its cast state directly, so a boss mod built on that event receives silence and cannot tell it from a boss that never casts. `world.casts` and `world.on('casts', ...)` are what to read instead, and the declaration says so where autocomplete will show you.
+
 The world types describe a repository this package does not depend on and cannot compile against, so they are a careful claim rather than a derivation. The loader checks them against the running game once per session and reports anything that has moved. What is declared is deliberately narrower than what the game carries: an entity has hundreds of mostly server-internal fields, and promising those would be promising state a client does not have. Anything left out is still reachable through `world.raw`, which is `unknown` because the game promises nothing about it.
 
 Sound cues are generated from the deployed game's own pack, so `woc.sound.play` autocompletes the real names. The union stays open: a game release adds cues before these types catch up, and a published type should not be able to break a working addon.

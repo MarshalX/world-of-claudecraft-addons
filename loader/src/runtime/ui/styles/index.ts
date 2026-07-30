@@ -1,4 +1,4 @@
-// The loader's UI kit, assembled from its four sheets into one string.
+// The loader's UI kit, assembled from its sheets into one string.
 //
 // Concatenated here rather than chained with @import: loader/build-runtime.mjs
 // loads a .css import as TEXT, and a text load never follows an @import inside
@@ -6,11 +6,16 @@
 // against the game's own origin at runtime. One string is also what root.ts
 // needs, since exactly one <style> element is injected and adopted.
 //
-// The order is the cascade. Every rule in all four is scoped to a loader-owned
-// element and none of them collide across the seams, but the sheets are still
-// written to be read in this order: chrome sets a window up, panes fill it,
-// catalog refines the four marketplace surfaces, and the kit refines all of them
-// for what an addon draws.
+// The order is the cascade. Every rule in every sheet is scoped to a loader-owned
+// element and none of them collide across the seams, so the order is about
+// readability rather than correctness: chrome sets a window up, panes fill it,
+// catalog refines the four marketplace surfaces, kit covers the surfaces an addon
+// asks the loader for, and bar and banner are the two it assembles itself.
+//
+// One exception where the order is NOT the whole story. The reduced-motion floor
+// closes kit.css, and it carries !important because it has to outrank rules in the
+// two sheets after it AND any class-level rule anywhere: `#woc-addons *` is one id
+// and loses to every selector that actually sets an animation. See the note there.
 //
 // Injected UNLAYERED by runtime/ui/root.ts. Every game rule lives inside
 // @layer base or @layer components, and an unlayered rule beats any layered one
@@ -36,13 +41,15 @@
 // copy of theme.ts's ensureReadable in sync.
 
 // biome-ignore-start lint/correctness/noUnresolvedImports: loader/build-runtime.mjs loads .css as text, which a static resolver does not model
+import banner from './banner.css';
+import bar from './bar.css';
 import catalog from './catalog.css';
 import chrome from './chrome.css';
 import kit from './kit.css';
 import panes from './panes.css';
 
-// biome-ignore-end lint/correctness/noUnresolvedImports: the four sheets above are the whole of it
+// biome-ignore-end lint/correctness/noUnresolvedImports: the six sheets above are the whole of it
 
-const LOADER_CSS = [chrome, panes, catalog, kit].join('\n');
+const LOADER_CSS = [chrome, panes, catalog, kit, bar, banner].join('\n');
 
 export { LOADER_CSS };

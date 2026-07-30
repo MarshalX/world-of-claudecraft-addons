@@ -13,7 +13,10 @@ import { createGameBindings } from '../../loader/src/runtime/keys/game-bindings.
 import { createLogBuffer } from '../../loader/src/runtime/log/buffer.ts';
 import { createNetHub } from '../../loader/src/runtime/net/hub.ts';
 import { createSoundEngine } from '../../loader/src/runtime/sound/engine.ts';
+import { createBanner } from '../../loader/src/runtime/ui/kit/banner.ts';
+import { createIconUrls } from '../../loader/src/runtime/ui/kit/icons.ts';
 import { createGameInjector } from '../../loader/src/runtime/ui/kit/injections.ts';
+import { createSkillArt } from '../../loader/src/runtime/ui/kit/skill-art.ts';
 import { createStacking } from '../../loader/src/runtime/ui/kit/stacking.ts';
 import { createToaster } from '../../loader/src/runtime/ui/kit/toast.ts';
 import { createTooltips } from '../../loader/src/runtime/ui/kit/tooltip.ts';
@@ -113,7 +116,12 @@ function createSharedServices(
   let deliver: ((data: unknown) => void) | null = null;
 
   const injector = createGameInjector({ doc });
-  const toaster = createToaster({ doc, root, setTimer: () => 0, clearTimer: () => undefined });
+  const noTimers = { setTimer: () => 0, clearTimer: () => undefined };
+  const toaster = createToaster({ doc, root, ...noTimers });
+  const banner = createBanner({ doc, root, ...noTimers });
+  // Never settles, so `icon.ability` stays optimistic: the same state a row drawn
+  // before the class manifest lands is in.
+  const icons = createIconUrls(createSkillArt({ fetchJson: () => new Promise(() => undefined) }));
   const tooltips = createTooltips({ doc, root, viewport: () => VIEWPORT });
   const keyTarget = new EventTarget();
   const dispatcher = createKeyDispatcher({ target: keyTarget, doc });
@@ -155,7 +163,7 @@ function createSharedServices(
     dispatcher,
     gameBindings: createGameBindings({ game: () => null, storage: () => null }),
     logs,
-    kit: { root, injector, toaster, tooltips, stacking },
+    kit: { root, injector, toaster, banner, tooltips, stacking, icons },
     channel: 'pbe',
     host: 'https://pbe.worldofclaudecraft.com',
     gameVersion: () => ({ version: '0.31.0', build: '202607290011' }),
@@ -195,6 +203,7 @@ function createSharedServices(
       injector.dispose();
       tooltips.dispose();
       toaster.dispose();
+      banner.dispose();
       dispatcher.dispose();
       logs.dispose();
       stacking.dispose();

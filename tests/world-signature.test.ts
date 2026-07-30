@@ -30,6 +30,10 @@ describe('world keys', () => {
       'quests',
       'cooldowns',
       'auras',
+      'casts',
+      'targetAuras',
+      'hazards',
+      'markers',
     ]);
   });
 
@@ -158,6 +162,63 @@ describe('party', () => {
 
   it('notices the leader changing', () => {
     expect(changed('party', party([{ pid: 1 }], 1), party([{ pid: 1 }], 2))).toBe(true);
+  });
+
+  // A tank losing threat is the raid-frame alert, and before this field was
+  // watched the row's own hp was the only thing that could wake a subscriber.
+  it('notices a member gaining aggro', () => {
+    const before = party([{ pid: 1, hasAggro: 0 }]);
+    const after = party([{ pid: 1, hasAggro: 1 }]);
+
+    expect(changed('party', before, after)).toBe(true);
+  });
+
+  it('notices a member dropping link', () => {
+    const before = party([{ pid: 1, connected: 1 }]);
+    const after = party([{ pid: 1, connected: 0 }]);
+
+    expect(changed('party', before, after)).toBe(true);
+  });
+
+  it('notices a shield soaking damage', () => {
+    const before = party([{ pid: 1, absorb: 400 }]);
+    const after = party([{ pid: 1, absorb: 120 }]);
+
+    expect(changed('party', before, after)).toBe(true);
+  });
+
+  // A dispel alert is the reason to watch a party at all, and the strip a row
+  // carries is the only place a member's debuffs are readable.
+  it('notices a debuff landing on a member', () => {
+    const before = party([{ pid: 1, auras: [] }]);
+    const after = party([{ pid: 1, auras: [{ id: 'curse_of_agony', neg: 1 }] }]);
+
+    expect(changed('party', before, after)).toBe(true);
+  });
+
+  it('notices one of two members being dispelled', () => {
+    const before = party([{ pid: 1, auras: [{ id: 'poison' }] }, { pid: 2 }]);
+    const after = party([{ pid: 1, auras: [] }, { pid: 2 }]);
+
+    expect(changed('party', before, after)).toBe(true);
+  });
+
+  // A row's strip is redrawn as its auras tick. Watching the remaining time would
+  // make every party in combat a per-frame wake-up.
+  it('is quiet while a member aura ticks down', () => {
+    const before = party([{ pid: 1, auras: [{ id: 'renew', remaining: 12 }] }]);
+    const after = party([{ pid: 1, auras: [{ id: 'renew', remaining: 2 }] }]);
+
+    expect(changed('party', before, after)).toBe(false);
+  });
+
+  // The separator matters: without it a member whose strip ran into the next
+  // member's scalars could read the same either way.
+  it('does not let one member absorb the next one', () => {
+    const before = party([{ pid: 1, auras: [{ id: 'a' }] }, { pid: 2 }]);
+    const after = party([{ pid: 1 }, { pid: 2, auras: [{ id: 'a' }] }]);
+
+    expect(changed('party', before, after)).toBe(true);
   });
 
   it('notices leaving the party entirely', () => {
@@ -293,6 +354,141 @@ describe('auras', () => {
     const after = [{ id: 'renew', sourceId: 1, remaining: 3 }];
 
     expect(changed('auras', before, after)).toBe(false);
+  });
+});
+
+describe('casts', () => {
+  const casting = (entries: [number, unknown][]): Map<number, unknown> => new Map(entries);
+
+  it('notices a boss starting a cast', () => {
+    const after = casting([[248, { ability: 'deathless_rage', remaining: 10, total: 10 }]]);
+
+    expect(changed('casts', casting([]), after)).toBe(true);
+  });
+
+  it('notices a cast finishing', () => {
+    const before = casting([[248, { ability: 'soul_rend' }]]);
+
+    expect(changed('casts', before, casting([]))).toBe(true);
+  });
+
+  // The mechanic a boss chains into is the thing a mod warns on. Keying on the
+  // entity alone would report the switch as no change and the warning would never
+  // fire for the second cast.
+  it('notices one cast being replaced by another on the same entity', () => {
+    const before = casting([[248, { ability: 'soul_rend' }]]);
+    const after = casting([[248, { ability: 'gravebreaker' }]]);
+
+    expect(changed('casts', before, after)).toBe(true);
+  });
+
+  // A cast bar moves every frame. This is the whole reason the remaining time is
+  // not in the signature.
+  it('is quiet while a cast bar fills', () => {
+    const before = casting([[248, { ability: 'soul_rend', remaining: 9.5, total: 10 }]]);
+    const after = casting([[248, { ability: 'soul_rend', remaining: 0.2, total: 10 }]]);
+
+    expect(changed('casts', before, after)).toBe(false);
+  });
+
+  it('separates the same ability cast by two entities', () => {
+    const before = casting([[248, { ability: 'fireball' }]]);
+    const after = casting([
+      [248, { ability: 'fireball' }],
+      [250, { ability: 'fireball' }],
+    ]);
+
+    expect(changed('casts', before, after)).toBe(true);
+  });
+
+  it('does not care which order the map iterates', () => {
+    const before = casting([
+      [1, { ability: 'a' }],
+      [2, { ability: 'b' }],
+    ]);
+    const after = casting([
+      [2, { ability: 'b' }],
+      [1, { ability: 'a' }],
+    ]);
+
+    expect(changed('casts', before, after)).toBe(false);
+  });
+});
+
+describe('targetAuras', () => {
+  it('notices a debuff landing on the target', () => {
+    expect(changed('targetAuras', [], [{ id: 'sunder', sourceId: 661 }])).toBe(true);
+  });
+
+  // A ramping debuff is the case this key exists for. Dread Curse stacks to ten,
+  // and every stack is a refresh of the aura already there, so on the id and the
+  // caster alone the whole ramp is invisible.
+  it('notices a stack being added', () => {
+    const before = [{ id: 'dread_curse', sourceId: 248, stacks: 4 }];
+    const after = [{ id: 'dread_curse', sourceId: 248, stacks: 5 }];
+
+    expect(changed('targetAuras', before, after)).toBe(true);
+  });
+
+  it('is quiet while a target debuff ticks down', () => {
+    const before = [{ id: 'sunder', sourceId: 661, stacks: 3, remaining: 28 }];
+    const after = [{ id: 'sunder', sourceId: 661, stacks: 3, remaining: 4 }];
+
+    expect(changed('targetAuras', before, after)).toBe(false);
+  });
+
+  it('treats an unstacked aura and a one-stack aura as the same reading', () => {
+    const before = [{ id: 'sunder', sourceId: 661 }];
+    const after = [{ id: 'sunder', sourceId: 661, stacks: 1 }];
+
+    expect(changed('targetAuras', before, after)).toBe(false);
+  });
+});
+
+describe('hazards', () => {
+  const ring = (id: string, remaining: number): Record<string, unknown> => ({
+    id,
+    kind: 'frostRing',
+    radius: 8,
+    remaining,
+  });
+
+  it('notices one appearing on the ground', () => {
+    expect(changed('hazards', [], [ring('r1', 12)])).toBe(true);
+  });
+
+  it('notices one expiring', () => {
+    expect(changed('hazards', [ring('r1', 1)], [])).toBe(true);
+  });
+
+  it('is quiet while one burns down', () => {
+    expect(changed('hazards', [ring('r1', 12)], [ring('r1', 2)])).toBe(false);
+  });
+
+  it('treats a null reading as its own', () => {
+    expect(changed('hazards', null, [])).toBe(false);
+  });
+});
+
+describe('markers', () => {
+  const marked = (entries: [number, number][]): Map<number, number> => new Map(entries);
+
+  it('notices a marker being placed', () => {
+    expect(changed('markers', marked([]), marked([[248, 1]]))).toBe(true);
+  });
+
+  // Both halves are the change: a raid leader moving the skull from one add to
+  // another is the event, and the count is the same on either side of it.
+  it('notices a marker moving to a different entity', () => {
+    expect(changed('markers', marked([[248, 1]]), marked([[250, 1]]))).toBe(true);
+  });
+
+  it('notices the same entity being re-marked', () => {
+    expect(changed('markers', marked([[248, 1]]), marked([[248, 4]]))).toBe(true);
+  });
+
+  it('is quiet on an unchanged assignment', () => {
+    expect(changed('markers', marked([[248, 1]]), marked([[248, 1]]))).toBe(false);
   });
 });
 

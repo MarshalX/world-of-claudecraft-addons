@@ -12,6 +12,7 @@
 // world-ready: the types are asserted here and verified there.
 
 import { fieldValue } from '../net/frames.ts';
+import { castsOf, type EntityCast, type Hazard, hazardsOf, markersOf } from './derived.ts';
 import type { Aura, Entity, InvSlot, PartyInfo, QuestProgress, WorldQuests } from './game-types.ts';
 import { readonlyMapView } from './readonly-map.ts';
 
@@ -45,6 +46,23 @@ function readAs<T>(source: unknown, field: string): T | null {
   return fieldValue(source, field) as T | null;
 }
 
+/** The entity the player has selected, resolved through the roster. */
+function targetOf(world: unknown, entities: ReadonlyMap<number, Entity>): Entity | null {
+  const id = fieldValue(fieldValue(world, 'player'), 'targetId');
+  if (typeof id !== 'number') {
+    return null;
+  }
+  return entities.get(id) ?? null;
+}
+
+/** The two quest collections as one reading, each null until the game has it. */
+function questsOf(world: unknown): WorldQuests {
+  return {
+    log: readAs<Map<string, QuestProgress>>(world, 'questLog'),
+    done: readAs<Set<string>>(world, 'questsDone'),
+  };
+}
+
 export interface WorldBackend {
   /** Which backend answered, so the manager's diagnostics can show it. */
   readonly kind: string;
@@ -63,6 +81,18 @@ export interface WorldBackend {
    */
   readonly cooldowns: ReadonlyMap<string, number> | null;
   readonly auras: readonly Aura[] | null;
+  /**
+   * Everything in scope that is casting, derived rather than read.
+   *
+   * There is no such collection on the game object: cast state lives on each
+   * entity, and the event that would announce it fires for a player only. See
+   * `world/derived.ts` for why that makes this the only way to see a boss cast.
+   */
+  readonly casts: ReadonlyMap<number, EntityCast>;
+  /** The target's auras, which `capture('target')` alone cannot report moving. */
+  readonly targetAuras: readonly Aura[] | null;
+  readonly hazards: readonly Hazard[] | null;
+  readonly markers: ReadonlyMap<number, number> | null;
   /** The real IWorld the game is running. */
   readonly raw: unknown;
 }
@@ -88,11 +118,7 @@ export function createGameBackend(game: unknown): WorldBackend | null {
     },
 
     get target(): Entity | null {
-      const id = fieldValue(fieldValue(world, 'player'), 'targetId');
-      if (typeof id !== 'number') {
-        return null;
-      }
-      return entities().get(id) ?? null;
+      return targetOf(world, entities());
     },
 
     get entities(): ReadonlyMap<number, Entity> {
@@ -108,10 +134,7 @@ export function createGameBackend(game: unknown): WorldBackend | null {
     },
 
     get quests(): WorldQuests {
-      return {
-        log: readAs<Map<string, QuestProgress>>(world, 'questLog'),
-        done: readAs<Set<string>>(world, 'questsDone'),
-      };
+      return questsOf(world);
     },
 
     get cooldowns(): ReadonlyMap<string, number> | null {
@@ -120,6 +143,22 @@ export function createGameBackend(game: unknown): WorldBackend | null {
 
     get auras(): readonly Aura[] | null {
       return readAs<Aura[]>(fieldValue(world, 'player'), 'auras');
+    },
+
+    get casts(): ReadonlyMap<number, EntityCast> {
+      return castsOf(entities());
+    },
+
+    get targetAuras(): readonly Aura[] | null {
+      return readAs<Aura[]>(targetOf(world, entities()), 'auras');
+    },
+
+    get hazards(): readonly Hazard[] | null {
+      return hazardsOf(world);
+    },
+
+    get markers(): ReadonlyMap<number, number> | null {
+      return markersOf(world);
     },
 
     raw: world,

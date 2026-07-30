@@ -58,6 +58,14 @@ function row(): InstalledAddon {
 interface BarsHarness extends SharedHarness {
   /** Put an ability on cooldown, or move what is left on it. */
   cooldown: (abilityId: string, seconds: number) => void;
+  /**
+   * Set a charge pool, the way a snapshot carrying `achg` and `achr` would.
+   *
+   * `maxCharges` is written as the zero the client actually holds rather than as a
+   * real maximum, because the server never sends one. An addon reading it would
+   * find a number that is always 0, which is why nothing here reads it.
+   */
+  charges: (abilityId: string, pool: { charges: number; recharge: number; length: number }) => void;
   /** Re-read the world, which is what turns a set change into a handler call. */
   poll: () => void;
   /** Run the addon's frame loop once. */
@@ -68,6 +76,8 @@ interface BarsHarness extends SharedHarness {
   fillOf: (abilityId: string) => string;
   /** One bar's remaining figure. */
   leftOf: (abilityId: string) => string;
+  /** One bar's icon URL, or '' when the slot is empty. */
+  iconOf: (abilityId: string) => string;
 }
 
 function barFor(abilityId: string): Element | null {
@@ -76,7 +86,10 @@ function barFor(abilityId: string): Element | null {
 
 async function run(): Promise<BarsHarness> {
   const cooldowns = new Map<string, number>();
-  const player = liveEntity({ set: { cooldowns } });
+  const abilityCharges: Record<string, unknown> = {};
+  // `templateId` on a player is the CLASS, which is the directory the game files a
+  // skill icon under. Without it there is nothing to build an icon URL from.
+  const player = liveEntity({ set: { cooldowns, abilityCharges, templateId: 'hunter' } });
   const world = { entities: new Map([[PLAYER_ID, player]]), player };
   const harness = createSharedServices(document, createFakeStorage(), {
     game: Promise.resolve({ world }),
@@ -90,6 +103,14 @@ async function run(): Promise<BarsHarness> {
     cooldown: (abilityId, seconds) => {
       cooldowns.set(abilityId, seconds);
     },
+    charges: (abilityId, pool) => {
+      abilityCharges[abilityId] = {
+        charges: pool.charges,
+        maxCharges: 0,
+        recharge: pool.recharge,
+        rechargeLength: pool.length,
+      };
+    },
     poll: () => harness.shared.world.watcher.poll(),
     frame: () => vi.advanceTimersToNextFrame(),
     // Read off the attribute rather than the dataset, which is an index
@@ -99,8 +120,10 @@ async function run(): Promise<BarsHarness> {
         (el) => el.getAttribute('data-ability') ?? '',
       ),
     fillOf: (abilityId) =>
-      (barFor(abilityId)?.querySelector('.woc-cd-fill') as HTMLElement | null)?.style.width ?? '',
-    leftOf: (abilityId) => barFor(abilityId)?.querySelector('.woc-cd-left')?.textContent ?? '',
+      (barFor(abilityId)?.querySelector('.woc-bar-fill') as HTMLElement | null)?.style.width ?? '',
+    leftOf: (abilityId) => barFor(abilityId)?.querySelector('.woc-bar-value')?.textContent ?? '',
+    iconOf: (abilityId) =>
+      barFor(abilityId)?.querySelector('.woc-bar-icon')?.getAttribute('src') ?? '',
   };
 }
 
@@ -183,7 +206,7 @@ describe('the drain', () => {
     h.cooldown('aimed_shot', LONG);
     h.poll();
 
-    expect(h.fillOf('aimed_shot')).toBe('100.0%');
+    expect(h.fillOf('aimed_shot')).toBe('100.00%');
   });
 
   // The claim the whole example is built to demonstrate: the subscription is
@@ -197,7 +220,7 @@ describe('the drain', () => {
     h.cooldown('aimed_shot', LONG / 2);
     h.frame();
 
-    expect(h.fillOf('aimed_shot')).toBe('50.0%');
+    expect(h.fillOf('aimed_shot')).toBe('50.00%');
     expect(h.leftOf('aimed_shot')).toBe('15.0s');
   });
 
@@ -211,7 +234,7 @@ describe('the drain', () => {
     h.cooldown('rapid_fire', 30);
     h.frame();
 
-    expect(h.fillOf('rapid_fire')).toBe('50.0%');
+    expect(h.fillOf('rapid_fire')).toBe('50.00%');
   });
 
   // A rebuild must not restart the fill: the bar keeps the total it was created
@@ -226,7 +249,7 @@ describe('the drain', () => {
     h.cooldown('rapid_fire', 180);
     h.poll();
 
-    expect(h.fillOf('aimed_shot')).toBe('50.0%');
+    expect(h.fillOf('aimed_shot')).toBe('50.00%');
   });
 });
 
@@ -279,7 +302,7 @@ describe('a cooldown that is reset or re-armed', () => {
     h.cooldown('combustion', 30);
     h.frame();
 
-    expect(h.fillOf('combustion')).toBe('50.0%');
+    expect(h.fillOf('combustion')).toBe('50.00%');
     expect(h.leftOf('combustion')).toBe('30.0s');
   });
 
@@ -296,13 +319,13 @@ describe('a cooldown that is reset or re-armed', () => {
     // Casting another shock re-arms this one to the full six seconds.
     h.cooldown('earth_shock', 6);
     h.frame();
-    expect(h.fillOf('earth_shock')).toBe('100.0%');
+    expect(h.fillOf('earth_shock')).toBe('100.00%');
 
     // And from there it drains against the SIX, not against the two.
     h.cooldown('earth_shock', 3);
     h.frame();
 
-    expect(h.fillOf('earth_shock')).toBe('50.0%');
+    expect(h.fillOf('earth_shock')).toBe('50.00%');
   });
 
   // The other direction cannot be detected, and this pins that it is not pretended
@@ -324,7 +347,7 @@ describe('a cooldown that is reset or re-armed', () => {
     h.cooldown('aimed_shot', 10);
     h.frame();
 
-    expect(h.fillOf('aimed_shot')).toBe('33.3%');
+    expect(h.fillOf('aimed_shot')).toBe('33.33%');
   });
 
   // And when a frame does catch the gap, the rebuild is what gets it right.
@@ -338,6 +361,128 @@ describe('a cooldown that is reset or re-armed', () => {
     h.cooldown('aimed_shot', 10);
     h.poll();
 
-    expect(h.fillOf('aimed_shot')).toBe('100.0%');
+    expect(h.fillOf('aimed_shot')).toBe('100.00%');
+  });
+});
+
+// The one exact bar in the addon.
+//
+// Every other row here fills from whatever it was first seen at, because a
+// cooldown's LENGTH is not published: the client converts an absolute schedule to a
+// remaining and discards the rest. A charge pool is the exception. It carries a real
+// `rechargeLength`, so the bar has a true denominator on its first frame and never
+// needs re-baselining at all.
+//
+// The subscription cannot see these. A charge coming back while the pool still holds
+// a use changes no cooldown id, so the set stays exactly as it was and only the frame
+// loop can raise or drop the row.
+describe('an ability regenerating a charge', () => {
+  it('raises a bar from the frame loop, with no cooldown set change', async () => {
+    const h = await run();
+
+    h.charges('twinstrike', { charges: 1, recharge: 6, length: 12 });
+    h.frame();
+
+    expect(h.drawn()).toEqual(['twinstrike']);
+  });
+
+  // The whole point: half of a published twelve, right the first time it is drawn.
+  it('fills against the published length rather than against what it first saw', async () => {
+    const h = await run();
+
+    h.charges('twinstrike', { charges: 1, recharge: 6, length: 12 });
+    h.frame();
+
+    expect(h.fillOf('twinstrike')).toBe('50.00%');
+  });
+
+  // The count is "1 left", not "1 of 2": the maximum is a server-side detail the
+  // client zero-fills, so an addon that showed a denominator would show 0.
+  it('shows how many uses are left beside the timer', async () => {
+    const h = await run();
+
+    h.charges('twinstrike', { charges: 1, recharge: 6, length: 12 });
+    h.frame();
+
+    expect(h.leftOf('twinstrike')).toBe('6.0s (1)');
+  });
+
+  it('drops the row once the pool is full again', async () => {
+    const h = await run();
+    h.charges('twinstrike', { charges: 1, recharge: 6, length: 12 });
+    h.frame();
+
+    h.charges('twinstrike', { charges: 2, recharge: 0, length: 12 });
+    h.frame();
+
+    expect(h.drawn()).toEqual([]);
+  });
+
+  // A pool that has emptied is ALSO on the ordinary cooldown wire, so both readings
+  // describe the same ability. One row, and the charge reading wins, because it is
+  // the one with a real total.
+  it('does not draw the same ability twice when the pool is empty', async () => {
+    const h = await run();
+
+    h.charges('twinstrike', { charges: 0, recharge: 9, length: 12 });
+    h.cooldown('twinstrike', 9);
+    h.poll();
+
+    expect(h.drawn()).toEqual(['twinstrike']);
+    expect(h.fillOf('twinstrike')).toBe('75.00%');
+  });
+
+  // A fresh recharge starting is not a re-arm to learn from: the length is already
+  // known, so a remaining that goes back up must not become the new denominator.
+  it('does not re-baseline off a published length', async () => {
+    const h = await run();
+    h.charges('twinstrike', { charges: 1, recharge: 3, length: 12 });
+    h.frame();
+
+    h.charges('twinstrike', { charges: 0, recharge: 12, length: 12 });
+    h.frame();
+    h.charges('twinstrike', { charges: 0, recharge: 6, length: 12 });
+    h.frame();
+
+    expect(h.fillOf('twinstrike')).toBe('50.00%');
+  });
+
+  // An addon that walked the pools every frame when there are none would be paying
+  // for a feature almost no class has.
+  it('costs nothing for a player with no charge abilities', async () => {
+    const h = await run();
+
+    h.frame();
+
+    expect(h.drawn()).toEqual([]);
+  });
+});
+
+// The icon comes from the loader's own URL builder rather than from a path the addon
+// wrote, which is what makes a game update that moves the directory one edit in the
+// loader instead of a silent break in every addon.
+describe('the skill icon', () => {
+  it('points at the art for the ability, filed under the player"s class', async () => {
+    const h = await run();
+
+    h.cooldown('aimed_shot', LONG);
+    h.poll();
+
+    expect(h.iconOf('aimed_shot')).toBe('/ui/skills/hunter/aimed_shot.webp');
+  });
+
+  // Not every ability ships painted art. The kit hides the slot when the image
+  // fails, so the row loses its icon and keeps its label rather than showing a
+  // broken-image glyph.
+  it('collapses the slot when the art does not exist', async () => {
+    const h = await run();
+    h.cooldown('tame_beast', LONG);
+    h.poll();
+    const icon = barFor('tame_beast')?.querySelector('.woc-bar-icon');
+
+    icon?.dispatchEvent(new Event('error'));
+
+    expect((icon as HTMLImageElement).hidden).toBe(true);
+    expect(barFor('tame_beast')?.textContent).toContain('Tame Beast');
   });
 });

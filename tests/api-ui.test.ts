@@ -11,7 +11,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createUi, elementId } from '../loader/src/runtime/api/ui.ts';
 import { DisposalBag } from '../loader/src/runtime/disposal.ts';
+import { createBanner } from '../loader/src/runtime/ui/kit/banner.ts';
+import { createIconUrls } from '../loader/src/runtime/ui/kit/icons.ts';
 import { createGameInjector } from '../loader/src/runtime/ui/kit/injections.ts';
+import { createSkillArt } from '../loader/src/runtime/ui/kit/skill-art.ts';
 import { createStacking } from '../loader/src/runtime/ui/kit/stacking.ts';
 import { createToaster } from '../loader/src/runtime/ui/kit/toast.ts';
 import { createTooltips } from '../loader/src/runtime/ui/kit/tooltip.ts';
@@ -46,19 +49,25 @@ function open() {
   const injector = createGameInjector({ doc: document });
   teardown.push(injector.dispose);
 
+  const timers = {
+    setTimer: (handler: () => void, ms: number) =>
+      globalThis.setTimeout(handler, ms) as unknown as number,
+    clearTimer: (id: number) => {
+      globalThis.clearTimeout(id);
+    },
+  };
+
   const kit: UiKit = {
     root,
     injector,
-    toaster: createToaster({
-      doc: document,
-      root,
-      setTimer: (handler, ms) => globalThis.setTimeout(handler, ms) as unknown as number,
-      clearTimer: (id) => {
-        globalThis.clearTimeout(id);
-      },
-    }),
+    toaster: createToaster({ doc: document, root, ...timers }),
+    banner: createBanner({ doc: document, root, ...timers }),
     tooltips: createTooltips({ doc: document, root, viewport: () => VIEW }),
     stacking: createStacking({ root }),
+    // A manifest reader whose fetch never settles, which is the state a first row is
+    // drawn in: `has` answers "not known yet", so the builder hands back the URL and
+    // the image decides. A suite that wanted the authoritative answer would resolve it.
+    icons: createIconUrls(createSkillArt({ fetchJson: () => new Promise(() => undefined) })),
   };
 
   const bag = new DisposalBag();
@@ -105,6 +114,31 @@ describe('creating surfaces', () => {
     document.querySelector<HTMLButtonElement>('.woc-modal-buttons button')?.click();
 
     expect(await answer).toBe('yes');
+  });
+
+  it('shows a banner', () => {
+    const { ui } = open();
+
+    ui.banner('Deathless Rage', { detail: 'interrupt it' });
+
+    expect(document.getElementById('woc-banner')?.textContent).toContain('Deathless Rage');
+  });
+
+  // The bar is handed back rather than placed: the kit does not know where in an
+  // addon's own frame the row belongs.
+  it('hands back a bar for the addon to place itself', () => {
+    const { ui } = open();
+
+    const bar = ui.bar({ label: 'Aimed Shot', value: '4.2s' });
+
+    expect(bar.el.classList.contains('woc-bar')).toBe(true);
+    expect(document.querySelector('.woc-bar')).toBeNull();
+  });
+
+  it('carries the icon URL builders', () => {
+    const { ui } = open();
+
+    expect(ui.icon.ability('aimed_shot', 'hunter')).toBe('/ui/skills/hunter/aimed_shot.webp');
   });
 
   it('attaches a tooltip', () => {
@@ -183,6 +217,26 @@ describe('disposal', () => {
     bag.dispose();
 
     expect(document.querySelectorAll('.woc-toast')).toHaveLength(0);
+  });
+
+  it('takes down a banner the addon left up', () => {
+    const { bag, ui } = open();
+    ui.banner('Phase two', { timeout: 0 });
+
+    bag.dispose();
+
+    expect(document.querySelectorAll('.woc-banner-card')).toHaveLength(0);
+  });
+
+  // Disable is hot, with no page reload, so a row left in a frame the loader has
+  // already removed would outlive whatever was updating it.
+  it('removes every bar the addon put on screen', () => {
+    const { bag, ui, kit } = open();
+    kit.root.append(ui.bar({ label: 'Fireball' }).el, ui.bar({ label: 'Frostbolt' }).el);
+
+    bag.dispose();
+
+    expect(document.querySelectorAll('.woc-bar')).toHaveLength(0);
   });
 
   // The addon's await is mid-way through something, so being disabled has to

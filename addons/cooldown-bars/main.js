@@ -13,11 +13,18 @@
 // goes. That split is the pattern for anything that has to animate: subscribe
 // for the change, animate from the read.
 //
-// The full length of a cooldown is not published. What is readable is how much
-// is left, so a bar's total is whatever it had left the moment it appeared. That
-// is exact for a cooldown that starts while you are watching, and honest about
-// one that was already running when the addon loaded: it fills the bar from
-// wherever it was found rather than pretending to know the rest.
+// The rows themselves come from `woc.ui.bar`, which is the loader's own timer row:
+// an icon, a name that truncates, a fill behind both, and a right-aligned figure in
+// tabular figures so the digits do not shuffle as they count down. This addon used
+// to build that out of about twenty inline style declarations, and the reason it no
+// longer does is that Combat Meter had built the same thing slightly differently.
+// Anything an addon draws that looks like a timer should come from here.
+//
+// The full length of an ordinary cooldown is not published. What is readable is how
+// much is LEFT, so a bar's total is whatever it had left the moment it appeared.
+// That is exact for a cooldown that starts while you are watching, and honest about
+// one that was already running when the addon loaded: it fills the bar from wherever
+// it was found rather than pretending to know the rest.
 //
 // A cooldown only ever counts DOWN, so a remaining that goes UP can only mean the
 // ability was re-armed, and the bar re-learns its length there. The game does this
@@ -33,15 +40,30 @@
 // bar is dropped and rebuilt correctly, and if none does the bar reads low until
 // it next reaches zero. Nothing on the wire distinguishes those two, so the addon
 // does not pretend to.
+//
+// CHARGES are the exception to all of that, and the only exact bar here. An ability
+// with a charge pool (Twinstrike, Double Charge, frost's second Ice Block) carries
+// a real recharge LENGTH alongside its remaining, so its bar has a true denominator
+// from the first frame and needs no re-learning at all. Those rows are read from
+// `world.player.abilityCharges` in the frame loop rather than from a subscription,
+// because a charge regenerating while the pool still holds a use changes no
+// cooldown id: the set stays exactly as it was and the subscription never fires.
+// Walking that record per frame is cheap in a way walking the cooldown map is not,
+// since only a handful of abilities have charges at all.
+//
+// What is NOT read is `maxCharges`. The server keeps the maximum to itself, so the
+// field is present, numeric, and permanently zero, which is why the count reads as
+// "2 left" rather than as "2 of 3".
 
-const FULL_PERCENT = 100;
 const DECIMALS = 1;
-const FRAME_WIDTH = 200;
+const FRAME_WIDTH = 220;
 const DEFAULT_MAX_BARS = 8;
 /** The global cooldown, and the floor under "worth drawing a bar for". */
 const GCD_SECONDS = 1.5;
+/** Below this share left, the row goes warm: it is about to be ready. */
+const NEARLY_READY = 0.25;
 
-/** Ability id to the bar tracking it: its element, and what it had left when seen. */
+/** Ability id to the bar tracking it: the kit row, and what it had left when seen. */
 const bars = new Map();
 
 function settingNumber(id, fallback) {
@@ -60,12 +82,36 @@ function settingFlag(id, fallback) {
   return fallback;
 }
 
-/** 'aimed_shot' reads as 'Aimed Shot'. The game publishes ids, not display names. */
+/**
+ * 'aimed_shot' reads as 'Aimed Shot'. A cooldown map is keyed by ability ID.
+ *
+ * Which means this label is derived from the id and MAY NOT BE WHAT THE GAME CALLS IT.
+ * The two have diverged: `arcane_shot` is displayed as "Fell Shot" in the game, so this
+ * row says "Arcane Shot" for an ability nothing else calls that. Nothing readable from
+ * an addon carries an id and its display name together for a damaging ability, and the
+ * only complete source is a hashed, minified i18n bundle that is not worth depending
+ * on. Combat Meter has the opposite half of the same problem, stated in its header.
+ *
+ * So the id is what is shown, because the id is what is KNOWN. It is also what the
+ * icon is filed under, which is why the art on these rows is right even when the name
+ * beside it is stale.
+ */
 function readable(abilityId) {
   return abilityId
     .split('_')
     .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
     .join(' ');
+}
+
+/**
+ * Your class, which is where the game files a skill icon.
+ *
+ * An entity's `templateId` is its mob template, except on a player, where it is the
+ * class id. Everything with a cooldown here is something you cast, so your own is
+ * the only one that ever applies.
+ */
+function playerClass() {
+  return woc.world.player?.templateId ?? '';
 }
 
 const frame = woc.ui.frame({
@@ -83,54 +129,26 @@ list.style.gap = '3px';
 frame.body.appendChild(list);
 
 /**
- * One row: a name, a remaining figure, and the fill behind both.
+ * One row, from the kit rather than hand-built.
  *
- * The row is a flex line rather than a float, and the name is the only part
- * allowed to shrink. Floating the counter put it in the same inline flow as the
- * name, so a long one ran straight underneath it and the two overlapped; a flex
- * line reserves the counter's width first and gives the name whatever is left.
- * `min-width: 0` is what actually lets the name shrink, since a flex item
- * refuses to go below its content width without it, and that alone is what makes
- * the ellipsis appear instead of an overflow.
+ * `data-ability` is the addon's own marking: the kit does not put one on, and this
+ * is what lets the frame be read back by ability rather than by position.
+ *
+ * Not every ability ships painted art, and the ones that do not have no URL at all.
+ * The kit hides its own icon slot when an image fails, so passing a URL that may
+ * not resolve is the intended usage rather than something to guard against here.
  */
 function createBar(abilityId) {
-  const row = document.createElement('div');
-  row.className = 'woc-cd-bar';
-  row.dataset.ability = abilityId;
-  row.style.position = 'relative';
-  row.style.display = 'flex';
-  row.style.alignItems = 'baseline';
-  row.style.gap = '6px';
-  row.style.padding = '2px 6px';
-  row.style.overflow = 'hidden';
-
-  const fill = document.createElement('div');
-  fill.className = 'woc-cd-fill';
-  fill.style.position = 'absolute';
-  fill.style.inset = '0 auto 0 0';
-  fill.style.background = 'rgb(120 160 255 / 30%)';
-
-  const label = document.createElement('span');
-  label.className = 'woc-cd-label';
-  label.style.position = 'relative';
-  label.style.flex = '1 1 auto';
-  label.style.minWidth = '0';
-  label.style.overflow = 'hidden';
-  label.style.textOverflow = 'ellipsis';
-  label.style.whiteSpace = 'nowrap';
-  label.textContent = readable(abilityId);
+  const name = readable(abilityId);
+  const bar = woc.ui.bar({
+    label: name,
+    icon: woc.ui.icon.ability(abilityId, playerClass()),
+    className: 'woc-cd-bar',
+  });
+  bar.el.dataset.ability = abilityId;
   // The full name is one hover away, so truncating costs nothing.
-  woc.ui.tooltip(label, readable(abilityId));
-
-  const left = document.createElement('span');
-  left.className = 'woc-cd-left';
-  left.style.position = 'relative';
-  left.style.flex = '0 0 auto';
-  left.style.marginLeft = 'auto';
-  left.style.fontVariantNumeric = 'tabular-nums';
-
-  row.append(fill, label, left);
-  return { row, fill, left };
+  woc.ui.tooltip(bar.el, name);
+  return bar;
 }
 
 /**
@@ -146,6 +164,33 @@ function shortestShown() {
   return 0;
 }
 
+/** The charge pools, or an empty list before any ability with one has been used. */
+function chargePools() {
+  const pools = woc.world.player?.abilityCharges;
+  if (typeof pools !== 'object' || pools === null) {
+    return [];
+  }
+  return Object.entries(pools);
+}
+
+/**
+ * Every ability regenerating a charge, with the exact length to measure against.
+ *
+ * `rechargeLength` is what makes these rows different from every other bar in this
+ * addon: it is a real total, published, so the fill is right on the first frame.
+ */
+function rechargingAbilities() {
+  const rows = [];
+  for (const [abilityId, pool] of chargePools()) {
+    const remaining = Number(pool?.recharge);
+    const total = Number(pool?.rechargeLength);
+    if (remaining > 0 && total > 0) {
+      rows.push({ abilityId, remaining, total, charges: Number(pool?.charges) });
+    }
+  }
+  return rows;
+}
+
 /** Everything running, in whatever order the game's map is in. */
 function runningCooldowns() {
   const live = woc.world.cooldowns;
@@ -156,34 +201,57 @@ function runningCooldowns() {
   const running = [];
   for (const [abilityId, remaining] of live) {
     if (remaining > 0 && (remaining >= floor || bars.has(abilityId))) {
-      running.push({ abilityId, remaining });
+      running.push({ abilityId, remaining, total: null, charges: null });
     }
   }
   return running;
 }
 
 /**
- * Rebuild the set of bars from the set of running cooldowns.
+ * Every ability worth a bar right now, charge pools first.
  *
- * Only on a set change, which is what the subscription reports. A bar that is
- * already up keeps the total it was created with, so a rebuild does not restart
- * its fill.
+ * An ability whose pool has emptied is ALSO on cooldown, because the empty-pool
+ * timer rides the ordinary cooldown wire. One row per ability, and the charge
+ * reading wins where there is one, because it is the one with a real total.
+ */
+function timers() {
+  const rows = rechargingAbilities();
+  const exact = new Set(rows.map((entry) => entry.abilityId));
+  for (const entry of runningCooldowns()) {
+    if (!exact.has(entry.abilityId)) {
+      rows.push(entry);
+    }
+  }
+  return rows;
+}
+
+/**
+ * Rebuild the set of bars from what is running.
+ *
+ * A bar that is already up keeps the total it was created with, so a rebuild does
+ * not restart its fill. A row with a published total is marked exact and is never
+ * re-baselined, since there is nothing to learn.
  */
 function syncBars() {
-  const running = runningCooldowns();
+  const running = timers();
   const seen = new Set(running.map((entry) => entry.abilityId));
 
-  for (const [abilityId, bar] of bars) {
+  for (const [abilityId, row] of bars) {
     if (!seen.has(abilityId)) {
-      bar.row.remove();
+      row.bar.destroy();
       bars.delete(abilityId);
     }
   }
 
-  for (const { abilityId, remaining } of running) {
+  for (const { abilityId, remaining, total } of running) {
     if (!bars.has(abilityId)) {
       const bar = createBar(abilityId);
-      bars.set(abilityId, { ...bar, total: remaining, seen: remaining });
+      bars.set(abilityId, {
+        bar,
+        total: total ?? remaining,
+        seen: remaining,
+        exact: total !== null,
+      });
     }
   }
   draw();
@@ -191,7 +259,7 @@ function syncBars() {
 
 /** Soonest ready first, which is the order the next decision is made in. */
 function drawOrder() {
-  return runningCooldowns()
+  return timers()
     .filter((entry) => bars.has(entry.abilityId))
     .sort((a, b) => a.remaining - b.remaining)
     .slice(0, settingNumber('max-bars', DEFAULT_MAX_BARS));
@@ -203,38 +271,71 @@ function drawOrder() {
  * The only signal there is. A cooldown counts down, so an increase can only be a
  * re-arm, and it is the one the set of running ids never reports: a shared
  * cooldown re-arming an entry that is already running changes no id at all.
+ *
+ * A charge recharge is skipped: its total is published, so an increase there is a
+ * fresh recharge starting against the same known length rather than news.
  */
-function rebaseline(bar, remaining) {
-  if (remaining > bar.seen) {
-    bar.total = remaining;
+function rebaseline(row, remaining) {
+  if (!row.exact && remaining > row.seen) {
+    row.total = remaining;
   }
-  bar.seen = remaining;
+  row.seen = remaining;
+}
+
+/** Warm as an ability comes back up, so a glance finds the next thing ready. */
+function toneFor(fraction) {
+  if (fraction <= NEARLY_READY) {
+    return 'warn';
+  }
+  return 'default';
+}
+
+/** `4.2s`, or `4.2s (2)` for an ability still holding a charge while it recharges. */
+function figure(remaining, charges) {
+  const left = `${remaining.toFixed(DECIMALS)}s`;
+  if (typeof charges === 'number' && charges > 0) {
+    return `${left} (${String(charges)})`;
+  }
+  return left;
 }
 
 function draw() {
   const order = drawOrder();
-  for (const [abilityId, bar] of bars) {
-    if (!order.some((entry) => entry.abilityId === abilityId)) {
-      bar.row.remove();
+  const shown = new Set(order.map((entry) => entry.abilityId));
+  for (const [abilityId, row] of bars) {
+    if (!shown.has(abilityId)) {
+      row.bar.el.remove();
     }
   }
-  for (const { abilityId, remaining } of order) {
-    const bar = bars.get(abilityId);
-    rebaseline(bar, remaining);
-    const fraction = Math.min(remaining / bar.total, 1);
-    bar.fill.style.width = `${(fraction * FULL_PERCENT).toFixed(DECIMALS)}%`;
-    bar.left.textContent = `${remaining.toFixed(DECIMALS)}s`;
-    list.appendChild(bar.row);
+  for (const { abilityId, remaining, charges } of order) {
+    const row = bars.get(abilityId);
+    rebaseline(row, remaining);
+    const fraction = Math.min(remaining / row.total, 1);
+    row.bar.update({
+      fraction,
+      value: figure(remaining, charges),
+      tone: toneFor(fraction),
+    });
+    list.appendChild(row.bar.el);
   }
 }
 
-// The set changes here; the numbers move in the frame loop below. Sampling the
-// set every frame instead would be a Map walk per frame to notice nothing.
+// The cooldown set changes here; the numbers move in the frame loop below.
+// Sampling the set every frame instead would be a Map walk per frame to notice
+// nothing. Charges are the other way round, and the frame loop says why.
 woc.world.on('cooldowns', syncBars);
 
-/** Redraw while anything is running, and stand down when nothing is. */
+/**
+ * Redraw while anything is running, and stand down when nothing is.
+ *
+ * `syncBars` rather than `draw` when a charge pool is recharging: a charge coming
+ * back while the pool still holds a use changes no cooldown id, so the
+ * subscription cannot raise or drop those rows and only the loop can.
+ */
 function tick() {
-  if (bars.size > 0) {
+  if (rechargingAbilities().length > 0) {
+    syncBars();
+  } else if (bars.size > 0) {
     draw();
   }
   woc.requestAnimationFrame(tick);

@@ -17,6 +17,10 @@ const KEYS = [
   'quests',
   'cooldowns',
   'auras',
+  'casts',
+  'targetAuras',
+  'hazards',
+  'markers',
 ] as const;
 
 /**
@@ -33,8 +37,26 @@ const KEYS = [
  */
 const PLAYER_FIELDS = ['id', 'level', 'hp', 'maxHp', 'resource', 'maxResource', 'dead', 'targetId'];
 
-/** Party rows arrive from the wire, so these are the terse names, not the Entity's. */
-const PARTY_MEMBER_FIELDS = ['pid', 'hp', 'mhp', 'dead', 'group'];
+/**
+ * Party rows arrive from the wire, so these are the terse names, not the Entity's.
+ *
+ * `hasAggro` and `connected` are here because raid-frame alerting is the point of
+ * watching a party at all, and neither woke a subscriber before: a tank losing
+ * threat and a member dropping link are both changes an addon has to paint. The
+ * aura strip is handled separately, since it is a list rather than a scalar.
+ */
+const PARTY_MEMBER_FIELDS = [
+  'pid',
+  'hp',
+  'mhp',
+  'dead',
+  'group',
+  'hasAggro',
+  'connected',
+  'role',
+  'absorb',
+  'incomingHeal',
+];
 
 function joinFields(source: unknown, fields: readonly string[]): string {
   return fields.map((field) => fieldScalar(source, field)).join(':');
@@ -58,12 +80,27 @@ function byCodePoint(a: string, b: string): number {
   return 1;
 }
 
+/**
+ * The ids on a party row's compact aura strip.
+ *
+ * Ids alone, not remaining time: a row's strip is redrawn constantly as its auras
+ * tick, and what an addon acts on is one arriving or falling off. Order is the
+ * game's own, which is stable per row, so this is not sorted.
+ */
+function rowAuras(row: unknown): string {
+  return fieldArray(row, 'auras')
+    .map((aura) => fieldString(aura, 'id') ?? '')
+    .join('.');
+}
+
 function partySignature(party: unknown): string {
   if (party === null) {
     return '';
   }
   const leader = fieldNumber(party, 'leader') ?? 0;
-  const rows = fieldArray(party, 'members').map((row) => joinFields(row, PARTY_MEMBER_FIELDS));
+  const rows = fieldArray(party, 'members').map(
+    (row) => `${joinFields(row, PARTY_MEMBER_FIELDS)}/${rowAuras(row)}`,
+  );
   return `${leader}|${rows.join(',')}`;
 }
 
@@ -110,6 +147,63 @@ function auraSignature(auras: unknown): string {
     .map((aura) => `${fieldString(aura, 'id') ?? ''}@${fieldNumber(aura, 'sourceId') ?? 0}`)
     .sort(byCodePoint)
     .join(',');
+}
+
+/**
+ * The same as `auraSignature`, plus the stack count.
+ *
+ * A ramping debuff is the case this exists for: a stack landing is the event a
+ * boss mod warns on, and on the id and caster alone it is invisible, because a
+ * stack is a refresh of the aura already there rather than a new one.
+ */
+function stackedAuraSignature(auras: unknown): string {
+  return eachOf(auras)
+    .map(
+      (aura) =>
+        `${fieldString(aura, 'id') ?? ''}@${fieldNumber(aura, 'sourceId') ?? 0}` +
+        `x${fieldNumber(aura, 'stacks') ?? 1}`,
+    )
+    .sort(byCodePoint)
+    .join(',');
+}
+
+/**
+ * Who is casting what, never how far along it is.
+ *
+ * A cast bar moves every frame, so including the remaining time would fire this
+ * at the frame rate. The ability is in the key because a boss that finishes one
+ * mechanic and immediately starts another has to read as two casts, and the
+ * entity id alone would report that as no change at all.
+ */
+function castSignature(casts: unknown): string {
+  if (!(casts instanceof Map)) {
+    return '';
+  }
+  const running: string[] = [];
+  for (const [id, cast] of casts) {
+    running.push(`${String(id)}:${fieldString(cast, 'ability') ?? ''}`);
+  }
+  return running.sort(byCodePoint).join(',');
+}
+
+/** Which hazards are on the ground and where, but not how long they have left. */
+function hazardSignature(hazards: unknown): string {
+  return eachOf(hazards)
+    .map((hazard) => fieldString(hazard, 'id') ?? '')
+    .sort(byCodePoint)
+    .join(',');
+}
+
+/** Which entities are marked, and with what. Both halves are the change. */
+function markerSignature(markers: unknown): string {
+  if (!(markers instanceof Map)) {
+    return '';
+  }
+  const marked: string[] = [];
+  for (const [id, marker] of markers) {
+    marked.push(`${String(id)}:${String(marker)}`);
+  }
+  return marked.sort(byCodePoint).join(',');
 }
 
 function entityIds(entities: unknown): Set<number> {
@@ -165,6 +259,14 @@ export function capture(key: WorldKey, value: unknown): Capture {
       return cooldownSignature(value);
     case 'auras':
       return auraSignature(value);
+    case 'casts':
+      return castSignature(value);
+    case 'targetAuras':
+      return stackedAuraSignature(value);
+    case 'hazards':
+      return hazardSignature(value);
+    case 'markers':
+      return markerSignature(value);
     default:
       return '';
   }

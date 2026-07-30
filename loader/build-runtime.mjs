@@ -29,10 +29,39 @@ const COMMENT = /\/\*[\s\S]*?\*\//g;
 const WHITESPACE = /\s+/g;
 
 /**
- * A selector the loader owns: under its root, or one of the two ids it puts in
- * the game's own DOM, which are the only elements it has outside that root.
+ * A whole `@keyframes` block, removed before selectors are read out of a sheet.
+ *
+ * Its interior is `from`, `to` and percentages, which are positions on a timeline
+ * rather than selectors: they match no element, so the scoping rule below has
+ * nothing to say about them and reading them as selectors only produces a false
+ * failure. The interior is exactly one level of nesting deep, which is what makes
+ * this matchable without a parser.
  */
-const LOADER_OWNED = /^(#woc-addons\b|#woc-tooltip\b|#woc-toasts\b|#woc-addons-|\[id\^=["']woc-)/;
+const KEYFRAMES_BLOCK = /@keyframes[^{]*\{(?:[^{}]*\{[^{}]*\})*\s*\}/g;
+
+/**
+ * The NAME of a keyframes rule, which does need checking.
+ *
+ * An animation name is global to the document rather than scoped to a subtree, so an
+ * unprefixed one can shadow a game animation of the same name and the symptom is the
+ * game's own element animating wrongly. That is the same class of bug the selector
+ * rule prevents, reached by the one route a selector check cannot see.
+ */
+const KEYFRAMES_NAME = /@keyframes\s+([^\s{]+)/g;
+
+/**
+ * A selector the loader owns.
+ *
+ * Three shapes. Its root, and anything under it. The fixed ids it creates for the
+ * overlay surfaces, which live under the root but are addressed by id alone because
+ * each is one element for the whole loader rather than one per addon. And the id
+ * namespace it uses inside the game's own DOM, which is where the rail buttons go.
+ *
+ * Adding an overlay surface means adding it here, and the failure if you forget is
+ * the build refusing rather than a rule quietly restyling the game.
+ */
+const LOADER_OWNED =
+  /^(#woc-addons\b|#woc-tooltip\b|#woc-toasts\b|#woc-banner\b|#woc-addons-|\[id\^=["']woc-)/;
 
 /**
  * Source maps are opt-in, and inline when asked for.
@@ -127,6 +156,9 @@ if (hostModules.length > 0) {
  *  3. NO SELECTOR IN TWO SHEETS. `styles/index.ts` concatenates them, so a
  *     selector defined twice makes the result depend on the join order, which
  *     is exactly the kind of coupling splitting the file was meant to avoid.
+ *  4. EVERY KEYFRAMES NAME PREFIXED. An animation name is global to the document
+ *     rather than scoped to a subtree, so this is what rule 2 means for a
+ *     keyframes rule: its steps match nothing, and its name can collide.
  */
 const cssDir = `${root}src/runtime/ui/styles/`;
 const sheetNames = (await readdir(cssDir)).filter((name) => name.endsWith('.css'));
@@ -138,12 +170,19 @@ const sheets = await Promise.all(
 );
 
 const selectorsOf = ({ name, css }) =>
-  [...css.matchAll(RULE_HEAD)]
+  [...css.replaceAll(KEYFRAMES_BLOCK, '').matchAll(RULE_HEAD)]
     .map(([, , selectorList]) => selectorList.trim().replaceAll(WHITESPACE, ' '))
     .filter((selector) => selector.length > 0 && !selector.startsWith('@'))
     .map((selector) => ({ sheet: name, selector }));
 
+const animationsOf = ({ name, css }) =>
+  [...css.matchAll(KEYFRAMES_NAME)].map(([, animation]) => ({ sheet: name, animation }));
+
 const rules = sheets.flatMap(selectorsOf);
+const unprefixed = sheets
+  .flatMap(animationsOf)
+  .filter(({ animation }) => !animation.startsWith('woc-'))
+  .map(({ sheet, animation }) => `${sheet}: @keyframes ${animation}`);
 const layered = sheets.filter(({ css }) => css.includes('@layer')).map(({ name }) => name);
 const unscoped = rules
   .filter(({ selector }) => !selector.split(',').every((one) => LOADER_OWNED.test(one.trim())))
@@ -165,6 +204,12 @@ if (unscoped.length > 0) {
   throw new Error(
     `every loader rule must be scoped to a loader-owned element:\n  ${unscoped.join('\n  ')}\n` +
       'An unlayered rule outranks the game, so an unscoped one restyles the game itself.',
+  );
+}
+if (unprefixed.length > 0) {
+  throw new Error(
+    `every keyframes name must start with woc-:\n  ${unprefixed.join('\n  ')}\n` +
+      'An animation name is global to the document, so an unprefixed one can shadow the game"s own.',
   );
 }
 if (duplicated.length > 0) {

@@ -77,6 +77,7 @@ interface Hit {
   kind?: string;
   crit?: boolean;
   absorbed?: number;
+  school?: string;
 }
 
 /** One heal2 event, with only the fields a caller cares about spelled out. */
@@ -128,19 +129,26 @@ function rowFor(label: string): Element | null {
 /**
  * The ability on an event, where an explicit null is the auto-attack case.
  *
- * Not `?? 'aimed_shot'`: that treats a deliberate null as absent, which is
+ * Not `?? 'Aimed Shot'`: that treats a deliberate null as absent, which is
  * exactly the case the Melee row exists for, and it silently made that test
  * assert the default instead.
+ *
+ * The values throughout this suite are DISPLAY NAMES, because that is what the wire
+ * puts in this field: every `damage` and `heal2` emit fills it from `ability.name`,
+ * and only `castStart` and `spellfx` carry the id. They used to be ids here and the
+ * whole suite passed anyway, which is how the icon bug shipped: `readable()` turns
+ * both forms into the same label, so no assertion about a row could tell them apart.
+ * The icon is the only thing that can, which is why it is asserted below.
  */
 function abilityOf(hit: Hit): string | null {
   if ('ability' in hit) {
     return hit.ability ?? null;
   }
-  return 'aimed_shot';
+  return 'Aimed Shot';
 }
 
 async function run(): Promise<MeterHarness> {
-  const player = liveEntity();
+  const player = liveEntity({ set: { templateId: 'priest' } });
   const world = { entities: new Map([[PLAYER_ID, player]]), player };
   const harness = createSharedServices(document, createFakeStorage(), {
     game: Promise.resolve({ world }),
@@ -160,7 +168,7 @@ async function run(): Promise<MeterHarness> {
         ability: abilityOf(hit),
         kind: hit.kind ?? 'hit',
         crit: hit.crit ?? false,
-        school: 'physical',
+        school: hit.school ?? 'physical',
         absorbed: hit.absorbed,
       };
       harness.inbound(eventsFrame([event]));
@@ -171,7 +179,7 @@ async function run(): Promise<MeterHarness> {
         sourceId: heal.by ?? PLAYER_ID,
         targetId: heal.at ?? PLAYER_ID,
         amount: heal.amount ?? 100,
-        ability: heal.ability ?? 'mend_wounds',
+        ability: heal.ability ?? 'Mend Wounds',
         crit: heal.crit ?? false,
         cueOnly: heal.cueOnly,
       };
@@ -187,8 +195,8 @@ async function run(): Promise<MeterHarness> {
       [...document.querySelectorAll('[data-ability]')].map(
         (el) => el.getAttribute('data-ability') ?? '',
       ),
-    figureOf: (label) => rowFor(label)?.querySelector('.woc-meter-figure')?.textContent ?? '',
-    detailOf: (label) => rowFor(label)?.querySelector('.woc-meter-detail')?.textContent ?? '',
+    figureOf: (label) => rowFor(label)?.querySelector('.woc-bar-value')?.textContent ?? '',
+    detailOf: (label) => rowFor(label)?.querySelector('.woc-bar-detail')?.textContent ?? '',
     openTab: (label) => {
       const button = [...document.querySelectorAll('.woc-meter-tab')].find(
         (el) => el.textContent === label,
@@ -307,8 +315,8 @@ describe('the ability breakdown', () => {
   it('opens a row per ability, named from the id', async () => {
     const h = await run();
 
-    h.hit({ ability: 'aimed_shot' });
-    h.hit({ ability: 'multi_shot' });
+    h.hit({ ability: 'Aimed Shot' });
+    h.hit({ ability: 'Multi Shot' });
     h.tick();
 
     expect(h.labels().sort(byName)).toEqual(['Aimed Shot', 'Multi Shot']);
@@ -328,9 +336,9 @@ describe('the ability breakdown', () => {
   it('orders the rows biggest first', async () => {
     const h = await run();
 
-    h.hit({ ability: 'multi_shot', amount: 100 });
-    h.hit({ ability: 'aimed_shot', amount: 900 });
-    h.hit({ ability: 'serpent_sting', amount: 500 });
+    h.hit({ ability: 'Multi Shot', amount: 100 });
+    h.hit({ ability: 'Aimed Shot', amount: 900 });
+    h.hit({ ability: 'Serpent Sting', amount: 500 });
     h.tick();
 
     expect(h.labels()).toEqual(['Aimed Shot', 'Serpent Sting', 'Multi Shot']);
@@ -339,8 +347,8 @@ describe('the ability breakdown', () => {
   it('reports each row as total, share and dps', async () => {
     const h = await run();
 
-    h.hit({ ability: 'aimed_shot', amount: 750 });
-    h.hit({ ability: 'multi_shot', amount: 250 });
+    h.hit({ ability: 'Aimed Shot', amount: 750 });
+    h.hit({ ability: 'Multi Shot', amount: 250 });
     h.tick(SECOND);
 
     // 750 of 1000 over the one second elapsed.
@@ -409,7 +417,7 @@ describe('the taken table', () => {
   it('tallies what landed on the player, by ability', async () => {
     const h = await run();
 
-    h.hit({ by: OTHER_ID, at: PLAYER_ID, amount: 500, ability: 'cleave' });
+    h.hit({ by: OTHER_ID, at: PLAYER_ID, amount: 500, ability: 'Cleave' });
     h.tick();
 
     h.openTab('Taken');
@@ -422,8 +430,8 @@ describe('the taken table', () => {
   // Taken and vice versa. One shared map would double-count the mirror case.
   it('keeps the two directions apart', async () => {
     const h = await run();
-    h.hit({ ability: 'aimed_shot', amount: 100 });
-    h.hit({ by: OTHER_ID, at: PLAYER_ID, amount: 500, ability: 'cleave' });
+    h.hit({ ability: 'Aimed Shot', amount: 100 });
+    h.hit({ by: OTHER_ID, at: PLAYER_ID, amount: 500, ability: 'Cleave' });
     h.tick();
 
     expect(h.labels()).toEqual(['Aimed Shot']);
@@ -456,7 +464,7 @@ describe('the healing table', () => {
   it('tallies what the player healed, by ability', async () => {
     const h = await run();
 
-    h.heal({ amount: 400, ability: 'mend_wounds' });
+    h.heal({ amount: 400, ability: 'Mend Wounds' });
     h.tick();
     h.openTab('Healing');
 
@@ -482,7 +490,7 @@ describe('the healing table', () => {
   it('ignores a cue-only heal', async () => {
     const h = await run();
 
-    h.heal({ amount: 0, cueOnly: true, ability: 'renewal' });
+    h.heal({ amount: 0, cueOnly: true, ability: 'Renewal' });
     h.tick();
     h.openTab('Healing');
 
@@ -505,9 +513,9 @@ describe('the healing table', () => {
   // and double-count anything that appeared in both.
   it('keeps the three tables apart', async () => {
     const h = await run();
-    h.hit({ amount: 100, ability: 'aimed_shot' });
-    h.heal({ amount: 400, ability: 'mend_wounds' });
-    h.hit({ by: OTHER_ID, at: PLAYER_ID, amount: 500, ability: 'cleave' });
+    h.hit({ amount: 100, ability: 'Aimed Shot' });
+    h.heal({ amount: 400, ability: 'Mend Wounds' });
+    h.hit({ by: OTHER_ID, at: PLAYER_ID, amount: 500, ability: 'Cleave' });
     h.tick();
 
     expect(h.labels()).toEqual(['Aimed Shot']);
@@ -621,10 +629,10 @@ describe('when a fight ends', () => {
 
   it('starts a new fight on the first hit after it ended', async () => {
     const h = await run();
-    h.hit({ amount: 9000, ability: 'aimed_shot' });
+    h.hit({ amount: 9000, ability: 'Aimed Shot' });
     h.tick(6 * SECOND);
 
-    h.hit({ amount: 100, ability: 'multi_shot' });
+    h.hit({ amount: 100, ability: 'Multi Shot' });
     h.tick();
 
     expect(h.fight()).toContain('100 damage');
@@ -671,5 +679,109 @@ describe('disabling it', () => {
 
     expect(() => h.tick(10 * SECOND)).not.toThrow();
     expect(h.fight()).toBe('');
+  });
+});
+
+// The rows carry NO ability art, and that is asserted rather than left implicit,
+// because it is a decision someone will reasonably try to undo.
+//
+// Skill art is filed under an ability's ID and a combat event carries its display
+// NAME, and the two have diverged in the game: `arcane_shot` is shown everywhere as
+// "Fell Shot", so no derivation from the name reaches the art. A first version
+// slugified the name and drew icons for the two hunter abilities whose names still
+// happened to match their ids, which read as random rather than as a limitation.
+//
+// Cooldown Bars keeps its icons because a cooldown map is keyed by the id, which is
+// also what the art is filed under. It pays for that on the other side, with a label
+// derived from the id that may not be what the game calls the ability.
+describe('the absence of ability art', () => {
+  it('draws no icon, whatever the event named the ability', async () => {
+    const h = await run();
+
+    h.hit({ ability: 'Fell Shot' });
+    h.tick();
+
+    expect(rowFor('Fell Shot')?.querySelector('.woc-bar-icon[src]')).toBeNull();
+  });
+
+  // The names ARE right, and that is the half this addon has. It shows what the game
+  // shows rather than a title-cased id, which is what Cooldown Bars is stuck with.
+  it('shows the name the game uses rather than one derived from an id', async () => {
+    const h = await run();
+
+    h.hit({ ability: 'Fell Shot' });
+    h.tick();
+
+    expect(h.labels()).toEqual(['Fell Shot']);
+  });
+});
+
+// What replaced the icons. `school` is the one identifying thing a damage event carries
+// that does not depend on the ability id, so it is what tells two rows apart now that
+// the art cannot, and the palette is the game's own rather than one invented here.
+//
+// Deliberately NOT rank or share: the row already encodes rank by its position and
+// share by its fill width, so colouring by either would be a third encoding of a fact
+// already on screen, and rows would swap colours whenever the ranking shifted.
+describe('colouring rows by school', () => {
+  it('tints a row by the school the event reported', async () => {
+    const h = await run();
+
+    h.hit({ ability: 'Fell Shot', school: 'arcane' });
+    h.tick();
+
+    expect(rowFor('Fell Shot')?.classList.contains('woc-bar-school-arcane')).toBe(true);
+  });
+
+  // A row keeps its colour for the whole fight, which is the point of choosing school
+  // over rank: an ability stays recognisable as its share moves around.
+  it('keeps the first school it saw rather than recolouring per hit', async () => {
+    const h = await run();
+    h.hit({ ability: 'Fell Shot', school: 'arcane' });
+    h.tick();
+
+    h.hit({ ability: 'Fell Shot', school: 'fire' });
+    h.tick();
+
+    expect(rowFor('Fell Shot')?.classList.contains('woc-bar-school-arcane')).toBe(true);
+    expect(rowFor('Fell Shot')?.classList.contains('woc-bar-school-fire')).toBe(false);
+  });
+
+  it('tells two abilities of different schools apart', async () => {
+    const h = await run();
+
+    h.hit({ ability: 'Fell Shot', school: 'arcane', amount: 500 });
+    h.hit({ ability: 'Venom Barb', school: 'nature', amount: 300 });
+    h.tick();
+
+    expect(rowFor('Fell Shot')?.classList.contains('woc-bar-school-arcane')).toBe(true);
+    expect(rowFor('Venom Barb')?.classList.contains('woc-bar-school-nature')).toBe(true);
+  });
+
+  // `heal2` carries no school at all, so a healing row has nothing true to pass and
+  // must not borrow one. It gets the default fill.
+  it('leaves a healing row untinted, because heal2 carries no school', async () => {
+    const h = await run();
+    h.heal({ ability: 'Mend Wounds' });
+    h.tick();
+
+    h.openTab('Healing');
+
+    const healRow = rowFor('Mend Wounds');
+    const tinted = [...(healRow?.classList ?? [])].some((n) => n.startsWith('woc-bar-school-'));
+
+    expect(tinted).toBe(false);
+  });
+
+  // On Taken the school is the ATTACKER'S, which is the more useful reading there:
+  // what kind of damage is landing on you.
+  it('tints a taken row by the school that hit you', async () => {
+    const h = await run();
+    h.hit({ by: OTHER_ID, at: PLAYER_ID, ability: 'Shadow Bolt', school: 'shadow' });
+    h.tick();
+
+    h.openTab('Taken');
+
+    expect(rowFor('Shadow Bolt')?.classList.contains('woc-bar-school-shadow')).toBe(true);
   });
 });

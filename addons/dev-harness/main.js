@@ -17,7 +17,37 @@
 
 const CHECK_TIMEOUT_MS = 3000;
 const TOAST_MS = 2500;
+const BANNER_MS = 2000;
 const MS_PER_SECOND = 1000;
+/** How long the bar demonstration takes to drain. */
+const DEMO_SECONDS = 4;
+const DEMO_WIDTH = 190;
+/** Under this share left the kit draws a bar warm, which the demo shows off. */
+const DEMO_WARN = 0.25;
+
+/**
+ * Every key the published types say `world.on` accepts.
+ *
+ * Written out rather than read from anywhere, which is the point: the loader owns
+ * one list and this is an independent second one. A key added to the published types
+ * and not to the runtime's own list would typecheck everywhere and throw here, and a
+ * key added to the runtime and never published would pass silently in a unit suite
+ * because nothing there reads the published types either.
+ */
+const WORLD_KEYS = [
+  'player',
+  'target',
+  'entities',
+  'party',
+  'inventory',
+  'quests',
+  'cooldowns',
+  'auras',
+  'casts',
+  'targetAuras',
+  'hazards',
+  'markers',
+];
 /** An arbitrary nested value, to show that storage is not flattened to strings. */
 const PROBE_VALUE = Object.freeze(['a', ['b'], { c: true }]);
 /** Matches --color-text-error, so a failed line reads the way the manager's do. */
@@ -185,6 +215,130 @@ function checkWorld() {
   return result('world', true, `${String(woc.world.entities.size)} entities in interest scope`);
 }
 
+/**
+ * Every published key is watchable, and every read answers.
+ *
+ * A key that reached the published types without reaching the runtime's own list
+ * throws from `world.on`, which is the failure this exists to catch: it is invisible
+ * to a unit suite, because nothing there reads the published types.
+ *
+ * The reads are checked for being PRESENT rather than for a value. Before world entry
+ * almost all of them are legitimately null, and a key missing from the object
+ * entirely is a different thing from one answering null, which is what `undefined`
+ * separates.
+ */
+function checkWorldKeys() {
+  const unwatchable = [];
+  const missing = [];
+  for (const key of WORLD_KEYS) {
+    if (woc.world[key] === undefined) {
+      missing.push(key);
+    }
+    try {
+      woc.world.on(key, () => undefined)();
+    } catch {
+      unwatchable.push(key);
+    }
+  }
+  if (missing.length > 0) {
+    return result('world keys', false, `no read for ${missing.join(', ')}`);
+  }
+  if (unwatchable.length > 0) {
+    return result('world keys', false, `world.on refused ${unwatchable.join(', ')}`);
+  }
+  return result('world keys', true, `${String(WORLD_KEYS.length)} keys readable and watchable`);
+}
+
+/**
+ * A mob's cast is readable even though no event announces it.
+ *
+ * `net.onEvent('castStart')` fires for a player cast, a pet, gathering and fishing,
+ * and for nothing else, so `world.casts` is the only way to see a boss cast. What
+ * this can check without a fight is that the derivation runs over the live roster and
+ * agrees with the cast fields on the entities themselves. Anything it finds is a real
+ * cast: this environment has no fixtures.
+ */
+function checkCasts() {
+  const { casts } = woc.world;
+  if (!(casts instanceof Map)) {
+    return result('casts', false, 'world.casts is not a Map');
+  }
+  const casting = [...woc.world.entities.values()].filter(
+    (entity) => typeof entity.castingAbility === 'string' && entity.castingAbility.length > 0,
+  );
+  if (casting.length !== casts.size) {
+    return result(
+      'casts',
+      false,
+      `${String(casts.size)} in world.casts, ${String(casting.length)} entities with a cast field`,
+    );
+  }
+  if (casts.size === 0) {
+    return result('casts', true, 'readable, nothing in scope is casting');
+  }
+  const names = [...casts.values()].map((cast) => cast.ability);
+  return result('casts', true, `${String(casts.size)} casting: ${names.join(', ')}`);
+}
+
+/**
+ * The icon URL builders answer, and refuse an id they cannot build a name from.
+ *
+ * Whether any given URL RESOLVES is not checked and cannot be from here: only some
+ * abilities ship painted art and the rest are drawn procedurally inside the game.
+ * The bar demonstration below is where that shows, since the kit hides a slot whose
+ * image fails.
+ */
+function checkIcons() {
+  const { icon } = woc.ui;
+  const ability = icon.ability('fireball', 'mage');
+  if (ability !== '/ui/skills/mage/fireball.webp') {
+    return result('icons', false, `ability() built ${String(ability)}`);
+  }
+  if (icon.mob('bog_bloat') !== '/ui/mobs/bog_bloat.webp') {
+    return result('icons', false, `mob() built ${String(icon.mob('bog_bloat'))}`);
+  }
+  if (icon.item('baked_bread') !== '/ui/items/baked_bread.webp') {
+    return result('icons', false, `item() built ${String(icon.item('baked_bread'))}`);
+  }
+  // A missing class is the case an addon hits before world entry, and a path with an
+  // empty segment in it would be a request that cannot succeed rather than a null.
+  if (icon.ability('fireball', '') !== null) {
+    return result('icons', false, 'ability() built a path with no class in it');
+  }
+  return result('icons', true, 'ability, mob and item paths built, empty ids refused');
+}
+
+/**
+ * The served art manifest, read for the player's own class.
+ *
+ * This is the half a unit suite cannot reach: whether the game still serves the
+ * manifest at all, and whether the ability ids in it line up with what the player
+ * actually has. Not every ability ships a file, so the check is that the loader can
+ * TELL, not that any given ability has one: an id the manifest omits has an icon in
+ * the game and no URL an addon can point at, and reporting that as a pass with a
+ * count is the honest reading.
+ */
+async function checkSkillArt() {
+  const cls = woc.world.player?.templateId ?? '';
+  if (cls === '') {
+    return result('skill art', true, 'no player yet, so no class to read a manifest for');
+  }
+  await woc.ui.icon.preload(cls);
+
+  // Cooldown map KEYS are real ability ids, which makes them the one list of the
+  // player's own abilities an addon can get without deriving anything.
+  const ids = [...(woc.world.cooldowns?.keys() ?? [])];
+  if (ids.length === 0) {
+    return result('skill art', true, `manifest read for ${cls}, nothing on cooldown to check`);
+  }
+  const withArt = ids.filter((id) => woc.ui.icon.ability(id, cls) !== null);
+  return result(
+    'skill art',
+    true,
+    `${cls}: ${String(withArt.length)} of ${String(ids.length)} running cooldowns have a file`,
+  );
+}
+
 /** The round trip, or a plain note that none has been measured yet. */
 function describeLatency(latencyMs) {
   if (latencyMs === null) {
@@ -277,10 +431,13 @@ async function runChecks() {
     checkSettings(),
     checkKeys(),
     checkWorld(),
+    checkWorldKeys(),
+    checkCasts(),
+    checkIcons(),
     checkNet(),
     checkShadowedGlobals(),
   ];
-  const awaited = await Promise.all([checkStorage(), checkSound(), checkTimers()]);
+  const awaited = await Promise.all([checkStorage(), checkSound(), checkTimers(), checkSkillArt()]);
   return [...immediate, ...awaited];
 }
 
@@ -381,6 +538,51 @@ function run() {
     });
 }
 
+/**
+ * A timer bar, drained by a frame loop so the fill can be watched moving.
+ *
+ * The whole reason a bar is a manual trigger rather than a check: a suite can assert
+ * the width string the addon wrote, and cannot see whether the row is legible, whether
+ * the icon lines up with the label, or whether the countdown's digits shuffle as they
+ * change. Its icon deliberately points at a real ability, so a missing-art case shows
+ * as a collapsed slot rather than as a broken image.
+ */
+function demoBar() {
+  const bar = woc.ui.bar({
+    label: 'Fireball (demo)',
+    icon: woc.ui.icon.ability('fireball', 'mage'),
+    detail: 'a bar, drained from a frame loop',
+  });
+  bar.el.style.width = `${String(DEMO_WIDTH)}px`;
+  win.body.appendChild(bar.el);
+
+  const startedAt = woc.now();
+  const drain = () => {
+    const elapsed = (woc.now() - startedAt) / MS_PER_SECOND;
+    const left = Math.max(DEMO_SECONDS - elapsed, 0);
+    if (left <= 0) {
+      bar.destroy();
+      return;
+    }
+    const fraction = left / DEMO_SECONDS;
+    bar.update({
+      fraction,
+      value: `${left.toFixed(1)}s`,
+      tone: barTone(fraction),
+    });
+    woc.requestAnimationFrame(drain);
+  };
+  drain();
+}
+
+/** Warm as it runs out, which is the tone change the kit draws. */
+function barTone(fraction) {
+  if (fraction <= DEMO_WARN) {
+    return 'warn';
+  }
+  return 'default';
+}
+
 /** Null is a cancelled prompt, which is not a failure. */
 function describeCapture(combo) {
   if (combo === null) {
@@ -388,6 +590,71 @@ function describeCapture(combo) {
   }
   return `Captured ${combo}`;
 }
+
+function showAlert() {
+  woc.ui
+    .alert({
+      title: 'Dev Harness',
+      message: 'This modal resolves even if the addon is disabled while it is open.',
+      buttons: [
+        { id: 'ok', label: 'Understood', primary: true },
+        { id: 'cancel', label: 'Cancel', cancel: true },
+      ],
+    })
+    .then((pressed) => {
+      woc.log('alert resolved with', pressed);
+    })
+    .catch((err) => {
+      woc.error('alert rejected, which it never should', err);
+    });
+}
+
+function captureKey() {
+  woc.ui.toast('Press any key', { timeout: TOAST_MS });
+  woc.keys
+    .capture()
+    .then((combo) => {
+      woc.log('captured', combo);
+      woc.ui.toast(describeCapture(combo), { timeout: TOAST_MS });
+    })
+    .catch((err) => {
+      woc.error('capture rejected, which it never should', err);
+    });
+}
+
+/**
+ * The two announcement surfaces, and the two steps of the louder one.
+ *
+ * A toast and a banner are easy to confuse in a description and impossible to
+ * confuse once both have been seen: one waits its turn at the top of the screen, the
+ * other lands over the middle of the view and interrupts.
+ *
+ * Both banner sizes get a button because the judgement they need is comparative. A
+ * warning is loud enough only relative to what else is on screen during a fight, and
+ * if every warning is the large one then none of them is.
+ */
+const ANNOUNCEMENTS = [
+  ['Toast', () => woc.ui.toast(`Uptime ${String(uptimeSeconds())}s`, { timeout: TOAST_MS })],
+  [
+    'Banner',
+    () =>
+      woc.ui.banner('Soul Rend', {
+        detail: 'the normal size, for a mechanic you react to',
+        kind: 'warn',
+        timeout: BANNER_MS,
+      }),
+  ],
+  [
+    'Big banner',
+    () =>
+      woc.ui.banner('Deathless Rage', {
+        detail: 'the large size, for one that ends the pull',
+        kind: 'danger',
+        size: 'large',
+        timeout: BANNER_MS,
+      }),
+  ],
+];
 
 /** The manual half: the surfaces a check cannot assert, only a person can see. */
 function controls() {
@@ -402,40 +669,10 @@ function controls() {
     button('Play cue', () => {
       woc.sound.play(String(woc.settings.cue));
     }),
-    button('Toast', () => {
-      woc.ui.toast(`Uptime ${String(uptimeSeconds())}s`, {
-        timeout: TOAST_MS,
-      });
-    }),
-    button('Alert', () => {
-      woc.ui
-        .alert({
-          title: 'Dev Harness',
-          message: 'This modal resolves even if the addon is disabled while it is open.',
-          buttons: [
-            { id: 'ok', label: 'Understood', primary: true },
-            { id: 'cancel', label: 'Cancel', cancel: true },
-          ],
-        })
-        .then((pressed) => {
-          woc.log('alert resolved with', pressed);
-        })
-        .catch((err) => {
-          woc.error('alert rejected, which it never should', err);
-        });
-    }),
-    button('Capture a key', () => {
-      woc.ui.toast('Press any key', { timeout: TOAST_MS });
-      woc.keys
-        .capture()
-        .then((combo) => {
-          woc.log('captured', combo);
-          woc.ui.toast(describeCapture(combo), { timeout: TOAST_MS });
-        })
-        .catch((err) => {
-          woc.error('capture rejected, which it never should', err);
-        });
-    }),
+    ...ANNOUNCEMENTS.map(([label, show]) => button(label, show)),
+    button('Bar', demoBar),
+    button('Alert', showAlert),
+    button('Capture a key', captureKey),
   );
 
   woc.ui.tooltip(row, 'Each button drives one surface the automated checks cannot assert.');

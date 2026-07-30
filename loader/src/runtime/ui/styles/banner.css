@@ -1,0 +1,149 @@
+/* The centre-screen warning, the sheet for kit/banner.ts.
+ *
+ * One slot for the whole loader: see that module for why a new banner replaces
+ * rather than stacks, and for why size and weight are one enum rather than two
+ * options. Almost everything here is in service of one requirement, which is that a
+ * player reads this within about a second while looking at something else.
+ */
+#woc-banner {
+  position: fixed;
+  top: 30%;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  /* A warning arrives unasked for, in the middle of where the player is clicking.
+     Taking the pointer would put a dead patch over the fight it is warning about. */
+  pointer-events: none;
+  /* The same band as the toast stack, which it cannot overlap: toasts sit at the
+     top edge. Both start one above kit/stacking.ts's WINDOW_Z_CEILING. */
+  z-index: 100001;
+}
+
+#woc-addons .woc-banner-card {
+  text-align: center;
+  font-family: var(--title-font, serif);
+  /* 700 is the top of the weight range the game loads for Cinzel, and a display
+     serif at 400 is thin strokes: the first version of this was unreadable across a
+     fight for that reason alone. */
+  font-weight: 700;
+  /* Cinzel has no lowercase, so the head line is caps whatever is passed in.
+     Tracking it out slightly is what keeps a long all-caps line from packing. */
+  letter-spacing: 0.02em;
+  line-height: 1.15;
+  text-shadow:
+    0 2px 5px rgb(0 0 0 / 95%),
+    0 0 16px rgb(0 0 0 / 80%);
+  color: var(--gold, rgb(255 209 0));
+  max-width: min(860px, 92vw);
+  /* A warning has to register in peripheral vision, which a static appearance does
+     not. Short and once. The reduced-motion floor in kit.css turns it off and the
+     banner is still perfectly legible without it, which is what makes the motion an
+     enhancement rather than the thing carrying the warning. */
+  animation: woc-banner-in 140ms ease-out;
+  /* Its own stacking context, so the scrim below sits behind this card's text and
+     nothing else, whether or not the entrance animation's transform is mid-flight.
+     Same idiom as a bar's fill, and for the same reason. */
+  isolation: isolate;
+}
+
+/*
+ * The scrim: what makes the warning legible over terrain of any colour.
+ *
+ * A text shadow is not contrast when the thing behind it is a pale sky, which is
+ * exactly where a centre-screen warning lands, so there has to be something darker
+ * than the sky behind the glyphs.
+ *
+ * It is a pseudo-element REACHING WELL PAST the card rather than a background on the
+ * card, and that is the whole trick. As a background its radii were measured against
+ * the padding box, so the gradient was still opaque where the element's own edge cut
+ * it off: four hard sides and four corners, a visible box. A fade can only have a
+ * soft edge if it finishes in empty space, which means the scrim has to be larger
+ * than the thing it is behind. The insets are percentages of the card, so a one-line
+ * warning and a two-line one both get a scrim in proportion to themselves.
+ */
+#woc-addons .woc-banner-card::before {
+  content: "";
+  position: absolute;
+  inset: -70% -20%;
+  z-index: -1;
+  /* The two axes fade separately and multiply, rather than one radial doing both.
+     A radial cannot: a banner is a wide, short box, so an ellipse inscribed in it
+     has already fallen off to almost nothing by the first and last letter of a long
+     headline, which is precisely where a warning needs its scrim most. So the
+     vertical falloff is the paint and the horizontal falloff is the mask.
+
+     The stop percentages are tied to the insets above and the tie is scale
+     invariant: at -70% top and bottom the card always occupies the middle 41.7% of
+     this box, so 27% and 73% always bracket it whatever the text does to its
+     height. Move one of these numbers and the other has to move with it. */
+  background: linear-gradient(
+    to bottom,
+    rgb(0 0 0 / 0%) 0%,
+    rgb(0 0 0 / 66%) 27%,
+    rgb(0 0 0 / 66%) 73%,
+    rgb(0 0 0 / 0%) 100%
+  );
+  -webkit-mask-image: linear-gradient(
+    to right,
+    transparent 0%,
+    black 13%,
+    black 87%,
+    transparent 100%
+  );
+  mask-image: linear-gradient(to right, transparent 0%, black 13%, black 87%, transparent 100%);
+}
+
+@keyframes woc-banner-in {
+  from {
+    opacity: 0;
+    transform: scale(1.12);
+  }
+
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* The padding hugs the text now that the scrim reaches past the card on its own. It
+   used to be wide enough to give a background room to fade, which is what made the
+   card a box in the first place. */
+#woc-addons .woc-banner-normal {
+  font-size: clamp(26px, 3.4vw, 42px);
+  padding: 6px 28px;
+}
+
+#woc-addons .woc-banner-large {
+  font-size: clamp(34px, 5vw, 62px);
+  padding: 8px 36px;
+}
+
+#woc-addons .woc-banner-danger {
+  color: var(--color-text-error, rgb(255 143 133));
+}
+
+#woc-addons .woc-banner-info {
+  color: var(--color-text-light, rgb(240 235 216));
+}
+
+/* The second line is set in the UI face, not the display one. Cinzel has no
+   lowercase, so a detail line in it is small caps at half the head's size, which is
+   the least legible thing on screen; this is the one place inside a banner where
+   inheriting the family is wrong. */
+#woc-addons .woc-banner-detail {
+  font-family: var(--ui-font, system-ui, sans-serif);
+  font-weight: 500;
+  letter-spacing: normal;
+  opacity: 0.9;
+  margin-top: 4px;
+}
+
+#woc-addons .woc-banner-normal .woc-banner-detail {
+  font-size: 16px;
+}
+
+#woc-addons .woc-banner-large .woc-banner-detail {
+  font-size: 19px;
+}

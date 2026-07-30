@@ -11,17 +11,12 @@
 import type { DisposalBag } from '../disposal.ts';
 import type { Unsubscribe } from '../net/bus.ts';
 import type { WorldBackend } from '../world/backend.ts';
-import type {
-  Aura,
-  Entity,
-  InvSlot,
-  PartyInfo,
-  WorldQuests,
-  WorldValues,
-} from '../world/game-types.ts';
+import type { EntityCast, Hazard } from '../world/derived.ts';
+import type { Aura, Entity, InvSlot, PartyInfo, WorldQuests } from '../world/game-types.ts';
 import type { WorldHub } from '../world/hub.ts';
 import { readonlyMapView } from '../world/readonly-map.ts';
 import { isWorldKey, WORLD_KEYS, type WorldKey } from '../world/signature.ts';
+import type { WorldValues } from '../world/values.ts';
 
 /**
  * The roster before the game exists.
@@ -36,6 +31,19 @@ function emptyEntities(): ReadonlyMap<number, Entity> {
   return readonlyMapView(new Map<number, Entity>());
 }
 
+/**
+ * No cast before the game exists.
+ *
+ * A bare Map is right here where it is wrong for `entities`: this one is built by
+ * the loader on every read rather than being the game's own live collection, so a
+ * write into it lands in something already discarded and cannot reach another
+ * addon. It is not wrapped because wrapping every derived read would be a
+ * per-frame allocation to guard a value nobody holds.
+ */
+function emptyCasts(): ReadonlyMap<number, EntityCast> {
+  return new Map<number, EntityCast>();
+}
+
 /** Every read answers null before the game exists, rather than throwing at an addon. */
 function fromBackend<T>(hub: WorldHub, read: (backend: WorldBackend) => T | null): T | null {
   const backend = hub.backend();
@@ -45,37 +53,27 @@ function fromBackend<T>(hub: WorldHub, read: (backend: WorldBackend) => T | null
   return read(backend);
 }
 
-export interface WorldApi {
-  readonly ready: Promise<void>;
-  readonly player: Entity | null;
-  readonly target: Entity | null;
-  readonly entities: ReadonlyMap<number, Entity>;
-  readonly party: PartyInfo | null;
-  readonly inventory: readonly InvSlot[] | null;
-  readonly quests: WorldQuests | null;
-  readonly cooldowns: ReadonlyMap<string, number> | null;
-  readonly auras: readonly Aura[] | null;
-
-  /**
-   * Watch one key for change, sampled once per animation frame.
-   *
-   * The handler's argument is typed from the key, so `world.on('cooldowns', ...)`
-   * receives the cooldown map rather than a value the addon narrows itself.
-   */
-  on: <K extends WorldKey>(key: K, handler: (value: WorldValues[K]) => void) => Unsubscribe;
-
-  /**
-   * The game's own objects. Unstable by definition: the game promises nothing
-   * about them, and the manager flags an addon that reaches for one.
-   */
-  readonly raw: unknown;
-  readonly game: unknown;
+/**
+ * Two halves of the facade as one object, carrying DESCRIPTORS rather than values.
+ *
+ * `{ ...a, ...b }` would be the obvious way to compose these and is exactly wrong
+ * here: a spread READS every property, so each getter would be called once at
+ * assembly time and the facade would freeze at whatever the answers were before
+ * the game existed. Copying descriptors keeps every getter a getter.
+ *
+ * The facade is split at all because it is one read per published key and that is
+ * past the length a single function body is allowed. The intersection is what
+ * keeps the split honest: a key dropped from either half fails to satisfy
+ * `WorldApi` at the return below rather than going missing at an addon.
+ */
+function mergeLive<A extends object, B extends object>(a: A, b: B): A & B {
+  const merged = Object.defineProperties({}, Object.getOwnPropertyDescriptors(a));
+  return Object.defineProperties(merged, Object.getOwnPropertyDescriptors(b)) as A & B;
 }
 
-export function createWorld(hub: WorldHub, bag: DisposalBag): WorldApi {
+/** The reads that come straight off the backend, each null until the game is up. */
+function gameReads(hub: WorldHub) {
   return {
-    ready: hub.ready,
-
     get player(): Entity | null {
       return fromBackend(hub, (backend) => backend.player);
     },
@@ -111,8 +109,40 @@ export function createWorld(hub: WorldHub, bag: DisposalBag): WorldApi {
     get auras(): readonly Aura[] | null {
       return fromBackend(hub, (backend) => backend.auras);
     },
+  };
+}
 
-    on: (key, handler) => {
+/** The reads the loader computes. See `world/derived.ts` for why each exists. */
+function derivedReads(hub: WorldHub) {
+  return {
+    get casts(): ReadonlyMap<number, EntityCast> {
+      const backend = hub.backend();
+      if (backend === null) {
+        return emptyCasts();
+      }
+      return backend.casts;
+    },
+
+    get targetAuras(): readonly Aura[] | null {
+      return fromBackend(hub, (backend) => backend.targetAuras);
+    },
+
+    get hazards(): readonly Hazard[] | null {
+      return fromBackend(hub, (backend) => backend.hazards);
+    },
+
+    get markers(): ReadonlyMap<number, number> | null {
+      return fromBackend(hub, (backend) => backend.markers);
+    },
+  };
+}
+
+/** Subscribing, plus the two escape hatches. Everything that is not a state read. */
+function controls(hub: WorldHub, bag: DisposalBag) {
+  return {
+    ready: hub.ready,
+
+    on: <K extends WorldKey>(key: K, handler: (value: WorldValues[K]) => void): Unsubscribe => {
       if (!isWorldKey(key)) {
         throw new Error(`world.on: unknown key '${key}'. Known keys: ${WORLD_KEYS.join(', ')}`);
       }
@@ -134,4 +164,39 @@ export function createWorld(hub: WorldHub, bag: DisposalBag): WorldApi {
       return hub.game();
     },
   };
+}
+
+export interface WorldApi {
+  readonly ready: Promise<void>;
+  readonly player: Entity | null;
+  readonly target: Entity | null;
+  readonly entities: ReadonlyMap<number, Entity>;
+  readonly party: PartyInfo | null;
+  readonly inventory: readonly InvSlot[] | null;
+  readonly quests: WorldQuests | null;
+  readonly cooldowns: ReadonlyMap<string, number> | null;
+  readonly auras: readonly Aura[] | null;
+  readonly casts: ReadonlyMap<number, EntityCast>;
+  readonly targetAuras: readonly Aura[] | null;
+  readonly hazards: readonly Hazard[] | null;
+  readonly markers: ReadonlyMap<number, number> | null;
+
+  /**
+   * Watch one key for change, sampled once per animation frame.
+   *
+   * The handler's argument is typed from the key, so `world.on('cooldowns', ...)`
+   * receives the cooldown map rather than a value the addon narrows itself.
+   */
+  on: <K extends WorldKey>(key: K, handler: (value: WorldValues[K]) => void) => Unsubscribe;
+
+  /**
+   * The game's own objects. Unstable by definition: the game promises nothing
+   * about them, and the manager flags an addon that reaches for one.
+   */
+  readonly raw: unknown;
+  readonly game: unknown;
+}
+
+export function createWorld(hub: WorldHub, bag: DisposalBag): WorldApi {
+  return mergeLive(mergeLive(gameReads(hub), derivedReads(hub)), controls(hub, bag));
 }

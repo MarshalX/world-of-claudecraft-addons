@@ -26,7 +26,8 @@
     "test": "vitest run",
     "validate": "node tools/validate.mjs",
     "index": "node tools/index.mjs",
-    "cues": "node tools/cues.mjs"
+    "cues": "node tools/cues.mjs",
+    "icons": "node tools/icons.mjs"
   },
   "dependencies": {
     "comlink": "^4.4.2",

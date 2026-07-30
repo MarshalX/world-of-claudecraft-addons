@@ -58,6 +58,57 @@ export interface Aura {
   charges?: number;
   /** Seconds between ticks, for a dot or hot. */
   tickInterval?: number;
+  /** A second magnitude, e.g. the top of an imbue's damage range. */
+  value2?: number;
+  value3?: number;
+  /** Which abilities a next-cast empowerment applies to. Absent when unscoped. */
+  empowerAbilities?: string[];
+  /**
+   * Set only on control an encounter owns, which nothing a player does breaks.
+   *
+   * This is what separates a scripted mechanic's stun from an ordinary one, and
+   * it is on the wire as `ub` for exactly that reason.
+   */
+  unbreakableControl?: boolean;
+}
+
+/**
+ * One charge-limited ability's pool.
+ *
+ * `maxCharges` is deliberately NOT here. The server keeps the maximum to itself
+ * and the client zero-fills the field, so it is readable, of the right kind, and
+ * permanently 0: the `inCombat` trap exactly. The game's own bar derives the max
+ * from its bundled ability table, which an addon has no equivalent of.
+ */
+export interface AbilityCharge {
+  /** Uses in the pool right now. */
+  charges: number;
+  /** Seconds until the next charge returns, or 0 when none is regenerating. */
+  recharge: number;
+  /** What `recharge` counts down from. Real, unlike a cooldown's total. */
+  rechargeLength: number;
+}
+
+/** The six authored attributes plus the two PvP fractions derived from ratings. */
+export interface CoreStats {
+  str: number;
+  agi: number;
+  sta: number;
+  int: number;
+  spi: number;
+  armor: number;
+  pvpOffense: number;
+  pvpDefense: number;
+}
+
+/** The equipped mainhand's damage range and swing time. */
+export interface WeaponInfo {
+  min: number;
+  max: number;
+  /** Seconds per swing. */
+  speed: number;
+  /** Set when the weapon is a dagger, which some abilities require. */
+  dagger?: boolean;
 }
 
 /**
@@ -114,6 +165,19 @@ export interface Entity {
   critChance: number;
   dodgeChance: number;
   blockChance: number;
+  /** Seconds until the next auto-attack swing lands. */
+  swingTimer: number;
+  comboPoints: number;
+  stats: CoreStats;
+  weapon: WeaponInfo;
+  /**
+   * Ability id to its charge pool, for the few abilities that have one.
+   *
+   * Absent entirely until the first snapshot that carried any, which is why it is
+   * optional: the client creates the record on decode rather than blank-filling
+   * it. An ability with no charge model is simply not a key.
+   */
+  abilityCharges?: Record<string, AbilityCharge>;
 }
 
 /** A compact aura summary for a party row. Not the full `Aura`. */
@@ -192,22 +256,4 @@ export interface WorldQuests {
   readonly log: ReadonlyMap<string, QuestProgress> | null;
   /** The ids of finished quests. */
   readonly done: ReadonlySet<string> | null;
-}
-
-/**
- * What each `world.on` key reports, and what the matching read returns.
- *
- * One declaration for both so a key can never mean two things. The keys
- * themselves stay authoritative in `signature.ts`, which is what the runtime
- * validates against; `tests/world-shape.test.ts` asserts the two agree.
- */
-export interface WorldValues {
-  player: Entity | null;
-  target: Entity | null;
-  entities: ReadonlyMap<number, Entity>;
-  party: PartyInfo | null;
-  inventory: readonly InvSlot[] | null;
-  quests: WorldQuests | null;
-  cooldowns: ReadonlyMap<string, number> | null;
-  auras: readonly Aura[] | null;
 }

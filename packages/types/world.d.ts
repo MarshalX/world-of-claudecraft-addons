@@ -40,6 +40,58 @@ export interface Aura {
   charges?: number;
   /** Seconds between ticks, for a dot or hot. */
   tickInterval?: number;
+  /** A second magnitude, e.g. the top of an imbue's damage range. */
+  value2?: number;
+  value3?: number;
+  /** Which abilities a next-cast empowerment applies to. Absent when unscoped. */
+  empowerAbilities?: string[];
+  /**
+   * Set only on control an encounter owns, which nothing a player does breaks.
+   *
+   * This is what separates a scripted mechanic's stun from an ordinary one, so it
+   * is the field to read before telling a player their trinket will help.
+   */
+  unbreakableControl?: boolean;
+}
+
+/**
+ * One charge-limited ability's pool.
+ *
+ * There is no maximum here, and that is not an omission: the server keeps the
+ * maximum to itself, so the field your client holds for it is permanently 0.
+ * The game's own bar derives it from a bundled ability table an addon has no
+ * equivalent of. What you can rely on is `rechargeLength`, which is real, and is
+ * the one timer on the whole surface that gives you an exact denominator.
+ */
+export interface AbilityCharge {
+  /** Uses in the pool right now. */
+  charges: number;
+  /** Seconds until the next charge returns, or 0 when none is regenerating. */
+  recharge: number;
+  /** What `recharge` counts down from. */
+  rechargeLength: number;
+}
+
+/** The six authored attributes plus the two PvP fractions derived from ratings. */
+export interface CoreStats {
+  str: number;
+  agi: number;
+  sta: number;
+  int: number;
+  spi: number;
+  armor: number;
+  pvpOffense: number;
+  pvpDefense: number;
+}
+
+/** The equipped mainhand's damage range and swing time. */
+export interface WeaponInfo {
+  min: number;
+  max: number;
+  /** Seconds per swing. */
+  speed: number;
+  /** Set when the weapon is a dagger, which some abilities require. */
+  dagger?: boolean;
 }
 
 /**
@@ -106,6 +158,19 @@ export interface Entity {
   critChance: number;
   dodgeChance: number;
   blockChance: number;
+  /** Seconds until your next auto-attack swing lands. */
+  swingTimer: number;
+  comboPoints: number;
+  stats: CoreStats;
+  weapon: WeaponInfo;
+  /**
+   * Ability id to its charge pool, for the few abilities that have one.
+   *
+   * Absent until the first snapshot that carried any, so guard the read. An
+   * ability with no charge model is simply not a key here, and a charge bar drawn
+   * off `rechargeLength` is exact where a cooldown bar cannot be.
+   */
+  abilityCharges?: Record<string, AbilityCharge>;
 }
 
 /** A compact aura summary for a party row. Not the full `Aura`. */
@@ -186,6 +251,47 @@ export interface WorldQuests {
   readonly done: ReadonlySet<string> | null;
 }
 
+/**
+ * What a cast bar says, on any entity rather than only on you.
+ *
+ * Read this rather than listening for a cast event. `net.onEvent('castStart')`
+ * fires for a PLAYER cast, a pet, gathering and fishing, and for nothing else: a
+ * mob's mechanic sets its cast state directly, so a boss mod built on the event
+ * receives silence and has no way to tell that from a boss that never casts.
+ * `world.casts` and `world.on('casts', ...)` are the surface that closes that gap.
+ */
+export interface EntityCast {
+  /** The ability id being cast. */
+  ability: string;
+  /** Seconds left, against `total`. */
+  remaining: number;
+  total: number;
+  /** Whether it is a channel, which drains rather than completes. */
+  channeling: boolean;
+}
+
+export type HazardKind = 'frostRing' | 'temporalHourglass';
+
+/**
+ * A ground effect with a position, a radius and a life.
+ *
+ * These two are the only ground effects whose geometry rides the snapshot, and
+ * they arrive filtered to what is near you. Every other ground AoE announces
+ * itself once as a `spellfxAt` event and then lives only in the renderer, so
+ * tracking those means keeping your own list from the events.
+ */
+export interface Hazard {
+  id: string;
+  kind: HazardKind;
+  x: number;
+  z: number;
+  radius: number;
+  /** The inner edge of a ring's safe middle. 0 when the whole disc is hot. */
+  innerRadius: number;
+  duration: number;
+  remaining: number;
+}
+
 /** What each read returns, and what the matching `world.on` key reports. */
 export interface WorldValues {
   player: Entity | null;
@@ -196,6 +302,10 @@ export interface WorldValues {
   quests: WorldQuests | null;
   cooldowns: ReadonlyMap<string, number> | null;
   auras: readonly Aura[] | null;
+  casts: ReadonlyMap<number, EntityCast>;
+  targetAuras: readonly Aura[] | null;
+  hazards: readonly Hazard[] | null;
+  markers: ReadonlyMap<number, number> | null;
 }
 
 /** The state keys `world.on` can watch. Anything else throws. */
@@ -232,12 +342,41 @@ export interface WorldApi {
   readonly auras: readonly Aura[] | null;
 
   /**
+   * Entity id to what it is casting, for everything near you.
+   *
+   * Built on each read from live entity state, so it is never stale and there is
+   * nothing to hold on to: read it again rather than keeping the map.
+   */
+  readonly casts: ReadonlyMap<number, EntityCast>;
+
+  /**
+   * The effects on your current target, or null when nothing is targeted.
+   *
+   * `world.on('target', ...)` reports which entity is selected and nothing else,
+   * so watching a debuff you applied to a boss means watching this key.
+   */
+  readonly targetAuras: readonly Aura[] | null;
+
+  readonly hazards: readonly Hazard[] | null;
+
+  /**
+   * Entity id to raid target marker, 0 through 7.
+   *
+   * Empty when you are not in a party, because the game sends markers only to a
+   * grouped player. That is indistinguishable from a group that has marked
+   * nothing, so read `world.party` if the difference matters. There is no way to
+   * SET one: placing a marker is a command, and the loader never sends.
+   */
+  readonly markers: ReadonlyMap<number, number> | null;
+
+  /**
    * Watch a key for change, sampled once per animation frame.
    *
    * Fires on change rather than on every sample, and only for a change worth
    * acting on: `auras` reports one arriving or falling off, not its remaining
-   * time ticking down, and `cooldowns` reports one starting or ending rather
-   * than counting down. Count down yourself if you need to draw it.
+   * time ticking down, `cooldowns` reports one starting or ending rather than
+   * counting down, and `casts` reports a cast starting, ending or being replaced
+   * rather than its bar moving. Count down yourself if you need to draw it.
    *
    * The handler's argument is typed from the key, so `world.on('party', ...)`
    * receives a `PartyInfo` without narrowing.

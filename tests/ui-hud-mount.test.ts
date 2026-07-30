@@ -165,6 +165,7 @@ describe('the composed UI', () => {
     const ui = mountUi({
       doc: document,
       css: '',
+      fetchJson: () => new Promise<unknown>(() => undefined),
       registry: null,
       storage: null,
       channel: 'pbe',
@@ -187,6 +188,7 @@ describe('the composed UI', () => {
     const ui = mountUi({
       doc: document,
       css: '',
+      fetchJson: () => new Promise<unknown>(() => undefined),
       registry: null,
       storage: null,
       channel: 'pbe',
@@ -209,6 +211,7 @@ describe('the composed UI', () => {
     const ui = mountUi({
       doc: document,
       css: '',
+      fetchJson: () => new Promise<unknown>(() => undefined),
       registry: null,
       storage: null,
       channel: 'pbe',
@@ -253,6 +256,7 @@ describe('addon UI against the HUD', () => {
     return mountUi({
       doc: document,
       css: '',
+      fetchJson: () => new Promise<unknown>(() => undefined),
       registry: null,
       storage: null,
       channel: 'pbe',
@@ -353,6 +357,7 @@ describe('the manager and the window order', () => {
     return mountUi({
       doc: document,
       css: '',
+      fetchJson: () => new Promise<unknown>(() => undefined),
       registry: null,
       storage: null,
       channel: 'pbe',

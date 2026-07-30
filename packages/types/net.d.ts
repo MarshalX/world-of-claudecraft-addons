@@ -51,7 +51,16 @@ export interface NetState {
  */
 export interface NetApi {
   on: (type: FrameType, handler: (frame: unknown) => void, opts?: SubscribeOpts) => Unsubscribe;
-  /** One decoded event kind out of the 'events' frames. */
+  /**
+   * One decoded event kind out of the 'events' frames.
+   *
+   * `castStart` does NOT cover a mob. It is emitted for a player cast, a pet,
+   * gathering and fishing, and nothing else: every mob mechanic that shows a cast
+   * bar sets its cast state directly, and that state reaches you only on the
+   * per-entity snapshot. So a boss mod written on this event receives silence, and
+   * has no way to tell that from a boss that never casts. Read `world.casts`, or
+   * subscribe with `world.on('casts', ...)`, for anything but your own casting.
+   */
   onEvent: (kind: string, handler: (event: unknown) => void, opts?: SubscribeOpts) => Unsubscribe;
   onAnyEvent: (handler: (event: unknown) => void, opts?: SubscribeOpts) => Unsubscribe;
   /** Every inbound frame, whatever its type. */

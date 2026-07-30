@@ -22,11 +22,35 @@
 // server, and it matches the 5 seconds the game's own meter uses to close an
 // encounter, so the segments line up.
 //
-// Two limits, stated rather than hidden. Damage a pet deals is not counted: the
-// published surface does not say which entity is yours, and guessing from position
-// or name would be wrong often enough to be worse than the omission. And there is
-// no overhealing column, because no overheal figure rides the wire at all; the
-// healing here is what landed.
+// Three limits, stated rather than hidden.
+//
+// NO ABILITY ICONS. The rows carry no art, and this is the one worth reading before
+// anyone adds it back. Skill art is filed under the ability ID, and a combat event
+// carries the ability's display NAME: `damage` and `heal2` fill that field from
+// `ability.name` and only `castStart` and `spellfx` carry `ability.id`. Those two
+// have DIVERGED in the game, so a name cannot be turned back into an id. The worked
+// example, from the deployed i18n bundle:
+//
+//   arcane_shot: { name: `Fell Shot`, ... }
+//
+// The id is `arcane_shot`, the art is `/ui/skills/hunter/arcane_shot.webp`, and every
+// event about it says "Fell Shot". Slugifying gives `fell_shot`, which does not exist.
+// A first version shipped exactly that and drew icons for the two hunter abilities
+// whose names happened to still match their ids, which read as random.
+//
+// The routes to a real mapping were weighed and all rejected. The i18n bundle has all
+// 380 pairs and is served, but behind a hashed filename that must be discovered from
+// play.html, as minified JS rather than JSON, per locale: a surface far more brittle
+// than anything else the loader touches, breaking on a bundler change rather than on a
+// game change. Correlating a `spellfx` id with the damage that follows is learnable
+// from the wire alone, but a mispairing draws the WRONG icon, which is worse than
+// none. So the meter shows the names the game shows and no art. If the game ever
+// aligns the two or serves a mapping, this becomes a small change.
+//
+// Damage a pet deals is not counted: the published surface does not say which entity
+// is yours, and guessing from position or name would be wrong often enough to be worse
+// than the omission. And there is no overhealing column, because no overheal figure
+// rides the wire at all; the healing here is what landed.
 
 const MS_PER_SECOND = 1000;
 const REPAINT_MS = 500;
@@ -37,8 +61,9 @@ const DEFAULT_TIMEOUT_SECONDS = 5;
 const DEFAULT_MAX_ROWS = 10;
 const WINDOW_WIDTH = 340;
 const WINDOW_HEIGHT = 320;
-/** Auto-attacks arrive with no ability id, and they are usually a real share. */
+/** Auto-attacks arrive with no ability at all, and they are usually a real share. */
 const MELEE_LABEL = 'Melee';
+
 /** Attack-table outcomes, in the order they are worth reading. */
 const OUTCOMES = ['hit', 'miss', 'dodge', 'parry', 'block', 'resist'];
 
@@ -56,7 +81,11 @@ const TABLES = [
 ];
 
 function emptyTally() {
-  return { total: 0, count: 0, crits: 0, biggest: 0, absorbed: 0 };
+  // `school` is the one identifying thing about an ability that IS on a damage event
+  // and does not depend on the id, which is why the rows are coloured by it. First
+  // seen wins: an ability's school does not change, and re-reading it every hit would
+  // let one odd event recolour a row mid-fight.
+  return { total: 0, count: 0, crits: 0, biggest: 0, absorbed: 0, school: null };
 }
 
 /**
@@ -103,20 +132,30 @@ function timeoutMs() {
   return settingNumber('fight-timeout', DEFAULT_TIMEOUT_SECONDS) * MS_PER_SECOND;
 }
 
-/** 'aimed_shot' reads as 'Aimed Shot'. The game publishes ids, not display names. */
-function readable(abilityId) {
-  return abilityId
-    .split('_')
-    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-    .join(' ');
-}
-
-/** What to call the ability behind one event. An auto-attack has none. */
+/**
+ * What to call the ability behind one event: exactly what the event said.
+ *
+ * There was a title-casing pass here and it was DEAD CODE, which is worse than it
+ * sounds. A combat event's `ability` is already a display name from every one of the
+ * four places the game fills it: `ability.name`, `spell.name`, `queued.def.name`, and
+ * a literal 'Auto Shot' or 'Wand' for a ranged auto-attack. So it never had an
+ * underscore to split or a lowercase letter to raise.
+ *
+ * Removing it is the actual fix for how the icon bug hid. Title-casing turned
+ * `measured_shot` and `Measured Shot` into the SAME label, so a row looked correct
+ * whichever form the field held and no assertion about the frame could tell them
+ * apart. Passing the value through means a wire that ever starts sending ids shows
+ * `measured_shot` in the panel, which someone reports on the first fight, instead of
+ * being laundered into something that looks right and builds the wrong icon URL.
+ *
+ * Cooldown Bars keeps its own version of that pass and is right to: it reads the
+ * cooldown map, whose keys really are ids.
+ */
 function labelOf(event) {
   if (typeof event.ability !== 'string' || event.ability.length === 0) {
     return MELEE_LABEL;
   }
-  return readable(event.ability);
+  return event.ability;
 }
 
 /** Absorbed rides only the events that had some, so an absent field is zero. */
@@ -156,6 +195,9 @@ function nounFor(id) {
 function record(id, label, event) {
   const map = fight.tallies[id];
   const tally = map.get(label) ?? emptyTally();
+  if (tally.school === null && typeof event.school === 'string' && event.school.length > 0) {
+    tally.school = event.school;
+  }
   tally.total += event.amount;
   tally.count += 1;
   if (event.crit === true) {
@@ -284,11 +326,14 @@ outcomes.style.opacity = '0.75';
 
 panel.body.append(tabs, total, table, outcomes);
 
-/** Ability label to its row elements, reused across repaints. */
+/** Ability label to its row, reused across repaints. */
 const rows = new Map();
 
 /** Drop every row, for a tab switch or a reset. Rows are keyed by label. */
 function clearRows() {
+  for (const row of rows.values()) {
+    row.destroy();
+  }
   rows.clear();
   table.replaceChildren();
 }
@@ -318,53 +363,27 @@ function createTab(entry) {
 
 const tabButtons = TABLES.map(createTab);
 
-function createRow(label) {
-  const row = document.createElement('div');
-  row.className = 'woc-meter-row';
-  row.dataset.ability = label;
-  row.style.position = 'relative';
-  row.style.padding = '2px 6px';
-  row.style.overflow = 'hidden';
-
-  const fill = document.createElement('div');
-  fill.className = 'woc-meter-fill';
-  fill.style.position = 'absolute';
-  fill.style.inset = '0 auto 0 0';
-  fill.style.background = 'rgb(120 160 255 / 30%)';
-
-  // A flex line, and the name is the only part allowed to shrink. `min-width: 0`
-  // is what lets it: a flex item refuses to go below its content width without it,
-  // and that is the difference between an ellipsis and an overlap.
-  const head = document.createElement('div');
-  head.style.position = 'relative';
-  head.style.display = 'flex';
-  head.style.alignItems = 'baseline';
-  head.style.gap = '6px';
-
-  const name = document.createElement('span');
-  name.className = 'woc-meter-name';
-  name.style.flex = '1 1 auto';
-  name.style.minWidth = '0';
-  name.style.overflow = 'hidden';
-  name.style.textOverflow = 'ellipsis';
-  name.style.whiteSpace = 'nowrap';
-  name.textContent = label;
-  woc.ui.tooltip(name, label);
-
-  const figure = document.createElement('span');
-  figure.className = 'woc-meter-figure';
-  figure.style.flex = '0 0 auto';
-  figure.style.fontVariantNumeric = 'tabular-nums';
-
-  const detail = document.createElement('div');
-  detail.className = 'woc-meter-detail';
-  detail.style.position = 'relative';
-  detail.style.fontSize = '11px';
-  detail.style.opacity = '0.7';
-
-  head.append(name, figure);
-  row.append(fill, head, detail);
-  return { row, fill, figure, detail };
+/**
+ * One row, from the loader's own timer bar rather than hand-built.
+ *
+ * The kit row is the same shape this addon used to assemble out of about twenty
+ * inline style declarations, and Cooldown Bars had assembled a slightly different
+ * one. What the shared version gets right and both copies had drifted on is which
+ * part may shrink, whether the figure reserves its width before the name takes what
+ * is left, and whether the numbers are tabular. Its second line is what carries the
+ * per-ability detail, with the fill spanning both, so the share still reads as the
+ * whole row's rather than as a bar on the top line of it.
+ *
+ * NO ICON, and that is a decision rather than an omission. See the header. The fill is
+ * tinted by the ability's SCHOOL instead, which is the one identifying thing a damage
+ * event carries that does not depend on the id, and it is what tells two rows apart now
+ * that the art cannot. Healing rows pass nothing, because `heal2` carries no school.
+ */
+function createRow(label, school) {
+  const bar = woc.ui.bar({ label, school, className: 'woc-meter-row' });
+  bar.el.dataset.ability = label;
+  woc.ui.tooltip(bar.el, label);
+  return bar;
 }
 
 /** The tallies for the table on screen, biggest first and capped. */
@@ -388,19 +407,24 @@ function detailText(tally) {
   return parts.join(', ');
 }
 
-function drawRow(label, tally, whole, seconds) {
-  const row = rows.get(label) ?? createRow(label);
-  rows.set(label, row);
-  const share = (tally.total / Math.max(whole, 1)) * PERCENT;
-  const rate = (tally.total / seconds).toFixed(DECIMALS);
-  row.fill.style.width = `${share.toFixed(DECIMALS)}%`;
-  row.figure.textContent = `${num(tally.total)}  ${pct(tally.total, whole)}  ${rate}`;
+/** The detail line, or an empty string when the player has switched it off. */
+function detailLine(tally) {
   if (settingFlag('show-detail', true)) {
-    row.detail.textContent = detailText(tally);
-  } else {
-    row.detail.textContent = '';
+    return detailText(tally);
   }
-  table.appendChild(row.row);
+  return '';
+}
+
+function drawRow(label, tally, whole, seconds) {
+  const row = rows.get(label) ?? createRow(label, tally.school);
+  rows.set(label, row);
+  const rate = (tally.total / seconds).toFixed(DECIMALS);
+  row.update({
+    fraction: tally.total / Math.max(whole, 1),
+    value: `${num(tally.total)}  ${pct(tally.total, whole)}  ${rate}`,
+    detail: detailLine(tally),
+  });
+  table.appendChild(row.el);
 }
 
 function drawTable(seconds) {
@@ -409,7 +433,7 @@ function drawTable(seconds) {
   const shown = new Set(ordered.map(([label]) => label));
   for (const [label, row] of rows) {
     if (!shown.has(label)) {
-      row.row.remove();
+      row.destroy();
       rows.delete(label);
     }
   }

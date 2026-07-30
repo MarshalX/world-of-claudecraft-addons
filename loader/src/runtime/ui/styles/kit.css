@@ -1,9 +1,11 @@
-/* What addons themselves draw with: frames, toasts, modals, and the tooltip.
+/* The surfaces the loader owns and an addon merely asks for: addon frames, toasts,
+ * modals, and the tooltip. The two an addon assembles itself have sheets of their
+ * own, bar.css and banner.css, because they change for different reasons.
  *
- * Last of the three sheets runtime/ui/styles/index.ts concatenates, so a frame
- * rule here can refine the window chrome the first sheet set up without needing
- * extra specificity to do it. The rail glyph and the reduced-motion floor close
- * the sheet: both are floors for anything the loader puts on screen.
+ * Ordered after chrome.css in runtime/ui/styles/index.ts, so a frame rule here can
+ * refine the window chrome that sheet set up without extra specificity to do it. The
+ * rail glyph and the reduced-motion floor close this file: both are floors for
+ * anything the loader puts on screen, wherever its rules live.
  */
 
 /* Addon frames. The window chrome in chrome.css is shared; these are the
@@ -145,12 +147,26 @@
   stroke-linejoin: round;
 }
 
-/* The kit animates nothing today, so this is the floor rather than an override:
-   it holds for anything added later without needing !important, because an
-   unlayered rule already outranks whatever the game's layers say. */
+/* The reduced-motion floor, over everything the loader draws.
+ *
+ * This rule was written BEFORE anything animated and would not have worked when
+ * something finally did. Its original note said no !important was needed because an
+ * unlayered rule already outranks the game's layered ones, which is true and beside
+ * the point: that is about the GAME's rules and says nothing about the loader's own,
+ * where ordinary specificity applies as usual. `#woc-addons *` is one id, and any
+ * rule that actually sets an animation names a class too, so it wins. The banner's
+ * entrance is the first such rule and would have played through a reduce preference.
+ *
+ * !important is not a shortcut past that; it is the only thing that reaches the case
+ * that matters. Addon code sets inline styles as a matter of course, so an addon can
+ * put an animation in a style attribute, which outranks every selector anyone can
+ * write here. A floor a stylesheet can step over is a bug; one that ADDON CODE can
+ * step over is a promise the loader cannot keep. */
 @media (prefers-reduced-motion: reduce) {
   #woc-addons * {
-    transition: none;
-    animation: none;
+    /* biome-ignore lint/complexity/noImportantStyles: an accessibility floor is the one thing that must outrank later rules AND the inline styles addon code writes, which is the case !important exists for. */
+    transition: none !important;
+    /* biome-ignore lint/complexity/noImportantStyles: same, for the animation half. Without it the banner's entrance plays for a player who asked for no motion. */
+    animation: none !important;
   }
 }

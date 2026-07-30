@@ -139,6 +139,16 @@
           }
         }
       }
+    },
+    {
+      "includes": ["**/*.generated.d.ts"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noExcessiveLinesPerFile": "off"
+          }
+        }
+      }
     }
   ]
 }

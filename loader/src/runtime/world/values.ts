@@ -1,0 +1,31 @@
+// What each world key reports, and what the matching read returns.
+//
+// One declaration for both so a key can never mean two things: the read and the
+// subscription are the same value by construction, which is what lets
+// `world.on('casts', ...)` hand over a typed map without the addon narrowing it.
+//
+// It has a module of its own because it is the one place the game's own shapes
+// and the loader's derived ones meet. The keys themselves stay authoritative in
+// `signature.ts`, which holds the array `world.on` validates against and the
+// capture behind each one; `tests/world-shape.test.ts` asserts the two agree.
+
+import type { EntityCast, Hazard } from './derived.ts';
+import type { Aura, Entity, InvSlot, PartyInfo, WorldQuests } from './game-types.ts';
+
+export interface WorldValues {
+  player: Entity | null;
+  target: Entity | null;
+  entities: ReadonlyMap<number, Entity>;
+  party: PartyInfo | null;
+  inventory: readonly InvSlot[] | null;
+  quests: WorldQuests | null;
+  cooldowns: ReadonlyMap<string, number> | null;
+  auras: readonly Aura[] | null;
+  /** Entity id to what it is casting, for everything in interest scope. */
+  casts: ReadonlyMap<number, EntityCast>;
+  /** The current target's effects. Null when nothing is targeted. */
+  targetAuras: readonly Aura[] | null;
+  hazards: readonly Hazard[] | null;
+  /** Entity id to raid target marker, 0 through 7. */
+  markers: ReadonlyMap<number, number> | null;
+}

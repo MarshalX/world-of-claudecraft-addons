@@ -205,3 +205,38 @@ describe('createWorldWatcher', () => {
     });
   });
 });
+
+// The end of the path a boss mod actually takes, kept as its own block because it
+// is a different claim from the sampler's: a mob's cast emits no event at all, so
+// the sampler noticing a cast field move on an entity ALREADY in the roster is the
+// only thing in the loader that can wake an addon for one.
+describe('watching casts', () => {
+  it('wakes a subscriber when a mob starts casting, with no roster change', () => {
+    const h = harness();
+    const mob: Record<string, unknown> = { id: 248, castingAbility: null };
+    h.live.entities.set(248, mob);
+    const seen = vi.fn();
+    h.watcher.on('casts', seen);
+
+    setAt(mob, 'castingAbility', 'deathless_rage');
+    h.watcher.poll();
+
+    const reported = seen.mock.calls[0] as [Map<number, unknown>];
+
+    expect(seen).toHaveBeenCalledOnce();
+    expect(reported[0].get(248)).toMatchObject({ ability: 'deathless_rage' });
+  });
+
+  it('does not wake it again while that cast bar fills', () => {
+    const h = harness();
+    const mob: Record<string, unknown> = { id: 248, castingAbility: 'soul_rend', castRemaining: 3 };
+    h.live.entities.set(248, mob);
+    const seen = vi.fn();
+    h.watcher.on('casts', seen);
+
+    setAt(mob, 'castRemaining', 0.4);
+    h.watcher.poll();
+
+    expect(seen).not.toHaveBeenCalled();
+  });
+});

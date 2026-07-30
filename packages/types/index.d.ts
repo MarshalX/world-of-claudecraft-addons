@@ -21,24 +21,41 @@ declare global {
 
 export type { AddonInfo, GameInfo, Unsubscribe } from './addon.js';
 export type { KnownCue } from './cues.generated.js';
+export type { KnownSkillIcon, SkillIconClass } from './icons.generated.js';
 export type { ConflictReport, KeysApi } from './keys.js';
 export type { FrameType, NetApi, NetState, SubscribeOpts } from './net.js';
 export type { Cue, PlayOpts, SoundApi } from './sound.js';
 export type { StorageApi } from './storage.js';
 export type {
+  AbilityIconId,
   AlertOpts,
+  BannerKind,
+  BannerOpts,
+  BannerSize,
+  Bar,
+  BarOpts,
+  BarSchool,
+  BarTone,
+  BarUpdate,
   Frame,
   FrameDensity,
   FrameOpts,
+  IconClass,
+  IconUrls,
   MicroButtonOpts,
   ToastOpts,
   UiApi,
 } from './ui.js';
 export type {
+  AbilityCharge,
   Aura,
   AuraKind,
+  CoreStats,
   Entity,
+  EntityCast,
   EntityKind,
+  Hazard,
+  HazardKind,
   InvSlot,
   PartyInfo,
   PartyMember,
@@ -47,6 +64,7 @@ export type {
   ResourceType,
   School,
   Vec3,
+  WeaponInfo,
   WorldApi,
   WorldKey,
   WorldQuests,

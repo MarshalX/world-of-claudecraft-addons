@@ -21,6 +21,7 @@
 // adding a field to the published entity without saying how to recognise it is
 // a compile error rather than an untested promise.
 
+import { fieldValue } from '../net/frames.ts';
 import type { Entity, Vec3 } from './game-types.ts';
 
 /** What a field should look like at runtime. `vec3` is the game's position shape. */
@@ -73,6 +74,41 @@ const SHAPE: Record<keyof Entity, FieldSpec> = {
   critChance: { kind: 'number' },
   dodgeChance: { kind: 'number' },
   blockChance: { kind: 'number' },
+  swingTimer: { kind: 'number' },
+  comboPoints: { kind: 'number' },
+  stats: { kind: 'object' },
+  weapon: { kind: 'object' },
+  // Created on the first snapshot that carried a charge pool, rather than
+  // blank-filled, so its absence is the ordinary case and not drift.
+  abilityCharges: { kind: 'object', optional: true },
+};
+
+/**
+ * The two published fields that are objects rather than scalars.
+ *
+ * Checked because 'object' on its own would pass a renamed member: the client
+ * builds both with a full set of defaults before the server sends anything, so a
+ * rename inside one is invisible at the top level and would read to an addon as a
+ * stat that is permanently zero. The pools in `abilityCharges` are deliberately
+ * not here, since there is nothing to walk until an ability with charges is used.
+ */
+const NESTED_SHAPES: Record<string, Record<string, FieldSpec>> = {
+  stats: {
+    str: { kind: 'number' },
+    agi: { kind: 'number' },
+    sta: { kind: 'number' },
+    int: { kind: 'number' },
+    spi: { kind: 'number' },
+    armor: { kind: 'number' },
+    pvpOffense: { kind: 'number' },
+    pvpDefense: { kind: 'number' },
+  },
+  weapon: {
+    min: { kind: 'number' },
+    max: { kind: 'number' },
+    speed: { kind: 'number' },
+    dagger: { kind: 'boolean', optional: true },
+  },
 };
 
 function isVec3(value: unknown): boolean {
@@ -160,10 +196,36 @@ function checkShape(shape: Record<string, FieldSpec>, value: unknown): readonly 
   return problems;
 }
 
-/** The published entity shape against a live one. */
+/**
+ * Every nested problem, each prefixed with the field it was found under.
+ *
+ * Reported as `stats.armor is missing` rather than as a bare `armor`, because the
+ * whole value of the report is that someone can go and look at the right thing.
+ */
+function checkNested(value: unknown): readonly string[] {
+  const problems: string[] = [];
+  for (const [field, shape] of Object.entries(NESTED_SHAPES)) {
+    const nested = fieldValue(value, field);
+    if (nested !== null) {
+      problems.push(...checkShape(shape, nested).map((problem) => `${field}.${problem}`));
+    }
+  }
+  return problems;
+}
+
+/** The published entity shape against a live one, nested objects included. */
 function checkEntityShape(value: unknown): readonly string[] {
-  return checkShape(SHAPE, value);
+  const problems = checkShape(SHAPE, value);
+  if (problems.length > 0) {
+    return problems;
+  }
+  return checkNested(value);
 }
 
 export type { FieldKind, FieldSpec };
-export { checkEntityShape, checkShape, SHAPE as ENTITY_SHAPE };
+export {
+  checkEntityShape,
+  checkShape,
+  NESTED_SHAPES as ENTITY_NESTED_SHAPES,
+  SHAPE as ENTITY_SHAPE,
+};

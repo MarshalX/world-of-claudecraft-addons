@@ -76,6 +76,9 @@ describe('before the game exists', () => {
     expect(world.quests).toBeNull();
     expect(world.cooldowns).toBeNull();
     expect(world.auras).toBeNull();
+    expect(world.targetAuras).toBeNull();
+    expect(world.hazards).toBeNull();
+    expect(world.markers).toBeNull();
     expect(world.raw).toBeNull();
     expect(world.game).toBeNull();
   });
@@ -85,6 +88,15 @@ describe('before the game exists', () => {
 
     expect(world.entities.size).toBe(0);
     expect([...world.entities]).toEqual([]);
+  });
+
+  // Same reasoning as the roster: an addon that loops over the casts it can see
+  // must not have to guard the read before world entry.
+  it('answers an empty cast map rather than null', () => {
+    const { world } = harness();
+
+    expect(world.casts.size).toBe(0);
+    expect([...world.casts]).toEqual([]);
   });
 
   // Found by running the dev-harness addon through the real loader. The empty
@@ -162,6 +174,52 @@ describe('once the game exists', () => {
       log: at(h.live, 'questLog'),
       done: at(h.live, 'questsDone'),
     });
+  });
+
+  // The reason this surface exists: no event announces a mob's cast, so a boss
+  // mod can only see one by reading it off the roster.
+  it('derives casts from the live roster', async () => {
+    const h = harness();
+    h.enterWorld();
+    await h.world.ready;
+
+    setAt(h.live, 'entities', new Map([[248, { castingAbility: 'soul_rend', castTotal: 3 }]]));
+
+    expect(h.world.casts.get(248)).toMatchObject({ ability: 'soul_rend', total: 3 });
+  });
+
+  // `world.on('target')` reports the SELECTION changing and nothing else, so
+  // without this read a debuff on a boss is unreachable.
+  it('reads the auras off whatever is targeted', async () => {
+    const h = harness();
+    h.enterWorld();
+    await h.world.ready;
+
+    setAt(at(h.live, 'player'), 'targetId', 248);
+    setAt(h.live, 'entities', new Map([[248, { id: 248, auras: [{ id: 'sunder' }] }]]));
+
+    expect(h.world.targetAuras).toEqual([{ id: 'sunder' }]);
+  });
+
+  it('answers null for target auras with nothing targeted', async () => {
+    const h = harness();
+    h.enterWorld();
+    await h.world.ready;
+
+    expect(h.world.targetAuras).toBeNull();
+  });
+
+  it('reads hazards and markers off the world', async () => {
+    const h = harness();
+    h.enterWorld();
+    await h.world.ready;
+
+    setAt(h.live, 'activeFrostRings', [{ id: 'r1', x: 0, z: 0, radius: 8, remaining: 4 }]);
+    setAt(h.live, 'activeTemporalHourglasses', []);
+    setAt(h.live, 'markers', Object.fromEntries([[248, 1]]));
+
+    expect(h.world.hazards).toHaveLength(1);
+    expect(h.world.markers?.get(248)).toBe(1);
   });
 });
 

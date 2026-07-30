@@ -13,6 +13,7 @@ import { createHostEventHandler } from './host-events.ts';
 import { type GameProbe, probeGame } from './probe.ts';
 import { waitForDocument } from './ready.ts';
 import { createRuntimeServices, type RuntimeServices } from './services.ts';
+import { fetchJson } from './sound/web-audio.ts';
 import type { AddonStatus } from './supervisor.ts';
 import { createSupervisor, type Supervisor } from './supervisor.ts';
 import { createGameSurfaces, type GameSurfaces } from './surfaces.ts';
@@ -146,6 +147,9 @@ function pageServices() {
     setTimer,
     clearTimer,
     viewport: () => ({ w: globalThis.innerWidth, h: globalThis.innerHeight }),
+    // The same reader the sound engine uses for its pack. Both are same-origin game
+    // content, and the kit's per-class art manifests are the second consumer.
+    fetchJson,
     // The browser's own locale, which is the game's page locale. The loader has
     // no translation layer yet, and a hardcoded format would be the one part of
     // the manager that ignores the player's regional settings.

@@ -5,13 +5,21 @@
 // make every assertion a race.
 
 import type { WorldBackend } from '../../loader/src/runtime/world/backend.ts';
+import { castsOf, type EntityCast, type Hazard } from '../../loader/src/runtime/world/derived.ts';
 import type { Aura, Entity, WorldQuests } from '../../loader/src/runtime/world/game-types.ts';
 import { createWorldWatcher, type WorldWatcher } from '../../loader/src/runtime/world/watch.ts';
 import { PLAYER_ENTITY } from './frames.ts';
 
+export interface LiveWorld {
+  player: Record<string, unknown>;
+  entities: Map<number, unknown>;
+  hazards: Hazard[] | null;
+  markers: Map<number, number> | null;
+}
+
 export interface WatchHarness {
   watcher: WorldWatcher;
-  live: { player: Record<string, unknown>; entities: Map<number, unknown> };
+  live: LiveWorld;
   errors: unknown[];
   /** Frames currently scheduled. Zero means the sampler is not running. */
   frames: () => number;
@@ -21,9 +29,11 @@ export interface WatchHarness {
 }
 
 export function watchHarness(): WatchHarness {
-  const live = {
+  const live: LiveWorld = {
     player: { ...PLAYER_ENTITY } as Record<string, unknown>,
     entities: new Map<number, unknown>(),
+    hazards: null,
+    markers: null,
   };
   let attached = true;
   const errors: unknown[] = [];
@@ -58,6 +68,20 @@ export function watchHarness(): WatchHarness {
     },
     get auras(): readonly Aura[] | null {
       return null;
+    },
+    // Derived from `live.entities` through the real function, not stubbed: a test
+    // that moves a cast field on a fixture entity has to see what an addon would.
+    get casts(): ReadonlyMap<number, EntityCast> {
+      return castsOf(live.entities as ReadonlyMap<number, Entity>);
+    },
+    get targetAuras(): readonly Aura[] | null {
+      return null;
+    },
+    get hazards(): readonly Hazard[] | null {
+      return live.hazards;
+    },
+    get markers(): ReadonlyMap<number, number> | null {
+      return live.markers;
     },
     raw: live,
   } satisfies WorldBackend;

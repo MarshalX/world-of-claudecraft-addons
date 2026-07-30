@@ -25,6 +25,7 @@ import MANIFEST_TEXT from '../addons/dev-harness/addon.json?raw';
 // biome-ignore lint/correctness/noUnresolvedImports: Vite's ?raw suffix is a loader directive a static resolver does not model, and an addon file is a function BODY with no exports at all. Same reason as the runtime bundle import in host/boot.ts.
 import SOURCE from '../addons/dev-harness/main.js?raw';
 import { loadAddon } from '../loader/src/runtime/loader.ts';
+import { WORLD_KEYS } from '../loader/src/runtime/world/signature.ts';
 import type { InstalledAddon } from '../loader/src/shared/protocol.ts';
 import { validateManifest } from '../loader/src/shared/schema.ts';
 import { createSharedServices } from './fakes/shared-services.ts';
@@ -156,7 +157,7 @@ describe('what it reports without a game', () => {
   it('passes every check', async () => {
     await run();
 
-    expect(await report()).toContain('10 of 10 checks passed');
+    expect(await report()).toContain('14 of 14 checks passed');
   });
 
   it('names no check as failed', async () => {
@@ -167,12 +168,45 @@ describe('what it reports without a game', () => {
 
   // Named individually as well as counted, so a rename or a dropped check shows
   // up as a failure here rather than as a total that quietly went down by one.
-  it.each(['identity', 'settings', 'storage', 'sound', 'keys', 'shadowed globals', 'timers'])(
-    'passes the %s check',
-    async (name) => {
-      await run();
+  it.each([
+    'identity',
+    'settings',
+    'storage',
+    'sound',
+    'keys',
+    'world keys',
+    'casts',
+    'icons',
+    'skill art',
+    'shadowed globals',
+    'timers',
+  ])('passes the %s check', async (name) => {
+    await run();
 
-      expect(await report()).not.toContain(`FAIL  ${name}`);
-    },
-  );
+    expect(await report()).not.toContain(`FAIL  ${name}`);
+  });
+});
+
+// The harness carries its OWN copy of the world key list, and that is deliberate: it
+// stands in for the published types rather than reading the loader's array, so a key
+// that reached one and not the other throws from `world.on` in a live session instead
+// of passing everywhere. The copy still has to be kept up to date, which is what this
+// pins: a key added to the loader and not to the harness is not checked at all, and
+// nothing else would ever say so.
+describe('the key list it carries', () => {
+  /** Any total order will do: the sort exists only to make the comparison stable. */
+  const byName = (a: string, b: string): number => a.localeCompare(b);
+
+  /** The array literal out of the addon source, which is the only place it exists. */
+  function harnessKeys(): string[] {
+    const block = /const WORLD_KEYS = \[([^\]]*)\]/.exec(SOURCE);
+    if (block === null) {
+      throw new Error('the harness no longer declares a WORLD_KEYS array');
+    }
+    return [...(block[1] as string).matchAll(/'([^']+)'/g)].map((match) => match[1] as string);
+  }
+
+  it('covers every key the loader publishes', () => {
+    expect([...harnessKeys()].sort(byName)).toEqual([...WORLD_KEYS].sort(byName));
+  });
 });

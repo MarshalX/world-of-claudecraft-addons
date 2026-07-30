@@ -11,7 +11,11 @@
 // spread over the top: that fixture is what a real client holds, so where the
 // two overlap the observed value wins over a generated default.
 
-import { ENTITY_SHAPE, type FieldSpec } from '../../loader/src/runtime/world/shape.ts';
+import {
+  ENTITY_NESTED_SHAPES,
+  ENTITY_SHAPE,
+  type FieldSpec,
+} from '../../loader/src/runtime/world/shape.ts';
 import { PLAYER_ENTITY } from './frames.ts';
 
 /** An inert value of the right kind, for a field no fixture has an opinion about. */
@@ -35,6 +39,26 @@ function defaultFor(spec: FieldSpec): unknown {
     return new Map();
   }
   return {};
+}
+
+/**
+ * An inert value for a field the shape checker walks INTO.
+ *
+ * `stats` and `weapon` are checked member by member, so the bare `{}` an object
+ * field otherwise gets would fail the very check this fixture exists to pass.
+ */
+function nestedFor(field: string): Record<string, unknown> | null {
+  const shape = ENTITY_NESTED_SHAPES[field];
+  if (shape === undefined) {
+    return null;
+  }
+  const built: Record<string, unknown> = {};
+  for (const [member, spec] of Object.entries(shape)) {
+    if (spec.optional !== true) {
+      built[member] = defaultFor(spec);
+    }
+  }
+  return built;
 }
 
 interface Drift {
@@ -62,7 +86,7 @@ function liveEntity(drift: Drift = {}): Record<string, unknown> {
   };
   for (const [field, spec] of Object.entries(ENTITY_SHAPE)) {
     if (!(field in built) && spec.optional !== true) {
-      built[field] = defaultFor(spec);
+      built[field] = nestedFor(field) ?? defaultFor(spec);
     }
   }
 

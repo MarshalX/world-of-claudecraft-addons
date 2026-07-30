@@ -1,0 +1,141 @@
+/* The timer bar, one sheet per kit module: this one is kit/bar.ts.
+ *
+ * Split out of kit.css when the banner's rules pushed that file past the length a
+ * sheet is allowed. The seam is worth having anyway. kit.css holds the surfaces the
+ * LOADER owns and an addon merely uses (frames, toasts, modals, the tooltip); a bar
+ * is a thing an addon assembles a screenful of, so its rules change for different
+ * reasons and at a different rate.
+ *
+ * The layout note that matters is in kit/bar.ts: the label is the only part allowed
+ * to shrink, and `min-width: 0` is what lets it, which is the difference between an
+ * ellipsis and the figure being overlapped by a long name.
+ */
+#woc-addons .woc-bar {
+  position: relative;
+  padding: 2px 6px;
+  overflow: hidden;
+  border-radius: var(--radius-sm, 4px);
+  /* Its own stacking context, so the fill sits behind this row's text and not
+     behind a neighbouring row that happens to come later in the DOM. */
+  isolation: isolate;
+}
+
+/* The head line. The row itself is a block so the fill can span the head and the
+   detail together, which is what makes a share read as the whole row's. */
+#woc-addons .woc-bar-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+#woc-addons .woc-bar-detail {
+  font-size: 11px;
+  opacity: 0.7;
+}
+
+#woc-addons .woc-bar-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 0;
+  z-index: -1;
+  background: rgb(120 160 255 / 30%);
+}
+
+/* School tints, from the game's OWN palette: --color-debuff-* is what it uses for the
+   school border on a debuff icon, so a row tinted this way matches the colour the player
+   already reads for the same school elsewhere. Nothing is invented here, and each var
+   carries the token's current value as a fallback, in the sheet's own rgb() notation,
+   in case the game renames one.
+
+   `opacity` on the fill rather than a translucent colour, because the tokens are opaque
+   hexes and a var() cannot be given alpha without color-mix. The fill is its own
+   element, so this dims the fill and never the text over it.
+
+   These come FIRST and the tone rules follow, which is what makes tone win where an
+   addon sets both: tone is urgency and school is damage type, and a row that is about
+   to matter has to say so over what kind of damage it was. Same specificity, so the
+   order is the mechanism. Do not reorder these two groups. */
+#woc-addons .woc-bar-school-physical .woc-bar-fill {
+  background: var(--color-debuff, rgb(192 57 43));
+  opacity: 0.32;
+}
+
+#woc-addons .woc-bar-school-fire .woc-bar-fill {
+  background: var(--color-debuff-fire, rgb(232 114 42));
+  opacity: 0.32;
+}
+
+#woc-addons .woc-bar-school-frost .woc-bar-fill {
+  background: var(--color-debuff-frost, rgb(74 163 223));
+  opacity: 0.32;
+}
+
+#woc-addons .woc-bar-school-arcane .woc-bar-fill {
+  background: var(--color-debuff-arcane, rgb(63 140 255));
+  opacity: 0.32;
+}
+
+#woc-addons .woc-bar-school-shadow .woc-bar-fill {
+  background: var(--color-debuff-shadow, rgb(155 89 208));
+  opacity: 0.32;
+}
+
+#woc-addons .woc-bar-school-nature .woc-bar-fill {
+  background: var(--color-debuff-nature, rgb(53 168 53));
+  opacity: 0.32;
+}
+
+#woc-addons .woc-bar-school-holy .woc-bar-fill {
+  background: var(--color-debuff-holy, rgb(216 181 107));
+  opacity: 0.32;
+}
+
+/* Tone, after the schools so it wins both properties: its own translucent colour AND
+   the opacity the school rules would otherwise have dimmed it with. */
+#woc-addons .woc-bar-warn .woc-bar-fill {
+  background: rgb(200 168 56 / 32%);
+  opacity: 1;
+}
+
+#woc-addons .woc-bar-danger .woc-bar-fill {
+  background: rgb(255 143 133 / 30%);
+  opacity: 1;
+}
+
+#woc-addons .woc-bar-icon {
+  flex: 0 0 auto;
+  width: 18px;
+  height: 18px;
+  border-radius: 3px;
+  /* The art is square; a row that is shorter than the icon must crop rather than
+     squash it, since a squashed ability icon is harder to recognise than a cropped
+     one at this size. */
+  object-fit: cover;
+}
+
+#woc-addons .woc-bar-label {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+#woc-addons .woc-bar-value {
+  flex: 0 0 auto;
+  margin-left: auto;
+  /* Tabular figures, or every digit change shifts the whole countdown sideways. */
+  font-variant-numeric: tabular-nums;
+}
+
+/* A compact frame's rows are read at a glance rather than operated, so they give
+   up the tap-target floor the same way the frame's own chrome does. */
+#woc-addons .woc-density-compact .woc-bar {
+  padding: 1px 4px;
+  font-size: 12px;
+}
+
+#woc-addons .woc-density-compact .woc-bar-icon {
+  width: 14px;
+  height: 14px;
+}

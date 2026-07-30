@@ -13,10 +13,14 @@
 import type { DisposalBag, Teardown } from '../disposal.ts';
 import type { AlertOpts } from '../ui/kit/alert.ts';
 import { openAlert } from '../ui/kit/alert.ts';
+import type { BannerOpts } from '../ui/kit/banner.ts';
+import type { Bar, BarOpts } from '../ui/kit/bar.ts';
+import { createBar } from '../ui/kit/bar.ts';
 import type { AddonFrame } from '../ui/kit/frame.ts';
 import { createAddonFrame } from '../ui/kit/frame.ts';
 import type { FrameOpts } from '../ui/kit/frame-chrome.ts';
 import type { FrameStateStore } from '../ui/kit/frame-state.ts';
+import type { IconUrls } from '../ui/kit/icons.ts';
 import type { InjectionSpec } from '../ui/kit/injections.ts';
 import type { ToastOpts } from '../ui/kit/toast.ts';
 import type { UiKit } from '../ui/mount.ts';
@@ -41,6 +45,12 @@ interface UiApi {
   /** A panel window: movable, resizable, with a title bar and close button. */
   window: (opts: FrameOpts) => AddonFrame;
   toast: (text: string, opts?: ToastOpts) => Teardown;
+  /** A centre-screen warning. One slot for the whole loader; a new one replaces it. */
+  banner: (text: string, opts?: BannerOpts) => Teardown;
+  /** A timer row: icon, label, fill, and a right-aligned figure. */
+  bar: (opts?: BarOpts) => Bar;
+  /** Where the game's own art lives, so no addon writes a path. */
+  icon: IconUrls;
   /** Resolves with the id of the button pressed, or null if dismissed. */
   alert: (opts: AlertOpts) => Promise<string | null>;
   /** A button on the game's own rail. Lands when the HUD does. */
@@ -107,32 +117,52 @@ function microSpec(fqid: string, opts: MicroButtonOpts): InjectionSpec {
   return spec;
 }
 
+function addonFrame(deps: UiDeps, opts: FrameOpts, chrome: 'frame' | 'window'): AddonFrame {
+  const frame = createAddonFrame({
+    doc: deps.doc,
+    root: deps.kit.root,
+    fqid: deps.fqid,
+    chrome,
+    opts,
+    store: storeFor(deps, opts),
+    viewport: deps.viewport,
+    window: deps.window,
+    raise: deps.kit.stacking.raise,
+  });
+  deps.bag.add(() => {
+    frame.destroy();
+  });
+  return frame;
+}
+
+/**
+ * A bar whose removal is in the bag.
+ *
+ * The bag holds the removal rather than only a listener: a bar is DOM the addon
+ * appended somewhere of its own, and disable is hot with no page reload, so a row
+ * left behind would sit in a frame the loader has already taken down, with nothing
+ * left running to update it.
+ */
+function addonBar(deps: UiDeps, opts: BarOpts | undefined): Bar {
+  const bar = createBar(deps.doc, opts);
+  deps.bag.add(bar.destroy);
+  return bar;
+}
+
 function createUi(deps: UiDeps): UiApi {
   const { kit, fqid, bag } = deps;
 
-  const makeFrame = (opts: FrameOpts, chrome: 'frame' | 'window'): AddonFrame => {
-    const frame = createAddonFrame({
-      doc: deps.doc,
-      root: kit.root,
-      fqid,
-      chrome,
-      opts,
-      store: storeFor(deps, opts),
-      viewport: deps.viewport,
-      window: deps.window,
-      raise: kit.stacking.raise,
-    });
-    bag.add(() => {
-      frame.destroy();
-    });
-    return frame;
-  };
-
   return {
-    frame: (opts) => makeFrame(opts, 'frame'),
-    window: (opts) => makeFrame(opts, 'window'),
+    frame: (opts) => addonFrame(deps, opts, 'frame'),
+    window: (opts) => addonFrame(deps, opts, 'window'),
 
     toast: (text, opts) => tracked(bag, kit.toaster.show(text, opts)),
+
+    banner: (text, opts) => tracked(bag, kit.banner.show(text, opts)),
+
+    bar: (opts) => addonBar(deps, opts),
+
+    icon: kit.icons,
 
     alert: (opts) => {
       const modal = openAlert({ doc: deps.doc, root: kit.root }, opts);

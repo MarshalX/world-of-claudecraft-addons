@@ -26,7 +26,10 @@ import type { StorageHub } from '../storage/hub.ts';
 import type { AddonStatus } from '../supervisor.ts';
 import { ANCHORS, ANCHORS_REQUIRED_IN_GAME } from './anchors.ts';
 import { ENTRY_ID } from './esc-inject.ts';
+import { type Banner, createBanner } from './kit/banner.ts';
+import { createIconUrls, type IconUrls } from './kit/icons.ts';
 import { createGameInjector, type GameInjector } from './kit/injections.ts';
+import { createSkillArt } from './kit/skill-art.ts';
 import { createStacking, type Stacking } from './kit/stacking.ts';
 import { createToaster, type Toaster } from './kit/toast.ts';
 import { createTooltips, type Tooltips } from './kit/tooltip.ts';
@@ -173,16 +176,14 @@ function buildKit(deps: UiDeps, root: HTMLElement, manager: Manager): UiKit {
   injector.add({ kind: 'menu', id: ENTRY_ID, label: LABEL, onOpen });
   injector.add({ kind: 'micro', id: BUTTON_ID, label: LABEL, onOpen });
 
-  const toaster = createToaster({
-    doc: deps.doc,
-    root,
-    setTimer: deps.setTimer,
-    clearTimer: deps.clearTimer,
-  });
+  const timers = { setTimer: deps.setTimer, clearTimer: deps.clearTimer };
+  const toaster = createToaster({ doc: deps.doc, root, ...timers });
+  const banner = createBanner({ doc: deps.doc, root, ...timers });
   const tooltips = createTooltips({ doc: deps.doc, root, viewport: deps.viewport });
   const stacking = createStacking({ root });
+  const icons = createIconUrls(createSkillArt({ fetchJson: deps.fetchJson }));
 
-  return { root, toaster, tooltips, injector, stacking };
+  return { root, toaster, banner, tooltips, injector, stacking, icons };
 }
 
 export interface UiDeps {
@@ -205,6 +206,8 @@ export interface UiDeps {
   setTimer: (handler: () => void, ms: number) => number;
   clearTimer: (id: number) => void;
   viewport: () => { w: number; h: number };
+  /** Same-origin JSON, for the per-class skill-art manifests. */
+  fetchJson: (url: string) => Promise<unknown>;
   /** The storage hub and the game's bindings, for the per-addon settings pages. */
   storageHub: StorageHub;
   gameBindings: GameBindings;
@@ -222,10 +225,17 @@ export interface UiDeps {
 export interface UiKit {
   root: HTMLElement;
   toaster: Toaster;
+  /** The one centre-screen warning slot. Shared for the reason toasts are. */
+  banner: Banner;
   tooltips: Tooltips;
   injector: GameInjector;
   /** Which loader window is in front. Shared with the manager. */
   stacking: Stacking;
+  /**
+   * Where the game's art lives, over one shared reading of which abilities have a
+   * file. Shared rather than per addon so two addons cost one manifest fetch.
+   */
+  icons: IconUrls;
 }
 
 export interface MountedUi {
@@ -254,6 +264,7 @@ export function mountUi(deps: UiDeps): MountedUi {
       kit.injector.dispose();
       kit.tooltips.dispose();
       kit.toaster.dispose();
+      kit.banner.dispose();
       kit.stacking.dispose();
       config.dispose();
       manager.dispose();
