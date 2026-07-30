@@ -1,18 +1,35 @@
-// Serve addons/ over http on :5180, as the loader's local dev marketplace.
+// Serve addons/ and the built userscript over http on :5180.
+//
+// Two roles on one socket: the loader's local dev marketplace, and the place a
+// userscript manager installs the loader itself from. They are one server
+// because they are one session: `pnpm dev` is somebody testing a loader change
+// against real addons, and needing a second port for the half that changes least
+// often is the kind of friction that ends in a stale userscript being debugged.
 //
 // The socket. Everything it decides lives in serve-core.ts, which a Vitest suite
 // drives directly.
 //
 // Every response carries a strong ETag over its own bytes. That is what the
 // loader's conditional GET polls: an unchanged addon body answers 304 with no
-// payload, which is what makes a two-second hot-reload poll cost nothing.
+// payload, which is what makes a two-second hot-reload poll cost nothing. The
+// userscript is served the same way, so a manager's update check on an unchanged
+// build is a 304 rather than half a megabyte.
 
 import { readFile } from 'node:fs/promises';
 import { createServer } from 'node:http';
 import process from 'node:process';
 import { fileURLToPath } from 'node:url';
 import { ROOT } from './manifests.ts';
-import { buildIndex, contentType, etagFor, HOST, PORT, resolveFile } from './serve-core.ts';
+import {
+  buildIndex,
+  contentType,
+  etagFor,
+  HOST,
+  LOADER_PATH,
+  PORT,
+  resolveFile,
+  resolveLoader,
+} from './serve-core.ts';
 
 const NOT_FOUND = 404;
 const NOT_MODIFIED = 304;
@@ -45,6 +62,15 @@ function sendCacheable(req, res, body, type) {
   res.end(body);
 }
 
+/** One file, or the reason it is not there. */
+async function sendFile(req, res, file, missing) {
+  try {
+    sendCacheable(req, res, await readFile(file), contentType(file));
+  } catch {
+    res.writeHead(NOT_FOUND).end(missing);
+  }
+}
+
 function sendIndex(req, res) {
   const index = buildIndex((dir) => {
     console.warn(`serve: skipping ${dir}, its manifest is invalid (run "pnpm validate")`);
@@ -73,17 +99,24 @@ async function handle(req, res) {
     return;
   }
 
-  const file = resolveFile(pathname);
-  if (file === null) {
-    res.writeHead(NOT_FOUND).end('only /marketplace.json and addons/** are served\n');
+  const loader = resolveLoader(pathname);
+  if (loader !== null) {
+    // A named cause rather than a bare 404: the userscript is a build output, so
+    // the ordinary way to reach this is a working tree that has never run the
+    // build, and "not found" would send someone looking at the route instead.
+    await sendFile(req, res, loader, 'the loader is not built yet: run "pnpm build"\n');
     return;
   }
 
-  try {
-    sendCacheable(req, res, await readFile(file), contentType(file));
-  } catch {
-    res.writeHead(NOT_FOUND).end(`no such file: ${pathname}\n`);
+  const file = resolveFile(pathname);
+  if (file === null) {
+    res
+      .writeHead(NOT_FOUND)
+      .end(`only /marketplace.json, ${LOADER_PATH} and addons/** are served\n`);
+    return;
   }
+
+  await sendFile(req, res, file, `no such file: ${pathname}\n`);
 }
 
 function main() {
@@ -95,6 +128,7 @@ function main() {
   });
 
   server.listen(PORT, HOST, () => {
+    console.log(`serve: install the loader from http://localhost:${PORT}${LOADER_PATH}`);
     console.log(`serve: http://localhost:${PORT}/marketplace.json  (addons/ from ${ROOT})`);
     console.log('serve: turn the dev server on in the Addons manager Dev tab to install from it');
   });

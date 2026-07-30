@@ -7,7 +7,15 @@
 import { describe, expect, it } from 'vitest';
 import { validateIndex } from '../loader/src/shared/schema.ts';
 import { ROOT } from '../tools/manifests.ts';
-import { buildIndex, etagFor, PORT, resolveFile } from '../tools/serve-core.ts';
+import {
+  buildIndex,
+  contentType,
+  etagFor,
+  LOADER_PATH,
+  PORT,
+  resolveFile,
+  resolveLoader,
+} from '../tools/serve-core.ts';
 
 describe('the generated index', () => {
   // Generated from addons/*/addon.json rather than read from the committed
@@ -71,6 +79,41 @@ describe('what may be served', () => {
   // A path that only looks like it is under addons/ once `..` is collapsed.
   it('refuses a traversal that lands beside addons/', () => {
     expect(resolveFile('/addons/../addons-other/x.js')).toBeNull();
+  });
+});
+
+// The second role on the same socket: a manager installs the loader from here,
+// so `pnpm dev` needs no second port and no file:// permission.
+describe('the loader route', () => {
+  it('resolves the built userscript', () => {
+    expect(resolveLoader(LOADER_PATH)).toBe(`${ROOT}loader/dist/woc-loader.user.js`);
+  });
+
+  // The suffix is not decoration: it is what makes a userscript manager
+  // intercept the URL and offer to install instead of showing the source.
+  it('is served under a .user.js name', () => {
+    expect(LOADER_PATH).toMatch(/\.user\.js$/);
+  });
+
+  it('is served as script, or a manager will not offer to install it', () => {
+    expect(contentType(LOADER_PATH)).toBe('text/javascript; charset=utf-8');
+  });
+
+  // One exact path with no directory behind it, which is the whole difference
+  // from resolveFile: there is nothing here to walk.
+  it.each([
+    ['a sibling in the same directory', '/loader/dist/other.js'],
+    ['the directory itself', '/loader/dist/'],
+    ['a traversal dressed as the loader', `/loader/dist/..${LOADER_PATH}`],
+    ['a query-shaped suffix', `${LOADER_PATH}.map`],
+  ])('refuses %s', (_case, pathname) => {
+    expect(resolveLoader(pathname)).toBeNull();
+  });
+
+  // Kept out of addons/, or the loader would offer its own userscript as an
+  // addon in Browse: buildIndex reads every directory under addons/.
+  it('is not in the marketplace index', () => {
+    expect(buildIndex().addons.map((addon) => addon.id)).not.toContain('woc-loader');
   });
 });
 

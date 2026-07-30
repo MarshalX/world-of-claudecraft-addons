@@ -206,3 +206,36 @@
 #woc-addons.woc-no-hud .woc-addon-frame {
   display: none;
 }
+
+/* The Dev tab's freeze, as far as the stylesheet is concerned. See runtime/freeze.ts.
+ *
+ * The callback gates hold everything that repaints on a cadence and can do
+ * nothing about an animation, which the browser runs with no callback to hold:
+ * a toast sliding in and a bar's width transition would both keep moving under
+ * a freeze that only stopped timers, and both are exactly what a screenshot
+ * catches half way through.
+ *
+ * `paused`, not `none`. Cancelling an animation snaps its element back to the
+ * unanimated state, which for anything mid-entrance means freezing the frame
+ * makes it JUMP, and photographing the jump is worse than photographing the
+ * motion. Pausing holds the pixels that were on screen when the switch went on.
+ *
+ * The descendant selector is the point rather than an accident: everything under
+ * the root belongs to the loader or to an addon, and an addon's own animations
+ * are the main thing being stilled here.
+ *
+ * !important for the same reason the reduced-motion floor in kit.css carries it,
+ * and the argument is stronger here: an addon that animates a bar writes the
+ * transition into the style attribute as a matter of course, and an inline style
+ * outranks every selector this file can spell. A freeze an addon can animate
+ * through is not a freeze, and the switch would then be a control that looks like
+ * it worked. */
+#woc-addons.woc-frozen,
+#woc-addons.woc-frozen *,
+#woc-addons.woc-frozen *::before,
+#woc-addons.woc-frozen *::after {
+  /* biome-ignore lint/complexity/noImportantStyles: a freeze has to outrank the inline styles addon code writes, which is the case !important exists for. Paused rather than none, so the pixels on screen when the switch went on are the ones held. */
+  animation-play-state: paused !important;
+  /* biome-ignore lint/complexity/noImportantStyles: same, for the transition half. Without it a bar mid-transition keeps sliding under a freeze and photographs half way. */
+  transition: none !important;
+}

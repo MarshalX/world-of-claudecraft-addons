@@ -16,9 +16,11 @@
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { DiagnosticsReading } from '../loader/src/runtime/diagnostics.ts';
+import { isFrozen, setFrozen } from '../loader/src/runtime/freeze.ts';
 import { mountManager } from '../loader/src/runtime/ui/manager/index.tsx';
 import { UI_TEXT } from '../loader/src/runtime/ui/manager/strings.ts';
 import { TABS } from '../loader/src/runtime/ui/manager/tabs.ts';
+import { FROZEN_CLASS } from '../loader/src/runtime/ui/root.ts';
 import { LOCAL, LOCAL_ORIGIN, OFFICIAL } from '../loader/src/shared/marketplace.ts';
 import type {
   DevState,
@@ -87,6 +89,8 @@ afterEach(() => {
   for (const stop of cleanups.splice(0)) {
     stop();
   }
+  // Module state by design, so a frozen case would freeze the next one.
+  setFrozen(document, false);
   document.body.innerHTML = '';
 });
 
@@ -149,6 +153,13 @@ const buttonNamed = (label: string): HTMLButtonElement | undefined =>
   [...document.querySelectorAll<HTMLButtonElement>('.woc-dev button')].find(
     (button) => button.textContent === label,
   );
+
+const toggleNamed = (label: string): HTMLInputElement | null => {
+  const found = [...document.querySelectorAll<HTMLLabelElement>('.woc-dev .woc-toggle')].find(
+    (one) => one.textContent === label,
+  );
+  return found?.querySelector('input') ?? null;
+};
 
 describe('the tab', () => {
   it('is in the strip', () => {
@@ -234,8 +245,55 @@ describe('the controls', () => {
   });
 });
 
+// What the switch DOES is tests/freeze.test.ts. This is the half that suite
+// cannot see: that the control is on the pane, that clicking it reaches the
+// runtime, and that it goes nowhere near the bridge.
+describe('the freeze', () => {
+  it('freezes every addon window from the toggle', async () => {
+    await open();
+
+    await vi.waitFor(() => {
+      expect(toggleNamed(UI_TEXT.devFreeze)).not.toBeNull();
+    });
+    toggleNamed(UI_TEXT.devFreeze)?.click();
+
+    await vi.waitFor(() => {
+      expect(isFrozen()).toBe(true);
+    });
+    expect(document.getElementById('woc-addons')?.classList.contains(FROZEN_CLASS)).toBe(true);
+  });
+
+  it('unfreezes from the same toggle', async () => {
+    await open();
+
+    await vi.waitFor(() => {
+      expect(toggleNamed(UI_TEXT.devFreeze)).not.toBeNull();
+    });
+    toggleNamed(UI_TEXT.devFreeze)?.click();
+    toggleNamed(UI_TEXT.devFreeze)?.click();
+
+    expect(isFrozen()).toBe(false);
+  });
+
+  // The switch must never be persisted: a freeze that survived the session that
+  // set it would be a loader booting dead with no visible cause, and a player
+  // has no reason to look in a Dev tab for it. Nothing reaching the host is what
+  // makes a page reload the recovery path.
+  it('reaches neither the host nor a store', async () => {
+    const { calls } = await open();
+
+    await vi.waitFor(() => {
+      expect(toggleNamed(UI_TEXT.devFreeze)).not.toBeNull();
+    });
+    toggleNamed(UI_TEXT.devFreeze)?.click();
+
+    expect(calls.setEnabled).not.toHaveBeenCalled();
+    expect(calls.setHotReload).not.toHaveBeenCalled();
+  });
+});
+
 describe('with no bridge', () => {
-  it('says the loader is not connected rather than rendering empty controls', async () => {
+  async function openUnbridged(): Promise<void> {
     const root = document.createElement('div');
     root.id = 'woc-addons';
     document.body.appendChild(root);
@@ -252,9 +310,24 @@ describe('with no bridge', () => {
     cleanups.push(manager.dispose);
     manager.open();
     await clickTab('Dev');
+  }
+
+  it('says the loader is not connected rather than rendering empty controls', async () => {
+    await openUnbridged();
 
     await vi.waitFor(() => {
       expect(text()).toContain(UI_TEXT.devUnreachable);
+    });
+  });
+
+  // Freezing is pure runtime and works with no host at all, and a loader whose
+  // handshake failed is one of the times a still window is most worth having. So
+  // the switch is NOT behind the note that says dev mode is unavailable.
+  it('still offers the freeze', async () => {
+    await openUnbridged();
+
+    await vi.waitFor(() => {
+      expect(toggleNamed(UI_TEXT.devFreeze)).not.toBeNull();
     });
   });
 });

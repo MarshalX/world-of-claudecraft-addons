@@ -9,6 +9,7 @@
 // honest, and the hub runs it once when the world goes live.
 
 import type { DisposalBag } from '../disposal.ts';
+import { unlessFrozen } from '../freeze.ts';
 import type { Unsubscribe } from '../net/bus.ts';
 import type { WorldBackend } from '../world/backend.ts';
 import type { EntityCast, Hazard } from '../world/derived.ts';
@@ -148,7 +149,12 @@ function controls(hub: WorldHub, bag: DisposalBag) {
       }
       // The watcher samples the one key it was given and dispatches what the
       // backend read answered, which is this key's value by construction.
-      const off = hub.watcher.on(key, handler as (value: unknown) => void);
+      //
+      // Gated on the freeze switch here rather than by stopping the sampler,
+      // which matters on resume: the watcher keeps taking its baseline while
+      // frozen, so unfreezing reports the state as it is NOW instead of firing
+      // every listener at once for changes the addon can no longer act on.
+      const off = hub.watcher.on(key, unlessFrozen(handler as (value: unknown) => void));
       const drop = bag.add(off);
       return () => {
         drop();

@@ -7,6 +7,7 @@
 import { createHash } from 'node:crypto';
 import { join, normalize } from 'node:path';
 import type { MarketplaceIndex } from '../loader/src/shared/schema.ts';
+import { LOADER_FILENAME, LOADER_OUT_DIR } from './artifact.ts';
 import { addonDirs, newestManifestMs, ROOT, readAddon } from './manifests.ts';
 
 /** Matched by shared/marketplace.ts LOCAL_ORIGIN and by the userscript @connect list. */
@@ -107,4 +108,29 @@ function resolveFile(pathname: string): string | null {
   return join(ROOT, relative);
 }
 
-export { buildIndex, contentType, etagFor, HOST, PORT, resolveFile };
+/** The one URL outside addons/ this server answers. */
+const LOADER_PATH = `/${LOADER_FILENAME}`;
+
+/**
+ * The built userscript, so the loader can be installed from a URL.
+ *
+ * Installing from `file://` needs a per-manager permission that is off by
+ * default and moves between browser versions, which makes "did the install even
+ * happen" the first thing to debug in a session that was supposed to be about
+ * something else. A localhost URL is the same flow a released loader uses, and
+ * `localhost` is already in the userscript's @connect list.
+ *
+ * ONE EXACT PATH, matched before decoding and with no directory behind it. That
+ * is the whole difference from resolveFile: this cannot be walked, because there
+ * is nothing to walk. Serving loader/dist as a tree would put a second
+ * traversal-guarded route in a server whose only real security property is that
+ * it has exactly one.
+ */
+function resolveLoader(pathname: string): string | null {
+  if (pathname !== LOADER_PATH) {
+    return null;
+  }
+  return join(ROOT, LOADER_OUT_DIR, LOADER_FILENAME);
+}
+
+export { buildIndex, contentType, etagFor, HOST, LOADER_PATH, PORT, resolveFile, resolveLoader };

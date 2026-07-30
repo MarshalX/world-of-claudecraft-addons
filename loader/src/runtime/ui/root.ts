@@ -24,6 +24,16 @@ const STYLE_ID = 'woc-addons-style';
  * class one file sets and another styles with nothing holding them together.
  */
 const NO_HUD_CLASS = 'woc-no-hud';
+/**
+ * On the root while the Dev tab's freeze is on.
+ *
+ * The callback gates in `runtime/freeze.ts` stop every addon that repaints on a
+ * cadence, and they cannot stop a CSS animation, which has no callback to hold.
+ * This is the half of the freeze the stylesheet owns. Here rather than in
+ * freeze.ts for the same reason NO_HUD_CLASS is here: one home for a class one
+ * module writes and another styles.
+ */
+const FROZEN_CLASS = 'woc-frozen';
 
 interface RootDeps {
   doc: Document;
@@ -79,4 +89,4 @@ function mountRoot(deps: RootDeps): AddonRoot {
 }
 
 export type { AddonRoot, RootDeps };
-export { mountRoot, NO_HUD_CLASS, ROOT_ID };
+export { FROZEN_CLASS, mountRoot, NO_HUD_CLASS, ROOT_ID };

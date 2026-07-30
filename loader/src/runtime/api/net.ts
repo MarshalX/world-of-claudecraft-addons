@@ -5,6 +5,7 @@
 // disposal bag, so disabling an addon releases all of them.
 
 import type { DisposalBag } from '../disposal.ts';
+import { unlessFrozen } from '../freeze.ts';
 import type { SubscribeOpts, Unsubscribe } from '../net/bus.ts';
 import type { NetHub } from '../net/hub.ts';
 import type { NetState } from '../net/state.ts';
@@ -93,14 +94,26 @@ export interface NetApi {
   readonly state: NetState;
 }
 
+/**
+ * The subscriptions are gated on the freeze switch and `waitFor` is NOT.
+ *
+ * A frozen `waitFor` would be a promise that never settles: the subscription is
+ * `once`, so the bus drops it on the frame the handler was held for, and the
+ * addon's await would then hang past the resume with nothing left to wake it.
+ * The gate is for repaints, and a pending promise is not one.
+ *
+ * Traffic that arrives while frozen is dropped rather than queued, so a meter
+ * under-counts across a freeze. See runtime/freeze.ts for why that beats
+ * replaying a backlog of 20 Hz frames into the resume.
+ */
 export function createNet(hub: NetHub, bag: DisposalBag, timers: NetTimers): NetApi {
   const waitDeps: WaitDeps = { hub, bag, timers };
   return {
-    on: (type, handler, opts) => tracked(bag, hub.onFrame(type, handler, opts)),
-    onEvent: (kind, handler, opts) => tracked(bag, hub.onEvent(kind, handler, opts)),
-    onAnyEvent: (handler, opts) => tracked(bag, hub.onAnyEvent(handler, opts)),
-    onRaw: (handler, opts) => tracked(bag, hub.onRaw(handler, opts)),
-    onSend: (handler, opts) => tracked(bag, hub.onSend(handler, opts)),
+    on: (type, handler, opts) => tracked(bag, hub.onFrame(type, unlessFrozen(handler), opts)),
+    onEvent: (kind, handler, opts) => tracked(bag, hub.onEvent(kind, unlessFrozen(handler), opts)),
+    onAnyEvent: (handler, opts) => tracked(bag, hub.onAnyEvent(unlessFrozen(handler), opts)),
+    onRaw: (handler, opts) => tracked(bag, hub.onRaw(unlessFrozen(handler), opts)),
+    onSend: (handler, opts) => tracked(bag, hub.onSend(unlessFrozen(handler), opts)),
     waitFor: (type, opts) => waitForFrame(waitDeps, type, opts?.timeout ?? DEFAULT_WAIT_MS),
     get state(): NetState {
       return hub.state();

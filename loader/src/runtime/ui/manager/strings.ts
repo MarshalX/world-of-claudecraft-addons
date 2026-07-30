@@ -133,6 +133,13 @@ export const UI_TEXT = {
   devRefresh: 'Refresh',
   devReloadAll: 'Reload all',
   devUnreachable: 'The loader is not connected to its storage, so dev mode is unavailable.',
+  devFreeze: 'Freeze every addon window',
+  devFreezeNote:
+    'Holds every timer, world watch and socket handler the loader hands an addon, and pauses ' +
+    'animation, so a window stops moving and can be read or photographed. Socket traffic and ' +
+    'world changes during a freeze are dropped rather than queued, so a meter under-counts ' +
+    'across one and "Reload all" resets it. This is never saved, so reloading the page always ' +
+    'unfreezes.',
 
   anchorsHeading: 'Game anchors',
   anchorsNote:

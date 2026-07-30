@@ -14,6 +14,7 @@
 import { render } from 'preact';
 import type { DevApi, MarketApi } from '../../../shared/protocol.ts';
 import type { DiagnosticsReading } from '../../diagnostics.ts';
+import { createFreezeControl, type FreezeControl } from '../../freeze.ts';
 import type { LogBuffer } from '../../log/buffer.ts';
 import type { AddonStatus } from '../../supervisor.ts';
 import { ManagerApp } from './app.tsx';
@@ -99,6 +100,12 @@ interface FrameView {
   catalog: CatalogStore;
   geometry: GeometryStore;
   selection: AddonSelection;
+  /**
+   * Alongside the stores rather than in them: the freeze is runtime state that
+   * never reaches the host, so it has nothing to load, nothing to persist, and
+   * no reason to repaint anything outside the checkbox that sets it.
+   */
+  freeze: FreezeControl;
   onClose: () => void;
 }
 
@@ -136,6 +143,7 @@ function renderApp(deps: ManagerDeps, view: FrameView, container: HTMLElement): 
       }}
       dev={view.dev.state()}
       devStore={view.dev}
+      freeze={view.freeze}
       catalogStore={view.catalog}
       formatTime={deps.formatTime}
       readDiagnostics={deps.readDiagnostics}
@@ -185,6 +193,21 @@ function createStores(deps: ManagerDeps, repaint: () => void) {
   return { store, dev, catalog, geometry, selection };
 }
 
+/**
+ * What opening the window reads, none of which goes to the network.
+ *
+ * Loaded on open rather than at boot: a player who never opens the manager should
+ * not pay for a bridge round trip. All three are loaded whatever tab is being
+ * opened, since deferring to the tab would make every tab's first paint its
+ * loading state. The dev reading is three storage reads and the catalog answers
+ * from the indexes as they were last read. Refresh is what fetches.
+ */
+function loadPanes(panes: Pick<FrameView, 'store' | 'dev' | 'catalog'>): void {
+  panes.store.reload();
+  panes.dev.load();
+  panes.catalog.load();
+}
+
 function createFrame(deps: ManagerDeps): Frame {
   const container = deps.doc.createElement('div');
   container.className = 'woc-manager';
@@ -196,6 +219,7 @@ function createFrame(deps: ManagerDeps): Frame {
   const { store, dev, catalog, geometry, selection } = createStores(deps, () => {
     paint();
   });
+  const freeze = createFreezeControl(deps.doc);
 
   const close = (): void => {
     open = false;
@@ -207,25 +231,21 @@ function createFrame(deps: ManagerDeps): Frame {
       render(null, container);
       return;
     }
-    renderApp(deps, { store, dev, catalog, geometry, selection, onClose: close }, container);
+    renderApp(
+      deps,
+      { store, dev, catalog, geometry, selection, freeze, onClose: close },
+      container,
+    );
   };
 
-  // Loaded on open rather than at boot: a player who never opens the manager
-  // should not pay for a bridge round trip. Both loads commit synchronously and
-  // so paint already; the explicit paint covers a future one that does not.
+  // The loads commit synchronously and so paint already; the explicit paint
+  // covers a future one that does not.
   const show = (): void => {
     if (open) {
       return;
     }
     open = true;
-    store.reload();
-    // Neither of these goes to the network: the dev reading is three storage
-    // reads, and the catalog answers from the indexes as they were last read.
-    // Both are loaded whether or not their tab is the one being opened, since
-    // deferring to the tab would mean its first paint is always the loading
-    // state. Refresh is what fetches.
-    dev.load();
-    catalog.load();
+    loadPanes({ store, dev, catalog });
     paint();
   };
 

@@ -12,6 +12,7 @@
 import { useEffect, useState } from 'preact/hooks';
 import type { InstalledAddon } from '../../../shared/protocol.ts';
 import type { DiagnosticsReading } from '../../diagnostics.ts';
+import type { FreezeControl } from '../../freeze.ts';
 import type { LogEntry } from '../../log/buffer.ts';
 import type { AddonStatus } from '../../supervisor.ts';
 import type { FrameBox } from '../frame/geometry.ts';
@@ -41,6 +42,8 @@ interface ManagerAppProps {
   onReloadAll: () => void;
   dev: DevPaneState;
   devStore: DevStore;
+  /** The Dev tab's freeze. Runtime-only: it reaches neither a store nor the host. */
+  freeze: FreezeControl;
   /**
    * Passed whole rather than as a state prop plus a store prop.
    *
@@ -145,6 +148,7 @@ function Pane(props: { tab: TabId; app: ManagerAppProps }) {
         store={props.app.devStore}
         onReloadAll={props.app.onReloadAll}
         format={props.app.formatTime}
+        freeze={props.app.freeze}
       />
     );
   }

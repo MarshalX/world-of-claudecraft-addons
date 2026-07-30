@@ -1,5 +1,6 @@
 import { defineConfig } from 'vite';
 import monkey from 'vite-plugin-monkey';
+import { LOADER_FILENAME, LOADER_OUT_DIR } from './tools/artifact.ts';
 
 const HOSTS = [
   'https://worldofclaudecraft.com/*',
@@ -7,14 +8,13 @@ const HOSTS = [
   'https://pbe2.worldofclaudecraft.com/*',
 ];
 
-const RAW_BASE =
-  'https://raw.githubusercontent.com/MarshalX/world-of-claudecraft-addons/HEAD/loader/dist';
+const RAW_BASE = `https://raw.githubusercontent.com/MarshalX/world-of-claudecraft-addons/HEAD/${LOADER_OUT_DIR}`;
 
 // Vite builds the sandbox half, the userscript itself. The page-realm runtime is
 // pre-bundled by loader/build-runtime.mjs and inlined by the host via ?raw.
 export default defineConfig({
   build: {
-    outDir: 'loader/dist',
+    outDir: LOADER_OUT_DIR,
     emptyOutDir: true,
   },
   plugins: [
@@ -52,13 +52,13 @@ export default defineConfig({
           'GM_xmlhttpRequest',
           'GM_registerMenuCommand',
         ],
-        downloadURL: `${RAW_BASE}/woc-loader.user.js`,
-        updateURL: `${RAW_BASE}/woc-loader.user.js`,
+        downloadURL: `${RAW_BASE}/${LOADER_FILENAME}`,
+        updateURL: `${RAW_BASE}/${LOADER_FILENAME}`,
         supportURL: 'https://github.com/MarshalX/world-of-claudecraft-addons/issues',
         homepageURL: 'https://github.com/MarshalX/world-of-claudecraft-addons',
       },
       build: {
-        fileName: 'woc-loader.user.js',
+        fileName: LOADER_FILENAME,
       },
     }),
   ],
