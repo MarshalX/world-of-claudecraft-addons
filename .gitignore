@@ -3,6 +3,7 @@
 node_modules/
 *.log
 
-# The built userscript is committed on release tags only, never from an ordinary
-# working-tree build.
+# Never committed, on a tag or otherwise. The built userscript is published as a
+# GitHub Release asset, which is immutable and addressable, rather than as a file
+# in the tree that a branch pointer could change under an installed player.
 loader/dist/

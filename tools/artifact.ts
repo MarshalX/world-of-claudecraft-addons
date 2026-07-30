@@ -21,4 +21,15 @@ const LOADER_OUT_DIR = 'loader/dist';
  */
 const LOADER_FILENAME = 'woc-loader.user.js';
 
-export { LOADER_FILENAME, LOADER_OUT_DIR };
+/**
+ * Vite's userscript `build.metaFileName`: the metadata block on its own.
+ *
+ * This is what `@updateURL` points at, so an update check transfers a few
+ * hundred bytes rather than the whole 460 kB bundle. Derived rather than
+ * written out, and passed to vite explicitly rather than letting `true` derive
+ * the same name internally, because the release workflow attaches this file by
+ * name and a second spelling is a second thing that can drift.
+ */
+const LOADER_META_FILENAME = LOADER_FILENAME.replace(/\.user\.js$/, '.meta.js');
+
+export { LOADER_FILENAME, LOADER_META_FILENAME, LOADER_OUT_DIR };

@@ -1,0 +1,166 @@
+name: Release
+
+# The tag is the version. Nothing in the tree records a release number, so there
+# is no second place one can disagree from: `pnpm pkg set` stamps the tag into
+# package.json just before the build, vite-plugin-monkey reads it from there, and
+# the built metadata block is grepped afterwards to prove it took.
+#
+# A published release is IMMUTABLE. A defect found after publication is a new
+# patch tag, never a re-upload: a replaced asset under one tag means two
+# different files claiming one version, and every checksum, cache and mirror
+# that saw the first one is now wrong with nothing to indicate it. Deleting a
+# release is acceptable within minutes of publishing and before anyone could
+# have installed; after that it is a patch.
+
+on:
+  push:
+    tags:
+      # Loader releases only. `types-v*` tags @woc-addons/types on its own
+      # cadence and must not build a loader.
+      - 'v[0-9]+.[0-9]+.[0-9]+'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          # git-cliff reads the whole history and every tag. A shallow clone
+          # produces release notes containing one commit.
+          fetch-depth: 0
+
+      # Corepack must come before setup-node's pnpm cache, which needs pnpm on PATH.
+      - name: Enable corepack
+        run: corepack enable
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Typecheck, lint, test, validate manifests
+        run: pnpm check
+
+      - name: Stamp the version from the tag
+        # After install, never before: the lockfile does not record the root
+        # version, but there is no reason to hand --frozen-lockfile a tree that
+        # differs from the committed one.
+        run: pnpm pkg set version="${GITHUB_REF_NAME#v}"
+
+      - run: pnpm build
+
+      - name: Check the built metadata block
+        # Three ways a release goes wrong quietly, all of them invisible until a
+        # player is already affected.
+        #
+        # A version that did not take means the manager compares equal to what
+        # it has and never updates. @name or @namespace drifting means every
+        # existing install is orphaned: the manager treats it as a different
+        # script, with an empty GM store, so every player loses their addons,
+        # settings, keybinds and window positions.
+        run: |
+          set -euo pipefail
+          version="${GITHUB_REF_NAME#v}"
+
+          for file in loader/dist/woc-loader.user.js loader/dist/woc-loader.meta.js; do
+            if [ ! -s "$file" ]; then
+              echo "::error::$file is missing or empty"
+              exit 1
+            fi
+
+            check() {
+              if ! grep -qE "^// @$1[[:space:]]+$2\$" "$file"; then
+                echo "::error::$file: expected @$1 to be '$2'"
+                grep -E "^// @$1[[:space:]]" "$file" || echo "  (no @$1 line at all)"
+                exit 1
+              fi
+            }
+
+            check version "$version"
+            check name 'World of ClaudeCraft Addon Loader'
+            check namespace 'woc-addons'
+          done
+
+          echo "metadata block agrees with $GITHUB_REF_NAME"
+
+      - name: Checksum the assets
+        # Not a supply-chain guarantee, since the checksums sit next to the files
+        # they describe. It is how a player or a reviewer confirms that what they
+        # downloaded is what this run produced.
+        run: |
+          set -euo pipefail
+          cd loader/dist
+          sha256sum woc-loader.user.js woc-loader.meta.js > SHA256SUMS
+          cat SHA256SUMS
+
+      - name: Generate the release notes
+        uses: orhun/git-cliff-action@v4
+        with:
+          # Pinned to the same version package.json holds, so `pnpm changelog`
+          # in a working tree and this job cannot render differently.
+          version: v2.13.1
+          config: cliff.toml
+          # --latest is this tag's section alone; --strip header drops the
+          # "# Changelog" preamble, which belongs to the file and not to a
+          # release page. The footer's compare link is kept.
+          args: --latest --strip header
+        env:
+          OUTPUT: RELEASE_NOTES.md
+          GITHUB_REPO: ${{ github.repository }}
+
+      - uses: softprops/action-gh-release@v3
+        with:
+          body_path: RELEASE_NOTES.md
+          files: |
+            loader/dist/woc-loader.user.js
+            loader/dist/woc-loader.meta.js
+            loader/dist/SHA256SUMS
+          fail_on_unmatched_files: true
+
+  changelog:
+    # Separate from the release, and after it, deliberately. Publishing the
+    # artifact is the part that must not be held up by a push to a protected
+    # branch, and a failure here leaves a correct release in place that a re-run
+    # can catch the file up to.
+    needs: release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          # Checked out on main rather than on the tag: this job's only output is
+          # a commit to main, and the tag it was triggered by is fetched anyway.
+          ref: main
+          fetch-depth: 0
+
+      - name: Regenerate the changelog
+        uses: orhun/git-cliff-action@v4
+        with:
+          version: v2.13.1
+          config: cliff.toml
+        env:
+          OUTPUT: CHANGELOG.md
+          GITHUB_REPO: ${{ github.repository }}
+
+      - name: Commit if changed
+        run: |
+          set -euo pipefail
+
+          # Staged first, then compared against the index: `git diff` reports no
+          # change for a file git is not tracking yet, so on the release that
+          # first creates CHANGELOG.md a working-tree diff would report it
+          # unchanged and quietly never commit it.
+          git add CHANGELOG.md
+          if git diff --cached --quiet -- CHANGELOG.md; then
+            echo "changelog unchanged"
+            exit 0
+          fi
+
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "Regenerate the changelog for $GITHUB_REF_NAME."
+          git push origin main
