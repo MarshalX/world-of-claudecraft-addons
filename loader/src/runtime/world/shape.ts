@@ -61,6 +61,7 @@ const SHAPE: Record<keyof Entity, FieldSpec> = {
   targetId: { kind: 'number', nullable: true },
   aggroTargetId: { kind: 'number', nullable: true },
   threat: { kind: 'map' },
+  ownerId: { kind: 'number', nullable: true },
   castingAbility: { kind: 'string', nullable: true },
   castRemaining: { kind: 'number' },
   castTotal: { kind: 'number' },

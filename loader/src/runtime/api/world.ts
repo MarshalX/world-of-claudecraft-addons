@@ -12,14 +12,30 @@ import type { DisposalBag } from '../disposal.ts';
 import { unlessFrozen } from '../freeze.ts';
 import type { Unsubscribe } from '../net/bus.ts';
 import { type AbilityIndex, emptyAbilities } from '../world/abilities.ts';
+import {
+  type AuraQuery,
+  filterAuras,
+  filterPartyAuras,
+  NO_ROWS,
+  NONE,
+  type PartyAuraQuery,
+} from '../world/auras.ts';
 import type { WorldBackend } from '../world/backend.ts';
 import { type CombatState, OUT_OF_COMBAT } from '../world/combat.ts';
 import type { EntityCast, Hazard } from '../world/derived.ts';
 import { mergeLive } from '../world/facade.ts';
-import type { Aura, Entity, InvSlot, PartyInfo, WorldQuests } from '../world/game-types.ts';
+import type {
+  Aura,
+  Entity,
+  InvSlot,
+  PartyInfo,
+  PartyMemberAura,
+  WorldQuests,
+} from '../world/game-types.ts';
 import type { WorldHub } from '../world/hub.ts';
 import { readonlyMapView } from '../world/readonly-map.ts';
 import { isWorldKey, WORLD_KEYS, type WorldKey } from '../world/signature.ts';
+import { resolveUnit, type UnitContext, type UnitToken } from '../world/units.ts';
 import type { WorldValues } from '../world/values.ts';
 
 /**
@@ -139,6 +155,55 @@ function derivedReads(hub: WorldHub) {
   };
 }
 
+/** Null before world entry, which is the one case `mine` cannot be answered in. */
+function playerIdOf(ctx: UnitContext): number | null {
+  if (ctx.player === null) {
+    return null;
+  }
+  return ctx.player.id;
+}
+
+/**
+ * Everything that takes an argument: resolving a unit, and filtering its auras.
+ *
+ * These are lookups OVER the reads above rather than reads of their own, which
+ * is why they are not world keys and cannot be subscribed to. Watch the key the
+ * answer comes from (`target`, `party`, `auras`) and re-resolve in the handler.
+ */
+function lookups(hub: WorldHub) {
+  const context = (): UnitContext => {
+    const backend = hub.backend();
+    return {
+      player: backend?.player ?? null,
+      target: backend?.target ?? null,
+      entities: backend?.entities ?? emptyEntities(),
+      party: backend?.party ?? null,
+    };
+  };
+
+  return {
+    unit: (token: string): Entity | null => resolveUnit(token, context()),
+
+    aurasOn: (token: string, query: AuraQuery = {}): readonly Aura[] => {
+      const ctx = context();
+      const unit = resolveUnit(token, ctx);
+      if (unit === null) {
+        return NONE;
+      }
+      return filterAuras(unit.auras, query, playerIdOf(ctx));
+    },
+
+    partyAuras: (pid: number, query: PartyAuraQuery = {}): readonly PartyMemberAura[] => {
+      const party = hub.backend()?.party;
+      if (party === undefined || party === null) {
+        return NO_ROWS;
+      }
+      const row = party.members.find((member) => member.pid === pid);
+      return filterPartyAuras(row?.auras, query);
+    },
+  };
+}
+
 /** Subscribing, plus the two escape hatches. Everything that is not a state read. */
 function controls(hub: WorldHub, bag: DisposalBag) {
   return {
@@ -206,6 +271,21 @@ export interface WorldApi {
   readonly combat: CombatState;
 
   /**
+   * The entity a unit token names, or null.
+   *
+   * `targettarget` reads whichever field the target's kind actually fills, which
+   * is the reason to use this rather than open-coding the lookup: a mob never
+   * carries `targetId`.
+   */
+  unit: (token: UnitToken) => Entity | null;
+
+  /** The matching effects on a unit, empty when it resolves to nothing. */
+  aurasOn: (token: UnitToken, query?: AuraQuery) => readonly Aura[];
+
+  /** The same over a party row's compact strip, which carries no source. */
+  partyAuras: (pid: number, query?: PartyAuraQuery) => readonly PartyMemberAura[];
+
+  /**
    * Watch one key for change, sampled once per animation frame.
    *
    * The handler's argument is typed from the key, so `world.on('cooldowns', ...)`
@@ -222,5 +302,8 @@ export interface WorldApi {
 }
 
 export function createWorld(hub: WorldHub, bag: DisposalBag): WorldApi {
-  return mergeLive(mergeLive(gameReads(hub), derivedReads(hub)), controls(hub, bag));
+  return mergeLive(
+    mergeLive(gameReads(hub), derivedReads(hub)),
+    mergeLive(lookups(hub), controls(hub, bag)),
+  );
 }

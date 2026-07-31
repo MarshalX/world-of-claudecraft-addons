@@ -93,6 +93,30 @@ woc.world.on('combat', ({ active, source }) => {
 
 There IS an `inCombat` field on the entity and it is never written, so it reads false forever. That is not an oversight in this API, it is the reason this reading exists.
 
+### Naming a unit
+
+```js
+woc.world.unit('target');        // the same Entity world.target gives you
+woc.world.unit('targettarget');  // what your target is fighting
+woc.world.unit('pet');           // your companion
+woc.world.unit('party1');        // the first group member who is not you
+```
+
+`world.unit` resolves a unit the way an addon thinks about one, and `targettarget` is the reason to use it rather than writing the lookup yourself. A mob does not carry `targetId`: the server fills that field from a SELECTION, and a mob does not select, so on every mob it is present, correctly typed, and permanently null. What a mob is fighting rides `aggroTargetId` instead. The resolver reads whichever field the target's kind actually fills, so a target-of-target display works on the units it is usually pointed at.
+
+`partyN` counts the other members, so `party1` is the first person who is not you; `raidN` counts everyone including you. Both resolve to an **entity**, which means both answer null for a member too far away to have one even while `world.party` still lists them. For a raid display read the party rows, which are complete, and reach for an entity only when you need something a row does not carry.
+
+### Filtering auras
+
+```js
+const mine = woc.world.aurasOn('target', { mine: true, kind: 'dot' });
+const debuffs = woc.world.partyAuras(pid, { debuff: true });
+```
+
+`mine` is the filter a dot tracker needs and the one most often forgotten. Two players can carry the same debuff on one target, and without it a display shows a full timer while your own effect quietly expires.
+
+`partyAuras` is separate because a party row's auras are a smaller shape than an entity's: an id, a kind, whole seconds, and a debuff flag, with no source. That is also why `PartyAuraQuery` has no `mine`, rather than one that silently matches nothing.
+
 ```js
 woc.world.on('cooldowns', rebuild);
 await woc.world.ready;

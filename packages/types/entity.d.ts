@@ -173,6 +173,14 @@ export interface Entity {
    * where the twentieth person stands.
    */
   threat: Map<number, number>;
+  /**
+   * The owning player's entity id for a controlled pet, null for anything wild.
+   *
+   * The only way to find a pet. A companion is an ordinary mob entity in every
+   * other respect, so nothing else tells it apart from the wolf standing next
+   * to it. `world.unit('pet')` is this lookup done for you.
+   */
+  ownerId: number | null;
   /** The ability id being cast, or null. */
   castingAbility: string | null;
   /** Seconds left on the cast, against `castTotal`. Both 0 when not casting. */

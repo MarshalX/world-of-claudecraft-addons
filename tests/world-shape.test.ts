@@ -119,6 +119,7 @@ describe('the shape table', () => {
       targetId: true,
       aggroTargetId: true,
       threat: true,
+      ownerId: true,
       castingAbility: true,
       castRemaining: true,
       castTotal: true,

@@ -488,6 +488,8 @@ async function runChecks() {
     checkAbilities(),
     checkCombat(),
     checkMobTargeting(),
+    checkUnits(),
+    checkAuraQueries(),
     checkCasts(),
     checkIcons(),
     checkNet(),
@@ -505,6 +507,81 @@ const win = woc.ui.window({
   save: true,
   visible: woc.settings['open-on-load'] === true,
 });
+
+/** Whichever field this kind of entity fills, which is the thing being checked. */
+function fightingId(entity) {
+  if (entity.kind === 'mob') {
+    return entity.aggroTargetId;
+  }
+  return entity.targetId;
+}
+
+/**
+ * Unit tokens, against the state they are resolved from.
+ *
+ * Every assertion here is one an addon would otherwise trust silently: that
+ * `player` and `target` agree with the plain reads, that an unknown token is a
+ * null rather than a throw, and that `targettarget` on a MOB target is not the
+ * permanently-null field. The last one cannot be checked without a mob target,
+ * so it reports what it could see rather than passing quietly.
+ */
+function checkUnits() {
+  const { world } = woc;
+  if (typeof world.unit !== 'function') {
+    return result('units', false, 'world.unit is not callable');
+  }
+  if (world.unit('player') !== world.player) {
+    return result('units', false, 'the player token did not resolve to world.player');
+  }
+  if (world.unit('target') !== world.target) {
+    return result('units', false, 'the target token did not resolve to world.target');
+  }
+  if (world.unit('nonsense') !== null) {
+    return result('units', false, 'an unknown token answered with something');
+  }
+  const { target } = world;
+  if (target === null) {
+    return result('units', true, 'no target, so target-of-target went unchecked');
+  }
+  const victim = world.unit('targettarget');
+  const expected = fightingId(target);
+  if ((victim?.id ?? null) !== (expected ?? null)) {
+    return result(
+      'units',
+      false,
+      `targettarget resolved ${victim?.id ?? null}, expected ${expected}`,
+    );
+  }
+  return result('units', true, `target is a ${target.kind}, fighting ${expected ?? 'nobody'}`);
+}
+
+/**
+ * The aura filters, checked against the unfiltered list they narrow.
+ *
+ * A filter that returned everything would pass any spot check on a player with
+ * one aura, so this compares counts against a hand-rolled filter over the same
+ * list: the surface has to agree with what the caller would have written.
+ */
+function checkAuraQueries() {
+  const { world } = woc;
+  if (typeof world.aurasOn !== 'function') {
+    return result('aura queries', false, 'world.aurasOn is not callable');
+  }
+  if (world.aurasOn('nonsense').length > 0) {
+    return result('aura queries', false, 'an unresolvable unit answered with auras');
+  }
+  const all = world.aurasOn('player');
+  const mine = world.aurasOn('player', { mine: true });
+  const { player } = world;
+  if (player === null) {
+    return result('aura queries', true, 'no world yet');
+  }
+  const expected = all.filter((one) => one.sourceId === player.id).length;
+  if (mine.length !== expected) {
+    return result('aura queries', false, `mine kept ${mine.length}, expected ${expected}`);
+  }
+  return result('aura queries', true, `${all.length} on you, ${mine.length} your own`);
+}
 
 function combatWord(active) {
   if (active) {

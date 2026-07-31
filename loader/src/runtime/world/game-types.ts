@@ -172,6 +172,13 @@ export interface Entity {
    * it is the top of the table and not the whole of it.
    */
   threat: Map<number, number>;
+  /**
+   * The owning player's entity id for a controlled pet, null for anything wild.
+   *
+   * The one way to find a pet: it is an ordinary mob entity otherwise, so
+   * nothing else distinguishes a hunter's companion from the wolf next to it.
+   */
+  ownerId: number | null;
   /** The ability id being cast, or null. */
   castingAbility: string | null;
   /** Seconds left on the cast, against `castTotal`. Both 0 when not casting. */

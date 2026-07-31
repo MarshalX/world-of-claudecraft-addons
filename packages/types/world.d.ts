@@ -151,6 +151,55 @@ export interface CombatState {
   source: CombatSource;
 }
 
+/**
+ * A unit you can name.
+ *
+ * `partyN` counts the OTHER members, 1-based, so `party1` is the first person
+ * who is not you and the tokens line up with how a party display is laid out.
+ * `raidN` counts every member including you, in the roster's own order.
+ *
+ * Both resolve to an ENTITY, so both answer null for someone too far away to
+ * have one, even while `world.party` still lists them. For a raid display read
+ * the party rows, which are complete, and reach for an entity only when you need
+ * something a row does not carry.
+ */
+export type UnitToken =
+  | 'player'
+  | 'target'
+  | 'targettarget'
+  | 'pet'
+  | `party${number}`
+  | `raid${number}`;
+
+/** Which effects to keep. An empty query keeps all of them. */
+export interface AuraQuery {
+  /** The applying ability's id. */
+  id?: string;
+  /** What the effect does, e.g. 'dot' or 'stun'. */
+  kind?: string;
+  /**
+   * Only effects YOU applied.
+   *
+   * The filter a dot tracker needs and the one most likely to be forgotten: two
+   * players can carry the same debuff on one target, and without this a display
+   * shows a full timer while your own dot quietly expires.
+   */
+  mine?: boolean;
+}
+
+/**
+ * The same over a party row's strip, which is a smaller shape.
+ *
+ * A row's auras carry an id, a kind, whole seconds, and a debuff flag. No
+ * source, so there is no `mine` here rather than one that silently does nothing.
+ */
+export interface PartyAuraQuery {
+  id?: string;
+  kind?: string;
+  /** True for debuffs only, false for buffs only, absent for both. */
+  debuff?: boolean;
+}
+
 /** What each read returns, and what the matching `world.on` key reports. */
 export interface WorldValues {
   player: Entity | null;
@@ -240,6 +289,41 @@ export interface WorldApi {
    * moment it becomes one.
    */
   readonly combat: CombatState;
+
+  /**
+   * The entity a token names, or null when there is nothing there.
+   *
+   * Worth using rather than open-coding, because one of these is a trap:
+   * `targettarget` reads whichever field the target's kind actually fills. A
+   * mob never carries `targetId`, so the obvious lookup gives you a
+   * target-of-target that works on players and is blank on every mob.
+   *
+   * ```js
+   * const boss = woc.world.unit('target');
+   * const tank = woc.world.unit('targettarget');
+   * ```
+   */
+  unit: (token: UnitToken) => Entity | null;
+
+  /**
+   * The effects on a unit that match, in the game's own order.
+   *
+   * Empty rather than null when the unit resolves to nothing, so a display can
+   * render the answer without a guard first.
+   *
+   * ```js
+   * const mine = woc.world.aurasOn('target', { mine: true, kind: 'dot' });
+   * ```
+   */
+  aurasOn: (token: UnitToken, query?: AuraQuery) => readonly Aura[];
+
+  /**
+   * The same over one party row's compact strip.
+   *
+   * Separate because a row's auras are a different, smaller shape than an
+   * entity's, and because a row exists for a member who is nowhere near you.
+   */
+  partyAuras: (pid: number, query?: PartyAuraQuery) => readonly PartyMemberAura[];
 
   /**
    * Entity id to raid target marker, 0 through 7.
