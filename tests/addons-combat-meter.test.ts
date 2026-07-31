@@ -147,9 +147,26 @@ function abilityOf(hit: Hit): string | null {
   return 'Aimed Shot';
 }
 
+/**
+ * A spellbook in the game's own shape, carrying the divergence this addon turns on.
+ *
+ * `arcane_shot` is displayed as "Fell Shot", so an event names one thing and the art
+ * is filed under another. Both are here so a test can prove the join runs backwards
+ * correctly rather than that some string reached some attribute.
+ */
+const KNOWN = [
+  {
+    def: { id: 'arcane_shot', name: 'Fell Shot', school: 'arcane', requiresTarget: true },
+    rank: 1,
+    cost: 25,
+    castTime: 0,
+    cooldown: 6,
+  },
+];
+
 async function run(): Promise<MeterHarness> {
   const player = liveEntity({ set: { templateId: 'priest' } });
-  const world = { entities: new Map([[PLAYER_ID, player]]), player };
+  const world = { entities: new Map([[PLAYER_ID, player]]), player, known: KNOWN };
   const harness = createSharedServices(document, createFakeStorage(), {
     game: Promise.resolve({ world }),
   });
@@ -682,26 +699,40 @@ describe('disabling it', () => {
   });
 });
 
-// The rows carry NO ability art, and that is asserted rather than left implicit,
-// because it is a decision someone will reasonably try to undo.
+// Ability art, which for a long time this addon could not draw at all.
 //
 // Skill art is filed under an ability's ID and a combat event carries its display
 // NAME, and the two have diverged in the game: `arcane_shot` is shown everywhere as
-// "Fell Shot", so no derivation from the name reaches the art. A first version
-// slugified the name and drew icons for the two hunter abilities whose names still
-// happened to match their ids, which read as random rather than as a limitation.
+// "Fell Shot". A first version slugified the name into `fell_shot` and drew icons for
+// only the abilities whose names still happened to match their ids, which read as
+// random rather than as a limitation, so the art was removed entirely.
 //
-// Cooldown Bars keeps its icons because a cooldown map is keyed by the id, which is
-// also what the art is filed under. It pays for that on the other side, with a label
-// derived from the id that may not be what the game calls the ability.
-describe('the absence of ability art', () => {
-  it('draws no icon, whatever the event named the ability', async () => {
+// `world.abilities` carries the id and the name together, so the join now runs
+// backwards and the art is exact. What it covers is the player's OWN kit, which is
+// why the second case here matters as much as the first: a mob's ability has no id to
+// find, and drawing nothing is the correct answer rather than a failure.
+describe('ability art', () => {
+  it('draws art from the ID for an ability the event named differently', async () => {
     const h = await run();
 
     h.hit({ ability: 'Fell Shot' });
     h.tick();
 
-    expect(rowFor('Fell Shot')?.querySelector('.woc-bar-icon[src]')).toBeNull();
+    const icon = rowFor('Fell Shot')?.querySelector('img.woc-bar-icon');
+    // The id, never a slug of the name: `fell_shot` is not a file that exists.
+    expect(icon?.getAttribute('src')).toContain('arcane_shot');
+    expect(icon?.hasAttribute('hidden')).toBe(false);
+  });
+
+  it('draws none for an ability that is not the player own, which has no id to find', async () => {
+    const h = await run();
+
+    h.hit({ ability: 'Crushing Blow' });
+    h.tick();
+
+    const icon = rowFor('Crushing Blow')?.querySelector('img.woc-bar-icon');
+    expect(icon?.getAttribute('src')).toBe('');
+    expect(icon?.hasAttribute('hidden')).toBe(true);
   });
 
   // The names ARE right, and that is the half this addon has. It shows what the game

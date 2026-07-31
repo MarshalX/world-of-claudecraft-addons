@@ -83,24 +83,31 @@ function settingFlag(id, fallback) {
 }
 
 /**
- * 'aimed_shot' reads as 'Aimed Shot'. A cooldown map is keyed by ability ID.
+ * 'aimed_shot' reads as 'Aimed Shot'. The FALLBACK, not the label.
  *
- * Which means this label is derived from the id and MAY NOT BE WHAT THE GAME CALLS IT.
- * The two have diverged: `arcane_shot` is displayed as "Fell Shot" in the game, so this
- * row says "Arcane Shot" for an ability nothing else calls that. Nothing readable from
- * an addon carries an id and its display name together for a damaging ability, and the
- * only complete source is a hashed, minified i18n bundle that is not worth depending
- * on. Combat Meter has the opposite half of the same problem, stated in its header.
- *
- * So the id is what is shown, because the id is what is KNOWN. It is also what the
- * icon is filed under, which is why the art on these rows is right even when the name
- * beside it is stale.
+ * A guess from the id, and it is wrong wherever the two have diverged: `arcane_shot`
+ * is displayed as "Fell Shot", so this returns a name nothing else in the game calls
+ * that ability. It is only reached for an id the spellbook does not carry, which is
+ * something you did not learn: an item cooldown, or an ability granted by something
+ * other than your class kit. Wrong-but-readable beats blank for those.
  */
 function readable(abilityId) {
   return abilityId
     .split('_')
     .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
     .join(' ');
+}
+
+/**
+ * What the game actually calls this ability.
+ *
+ * A cooldown map is keyed by ability ID, and the id and the display name have
+ * diverged, so for a long time these rows showed a title-cased id and there was no
+ * way to do better. `world.abilities` is that way: it carries both for everything in
+ * your own kit, which is everything with a cooldown you can see.
+ */
+function abilityName(abilityId) {
+  return woc.world.abilities.byId(abilityId)?.name ?? readable(abilityId);
 }
 
 /**
@@ -142,7 +149,7 @@ frame.body.appendChild(list);
  */
 // #region bar
 function createBar(abilityId) {
-  const name = readable(abilityId);
+  const name = abilityName(abilityId);
   const bar = woc.ui.bar({
     label: name,
     icon: woc.ui.icon.ability(abilityId, playerClass()),

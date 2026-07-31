@@ -66,6 +66,36 @@ describe('computeUpdates', () => {
     expect(computeUpdates([installed()], offering('1.1.0'))).toEqual([]);
   });
 
+  /**
+   * An update this loader could not run is withheld, not offered.
+   *
+   * The failure it prevents is the quiet one: the newer addon installs, reports
+   * running, and then throws against a member this loader does not have, on
+   * whatever frame first reaches it. Nothing badges that, because the supervisor
+   * only wraps the LOAD. Keeping the working version installed until the loader
+   * catches up is the honest outcome.
+   */
+  it('withholds an update needing an API minor this loader does not implement', () => {
+    const ahead = [marketState(OFFICIAL, [marketEntry({ version: '1.3.0', apiMinor: 99 })])];
+
+    expect(computeUpdates([installed()], ahead)).toEqual([]);
+  });
+
+  it('withholds an update built for another API major', () => {
+    const ahead = [marketState(OFFICIAL, [marketEntry({ version: '1.3.0', apiVersion: 2 })])];
+
+    expect(computeUpdates([installed()], ahead)).toEqual([]);
+  });
+
+  // Absent reads as 0, which is what an addon published before the minor existed
+  // was written against. A field its author never saw must not refuse it.
+  it('offers an update from an addon that declares no minor at all', () => {
+    const { apiMinor: _dropped, ...noMinor } = marketEntry({ version: '1.3.0' });
+    const ahead = [marketState(OFFICIAL, [noMinor])];
+
+    expect(computeUpdates([installed()], ahead)).toHaveLength(1);
+  });
+
   // Silence is the honest reading of "not looked yet". An empty answer would be
   // drawn as "everything is up to date", which is a claim nothing established.
   it('reports nothing for a source whose index has never been read', () => {

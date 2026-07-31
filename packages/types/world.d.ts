@@ -1,3 +1,4 @@
+import type { AbilityIndex } from './abilities.js';
 import type { Unsubscribe } from './addon.js';
 
 export interface Vec3 {
@@ -306,6 +307,7 @@ export interface WorldValues {
   targetAuras: readonly Aura[] | null;
   hazards: readonly Hazard[] | null;
   markers: ReadonlyMap<number, number> | null;
+  abilities: AbilityIndex;
 }
 
 /** The state keys `world.on` can watch. Anything else throws. */
@@ -358,6 +360,16 @@ export interface WorldApi {
   readonly targetAuras: readonly Aura[] | null;
 
   readonly hazards: readonly Hazard[] | null;
+
+  /**
+   * Your spellbook, and the one way to turn an ability id into its display name
+   * or a display name back into an id.
+   *
+   * Never null, unlike most reads here: it is a lookup, so an empty one answers
+   * the same questions a populated one does and you need no guard before asking.
+   * Covers your OWN kit only. See `AbilityIndex`.
+   */
+  readonly abilities: AbilityIndex;
 
   /**
    * Entity id to raid target marker, 0 through 7.

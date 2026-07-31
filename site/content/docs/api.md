@@ -62,9 +62,25 @@ woc.world.targetAuras     // and on your target
 woc.world.casts           // ReadonlyMap<entityId, EntityCast> for anything casting
 woc.world.hazards         // ground effects, with radius and kind
 woc.world.markers         // raid markers, by entity
+woc.world.abilities       // your spellbook, with lookups by id and by name
 ```
 
 `world.cooldowns` is keyed by real ability id, which makes it one of the few places an id is safe to assume. `world.hazards` and `world.markers` are what a positional addon reads.
+
+`world.abilities` is how you get between an ability's id and its display name, which have diverged: skill art is filed under `arcane_shot`, while a combat event names it `Fell Shot`. Without this you can hold one and never reach the other.
+
+```js
+// an event gave you a name; get the id, and then the art
+const info = woc.world.abilities.byName(event.ability);
+const url = info && woc.ui.icon.ability(info.id, woc.world.player.templateId);
+
+// a cooldown map gave you an id; get something worth showing a player
+const label = woc.world.abilities.byId(id)?.name ?? id;
+```
+
+It covers YOUR OWN known kit, so an ability a mob casts is not in it and `byName` answers null. It is empty rather than absent before world entry, and its `cost`, `castTime` and `cooldown` are resolved after your talents rather than the ability's base figures.
+
+Added in API 1.1. Set `"apiMinor": 1` in your addon.json to use it, and a loader older than that refuses your addon by name instead of starting it and failing on the first frame that reaches the member. If you would rather keep working on an older loader with this one feature off, declare the lower minor and check `woc.apiMinor` before reading it.
 
 ```js
 woc.world.on('cooldowns', rebuild);

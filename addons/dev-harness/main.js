@@ -47,6 +47,7 @@ const WORLD_KEYS = [
   'targetAuras',
   'hazards',
   'markers',
+  'abilities',
 ];
 /** An arbitrary nested value, to show that storage is not flattened to strings. */
 const PROBE_VALUE = Object.freeze(['a', ['b'], { c: true }]);
@@ -424,6 +425,57 @@ function checkShadowedGlobals() {
   return result('shadowed globals', true, `${String(SHADOW_PROBES.length)} globals shadowed`);
 }
 
+/** What a display could guess from an id alone, which is the thing being replaced. */
+function titleCase(id) {
+  return id
+    .split('_')
+    .map((word) => word.slice(0, 1).toUpperCase() + word.slice(1))
+    .join(' ');
+}
+
+/**
+ * The spellbook, and the id-to-name bridge it exists for.
+ *
+ * The round trip is the whole point, so that is what is asserted: every ability
+ * has to come back as ITSELF through both lookups. An index that answered a
+ * plausible-looking neighbour would pass a spot check on one ability and be
+ * wrong everywhere else.
+ *
+ * The lookups are also checked for rejecting a name that is not the player's,
+ * because that is the case a meter hits constantly: every mob ability reaches it
+ * as a display name with no id behind it, and a null is the honest answer.
+ */
+function checkAbilities() {
+  const book = woc.world.abilities;
+  if (book === undefined || typeof book.byId !== 'function') {
+    return result('abilities', false, 'world.abilities is not an index');
+  }
+  if (book.known.length === 0) {
+    return result('abilities', true, 'empty, no world yet (login screen or loading)');
+  }
+  const broken = [];
+  for (const info of book.known) {
+    if (book.byId(info.id) !== info || book.byName(info.name) !== info) {
+      broken.push(info.id);
+    }
+  }
+  if (broken.length > 0) {
+    return result('abilities', false, `did not round trip: ${broken.join(', ')}`);
+  }
+  if (book.byName('  not an ability') !== null) {
+    return result('abilities', false, 'byName answered for a name nobody has');
+  }
+  // How many names a title-cased id would have got WRONG, which is what a display
+  // had to fall back on before this surface existed. A count of zero here would
+  // mean the bridge is not earning its place on this character.
+  const diverged = book.known.filter((info) => info.name !== titleCase(info.id));
+  return result(
+    'abilities',
+    true,
+    `${String(book.known.length)} known, ${String(diverged.length)} unguessable from the id`,
+  );
+}
+
 async function runChecks() {
   const immediate = [
     checkIdentity(),
@@ -432,6 +484,7 @@ async function runChecks() {
     checkKeys(),
     checkWorld(),
     checkWorldKeys(),
+    checkAbilities(),
     checkCasts(),
     checkIcons(),
     checkNet(),

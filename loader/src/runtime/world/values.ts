@@ -9,6 +9,7 @@
 // `signature.ts`, which holds the array `world.on` validates against and the
 // capture behind each one; `tests/world-shape.test.ts` asserts the two agree.
 
+import type { AbilityIndex } from './abilities.ts';
 import type { EntityCast, Hazard } from './derived.ts';
 import type { Aura, Entity, InvSlot, PartyInfo, WorldQuests } from './game-types.ts';
 
@@ -28,4 +29,13 @@ export interface WorldValues {
   hazards: readonly Hazard[] | null;
   /** Entity id to raid target marker, 0 through 7. */
   markers: ReadonlyMap<number, number> | null;
+  /**
+   * The player's own spellbook, with lookups by id and by display name.
+   *
+   * Never null, like `entities` and `casts` and unlike the rest: it is a lookup
+   * surface, and making every call site guard the namespace before asking it a
+   * question would be a null check per event in a combat handler. Empty until
+   * the world is up.
+   */
+  abilities: AbilityIndex;
 }

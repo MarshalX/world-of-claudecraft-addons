@@ -11,7 +11,7 @@
 // and records a throw as `failed` while LEAVING THE ROW ENABLED. This file only
 // builds the surface that lifecycle hands over.
 
-import { API_VERSION } from '../../shared/api-version.ts';
+import { API_MINOR, API_VERSION } from '../../shared/api-version.ts';
 import type { Channel } from '../../shared/hosts.ts';
 import type { AddonManifest } from '../../shared/schema.ts';
 import type { DisposalBag, Teardown } from '../disposal.ts';
@@ -59,6 +59,7 @@ interface GameIdentity {
 interface WocApi extends TimersApi, LogApi {
   readonly addon: AddonIdentity;
   readonly api: number;
+  readonly apiMinor: number;
   readonly game: GameIdentity;
   readonly net: NetApi;
   readonly world: WorldApi;
@@ -220,6 +221,8 @@ function createAddonApi(shared: SharedServices, addon: AddonContext): AddonApi {
     addon: addonIdentity(addon),
 
     api: API_VERSION,
+
+    apiMinor: API_MINOR,
 
     // A getter, because the footer is not readable until the document is, and
     // an addon holding `woc.game` from its first line should still see the

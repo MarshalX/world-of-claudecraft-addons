@@ -34,6 +34,7 @@ describe('world keys', () => {
       'targetAuras',
       'hazards',
       'markers',
+      'abilities',
     ]);
   });
 

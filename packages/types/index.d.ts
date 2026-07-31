@@ -19,6 +19,7 @@ declare global {
   const woc: WocApi;
 }
 
+export type { AbilityIndex, AbilityInfo } from './abilities.js';
 export type { AddonInfo, GameInfo, Unsubscribe } from './addon.js';
 export type { KnownCue } from './cues.generated.js';
 export type { KnownSkillIcon, SkillIconClass } from './icons.generated.js';
@@ -74,7 +75,20 @@ export type {
 export interface WocApi {
   readonly addon: AddonInfo;
   readonly game: GameInfo;
+  /**
+   * The API major this loader implements. An addon runs only on a matching one.
+   */
   readonly api: number;
+  /**
+   * How much surface that major has grown, bumped by every additive change.
+   *
+   * Declare the minor you need as `apiMinor` in your addon.json and the loader
+   * refuses to start you on an older one, with a message naming both. Read this
+   * only when you want to degrade rather than be refused: an addon that declares
+   * a lower minor and feature-detects can keep working on an older loader with
+   * one feature switched off.
+   */
+  readonly apiMinor: number;
 
   readonly net: NetApi;
   readonly world: WorldApi;

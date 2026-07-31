@@ -24,12 +24,10 @@
 //
 // Three limits, stated rather than hidden.
 //
-// NO ABILITY ICONS. The rows carry no art, and this is the one worth reading before
-// anyone adds it back. Skill art is filed under the ability ID, and a combat event
-// carries the ability's display NAME: `damage` and `heal2` fill that field from
-// `ability.name` and only `castStart` and `spellfx` carry `ability.id`. Those two
-// have DIVERGED in the game, so a name cannot be turned back into an id. The worked
-// example, from the deployed i18n bundle:
+// ICONS ONLY FOR YOUR OWN ABILITIES, and the reason is worth keeping. Skill art is
+// filed under the ability ID, while a combat event carries the display NAME: `damage`
+// and `heal2` fill that field from `ability.name`, and only `castStart` and `spellfx`
+// carry `ability.id`. The two have DIVERGED in the game:
 //
 //   arcane_shot: { name: `Fell Shot`, ... }
 //
@@ -38,14 +36,12 @@
 // A first version shipped exactly that and drew icons for the two hunter abilities
 // whose names happened to still match their ids, which read as random.
 //
-// The routes to a real mapping were weighed and all rejected. The i18n bundle has all
-// 380 pairs and is served, but behind a hashed filename that must be discovered from
-// play.html, as minified JS rather than JSON, per locale: a surface far more brittle
-// than anything else the loader touches, breaking on a bundler change rather than on a
-// game change. Correlating a `spellfx` id with the damage that follows is learnable
-// from the wire alone, but a mispairing draws the WRONG icon, which is worse than
-// none. So the meter shows the names the game shows and no art. If the game ever
-// aligns the two or serves a mapping, this becomes a small change.
+// `world.abilities` is what closed it: the loader reads the game's own resolved
+// spellbook, which carries the id and the name together, so `byName` walks the join
+// backwards and the art is exact. What it covers is YOUR OWN kit, so a mob's ability
+// still has no id to find and gets no icon. That is why a missing icon here means
+// "not something you cast" rather than "we could not work it out", and why the rows
+// are still tinted by school: the tint reaches the rows the art cannot.
 //
 // Damage a pet deals is not counted: the published surface does not say which entity
 // is yours, and guessing from position or name would be wrong often enough to be worse
@@ -376,19 +372,46 @@ const tabButtons = TABLES.map(createTab);
  * per-ability detail, with the fill spanning both, so the share still reads as the
  * whole row's rather than as a bar on the top line of it.
  *
- * NO ICON, and that is a decision rather than an omission. See the header. The fill is
- * tinted by the ability's SCHOOL instead, which is the one identifying thing a damage
- * event carries that does not depend on the id, and it is what tells two rows apart now
- * that the art cannot. Healing rows pass nothing, because `heal2` carries no school.
+ * The art comes from the label by way of `world.abilities`, which is the only thing
+ * that turns the display name an event carries back into the id the icon is filed
+ * under. A row with no icon is therefore a row this character did not cast: a mob's
+ * ability, or Melee, neither of which is in your own spellbook. That is a real
+ * distinction rather than a gap, so it is left visible.
+ *
+ * The fill stays tinted by SCHOOL. It was the only way to tell two rows apart back
+ * when there was no art, and it is still worth having with art: it survives on the
+ * rows the icons cannot reach, and it says what KIND of damage a row is made of,
+ * which an icon does not. Healing rows pass nothing, because `heal2` carries no
+ * school.
  */
 // #region school-tint
 function createRow(label, school) {
-  const bar = woc.ui.bar({ label, school, className: 'woc-meter-row' });
+  const bar = woc.ui.bar({ label, school, icon: abilityArt(label), className: 'woc-meter-row' });
   bar.el.dataset.ability = label;
   woc.ui.tooltip(bar.el, label);
   return bar;
 }
 // #endregion
+
+/**
+ * The icon for a row, found from the display name the event gave us.
+ *
+ * The join that was impossible until `world.abilities` existed: an event names the
+ * ability ("Fell Shot"), art is filed under the id (`arcane_shot`), and the two have
+ * diverged. Slugifying the name was tried and produced `fell_shot`, which is nothing.
+ *
+ * Null for anything not in your own spellbook, which is every mob ability and Melee.
+ * The kit hides its icon slot for a null or a URL that fails to load, so a row that
+ * cannot have art simply has none.
+ */
+function abilityArt(label) {
+  const info = woc.world.abilities.byName(label);
+  if (info === null) {
+    return null;
+  }
+  // A player entity's templateId is its class, which is where skill art is filed.
+  return woc.ui.icon.ability(info.id, woc.world.player?.templateId ?? '');
+}
 
 /** The tallies for the table on screen, biggest first and capped. */
 function tableRows() {

@@ -11,6 +11,7 @@
 import type { DisposalBag } from '../disposal.ts';
 import { unlessFrozen } from '../freeze.ts';
 import type { Unsubscribe } from '../net/bus.ts';
+import { type AbilityIndex, emptyAbilities } from '../world/abilities.ts';
 import type { WorldBackend } from '../world/backend.ts';
 import type { EntityCast, Hazard } from '../world/derived.ts';
 import type { Aura, Entity, InvSlot, PartyInfo, WorldQuests } from '../world/game-types.ts';
@@ -135,6 +136,14 @@ function derivedReads(hub: WorldHub) {
     get markers(): ReadonlyMap<number, number> | null {
       return fromBackend(hub, (backend) => backend.markers);
     },
+
+    get abilities(): AbilityIndex {
+      const backend = hub.backend();
+      if (backend === null) {
+        return emptyAbilities();
+      }
+      return backend.abilities;
+    },
   };
 }
 
@@ -186,6 +195,14 @@ export interface WorldApi {
   readonly targetAuras: readonly Aura[] | null;
   readonly hazards: readonly Hazard[] | null;
   readonly markers: ReadonlyMap<number, number> | null;
+  /**
+   * The player's own spellbook, with lookups by id and by display name.
+   *
+   * The bridge between an ability's id and the name combat events carry, which
+   * nothing else on the surface provides. Covers the player's OWN kit, so a mob's
+   * ability name is not in here.
+   */
+  readonly abilities: AbilityIndex;
 
   /**
    * Watch one key for change, sampled once per animation frame.

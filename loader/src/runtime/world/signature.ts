@@ -7,6 +7,7 @@
 // "has a number moved".
 
 import { fieldArray, fieldNumber, fieldScalar, fieldString, fieldValue } from '../net/frames.ts';
+import { abilityIndexSignature } from './abilities.ts';
 
 const KEYS = [
   'player',
@@ -21,6 +22,7 @@ const KEYS = [
   'targetAuras',
   'hazards',
   'markers',
+  'abilities',
 ] as const;
 
 /**
@@ -267,6 +269,8 @@ export function capture(key: WorldKey, value: unknown): Capture {
       return hazardSignature(value);
     case 'markers':
       return markerSignature(value);
+    case 'abilities':
+      return abilityIndexSignature(value);
     default:
       return '';
   }

@@ -17,7 +17,7 @@
 // event arriving mid-reconcile would otherwise interleave two disposals of the
 // same bag or two evaluations of the same source.
 
-import { API_VERSION } from '../shared/api-version.ts';
+import { API_MINOR, API_VERSION } from '../shared/api-version.ts';
 import { describeError } from '../shared/diag.ts';
 import type { Channel } from '../shared/hosts.ts';
 import type { InstalledAddon, RegistryApi } from '../shared/protocol.ts';
@@ -66,11 +66,31 @@ function implementsApi(apiVersion: number): boolean {
   return apiVersion === API_VERSION;
 }
 
+/**
+ * Whether this loader has grown far enough for what the addon uses.
+ *
+ * The minor is the opposite comparison to the major, and deliberately so: a
+ * bigger one is FINE, because the surface only ever grew. What must be refused is
+ * an addon needing more than is here, which before this existed was accepted and
+ * run, then threw against an undefined member on whatever frame first reached it.
+ * That is the case worth catching, since it never surfaced as a load failure: the
+ * addon reported running and broke silently.
+ */
+function withinMinor(apiMinor: number | undefined): boolean {
+  return (apiMinor ?? 0) <= API_MINOR;
+}
+
 /** Why this addon cannot run here, or null if nothing stops it. */
 function incompatibility(row: InstalledAddon, channel: Channel): string | null {
   const { manifest } = row;
   if (!implementsApi(manifest.apiVersion)) {
     return `needs loader API version ${manifest.apiVersion}, this loader implements ${API_VERSION}`;
+  }
+  if (!withinMinor(manifest.apiMinor)) {
+    return (
+      `needs loader API ${manifest.apiVersion}.${manifest.apiMinor}, ` +
+      `this loader implements ${API_VERSION}.${API_MINOR}. Update the loader.`
+    );
   }
   const { channels } = manifest;
   if (channels !== undefined && !channels.includes(channel)) {

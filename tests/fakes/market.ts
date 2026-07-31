@@ -21,6 +21,8 @@ function marketEntry(overrides: Partial<MarketplaceEntry> = {}): MarketplaceEntr
     name: 'Combat Meter',
     version: '1.2.0',
     apiVersion: 1,
+    // Present by default so a case that DROPS it is testing something.
+    apiMinor: 1,
     author: 'MarshalX',
     description: 'What your damage is made of.',
     entry: 'main.js',

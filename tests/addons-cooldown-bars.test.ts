@@ -90,7 +90,19 @@ async function run(): Promise<BarsHarness> {
   // `templateId` on a player is the CLASS, which is the directory the game files a
   // skill icon under. Without it there is nothing to build an icon URL from.
   const player = liveEntity({ set: { cooldowns, abilityCharges, templateId: 'hunter' } });
-  const world = { entities: new Map([[PLAYER_ID, player]]), player };
+  // The spellbook in the game's own shape. `arcane_shot` is displayed as "Fell
+  // Shot", which is the divergence a label read from the id alone gets wrong, and
+  // `rapid_fire` is deliberately absent so the fallback stays covered too.
+  const known = [
+    {
+      def: { id: 'arcane_shot', name: 'Fell Shot', school: 'arcane', requiresTarget: true },
+      rank: 3,
+      cost: 55,
+      castTime: 0,
+      cooldown: 5.4,
+    },
+  ];
+  const world = { entities: new Map([[PLAYER_ID, player]]), player, known };
   const harness = createSharedServices(document, createFakeStorage(), {
     game: Promise.resolve({ world }),
   });
@@ -189,7 +201,24 @@ describe('which bars are up', () => {
     expect(h.drawn()).toEqual(['multi_shot', 'aimed_shot', 'rapid_fire']);
   });
 
-  it('reads the ability id as a name', async () => {
+  // The label the game itself uses, which a cooldown map cannot supply on its own:
+  // it is keyed by id, and the id and the display name have diverged. Reading
+  // `arcane_shot` as "Arcane Shot" is what these rows used to show, and it names an
+  // ability nothing else in the game calls that.
+  it('calls an ability what the game calls it, not what its id suggests', async () => {
+    const h = await run();
+
+    h.cooldown('arcane_shot', LONG);
+    h.poll();
+
+    expect(barFor('arcane_shot')?.textContent).toContain('Fell Shot');
+    expect(barFor('arcane_shot')?.textContent).not.toContain('Arcane Shot');
+  });
+
+  // An id the spellbook does not carry is something the player did not learn: an
+  // item cooldown, or an ability granted from outside the class kit. A guess from
+  // the id beats a blank row for those.
+  it('falls back to the id for an ability outside the spellbook', async () => {
     const h = await run();
 
     h.cooldown('rapid_fire', LONG);

@@ -12,6 +12,7 @@
 // world-ready: the types are asserted here and verified there.
 
 import { fieldValue } from '../net/frames.ts';
+import { type AbilityIndex, createAbilityReader } from './abilities.ts';
 import { castsOf, type EntityCast, type Hazard, hazardsOf, markersOf } from './derived.ts';
 import type { Aura, Entity, InvSlot, PartyInfo, QuestProgress, WorldQuests } from './game-types.ts';
 import { readonlyMapView } from './readonly-map.ts';
@@ -93,6 +94,16 @@ export interface WorldBackend {
   readonly targetAuras: readonly Aura[] | null;
   readonly hazards: readonly Hazard[] | null;
   readonly markers: ReadonlyMap<number, number> | null;
+  /**
+   * The player's own spellbook, projected and memoized.
+   *
+   * Never null, because it is a lookup rather than a reading: an empty index
+   * answers the same questions as a populated one. It is also the only member
+   * here backed by a STATEFUL reader, since the game rebuilds its resolved list
+   * on every snapshot and re-projecting twenty abilities at that rate would
+   * allocate for nothing.
+   */
+  readonly abilities: AbilityIndex;
   /** The real IWorld the game is running. */
   readonly raw: unknown;
 }
@@ -109,6 +120,7 @@ export function createGameBackend(game: unknown): WorldBackend | null {
     return null;
   }
   const entities = entityMapReader(world);
+  const abilities = createAbilityReader();
 
   return {
     kind: 'game',
@@ -159,6 +171,10 @@ export function createGameBackend(game: unknown): WorldBackend | null {
 
     get markers(): ReadonlyMap<number, number> | null {
       return markersOf(world);
+    },
+
+    get abilities(): AbilityIndex {
+      return abilities(world);
     },
 
     raw: world,

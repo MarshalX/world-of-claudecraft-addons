@@ -4,6 +4,10 @@
 // The frame clock is manual: the sampler schedules itself, so a real one would
 // make every assertion a race.
 
+import {
+  type AbilityIndex,
+  createAbilityReader,
+} from '../../loader/src/runtime/world/abilities.ts';
 import type { WorldBackend } from '../../loader/src/runtime/world/backend.ts';
 import { castsOf, type EntityCast, type Hazard } from '../../loader/src/runtime/world/derived.ts';
 import type { Aura, Entity, WorldQuests } from '../../loader/src/runtime/world/game-types.ts';
@@ -15,6 +19,8 @@ export interface LiveWorld {
   entities: Map<number, unknown>;
   hazards: Hazard[] | null;
   markers: Map<number, number> | null;
+  /** The game's resolved ability list, in its own shape: entries carrying a `def`. */
+  known: unknown[];
 }
 
 export interface WatchHarness {
@@ -34,7 +40,9 @@ export function watchHarness(): WatchHarness {
     entities: new Map<number, unknown>(),
     hazards: null,
     markers: null,
+    known: [],
   };
+  const readAbilities = createAbilityReader();
   let attached = true;
   const errors: unknown[] = [];
   const scheduled = new Map<number, () => void>();
@@ -82,6 +90,12 @@ export function watchHarness(): WatchHarness {
     },
     get markers(): ReadonlyMap<number, number> | null {
       return live.markers;
+    },
+    // Through the real reader, like `casts` and for the same reason: a test that
+    // moves the fixture's known list has to see what an addon would, including
+    // the memoization, since that is the part with behaviour worth regressing on.
+    get abilities(): AbilityIndex {
+      return readAbilities(live);
     },
     raw: live,
   } satisfies WorldBackend;
