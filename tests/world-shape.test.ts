@@ -117,6 +117,8 @@ describe('the shape table', () => {
       dead: true,
       hostile: true,
       targetId: true,
+      aggroTargetId: true,
+      threat: true,
       castingAbility: true,
       castRemaining: true,
       castTotal: true,

@@ -29,7 +29,5 @@ export const API_VERSION = 1;
  * The rule for bumping: a new member on the published surface moves this, and a
  * member changing shape or leaving moves API_VERSION instead. An addon declares
  * the minor it needs and runs on any loader implementing that or more.
- *
- * 1: world.abilities
  */
 export const API_MINOR = 1;

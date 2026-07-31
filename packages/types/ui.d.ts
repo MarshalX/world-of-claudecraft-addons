@@ -1,6 +1,6 @@
 import type { Unsubscribe } from './addon.js';
+import type { School } from './entity.js';
 import type { KnownSkillIcon, SkillIconClass } from './icons.generated.js';
-import type { School } from './world.js';
 
 export type FrameDensity = 'comfortable' | 'compact';
 

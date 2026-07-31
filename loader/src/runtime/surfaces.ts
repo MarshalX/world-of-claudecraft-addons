@@ -9,6 +9,7 @@ import { fieldValue } from './net/frames.ts';
 import { installSocketHook, type SocketCtor } from './net/hook.ts';
 import { createNetHub, type NetHub } from './net/hub.ts';
 import { waitForGame } from './ready.ts';
+import { createCombatClock } from './world/combat-clock.ts';
 import { createWorldHub, type WorldHub } from './world/hub.ts';
 
 const GAME_GLOBAL = '__game';
@@ -48,10 +49,17 @@ export function createGameSurfaces(): GameSurfaces {
     clearTimer,
   });
 
+  // Subscribed here rather than inside the world hub because it reads the SOCKET,
+  // not the game: the player's id is on the hello frame, so it starts counting
+  // from the first frame rather than from world entry.
+  const combat = createCombatClock({ net, now: () => performance.now() });
+
   const world = createWorldHub({
     game: wait.ready,
     schedule: (frame) => globalThis.requestAnimationFrame(frame),
     cancel: (id) => globalThis.cancelAnimationFrame(id),
+    lastDamageAt: combat.lastDamageAt,
+    now: () => performance.now(),
   });
 
   return {
@@ -59,6 +67,7 @@ export function createGameSurfaces(): GameSurfaces {
     world,
     dispose: () => {
       wait.cancel();
+      combat.dispose();
       world.dispose();
       net.dispose();
     },

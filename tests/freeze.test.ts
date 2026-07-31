@@ -110,6 +110,8 @@ async function worldHarness() {
     cancel: (id) => {
       scheduled.delete(id);
     },
+    lastDamageAt: () => null,
+    now: () => 0,
   });
   await hub.ready;
 

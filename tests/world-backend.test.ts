@@ -19,8 +19,11 @@ function gameWorld(over: Record<string, unknown> = {}): Record<string, unknown> 
   };
 }
 
+/** No damage clock: these cases drive the state branches, not the fallback. */
+const DEPS = { lastDamageAt: () => null, now: () => 0 };
+
 const backendOf = (game: Record<string, unknown>) => {
-  const backend = createGameBackend(game);
+  const backend = createGameBackend(game, DEPS);
   if (backend === null) {
     throw new Error('expected a backend');
   }
@@ -29,8 +32,8 @@ const backendOf = (game: Record<string, unknown>) => {
 
 describe('createGameBackend', () => {
   it('refuses to build without a world, rather than answering nothing', () => {
-    expect(createGameBackend({ renderer: {} })).toBeNull();
-    expect(createGameBackend(null)).toBeNull();
+    expect(createGameBackend({ renderer: {} }, DEPS)).toBeNull();
+    expect(createGameBackend(null, DEPS)).toBeNull();
   });
 
   it('exposes the real IWorld as raw', () => {

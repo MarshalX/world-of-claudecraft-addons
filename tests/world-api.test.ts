@@ -45,6 +45,8 @@ function harness(game: Record<string, unknown> | null = null): Harness {
     cancel: (id) => {
       scheduled.delete(id);
     },
+    lastDamageAt: () => null,
+    now: () => 0,
   });
   const bag = new DisposalBag();
 

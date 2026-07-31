@@ -23,6 +23,7 @@ const KEYS = [
   'hazards',
   'markers',
   'abilities',
+  'combat',
 ] as const;
 
 /**
@@ -271,6 +272,12 @@ export function capture(key: WorldKey, value: unknown): Capture {
       return markerSignature(value);
     case 'abilities':
       return abilityIndexSignature(value);
+    // The source is in the signature as well as the flag, so a fight that stays
+    // active while the loader's confidence in it changes is reported. A meter
+    // that trusts only the server's own answer needs to hear that moment; one
+    // that does not can ignore it, which is cheaper than never being told.
+    case 'combat':
+      return `${String(fieldValue(value, 'active'))}:${fieldString(value, 'source') ?? ''}`;
     default:
       return '';
   }

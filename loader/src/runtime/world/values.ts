@@ -10,6 +10,7 @@
 // capture behind each one; `tests/world-shape.test.ts` asserts the two agree.
 
 import type { AbilityIndex } from './abilities.ts';
+import type { CombatState } from './combat.ts';
 import type { EntityCast, Hazard } from './derived.ts';
 import type { Aura, Entity, InvSlot, PartyInfo, WorldQuests } from './game-types.ts';
 
@@ -38,4 +39,12 @@ export interface WorldValues {
    * the world is up.
    */
   abilities: AbilityIndex;
+  /**
+   * Whether the player is fighting, with the signal that answered.
+   *
+   * Never null, like `abilities` and `casts`: it is a derived reading rather
+   * than a value the game hands over, so before the world exists it is simply
+   * inactive rather than unknown.
+   */
+  combat: CombatState;
 }

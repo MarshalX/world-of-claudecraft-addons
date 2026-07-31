@@ -13,7 +13,9 @@
 
 import { fieldValue } from '../net/frames.ts';
 import { type AbilityIndex, createAbilityReader } from './abilities.ts';
+import { type CombatState, readCombat } from './combat.ts';
 import { castsOf, type EntityCast, type Hazard, hazardsOf, markersOf } from './derived.ts';
+import { mergeLive } from './facade.ts';
 import type { Aura, Entity, InvSlot, PartyInfo, QuestProgress, WorldQuests } from './game-types.ts';
 import { readonlyMapView } from './readonly-map.ts';
 
@@ -47,6 +49,27 @@ function readAs<T>(source: unknown, field: string): T | null {
   return fieldValue(source, field) as T | null;
 }
 
+/**
+ * The combat reading, gathered from the three live collections it consults.
+ *
+ * Its own function rather than an inline getter because it is the one read here
+ * that takes several parts of the world at once; the rule it feeds lives in
+ * `combat.ts` and knows nothing about the game object.
+ */
+function combatOf(
+  world: unknown,
+  entities: ReadonlyMap<number, Entity>,
+  deps: BackendDeps,
+): CombatState {
+  return readCombat({
+    player: readAs<Entity>(world, 'player'),
+    party: readAs<PartyInfo>(world, 'partyInfo'),
+    entities,
+    lastDamageAt: deps.lastDamageAt(),
+    now: deps.now(),
+  });
+}
+
 /** The entity the player has selected, resolved through the roster. */
 function targetOf(world: unknown, entities: ReadonlyMap<number, Entity>): Entity | null {
   const id = fieldValue(fieldValue(world, 'player'), 'targetId');
@@ -61,6 +84,45 @@ function questsOf(world: unknown): WorldQuests {
   return {
     log: readAs<Map<string, QuestProgress>>(world, 'questLog'),
     done: readAs<Set<string>>(world, 'questsDone'),
+  };
+}
+
+/** The reads that pass straight through to a member of the game's own world. */
+function coreReads(world: unknown, entities: () => ReadonlyMap<number, Entity>) {
+  return {
+    kind: 'game',
+
+    get player(): Entity | null {
+      return readAs<Entity>(world, 'player');
+    },
+
+    get target(): Entity | null {
+      return targetOf(world, entities());
+    },
+
+    get entities(): ReadonlyMap<number, Entity> {
+      return entities();
+    },
+
+    get party(): PartyInfo | null {
+      return readAs<PartyInfo>(world, 'partyInfo');
+    },
+
+    get inventory(): readonly InvSlot[] | null {
+      return readAs<InvSlot[]>(world, 'inventory');
+    },
+
+    get quests(): WorldQuests {
+      return questsOf(world);
+    },
+
+    get cooldowns(): ReadonlyMap<string, number> | null {
+      return readAs<Map<string, number>>(fieldValue(world, 'player'), 'cooldowns');
+    },
+
+    get auras(): readonly Aura[] | null {
+      return readAs<Aura[]>(fieldValue(world, 'player'), 'auras');
+    },
   };
 }
 
@@ -104,8 +166,23 @@ export interface WorldBackend {
    * allocate for nothing.
    */
   readonly abilities: AbilityIndex;
+  /**
+   * Whether the player is fighting, and which signal said so.
+   *
+   * Derived rather than read: the game sends no combat flag for the self record.
+   * See `world/combat.ts` for the order the signals are consulted in and why the
+   * answer carries its own source.
+   */
+  readonly combat: CombatState;
   /** The real IWorld the game is running. */
   readonly raw: unknown;
+}
+
+/** What the combat reading needs that the game object does not carry. */
+export interface BackendDeps {
+  /** When damage involving the player last landed. See `world/combat-clock.ts`. */
+  lastDamageAt: () => number | null;
+  now: () => number;
 }
 
 /**
@@ -114,7 +191,7 @@ export interface WorldBackend {
  * Every member is a getter: the game mutates these objects in place, so reading
  * on access is what makes the facade live rather than a stale copy.
  */
-export function createGameBackend(game: unknown): WorldBackend | null {
+export function createGameBackend(game: unknown, deps: BackendDeps): WorldBackend | null {
   const world = fieldValue(game, 'world');
   if (world === null) {
     return null;
@@ -122,41 +199,7 @@ export function createGameBackend(game: unknown): WorldBackend | null {
   const entities = entityMapReader(world);
   const abilities = createAbilityReader();
 
-  return {
-    kind: 'game',
-
-    get player(): Entity | null {
-      return readAs<Entity>(world, 'player');
-    },
-
-    get target(): Entity | null {
-      return targetOf(world, entities());
-    },
-
-    get entities(): ReadonlyMap<number, Entity> {
-      return entities();
-    },
-
-    get party(): PartyInfo | null {
-      return readAs<PartyInfo>(world, 'partyInfo');
-    },
-
-    get inventory(): readonly InvSlot[] | null {
-      return readAs<InvSlot[]>(world, 'inventory');
-    },
-
-    get quests(): WorldQuests {
-      return questsOf(world);
-    },
-
-    get cooldowns(): ReadonlyMap<string, number> | null {
-      return readAs<Map<string, number>>(fieldValue(world, 'player'), 'cooldowns');
-    },
-
-    get auras(): readonly Aura[] | null {
-      return readAs<Aura[]>(fieldValue(world, 'player'), 'auras');
-    },
-
+  return mergeLive(coreReads(world, entities), {
     get casts(): ReadonlyMap<number, EntityCast> {
       return castsOf(entities());
     },
@@ -177,6 +220,10 @@ export function createGameBackend(game: unknown): WorldBackend | null {
       return abilities(world);
     },
 
+    get combat(): CombatState {
+      return combatOf(world, entities(), deps);
+    },
+
     raw: world,
-  };
+  });
 }

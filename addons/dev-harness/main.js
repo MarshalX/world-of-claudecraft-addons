@@ -48,6 +48,7 @@ const WORLD_KEYS = [
   'hazards',
   'markers',
   'abilities',
+  'combat',
 ];
 /** An arbitrary nested value, to show that storage is not flattened to strings. */
 const PROBE_VALUE = Object.freeze(['a', ['b'], { c: true }]);
@@ -485,6 +486,8 @@ async function runChecks() {
     checkWorld(),
     checkWorldKeys(),
     checkAbilities(),
+    checkCombat(),
+    checkMobTargeting(),
     checkCasts(),
     checkIcons(),
     checkNet(),
@@ -502,6 +505,80 @@ const win = woc.ui.window({
   save: true,
   visible: woc.settings['open-on-load'] === true,
 });
+
+function combatWord(active) {
+  if (active) {
+    return 'in combat';
+  }
+  return 'idle';
+}
+
+/**
+ * The combat reading, and the honesty of the source it travels with.
+ *
+ * There is no combat flag on the wire, so this cannot check the ANSWER against
+ * anything: only the live game knows whether the player is fighting. What it can
+ * check is that the shape holds and that the source is one the loader claims to
+ * produce, which is what catches the reading degrading to a bare boolean or to a
+ * source string nothing documents.
+ *
+ * The interesting line is the last one. A `recent` reading means every branch
+ * backed by server state declined and a five second timer answered instead,
+ * which is the one case an addon may want to treat differently, so the harness
+ * reports which branch replied rather than just that one did.
+ */
+function checkCombat() {
+  const state = woc.world.combat;
+  if (state === null || typeof state !== 'object') {
+    return result('combat', false, 'world.combat is not a reading');
+  }
+  if (typeof state.active !== 'boolean') {
+    return result('combat', false, `active is ${typeof state.active}, expected a boolean`);
+  }
+  const sources = ['party', 'threat', 'pvp', 'recent', 'none'];
+  if (!sources.includes(state.source)) {
+    return result('combat', false, `source is '${state.source}', which is not one of the five`);
+  }
+  if (!state.active && state.source !== 'none') {
+    return result('combat', false, `inactive but sourced to '${state.source}'`);
+  }
+  return result('combat', true, `${combatWord(state.active)} via ${state.source}`);
+}
+
+/**
+ * A mob's target, which is NOT on the field that looks like it.
+ *
+ * `targetId` is filled from a selection and a mob does not select, so on every
+ * mob it is present, correctly typed, and permanently null; what a mob is
+ * fighting rides `aggroTargetId`, and its hate table rides `threat`. This is the
+ * `inCombat` trap one level down, so the harness watches for the day the game
+ * starts filling `targetId` on mobs, which would make the published note wrong.
+ */
+function checkMobTargeting() {
+  const mobs = [...woc.world.entities.values()].filter((entity) => entity.kind === 'mob');
+  if (mobs.length === 0) {
+    return result('mob targeting', true, 'no mobs in scope');
+  }
+  const withThreat = mobs.filter((mob) => mob.threat instanceof Map && mob.threat.size > 0);
+  const wrongShape = mobs.filter((mob) => !(mob.threat instanceof Map));
+  if (wrongShape.length > 0) {
+    return result('mob targeting', false, `${wrongShape.length} mobs carry no threat Map`);
+  }
+  const selecting = mobs.filter((mob) => mob.targetId !== null);
+  if (selecting.length > 0) {
+    return result(
+      'mob targeting',
+      false,
+      `${selecting.length} mobs carry targetId, which the types say never happens`,
+    );
+  }
+  const aggroed = mobs.filter((mob) => mob.aggroTargetId !== null);
+  return result(
+    'mob targeting',
+    true,
+    `${mobs.length} mobs, ${aggroed.length} attacking, ${withThreat.length} with a hate table`,
+  );
+}
 
 function element(tag, className, text) {
   const el = document.createElement(tag);

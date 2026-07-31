@@ -9,6 +9,7 @@ import {
   createAbilityReader,
 } from '../../loader/src/runtime/world/abilities.ts';
 import type { WorldBackend } from '../../loader/src/runtime/world/backend.ts';
+import { type CombatState, readCombat } from '../../loader/src/runtime/world/combat.ts';
 import { castsOf, type EntityCast, type Hazard } from '../../loader/src/runtime/world/derived.ts';
 import type { Aura, Entity, WorldQuests } from '../../loader/src/runtime/world/game-types.ts';
 import { createWorldWatcher, type WorldWatcher } from '../../loader/src/runtime/world/watch.ts';
@@ -96,6 +97,19 @@ export function watchHarness(): WatchHarness {
     // the memoization, since that is the part with behaviour worth regressing on.
     get abilities(): AbilityIndex {
       return readAbilities(live);
+    },
+    // Read through the real rule, so a test that puts a hate table on a fixture
+    // mob sees the same answer an addon would. No party and no damage clock, so
+    // what this exercises is the entity branches, which are the ones a watcher
+    // test can actually move.
+    get combat(): CombatState {
+      return readCombat({
+        player: live.player as unknown as Entity,
+        party: null,
+        entities: live.entities as ReadonlyMap<number, Entity>,
+        lastDamageAt: null,
+        now: 0,
+      });
     },
     raw: live,
   } satisfies WorldBackend;

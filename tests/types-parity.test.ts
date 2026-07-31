@@ -16,6 +16,7 @@
 import { describe, expect, it } from 'vitest';
 import type { GameIdentity, WocApi } from '../loader/src/runtime/api/index.ts';
 import type { KeysApi } from '../loader/src/runtime/api/keys.ts';
+import type { NetApi } from '../loader/src/runtime/api/net.ts';
 import type { SoundApi } from '../loader/src/runtime/api/sound.ts';
 import type { AddonStorageApi } from '../loader/src/runtime/api/storage.ts';
 import type { UiApi } from '../loader/src/runtime/api/ui.ts';
@@ -24,12 +25,13 @@ import type { Entity } from '../loader/src/runtime/world/game-types.ts';
 import type { WorldKey } from '../loader/src/runtime/world/signature.ts';
 import type { WorldValues } from '../loader/src/runtime/world/values.ts';
 import type { GameInfo } from '../packages/types/addon.js';
+import type { Entity as PublicEntity } from '../packages/types/entity.js';
 import type { KeysApi as PublicKeysApi } from '../packages/types/keys.js';
+import type { NetApi as PublicNetApi } from '../packages/types/net.js';
 import type { SoundApi as PublicSoundApi } from '../packages/types/sound.js';
 import type { StorageApi as PublicStorageApi } from '../packages/types/storage.js';
 import type { UiApi as PublicUiApi } from '../packages/types/ui.js';
 import type {
-  Entity as PublicEntity,
   WorldApi as PublicWorldApi,
   WorldKey as PublicWorldKey,
   WorldValues as PublicWorldValues,
@@ -47,6 +49,15 @@ type Assignable<From, To> = [From] extends [To] ? true : false;
 /** Each of these is a compile error the moment the two shapes disagree. */
 const uiIsPublished: Assignable<UiApi, PublicUiApi> = true;
 const publishedIsUi: Assignable<PublicUiApi, UiApi> = true;
+
+/**
+ * `net` was the one surface with no check at all, which is how its published
+ * `onEvent` could have promised a typed payload the loader never narrowed. The
+ * two event catalogues are written separately on purpose, so this is also what
+ * proves they still describe the same records.
+ */
+const netIsPublished: Assignable<NetApi, PublicNetApi> = true;
+const publishedIsNet: Assignable<PublicNetApi, NetApi> = true;
 
 const soundIsPublished: Assignable<SoundApi, PublicSoundApi> = true;
 const publishedIsSound: Assignable<PublicSoundApi, SoundApi> = true;
@@ -102,12 +113,15 @@ const wocCarriesSound: Assignable<WocApi['sound'], PublicSoundApi> = true;
 const wocCarriesKeys: Assignable<WocApi['keys'], PublicKeysApi> = true;
 const wocCarriesStorage: Assignable<WocApi['storage'], PublicStorageApi> = true;
 const wocCarriesWorld: Assignable<WocApi['world'], PublicWorldApi> = true;
+const wocCarriesNet: Assignable<WocApi['net'], PublicNetApi> = true;
 
 describe('the published types', () => {
   it('match the implementation in both directions', () => {
     expect([
       uiIsPublished,
       publishedIsUi,
+      netIsPublished,
+      publishedIsNet,
       soundIsPublished,
       publishedIsSound,
       keysIsPublished,
@@ -138,6 +152,7 @@ describe('the published types', () => {
       wocCarriesSound,
       wocCarriesKeys,
       wocCarriesStorage,
+      wocCarriesNet,
       wocCarriesWorld,
     ]).not.toContain(false);
   });

@@ -35,6 +35,7 @@ describe('world keys', () => {
       'hazards',
       'markers',
       'abilities',
+      'combat',
     ]);
   });
 

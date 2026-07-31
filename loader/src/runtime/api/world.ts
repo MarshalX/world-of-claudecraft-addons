@@ -13,7 +13,9 @@ import { unlessFrozen } from '../freeze.ts';
 import type { Unsubscribe } from '../net/bus.ts';
 import { type AbilityIndex, emptyAbilities } from '../world/abilities.ts';
 import type { WorldBackend } from '../world/backend.ts';
+import { type CombatState, OUT_OF_COMBAT } from '../world/combat.ts';
 import type { EntityCast, Hazard } from '../world/derived.ts';
+import { mergeLive } from '../world/facade.ts';
 import type { Aura, Entity, InvSlot, PartyInfo, WorldQuests } from '../world/game-types.ts';
 import type { WorldHub } from '../world/hub.ts';
 import { readonlyMapView } from '../world/readonly-map.ts';
@@ -53,24 +55,6 @@ function fromBackend<T>(hub: WorldHub, read: (backend: WorldBackend) => T | null
     return null;
   }
   return read(backend);
-}
-
-/**
- * Two halves of the facade as one object, carrying DESCRIPTORS rather than values.
- *
- * `{ ...a, ...b }` would be the obvious way to compose these and is exactly wrong
- * here: a spread READS every property, so each getter would be called once at
- * assembly time and the facade would freeze at whatever the answers were before
- * the game existed. Copying descriptors keeps every getter a getter.
- *
- * The facade is split at all because it is one read per published key and that is
- * past the length a single function body is allowed. The intersection is what
- * keeps the split honest: a key dropped from either half fails to satisfy
- * `WorldApi` at the return below rather than going missing at an addon.
- */
-function mergeLive<A extends object, B extends object>(a: A, b: B): A & B {
-  const merged = Object.defineProperties({}, Object.getOwnPropertyDescriptors(a));
-  return Object.defineProperties(merged, Object.getOwnPropertyDescriptors(b)) as A & B;
 }
 
 /** The reads that come straight off the backend, each null until the game is up. */
@@ -144,6 +128,14 @@ function derivedReads(hub: WorldHub) {
       }
       return backend.abilities;
     },
+
+    get combat(): CombatState {
+      const backend = hub.backend();
+      if (backend === null) {
+        return OUT_OF_COMBAT;
+      }
+      return backend.combat;
+    },
   };
 }
 
@@ -203,6 +195,15 @@ export interface WorldApi {
    * ability name is not in here.
    */
   readonly abilities: AbilityIndex;
+
+  /**
+   * Whether the player is fighting, and which signal answered.
+   *
+   * Derived: the game sends no combat flag on the self record, and the one that
+   * exists on the client entity is never written. `world/combat.ts` holds the
+   * order the signals are consulted in.
+   */
+  readonly combat: CombatState;
 
   /**
    * Watch one key for change, sampled once per animation frame.

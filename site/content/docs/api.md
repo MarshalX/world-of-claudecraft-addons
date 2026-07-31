@@ -63,6 +63,7 @@ woc.world.casts           // ReadonlyMap<entityId, EntityCast> for anything cast
 woc.world.hazards         // ground effects, with radius and kind
 woc.world.markers         // raid markers, by entity
 woc.world.abilities       // your spellbook, with lookups by id and by name
+woc.world.combat          // { active, source }: whether you are fighting
 ```
 
 `world.cooldowns` is keyed by real ability id, which makes it one of the few places an id is safe to assume. `world.hazards` and `world.markers` are what a positional addon reads.
@@ -80,7 +81,17 @@ const label = woc.world.abilities.byId(id)?.name ?? id;
 
 It covers YOUR OWN known kit, so an ability a mob casts is not in it and `byName` answers null. It is empty rather than absent before world entry, and its `cost`, `castTime` and `cooldown` are resolved after your talents rather than the ability's base figures.
 
-Added in API 1.1. Set `"apiMinor": 1` in your addon.json to use it, and a loader older than that refuses your addon by name instead of starting it and failing on the first frame that reaches the member. If you would rather keep working on an older loader with this one feature off, declare the lower minor and check `woc.apiMinor` before reading it.
+`world.combat` is the one reading here the game does not send. There is no combat flag for you on the wire, so the loader answers from the best signal available and tells you which one it used:
+
+```js
+woc.world.on('combat', ({ active, source }) => {
+  if (active) meter.begin();
+});
+```
+
+`source` is `party` when you are grouped, since the server sets a combat flag per member; `threat` when a nearby mob's hate table has you on it, which is server state too; `pvp` when a hostile player has you selected; and `recent` when none of those answered and damage involving you landed in the last five seconds. Only that last one is a guess. Most addons can ignore the source entirely; read it when acting on a false positive would be worse than acting late.
+
+There IS an `inCombat` field on the entity and it is never written, so it reads false forever. That is not an oversight in this API, it is the reason this reading exists.
 
 ```js
 woc.world.on('cooldowns', rebuild);

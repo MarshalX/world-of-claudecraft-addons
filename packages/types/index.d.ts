@@ -22,6 +22,18 @@ declare global {
 export type { AbilityIndex, AbilityInfo } from './abilities.js';
 export type { AddonInfo, GameInfo, Unsubscribe } from './addon.js';
 export type { KnownCue } from './cues.generated.js';
+export type {
+  AbilityCharge,
+  Aura,
+  AuraKind,
+  CoreStats,
+  Entity,
+  EntityKind,
+  ResourceType,
+  School,
+  Vec3,
+  WeaponInfo,
+} from './entity.js';
 export type { KnownSkillIcon, SkillIconClass } from './icons.generated.js';
 export type { ConflictReport, KeysApi } from './keys.js';
 export type { FrameType, NetApi, NetState, SubscribeOpts } from './net.js';
@@ -48,13 +60,9 @@ export type {
   UiApi,
 } from './ui.js';
 export type {
-  AbilityCharge,
-  Aura,
-  AuraKind,
-  CoreStats,
-  Entity,
+  CombatSource,
+  CombatState,
   EntityCast,
-  EntityKind,
   Hazard,
   HazardKind,
   InvSlot,
@@ -62,10 +70,6 @@ export type {
   PartyMember,
   PartyMemberAura,
   QuestProgress,
-  ResourceType,
-  School,
-  Vec3,
-  WeaponInfo,
   WorldApi,
   WorldKey,
   WorldQuests,

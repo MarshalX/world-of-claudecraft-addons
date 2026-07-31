@@ -144,6 +144,10 @@ function createSharedServices(
       game: options.game ?? new Promise(() => undefined),
       schedule: () => 0,
       cancel: () => undefined,
+      // No damage clock in a fake: the combat reading falls through to its state
+      // branches, which is what a test driving world state wants to exercise.
+      lastDamageAt: () => null,
+      now: () => 0,
     }),
     storage: hub,
     sound: createSoundEngine({
