@@ -20,13 +20,13 @@ import type { AddonStatus } from '../../supervisor.ts';
 import type { UnlockMode } from '../kit/unlock.ts';
 import { ManagerApp } from './app.tsx';
 import type { CatalogRegistry } from './catalog-actions.ts';
-import { type CatalogStore, createCatalogStore } from './catalog-store.ts';
+import type { CatalogStore } from './catalog-store.ts';
 import type { ConfigService, ConflictReading } from './config.ts';
-import { createDevStore, type DevStore } from './dev-store.ts';
-import { createGeometryStore, type GeometryStorage, type GeometryStore } from './geometry-store.ts';
-import { type AddonSelection, createSelection } from './selection.ts';
+import type { DevStore } from './dev-store.ts';
+import type { GeometryStorage, GeometryStore } from './geometry-store.ts';
+import type { AddonSelection } from './selection.ts';
 import type { InstalledRegistry, InstalledStore } from './store.ts';
-import { createInstalledStore } from './store.ts';
+import { createStores, loadPanes } from './stores.ts';
 
 /**
  * Every registry member the manager's panes reach for.
@@ -176,52 +176,6 @@ function renderApp(deps: ManagerDeps, view: FrameView, container: HTMLElement): 
 }
 
 /**
- * The window's own state: its container, its stores, and the open flag.
- *
- * Split out so mountManager stays a wiring function. The mutual reference
- * between paint and close is why the two are built together rather than passed
- * to each other.
- */
-/**
- * The stores the window reads, all repainting through one callback.
- *
- * They load outside the component tree, so opening the window paints whatever is
- * already loaded and a reload driven from another tab does not need the window
- * to be open.
- */
-function createStores(deps: ManagerDeps, repaint: () => void) {
-  const store = createInstalledStore({ registry: deps.registry, onChange: repaint });
-  const dev = createDevStore({ dev: deps.dev, market: deps.market, onChange: repaint });
-  const catalog = createCatalogStore({
-    market: deps.market,
-    registry: deps.registry,
-    onChange: repaint,
-  });
-  const geometry = createGeometryStore({ storage: deps.storage, channel: deps.channel });
-  const selection = createSelection({
-    config: deps.config,
-    find: (fqid) => store.state().rows.find((row) => row.fqid === fqid) ?? null,
-    repaint,
-  });
-  return { store, dev, catalog, geometry, selection };
-}
-
-/**
- * What opening the window reads, none of which goes to the network.
- *
- * Loaded on open rather than at boot: a player who never opens the manager should
- * not pay for a bridge round trip. All three are loaded whatever tab is being
- * opened, since deferring to the tab would make every tab's first paint its
- * loading state. The dev reading is three storage reads and the catalog answers
- * from the indexes as they were last read. Refresh is what fetches.
- */
-function loadPanes(panes: Pick<FrameView, 'store' | 'dev' | 'catalog'>): void {
-  panes.store.reload();
-  panes.dev.load();
-  panes.catalog.load();
-}
-
-/**
  * Repaint when the arrange-your-UI mode is flipped from somewhere else.
  *
  * The manager draws a checkbox for it and the loader's keybind flips the same
@@ -232,6 +186,13 @@ function followUnlock(deps: ManagerDeps, paint: () => void): () => void {
   return deps.unlock.onChange(paint);
 }
 
+/**
+ * The window's own state: its container, its stores, and the open flag.
+ *
+ * Split out so mountManager stays a wiring function. The mutual reference
+ * between paint and close is why the two are built together rather than passed
+ * to each other.
+ */
 function createFrame(deps: ManagerDeps): Frame {
   const container = deps.doc.createElement('div');
   container.className = 'woc-manager';

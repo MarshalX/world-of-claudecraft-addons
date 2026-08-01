@@ -20,7 +20,8 @@
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { BANNER_ID, createBanner } from '../loader/src/runtime/ui/kit/banner.ts';
-import { clampFraction, createBar } from '../loader/src/runtime/ui/kit/bar.ts';
+import { createBar } from '../loader/src/runtime/ui/kit/bar.ts';
+import { clampFraction } from '../loader/src/runtime/ui/kit/readout.ts';
 
 function root(): HTMLElement {
   const el = document.createElement('div');

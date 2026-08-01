@@ -102,12 +102,25 @@ function incompatibility(row: InstalledAddon, channel: Channel): string | null {
 /**
  * What has to be identical for a running addon to be left alone.
  *
- * The version is in it so an update to an addon that is already running
- * restarts it. Nothing else about the registry row can change without the fqid
- * changing too.
+ * The whole manifest, not just its version, and the version alone was wrong. A
+ * marketplace serves one manifest per ref rather than per version, so the same
+ * version string can carry different declarations: the dev server reads the file
+ * from disk on every request, and `MarketApi.setRef` moves a source to another tag
+ * whose manifest an author edited without bumping anything.
+ *
+ * That matters because the manifest is not decoration. The settings and keybind
+ * declarations are what the addon's own `woc.settings` and `woc.keys` are BUILT
+ * from, and a value is hydrated only for a declared id, so an addon left running
+ * across a manifest change can never see a setting that manifest added. It reads
+ * as a control that does nothing, which is what was reported.
+ *
+ * Serialised whole rather than field by field for the reason `declarationsOf` in
+ * the manager is: a hand-listed comparison has to be extended every time the schema
+ * grows a field, and forgetting is silent. An unchanged manifest serialises
+ * identically, so nothing restarts for a reconcile that found no news.
  */
 function signature(row: InstalledAddon): string {
-  return `${row.marketplace}@${row.manifest.version}`;
+  return `${row.marketplace}@${JSON.stringify(row.manifest)}`;
 }
 
 /** What the manager reads, and the one write that changes it. */

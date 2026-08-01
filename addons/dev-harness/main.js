@@ -30,6 +30,19 @@ const DEMO_WIDTH = 190;
 const DEMO_WARN = 0.25;
 
 /**
+ * The three squares the tile demonstration drains: label, ability, class, school.
+ *
+ * The last one names an ability nothing ships art for, so its slot collapses and
+ * the square is left with its wedge and its figures on nothing. That is the case a
+ * cooldown display meets constantly and the one a screenshot has to show.
+ */
+const DEMO_TILES = [
+  ['Fireball', 'fireball', 'mage', 'fire'],
+  ['Frostbolt', 'frostbolt', 'mage', 'frost'],
+  ['Nothing painted', 'not_an_ability', 'mage', 'shadow'],
+];
+
+/**
  * Every key the published types say `world.on` accepts.
  *
  * Written out rather than read from anywhere, which is the point: the loader owns
@@ -296,6 +309,64 @@ function checkCasts() {
 }
 
 /**
+ * Whether this document has the loader's stylesheet in it at all.
+ *
+ * The control for the measurement below, and it needs one: the harness also runs
+ * headless, where CSS text does not survive into the environment, and a rule that
+ * is missing because no sheet was ever injected has to be told apart from a rule
+ * that is missing because its class was renamed. A loader window is absolutely
+ * positioned by the chrome sheet, so a static one means there is no sheet here.
+ */
+function sheetLive() {
+  return getComputedStyle(win.el).position === 'absolute';
+}
+
+/**
+ * The square timer, and the half of it a unit suite cannot reach.
+ *
+ * A test can assert the classes the kit writes on the element. It cannot assert
+ * that the SHEET declaring those classes exists, because CSS text does not survive
+ * into that environment, so a class renamed on one side of that seam passes every
+ * test and draws nothing. In a real page it is measurable: a tile that computes as
+ * an ordinary box is a tile whose rules never arrived.
+ *
+ * The probe is attached and taken away again in the same call. A style cannot be
+ * computed for an element outside the document, and every rule in the kit is scoped
+ * under the loader's own root, so measuring it anywhere else would report the same
+ * nothing a missing sheet does.
+ */
+function checkTile() {
+  if (typeof woc.ui.tile !== 'function') {
+    return result('tile', false, 'ui.tile is not callable');
+  }
+  const tile = woc.ui.tile({ label: 'Probe', fraction: 0.5, count: 2, school: 'frost' });
+  stage.appendChild(tile.el);
+  const swept = tile.el
+    .querySelector('.woc-tile-sweep')
+    ?.style.getPropertyValue('--woc-tile-sweep');
+  const drawn = getComputedStyle(tile.el).borderTopWidth;
+  const styled = sheetLive();
+  const announced = tile.el.getAttribute('aria-label');
+  tile.destroy();
+
+  // Half a timer left has to be half the square GIVEN BACK, not half of it covered:
+  // the public fraction is what remains and the wedge takes what has elapsed.
+  if (swept !== '50.00%') {
+    return result('tile', false, `a half-spent timer swept ${swept ?? 'nothing'}`);
+  }
+  if (announced !== 'Probe, 2') {
+    return result('tile', false, `announced as ${String(announced)}`);
+  }
+  if (!styled) {
+    return result('tile', true, 'sweep and name written, no sheet in this document to measure');
+  }
+  if (drawn === '' || drawn === '0px') {
+    return result('tile', false, 'the loader has a sheet, and none of it reaches a tile');
+  }
+  return result('tile', true, `sweep written, sheet live at a ${drawn} border`);
+}
+
+/**
  * The icon URL builders answer, and refuse an id they cannot build a name from.
  *
  * Whether any given URL RESOLVES is not checked and cannot be from here: only some
@@ -522,6 +593,7 @@ const STATIC_CHECKS = [
   checkKeys,
   checkWorldKeys,
   checkIcons,
+  checkTile,
   checkNet,
   checkShadowedGlobals,
 ];
@@ -1053,6 +1125,52 @@ function demoBar() {
   drain();
 }
 
+/**
+ * The same timer as a square, drained beside the bar so the two can be compared.
+ *
+ * A row of them rather than one, because everything a tile gets wrong is only
+ * visible against its neighbours: whether the wedges sweep the same way, whether
+ * the countdown stays put while its digits change, whether a school border reads
+ * as a border or as a colour someone spilled on the art.
+ *
+ * One of the three deliberately points at art that does not exist. The kit hides a
+ * slot whose image fails, and on a tile that leaves a bare square with its timer
+ * still on it, which is the case a cooldown display hits constantly and the one
+ * worth looking at rather than asserting.
+ */
+function demoTiles() {
+  const row = element('div');
+  row.style.display = 'flex';
+  row.style.gap = '4px';
+  row.style.marginTop = '6px';
+  stage.appendChild(row);
+
+  const tiles = DEMO_TILES.map(([label, ability, cls, school]) => {
+    const tile = woc.ui.tile({ label, icon: woc.ui.icon.ability(ability, cls), school, count: 2 });
+    row.appendChild(tile.el);
+    return tile;
+  });
+
+  const startedAt = woc.now();
+  const drain = () => {
+    const elapsed = (woc.now() - startedAt) / MS_PER_SECOND;
+    const left = Math.max(DEMO_SECONDS - elapsed, 0);
+    if (left <= 0) {
+      row.remove();
+      for (const tile of tiles) {
+        tile.destroy();
+      }
+      return;
+    }
+    const fraction = left / DEMO_SECONDS;
+    for (const tile of tiles) {
+      tile.update({ fraction, value: left.toFixed(0), tone: barTone(fraction) });
+    }
+    woc.requestAnimationFrame(drain);
+  };
+  drain();
+}
+
 /** Warm as it runs out, which is the tone change the kit draws. */
 function barTone(fraction) {
   if (fraction <= DEMO_WARN) {
@@ -1149,6 +1267,7 @@ function controls() {
     }),
     ...ANNOUNCEMENTS.map(([label, show]) => button(label, show)),
     button('Bar', demoBar),
+    button('Tiles', demoTiles),
     button('Alert', showAlert),
     button('Capture a key', captureKey),
   );

@@ -23,6 +23,16 @@ interface InteractiveFrameDeps {
   /** Called at the end of a gesture, not during it. */
   onCommit: (box: FrameBox) => void;
   /**
+   * Called on every write of the box, which is what an addon lays out against.
+   *
+   * The pair of `onCommit` rather than a rename of it: one is "the player has
+   * finished, persist this" and the other is "the box is now that", and a display
+   * that scales with its frame has to follow the drag rather than jump when the
+   * pointer comes up. Not called for the initial paint, which is the size the
+   * caller asked for.
+   */
+  onBox?: (box: FrameBox) => void;
+  /**
    * Whether the edges resize, and whether the size is written at all. Defaults
    * to true.
    *
@@ -104,6 +114,7 @@ function createBoxKeeper(deps: InteractiveFrameDeps, resizable: boolean): BoxKee
     move: (next) => {
       box = clampBox(withSize(next), deps.viewport(), min);
       paint(deps.el, box, resizable);
+      deps.onBox?.(box);
     },
   };
 }

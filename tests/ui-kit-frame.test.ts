@@ -210,6 +210,59 @@ describe('sizing', () => {
   });
 });
 
+// Telling an addon where its frame ended up.
+//
+// The loader owns the box: it writes the position, the size of a resizable frame,
+// and re-clamps both on a restore and on a viewport change. An addon laying its own
+// content out against that box (a strip of icons sized by its frame's height) can
+// otherwise only measure the element, which forces a synchronous layout on every
+// frame of a display that already writes styles every frame.
+describe('onMove', () => {
+  it('reports the box a saved state restored', async () => {
+    const hub = createFakeStorage();
+    await hub.set(uiNamespace(FQID), frameKey('pbe', CHARACTER, 'meter'), {
+      box: { x: 40, y: 60, w: 240, h: 120 },
+      visible: true,
+    });
+    const seen: number[] = [];
+
+    open(
+      { id: 'meter', save: true, resizable: true, onMove: (box) => seen.push(box.h) },
+      'frame',
+      hub,
+    );
+
+    await vi.waitFor(() => expect(seen).toContain(120));
+  });
+
+  // The viewport shrinking re-clamps every frame, which can change the box without
+  // the player touching anything.
+  it('reports a refit driven by the window resizing', () => {
+    const seen: number[] = [];
+    open({
+      id: 'meter',
+      resizable: true,
+      width: 300,
+      height: 200,
+      onMove: (box) => seen.push(box.w),
+    });
+
+    globalThis.dispatchEvent(new Event('resize'));
+
+    expect(seen).toHaveLength(1);
+  });
+
+  // The size an addon asked for is the size it already holds, so reporting it back
+  // during construction would fire the handler before the addon has the frame.
+  it('says nothing about the initial placement', () => {
+    const seen: number[] = [];
+
+    open({ id: 'meter', resizable: true, onMove: (box) => seen.push(box.w) });
+
+    expect(seen).toEqual([]);
+  });
+});
+
 describe('visibility', () => {
   it('is visible by default and hidden by a class rather than an attribute', () => {
     const frame = open({ id: 'a' });

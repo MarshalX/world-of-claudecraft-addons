@@ -219,6 +219,20 @@ Keep the `title` even so. It is not drawn, but it is the frame's accessible name
 
 You get that for free: it is one mode on the loader's root, so any frame you create takes part without asking. It is also why you should not build your own idle placeholder before trying it.
 
+### Laying out against your own frame
+
+`resizable: true` puts the box in the player's hands, and `onMove` tells you where it ended up. The loader owns that box: it writes the position, and the size of a resizable frame, and it re-clamps both when the viewport changes and when a saved box is restored, so this is the only account of it you can trust.
+
+```js
+woc.ui.frame({ id: 'strip', resizable: true, height: 40, onMove: (box) => scaleTo(box.h) });
+```
+
+Use it rather than measuring `frame.el`. A measurement forces a synchronous layout, and a display that scales with its frame would pay for one on every frame it draws. It fires on a drag, on a resize at pointer rate, on the async restore of a saved box, and when the window is resized under you, but never for the initial placement, which is the size you asked for and therefore already hold. A throw inside it is caught and written to your addon's log rather than breaking the gesture the player is in the middle of.
+
+**A frame cannot be dragged smaller than the size it was created at.** So create it at the smallest you want to allow, and let the player grow it from there.
+
+Cooldown Bars uses the pair for its tile strip: the frame's height is the icon size, and every tile follows it through `size` on `tile.update`. The width is deliberately only room to grow into. Icons sized to fill the width would have to shrink as more cooldowns started, so they would change size in the middle of a fight, which is exactly when a player is picking one out by shape.
+
 `ui.bar` is the loader's timer row, and `ui.tooltip` attaches a description to any element you own:
 
 <!-- include: addons/cooldown-bars/main.js#bar -->
@@ -226,6 +240,22 @@ You get that for free: it is one mode on the loader's root, so any frame you cre
 A bar's fill can be tinted by damage school, which is a separate axis from `tone`. Tone is urgency; a school is what kind of damage a row is made of. Where both are set, tone wins.
 
 <!-- include: addons/combat-meter/main.js#school-tint -->
+
+### Timers as squares
+
+`ui.tile` is the same timer in the other shape: the game's art with a radial sweep over it, a countdown on top, and a stack count in the corner.
+
+<!-- include: addons/cooldown-bars/main.js#tile -->
+
+Pick between the two by what carries the meaning. A bar has room for a name, so it suits a list you read; a tile has none, so the art is the label and it suits a strip you glance at, which is what an aura display and a cooldown row are. There is no linear sweep on a tile, because that is `ui.bar`.
+
+`fraction` is what is LEFT, the same as a bar's, and the wedge gives the art back as it runs down. Neither one animates itself: subscribe for the set changing and move `fraction` from a frame loop, which is the pattern the whole world API is built around.
+
+A tile's border takes the same `school` and `tone` axes a bar's fill does. Its square defaults to 40px, the tap-target floor the game holds its own controls to, and `size` gives that up deliberately for a dense strip.
+
+`label` is never drawn. It is how the tile is announced, as one image named for everything it says, since there is nowhere to put a name on a square that is all art. A tile without one is hidden from assistive technology rather than announced as a bare number.
+
+Cooldown Bars offers both under a `layout` setting, which is worth reading as the worked example: the two widgets take the same `{el, update, destroy}`, so everything between the builder and the screen is written once and only two things branch. A charge count goes in a bar's figure and in a tile's corner, and a tile's countdown loses its decimal because 40 pixels will not hold "119.4s".
 
 ### Saying something
 

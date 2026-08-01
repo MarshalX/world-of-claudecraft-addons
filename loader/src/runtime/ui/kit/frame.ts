@@ -98,6 +98,11 @@ function gestureDeps(
       h: chrome.el.offsetHeight || size.h,
     });
   }
+  // Assigned rather than spread: exactOptionalPropertyTypes rejects an explicit
+  // undefined, and an addon that wants no callback must not install one.
+  if (deps.opts.onMove !== undefined) {
+    gestures.onBox = deps.opts.onMove;
+  }
   return gestures;
 }
 

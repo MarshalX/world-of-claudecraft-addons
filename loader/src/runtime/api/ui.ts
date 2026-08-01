@@ -22,6 +22,8 @@ import type { FrameOpts } from '../ui/kit/frame-chrome.ts';
 import type { FrameStateStore } from '../ui/kit/frame-state.ts';
 import type { IconUrls } from '../ui/kit/icons.ts';
 import type { InjectionSpec } from '../ui/kit/injections.ts';
+import type { Tile, TileOpts } from '../ui/kit/tile.ts';
+import { createTile } from '../ui/kit/tile.ts';
 import type { ToastOpts } from '../ui/kit/toast.ts';
 import type { UiKit } from '../ui/mount.ts';
 
@@ -49,6 +51,8 @@ interface UiApi {
   banner: (text: string, opts?: BannerOpts) => Teardown;
   /** A timer row: icon, label, fill, and a right-aligned figure. */
   bar: (opts?: BarOpts) => Bar;
+  /** The square form of the same thing: art, a radial sweep, a figure and a count. */
+  tile: (opts?: TileOpts) => Tile;
   /** Where the game's own art lives, so no addon writes a path. */
   icon: IconUrls;
   /** Resolves with the id of the button pressed, or null if dismissed. */
@@ -65,6 +69,8 @@ interface UiDeps {
   kit: UiKit;
   fqid: string;
   bag: DisposalBag;
+  /** Report a throw from addon code the loader called. See `guarded`. */
+  onError: (where: string, err: unknown) => void;
   /** Null when the addon's storage is unreachable; frames then never persist. */
   frameStore: FrameStateStore | null;
   viewport: () => { w: number; h: number };
@@ -117,13 +123,38 @@ function microSpec(fqid: string, opts: MicroButtonOpts): InjectionSpec {
   return spec;
 }
 
+/**
+ * The addon's own `onMove`, wrapped so a throw cannot break the gesture.
+ *
+ * This runs inside the loader's pointer handling, mid-drag, exactly as a socket
+ * tap runs inside the game's own send. The rule is the same one: addon code the
+ * loader calls into is guarded, and the cost of a mistake is a logged warning
+ * rather than a window that stops following the pointer with no way to let go.
+ */
+function guarded(deps: UiDeps, opts: FrameOpts): FrameOpts {
+  const { onMove } = opts;
+  if (onMove === undefined) {
+    return opts;
+  }
+  return {
+    ...opts,
+    onMove: (box) => {
+      try {
+        onMove(box);
+      } catch (err) {
+        deps.onError(`the onMove handler of frame '${opts.id}'`, err);
+      }
+    },
+  };
+}
+
 function addonFrame(deps: UiDeps, opts: FrameOpts, chrome: 'frame' | 'window'): AddonFrame {
   const frame = createAddonFrame({
     doc: deps.doc,
     root: deps.kit.root,
     fqid: deps.fqid,
     chrome,
-    opts,
+    opts: guarded(deps, opts),
     store: storeFor(deps, opts),
     viewport: deps.viewport,
     window: deps.window,
@@ -149,6 +180,13 @@ function addonBar(deps: UiDeps, opts: BarOpts | undefined): Bar {
   return bar;
 }
 
+/** The same, for the square form: a tile is DOM in someone else's frame too. */
+function addonTile(deps: UiDeps, opts: TileOpts | undefined): Tile {
+  const tile = createTile(deps.doc, opts);
+  deps.bag.add(tile.destroy);
+  return tile;
+}
+
 function createUi(deps: UiDeps): UiApi {
   const { kit, fqid, bag } = deps;
 
@@ -161,6 +199,8 @@ function createUi(deps: UiDeps): UiApi {
     banner: (text, opts) => tracked(bag, kit.banner.show(text, opts)),
 
     bar: (opts) => addonBar(deps, opts),
+
+    tile: (opts) => addonTile(deps, opts),
 
     icon: kit.icons,
 

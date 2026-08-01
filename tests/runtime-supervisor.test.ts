@@ -155,6 +155,33 @@ describe('reconciling', () => {
     expect(document.querySelectorAll('.woc-frame, .woc-window')).toHaveLength(0);
   });
 
+  // And a version bump is not what makes a manifest new. A marketplace serves one
+  // manifest per REF, so the dev server hands back whatever is on disk and a moved
+  // tag hands back another author's edit, both under the version already installed.
+  //
+  // It matters because the declarations are what `woc.settings` and `woc.keys` are
+  // built from, and a value hydrates only for a declared id: an addon left running
+  // across this change can never see the setting the change added, which reads to
+  // the player as a control that does nothing.
+  it('restarts one whose declarations changed under the same version', async () => {
+    const { supervisor, state, sources, harness } = open();
+    await supervisor.sync();
+
+    state.rows = [
+      row({
+        manifest: manifest({
+          settings: [
+            { id: 'layout', type: 'select', label: 'Layout', default: 'bars', options: ['bars'] },
+          ],
+        }),
+      }),
+    ];
+    sources[FQID] = 'woc.log("relisted");';
+    await supervisor.sync();
+
+    expect(harness.shared.logs.tail(FQID).map((entry) => entry.text)).toContain('relisted');
+  });
+
   it('forgets an addon that was uninstalled', async () => {
     const { supervisor, state } = open();
     await supervisor.sync();

@@ -159,13 +159,24 @@ function createNetTimers(shared: SharedServices): NetTimers {
   };
 }
 
-/** The ui surface, with the per-character frame store it persists through. */
-function createUiSurface(shared: SharedServices, addon: AddonContext): UiApi {
+/**
+ * The ui surface, with the per-character frame store it persists through.
+ *
+ * `onError` is the addon's own logger. The one callback the ui surface hands back
+ * to addon code, a frame's `onMove`, runs inside a pointer gesture the LOADER is
+ * in the middle of, so a throw there must cost a warning rather than a window that
+ * stops following the pointer. Reported through the addon's log rather than
+ * swallowed, so it reaches the manager's log tail where a player can quote it.
+ */
+function createUiSurface(shared: SharedServices, addon: AddonContext, log: LogApi): UiApi {
   return createUi({
     doc: shared.doc,
     kit: shared.kit,
     fqid: addon.fqid,
     bag: addon.bag,
+    onError: (where, err) => {
+      log.error(`${where} threw`, err);
+    },
     frameStore: createFrameStateStore({
       fqid: addon.fqid,
       hub: shared.storage,
@@ -214,9 +225,11 @@ function createAddonApi(shared: SharedServices, addon: AddonContext): AddonApi {
   const { settings, keybinds } = createStores(shared, addon);
   const timers = createTimers(shared.window, bag);
 
+  const log = createLogSurface(shared, addon);
+
   const woc: WocApi = {
     ...timers,
-    ...createLogSurface(shared, addon),
+    ...log,
 
     addon: addonIdentity(addon),
 
@@ -235,7 +248,7 @@ function createAddonApi(shared: SharedServices, addon: AddonContext): AddonApi {
     net: createNet(shared.net, bag, createNetTimers(shared)),
     world: createWorld(shared.world, bag),
 
-    ui: createUiSurface(shared, addon),
+    ui: createUiSurface(shared, addon, log),
 
     sound: createSound(shared.sound, bag),
 

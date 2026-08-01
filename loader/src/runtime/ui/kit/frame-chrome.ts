@@ -7,6 +7,7 @@
 // The density variant landed here and pushed the pair over the file limit, which
 // was the prompt rather than the reason: the seam was always in this place.
 
+import type { FrameBox } from '../frame/geometry.ts';
 import { closeGlyphMarkup } from './close-glyph.ts';
 
 type FrameChrome = 'frame' | 'window';
@@ -65,6 +66,20 @@ interface FrameOpts {
   className?: string;
   /** How tightly the loader's own chrome is drawn. Defaults to 'comfortable'. */
   density?: FrameDensity;
+  /**
+   * Where the frame ended up, after every move the loader made.
+   *
+   * The loader owns the box: it writes the position and, for a resizable frame,
+   * the size, and it re-clamps both on a viewport change and on a restore. So an
+   * addon laying its own content out against that box has no way to know what it
+   * is except by measuring the element, which costs a synchronous layout on every
+   * frame of a display that is already writing styles every frame.
+   *
+   * Fires on a drag, on a resize, on the async restore of a saved box, and on a
+   * refit. NOT for the initial placement, which is the size the addon asked for
+   * and therefore already holds.
+   */
+  onMove?: (box: FrameBox) => void;
 }
 
 interface Chrome {

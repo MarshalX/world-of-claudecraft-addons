@@ -73,16 +73,18 @@ function open() {
   };
 
   const bag = new DisposalBag();
+  const onError = vi.fn();
   const ui = createUi({
     doc: document,
     kit,
     fqid: FQID,
     bag,
+    onError,
     frameStore: null,
     viewport: () => VIEW,
     window: globalThis,
   });
-  return { bag, kit, ui };
+  return { bag, kit, ui, onError };
 }
 
 describe('creating surfaces', () => {
@@ -137,6 +139,15 @@ describe('creating surfaces', () => {
     expect(document.querySelector('.woc-bar')).toBeNull();
   });
 
+  it('hands back a tile the same way', () => {
+    const { ui } = open();
+
+    const tile = ui.tile({ label: 'Aimed Shot', fraction: 0.5 });
+
+    expect(tile.el.classList.contains('woc-tile')).toBe(true);
+    expect(document.querySelector('.woc-tile')).toBeNull();
+  });
+
   it('carries the icon URL builders', () => {
     const { ui } = open();
 
@@ -152,6 +163,27 @@ describe('creating surfaces', () => {
     el.dispatchEvent(new Event('pointerenter'));
 
     expect(document.getElementById('woc-tooltip')?.textContent).toBe('Toggle the meter');
+  });
+});
+
+// A frame's onMove runs inside the loader's own pointer handling, which is the
+// same position a socket tap runs in: a throw there must not break the gesture the
+// player is in the middle of, and it must not be swallowed either. Reported through
+// the addon's own log, which is what the manager's log tail shows a player.
+describe('a frame callback that throws', () => {
+  it('reports it and leaves the frame working', () => {
+    const { ui, onError } = open();
+    ui.frame({
+      id: 'strip',
+      resizable: true,
+      onMove: () => {
+        throw new Error('the addon is broken');
+      },
+    });
+
+    expect(() => globalThis.dispatchEvent(new Event('resize'))).not.toThrow();
+    expect(onError).toHaveBeenCalledOnce();
+    expect(onError.mock.calls[0]?.[0]).toContain('strip');
   });
 });
 
@@ -239,6 +271,17 @@ describe('disposal', () => {
     bag.dispose();
 
     expect(document.querySelectorAll('.woc-bar')).toHaveLength(0);
+  });
+
+  // A strip of tiles is the same kind of leak, and there are usually more of them:
+  // an aura display rebuilds its whole row every time an effect lands.
+  it('removes every tile the addon put on screen', () => {
+    const { bag, ui, kit } = open();
+    kit.root.append(ui.tile({ label: 'Renew' }).el, ui.tile({ label: 'Rejuvenation' }).el);
+
+    bag.dispose();
+
+    expect(document.querySelectorAll('.woc-tile')).toHaveLength(0);
   });
 
   // The addon's await is mid-way through something, so being disabled has to

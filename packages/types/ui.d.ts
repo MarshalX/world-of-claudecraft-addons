@@ -4,6 +4,14 @@ import type { KnownSkillIcon, SkillIconClass } from './icons.generated.js';
 
 export type FrameDensity = 'comfortable' | 'compact' | 'bare';
 
+/** Where a frame is, in page pixels. The loader owns it; see `FrameOpts.onMove`. */
+export interface FrameBox {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
 export interface FrameOpts {
   /** Unique within your addon. It is the persistence key, so keep it stable. */
   id: string;
@@ -49,6 +57,23 @@ export interface FrameOpts {
    * matching density for free.
    */
   density?: FrameDensity;
+  /**
+   * Where the frame ended up, after every move the loader made.
+   *
+   * The loader owns the box. It writes the position, and for a `resizable` frame
+   * the size, and it re-clamps both when the viewport changes and when a saved box
+   * is restored. Use this rather than measuring `frame.el`: a measurement forces a
+   * synchronous layout, and a display that scales with its frame would pay for one
+   * on every frame it draws.
+   *
+   * Fires on a drag, on a resize (at pointer rate, so keep it cheap), on the async
+   * restore of a saved box, and when the window is resized under it. NOT for the
+   * initial placement, which is the size you asked for and therefore already hold.
+   *
+   * A throw here is caught and written to your addon's log rather than breaking
+   * the gesture the player is in the middle of.
+   */
+  onMove?: (box: FrameBox) => void;
 }
 
 export interface Frame {
@@ -168,6 +193,73 @@ export interface Bar {
   destroy: () => void;
 }
 
+/** The same two axes a bar has, with the same rule: where both are set, tone wins. */
+export type TileTone = BarTone;
+
+export type TileSchool = BarSchool;
+
+/** Everything a tile can be told. All of it is optional on an update. */
+export interface TileUpdate {
+  /**
+   * What the tile is, for assistive technology. It is never drawn.
+   *
+   * A tile is announced as one image, named for everything it says: the label, then
+   * the figure, then the count. There is nowhere to draw a name on a square whose
+   * whole face is art, so this is how it gets one.
+   *
+   * A tile with NO label is hidden from assistive technology outright. Art with a
+   * wedge over it and no name is not something anyone can act on, and announcing a
+   * bare "4.2" is worse than silence.
+   */
+  label?: string;
+  /** An icon URL, from `ui.icon`, or null for none. The slot hides itself if it fails. */
+  icon?: string | null;
+  /**
+   * 0 through 1 of the timer REMAINING, which is the sense `ui.bar` takes.
+   *
+   * The dark wedge covers what is left and gives the art back clockwise as it runs
+   * down. Clamped like a bar's, so dividing by a total you do not have yet is safe.
+   */
+  fraction?: number;
+  /** The figure over the art, usually a countdown. An empty string hides it. */
+  value?: string;
+  /**
+   * Stacks, or charges left, in the corner. Null hides it.
+   *
+   * Whether a count of 1 is worth drawing is yours: an aura at one stack usually is
+   * not, and an ability with one charge left usually is.
+   */
+  count?: number | null;
+  /** Tint the border by the game's own colour for a damage school. */
+  school?: TileSchool | null;
+  tone?: TileTone;
+  /**
+   * The square's side in pixels.
+   *
+   * Defaults to 40, the tap-target floor the game holds its own controls to. Going
+   * below it is the same trade `density: 'compact'` makes, and inside a compact frame
+   * the default is 32 already.
+   *
+   * On the update as well as at creation, so a strip can scale with the frame it
+   * sits in: pair it with `ui.frame`'s `onMove` and every tile follows the drag.
+   * Anything that is not a positive number leaves the current size alone.
+   */
+  size?: number;
+}
+
+export interface TileOpts extends TileUpdate {
+  /** Added alongside the kit's own classes, so you can style your own tiles. */
+  className?: string;
+}
+
+export interface Tile {
+  /** The square. Append it where you want it; the loader does not place it. */
+  readonly el: HTMLElement;
+  update: (next: TileUpdate) => void;
+  /** Removes the tile. Also done for you when your addon is disabled. */
+  destroy: () => void;
+}
+
 /**
  * An ability id that ships a painted icon file, or any other string.
  *
@@ -284,6 +376,20 @@ export interface UiApi {
    * Inside a `density: 'compact'` frame the row is drawn compact too.
    */
   bar: (opts?: BarOpts) => Bar;
+  /**
+   * The square form of the same thing: art, a radial sweep over it, a countdown
+   * and a stack count.
+   *
+   * Reach for this where the ART is the label and a strip of them is read at a
+   * glance, which is what an aura display and a cooldown row are. Reach for `ui.bar`
+   * where each timer needs a name beside it. There is no linear sweep here because
+   * that is `ui.bar`, and one thing drawn two ways is how two addons end up looking
+   * different for no reason anyone chose.
+   *
+   * It does not animate itself, exactly as a bar does not: subscribe for the set
+   * changing and move `fraction` from a frame loop.
+   */
+  tile: (opts?: TileOpts) => Tile;
   /** Where the game's own art lives, so no addon writes a path. */
   icon: IconUrls;
   /**

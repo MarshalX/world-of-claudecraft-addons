@@ -22,6 +22,8 @@ const QUOTED = [
       frame: ['woc.ui.frame', 'frame.body.appendChild'],
       /** The API page for `woc.ui.bar`, icons and tooltips. */
       bar: ['woc.ui.bar', 'woc.ui.icon.ability', 'woc.ui.tooltip'],
+      /** The API page for `woc.ui.tile`, which is the same row as a square. */
+      tile: ['woc.ui.tile', 'woc.ui.icon.ability', 'label'],
       /** Patterns, item 1, and the single most important example in the docs. */
       'subscribe-and-animate': ["woc.world.on('cooldowns'", 'woc.requestAnimationFrame'],
       /** The API page for `woc.keys.bind`. */
