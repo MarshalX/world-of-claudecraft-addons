@@ -92,6 +92,18 @@ interface SharedServices {
   gameVersion: () => { version: string | null; build: string | null };
   /** The character in play, for per-character frame state. Null before entry. */
   character: () => string | null;
+  /**
+   * Resolves the first time there IS a character, which is world entry.
+   *
+   * Per-character state cannot be read before then: there is no key to read it
+   * under. An addon builds its frames at document-start, so without this the one
+   * read of a saved position happens on the landing page, finds nothing, and is
+   * never tried again.
+   *
+   * A function rather than a promise because asking for it costs a world
+   * subscription, and only an addon with a saved frame ever asks.
+   */
+  characterKnown: () => Promise<void>;
   now: () => number;
   wallClock: () => number;
   viewport: () => { w: number; h: number };
@@ -182,6 +194,7 @@ function createUiSurface(shared: SharedServices, addon: AddonContext, log: LogAp
       hub: shared.storage,
       channel: shared.channel,
       character: shared.character,
+      known: shared.characterKnown,
     }),
     viewport: shared.viewport,
     window: shared.window,

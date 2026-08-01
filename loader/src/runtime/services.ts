@@ -108,6 +108,50 @@ function characterKey(surfaces: GameSurfaces): string | null {
   return characterId(surfaces.net.state().realm, playerName(backend));
 }
 
+/**
+ * Resolves the first time there is a character to key per-character state on.
+ *
+ * The loader boots at document-start and an addon builds its frames on its first
+ * line, both of which are long before a player has a character. Everything keyed
+ * per character therefore has a moment it becomes READABLE, and this is it.
+ *
+ * Watched rather than polled: `player` changing is the event, and the subscription
+ * drops itself the moment it answers. The name alone is not enough, since the realm
+ * comes off the socket's hello, so every change re-asks the same question rather
+ * than assuming the first one is it.
+ *
+ * Built on demand and memoised, never at boot. The world watcher runs a frame loop
+ * for as long as anything is subscribed, and `world/watch.ts` promises that an
+ * addon which never calls `world.on` costs nothing at all. Subscribing here at
+ * startup would quietly make that false for every session, including one with no
+ * addons installed; asking for it is what an addon with a SAVED frame does.
+ *
+ * There is deliberately no timeout, for the reason `waitForGame` has none: a
+ * player can sit on the login screen for as long as they like.
+ */
+function whenCharacterKnown(surfaces: GameSurfaces): Promise<void> {
+  if (characterKey(surfaces) !== null) {
+    return Promise.resolve();
+  }
+  return new Promise<void>((resolve) => {
+    const off = surfaces.world.watcher.on('player', () => {
+      if (characterKey(surfaces) !== null) {
+        off();
+        resolve();
+      }
+    });
+  });
+}
+
+/** The memo behind `characterKnown`, so the subscription is made at most once. */
+function characterWaiter(surfaces: GameSurfaces): () => Promise<void> {
+  let waiting: Promise<void> | null = null;
+  return () => {
+    waiting ??= whenCharacterKnown(surfaces);
+    return waiting;
+  };
+}
+
 function createRuntimeServices(deps: ServicesDeps): RuntimeServices {
   const { scope, surfaces } = deps;
   const doc = scope.document;
@@ -140,6 +184,8 @@ function createRuntimeServices(deps: ServicesDeps): RuntimeServices {
     gameVersion: () => readGameVersion(doc),
 
     character: () => characterKey(surfaces),
+
+    characterKnown: characterWaiter(surfaces),
 
     now: () => scope.performance.now(),
     wallClock: () => Date.now(),

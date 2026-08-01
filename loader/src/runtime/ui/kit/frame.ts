@@ -19,14 +19,13 @@ import {
 } from '../frame/interactive.ts';
 import { buildChrome, type Chrome, type FrameChrome, type FrameOpts } from './frame-chrome.ts';
 import type { FrameState, FrameStateStore } from './frame-state.ts';
+import { createVisibility } from './frame-visibility.ts';
 
 /** What a frame with no width of its own opens at. */
 const DEFAULT_FRAME_WIDTH = 240;
 const DEFAULT_FRAME_HEIGHT = 120;
 const DEFAULT_WINDOW_WIDTH = 480;
 const DEFAULT_WINDOW_HEIGHT = 320;
-
-const HIDDEN_CLASS = 'woc-hidden';
 
 interface AddonFrame {
   /** The frame element. Addon-owned; the loader only positions it. */
@@ -111,29 +110,42 @@ interface FrameMechanics {
   interactive: InteractiveFrame;
   isVisible: () => boolean;
   setVisible: (next: boolean) => void;
+  /** Apply what storage said, unless the addon or the player has spoken first. */
+  restoreVisible: (next: boolean) => void;
+  /** The saved state has been read back. Nothing persists before this. */
+  settled: () => void;
   isDestroyed: () => boolean;
   destroy: () => void;
 }
 
 function mountFrame(deps: FrameDeps, chrome: Chrome, size: Viewport): FrameMechanics {
   const { opts } = deps;
-  let visible = opts.visible ?? true;
   let destroyed = false;
 
-  const applyVisibility = (): void => {
-    chrome.el.classList.toggle(HIDDEN_CLASS, !visible);
-  };
-  applyVisibility();
   deps.root.appendChild(chrome.el);
 
-  const persist = (): void => {
-    if (!destroyed) {
-      deps.store?.save(opts.id, { box: interactive.box(), visible });
-    }
-  };
+  // Everything about WHEN a frame is on screen, including why a saved one starts
+  // hidden, is in kit/frame-visibility.ts.
+  const vis = createVisibility({
+    el: chrome.el,
+    wanted: opts.visible ?? true,
+    stored: deps.store !== null,
+    onShown: () => {
+      interactive.refit();
+      deps.raise?.(chrome.el);
+    },
+    save: (visible) => {
+      if (!destroyed) {
+        deps.store?.save(opts.id, { box: interactive.box(), visible });
+      }
+    },
+  });
 
+  // `vis.commit` by reference: the end of a gesture is a write of what is already
+  // on screen, and routing it through anything that compares first would make a
+  // drag that changed only the position save nothing at all.
   const interactive: InteractiveFrame = makeFrameInteractive(
-    gestureDeps(deps, chrome, size, persist),
+    gestureDeps(deps, chrome, size, vis.commit),
   );
 
   const onWindowResize = (): void => {
@@ -141,29 +153,16 @@ function mountFrame(deps: FrameDeps, chrome: Chrome, size: Viewport): FrameMecha
   };
   deps.window.addEventListener('resize', onWindowResize);
 
-  const setVisible = (next: boolean): void => {
-    if (visible === next) {
-      return;
-    }
-    visible = next;
-    applyVisibility();
-    // Re-clamped on show: the viewport may have changed while it was hidden, and
-    // a hidden element measures as zero so the clamp could not run then.
-    if (visible) {
-      interactive.refit();
-      deps.raise?.(chrome.el);
-    }
-    persist();
-  };
-
   chrome.close?.addEventListener('click', () => {
-    setVisible(false);
+    vis.set(false);
   });
 
   return {
     interactive,
-    isVisible: () => visible,
-    setVisible,
+    isVisible: vis.isVisible,
+    setVisible: vis.set,
+    restoreVisible: vis.restore,
+    settled: vis.settled,
     isDestroyed: () => destroyed,
 
     destroy: () => {
@@ -181,6 +180,11 @@ function mountFrame(deps: FrameDeps, chrome: Chrome, size: Viewport): FrameMecha
 /**
  * Move the frame to its saved placement whenever storage answers, and only if
  * the addon has not already been disabled by then.
+ *
+ * The answer arrives at world entry, because a per-character key cannot be built
+ * before there is a character. Until it does, a saved frame is hidden, so this is
+ * also what puts it on screen: the null case is not "nothing to do" but "there was
+ * nothing stored, so use what the addon asked for".
  */
 function restoreSaved(deps: FrameDeps, size: Viewport, frame: FrameMechanics): void {
   if (deps.store === null) {
@@ -189,11 +193,17 @@ function restoreSaved(deps: FrameDeps, size: Viewport, frame: FrameMechanics): v
   deps.store
     .load(deps.opts.id)
     .then((state: FrameState | null) => {
-      if (state === null || frame.isDestroyed()) {
+      if (frame.isDestroyed()) {
+        return;
+      }
+      if (state === null) {
+        frame.restoreVisible(deps.opts.visible ?? true);
+        frame.settled();
         return;
       }
       frame.interactive.place(clampBox(state.box, deps.viewport(), size));
-      frame.setVisible(state.visible);
+      frame.restoreVisible(state.visible);
+      frame.settled();
     })
     .catch(() => undefined);
 }
@@ -251,4 +261,4 @@ function frameTeardown(frame: AddonFrame): Teardown {
 }
 
 export type { AddonFrame, FrameDeps };
-export { createAddonFrame, DEFAULT_FRAME_WIDTH, frameTeardown, HIDDEN_CLASS };
+export { createAddonFrame, DEFAULT_FRAME_WIDTH, frameTeardown };

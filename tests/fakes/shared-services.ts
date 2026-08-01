@@ -184,6 +184,8 @@ function createSharedServices(
     host: 'https://pbe.worldofclaudecraft.com',
     gameVersion: () => ({ version: '0.31.0', build: '202607290011' }),
     character: () => 'Claudemoon/Marshal',
+    // Always in the world here, so every per-character read is answerable at once.
+    characterKnown: () => Promise.resolve(),
     now,
     wallClock: () => WALL_CLOCK_MS,
     viewport: () => VIEWPORT,

@@ -12,6 +12,14 @@
 //
 // Writes are fire and forget. A frame that reopens in its default spot is a
 // small annoyance; a drag that stalls on a bridge round trip is a large one.
+//
+// READS wait for the character, and that is the whole of a bug this shipped with.
+// An addon builds its frames on its first line, which is document-start: there is
+// no character then, so there is no key, so the one read of a saved position
+// happened on the landing page, found nothing, and was never tried again. Every
+// addon frame opened at its default spot on every reload, stacked on top of each
+// other, and a frame the player had closed came back. The key exists at world
+// entry, so the read waits for it.
 
 import { diagError } from '../../../shared/diag.ts';
 import type { Channel } from '../../../shared/hosts.ts';
@@ -36,6 +44,17 @@ interface FrameStateDeps {
    * frame never persisted for the whole session.
    */
   character: () => string | null;
+  /**
+   * Resolves once `character()` will answer. See the note at the top.
+   *
+   * A read waits for it; a WRITE does not. A write before world entry has nowhere
+   * to go and nothing to say: frames are hidden while the game's HUD is absent, so
+   * there is no gesture that could have produced one.
+   *
+   * Called rather than awaited directly, because asking costs a world subscription
+   * and a frame that does not persist must not pay for one.
+   */
+  known: () => Promise<void>;
 }
 
 interface FrameStateStore {
@@ -66,8 +85,15 @@ function createFrameStateStore(deps: FrameStateDeps): FrameStateStore {
 
   return {
     load: async (frameId) => {
+      if (!deps.hub.connected) {
+        return null;
+      }
+      // Never resolves for a player who does not enter the world, which is
+      // correct: there is no per-character state to restore for a character that
+      // does not exist, and their frames are hidden with the HUD anyway.
+      await deps.known();
       const key = keyFor(frameId);
-      if (key === null || !deps.hub.connected) {
+      if (key === null) {
         return null;
       }
       try {

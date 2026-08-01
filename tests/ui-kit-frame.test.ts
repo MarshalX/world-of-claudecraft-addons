@@ -8,9 +8,10 @@
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { CLOSE_PATH } from '../loader/src/runtime/ui/kit/close-glyph.ts';
-import { createAddonFrame, HIDDEN_CLASS } from '../loader/src/runtime/ui/kit/frame.ts';
+import { createAddonFrame } from '../loader/src/runtime/ui/kit/frame.ts';
 import { buildChrome, type FrameOpts } from '../loader/src/runtime/ui/kit/frame-chrome.ts';
 import { createFrameStateStore } from '../loader/src/runtime/ui/kit/frame-state.ts';
+import { HIDDEN_CLASS } from '../loader/src/runtime/ui/kit/frame-visibility.ts';
 import { frameKey, uiNamespace } from '../loader/src/shared/storage-keys.ts';
 import { createFakeStorage, type FakeStorage } from './fakes/storage.ts';
 
@@ -30,7 +31,32 @@ function stateStore(hub: FakeStorage | null) {
   if (hub === null) {
     return null;
   }
-  return createFrameStateStore({ fqid: FQID, hub, channel: 'pbe', character: () => CHARACTER });
+  return createFrameStateStore({
+    fqid: FQID,
+    hub,
+    channel: 'pbe',
+    character: () => CHARACTER,
+    known: () => Promise.resolve(),
+  });
+}
+
+/**
+ * A completed drag on a frame's handle.
+ *
+ * interactjs does not move the box under happy-dom, which has no layout, so what
+ * this drives is the GESTURE ending rather than the arithmetic (that is pure and
+ * lives in frame-geometry.test.ts). Ending is the half that writes.
+ */
+function drag(handle: HTMLElement): void {
+  const at = (clientX: number, clientY: number) => ({
+    clientX,
+    clientY,
+    pointerId: 1,
+    bubbles: true,
+  });
+  handle.dispatchEvent(new PointerEvent('pointerdown', at(150, 120)));
+  document.dispatchEvent(new PointerEvent('pointermove', at(200, 160)));
+  document.dispatchEvent(new PointerEvent('pointerup', at(200, 160)));
 }
 
 /** dataset is an index-signature type, so its reads have to be computed. */
@@ -296,6 +322,91 @@ describe('visibility', () => {
   });
 });
 
+// What every addon's windows did on every reload, reported from a live session:
+// they opened stacked in the middle of the screen, over the game's loading bar,
+// including the ones the player had closed.
+//
+// One cause under all three. A per-character key cannot be built before there is a
+// character, an addon builds its frames at document-start, so the one read of the
+// saved state happened on the landing page and answered null. The frame then drew
+// at its default box with its default visibility, and nothing tried again.
+//
+// So a frame that SAVES its visibility does not guess it. It starts hidden and the
+// stored answer decides, which is free: a frame is hidden with the HUD until world
+// entry anyway, which is the same moment the answer becomes readable.
+describe('a frame whose state is saved', () => {
+  it('starts hidden rather than guessing, whatever it asked for', () => {
+    const hub = createFakeStorage();
+
+    const frame = open({ id: 'meter', save: true, visible: true }, 'frame', hub);
+
+    expect(frame.visible).toBe(false);
+  });
+
+  it('shows itself once nothing turns out to have been stored', async () => {
+    const hub = createFakeStorage();
+
+    const frame = open({ id: 'meter', save: true }, 'frame', hub);
+
+    await vi.waitFor(() => expect(frame.visible).toBe(true));
+  });
+
+  // The one the player notices: a window they closed came back on every reload.
+  it('stays hidden when that is what was stored', async () => {
+    const hub = createFakeStorage();
+    await hub.set(uiNamespace(FQID), frameKey('pbe', CHARACTER, 'meter'), {
+      box: { x: 40, y: 60, w: 240, h: 120 },
+      visible: false,
+    });
+
+    const frame = open({ id: 'meter', save: true, visible: true }, 'frame', hub);
+    await vi.waitFor(() => expect(frame.el.style.left).toBe('40px'));
+
+    expect(frame.visible).toBe(false);
+  });
+
+  // The answer lands at world entry, which is late enough for a player to have
+  // pressed the addon's own toggle key on the loading screen. Their press wins.
+  it('does not overrule a toggle pressed before the answer arrived', async () => {
+    const hub = createFakeStorage();
+    await hub.set(uiNamespace(FQID), frameKey('pbe', CHARACTER, 'meter'), {
+      box: { x: 40, y: 60, w: 240, h: 120 },
+      visible: false,
+    });
+
+    const frame = open({ id: 'meter', save: true }, 'frame', hub);
+    frame.show();
+    await vi.waitFor(() => expect(frame.el.style.left).toBe('40px'));
+
+    expect(frame.visible).toBe(true);
+  });
+
+  // And that press is written down, against the box the restore put under it
+  // rather than against the default one it was sitting at when pressed.
+  it('records a press made before the answer, without losing the saved box', async () => {
+    const hub = createFakeStorage();
+    const key = `${uiNamespace(FQID)}/${frameKey('pbe', CHARACTER, 'meter')}`;
+    await hub.set(uiNamespace(FQID), frameKey('pbe', CHARACTER, 'meter'), {
+      box: { x: 40, y: 60, w: 240, h: 120 },
+      visible: false,
+    });
+
+    const frame = open({ id: 'meter', save: true }, 'frame', hub);
+    frame.show();
+
+    await vi.waitFor(() => {
+      expect(hub.dump()[key]).toMatchObject({ visible: true, box: { x: 40 } });
+    });
+  });
+
+  // A frame that does not persist has nothing to wait for, so it must not wait.
+  it('is unaffected when the addon never asked to save', () => {
+    const frame = open({ id: 'meter' }, 'frame', null);
+
+    expect(frame.visible).toBe(true);
+  });
+});
+
 describe('persistence', () => {
   it('saves nothing when the addon did not ask for it', () => {
     const hub = createFakeStorage();
@@ -317,6 +428,36 @@ describe('persistence', () => {
     expect(hub.dump()[key]).toMatchObject({ visible: false });
   });
 
+  // The half no test covered, and it broke twice: once because nothing restored a
+  // position, and once because a refactor routed the end of a gesture through a
+  // call that compares first, so a drag that changed only the position saved
+  // nothing at all. Both times the symptom was identical from the outside.
+  it('writes the state down when a drag ends', async () => {
+    const hub = createFakeStorage();
+    const frame = open({ id: 'meter', save: true, title: 'Meter' }, 'window', hub);
+    // The answer has to have landed first: before it does, this frame is sitting
+    // at its default box rather than the stored one, and a write would lose it.
+    await vi.waitFor(() => expect(frame.visible).toBe(true));
+
+    drag(frame.el.querySelector<HTMLElement>('.woc-titlebar') as HTMLElement);
+
+    const key = `${uiNamespace(FQID)}/${frameKey('pbe', CHARACTER, 'meter')}`;
+    await vi.waitFor(() => {
+      expect(hub.dump()[key]).toBeDefined();
+    });
+  });
+
+  // The other side of that gate: a gesture before the answer lands must not write
+  // the default box over the position the player set last session.
+  it('writes nothing from a drag made before the saved state arrived', () => {
+    const hub = createFakeStorage();
+    const frame = open({ id: 'meter', save: true, title: 'Meter' }, 'window', hub);
+
+    drag(frame.el.querySelector<HTMLElement>('.woc-titlebar') as HTMLElement);
+
+    expect(hub.dump()).toEqual({});
+  });
+
   it('restores a saved position and visibility', async () => {
     const hub = createFakeStorage();
     await hub.set(uiNamespace(FQID), frameKey('pbe', CHARACTER, 'meter'), {
@@ -325,9 +466,11 @@ describe('persistence', () => {
     });
 
     const frame = open({ id: 'meter', save: true }, 'frame', hub);
-    await vi.waitFor(() => expect(frame.visible).toBe(false));
 
-    expect(frame.el.style.left).toBe('40px');
+    // Waited on the POSITION, not on the visibility: a saved frame starts hidden
+    // whatever it stored, so hidden says nothing about the read having landed.
+    await vi.waitFor(() => expect(frame.el.style.left).toBe('40px'));
+    expect(frame.visible).toBe(false);
   });
 
   // A NaN reaching a style property drops the declaration silently, which would
@@ -354,12 +497,43 @@ describe('persistence', () => {
       hub,
       channel: 'pbe',
       character: () => null,
+      // Already resolved, so this is the case where the answer arrived and there
+      // is STILL no character: an offline session with no player entity.
+      known: () => Promise.resolve(),
     });
 
     store.save('meter', { box: { x: 1, y: 2, w: 3, h: 4 }, visible: true });
     expect(await store.load('meter')).toBeNull();
 
     expect(hub.dump()).toEqual({});
+  });
+
+  // The read that used to happen on the landing page, find nothing, and never be
+  // tried again: every addon frame opened at its default spot on every reload.
+  it('waits for the character before reading, rather than answering null', async () => {
+    const hub = createFakeStorage();
+    let character: string | null = null;
+    let arrive = (): void => undefined;
+    const known = new Promise<void>((resolve) => {
+      arrive = resolve;
+    });
+    await hub.set(uiNamespace(FQID), frameKey('pbe', CHARACTER, 'meter'), {
+      box: { x: 7, y: 8, w: 9, h: 10 },
+      visible: true,
+    });
+    const store = createFrameStateStore({
+      fqid: FQID,
+      hub,
+      channel: 'pbe',
+      character: () => character,
+      known: () => known,
+    });
+
+    const reading = store.load('meter');
+    character = CHARACTER;
+    arrive();
+
+    expect(await reading).toMatchObject({ box: { x: 7 } });
   });
 
   it('does not persist when storage never connected', async () => {
@@ -369,6 +543,7 @@ describe('persistence', () => {
       hub,
       channel: 'pbe',
       character: () => CHARACTER,
+      known: () => Promise.resolve(),
     });
 
     store.save('meter', { box: { x: 1, y: 2, w: 3, h: 4 }, visible: true });
