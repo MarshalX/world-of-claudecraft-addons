@@ -10,6 +10,7 @@ import { describe, expect, it } from 'vitest';
 import {
   browseEmptiness,
   browseRows,
+  catalogHasPreviews,
   catalogTags,
   pendingUpdates,
 } from '../loader/src/runtime/ui/manager/catalog.ts';
@@ -215,5 +216,28 @@ describe('pendingUpdates', () => {
 
   it('is empty when every row is pinned', () => {
     expect(pendingUpdates([row({ pin: '1.2.0' })])).toEqual([]);
+  });
+});
+
+describe('catalogHasPreviews', () => {
+  const shot = { file: 'preview.png', alt: 'The panel, mid-fight.' };
+
+  it('is false when nothing on offer declares one', () => {
+    expect(catalogHasPreviews([marketState(OFFICIAL, [marketEntry()])])).toBe(false);
+  });
+
+  it('is true when one addon in any source declares one', () => {
+    const markets = [
+      marketState(OFFICIAL, [marketEntry()]),
+      marketState(OFFICIAL, [marketEntry({ id: 'other', preview: shot })]),
+    ];
+
+    expect(catalogHasPreviews(markets)).toBe(true);
+  });
+
+  // The reading is over every source rather than over the filtered rows, which is
+  // what stops the column appearing and disappearing as a player types.
+  it('is false for a list with no sources at all', () => {
+    expect(catalogHasPreviews([])).toBe(false);
   });
 });

@@ -28,7 +28,9 @@ const PNG_SUFFIX = /\.png$/;
  *
  * Both `alt` and the caption come from the manifest and are never written into a
  * template, so a re-shoot changes the page without a template edit and a
- * description cannot go stale in a second place.
+ * description cannot go stale in a second place. An addon's preview carries alt
+ * text from its own `addon.json` and no caption, because the card it sits in has
+ * already named it.
  */
 export function figure(shot: Measured): Html {
   const stem = shot.file.replace(PNG_SUFFIX, '');
@@ -47,7 +49,7 @@ export function figure(shot: Measured): Html {
       />
     </picture>
   </div>
-  <figcaption>${shot.caption}</figcaption>
+  ${shot.caption !== null && html`<figcaption>${shot.caption}</figcaption>`}
 </figure>`;
 }
 

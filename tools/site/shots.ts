@@ -115,12 +115,20 @@ export function undersizeReport(measured: readonly Measured[]): string[] {
     );
 }
 
-/** A shot as the manifest declares it. */
+/**
+ * A shot as the manifest declares it, or as the build synthesises one.
+ *
+ * `caption` is nullable here while the manifest schema above still requires it,
+ * and the two are not in conflict: a shot in prose is a figure the reader meets
+ * on its own and needs telling what it is, while an addon's preview sits inside a
+ * card whose heading is already the addon's name, where a caption would say it
+ * twice. Only the synthesised kind passes null.
+ */
 export interface Shot {
   readonly id: string;
   readonly file: string;
   readonly minWidth: number;
-  readonly caption: string;
+  readonly caption: string | null;
   readonly alt: string;
 }
 

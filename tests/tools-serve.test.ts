@@ -99,6 +99,14 @@ describe('the loader route', () => {
     expect(contentType(LOADER_PATH)).toBe('text/javascript; charset=utf-8');
   });
 
+  // The manager loads an addon's preview from the local source exactly as it does
+  // from GitHub, so the dev server has to name the type: an image handed over as
+  // application/octet-stream renders by sniffing at best, and not at all behind a
+  // nosniff header.
+  it('names the type of an addon preview', () => {
+    expect(contentType('/addons/combat-meter/preview.png')).toBe('image/png');
+  });
+
   // One exact path with no directory behind it, which is the whole difference
   // from resolveFile: there is nothing here to walk.
   it.each([

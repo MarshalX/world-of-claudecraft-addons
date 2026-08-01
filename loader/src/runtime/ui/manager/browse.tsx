@@ -14,10 +14,11 @@
 import { useState } from 'preact/hooks';
 import { FIELD_CLASS } from '../kit/field-shape.ts';
 import type { BrowseEmptiness, BrowseFilter, BrowseRow } from './catalog.ts';
-import { browseEmptiness, browseRows, catalogTags } from './catalog.ts';
+import { browseEmptiness, browseRows, catalogHasPreviews, catalogTags } from './catalog.ts';
 import type { CatalogState, CatalogStore } from './catalog-store.ts';
 import { ErrorNote } from './error-note.tsx';
 import { InstallConfirm } from './install-confirm.tsx';
+import { Preview } from './preview.tsx';
 import { UI_TEXT } from './strings.ts';
 
 function Tags(props: { tags: readonly string[] | undefined }) {
@@ -36,12 +37,21 @@ function Tags(props: { tags: readonly string[] | undefined }) {
   );
 }
 
-function Row(props: { row: BrowseRow; busy: boolean; onInstall: (fqid: string) => void }) {
+interface RowProps {
+  row: BrowseRow;
+  busy: boolean;
+  /** Whether anything on offer has a screenshot, so the column is worth drawing. */
+  shots: boolean;
+  onInstall: (fqid: string) => void;
+}
+
+function Row(props: RowProps) {
   const { row } = props;
   const { entry } = row;
 
   return (
     <li className="woc-row">
+      <Preview row={row} size="thumb" placeholder={props.shots} />
       <div className="woc-row-main">
         <span className="woc-row-name">
           {entry.name} <span className="woc-badge woc-badge-muted">{row.market.name}</span>
@@ -166,6 +176,8 @@ function Filters(props: FilterProps) {
 
 interface ResultsProps {
   rows: readonly BrowseRow[];
+  /** Whether anything on offer has a screenshot. See `catalogHasPreviews`. */
+  shots: boolean;
   /** Whether any source offers anything at all, which is a different emptiness. */
   anyOffered: boolean;
   /** Why nothing is offered, when nothing is. */
@@ -203,7 +215,13 @@ function Results(props: ResultsProps) {
   return (
     <ul className="woc-list">
       {props.rows.map((row) => (
-        <Row key={row.fqid} row={row} busy={props.busy === row.fqid} onInstall={props.onInstall} />
+        <Row
+          key={row.fqid}
+          row={row}
+          shots={props.shots}
+          busy={props.busy === row.fqid}
+          onInstall={props.onInstall}
+        />
       ))}
     </ul>
   );
@@ -259,6 +277,7 @@ export function BrowsePane(props: BrowsePaneProps) {
       <ErrorNote error={state.error} />
       <Results
         rows={rows}
+        shots={catalogHasPreviews(state.markets)}
         anyOffered={state.markets.some((market) => market.addons.length > 0)}
         emptiness={browseEmptiness(state.markets)}
         busy={state.busy}

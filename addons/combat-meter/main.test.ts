@@ -14,16 +14,14 @@
 // comment says a meter must ignore by the flag rather than by the amount.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import MANIFEST_TEXT from '../addons/combat-meter/addon.json?raw';
+import { validateManifest } from '../../loader/src/shared/schema.ts';
+import { mountAddon, parseManifest } from '../../tests/fakes/addon.ts';
+import { liveEntity } from '../../tests/fakes/entity.ts';
+import { eventsFrame, PLAYER_ENTITY } from '../../tests/fakes/frames.ts';
+import type { SharedHarness } from '../../tests/fakes/shared-services.ts';
+import MANIFEST_TEXT from './addon.json?raw';
 // biome-ignore lint/correctness/noUnresolvedImports: Vite's ?raw suffix is a loader directive a static resolver does not model, and an addon file is a function BODY with no exports at all. Same reason as the dev-harness suite.
-import SOURCE from '../addons/combat-meter/main.js?raw';
-import { loadAddon } from '../loader/src/runtime/loader.ts';
-import type { InstalledAddon } from '../loader/src/shared/protocol.ts';
-import { validateManifest } from '../loader/src/shared/schema.ts';
-import { liveEntity } from './fakes/entity.ts';
-import { eventsFrame, PLAYER_ENTITY } from './fakes/frames.ts';
-import { createSharedServices, type SharedHarness } from './fakes/shared-services.ts';
-import { createFakeStorage } from './fakes/storage.ts';
+import SOURCE from './main.js?raw';
 
 const FQID = 'official/combat-meter';
 const MANIFEST_JSON: unknown = JSON.parse(MANIFEST_TEXT);
@@ -53,15 +51,7 @@ afterEach(() => {
 });
 
 function manifest() {
-  const parsed = validateManifest(MANIFEST_JSON);
-  if (!parsed.ok) {
-    throw new Error(`the combat-meter manifest is invalid: ${JSON.stringify(parsed.issues)}`);
-  }
-  return parsed.value;
-}
-
-function row(): InstalledAddon {
-  return { fqid: FQID, marketplace: 'official', manifest: manifest(), enabled: true, pin: null };
+  return parseManifest(MANIFEST_TEXT);
 }
 
 function textOf(selector: string): string {
@@ -177,12 +167,12 @@ const KNOWN = [
 async function run(): Promise<MeterHarness> {
   const player = liveEntity({ set: { templateId: 'priest' } });
   const world = { entities: new Map([[PLAYER_ID, player]]), player, known: KNOWN };
-  const harness = createSharedServices(document, createFakeStorage(), {
+  const harness = await mountAddon({
+    manifest: MANIFEST_TEXT,
+    source: SOURCE,
     game: Promise.resolve({ world }),
   });
   teardown.push(harness.dispose);
-  const addon = await loadAddon({ shared: harness.shared, row: row(), source: SOURCE });
-  teardown.push(addon.dispose);
   // The sample resolves the character; the awaits let the read keyed on it return.
   harness.shared.world.watcher.poll();
   await Promise.resolve();

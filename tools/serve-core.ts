@@ -28,6 +28,11 @@ const TYPES: Record<string, string> = {
   '.json': 'application/json; charset=utf-8',
   '.css': 'text/css; charset=utf-8',
   '.svg': 'image/svg+xml',
+  // An addon's preview. Added when previews moved into the addon directory: the
+  // manager loads one from the local source exactly as it does from GitHub, and
+  // an image handed over as application/octet-stream is a picture that renders
+  // by sniffing at best and not at all behind a nosniff header.
+  '.png': 'image/png',
 };
 
 const DEFAULT_TYPE = 'application/octet-stream';

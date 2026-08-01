@@ -16,6 +16,27 @@ const valid = {
 const withField = (key: string, value: unknown) => ({ ...valid, [key]: value });
 
 describe('validateManifest', () => {
+  // The path is appended to a marketplace base URL, so it carries the same risk
+  // `entry` does and is validated by the same shape. A preview that escaped the
+  // addon directory would fetch, and show, somebody else's file.
+  it('refuses a preview that traverses out of the addon directory', () => {
+    const r = validateManifest({ ...valid, preview: { file: '../other/shot.png', alt: 'x' } });
+    expect(r.ok).toBe(false);
+  });
+
+  it('refuses a preview with no alt text', () => {
+    const r = validateManifest({ ...valid, preview: { file: 'preview.png', alt: '' } });
+    expect(r.ok).toBe(false);
+  });
+
+  // Both halves are required together: a file with no description is a picture a
+  // screen reader announces as nothing, and a description with no file is nothing
+  // at all.
+  it('refuses a preview missing either half', () => {
+    expect(validateManifest({ ...valid, preview: { file: 'preview.png' } }).ok).toBe(false);
+    expect(validateManifest({ ...valid, preview: { alt: 'x' } }).ok).toBe(false);
+  });
+
   it('accepts a minimal manifest', () => {
     const r = validateManifest(valid);
     expect(r.ok).toBe(true);
@@ -24,7 +45,7 @@ describe('validateManifest', () => {
   it('accepts the full manifest', () => {
     const r = validateManifest({
       ...valid,
-      icon: 'sword',
+      preview: { file: 'preview.png', alt: 'The panel, mid-fight.' },
       homepage: 'https://github.com/MarshalX/world-of-claudecraft-addons',
       gameVersion: '>=0.31.0',
       channels: ['live', 'pbe'],

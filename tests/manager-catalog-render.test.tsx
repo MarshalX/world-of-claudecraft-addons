@@ -178,6 +178,100 @@ describe('the Browse pane', () => {
     expect(text()).toContain(THIRD_PARTY.name);
   });
 
+  // The screenshot is loaded straight from the marketplace by the page, so what a
+  // suite can hold is the URL it resolved and the alt text it carried, which are
+  // the two things a wrong answer here would get wrong.
+  it("draws a row thumbnail from the addon's own directory", async () => {
+    await browse({
+      markets: [
+        marketState(OFFICIAL, [
+          marketEntry({ preview: { file: 'preview.png', alt: 'A meter, mid-fight.' } }),
+        ]),
+      ],
+    });
+
+    await until(() => {
+      expect(document.querySelector('.woc-shot-thumb')).not.toBeNull();
+    });
+    const shot = document.querySelector('.woc-shot-thumb');
+    expect(shot?.getAttribute('src')).toContain('/addons/combat-meter/preview.png');
+    expect(shot?.getAttribute('alt')).toBe('A meter, mid-fight.');
+  });
+
+  // The column is worth drawing only once something on offer has a picture in it.
+  // A list where nothing does is text, and a column of empty frames beside it
+  // would be decoration.
+  it('draws no column at all when nothing on offer has a preview', async () => {
+    await browse({ markets: [marketState(OFFICIAL, [marketEntry()])] });
+
+    await until(() => {
+      expect(text()).toContain('Combat Meter');
+    });
+    expect(document.querySelector('.woc-shot')).toBeNull();
+    expect(document.querySelector('.woc-shot-slot')).toBeNull();
+  });
+
+  // Once one addon has a screenshot, every row reserves the slot: otherwise the
+  // rows with a picture indent their text and the rows without do not, which
+  // reads as a defect rather than as a missing picture.
+  it('reserves the slot on rows with no preview once any row has one', async () => {
+    await browse({
+      markets: [
+        marketState(OFFICIAL, [
+          marketEntry({ preview: { file: 'preview.png', alt: 'A meter, mid-fight.' } }),
+          marketEntry({ id: 'plain', name: 'Plain' }),
+        ]),
+      ],
+    });
+
+    await until(() => {
+      expect(text()).toContain('Plain');
+    });
+    expect(document.querySelectorAll('.woc-shot-thumb')).toHaveLength(1);
+    expect(document.querySelectorAll('.woc-shot-slot')).toHaveLength(1);
+  });
+
+  // Asked of every SOURCE rather than of the filtered rows, so typing cannot make
+  // the column appear and disappear under the player's hands.
+  it('keeps the column while a filter hides every row that has a preview', async () => {
+    await browse({
+      markets: [
+        marketState(OFFICIAL, [
+          marketEntry({ preview: { file: 'preview.png', alt: 'A meter, mid-fight.' } }),
+          marketEntry({ id: 'plain', name: 'Plain' }),
+        ]),
+      ],
+    });
+
+    await until(() => {
+      expect(text()).toContain('Plain');
+    });
+    const search = document.querySelector('#woc-browse-search') as HTMLInputElement;
+    search.value = 'Plain';
+    search.dispatchEvent(new Event('input', { bubbles: true }));
+
+    await until(() => {
+      expect(text()).not.toContain('Combat Meter');
+    });
+    expect(document.querySelectorAll('.woc-shot-slot')).toHaveLength(1);
+  });
+
+  // The confirmation shows one addon on its own, so it has nothing to line up
+  // against and reserves nothing.
+  it('reserves no slot on the confirmation for an addon with no preview', async () => {
+    await browse({ markets: [marketState(OFFICIAL, [marketEntry()])] });
+
+    await until(() => {
+      expect(text()).toContain('Combat Meter');
+    });
+    buttonNamed(`${UI_TEXT.browseInstall} Combat Meter`)?.click();
+
+    await until(() => {
+      expect(document.querySelector('.woc-confirm')).not.toBeNull();
+    });
+    expect(document.querySelector('.woc-confirm .woc-shot-slot')).toBeNull();
+  });
+
   it('says a source has not been read yet rather than showing an empty list', async () => {
     await browse({ markets: [marketState(OFFICIAL, [], { fetchedAt: null })] });
 

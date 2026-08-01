@@ -45,6 +45,10 @@
 
     "noEmit": true
   },
-  "include": ["loader/src", "packages", "tools", "tests"],
-  "exclude": ["node_modules", "loader/dist", "addons"]
+  // An addon's own suite sits beside its source, so `addons` is included for its
+  // `.test.ts` files ALONE. The addon itself is plain JavaScript evaluated as a
+  // function body, and `allowJs` is off, so a `main.js` is never compiled here
+  // even though its directory is listed: the glob is what says so out loud.
+  "include": ["loader/src", "packages", "tools", "tests", "addons/**/*.test.ts"],
+  "exclude": ["node_modules", "loader/dist"]
 }
