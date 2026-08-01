@@ -733,12 +733,37 @@ describe('the close button', () => {
     expect(close?.querySelector('svg')?.getAttribute('aria-hidden')).toBe('true');
   });
 
-  // A frame is HUD furniture with no close button at all: one there would offer
-  // to close something the player can only get back through the manager.
-  it('is absent on a frame', () => {
+  // A frame is HUD furniture: ordinarily a readout that lives on screen and is
+  // toggled by a keybind, where a button would be chrome nobody asked for.
+  it('is absent on a frame that did not ask', () => {
     const frame = open({ id: 'meter' }, 'frame');
 
     expect(frame.el.querySelector('.woc-close')).toBeNull();
+  });
+
+  // Added after a live session found the middle case is the bad one: a compact
+  // frame draws a title bar and had no button on it, so a player met a titled
+  // panel and had to go and find its keybind to be rid of it.
+  it('is drawn on a frame that asks for one', () => {
+    const frame = open({ id: 'meter', closable: true }, 'frame');
+
+    expect(frame.el.querySelector('.woc-close')).not.toBeNull();
+  });
+
+  // The same refusal a bare WINDOW gets about its density, for the same reason:
+  // bare removes the title bar the button would live in, so honouring the option
+  // would be a promise with nowhere to keep it.
+  it('is refused on a bare frame, which has no title bar to hold it', () => {
+    const frame = open({ id: 'meter', closable: true, density: 'bare' }, 'frame');
+
+    expect(frame.el.querySelector('.woc-close')).toBeNull();
+  });
+
+  // A window is a panel the player opens and closes; that is what makes it one.
+  it('is drawn on a window that did not ask', () => {
+    const frame = open({ id: 'meter' }, 'window');
+
+    expect(frame.el.querySelector('.woc-close')).not.toBeNull();
   });
 });
 

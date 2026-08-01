@@ -17,6 +17,21 @@ export interface FrameOpts {
   /** Unique within your addon. It is the persistence key, so keep it stable. */
   id: string;
   title?: string;
+  /**
+   * Draw a close button in the title bar. Since apiMinor 2.
+   *
+   * `ui.window` always has one and ignores this. A `ui.frame` does not, because a
+   * frame is ordinarily a HUD readout that lives on screen and is toggled by a
+   * keybind, and a button on every cooldown strip would be chrome nobody asked
+   * for. Ask for one when your frame is a panel the player OPENS: a reference
+   * list, a ledger, anything they would expect to dismiss with the mouse.
+   *
+   * Ignored on `density: 'bare'`, which removes the title bar the button would
+   * live in. That is the same refusal `ui.window` makes about `bare`, and for the
+   * same reason: a promise with nowhere to keep it is worse than an ignored
+   * option. Dismiss a bare frame with its keybind or through the unlock mode.
+   */
+  closable?: boolean;
   width?: number;
   height?: number;
   /**

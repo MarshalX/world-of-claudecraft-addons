@@ -22,6 +22,7 @@ import { createCheckbox, createSelect, createSlider, createText } from '../ui/ki
 import type { AddonFrame } from '../ui/kit/frame.ts';
 import { createAddonFrame } from '../ui/kit/frame.ts';
 import type { FrameOpts } from '../ui/kit/frame-chrome.ts';
+import { rostered } from '../ui/kit/frame-roster.ts';
 import type { FrameStateStore } from '../ui/kit/frame-state.ts';
 import type { IconUrls } from '../ui/kit/icons.ts';
 import type { InjectionSpec } from '../ui/kit/injections.ts';
@@ -211,7 +212,13 @@ function addonFrame(deps: UiDeps, opts: FrameOpts, chrome: 'frame' | 'window'): 
     window: deps.window,
     raise: deps.kit.stacking.raise,
   });
+  const forget = rostered(
+    deps.kit.roster,
+    { fqid: deps.fqid, frameId: opts.id, title: opts.title ?? opts.id },
+    frame,
+  );
   deps.bag.add(() => {
+    forget();
     frame.destroy();
   });
   return frame;
