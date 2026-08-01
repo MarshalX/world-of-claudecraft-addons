@@ -11,6 +11,7 @@ import { mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { dirname, join } from 'node:path';
 import sharp from 'sharp';
 import { createHighlighter } from 'shiki';
+import { ADDONS_DIR, addonDirs, readAddon } from '../manifests.ts';
 import { render } from './html.ts';
 import { type Context, createRenderer, type Renderer } from './markdown.ts';
 import { extractRegion } from './regions.ts';
@@ -79,18 +80,95 @@ function styles(): string {
 /** Measure every shot, and emit AVIF and WebP beside the PNG of record. */
 async function shots(out: string): Promise<Map<string, Measured>> {
   const declared = parseShots(read('site', 'content', 'shots.json'), 'site/content/shots.json');
-  const done = await Promise.all([...declared].map(([id, shot]) => encode(out, id, shot)));
+  const done = await Promise.all(
+    [...declared].map(([, shot]) => encode(out, shot, { dir: SHOTS_DIR, file: shot.file })),
+  );
   return new Map(done);
 }
 
-/** Copy one PNG through and write its two derivatives. */
-async function encode(out: string, id: string, shot: Shot): Promise<[string, Measured]> {
-  const source = join(ROOT, 'screenshots', shot.file);
-  const image = sharp(source);
+/**
+ * The card slot an addon preview is shown in, in device pixels.
+ *
+ * One figure for every addon rather than a tuned one each, because these sit in a
+ * uniform card grid: the slot is the same for all of them, so a per-addon number
+ * would be the same number written thirty times.
+ *
+ * Previews are deliberately left OUT of the undersize report, and this is the
+ * carve-out `site/content/shots.json` already describes for a fixed-size HUD
+ * panel. An addon's preview is nearly always a picture of its own panel, which
+ * cannot be captured wider without zooming the whole game, so measuring it
+ * against a column reports a shortfall its author cannot act on. Both shipped
+ * previews are exactly that, and the alternative that was tried first is worse:
+ * declaring each one's own width as its target, which the comment on `measure`
+ * calls out as a number that can only ever agree with itself. The figure still
+ * caps at natural size, so a small panel renders small and sharp either way, and
+ * what is lost is a warning nobody could have used.
+ */
+const PREVIEW_MIN_WIDTH = 700;
+
+/** Where the site's own shots of record live. An addon's preview does not. */
+const SHOTS_DIR = join(ROOT, 'screenshots');
+
+/** Where a file of record lives: the directory holding it, and its name there. */
+interface Source {
+  readonly dir: string;
+  readonly file: string;
+}
+
+/**
+ * One addon's preview as a shot, or null when that addon declares none.
+ *
+ * The served name is prefixed rather than reusing `preview.png`, since every
+ * addon names its file the same thing and they all land in one directory.
+ */
+function previewShot(dir: string): { shot: Shot; source: Source } | null {
+  const result = readAddon(dir);
+  if (!result.ok || result.manifest.preview === undefined) {
+    return null;
+  }
+  const { preview } = result.manifest;
+  return {
+    shot: {
+      id: dir,
+      file: `addon-${dir}.png`,
+      minWidth: PREVIEW_MIN_WIDTH,
+      caption: null,
+      alt: preview.alt,
+    },
+    source: { dir: join(ADDONS_DIR, dir), file: preview.file },
+  };
+}
+
+/**
+ * The addon previews, encoded from each addon's own directory.
+ *
+ * They are NOT in `site/content/shots.json` and must not be: an addon's preview
+ * is declared by its `addon.json`, beside the file, which is the same manifest
+ * the loader validates and the manager reads. Listing them again here would be a
+ * second place for the alt text to go stale, and the whole point of the catalog
+ * page is that nothing about an addon is written twice.
+ */
+async function previews(out: string): Promise<Map<string, Measured>> {
+  const declared = addonDirs()
+    .map((dir) => previewShot(dir))
+    .filter((one) => one !== null);
+  return new Map(await Promise.all(declared.map((one) => encode(out, one.shot, one.source))));
+}
+
+/**
+ * Copy one PNG through and write its two derivatives.
+ *
+ * `source` is where the file of record lives, which is `screenshots/` for
+ * anything the manifest declares and the addon's own directory for a preview. Its
+ * name there differs from the served name only for a preview.
+ */
+async function encode(out: string, shot: Shot, source: Source): Promise<[string, Measured]> {
+  const path = join(source.dir, source.file);
+  const image = sharp(path);
   const { width = 0, height = 0 } = await image.metadata();
   const sized = measure(shot, { width, height });
   // The PNG is copied through as the last fallback and as what the README links.
-  write(out, `shots/${shot.file}`, readFileSync(source));
+  write(out, `shots/${shot.file}`, readFileSync(path));
   // One derivative each, at the SERVED width rather than the file's: a shot is
   // never sent wider than its slot needs. The figure caps at half of that, so what
   // arrives is exactly the 2x asset and a second density would be a third copy of
@@ -99,16 +177,26 @@ async function encode(out: string, id: string, shot: Shot): Promise<[string, Mea
   const fit = image.resize({ width: sized.served, withoutEnlargement: true });
   write(out, `shots/${stem}.avif`, await fit.clone().avif({ quality: AVIF_Q }).toBuffer());
   write(out, `shots/${stem}.webp`, await fit.webp({ quality: WEBP_Q }).toBuffer());
-  return [id, sized];
+  return [shot.id, sized];
 }
 
 /** Resolve a `shot:` id or an `include:` path, failing the build when either is gone. */
-function context(measured: ReadonlyMap<string, Measured>): Context {
+function context(
+  measured: ReadonlyMap<string, Measured>,
+  shown: ReadonlyMap<string, Measured>,
+): Context {
   return {
     shot(id) {
       const found = measured.get(id);
       if (!found) {
         throw new Error(`unknown shot \`${id}\`; add it to site/content/shots.json`);
+      }
+      return found;
+    },
+    preview(id) {
+      const found = shown.get(id);
+      if (!found) {
+        throw new Error(`addon \`${id}\` declares no preview; add one to addons/${id}/addon.json`);
       }
       return found;
     },
@@ -156,6 +244,16 @@ export interface Build {
   readonly site: Site;
   readonly styles: string;
   readonly shots: ReadonlyMap<string, Measured>;
+  /**
+   * One addon's preview, by addon id.
+   *
+   * Separate from `shots` rather than merged into it, because the two have
+   * different owners: a shot is declared in `site/content/shots.json` and is the
+   * site's own, while a preview is declared in an `addon.json` and belongs to the
+   * addon. Merging them would let a prose page reference a preview by id and so
+   * make an addon's screenshot load-bearing for a docs page.
+   */
+  readonly previews: ReadonlyMap<string, Measured>;
   readonly markdown: Renderer;
   readonly context: Context;
   readonly emit: (page: Page) => void;
@@ -176,13 +274,15 @@ export async function prepare(outDir: string): Promise<Build> {
   rmSync(out, { recursive: true, force: true });
   const sheet = styles();
   const measured = await shots(out);
+  const shown = await previews(out);
   const warnings = undersizeReport([...measured.values()]);
   const build: Build = {
     site: SITE,
     styles: sheet,
     shots: measured,
+    previews: shown,
     markdown: await renderer(),
-    context: context(measured),
+    context: context(measured, shown),
     emit(page) {
       write(out, outputPath(page.path), render(shell(page, SITE, sheet)));
     },

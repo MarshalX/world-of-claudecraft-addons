@@ -29,6 +29,12 @@ const context: Context = {
     }
     return SHOT;
   },
+  // Prose cannot reference an addon preview, so nothing in this suite reaches it.
+  // It throws rather than returning a stand-in, since a rendering path that
+  // started asking for one would be a change worth failing on.
+  preview(id) {
+    throw new Error(`prose asked for the preview of \`${id}\``);
+  },
   include(path, region) {
     if (region === 'gone') {
       throw new Error('no region `gone`');

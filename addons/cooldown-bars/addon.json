@@ -7,6 +7,10 @@
   "author": "MarshalX",
   "description": "A draining bar for every ability you have on cooldown, soonest ready first, with an exact one for anything regenerating a charge. Draws as a column of named bars or as a strip of swept icons.",
   "entry": "main.js",
+  "preview": {
+    "file": "preview.png",
+    "alt": "The Cooldowns panel, five draining bars ordered by time remaining: Rapid Fire 4.4s, Volley 5.8s, Counter Shot 10.4s, Wildheart 97.5s and Shellskin 155.5s, each with the ability's own icon."
+  },
   "homepage": "https://github.com/MarshalX/world-of-claudecraft-addons",
   "tags": ["combat", "interface"],
   "permissions": ["world.read", "ui", "keys"],

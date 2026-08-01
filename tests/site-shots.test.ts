@@ -136,10 +136,14 @@ describe('the committed manifest', () => {
     expect(shots.size).toBeGreaterThan(0);
   });
 
+  // The manifest schema requires a caption even though the TYPE allows null: only
+  // a preview synthesised from an addon.json passes null, and none of those are
+  // declared here. Asserting on the parsed value is what pins that.
   it('gives every shot a caption and an alt distinct from it', () => {
     for (const shot of parseShots(JSON.stringify(committed), AT).values()) {
+      expect(shot.caption).not.toBeNull();
       expect(shot.alt).not.toBe(shot.caption);
-      expect(shot.alt.length).toBeGreaterThan(shot.caption.length);
+      expect(shot.alt.length).toBeGreaterThan(shot.caption?.length ?? 0);
     }
   });
 });

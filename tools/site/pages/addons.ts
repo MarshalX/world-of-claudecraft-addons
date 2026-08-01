@@ -6,9 +6,11 @@
 // confirmation reads. A catalog maintained by hand would be a fourth copy, and it
 // would be the one that goes stale, because it is the only one nothing checks.
 //
-// A shot is optional: an addon with no screenshot in site/content/shots.json gets
-// a card without one rather than failing the build, so publishing an addon is not
-// gated on someone taking a picture of it.
+// A preview is optional: an addon whose addon.json declares no screenshot gets a
+// card without one rather than failing the build, so publishing an addon is not
+// gated on someone taking a picture of it. Where there IS one it is declared in
+// the addon's own manifest, beside the file, which is why nothing about a shot
+// appears in this file either.
 
 import type { Build } from '../build.ts';
 import { type Html, html, join } from '../html.ts';
@@ -32,7 +34,7 @@ const GAPS: Record<string, string> = {
 };
 
 function card(build: Build, addon: CatalogAddon): Html {
-  const shot = build.shots.get(addon.id);
+  const shot = build.previews.get(addon.id);
   return html`<article class="addon-card">
   <p class="addon-meta">${addon.version} · ${addon.author}</p>
   <h2>${addon.name}</h2>

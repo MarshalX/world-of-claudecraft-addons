@@ -174,7 +174,7 @@ export function landing(build: Build, data: LandingData): Page {
       heading: 'What your damage is actually made of',
       body: 'A row per ability with crit rate, average and biggest hit, plus your real miss, dodge and parry rates and what is hitting you back.',
       note: 'The game has its own meter. This answers what that one does not.',
-      figure: figure(build.context.shot('combat-meter')),
+      figure: figure(build.context.preview('combat-meter')),
       flip: false,
     },
     {
@@ -182,7 +182,7 @@ export function landing(build: Build, data: LandingData): Page {
       heading: 'Everything on cooldown, soonest first',
       body: 'A draining bar for every ability you have on cooldown, with an exact bar for anything regenerating a charge.',
       note: 'Also the example addon: one file, no build step. It is what authors copy.',
-      figure: figure(build.context.shot('cooldown-bars')),
+      figure: figure(build.context.preview('cooldown-bars')),
       flip: true,
     },
     {

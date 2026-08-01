@@ -7,6 +7,10 @@
   "author": "MarshalX",
   "description": "What your damage and healing are made of: a row per ability with crit rate, average and biggest hit, plus your real miss and dodge rates and what is hitting you.",
   "entry": "main.js",
+  "preview": {
+    "file": "preview.png",
+    "alt": "The Combat Meter panel on its Damage tab, reading 2,542 damage in 22s, last fight. Seven ability rows (Auto Shot, Measured Shot, Fell Shot, Fevered Draw, Venom Barb, Rattling Shot, Chain Arc) each show hits, crit rate, average and max, with the fill behind each row tinted by damage school, and a summary line reading hit 100%."
+  },
   "homepage": "https://github.com/MarshalX/world-of-claudecraft-addons",
   "tags": ["combat"],
   "permissions": ["net.read", "world.read", "ui", "keys"],

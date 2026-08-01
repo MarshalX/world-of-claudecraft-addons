@@ -14,6 +14,7 @@
 
 import type { BrowseRow } from './catalog.ts';
 import { describePermissions } from './permissions.ts';
+import { Preview } from './preview.tsx';
 import { UI_TEXT } from './strings.ts';
 
 function Declared(props: { permissions: readonly string[] | undefined }) {
@@ -52,6 +53,7 @@ export function InstallConfirm(props: InstallConfirmProps) {
       <p className="woc-note">
         {entry.version} {UI_TEXT.by} {entry.author}
       </p>
+      <Preview row={props.row} size="full" />
       <p className="woc-row-desc">{entry.description}</p>
       <p className="woc-note">
         {UI_TEXT.confirmFrom} {market.name}

@@ -29,7 +29,8 @@ const FIELDS: Record<string, string> = {
     'One line. It is what Browse shows and what the install confirmation repeats, so write it for someone deciding whether to trust you.',
   entry:
     'A relative path inside your directory, usually `main.js`. It must not traverse outside, and the file is evaluated as a function **body**: no exports, no registration call, `woc` already in scope.',
-  icon: 'A relative path to an image inside your directory.',
+  preview:
+    '`{ file, alt }`. A PNG in your own directory, usually `preview.png`, and one sentence saying what it shows. The manager draws it as a thumbnail in Browse and full size on the install confirmation, and the catalog page builds its own derivatives from the same file, so a screenshot is committed once and lives beside the addon rather than in a list somewhere else. Optional: no preview means a row and a card without one, never a failed build.',
   homepage: 'A URL shown on the addon row.',
   tags: 'Up to six, same shape as an id. They become the filter controls in Browse, which is why they are bounded and why two authors cannot publish `Combat` and `combat` as different tags.',
   gameVersion:

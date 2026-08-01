@@ -45,11 +45,64 @@ function addonDirs(): string[] {
 }
 
 /**
+ * What a preview may weigh.
+ *
+ * Half a megabyte, and it is a ceiling rather than a target. The manager loads
+ * this INSIDE the running game, over whatever connection the player has, so a
+ * preview is the one asset here whose size a player pays for at a moment they
+ * did not choose. The shipped shots sit at 100 kB and 270 kB; the cap is set
+ * where a full-window capture at retina still fits and a lossless export of a
+ * whole desktop does not.
+ */
+const PREVIEW_MAX_BYTES = 524_288;
+
+/** The eight bytes every PNG opens with, as latin1 so it is one literal. */
+const PNG_SIGNATURE = '\x89PNG\r\n\x1a\n';
+
+const PNG_EXTENSION = '.png';
+
+/**
+ * The checks on a declared preview, which are about the FILE rather than the
+ * manifest and so cannot live in the schema.
+ *
+ * PNG is required rather than merely conventional: the README links these
+ * directly so GitHub renders them, the site builds its own AVIF and WebP from
+ * them, and both of those want one lossless file of record rather than whatever
+ * the author's screenshot tool produced. The signature is checked as well as the
+ * extension because a renamed JPEG passes an extension test, renders in a
+ * browser, and then fails the site build with an error about a decoder.
+ */
+function previewIssues(dir: string, file: string): ValidationIssue[] {
+  const path = join(ADDONS_DIR, dir, file);
+  let bytes: Buffer;
+  try {
+    bytes = readFileSync(path);
+  } catch {
+    return [{ path: 'preview.file', message: `no such file: addons/${dir}/${file}` }];
+  }
+  const issues: ValidationIssue[] = [];
+  if (!file.toLowerCase().endsWith(PNG_EXTENSION)) {
+    issues.push({ path: 'preview.file', message: 'must be a .png' });
+  }
+  if (bytes.subarray(0, PNG_SIGNATURE.length).toString('latin1') !== PNG_SIGNATURE) {
+    issues.push({ path: 'preview.file', message: 'is not a PNG, whatever it is named' });
+  }
+  if (bytes.length > PREVIEW_MAX_BYTES) {
+    issues.push({
+      path: 'preview.file',
+      message: `is ${bytes.length} bytes, over the ${PREVIEW_MAX_BYTES} the manager will load in game`,
+    });
+  }
+  return issues;
+}
+
+/**
  * Read, parse, and validate one addon directory.
  *
- * The two checks past the schema are the ones a schema cannot express: the id
- * has to match the directory, because the directory is what the index publishes
- * as the path, and the apiVersion has to be one this loader implements.
+ * The checks past the schema are the ones a schema cannot express: the id has to
+ * match the directory, because the directory is what the index publishes as the
+ * path; the apiVersion has to be one this loader implements; and a declared
+ * preview has to be a file that is actually there and actually a PNG.
  */
 function readAddon(dir: string): ReadResult {
   const file = join(ADDONS_DIR, dir, 'addon.json');
@@ -75,11 +128,39 @@ function readAddon(dir: string): ReadResult {
       message: `is ${result.value.apiVersion}, but this loader implements ${API_VERSION}`,
     });
   }
+  const { preview } = result.value;
+  if (preview !== undefined) {
+    issues.push(...previewIssues(dir, preview.file));
+  }
   if (issues.length > 0) {
     return { dir, ok: false, issues };
   }
 
   return { dir, ok: true, manifest: result.value };
+}
+
+/**
+ * The file name an addon's own suite has to use.
+ *
+ * Fixed rather than discovered, so the coverage check is a `statSync` on one path
+ * instead of a directory walk deciding what looks like a test, and so every addon
+ * directory reads the same way: `addon.json`, `main.js`, `main.test.ts`.
+ */
+const SUITE_FILE = 'main.test.ts';
+
+/**
+ * Whether an addon directory carries its own suite.
+ *
+ * Here rather than in the suite that asserts it because `noNodejsModules` is not
+ * exempt under `tests/**`, which is the same reason this module is TypeScript at
+ * all: a Vitest file imports it and lets it do the reading.
+ */
+function hasSuite(dir: string): boolean {
+  try {
+    return statSync(join(ADDONS_DIR, dir, SUITE_FILE)).isFile();
+  } catch {
+    return false;
+  }
 }
 
 /** The newest addon.json mtime in milliseconds, or 0 when there are none. */
@@ -96,4 +177,4 @@ function newestManifestMs(dirs: readonly string[]): number {
 }
 
 export type { ReadResult };
-export { ADDONS_DIR, addonDirs, newestManifestMs, ROOT, readAddon };
+export { ADDONS_DIR, addonDirs, hasSuite, newestManifestMs, ROOT, readAddon, SUITE_FILE };

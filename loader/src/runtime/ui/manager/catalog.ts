@@ -80,6 +80,19 @@ function catalogTags(markets: readonly MarketplaceState[]): string[] {
 }
 
 /**
+ * Whether the screenshot column is worth drawing at all.
+ *
+ * Asked of every source rather than of the filtered rows, so that typing in the
+ * search box cannot make the column appear and disappear under the player's
+ * hands. Where nothing on offer has a screenshot the list is text and lines up
+ * without a column; where anything does, every row reserves one so the rows
+ * still line up, and the ones with nothing to show say so.
+ */
+function catalogHasPreviews(markets: readonly MarketplaceState[]): boolean {
+  return markets.some((market) => market.addons.some((entry) => entry.preview !== undefined));
+}
+
+/**
  * Every offered addon, in source order, filtered.
  *
  * Source order rather than sorted by name: the official marketplace is first in
@@ -138,4 +151,4 @@ function pendingUpdates(updates: readonly UpdateRow[]): UpdateRow[] {
 }
 
 export type { BrowseEmptiness, BrowseFilter, BrowseRow };
-export { browseEmptiness, browseRows, catalogTags, NO_FILTER, pendingUpdates };
+export { browseEmptiness, browseRows, catalogHasPreviews, catalogTags, NO_FILTER, pendingUpdates };

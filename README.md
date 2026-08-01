@@ -40,11 +40,11 @@ The per-browser procedure lives on the site rather than here, because two copies
 
 **[Combat Meter](addons/combat-meter)** — what your damage and healing are made of: a row per ability with crit rate, average and biggest hit, plus your real miss and dodge rates and what is hitting you. The game has its own meter; this answers what that one does not.
 
-<img src="screenshots/combat-meter.png" width="420" alt="The Combat Meter panel showing 2,542 damage in 22 seconds, broken down into seven ability rows with hits, crit rate, average and max, each row tinted by damage school." />
+<img src="addons/combat-meter/preview.png" width="420" alt="The Combat Meter panel showing 2,542 damage in 22 seconds, broken down into seven ability rows with hits, crit rate, average and max, each row tinted by damage school." />
 
 **[Cooldown Bars](addons/cooldown-bars)** — a draining bar for every ability on cooldown, soonest ready at the top, with an exact bar for anything regenerating a charge. It is also **the example to copy**: one file, no build step, and it teaches the one thing that is not obvious from the API.
 
-<img src="screenshots/cooldown-bars.png" width="260" alt="The Cooldowns panel, five draining bars ordered by time remaining, each with the ability's own icon." />
+<img src="addons/cooldown-bars/preview.png" width="260" alt="The Cooldowns panel, five draining bars ordered by time remaining, each with the ability's own icon." />
 
 **[Dev Harness](addons/dev-harness)** — exercises every API surface and reports what it found, which is how the loader gets checked against a live game rather than only against a test.
 

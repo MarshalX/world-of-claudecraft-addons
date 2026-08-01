@@ -10,17 +10,16 @@
 // every frame would restart its own fill forever.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import MANIFEST_TEXT from '../addons/cooldown-bars/addon.json?raw';
+import { validateManifest } from '../../loader/src/shared/schema.ts';
+import { perCharacterKey, uiNamespace } from '../../loader/src/shared/storage-keys.ts';
+import { mountAddon, parseManifest } from '../../tests/fakes/addon.ts';
+import { liveEntity } from '../../tests/fakes/entity.ts';
+import { PLAYER_ENTITY } from '../../tests/fakes/frames.ts';
+import type { SharedHarness } from '../../tests/fakes/shared-services.ts';
+import { createFakeStorage } from '../../tests/fakes/storage.ts';
+import MANIFEST_TEXT from './addon.json?raw';
 // biome-ignore lint/correctness/noUnresolvedImports: Vite's ?raw suffix is a loader directive a static resolver does not model, and an addon file is a function BODY with no exports at all. Same reason as the dev-harness suite.
-import SOURCE from '../addons/cooldown-bars/main.js?raw';
-import { loadAddon } from '../loader/src/runtime/loader.ts';
-import type { InstalledAddon } from '../loader/src/shared/protocol.ts';
-import { validateManifest } from '../loader/src/shared/schema.ts';
-import { perCharacterKey, uiNamespace } from '../loader/src/shared/storage-keys.ts';
-import { liveEntity } from './fakes/entity.ts';
-import { PLAYER_ENTITY } from './fakes/frames.ts';
-import { createSharedServices, type SharedHarness } from './fakes/shared-services.ts';
-import { createFakeStorage } from './fakes/storage.ts';
+import SOURCE from './main.js?raw';
 
 const FQID = 'official/cooldown-bars';
 /** What tests/fakes/shared-services.ts says the player is called. */
@@ -54,15 +53,7 @@ afterEach(() => {
 });
 
 function manifest() {
-  const parsed = validateManifest(MANIFEST_JSON);
-  if (!parsed.ok) {
-    throw new Error(`the cooldown-bars manifest is invalid: ${JSON.stringify(parsed.issues)}`);
-  }
-  return parsed.value;
-}
-
-function row(): InstalledAddon {
-  return { fqid: FQID, marketplace: 'official', manifest: manifest(), enabled: true, pin: null };
+  return parseManifest(MANIFEST_TEXT);
 }
 
 interface BarsHarness extends SharedHarness {
@@ -117,7 +108,6 @@ async function start(
   frames: Record<string, { box: FrameBox; visible: boolean }> = {},
 ): Promise<BarsHarness> {
   const storage = createFakeStorage();
-  await storage.set(`config:${FQID}`, 'values', settings);
   await Promise.all(
     Object.entries(frames).map(([frameId, state]) =>
       storage.set(uiNamespace(FQID), perCharacterKey('pbe', CHARACTER, frameId), state),
@@ -141,12 +131,14 @@ async function start(
     },
   ];
   const world = { entities: new Map([[PLAYER_ID, player]]), player, known };
-  const harness = createSharedServices(document, storage, {
+  const harness = await mountAddon({
+    manifest: MANIFEST_TEXT,
+    source: SOURCE,
+    storage,
+    settings,
     game: Promise.resolve({ world }),
   });
   teardown.push(harness.dispose);
-  const addon = await loadAddon({ shared: harness.shared, row: row(), source: SOURCE });
-  teardown.push(addon.dispose);
 
   return {
     ...harness,

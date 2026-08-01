@@ -13,6 +13,9 @@
 // live game and report honestly here that there is none.
 
 import { afterEach, describe, expect, it } from 'vitest';
+import { WORLD_KEYS } from '../../loader/src/runtime/world/signature.ts';
+import { validateManifest } from '../../loader/src/shared/schema.ts';
+import { mountAddon, parseManifest } from '../../tests/fakes/addon.ts';
 // The addon's own two files, read the way the loader reads text it ships: the
 // raw suffix rather than node:fs, so this suite needs no filesystem types and
 // runs under happy-dom, whose URL rejects the file scheme.
@@ -21,17 +24,13 @@ import { afterEach, describe, expect, it } from 'vitest';
 // It is untrusted input everywhere else in the loader, and validateManifest is
 // what this suite checks; a typed JSON import would hand it a shape the compiler
 // had already vouched for.
-import MANIFEST_TEXT from '../addons/dev-harness/addon.json?raw';
+import MANIFEST_TEXT from './addon.json?raw';
 // biome-ignore lint/correctness/noUnresolvedImports: Vite's ?raw suffix is a loader directive a static resolver does not model, and an addon file is a function BODY with no exports at all. Same reason as the runtime bundle import in host/boot.ts.
-import SOURCE from '../addons/dev-harness/main.js?raw';
-import { loadAddon } from '../loader/src/runtime/loader.ts';
-import { WORLD_KEYS } from '../loader/src/runtime/world/signature.ts';
-import type { InstalledAddon } from '../loader/src/shared/protocol.ts';
-import { validateManifest } from '../loader/src/shared/schema.ts';
-import { createSharedServices } from './fakes/shared-services.ts';
-import { createFakeStorage } from './fakes/storage.ts';
+import SOURCE from './main.js?raw';
 
-const FQID = 'local/dev-harness';
+/** The dev server's source, which is where this addon is actually installed from. */
+const MARKETPLACE = 'local';
+const FQID = `${MARKETPLACE}/dev-harness`;
 
 const MANIFEST_JSON: unknown = JSON.parse(MANIFEST_TEXT);
 
@@ -45,24 +44,21 @@ afterEach(() => {
 });
 
 function manifest() {
-  const parsed = validateManifest(MANIFEST_JSON);
-  if (!parsed.ok) {
-    throw new Error(`the harness manifest is invalid: ${JSON.stringify(parsed.issues)}`);
-  }
-  return parsed.value;
+  return parseManifest(MANIFEST_TEXT);
 }
 
-function row(): InstalledAddon {
-  return { fqid: FQID, marketplace: 'local', manifest: manifest(), enabled: true, pin: null };
-}
-
+/**
+ * The harness runs with NO game, which is the state it is most often started in:
+ * an addon's first line executes at document-start, on the landing page.
+ */
 async function run() {
-  const hub = createFakeStorage();
-  const harness = createSharedServices(document, hub);
+  const harness = await mountAddon({
+    manifest: MANIFEST_TEXT,
+    source: SOURCE,
+    marketplace: MARKETPLACE,
+  });
   teardown.push(harness.dispose);
-  const addon = await loadAddon({ shared: harness.shared, row: row(), source: SOURCE });
-  teardown.push(addon.dispose);
-  return { addon, harness, hub };
+  return { addon: harness.addon, harness, hub: harness.hub };
 }
 
 describe('its manifest', () => {

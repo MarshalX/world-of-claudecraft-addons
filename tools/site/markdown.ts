@@ -173,6 +173,15 @@ export type Highlight = (code: string, lang: string) => string;
 export interface Context {
   /** Throws when the id is unknown, so a renamed shot fails the build. */
   readonly shot: (id: string) => Measured;
+  /**
+   * One addon's preview, by addon id. Throws when that addon declares none.
+   *
+   * Separate from `shot` rather than a fallback inside it, so that a page asking
+   * for an addon's screenshot fails saying the addon has no preview rather than
+   * saying there is no shot by that name, which would send whoever reads it to
+   * the wrong file.
+   */
+  readonly preview: (id: string) => Measured;
   /** Throws when the file or region is gone. See regions.ts. */
   readonly include: (path: string, region: string | null) => string;
 }

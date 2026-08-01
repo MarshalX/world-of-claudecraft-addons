@@ -100,7 +100,20 @@
       }
     },
     {
-      "includes": ["tests/**"],
+      "includes": ["addons/**"],
+      "javascript": {
+        "globals": ["woc"]
+      },
+      "linter": {
+        "rules": {
+          "style": {
+            "noExcessiveLinesPerFile": "off"
+          }
+        }
+      }
+    },
+    {
+      "includes": ["tests/**", "addons/*/*.test.ts"],
       "linter": {
         "rules": {
           "style": {
@@ -123,19 +136,6 @@
                 "maxLines": 200
               }
             }
-          }
-        }
-      }
-    },
-    {
-      "includes": ["addons/**"],
-      "javascript": {
-        "globals": ["woc"]
-      },
-      "linter": {
-        "rules": {
-          "style": {
-            "noExcessiveLinesPerFile": "off"
           }
         }
       }

@@ -2,7 +2,7 @@
   "schema": 1,
   "name": "Official Marketplace",
   "maintainer": "MarshalX",
-  "generated": "2026-08-01T16:07:36.000Z",
+  "generated": "2026-08-01T17:44:59.900Z",
   "addons": [
     {
       "id": "combat-meter",
@@ -13,6 +13,10 @@
       "author": "MarshalX",
       "description": "What your damage and healing are made of: a row per ability with crit rate, average and biggest hit, plus your real miss and dodge rates and what is hitting you.",
       "entry": "main.js",
+      "preview": {
+        "file": "preview.png",
+        "alt": "The Combat Meter panel on its Damage tab, reading 2,542 damage in 22s, last fight. Seven ability rows (Auto Shot, Measured Shot, Fell Shot, Fevered Draw, Venom Barb, Rattling Shot, Chain Arc) each show hits, crit rate, average and max, with the fill behind each row tinted by damage school, and a summary line reading hit 100%."
+      },
       "homepage": "https://github.com/MarshalX/world-of-claudecraft-addons",
       "tags": [
         "combat"
@@ -76,6 +80,10 @@
       "author": "MarshalX",
       "description": "A draining bar for every ability you have on cooldown, soonest ready first, with an exact one for anything regenerating a charge. Draws as a column of named bars or as a strip of swept icons.",
       "entry": "main.js",
+      "preview": {
+        "file": "preview.png",
+        "alt": "The Cooldowns panel, five draining bars ordered by time remaining: Rapid Fire 4.4s, Volley 5.8s, Counter Shot 10.4s, Wildheart 97.5s and Shellskin 155.5s, each with the ability's own icon."
+      },
       "homepage": "https://github.com/MarshalX/world-of-claudecraft-addons",
       "tags": [
         "combat",

@@ -18,10 +18,40 @@ const SEMVER_RE = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/;
 /** Relative path inside the addon directory: no traversal, no absolute, no scheme. */
 const ENTRY_RE = /^[A-Za-z0-9._-]+(?:\/[A-Za-z0-9._-]+)*$/;
 
+/**
+ * A path the loader will join onto a marketplace's base URL.
+ *
+ * One definition for both places a manifest names a file, because both are the
+ * same risk: whatever this accepts is appended to a raw.githubusercontent.com
+ * base, so a value that escapes the addon directory is a value that fetches
+ * somebody else's.
+ */
+const RelativeFile = z
+  .string()
+  .regex(ENTRY_RE, 'must be a relative path inside the addon directory')
+  .refine((p) => !p.includes('..'), 'must not traverse outside the addon directory');
+
 const AddonId = z.string().regex(ID_RE, 'must be lower-case kebab-case, e.g. "combat-meter"');
 
 /** Browse renders one filter control per distinct tag across every source. */
 const MAX_TAGS = 6;
+
+/**
+ * The screenshot the manager and the site both show.
+ *
+ * A structure rather than a bare path because a picture with no alt text is a
+ * picture nobody using a screen reader can act on, and the one place that text
+ * can be written where both consumers see it is the manifest. It is also the
+ * reason this replaced an `icon` field that had been declared since the first
+ * release and read by nothing: a field with no consumer collects no alt text and
+ * teaches nobody it is missing.
+ */
+export const PreviewDecl = z.object({
+  /** Relative to the addon's own directory, e.g. `preview.png`. */
+  file: RelativeFile,
+  /** What the screenshot shows, for anyone who cannot see it. */
+  alt: z.string().min(1),
+});
 
 export const KeybindDecl = z.object({
   id: AddonId,
@@ -87,11 +117,9 @@ export const AddonManifest = z.object({
   apiMinor: z.number().int().min(0).optional(),
   author: z.string().min(1),
   description: z.string().min(1),
-  entry: z
-    .string()
-    .regex(ENTRY_RE, 'must be a relative path inside the addon directory')
-    .refine((p) => !p.includes('..'), 'must not traverse outside the addon directory'),
-  icon: z.string().min(1).optional(),
+  entry: RelativeFile,
+  /** A screenshot in the addon's own directory. Absent is ordinary, not a defect. */
+  preview: PreviewDecl.optional(),
   homepage: z.string().url().optional(),
   /**
    * Browse's filter categories. Same shape as an addon id, so the filter can
@@ -146,6 +174,7 @@ export const InstalledAddon = z.object({
 });
 
 export type KeybindDecl = z.infer<typeof KeybindDecl>;
+export type PreviewDecl = z.infer<typeof PreviewDecl>;
 export type SettingDecl = z.infer<typeof SettingDecl>;
 export type AddonManifest = z.infer<typeof AddonManifest>;
 export type MarketplaceEntry = z.infer<typeof MarketplaceEntry>;
