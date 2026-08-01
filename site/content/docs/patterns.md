@@ -40,6 +40,24 @@ woc.onDispose(() => observer.disconnect());
 
 Use `woc.setTimeout` and `woc.requestAnimationFrame` rather than the page's, and register anything else with `woc.onDispose`.
 
+## A position is a live object, not a reading
+
+The game mutates an entity's `pos` in place rather than replacing it. So this does not do what it looks like:
+
+```js
+const start = woc.world.player.pos;        // NOT where you are now
+// ... later ...
+const moved = Math.hypot(woc.world.player.pos.x - start.x, woc.world.player.pos.z - start.z);
+```
+
+`start` is the same object `woc.world.player.pos` is, so it moves with you and `moved` is always 0. Copy the components when you want a point to keep meaning that point:
+
+```js
+const start = { x: pos.x, y: pos.y, z: pos.z };
+```
+
+The same holds for anything else you keep out of the world: `prevPos`, an aura list, a party row. Reading is a plain read of the client's own objects, which is what makes the API cheap, and the price is that a reference is a subscription rather than a snapshot.
+
 ## Redrawing a list moves every row in it
 
 `appendChild` on an element that is already in the document does not leave it where it is. It removes it and inserts it again. So the obvious way to redraw a sorted list, appending every row in order, moves every row on every repaint even when nothing has changed position.

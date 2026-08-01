@@ -21,6 +21,7 @@ import { createGameSurfaces, type GameSurfaces } from './surfaces.ts';
 import { type MountedUi, mountUi } from './ui/mount.ts';
 // The three sheets bundled as text and joined into the one injected <style>.
 import { LOADER_CSS } from './ui/styles/index.ts';
+import { createProjector } from './world/project.ts';
 
 /** Held so the manager's Diagnostics pane can report the probe after the fact. */
 interface ProbeSlot {
@@ -153,6 +154,7 @@ function uiDeps(
     storage: host?.storage ?? null,
     ...view,
     ...pageServices(),
+    project: createProjector(() => deps.surfaces.world.game()),
     storageHub: services.storage,
     gameBindings: services.gameBindings,
     dispatcher: services.dispatcher,
@@ -166,6 +168,10 @@ function pageServices() {
   return {
     setTimer,
     clearTimer,
+    schedule: (frame: () => void) => globalThis.requestAnimationFrame(frame),
+    cancelFrame: (id: number) => {
+      globalThis.cancelAnimationFrame(id);
+    },
     viewport: () => ({ w: globalThis.innerWidth, h: globalThis.innerHeight }),
     // The same reader the sound engine uses for its pack. Both are same-origin game
     // content, and the kit's per-class art manifests are the second consumer.

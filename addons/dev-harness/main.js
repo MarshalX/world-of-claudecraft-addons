@@ -28,6 +28,11 @@ const DEMO_SECONDS = 4;
 const DEMO_WIDTH = 190;
 /** Under this share left the kit draws a bar warm, which the demo shows off. */
 const DEMO_WARN = 0.25;
+/** How far above a unit's own point its plate floats, in screen pixels. */
+const PLATE_LIFT = 48;
+/** How often the anchor demo rewrites its labels. Its POSITION is the loader's job. */
+const ANCHOR_TICK_MS = 200;
+const DECIMALS_YARDS = 1;
 
 /**
  * The three squares the tile demonstration drains: label, ability, class, school.
@@ -420,6 +425,38 @@ function checkFields() {
   return result('fields', true, 'four fields and a tab strip, none of them calling back on set');
 }
 
+function checkAnchor() {
+  if (typeof woc.ui.anchor3d !== 'function') {
+    return result('anchor', false, 'ui.anchor3d is not callable');
+  }
+  const { player } = woc.world;
+  const anchor = woc.ui.anchor3d(() => player?.pos ?? null);
+  const placed = anchor.el.isConnected;
+  const { visible } = anchor;
+  anchor.destroy();
+
+  if (!placed) {
+    return result('anchor', false, 'the anchor was never put in the loader root');
+  }
+  if (anchor.el.isConnected) {
+    return result('anchor', false, 'destroy left the element behind');
+  }
+  if (player === null) {
+    return result('anchor', true, 'no player yet, so there is no point to project');
+  }
+  // Visible or not is the camera's business: the player can be behind it, which
+  // is exactly what the anchor is supposed to hide for.
+  return result('anchor', true, `anchored to you, ${onScreenWord(visible)}`);
+}
+
+/** Whether the first frame had placed it yet, said in words a reader can use. */
+function onScreenWord(visible) {
+  if (visible) {
+    return 'on screen';
+  }
+  return 'off screen or not yet placed';
+}
+
 /**
  * The icon URL builders answer, and refuse an id they cannot build a name from.
  *
@@ -649,6 +686,7 @@ const STATIC_CHECKS = [
   checkIcons,
   checkTile,
   checkFields,
+  checkAnchor,
   checkNet,
   checkShadowedGlobals,
 ];
@@ -1308,6 +1346,145 @@ function demoTooltip() {
   });
 }
 
+/**
+ * A badge to hang on a world anchor.
+ *
+ * Styled inline from the GAME's own custom properties rather than from a copy of
+ * them: an addon inherits the same tokens the loader does, so a badge written this
+ * way follows the player's theme. The loader gives an anchor no look of its own on
+ * purpose, since what belongs over a world point is the addon's business.
+ */
+function anchorBadge(text) {
+  const badge = element('div', undefined, text);
+  badge.style.padding = '2px 8px';
+  badge.style.whiteSpace = 'nowrap';
+  badge.style.fontSize = '13px';
+  badge.style.borderRadius = 'var(--radius-sm, 4px)';
+  badge.style.border = '1px solid var(--color-border-default, rgb(78 61 29))';
+  badge.style.background = 'var(--panel-base, rgb(21 21 31))';
+  badge.style.color = 'var(--gold, rgb(255 209 0))';
+  return badge;
+}
+
+/**
+ * A world point that will still mean this point later.
+ *
+ * The game mutates an entity's `pos` IN PLACE rather than replacing it, so holding
+ * the object holds "wherever that unit is now" and never "where it was". The first
+ * version of this demo pinned a marker correctly, because the anchor is built from
+ * the components, and then measured the distance against the live object: it read
+ * 0.0 yd from anywhere on the map, which is exactly what measuring the player
+ * against themselves looks like.
+ */
+function snapshot(pos) {
+  if (pos === null || pos === undefined) {
+    return null;
+  }
+  return { x: pos.x, y: pos.y, z: pos.z };
+}
+
+/** Yards along the ground: y is height, so the distance a player reads ignores it. */
+function groundDistance(from, to) {
+  if (from === null || to === null) {
+    return null;
+  }
+  return Math.hypot(to.x - from.x, to.z - from.z);
+}
+
+function distanceWord(from, to) {
+  const yards = groundDistance(from, to);
+  if (yards === null) {
+    return 'no player';
+  }
+  return `${yards.toFixed(DECIMALS_YARDS)} yd`;
+}
+
+/** The unit a plate follows: your target if you have one, otherwise you. */
+function platedUnit() {
+  return woc.world.target ?? woc.world.player;
+}
+
+/**
+ * What the following plate says.
+ *
+ * With no target it plates YOU, and the distance from you to yourself is zero: a
+ * true number that demonstrates nothing, and one that reads exactly like the bug
+ * the pinned badge had. So it says what it is instead, and the distance appears
+ * when there is something to be a distance from.
+ */
+function plateText() {
+  const unit = platedUnit();
+  if (unit === null) {
+    return 'nobody';
+  }
+  if (unit === woc.world.player) {
+    return `${unit.name} (you, take a target)`;
+  }
+  return `${unit.name} (${distanceWord(woc.world.player?.pos ?? null, unit.pos)})`;
+}
+
+/**
+ * Two anchors, because the two halves fail differently.
+ *
+ * The FOLLOWING one takes a function, so it tracks whatever it is pointed at with
+ * no loop in this addon: walk, turn, or change target and it keeps up. The PINNED
+ * one is a fixed point captured where you stood, which is the only way to see the
+ * culling work: walk away and it shrinks into the distance, turn around and it
+ * goes, since a point behind the camera has no place on screen.
+ *
+ * The labels are rewritten on a slow timer and the POSITIONS are not: an addon
+ * that moved these itself would be running a second frame loop beside the loader's
+ * to answer a question the loader already answers every frame.
+ */
+function startAnchors() {
+  const plate = woc.ui.anchor3d(() => platedUnit()?.pos ?? null, { offset: { y: -PLATE_LIFT } });
+  const plateBadge = anchorBadge('');
+  plate.el.appendChild(plateBadge);
+
+  const here = snapshot(woc.world.player?.pos);
+  const pin = woc.ui.anchor3d(here ?? { x: 0, y: 0, z: 0 });
+  const pinBadge = anchorBadge('');
+  pin.el.appendChild(pinBadge);
+
+  const label = () => {
+    plateBadge.textContent = plateText();
+    pinBadge.textContent = `pinned, ${distanceWord(woc.world.player?.pos ?? null, here)} away`;
+  };
+  label();
+  const timer = woc.setInterval(label, ANCHOR_TICK_MS);
+
+  return () => {
+    woc.clearInterval(timer);
+    plate.destroy();
+    pin.destroy();
+  };
+}
+
+/** The demo's teardown while it is running, or null while it is not. */
+let stopAnchors = null;
+
+/**
+ * Put two anchors in the world, or take them away again.
+ *
+ * A toggle rather than a one-shot: the point of these is to walk around and watch
+ * them behave, which is not something that finishes on a timer the way a draining
+ * bar does.
+ */
+function demoAnchors() {
+  if (stopAnchors !== null) {
+    stopAnchors();
+    stopAnchors = null;
+    woc.ui.toast('Anchors removed', { timeout: TOAST_MS });
+    return;
+  }
+  if (woc.world.player === null) {
+    woc.ui.toast('No world yet, so there is nothing to anchor to', { timeout: TOAST_MS });
+    return;
+  }
+  stopAnchors = startAnchors();
+  woc.ui.toast('Anchors placed: walk away and turn around', { timeout: TOAST_MS });
+}
+
 /** Null is a cancelled prompt, which is not a failure. */
 function describeCapture(combo) {
   if (combo === null) {
@@ -1404,6 +1581,7 @@ function controls() {
     button('Tiles', demoTiles),
     button('Form', demoForm),
     button('Tooltip', demoTooltip),
+    button('Anchors', demoAnchors),
     menuButton,
     button('Alert', showAlert),
     button('Capture a key', captureKey),

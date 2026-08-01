@@ -24,8 +24,10 @@ import type { GameBindings } from '../keys/game-bindings.ts';
 import type { LogBuffer } from '../log/buffer.ts';
 import type { StorageHub } from '../storage/hub.ts';
 import type { AddonStatus } from '../supervisor.ts';
+import type { Projector } from '../world/project.ts';
 import { ANCHORS, ANCHORS_REQUIRED_IN_GAME } from './anchors.ts';
 import { ENTRY_ID } from './esc-inject.ts';
+import { type Anchors, createAnchors } from './kit/anchor3d.ts';
 import { type Banner, createBanner } from './kit/banner.ts';
 import { createIconUrls, type IconUrls } from './kit/icons.ts';
 import { createGameInjector, type GameInjector } from './kit/injections.ts';
@@ -184,10 +186,18 @@ function buildKit(deps: UiDeps, root: HTMLElement, manager: Manager, unlock: Unl
   const banner = createBanner({ doc: deps.doc, root, ...timers });
   const tooltips = createTooltips({ doc: deps.doc, root, viewport: deps.viewport });
   const menus = createMenus({ doc: deps.doc, root, viewport: deps.viewport });
+  const anchors = createAnchors({
+    doc: deps.doc,
+    root,
+    project: deps.project,
+    viewport: deps.viewport,
+    schedule: deps.schedule,
+    cancel: deps.cancelFrame,
+  });
   const stacking = createStacking({ root });
   const icons = createIconUrls(createSkillArt({ fetchJson: deps.fetchJson }));
 
-  return { root, toaster, banner, tooltips, menus, injector, stacking, icons, unlock };
+  return { root, toaster, banner, tooltips, menus, anchors, injector, stacking, icons, unlock };
 }
 
 export interface UiDeps {
@@ -209,7 +219,17 @@ export interface UiDeps {
   formatTime: (at: number) => string;
   setTimer: (handler: () => void, ms: number) => number;
   clearTimer: (id: number) => void;
+  /** The frame clock, for the one loop every world anchor shares. */
+  schedule: (frame: () => void) => number;
+  cancelFrame: (id: number) => void;
   viewport: () => { w: number; h: number };
+  /**
+   * A world point to a point on screen, or null when the game cannot be asked.
+   *
+   * Passed in rather than read here, so the kit keeps no claim about the game:
+   * the assertion lives in runtime/world/project.ts with every other one.
+   */
+  project: Projector;
   /** Same-origin JSON, for the per-class skill-art manifests. */
   fetchJson: (url: string) => Promise<unknown>;
   /** The storage hub and the game's bindings, for the per-addon settings pages. */
@@ -234,6 +254,11 @@ export interface UiKit {
   tooltips: Tooltips;
   /** The one open context menu. Shared for the reason the banner slot is. */
   menus: Menus;
+  /**
+   * Elements kept over world points. Shared because they share one frame loop:
+   * ten anchors are one callback, not ten.
+   */
+  anchors: Anchors;
   injector: GameInjector;
   /** Which loader window is in front. Shared with the manager. */
   stacking: Stacking;
@@ -281,6 +306,7 @@ export function mountUi(deps: UiDeps): MountedUi {
       kit.injector.dispose();
       kit.tooltips.dispose();
       kit.menus.dispose();
+      kit.anchors.dispose();
       kit.toaster.dispose();
       kit.banner.dispose();
       kit.stacking.dispose();

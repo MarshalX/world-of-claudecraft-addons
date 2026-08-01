@@ -310,6 +310,22 @@ The reason this is in the loader rather than in your addon is the **dismissal**.
 
 There is one menu for the whole loader and opening a second closes the first. An item can be `disabled`, and `separator` draws a rule above it, ignored on the first item where it would draw a lid on the menu instead.
 
+### Over a point in the world
+
+`ui.anchor3d` hands you an element the loader keeps positioned over a world point: nameplates, ground markers, a target arrow, a pin on a gathering node.
+
+```js
+const plate = woc.ui.anchor3d(() => woc.world.target?.pos ?? null, { offset: { y: -40 } });
+plate.el.className = 'my-nameplate';
+plate.el.textContent = 'Bog Bloat';
+```
+
+Pass a fixed point for something that does not move, or a **function** for something that does, and the anchor follows it without your addon running a loop. Returning null hides it, which is the honest answer for a unit that has despawned.
+
+It hides itself when the point is behind the camera, when it is off screen by more than `margin`, and whenever the game cannot be asked at all, which includes every moment before world entry. Your element is centred on the point, so `margin` defaults to 64 rather than 0: an element centred on a point that has just left the edge is still half on screen.
+
+This is the only surface here that reads the game's **renderer** rather than its world model, and it is the reason it cannot be written in an addon. Every anchor shares one frame loop, and a frame in which nothing moved on screen writes nothing at all, so a camera nobody is turning costs you nothing.
+
 ### Saying something
 
 ```js

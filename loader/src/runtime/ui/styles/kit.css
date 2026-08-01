@@ -184,6 +184,35 @@
   color: var(--color-text-error, rgb(255 143 133));
 }
 
+/* An element the loader keeps over a world point (kit/anchor3d.ts).
+ *
+ * Fixed, because the projection is in viewport pixels measured from the canvas,
+ * which is itself fixed at the viewport origin. The root is `position: fixed;
+ * inset: 0` and unscaled, so those pixels are already this element's left and top.
+ * The game's own floating text divides the same numbers by its UI scale, and that
+ * is because it lives inside the zoomed #ui; copying it here would be wrong.
+ *
+ * Centred on the point by transform rather than by margin, so an addon can size
+ * its content freely without the loader having to measure it. Anything else about
+ * the placement is the addon's `offset`, in pixels.
+ *
+ * Under the windows and over nothing else: a marker in the world must not cover a
+ * panel the player opened, and it is not a window itself. Pointer events are off,
+ * because the world underneath it is what a click there is meant for. */
+#woc-addons .woc-anchor3d {
+  position: fixed;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* Hidden rather than moved off screen: behind the camera and past the edge are
+   both states where the element has no place, and an element parked at -9999px is
+   still an element the browser lays out. */
+#woc-addons .woc-anchor3d-off {
+  display: none;
+}
+
 /* Rail-button glyphs, sized to match the game's own micro-button icons.
    These two selectors are the only unscoped rules in the sheet, because these
    are the only loader elements that live inside the game's own DOM rather than

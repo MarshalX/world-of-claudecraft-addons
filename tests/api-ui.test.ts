@@ -11,6 +11,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createUi, elementId } from '../loader/src/runtime/api/ui.ts';
 import { DisposalBag } from '../loader/src/runtime/disposal.ts';
+import { createAnchors } from '../loader/src/runtime/ui/kit/anchor3d.ts';
 import { createBanner } from '../loader/src/runtime/ui/kit/banner.ts';
 import { createIconUrls } from '../loader/src/runtime/ui/kit/icons.ts';
 import { createGameInjector } from '../loader/src/runtime/ui/kit/injections.ts';
@@ -66,6 +67,15 @@ function open() {
     banner: createBanner({ doc: document, root, ...timers }),
     tooltips: createTooltips({ doc: document, root, viewport: () => VIEW }),
     menus: createMenus({ doc: document, root, viewport: () => VIEW }),
+    // A projector that answers, so an anchor an addon creates has somewhere to be.
+    anchors: createAnchors({
+      doc: document,
+      root,
+      project: () => ({ x: 100, y: 200, behind: false }),
+      viewport: () => VIEW,
+      schedule: () => 0,
+      cancel: () => undefined,
+    }),
     stacking: createStacking({ root }),
     unlock: createUnlockMode(root),
     // A manifest reader whose fetch never settles, which is the state a first row is

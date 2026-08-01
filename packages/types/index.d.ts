@@ -60,6 +60,8 @@ export type { StorageApi } from './storage.js';
 export type {
   AbilityIconId,
   AlertOpts,
+  Anchor3d,
+  Anchor3dOpts,
   BannerKind,
   BannerOpts,
   BannerSize,
@@ -70,8 +72,10 @@ export type {
   IconClass,
   IconUrls,
   MicroButtonOpts,
+  PointSource,
   ToastOpts,
   UiApi,
+  WorldPoint,
 } from './ui.js';
 export type {
   Field,

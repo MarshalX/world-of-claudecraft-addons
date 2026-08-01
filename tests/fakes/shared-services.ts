@@ -13,6 +13,7 @@ import { createGameBindings } from '../../loader/src/runtime/keys/game-bindings.
 import { createLogBuffer } from '../../loader/src/runtime/log/buffer.ts';
 import { createNetHub } from '../../loader/src/runtime/net/hub.ts';
 import { createSoundEngine } from '../../loader/src/runtime/sound/engine.ts';
+import { createAnchors } from '../../loader/src/runtime/ui/kit/anchor3d.ts';
 import { createBanner } from '../../loader/src/runtime/ui/kit/banner.ts';
 import { createIconUrls } from '../../loader/src/runtime/ui/kit/icons.ts';
 import { createGameInjector } from '../../loader/src/runtime/ui/kit/injections.ts';
@@ -126,6 +127,16 @@ function createSharedServices(
   const icons = createIconUrls(createSkillArt({ fetchJson: () => new Promise(() => undefined) }));
   const tooltips = createTooltips({ doc, root, viewport: () => VIEWPORT });
   const menus = createMenus({ doc, root, viewport: () => VIEWPORT });
+  // The projector answers, so an addon's anchor lands somewhere; the frame clock
+  // does not, so nothing here runs a loop a suite would have to stop.
+  const anchors = createAnchors({
+    doc,
+    root,
+    project: () => ({ x: 100, y: 200, behind: false }),
+    viewport: () => VIEWPORT,
+    schedule: () => 0,
+    cancel: () => undefined,
+  });
   const keyTarget = new EventTarget();
   const dispatcher = createKeyDispatcher({ target: keyTarget, doc });
   const logs = createLogBuffer();
@@ -179,6 +190,7 @@ function createSharedServices(
       banner,
       tooltips,
       menus,
+      anchors,
       stacking,
       icons,
       unlock: createUnlockMode(root),
@@ -224,6 +236,7 @@ function createSharedServices(
       injector.dispose();
       tooltips.dispose();
       menus.dispose();
+      anchors.dispose();
       toaster.dispose();
       banner.dispose();
       dispatcher.dispose();

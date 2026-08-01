@@ -197,6 +197,48 @@ export interface IconUrls {
   preload: (cls: IconClass) => Promise<void>;
 }
 
+/** A point in the world: x east-west, y height, z north-south, in yards. */
+export interface WorldPoint {
+  x: number;
+  y: number;
+  z: number;
+}
+
+/**
+ * A fixed point, or a function asked for one on every frame.
+ *
+ * The function form is what anything that MOVES needs: pass `() => entity.pos` and
+ * the anchor follows it without your addon running a loop of its own. Returning
+ * null hides the anchor, which is the honest answer for a unit that has gone.
+ */
+export type PointSource = WorldPoint | (() => WorldPoint | null);
+
+export interface Anchor3dOpts {
+  /** Added to the element, so you can style your own. */
+  className?: string;
+  /** Shifts the element from the point, in screen pixels. Down is positive. */
+  offset?: { x?: number; y?: number };
+  /**
+   * How far off screen the point may be before the anchor hides. Defaults to 64.
+   *
+   * Not zero, because your element is CENTRED on the point: one whose point has
+   * just left the edge is still half on screen, and hiding it there makes a
+   * nameplate blink out while the unit wearing it is still visible.
+   */
+  margin?: number;
+}
+
+export interface Anchor3d {
+  /** The element. Fill it; the loader owns only where it sits. */
+  readonly el: HTMLElement;
+  /** Whether it is on screen right now, which is worth checking before drawing. */
+  readonly visible: boolean;
+  /** Point it somewhere else, at a fixed point or at a function. */
+  moveTo: (at: PointSource) => void;
+  /** Removes it. Also done for you when your addon is disabled. */
+  destroy: () => void;
+}
+
 export interface MicroButtonOpts {
   /** Unique within your addon. The loader namespaces it before it reaches the page. */
   id: string;
@@ -285,6 +327,25 @@ export interface UiApi {
    * late teardown cannot take down someone else's menu.
    */
   menu: (at: Element | { x: number; y: number }, items: readonly MenuItem[]) => Unsubscribe;
+  /**
+   * An element the loader keeps over a point in the world.
+   *
+   * Nameplates, ground markers, a target arrow, a pin on a gathering node: all the
+   * same thing, and none of them buildable by an addon, because the projection is
+   * on the game's renderer and nothing else published here needs it.
+   *
+   * ```js
+   * const plate = woc.ui.anchor3d(() => woc.world.target?.pos ?? null, { offset: { y: -40 } });
+   * plate.el.textContent = woc.world.target.name;
+   * ```
+   *
+   * Every anchor shares ONE frame loop, and nothing is written unless the point
+   * moved on screen, so a camera nobody is turning costs nothing. It hides itself
+   * when the point is behind the camera, when it is off screen by more than
+   * `margin`, and whenever the game cannot be asked at all, which includes every
+   * moment before world entry.
+   */
+  anchor3d: (at: PointSource, opts?: Anchor3dOpts) => Anchor3d;
   /**
    * Resolves with the id of the button pressed, or with the cancel button's id
    * when dismissed, or null when there was no cancel button.

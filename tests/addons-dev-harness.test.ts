@@ -139,6 +139,35 @@ describe('disabling it', () => {
   });
 });
 
+/** Press one of the manual demonstration buttons by its label. */
+function press(label: string): void {
+  [...document.querySelectorAll<HTMLButtonElement>('button')]
+    .find((button) => button.textContent === label)
+    ?.click();
+}
+
+// The demonstrations are manual by definition: a suite cannot see whether a
+// nameplate sits over the right shoulder. What it CAN hold them to is that a
+// button pressed with no game behind it creates nothing, since every one of these
+// runs on the login screen as readily as in the world.
+describe('the anchor demonstration', () => {
+  it('creates nothing when there is no world to anchor to', async () => {
+    await run();
+
+    press('Anchors');
+
+    expect(document.querySelector('.woc-anchor3d')).toBeNull();
+  });
+
+  it('says why rather than doing nothing visible', async () => {
+    await run();
+
+    press('Anchors');
+
+    expect(document.querySelector('.woc-toast')?.textContent).toContain('No world yet');
+  });
+});
+
 /** The report text, once the harness has finished its run. */
 async function report(): Promise<string> {
   await expect.poll(() => document.body.textContent ?? '').toMatch(/checks passed/);
@@ -157,7 +186,7 @@ describe('what it reports without a game', () => {
   it('passes every check', async () => {
     await run();
 
-    expect(await report()).toContain('24 of 24 checks passed');
+    expect(await report()).toContain('25 of 25 checks passed');
   });
 
   it('names no check as failed', async () => {
@@ -179,6 +208,7 @@ describe('what it reports without a game', () => {
     'icons',
     'tile',
     'fields',
+    'anchor',
     'skill art',
     'shadowed globals',
     'timers',

@@ -13,6 +13,7 @@
 import type { DisposalBag, Teardown } from '../disposal.ts';
 import type { AlertOpts } from '../ui/kit/alert.ts';
 import { openAlert } from '../ui/kit/alert.ts';
+import type { Anchor3d, Anchor3dOpts, PointSource } from '../ui/kit/anchor3d.ts';
 import type { BannerOpts } from '../ui/kit/banner.ts';
 import type { Bar, BarOpts } from '../ui/kit/bar.ts';
 import { createBar } from '../ui/kit/bar.ts';
@@ -80,6 +81,8 @@ interface UiApi {
   tabs: (opts: TabsOpts) => Tabs;
   /** A context menu at an element or a point. Closes on select, Escape or a click away. */
   menu: (at: Element | { x: number; y: number }, items: readonly MenuItem[]) => Teardown;
+  /** An element the loader keeps over a point in the world. */
+  anchor3d: (at: PointSource, opts?: Anchor3dOpts) => Anchor3d;
   /** Resolves with the id of the button pressed, or null if dismissed. */
   alert: (opts: AlertOpts) => Promise<string | null>;
   /** A button on the game's own rail. Lands when the HUD does. */
@@ -247,6 +250,19 @@ function addonTile(deps: UiDeps, opts: TileOpts | undefined): Tile {
   return tile;
 }
 
+/**
+ * An anchor whose removal is in the bag.
+ *
+ * The bag holds the removal rather than a listener: an anchor left behind would go
+ * on being positioned by the shared frame loop, over a world its addon has stopped
+ * reading. It is the one leak here that costs a frame callback for the session.
+ */
+function addonAnchor(deps: UiDeps, at: PointSource, opts: Anchor3dOpts | undefined): Anchor3d {
+  const anchor = deps.kit.anchors.add(at, opts);
+  deps.bag.add(anchor.destroy);
+  return anchor;
+}
+
 /** The four builders, each bagged the same way. See `addonField`. */
 function fieldSurface(deps: UiDeps): FieldBuilders {
   return {
@@ -285,6 +301,8 @@ function createUi(deps: UiDeps): UiApi {
     // Tracked rather than bagged raw: an addon disabled with a menu open must not
     // leave it on screen, and closing it by hand must also drop it from the bag.
     menu: (at, items) => tracked(bag, kit.menus.open(at, items)),
+
+    anchor3d: (at, opts) => addonAnchor(deps, at, opts),
 
     alert: (opts) => {
       const modal = openAlert({ doc: deps.doc, root: kit.root }, opts);
