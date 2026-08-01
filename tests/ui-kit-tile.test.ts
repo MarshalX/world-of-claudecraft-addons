@@ -222,3 +222,50 @@ it('removes itself on destroy', () => {
 
   expect(host.querySelector('.woc-tile')).toBeNull();
 });
+
+// A strip of tiles is animated from an addon's frame loop, so `update` runs per tile
+// per frame and nearly always says what the tile already says. The accessible name is
+// the expensive half of that: it is composed from three parts that move on their own
+// schedules, so it was recomposed and rewritten on every call whether or not the
+// answer had changed, which put an attribute mutation on the accessibility tree per
+// tile per frame.
+//
+// The second case is what keeps the first from passing vacuously, and the third is
+// the one that would break if the guard were written as "write the name once".
+describe('a tile told what it already says', () => {
+  function touches(el: HTMLElement, run: () => void): number {
+    const observer = new MutationObserver(() => undefined);
+    observer.observe(el, {
+      attributes: true,
+      characterData: true,
+      childList: true,
+      subtree: true,
+    });
+    run();
+    const seen = observer.takeRecords().length;
+    observer.disconnect();
+    return seen;
+  }
+
+  const shown = { label: 'Fireball', value: '4', count: 2, fraction: 0.5, tone: 'warn' } as const;
+
+  it('writes nothing at all when every part repeats', () => {
+    const tile = createTile(document, shown);
+
+    expect(touches(tile.el, () => tile.update(shown))).toBe(0);
+  });
+
+  it('still writes when one part actually moves', () => {
+    const tile = createTile(document, shown);
+
+    expect(touches(tile.el, () => tile.update({ ...shown, value: '3' }))).toBeGreaterThan(0);
+  });
+
+  it('recomposes the name when a figure it is made of moves', () => {
+    const tile = createTile(document, shown);
+
+    tile.update({ value: '3' });
+
+    expect(tile.el.getAttribute('aria-label')).toBe('Fireball, 3, 2');
+  });
+});

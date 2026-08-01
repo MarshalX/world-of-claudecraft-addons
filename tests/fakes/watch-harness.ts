@@ -26,6 +26,9 @@ import { readThreat, type ThreatTable } from '../../loader/src/runtime/world/thr
 import { createWorldWatcher, type WorldWatcher } from '../../loader/src/runtime/world/watch.ts';
 import { PLAYER_ENTITY } from './frames.ts';
 
+/** Roughly one animation frame at 60 Hz, which is what the sampler rides. */
+const FRAME_MS = 16.7;
+
 export interface LiveWorld {
   player: Record<string, unknown>;
   entities: Map<number, unknown>;
@@ -45,6 +48,14 @@ export interface WatchHarness {
   errors: unknown[];
   /** Frames currently scheduled. Zero means the sampler is not running. */
   frames: () => number;
+  /**
+   * Run the scheduled frame, having moved the clock on by one.
+   *
+   * The clock moves because a real animation frame carries a new timestamp, and the
+   * sampler has a floor between samples: a `frame()` that did not advance time would
+   * model a browser that fires rAF twice in the same instant, which is a thing no
+   * browser does and would make the floor untestable.
+   */
   frame: () => void;
   /** Stands in for the game arriving or never having arrived. */
   setAttached: (on: boolean) => void;
@@ -65,6 +76,7 @@ export function watchHarness(): WatchHarness {
   const errors: unknown[] = [];
   const scheduled = new Map<number, () => void>();
   let nextFrame = 1;
+  let clock = 0;
 
   // `live` stays loose so a test can move one field at a time, including into a
   // shape the game would never produce, which is half of what these suites are
@@ -186,6 +198,7 @@ export function watchHarness(): WatchHarness {
     cancel: (id) => {
       scheduled.delete(id);
     },
+    now: () => clock,
     onError: (_key, err) => errors.push(err),
   });
 
@@ -195,6 +208,7 @@ export function watchHarness(): WatchHarness {
     errors,
     frames: () => scheduled.size,
     frame: () => {
+      clock += FRAME_MS;
       for (const run of [...scheduled.values()]) {
         scheduled.clear();
         run();

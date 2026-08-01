@@ -28,8 +28,27 @@
 // kit/readout.ts, which is what this row and the square one in kit/tile.ts share.
 
 import type { Teardown } from '../../disposal.ts';
-import type { ReadoutSchool, ReadoutTone } from './readout.ts';
-import { applyVariants, buildArt, clampFraction, toneClass } from './readout.ts';
+import type {
+  ArtSlot,
+  ReadoutSchool,
+  ReadoutTone,
+  StyleSlot,
+  TextSlot,
+  VariantState,
+} from './readout.ts';
+import {
+  applyVariants,
+  buildArt,
+  clampFraction,
+  styleSlot,
+  textSlot,
+  toneClass,
+  variantState,
+  writeArt,
+  writeStyle,
+  writeText,
+  writeTextHiding,
+} from './readout.ts';
 
 const FULL_PERCENT = 100;
 const DECIMALS = 2;
@@ -41,17 +60,25 @@ type BarTone = ReadoutTone;
 
 type BarSchool = ReadoutSchool;
 
-function setFraction(fill: HTMLElement, fraction: unknown): void {
-  fill.style.width = `${(clampFraction(fraction) * FULL_PERCENT).toFixed(DECIMALS)}%`;
+function setFraction(fill: StyleSlot, fraction: unknown): void {
+  writeStyle(fill, `${(clampFraction(fraction) * FULL_PERCENT).toFixed(DECIMALS)}%`);
 }
 
+/**
+ * The row, as its own updates address it.
+ *
+ * Slots rather than elements, because a bar is animated from an addon's frame loop
+ * and an update that repeats what is already on screen has to cost nothing. See the
+ * note at the top of kit/readout.ts.
+ */
 interface BarParts {
   el: HTMLElement;
-  fill: HTMLElement;
-  icon: HTMLImageElement;
-  label: HTMLElement;
-  value: HTMLElement;
-  detail: HTMLElement;
+  fill: StyleSlot;
+  icon: ArtSlot;
+  label: TextSlot;
+  value: TextSlot;
+  detail: TextSlot;
+  variants: VariantState;
 }
 
 function span(doc: Document, className: string): HTMLElement {
@@ -83,21 +110,28 @@ function buildBar(doc: Document, opts: BarOpts): BarParts {
   fill.className = 'woc-bar-fill';
 
   const icon = buildArt(doc, 'woc-bar-icon');
-  icon.hidden = true;
 
   const label = span(doc, 'woc-bar-label');
   const value = span(doc, 'woc-bar-value');
 
   const head = doc.createElement('div');
   head.className = 'woc-bar-head';
-  head.append(icon, label, value);
+  head.append(icon.el, label, value);
 
   const detail = doc.createElement('div');
   detail.className = 'woc-bar-detail';
   detail.hidden = true;
 
   el.append(fill, head, detail);
-  return { el, fill, icon, label, value, detail };
+  return {
+    el,
+    fill: styleSlot(fill, 'width'),
+    icon,
+    label: textSlot(label),
+    value: textSlot(value),
+    detail: textSlot(detail),
+    variants: variantState(opts.tone),
+  };
 }
 
 /** Everything a bar can be told, all of it optional on an update. */
@@ -145,24 +179,15 @@ interface Bar {
 /** The three text slots. The detail hides itself when cleared. */
 function applyText(parts: BarParts, next: BarUpdate): void {
   if (next.label !== undefined) {
-    // textContent, never innerHTML: an ability name reaches this from the wire.
-    parts.label.textContent = next.label;
+    writeText(parts.label, next.label);
   }
   if (next.value !== undefined) {
-    parts.value.textContent = next.value;
+    writeText(parts.value, next.value);
   }
   if (next.detail !== undefined) {
-    parts.detail.textContent = next.detail;
     // Hidden rather than emptied, so a row whose detail was switched off does not
     // leave the gap the second line's own spacing would otherwise still take.
-    parts.detail.hidden = next.detail.length === 0;
-  }
-}
-
-function applyIcon(icon: HTMLImageElement, next: BarUpdate): void {
-  if (next.icon !== undefined) {
-    icon.hidden = next.icon === null;
-    icon.src = next.icon ?? '';
+    writeTextHiding(parts.detail, next.detail);
   }
 }
 
@@ -171,8 +196,10 @@ function createBar(doc: Document, opts: BarOpts = {}): Bar {
 
   const update = (next: BarUpdate): void => {
     applyText(parts, next);
-    applyVariants(parts.el, PREFIX, next);
-    applyIcon(parts.icon, next);
+    applyVariants(parts.el, PREFIX, next, parts.variants);
+    if (next.icon !== undefined) {
+      writeArt(parts.icon, next.icon);
+    }
     if (next.fraction !== undefined) {
       setFraction(parts.fill, next.fraction);
     }

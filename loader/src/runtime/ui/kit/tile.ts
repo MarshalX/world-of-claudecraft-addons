@@ -24,8 +24,28 @@
 // cannot see.
 
 import type { Teardown } from '../../disposal.ts';
-import type { ReadoutSchool, ReadoutTone } from './readout.ts';
-import { applyVariants, buildArt, clampFraction, toneClass } from './readout.ts';
+import type {
+  ArtSlot,
+  ReadoutSchool,
+  ReadoutTone,
+  StyleSlot,
+  TextSlot,
+  VariantState,
+} from './readout.ts';
+import {
+  applyVariants,
+  buildArt,
+  clampFraction,
+  styleSlot,
+  textSlot,
+  toneClass,
+  variantState,
+  writeArt,
+  writeStyle,
+  writeTextHiding,
+} from './readout.ts';
+import type { TileState } from './tile-name.ts';
+import { applyName } from './tile-name.ts';
 
 const FULL_PERCENT = 100;
 const DECIMALS = 2;
@@ -58,9 +78,9 @@ type TileSchool = ReadoutSchool;
  * here is what keeps the public surface consistent with `ui.bar`: an addon that has
  * a remaining and a total should never have to work out which way round this one is.
  */
-function setFraction(sweep: HTMLElement, fraction: unknown): void {
+function setFraction(sweep: StyleSlot, fraction: unknown): void {
   const elapsed = 1 - clampFraction(fraction);
-  sweep.style.setProperty(SWEEP_PROPERTY, `${(elapsed * FULL_PERCENT).toFixed(DECIMALS)}%`);
+  writeStyle(sweep, `${(elapsed * FULL_PERCENT).toFixed(DECIMALS)}%`);
 }
 
 /**
@@ -71,18 +91,27 @@ function setFraction(sweep: HTMLElement, fraction: unknown): void {
  * and unhittable, and a NaN drops the declaration silently, so both would read as a
  * tile that was never created.
  */
-function setSize(el: HTMLElement, size: unknown): void {
-  if (typeof size === 'number' && Number.isFinite(size) && size > 0) {
-    el.style.setProperty(SIZE_PROPERTY, `${String(size)}px`);
+function setSize(size: StyleSlot, next: unknown): void {
+  if (typeof next === 'number' && Number.isFinite(next) && next > 0) {
+    writeStyle(size, `${String(next)}px`);
   }
 }
 
+/**
+ * The square, as its own updates address it.
+ *
+ * Slots rather than elements, because a strip of tiles is animated from an addon's
+ * frame loop and an update repeating what is already on screen has to cost nothing.
+ * See the note at the top of kit/readout.ts.
+ */
 interface TileParts {
   el: HTMLElement;
-  art: HTMLImageElement;
-  sweep: HTMLElement;
-  value: HTMLElement;
-  count: HTMLElement;
+  art: ArtSlot;
+  sweep: StyleSlot;
+  value: TextSlot;
+  count: TextSlot;
+  size: StyleSlot;
+  variants: VariantState;
 }
 
 function span(doc: Document, className: string): HTMLElement {
@@ -105,10 +134,14 @@ function buildTile(doc: Document, opts: TileOpts): TileParts {
   if (opts.className !== undefined) {
     el.classList.add(opts.className);
   }
-  setSize(el, opts.size);
+  // A tile with no label is hidden from assistive technology, and it starts without
+  // one, so the built element states that rather than waiting for the first update
+  // to say it. That is also what lets `applyName` trust its own record of the name.
+  el.setAttribute('aria-hidden', 'true');
+  const size = styleSlot(el, SIZE_PROPERTY);
+  setSize(size, opts.size);
 
   const art = buildArt(doc, 'woc-tile-art');
-  art.hidden = true;
 
   const sweep = doc.createElement('div');
   sweep.className = 'woc-tile-sweep';
@@ -116,8 +149,16 @@ function buildTile(doc: Document, opts: TileOpts): TileParts {
   const value = span(doc, 'woc-tile-value');
   const count = span(doc, 'woc-tile-count');
 
-  el.append(art, sweep, value, count);
-  return { el, art, sweep, value, count };
+  el.append(art.el, sweep, value, count);
+  return {
+    el,
+    art,
+    sweep: styleSlot(sweep, SWEEP_PROPERTY),
+    value: textSlot(value),
+    count: textSlot(count),
+    size,
+    variants: variantState(opts.tone),
+  };
 }
 
 /** Everything a tile can be told, all of it optional on an update. */
@@ -168,45 +209,6 @@ interface Tile {
   destroy: Teardown;
 }
 
-/** What the tile currently says, held so the accessible name can be recomposed. */
-interface TileState {
-  label: string | null;
-  value: string;
-  count: number | null;
-}
-
-/**
- * One accessible name for the whole tile, rebuilt whenever a part of it moves.
- *
- * A tile is a graphic. The wedge carries the timing, the art carries the identity,
- * and both figures are drawn ON the art rather than beside it, so it is announced as
- * one image named for everything it says rather than as a box whose children are read
- * in whatever order they were appended.
- *
- * A tile with NO label is hidden from assistive technology outright. Art with a wedge
- * over it and no name is not something anyone can act on, and announcing a bare "4.2"
- * is worse than silence. That is also the nudge: the way to be announced is to say
- * what you are.
- */
-function applyName(el: HTMLElement, state: TileState): void {
-  if (state.label === null) {
-    el.removeAttribute('role');
-    el.removeAttribute('aria-label');
-    el.setAttribute('aria-hidden', 'true');
-    return;
-  }
-  el.removeAttribute('aria-hidden');
-  el.setAttribute('role', 'img');
-  const said = [state.label];
-  if (state.value.length > 0) {
-    said.push(state.value);
-  }
-  if (state.count !== null) {
-    said.push(String(state.count));
-  }
-  el.setAttribute('aria-label', said.join(', '));
-}
-
 /** A count worth drawing, or null. Anything unusable reads as no count at all. */
 function readCount(count: unknown): number | null {
   if (typeof count !== 'number' || !Number.isFinite(count)) {
@@ -231,42 +233,28 @@ function countText(count: number | null): string {
 function applyText(parts: TileParts, state: TileState, next: TileUpdate): void {
   if (next.value !== undefined) {
     state.value = next.value;
-    parts.value.textContent = next.value;
-    parts.value.hidden = next.value.length === 0;
+    writeTextHiding(parts.value, next.value);
   }
   if (next.count !== undefined) {
     state.count = readCount(next.count);
-    parts.count.textContent = countText(state.count);
-    parts.count.hidden = state.count === null;
-  }
-}
-
-/**
- * The art slot, re-shown on every change rather than only on the first.
- *
- * A tile whose art failed once and was hidden has to get its face back when it is
- * pointed at a file that does exist, which happens the moment a strip of tiles is
- * reused for another set of auras.
- */
-function applyArt(art: HTMLImageElement, next: TileUpdate): void {
-  if (next.icon !== undefined) {
-    art.hidden = next.icon === null;
-    art.src = next.icon ?? '';
+    writeTextHiding(parts.count, countText(state.count));
   }
 }
 
 function createTile(doc: Document, opts: TileOpts = {}): Tile {
   const parts = buildTile(doc, opts);
-  const state: TileState = { label: null, value: '', count: null };
+  const state: TileState = { label: null, value: '', count: null, name: null };
 
   const update = (next: TileUpdate): void => {
     if (next.label !== undefined) {
       state.label = next.label;
     }
-    setSize(parts.el, next.size);
+    setSize(parts.size, next.size);
     applyText(parts, state, next);
-    applyVariants(parts.el, PREFIX, next);
-    applyArt(parts.art, next);
+    applyVariants(parts.el, PREFIX, next, parts.variants);
+    if (next.icon !== undefined) {
+      writeArt(parts.art, next.icon);
+    }
     if (next.fraction !== undefined) {
       setFraction(parts.sweep, next.fraction);
     }

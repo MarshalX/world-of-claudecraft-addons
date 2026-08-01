@@ -54,6 +54,7 @@ export function createWorldHub(deps: WorldHubDeps): WorldHub {
     backend: () => backend,
     schedule: deps.schedule,
     cancel: deps.cancel,
+    now: deps.now,
     onError: (key, err) => diagError(`an addon handler for world.on('${key}') threw`, err),
   });
 

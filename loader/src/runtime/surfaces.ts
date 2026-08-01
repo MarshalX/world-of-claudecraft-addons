@@ -11,7 +11,6 @@ import { createNetHub, type NetHub } from './net/hub.ts';
 import { waitForGame } from './ready.ts';
 import { createCombatClock } from './world/combat-clock.ts';
 import { createWorldHub, type WorldHub } from './world/hub.ts';
-import { createSimClock } from './world/sim-clock.ts';
 import { createZoneReader } from './world/zone.ts';
 
 const GAME_GLOBAL = '__game';
@@ -55,9 +54,6 @@ export function createGameSurfaces(): GameSurfaces {
   // not the game: the player's id is on the hello frame, so it starts counting
   // from the first frame rather than from world entry.
   const combat = createCombatClock({ net, now: () => performance.now() });
-  // The sim's own clock, off the snapshot head. Deadlines the game sends are
-  // measured against it, and nothing on the client keeps it. See world/sim-clock.ts.
-  const sim = createSimClock({ net });
 
   const world = createWorldHub({
     game: wait.ready,
@@ -66,7 +62,10 @@ export function createGameSurfaces(): GameSurfaces {
     lastDamageAt: combat.lastDamageAt,
     now: () => performance.now(),
     zoneName: createZoneReader(globalThis.document),
-    simNow: sim.now,
+    // Off the snapshot head, and tracked inside the hub rather than by a subscriber
+    // of it. A loader-owned subscription looks exactly like an addon's, so this one
+    // used to keep every snapshot on the freezing path. See world/sim-clock.ts.
+    simNow: net.simNow,
   });
 
   return {
@@ -75,7 +74,6 @@ export function createGameSurfaces(): GameSurfaces {
     dispose: () => {
       wait.cancel();
       combat.dispose();
-      sim.dispose();
       world.dispose();
       net.dispose();
     },

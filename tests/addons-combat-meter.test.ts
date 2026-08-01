@@ -109,6 +109,8 @@ interface MeterHarness extends SharedHarness {
   detailOf: (label: string) => string;
   /** Switch tables the way a player does. */
   openTab: (label: string) => void;
+  /** Press the addon's own show/hide bind, the way a player does. */
+  togglePanel: () => void;
 }
 
 /** Any total order will do: the sort exists to make the assertion order-free. */
@@ -164,6 +166,14 @@ const KNOWN = [
   },
 ];
 
+/**
+ * Start the addon and wait for its window to actually come up.
+ *
+ * A window that saves its state starts hidden and is shown once that state arrives,
+ * and the answer is keyed per character, so it takes a watcher sample to find the
+ * character and then a storage read to come back. Every case here is about what the
+ * meter DRAWS, and it does not draw to a window nobody can see.
+ */
 async function run(): Promise<MeterHarness> {
   const player = liveEntity({ set: { templateId: 'priest' } });
   const world = { entities: new Map([[PLAYER_ID, player]]), player, known: KNOWN };
@@ -173,6 +183,11 @@ async function run(): Promise<MeterHarness> {
   teardown.push(harness.dispose);
   const addon = await loadAddon({ shared: harness.shared, row: row(), source: SOURCE });
   teardown.push(addon.dispose);
+  // The sample resolves the character; the awaits let the read keyed on it return.
+  harness.shared.world.watcher.poll();
+  await Promise.resolve();
+  await Promise.resolve();
+  await Promise.resolve();
 
   return {
     ...harness,
@@ -222,6 +237,11 @@ async function run(): Promise<MeterHarness> {
         (el) => el.textContent === label,
       );
       (button as HTMLButtonElement | undefined)?.click();
+    },
+    // The addon's own default bind, pressed at the dispatcher: the same path a
+    // player takes, rather than a call to the frame the addon happens to hold.
+    togglePanel: () => {
+      harness.press('Alt+KeyD');
     },
   };
 }
@@ -799,7 +819,10 @@ describe('ability art', () => {
     h.tick();
 
     const icon = rowFor('Crushing Blow')?.querySelector('img.woc-bar-icon');
-    expect(icon?.getAttribute('src')).toBe('');
+    // No src AT ALL rather than an empty one. An empty src resolves against the
+    // document base, so writing one would point every art-less row at the game's own
+    // page; the slot is built with none and a null icon leaves it that way.
+    expect(icon?.hasAttribute('src')).toBe(false);
     expect(icon?.hasAttribute('hidden')).toBe(true);
   });
 
@@ -882,5 +905,75 @@ describe('colouring rows by school', () => {
     h.openTab('Taken');
 
     expect(rowFor('Shadow Bolt')?.classList.contains('woc-bar-school-shadow')).toBe(true);
+  });
+});
+
+// A hidden panel is not drawn to. Twice a second is small, but it is a sort of every
+// ability plus a row update each, for a window nobody is looking at, for the whole
+// session. What must NOT stop is the tallying, which runs off the socket, or the
+// fight timeout, which is what decides a fight has ended.
+describe('a panel nobody can see', () => {
+  it('keeps tallying while hidden and shows the fight when it comes back', async () => {
+    const h = await run();
+
+    h.togglePanel();
+    h.hit({ amount: 500 });
+    h.tick();
+    expect(h.labels()).toEqual([]);
+
+    h.togglePanel();
+
+    expect(h.fight()).toContain('500 damage');
+    expect(h.labels()).toEqual(['Aimed Shot']);
+  });
+
+  // The timeout has to keep running or a fight that ended while the panel was away
+  // reopens looking live, with an average still decaying against a clock nobody
+  // stopped.
+  it('still ends the fight while hidden', async () => {
+    const h = await run();
+
+    h.hit();
+    h.togglePanel();
+    h.tick(SECOND * 10);
+    h.togglePanel();
+
+    expect(h.fight()).toContain('last fight');
+  });
+
+  // The whole point of the previous two together: a fight fought entirely with the
+  // panel away is still there to read afterwards, rows and figures and all, rather
+  // than only its summary line or nothing at all.
+  it('shows a whole fight that happened and ended while it was away', async () => {
+    const h = await run();
+
+    h.togglePanel();
+    h.hit({ ability: 'Fell Shot', amount: 300 });
+    h.hit({ ability: 'Fell Shot', amount: 100 });
+    h.hit({ ability: 'Melee', amount: 100 });
+    h.tick(SECOND * 10);
+    h.togglePanel();
+
+    expect(h.fight()).toContain('500 damage');
+    expect(h.fight()).toContain('last fight');
+    expect(h.labels()).toEqual(['Fell Shot', 'Melee']);
+    expect(h.figureOf('Fell Shot')).toContain('400');
+    expect(h.detailOf('Fell Shot')).toContain('2 hits');
+  });
+
+  // The honest limit, and it is not new: the meter holds ONE fight, so a fight that
+  // starts while the panel is away replaces the one before it exactly as it would
+  // with the panel open. "Last fight" means the most recent, not a history.
+  it('replaces the old fight when a new one starts while hidden', async () => {
+    const h = await run();
+
+    h.hit({ ability: 'Fell Shot', amount: 300 });
+    h.togglePanel();
+    h.tick(SECOND * 10);
+    h.hit({ ability: 'Melee', amount: 50 });
+    h.togglePanel();
+
+    expect(h.fight()).toContain('50 damage');
+    expect(h.labels()).toEqual(['Melee']);
   });
 });

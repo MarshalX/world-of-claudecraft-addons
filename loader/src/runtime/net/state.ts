@@ -16,6 +16,15 @@ interface Mutable {
   reconnects: number;
   /** Whether any socket has opened yet, which is what makes the next one a reconnect. */
   opened: boolean;
+  /**
+   * The server's own clock in seconds, off the snapshot head. Null before the first.
+   *
+   * Not on `NetState`, which is the addon-facing reading: a raw sim time is a number
+   * whose only correct use is a subtraction against a deadline the addon would also
+   * have to be handed. `world.group` does that subtraction and publishes the answer
+   * in seconds remaining, the way everything else on the world API reports a time.
+   */
+  simTime: number | null;
 }
 
 function blank(): Mutable {
@@ -28,6 +37,7 @@ function blank(): Mutable {
     seed: null,
     reconnects: 0,
     opened: false,
+    simTime: null,
   };
 }
 
@@ -49,6 +59,14 @@ function applySnap(state: Mutable, frame: Frame, latency: LatencyTracker, at: nu
   const tickHz = fieldNumber(frame, 'tickHz');
   if (tickHz !== null && tickHz > 0) {
     state.tickHz = tickHz;
+  }
+  // Some of what the game sends is a DEADLINE rather than a duration, and a deadline
+  // is meaningless without the clock it was measured against. A loot roll expires at
+  // `ctx.time + 30`, where `ctx.time` is this, and nothing on the client keeps it:
+  // the client reads it off each snapshot, uses it while decoding, and drops it.
+  const time = fieldNumber(frame, 'time');
+  if (time !== null) {
+    state.simTime = time;
   }
   // The ack rides the self record, not the snapshot head, and the server omits
   // `self` on a snapshot that carries no self state. Read at the head it is
@@ -76,6 +94,8 @@ export interface NetStateTracker {
   noteFrame: (frame: Frame, at: number) => void;
   noteSend: (frame: Frame, at: number) => void;
   snapshot: () => NetState;
+  /** The sim's clock in seconds, or null before the first snapshot. */
+  simNow: () => number | null;
 }
 
 /**
@@ -132,5 +152,7 @@ export function createNetStateTracker(
         latencyMs: latency.value,
         reconnects: state.reconnects,
       }),
+
+    simNow: () => state.simTime,
   };
 }

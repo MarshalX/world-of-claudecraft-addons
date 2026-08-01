@@ -19,7 +19,7 @@ import type { AddonContext, SharedServices, WocApi } from './context.ts';
 import { createKeys, type KeysApi } from './keys.ts';
 import { createLog, type LogApi } from './log.ts';
 import { createNet, type NetTimers } from './net.ts';
-import { createSound } from './sound.ts';
+import { createSound, type SoundApi } from './sound.ts';
 import { type AddonStorageApi, createStorage } from './storage.ts';
 import { createUi, type UiApi } from './ui.ts';
 import { createWorld } from './world.ts';
@@ -142,6 +142,26 @@ function createKeysSurface(
   });
 }
 
+/**
+ * The sound surface, plus the pack read for an addon that says it makes sound.
+ *
+ * The pack is 119 kB and is read once per session, lazily, so a player whose addons
+ * never touch sound never fetches it. The cost of lazy is that the FIRST cue would
+ * fall back to a guessed URL while the read is in flight, and a guessed URL does not
+ * resolve for a family cue: `warm` is what closes that, since an addon starts long
+ * before it plays anything.
+ *
+ * Keyed on the declared permission, which is a DISCLOSURE and not a boundary. That
+ * is the right shape here: an addon that plays a cue without declaring one still
+ * works, and pays the same in-flight first cue it would have paid anyway.
+ */
+function createSoundSurface(shared: SharedServices, addon: AddonContext): SoundApi {
+  if (addon.manifest.permissions?.includes('sound') === true) {
+    shared.sound.warm();
+  }
+  return createSound(shared.sound, addon.bag);
+}
+
 /** The domain surfaces, every one of them bound to the same addon and the same bag. */
 type AddonSurfaces = Pick<WocApi, 'bus' | 'keys' | 'net' | 'sound' | 'storage' | 'ui' | 'world'>;
 
@@ -155,7 +175,7 @@ function createSurfaces(
     net: createNet(shared.net, addon.bag, createNetTimers(shared)),
     world: createWorld(shared.world, addon.bag),
     ui: createUiSurface(shared, addon, log),
-    sound: createSound(shared.sound, addon.bag),
+    sound: createSoundSurface(shared, addon),
     keys: createKeysSurface(shared, addon, keybinds),
     bus: createBusSurface(shared, addon, log),
     storage: createStorageSurface(shared, addon),

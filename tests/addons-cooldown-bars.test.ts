@@ -107,8 +107,12 @@ function barFor(abilityId: string): Element | null {
  * Seeded BEFORE the addon loads, because the loader hydrates settings and then
  * evaluates: an addon reads `woc.settings` while it builds its first frame, which
  * is exactly when the layout is decided.
+ *
+ * This is the raw start, BEFORE the overlay has come up. Nearly every case wants
+ * `run` instead; this one exists for the cases whose subject is the window between
+ * a frame being built and its stored state landing.
  */
-async function run(
+async function start(
   settings: Record<string, unknown> = {},
   frames: Record<string, { box: FrameBox; visible: boolean }> = {},
 ): Promise<BarsHarness> {
@@ -171,6 +175,27 @@ async function run(
     iconOf: (abilityId) =>
       barFor(abilityId)?.querySelector('.woc-bar-icon')?.getAttribute('src') ?? '',
   };
+}
+
+/**
+ * `start`, plus the wait for the overlay to actually come up.
+ *
+ * A frame that saves its state starts hidden and is shown once that state arrives,
+ * and the answer is keyed per character, so it takes a watcher sample to find the
+ * character and then a storage read to come back. Every case about what the display
+ * DOES wants that to have happened: a hidden frame is not a state a player reads the
+ * display in, and it is the state the addon's own frame loop stands down for.
+ */
+async function run(
+  settings: Record<string, unknown> = {},
+  frames: Record<string, { box: FrameBox; visible: boolean }> = {},
+): Promise<BarsHarness> {
+  const harness = await start(settings, frames);
+  // The sample is what resolves the character; the settle is what lets the read
+  // keyed on it come back.
+  harness.poll();
+  await settleFrames();
+  return harness;
 }
 
 describe('its manifest', () => {
@@ -681,8 +706,11 @@ describe('the size of the strip', () => {
   // The tile is drawn BEFORE the restore lands, which is the live path: a tile
   // already on screen has to be resized rather than rebuilt, or a drag would throw
   // away the art the browser has decoded on every pointer move.
+  //
+  // `start` rather than `run`, because that window IS the subject: waiting for the
+  // overlay to come up would wait for the very restore this is watching land.
   it('resizes a tile that is already on screen', async () => {
-    const h = await run(
+    const h = await start(
       { layout: 'tiles' },
       { tiles: { box: { x: 20, y: 20, w: 300, h: 64 }, visible: true } },
     );

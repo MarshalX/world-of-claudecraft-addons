@@ -1,46 +1,23 @@
-// The server's own clock, tracked off the snapshot head.
+// Turning a deadline the server sent into seconds an addon can read.
 //
-// It exists because some of what the game sends is a DEADLINE rather than a
-// duration, and a deadline is meaningless without the clock it was measured
-// against. A loot roll expires at `ctx.time + 30`, where `ctx.time` is the sim's
-// seconds-since-start, and nothing on the client keeps that number: the client
-// reads `time` off each snapshot, uses it while decoding, and drops it.
+// Some of what the game sends is a DEADLINE rather than a duration, and a deadline
+// is meaningless without the clock it was measured against. A loot roll expires at
+// `ctx.time + 30`, where `ctx.time` is the sim's seconds-since-start.
 //
 // An addon has `woc.now()`, which is monotonic milliseconds since the loader
-// started, and `Date.now()`, which is wall clock. Neither can be compared with a
-// sim deadline, so publishing one raw would hand out a number whose only correct
-// use is a subtraction the addon cannot perform. Everything else on this API
-// reports time as SECONDS REMAINING (auras, cooldowns, casts, charges), and this
-// is what lets a deadline be published the same way.
-
-import { fieldNumber } from '../net/frames.ts';
-import type { NetHub } from '../net/hub.ts';
-
-export interface SimClock {
-  /** The sim's clock in seconds, or null before the first snapshot. */
-  now: () => number | null;
-  dispose: () => void;
-}
-
-export interface SimClockDeps {
-  net: NetHub;
-}
-
-export function createSimClock(deps: SimClockDeps): SimClock {
-  let time: number | null = null;
-
-  const off = deps.net.onFrame('snap', (frame) => {
-    const value = fieldNumber(frame, 'time');
-    if (value !== null) {
-      time = value;
-    }
-  });
-
-  return {
-    now: () => time,
-    dispose: off,
-  };
-}
+// started, and `Date.now()`, which is wall clock. Neither can be compared with a sim
+// deadline, so publishing one raw would hand out a number whose only correct use is
+// a subtraction the addon cannot perform. Everything else on this API reports time
+// as SECONDS REMAINING (auras, cooldowns, casts, charges), and this is what lets a
+// deadline be published the same way.
+//
+// THE CLOCK ITSELF IS NOT HERE, and used to be. It was a subscriber on the net hub,
+// reading `time` off each snapshot, which made it indistinguishable from an addon
+// asking for snapshots: the hub freezes a frame when something is subscribed to it,
+// so the loader's own reading kept every snapshot of every session on the freezing
+// path whether or not any addon had ever asked for one. It reads off the snapshot
+// HEAD, which makes it net state rather than world state, so it is tracked in
+// net/state.ts beside `tick` and the ack, and reached through `NetHub.simNow`.
 
 /**
  * Seconds left until a sim deadline, or null when it cannot be known.

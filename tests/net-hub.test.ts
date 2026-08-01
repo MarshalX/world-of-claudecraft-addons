@@ -86,3 +86,85 @@ describe('the hub', () => {
     expect(seen.mock.calls.length).toBeLessThan(3);
   });
 });
+
+// Freezing is what stops one addon's handler changing what the next one sees, and
+// it costs a walk of the whole frame. A snapshot is the frame that matters: it is
+// the largest thing on the socket, it arrives 20 times a second, and it used to be
+// frozen whenever ANYTHING anywhere was subscribed. A player running a meter that
+// wants combat events was paying for it on every snapshot for the whole session.
+//
+// The first case is the saving. The second and third are the property that makes the
+// saving safe, and they are the ones to keep: a subscriber must never be handed a
+// frame that another handler could still be holding a mutable reference to.
+describe('freezing a frame', () => {
+  // A frame nobody is subscribed to is delivered to nobody, so there is no handler
+  // to read its frozenness back from. The freeze itself is what is counted instead,
+  // which is also the thing being saved.
+  it('does not walk a snapshot when only another topic is subscribed', () => {
+    const froze = vi.spyOn(Object, 'freeze');
+    h.net.onEvent('damage', vi.fn());
+    froze.mockClear();
+
+    h.inbound(snapFrame({ ents: [{ id: 1, auras: [{ id: 'rend' }] }, { id: 2 }] }));
+
+    expect(froze).not.toHaveBeenCalled();
+    froze.mockRestore();
+  });
+
+  it('walks it once something does subscribe to it', () => {
+    const froze = vi.spyOn(Object, 'freeze');
+    h.net.on('snap', vi.fn());
+    froze.mockClear();
+
+    h.inbound(snapFrame({ ents: [{ id: 1, auras: [{ id: 'rend' }] }, { id: 2 }] }));
+
+    expect(froze).toHaveBeenCalled();
+    froze.mockRestore();
+  });
+
+  it('freezes a snapshot for a frame subscriber', () => {
+    let delivered: unknown = null;
+    h.net.on('snap', (frame) => {
+      delivered = frame;
+    });
+
+    h.inbound(snapFrame());
+
+    expect(Object.isFrozen(delivered)).toBe(true);
+  });
+
+  it('freezes a snapshot for a raw subscriber', () => {
+    let delivered: unknown = null;
+    h.net.onRaw((frame) => {
+      delivered = frame;
+    });
+
+    h.inbound(snapFrame());
+
+    expect(Object.isFrozen(delivered)).toBe(true);
+  });
+
+  // Events are frozen one at a time against their own subscribers, so an addon
+  // watching one kind still cannot reach into what another addon is about to read.
+  it('freezes an event for the kind that asked for it', () => {
+    let delivered: unknown = null;
+    h.net.onEvent('damage', (event) => {
+      delivered = event;
+    });
+
+    h.inbound(eventsFrame([{ type: 'damage', amount: 12 }]));
+
+    expect(Object.isFrozen(delivered)).toBe(true);
+  });
+
+  it('freezes an event for a wildcard subscriber', () => {
+    let delivered: unknown = null;
+    h.net.onAnyEvent((event) => {
+      delivered = event;
+    });
+
+    h.inbound(eventsFrame([{ type: 'heal2', amount: 5 }]));
+
+    expect(Object.isFrozen(delivered)).toBe(true);
+  });
+});

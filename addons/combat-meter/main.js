@@ -517,9 +517,16 @@ function fightSuffix() {
   return ', last fight';
 }
 
+/** Cleared by the first draw. Until then the panel has never had any content. */
+let neverDrawn = true;
+
 function repaint() {
   const now = woc.now();
   expireFight(now);
+  if (!(panel.visible || neverDrawn)) {
+    return;
+  }
+  neverDrawn = false;
   const seconds = fightSeconds(now);
 
   // One direction per tab. Reporting all three put a "0 healing" in front of
@@ -536,6 +543,7 @@ woc.setInterval(repaint, REPAINT_MS);
 
 woc.keys.bind('toggle', () => {
   panel.toggle();
+  repaint();
 });
 
 woc.keys.bind('reset', () => {
@@ -546,4 +554,6 @@ woc.keys.bind('reset', () => {
 
 // A changed row cap has to take effect on the next repaint rather than at the next
 // hit, or the table sits on the old shape until something is attacked.
-woc.onSettingsChange(repaint);
+woc.onSettingsChange(() => {
+  repaint();
+});

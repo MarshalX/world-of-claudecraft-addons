@@ -387,9 +387,13 @@ function runningCooldowns() {
  * An ability whose pool has emptied is ALSO on cooldown, because the empty-pool
  * timer rides the ordinary cooldown wire. One row per ability, and the charge
  * reading wins where there is one, because it is the one with a real total.
+ *
+ * The charge pools are passed in rather than read here, because the frame loop has
+ * already had to read them to know whether there is anything to do at all. Reading
+ * them again would be the same walk twice in one frame.
  */
-function timers() {
-  const found = rechargingAbilities();
+function timersFrom(recharging) {
+  const found = [...recharging];
   const exact = new Set(found.map((entry) => entry.abilityId));
   for (const entry of runningCooldowns()) {
     if (!exact.has(entry.abilityId)) {
@@ -399,15 +403,24 @@ function timers() {
   return found;
 }
 
+/** The same reading for the callers that have no pool list already in hand. */
+function timers() {
+  return timersFrom(rechargingAbilities());
+}
+
 /**
  * Rebuild the set of rows from what is running.
  *
  * A row that is already up keeps the total it was created with, so a rebuild does
  * not restart its fill. A row with a published total is marked exact and is never
  * re-baselined, since there is nothing to learn.
+ *
+ * The reading is a parameter, not a read. Everything below here runs inside one
+ * frame and has to agree about what is running: taking a fresh reading per function
+ * was three walks of the cooldown map for one frame, and the last of them could
+ * legitimately disagree with the first about which rows exist.
  */
-function syncRows() {
-  const running = timers();
+function syncRows(running) {
   const seen = new Set(running.map((entry) => entry.abilityId));
 
   for (const [abilityId, row] of rows) {
@@ -427,12 +440,17 @@ function syncRows() {
       });
     }
   }
-  draw();
+  draw(running);
+}
+
+/** The three callers that want a sync but have no reading in hand. */
+function resync() {
+  syncRows(timers());
 }
 
 /** Soonest ready first, which is the order the next decision is made in. */
-function drawOrder() {
-  return timers()
+function drawOrder(running) {
+  return running
     .filter((entry) => rows.has(entry.abilityId))
     .sort((a, b) => a.remaining - b.remaining)
     .slice(0, settingNumber('max-bars', DEFAULT_MAX_BARS));
@@ -504,8 +522,8 @@ function paint(row, remaining, charges, fraction) {
   row.ui.update({ fraction, value: figure(remaining, charges), tone });
 }
 
-function draw() {
-  const order = drawOrder();
+function draw(running) {
+  const order = drawOrder(running);
   const shown = new Set(order.map((entry) => entry.abilityId));
   for (const [abilityId, row] of rows) {
     if (!shown.has(abilityId)) {
@@ -536,27 +554,31 @@ function place(el, at) {
 // The cooldown set changes here; the numbers move in the frame loop below.
 // Sampling the set every frame instead would be a Map walk per frame to notice
 // nothing. Charges are the other way round, and the frame loop says why.
-woc.world.on('cooldowns', syncRows);
+woc.world.on('cooldowns', resync);
 
 /**
- * Redraw while anything is running, and stand down when nothing is.
- *
- * `syncRows` rather than `draw` when a charge pool is recharging: a charge coming
- * back while the pool still holds a use changes no cooldown id, so the
- * subscription cannot raise or drop those rows and only the loop can.
+ * Redraw while anything is running, and do as little as possible when nothing is.
  */
+let wasVisible = false;
+
 function tick() {
-  if (rechargingAbilities().length > 0) {
-    syncRows();
-  } else if (rows.size > 0) {
-    draw();
+  const { visible } = frame;
+  const appeared = visible && !wasVisible;
+  wasVisible = visible;
+  if (visible) {
+    const recharging = rechargingAbilities();
+    if (appeared || recharging.length > 0) {
+      syncRows(timersFrom(recharging));
+    } else if (rows.size > 0) {
+      draw(timersFrom(recharging));
+    }
   }
   woc.requestAnimationFrame(tick);
 }
 woc.requestAnimationFrame(tick);
 // #endregion
 
-syncRows();
+resync();
 
 // #region keybind
 woc.keys.bind('toggle', () => {
@@ -589,7 +611,7 @@ function rebuild() {
   frame.body.appendChild(list);
   previous.destroy();
   applyLayout();
-  syncRows();
+  resync();
 }
 
 woc.onSettingsChange(rebuild);

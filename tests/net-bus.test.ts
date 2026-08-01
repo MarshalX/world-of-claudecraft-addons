@@ -197,8 +197,11 @@ describe('createFrameBus', () => {
   });
 
   describe('size and hasSubscribers', () => {
-    // The hub skips freezing entirely when nothing is listening, so this number
-    // is what decides whether a 20 Hz frame does any work at all.
+    // `hasSubscribers` is what decides whether a 20 Hz frame is frozen at all, per
+    // TOPIC rather than across the bus: the loader itself subscribes at boot, so a
+    // count across every topic is never zero and could never gate anything. `size`
+    // is the bookkeeping check, which is what these cases are really pinning: an
+    // unsubscribe has to leave nothing behind.
     it('counts across topics and drops back to zero', () => {
       const { bus } = harness();
       const offA = bus.subscribe('snap', vi.fn());
@@ -227,5 +230,40 @@ describe('createFrameBus', () => {
 
       expect(bus.size).toBe(0);
     });
+  });
+});
+
+// Which clock reading a throttle window is measured from. Its own block rather than
+// one more case under `throttle`, because the subject is not the throttle: it is that
+// `deliver` runs ADDON code in the middle of a publish, so the clock moves by an
+// amount one addon decides and another addon pays for.
+describe('the timestamp a publish is measured at', () => {
+  // Every subscriber on a topic is being told about the SAME frame, so the window
+  // is measured from when that frame arrived and not from when the handler ahead
+  // of it happened to finish. `deliver` runs addon code, so without one timestamp
+  // for the whole publish a slow addon silently ate its neighbour's window, by an
+  // amount that depended on what the slow addon was doing.
+  it('measures the window from the frame rather than from the handler before it', () => {
+    const { bus, advance } = harness();
+    const seen = vi.fn();
+    // A neighbour that is slow ONCE. A neighbour that costs the same every time
+    // shifts the stamp and the reading by the same amount and cannot show this:
+    // what leaks is the DIFFERENCE between one frame's neighbour and the next's.
+    let slow = true;
+    bus.subscribe('snap', () => {
+      if (slow) {
+        slow = false;
+        advance(40);
+      }
+    });
+    bus.subscribe('snap', seen, { throttle: 100 });
+
+    bus.publish('snap', 'a');
+    advance(80);
+    bus.publish('snap', 'b');
+
+    // 120 ms since the frame that was delivered, so the window is up. Stamped from
+    // when the neighbour finished it would read as 80 ms and drop this frame.
+    expect(seen.mock.calls.flat()).toEqual(['a', 'b']);
   });
 });

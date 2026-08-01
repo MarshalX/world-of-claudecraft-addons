@@ -14,6 +14,8 @@
 // Hand-validated rather than parsed with zod, which is host-only and must never
 // reach this bundle.
 
+import { diagError } from '../../shared/diag.ts';
+
 /** The `format` field the game stamps, and the one schema version understood. */
 const FORMAT = 'woc-sfx-runtime-pack';
 const SCHEMA_VERSION = 1;
@@ -152,9 +154,34 @@ function parseSoundPack(input: unknown): PackResult {
  * find. It also loses the game's per-clip gain and its cache-busting hash. This
  * is the path taken when the pack cannot be fetched at all.
  */
+/**
+ * Fetch and parse the game's pack, or an empty one having said why it is empty.
+ *
+ * Here rather than in the engine because it is the other half of what this module
+ * is: the URL and the parser are already here, and the engine's business is
+ * playback. Every failure is reported and then swallowed, since the caller carries
+ * on with fallback URLs, which is lossy but audible, where rejecting would leave
+ * the engine with nothing to do but report the same thing again.
+ */
+async function fetchSoundPack(fetchJson: (url: string) => Promise<unknown>): Promise<SoundPack> {
+  let raw: unknown;
+  try {
+    raw = await fetchJson(PACK_URL);
+  } catch (err) {
+    diagError('could not fetch the game sound pack, cue names will be unavailable', err);
+    return new Map();
+  }
+  const result = parseSoundPack(raw);
+  if (!result.ok) {
+    diagError(`could not read the game sound pack: ${result.reason}`);
+    return new Map();
+  }
+  return result.pack;
+}
+
 function fallbackCueUrl(cue: string): string {
   return `/audio/sfx/${cue}.mp3`;
 }
 
 export type { PackResult, SoundClip, SoundPack };
-export { fallbackCueUrl, PACK_URL, parseSoundPack };
+export { fallbackCueUrl, fetchSoundPack, PACK_URL, parseSoundPack };
