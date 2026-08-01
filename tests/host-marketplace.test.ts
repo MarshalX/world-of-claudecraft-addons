@@ -393,6 +393,99 @@ describe('refreshing an index', () => {
   });
 });
 
+// The index cache is per session, and before `ensure` nothing ever seeded it: on
+// a fresh install and again after every page reload, Browse drew "no marketplace
+// has been read yet" until the player found Refresh, and the update check
+// compared installed addons against no rows and reported nothing to update.
+describe('seeding the indexes', () => {
+  it('reads a source that has not been read this session', async () => {
+    const { market, http } = open();
+
+    await market.api.ensure();
+
+    expect(http.calls).toEqual([OFFICIAL_INDEX]);
+    expect((await market.api.list())[0]?.addons.map((row) => row.id)).toEqual(['combat-meter']);
+  });
+
+  it('reads every source in the list, not only the official one', async () => {
+    const { market, http } = open({
+      stored: [{ owner: 'someone', repo: 'their-addons', ref: 'HEAD' }],
+      files: { [OFFICIAL_INDEX]: indexBody(), [THIRD_PARTY]: indexBody() },
+    });
+
+    await market.api.ensure();
+
+    expect(http.calls).toEqual([OFFICIAL_INDEX, THIRD_PARTY]);
+  });
+
+  it('reads a source once a session however often it is called', async () => {
+    const { market, http } = open();
+
+    await market.api.ensure();
+    await market.api.ensure();
+    await market.api.ensure();
+
+    expect(http.calls).toEqual([OFFICIAL_INDEX]);
+  });
+
+  // Every open of the manager calls this, so retrying a source that is simply
+  // unreachable would put a doomed request in front of each of them.
+  // A count rather than a list, since a missing index legitimately costs two
+  // requests: the contents-API fallback is what the second one is.
+  it('does not retry a source whose read failed', async () => {
+    const { market, http } = open({ files: {} });
+    await market.api.ensure();
+    const spent = http.calls.length;
+
+    await market.api.ensure();
+
+    expect(http.calls).toHaveLength(spent);
+    expect((await market.api.list())[0]?.error).toContain('HTTP 404');
+  });
+
+  it('leaves Refresh able to retry a source it gave up on', async () => {
+    const { market, http } = open({ files: {} });
+    await market.api.ensure();
+
+    http.put(OFFICIAL_INDEX, indexBody());
+    await market.api.refresh(OFFICIAL_ID);
+
+    expect((await market.api.list())[0]?.error).toBeNull();
+  });
+
+  // Two calls landing together must not have the second answer before the read
+  // the first started: the manager lists straight afterwards, and a caller that
+  // returned early would list an index that has not arrived.
+  it('joins a read already running rather than returning ahead of it', async () => {
+    const { market, http } = open();
+
+    await Promise.all([market.api.ensure(), market.api.ensure()]);
+
+    expect(http.calls).toEqual([OFFICIAL_INDEX]);
+    expect((await market.api.list())[0]?.fetchedAt).not.toBeNull();
+  });
+
+  it('reads a re-added source again, since removing it forgot what it held', async () => {
+    const { market, http } = open({ files: { [THIRD_PARTY]: indexBody([], 'Theirs') } });
+    await market.api.add('https://github.com/someone/their-addons');
+    await market.api.remove('gh:someone/their-addons');
+
+    await market.api.add('https://github.com/someone/their-addons');
+    await market.api.ensure();
+
+    expect(http.calls.filter((url) => url === THIRD_PARTY)).toHaveLength(2);
+  });
+
+  it('does not fetch for a source Refresh already read', async () => {
+    const { market, http } = open();
+    await market.api.refresh(OFFICIAL_ID);
+
+    await market.api.ensure();
+
+    expect(http.calls).toEqual([OFFICIAL_INDEX]);
+  });
+});
+
 describe('dev mode', () => {
   it('is off until it is turned on', async () => {
     const { market } = await open();

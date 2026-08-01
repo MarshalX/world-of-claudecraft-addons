@@ -11,129 +11,90 @@
 import type { DisposalBag } from '../disposal.ts';
 import { unlessFrozen } from '../freeze.ts';
 import type { Unsubscribe } from '../net/bus.ts';
-import type { WorldBackend } from '../world/backend.ts';
+import type { AbilityIndex } from '../world/abilities.ts';
+import {
+  type AuraQuery,
+  filterAuras,
+  filterPartyAuras,
+  NO_ROWS,
+  NONE,
+  type PartyAuraQuery,
+} from '../world/auras.ts';
+import type { CharacterInfo, ProfessionInfo, TalentInfo } from '../world/character.ts';
+import type { CombatState } from '../world/combat.ts';
 import type { EntityCast, Hazard } from '../world/derived.ts';
-import type { Aura, Entity, InvSlot, PartyInfo, WorldQuests } from '../world/game-types.ts';
+import type { EncounterInfo } from '../world/encounter.ts';
+import { mergeLive } from '../world/facade.ts';
+import type {
+  Aura,
+  Entity,
+  EquipSlot,
+  InvSlot,
+  PartyInfo,
+  PartyMemberAura,
+  WorldQuests,
+} from '../world/game-types.ts';
+import type { GroupInfo } from '../world/group.ts';
 import type { WorldHub } from '../world/hub.ts';
-import { readonlyMapView } from '../world/readonly-map.ts';
 import { isWorldKey, WORLD_KEYS, type WorldKey } from '../world/signature.ts';
+import { NO_THREAT, type ThreatTable } from '../world/threat.ts';
+import { resolveUnit, type UnitContext, type UnitToken } from '../world/units.ts';
 import type { WorldValues } from '../world/values.ts';
+import { derivedReads, emptyEntities, fromBackend, gameReads, selfReads } from './world-reads.ts';
 
-/**
- * The roster before the game exists.
- *
- * A read-only view rather than a bare Map, and built per read rather than
- * shared. A bare Map would break the published contract for the whole window
- * between an addon's first line and world entry, so `entities.clear()` would
- * throw after entry and quietly succeed before it. Sharing one would be worse:
- * a write from one addon would land in what every other addon reads.
- */
-function emptyEntities(): ReadonlyMap<number, Entity> {
-  return readonlyMapView(new Map<number, Entity>());
-}
-
-/**
- * No cast before the game exists.
- *
- * A bare Map is right here where it is wrong for `entities`: this one is built by
- * the loader on every read rather than being the game's own live collection, so a
- * write into it lands in something already discarded and cannot reach another
- * addon. It is not wrapped because wrapping every derived read would be a
- * per-frame allocation to guard a value nobody holds.
- */
-function emptyCasts(): ReadonlyMap<number, EntityCast> {
-  return new Map<number, EntityCast>();
-}
-
-/** Every read answers null before the game exists, rather than throwing at an addon. */
-function fromBackend<T>(hub: WorldHub, read: (backend: WorldBackend) => T | null): T | null {
-  const backend = hub.backend();
-  if (backend === null) {
+/** Null before world entry, which is the one case `mine` cannot be answered in. */
+function playerIdOf(ctx: UnitContext): number | null {
+  if (ctx.player === null) {
     return null;
   }
-  return read(backend);
+  return ctx.player.id;
 }
 
 /**
- * Two halves of the facade as one object, carrying DESCRIPTORS rather than values.
+ * Everything that takes an argument: resolving a unit, and filtering its auras.
  *
- * `{ ...a, ...b }` would be the obvious way to compose these and is exactly wrong
- * here: a spread READS every property, so each getter would be called once at
- * assembly time and the facade would freeze at whatever the answers were before
- * the game existed. Copying descriptors keeps every getter a getter.
- *
- * The facade is split at all because it is one read per published key and that is
- * past the length a single function body is allowed. The intersection is what
- * keeps the split honest: a key dropped from either half fails to satisfy
- * `WorldApi` at the return below rather than going missing at an addon.
+ * These are lookups OVER the reads above rather than reads of their own, which
+ * is why they are not world keys and cannot be subscribed to. Watch the key the
+ * answer comes from (`target`, `party`, `auras`) and re-resolve in the handler.
  */
-function mergeLive<A extends object, B extends object>(a: A, b: B): A & B {
-  const merged = Object.defineProperties({}, Object.getOwnPropertyDescriptors(a));
-  return Object.defineProperties(merged, Object.getOwnPropertyDescriptors(b)) as A & B;
-}
-
-/** The reads that come straight off the backend, each null until the game is up. */
-function gameReads(hub: WorldHub) {
-  return {
-    get player(): Entity | null {
-      return fromBackend(hub, (backend) => backend.player);
-    },
-
-    get target(): Entity | null {
-      return fromBackend(hub, (backend) => backend.target);
-    },
-
-    get entities(): ReadonlyMap<number, Entity> {
-      const backend = hub.backend();
-      if (backend === null) {
-        return emptyEntities();
-      }
-      return backend.entities;
-    },
-
-    get party(): PartyInfo | null {
-      return fromBackend(hub, (backend) => backend.party);
-    },
-
-    get inventory(): readonly InvSlot[] | null {
-      return fromBackend(hub, (backend) => backend.inventory);
-    },
-
-    get quests(): WorldQuests | null {
-      return fromBackend(hub, (backend) => backend.quests);
-    },
-
-    get cooldowns(): ReadonlyMap<string, number> | null {
-      return fromBackend(hub, (backend) => backend.cooldowns);
-    },
-
-    get auras(): readonly Aura[] | null {
-      return fromBackend(hub, (backend) => backend.auras);
-    },
+function lookups(hub: WorldHub) {
+  const context = (): UnitContext => {
+    const backend = hub.backend();
+    return {
+      player: backend?.player ?? null,
+      target: backend?.target ?? null,
+      entities: backend?.entities ?? emptyEntities(),
+      party: backend?.party ?? null,
+    };
   };
-}
 
-/** The reads the loader computes. See `world/derived.ts` for why each exists. */
-function derivedReads(hub: WorldHub) {
   return {
-    get casts(): ReadonlyMap<number, EntityCast> {
+    unit: (token: string): Entity | null => resolveUnit(token, context()),
+
+    aurasOn: (token: string, query: AuraQuery = {}): readonly Aura[] => {
+      const ctx = context();
+      const unit = resolveUnit(token, ctx);
+      if (unit === null) {
+        return NONE;
+      }
+      return filterAuras(unit.auras, query, playerIdOf(ctx));
+    },
+
+    threat: (entityId: number): ThreatTable => {
       const backend = hub.backend();
       if (backend === null) {
-        return emptyCasts();
+        return NO_THREAT;
       }
-      return backend.casts;
+      return backend.threat(entityId);
     },
 
-    get targetAuras(): readonly Aura[] | null {
-      return fromBackend(hub, (backend) => backend.targetAuras);
-    },
-
-    get hazards(): readonly Hazard[] | null {
-      return fromBackend(hub, (backend) => backend.hazards);
-    },
-
-    get markers(): ReadonlyMap<number, number> | null {
-      return fromBackend(hub, (backend) => backend.markers);
+    partyAuras: (pid: number, query: PartyAuraQuery = {}): readonly PartyMemberAura[] => {
+      const party = hub.backend()?.party;
+      if (party === undefined || party === null) {
+        return NO_ROWS;
+      }
+      const row = party.members.find((member) => member.pid === pid);
+      return filterPartyAuras(row?.auras, query);
     },
   };
 }
@@ -179,6 +140,28 @@ export interface WorldApi {
   readonly entities: ReadonlyMap<number, Entity>;
   readonly party: PartyInfo | null;
   readonly inventory: readonly InvSlot[] | null;
+  /** Worn gear by slot, item ids only. A slot with nothing in it is absent. */
+  readonly equipment: Partial<Record<EquipSlot, string>> | null;
+  /** The bag sockets: an item id per equipped bag, null for an empty socket. */
+  readonly bags: readonly (string | null)[] | null;
+  /** Total slots across the backpack and every equipped bag. Derived from `bags`. */
+  readonly bagCapacity: number | null;
+  /** Money, in copper. */
+  readonly copper: number | null;
+  /** The zone name the game is displaying. Localized text, never an id. */
+  readonly zone: string | null;
+  /** Progression, deeds and titles. Null before world entry. */
+  readonly character: CharacterInfo | null;
+  readonly talents: TalentInfo | null;
+  /** The two profession counter maps. See `world/character.ts` for what is left out. */
+  readonly professions: ProfessionInfo | null;
+  /** Loot rolls, master loot and raid lockouts. */
+  readonly group: GroupInfo | null;
+  /** The instanced run in progress, thin by design. */
+  readonly encounter: EncounterInfo | null;
+
+  /** One entity's hate table, sorted and measured against you. */
+  threat: (entityId: number) => ThreatTable;
   readonly quests: WorldQuests | null;
   readonly cooldowns: ReadonlyMap<string, number> | null;
   readonly auras: readonly Aura[] | null;
@@ -186,6 +169,38 @@ export interface WorldApi {
   readonly targetAuras: readonly Aura[] | null;
   readonly hazards: readonly Hazard[] | null;
   readonly markers: ReadonlyMap<number, number> | null;
+  /**
+   * The player's own spellbook, with lookups by id and by display name.
+   *
+   * The bridge between an ability's id and the name combat events carry, which
+   * nothing else on the surface provides. Covers the player's OWN kit, so a mob's
+   * ability name is not in here.
+   */
+  readonly abilities: AbilityIndex;
+
+  /**
+   * Whether the player is fighting, and which signal answered.
+   *
+   * Derived: the game sends no combat flag on the self record, and the one that
+   * exists on the client entity is never written. `world/combat.ts` holds the
+   * order the signals are consulted in.
+   */
+  readonly combat: CombatState;
+
+  /**
+   * The entity a unit token names, or null.
+   *
+   * `targettarget` reads whichever field the target's kind actually fills, which
+   * is the reason to use this rather than open-coding the lookup: a mob never
+   * carries `targetId`.
+   */
+  unit: (token: UnitToken) => Entity | null;
+
+  /** The matching effects on a unit, empty when it resolves to nothing. */
+  aurasOn: (token: UnitToken, query?: AuraQuery) => readonly Aura[];
+
+  /** The same over a party row's compact strip, which carries no source. */
+  partyAuras: (pid: number, query?: PartyAuraQuery) => readonly PartyMemberAura[];
 
   /**
    * Watch one key for change, sampled once per animation frame.
@@ -204,5 +219,8 @@ export interface WorldApi {
 }
 
 export function createWorld(hub: WorldHub, bag: DisposalBag): WorldApi {
-  return mergeLive(mergeLive(gameReads(hub), derivedReads(hub)), controls(hub, bag));
+  return mergeLive(
+    mergeLive(gameReads(hub), mergeLive(selfReads(hub), derivedReads(hub))),
+    mergeLive(lookups(hub), controls(hub, bag)),
+  );
 }

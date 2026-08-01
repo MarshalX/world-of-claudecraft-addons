@@ -93,11 +93,20 @@ function fakeHost() {
   };
 }
 
-/** A live world with a hand-driven frame clock, so the sampler is not a race. */
+/**
+ * A live world with a hand-driven frame clock, so the sampler is not a race.
+ *
+ * The clock moves with the frames because the sampler holds a floor between
+ * samples: a frame clock stuck at one instant would model a browser firing every
+ * animation frame at the same timestamp, and the watcher would sample once and
+ * never again. 25 ms a frame is over that floor, so each frame here is a sample,
+ * which is what these cases are about.
+ */
 async function worldHarness() {
   const live = { player: { ...PLAYER_ENTITY } as Record<string, unknown> };
   const scheduled = new Map<number, () => void>();
   let next = 1;
+  let clock = 0;
 
   const hub = createWorldHub({
     game: Promise.resolve({ world: live }),
@@ -110,6 +119,10 @@ async function worldHarness() {
     cancel: (id) => {
       scheduled.delete(id);
     },
+    lastDamageAt: () => null,
+    now: () => clock,
+    zoneName: () => null,
+    simNow: () => null,
   });
   await hub.ready;
 
@@ -117,6 +130,7 @@ async function worldHarness() {
     world: createWorld(hub, new DisposalBag()),
     live,
     frame: () => {
+      clock += 25;
       for (const run of [...scheduled.values()]) {
         scheduled.clear();
         run();

@@ -9,7 +9,8 @@
 // game or by anything else running on the page.
 
 import { addonNamespace } from '../../shared/storage-keys.ts';
-import type { StorageHub } from '../storage/hub.ts';
+import type { CharacterStorageDeps, CharacterStore } from './storage-character.ts';
+import { createCharacterStorage } from './storage-character.ts';
 
 interface AddonStorageApi {
   /** Resolves `fallback` when the key has never been written. */
@@ -18,11 +19,22 @@ interface AddonStorageApi {
   delete: (key: string) => Promise<void>;
   /** This addon's own keys only. Loader-owned config lives in another namespace. */
   keys: () => Promise<string[]>;
+  /**
+   * The same four calls, for the character in play rather than for the account.
+   *
+   * A separate namespace rather than a prefix, so `keys()` on either one answers
+   * about itself. See api/storage-character.ts for why a read waits for the
+   * character and a write refuses to.
+   */
+  character: CharacterStore;
 }
 
-function createStorage(hub: StorageHub, fqid: string): AddonStorageApi {
+function createStorage(deps: CharacterStorageDeps): AddonStorageApi {
+  const { hub, fqid } = deps;
   const ns = addonNamespace(fqid);
   return {
+    character: createCharacterStorage(deps),
+
     get: async (key, fallback) => {
       const value = await hub.get(ns, key);
       // A stored `null` is a value the addon chose and is returned as one. Only

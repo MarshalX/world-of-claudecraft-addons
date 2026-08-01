@@ -24,12 +24,10 @@
 //
 // Three limits, stated rather than hidden.
 //
-// NO ABILITY ICONS. The rows carry no art, and this is the one worth reading before
-// anyone adds it back. Skill art is filed under the ability ID, and a combat event
-// carries the ability's display NAME: `damage` and `heal2` fill that field from
-// `ability.name` and only `castStart` and `spellfx` carry `ability.id`. Those two
-// have DIVERGED in the game, so a name cannot be turned back into an id. The worked
-// example, from the deployed i18n bundle:
+// ICONS ONLY FOR YOUR OWN ABILITIES, and the reason is worth keeping. Skill art is
+// filed under the ability ID, while a combat event carries the display NAME: `damage`
+// and `heal2` fill that field from `ability.name`, and only `castStart` and `spellfx`
+// carry `ability.id`. The two have DIVERGED in the game:
 //
 //   arcane_shot: { name: `Fell Shot`, ... }
 //
@@ -38,14 +36,12 @@
 // A first version shipped exactly that and drew icons for the two hunter abilities
 // whose names happened to still match their ids, which read as random.
 //
-// The routes to a real mapping were weighed and all rejected. The i18n bundle has all
-// 380 pairs and is served, but behind a hashed filename that must be discovered from
-// play.html, as minified JS rather than JSON, per locale: a surface far more brittle
-// than anything else the loader touches, breaking on a bundler change rather than on a
-// game change. Correlating a `spellfx` id with the damage that follows is learnable
-// from the wire alone, but a mispairing draws the WRONG icon, which is worse than
-// none. So the meter shows the names the game shows and no art. If the game ever
-// aligns the two or serves a mapping, this becomes a small change.
+// `world.abilities` is what closed it: the loader reads the game's own resolved
+// spellbook, which carries the id and the name together, so `byName` walks the join
+// backwards and the art is exact. What it covers is YOUR OWN kit, so a mob's ability
+// still has no id to find and gets no icon. That is why a missing icon here means
+// "not something you cast" rather than "we could not work it out", and why the rows
+// are still tinted by school: the tint reaches the rows the art cannot.
 //
 // Damage a pet deals is not counted: the published surface does not say which entity
 // is yours, and guessing from position or name would be wrong often enough to be worse
@@ -305,11 +301,6 @@ const panel = woc.ui.window({
   save: true,
 });
 
-// The tabs come first, the way the game's own meter puts them: they say what the
-// numbers under them are, so reading them second is reading backwards.
-const tabs = document.createElement('div');
-tabs.className = 'woc-tabs woc-meter-tabs';
-
 const total = document.createElement('div');
 total.className = 'woc-meter-total';
 total.style.opacity = '0.75';
@@ -326,7 +317,20 @@ outcomes.className = 'woc-meter-outcomes';
 outcomes.style.marginTop = '6px';
 outcomes.style.opacity = '0.75';
 
-panel.body.append(tabs, total, table, outcomes);
+const strip = woc.ui.tabs({
+  tabs: TABLES.map((entry) => ({ id: entry.id, label: entry.label })),
+  active: tab,
+  onSelect: (id) => {
+    tab = id;
+    // Clearing is what makes the switch instant rather than one repaint late.
+    clearRows();
+    repaint();
+  },
+});
+// The addon's own marking, for its own styling. The kit's classes are already on it.
+strip.el.classList.add('woc-meter-tabs');
+
+panel.body.append(strip.el, total, table, outcomes);
 
 /** Ability label to its row, reused across repaints. */
 const rows = new Map();
@@ -341,31 +345,6 @@ function clearRows() {
 }
 
 /**
- * One tab per table.
- *
- * `woc-tab` is the loader's own tab family, which the manager's strip uses, so
- * these get its hover and focus treatment rather than a private imitation. Inside
- * a compact frame it is drawn compact, which is what the density option is for.
- */
-function createTab(entry) {
-  const button = document.createElement('button');
-  button.type = 'button';
-  button.className = 'woc-tab woc-meter-tab';
-  button.dataset.tab = entry.id;
-  button.textContent = entry.label;
-  button.addEventListener('click', () => {
-    tab = entry.id;
-    // Clearing is what makes the switch instant rather than one repaint late.
-    clearRows();
-    repaint();
-  });
-  tabs.appendChild(button);
-  return button;
-}
-
-const tabButtons = TABLES.map(createTab);
-
-/**
  * One row, from the loader's own timer bar rather than hand-built.
  *
  * The kit row is the same shape this addon used to assemble out of about twenty
@@ -376,19 +355,61 @@ const tabButtons = TABLES.map(createTab);
  * per-ability detail, with the fill spanning both, so the share still reads as the
  * whole row's rather than as a bar on the top line of it.
  *
- * NO ICON, and that is a decision rather than an omission. See the header. The fill is
- * tinted by the ability's SCHOOL instead, which is the one identifying thing a damage
- * event carries that does not depend on the id, and it is what tells two rows apart now
- * that the art cannot. Healing rows pass nothing, because `heal2` carries no school.
+ * The art comes from the label by way of `world.abilities`, which is the only thing
+ * that turns the display name an event carries back into the id the icon is filed
+ * under. A row with no icon is therefore a row this character did not cast: a mob's
+ * ability, or Melee, neither of which is in your own spellbook. That is a real
+ * distinction rather than a gap, so it is left visible.
+ *
+ * The fill stays tinted by SCHOOL. It was the only way to tell two rows apart back
+ * when there was no art, and it is still worth having with art: it survives on the
+ * rows the icons cannot reach, and it says what KIND of damage a row is made of,
+ * which an icon does not. Healing rows pass nothing, because `heal2` carries no
+ * school.
  */
 // #region school-tint
 function createRow(label, school) {
-  const bar = woc.ui.bar({ label, school, className: 'woc-meter-row' });
+  const bar = woc.ui.bar({ label, school, icon: abilityArt(label), className: 'woc-meter-row' });
   bar.el.dataset.ability = label;
-  woc.ui.tooltip(bar.el, label);
+  woc.ui.tooltip(bar.el, () => rowTooltip(label, school));
   return bar;
 }
 // #endregion
+
+function rowTooltip(label, school) {
+  const tally = fight.tallies[tab].get(label);
+  if (tally === undefined) {
+    return label;
+  }
+  const lines = [detailText(tally)];
+  if (school !== null && school !== undefined) {
+    lines.push({ text: `${school} damage`, tone: 'muted' });
+  }
+  if (abilityArt(label) === null) {
+    lines.push({ text: 'not in your spellbook', tone: 'muted' });
+  }
+  return { title: label, icon: abilityArt(label), lines };
+}
+
+/**
+ * The icon for a row, found from the display name the event gave us.
+ *
+ * The join that was impossible until `world.abilities` existed: an event names the
+ * ability ("Fell Shot"), art is filed under the id (`arcane_shot`), and the two have
+ * diverged. Slugifying the name was tried and produced `fell_shot`, which is nothing.
+ *
+ * Null for anything not in your own spellbook, which is every mob ability and Melee.
+ * The kit hides its icon slot for a null or a URL that fails to load, so a row that
+ * cannot have art simply has none.
+ */
+function abilityArt(label) {
+  const info = woc.world.abilities.byName(label);
+  if (info === null) {
+    return null;
+  }
+  // A player entity's templateId is its class, which is where skill art is filed.
+  return woc.ui.icon.ability(info.id, woc.world.player?.templateId ?? '');
+}
 
 /** The tallies for the table on screen, biggest first and capped. */
 function tableRows() {
@@ -419,16 +440,26 @@ function detailLine(tally) {
   return '';
 }
 
-function drawRow(label, tally, whole, seconds) {
+/**
+ * Put a row at its position, and only if it is not there already.
+ */
+function place(el, at) {
+  if (table.children[at] !== el) {
+    table.insertBefore(el, table.children[at] ?? null);
+  }
+}
+
+/** One row, against the table it is part of: the whole, the clock, and its slot. */
+function drawRow(label, tally, table_) {
   const row = rows.get(label) ?? createRow(label, tally.school);
   rows.set(label, row);
-  const rate = (tally.total / seconds).toFixed(DECIMALS);
+  const rate = (tally.total / table_.seconds).toFixed(DECIMALS);
   row.update({
-    fraction: tally.total / Math.max(whole, 1),
-    value: `${num(tally.total)}  ${pct(tally.total, whole)}  ${rate}`,
+    fraction: tally.total / Math.max(table_.whole, 1),
+    value: `${num(tally.total)}  ${pct(tally.total, table_.whole)}  ${rate}`,
     detail: detailLine(tally),
   });
-  table.appendChild(row.el);
+  place(row.el, table_.at);
 }
 
 function drawTable(seconds) {
@@ -441,8 +472,8 @@ function drawTable(seconds) {
       rows.delete(label);
     }
   }
-  for (const [label, tally] of ordered) {
-    drawRow(label, tally, whole, seconds);
+  for (const [at, [label, tally]] of ordered.entries()) {
+    drawRow(label, tally, { whole, seconds, at });
   }
 }
 
@@ -486,9 +517,16 @@ function fightSuffix() {
   return ', last fight';
 }
 
+/** Cleared by the first draw. Until then the panel has never had any content. */
+let neverDrawn = true;
+
 function repaint() {
   const now = woc.now();
   expireFight(now);
+  if (!(panel.visible || neverDrawn)) {
+    return;
+  }
+  neverDrawn = false;
   const seconds = fightSeconds(now);
 
   // One direction per tab. Reporting all three put a "0 healing" in front of
@@ -496,13 +534,6 @@ function repaint() {
   const amount = num(fight.totals[tab]);
   total.textContent = `${amount} ${nounFor(tab)} in ${duration(seconds)}${fightSuffix()}`;
 
-  for (const button of tabButtons) {
-    const active = button.dataset.tab === tab;
-    button.setAttribute('aria-pressed', String(active));
-    // `woc-tab-active` is the loader's own marking, so the open tab looks the way
-    // the manager's does. aria-pressed alone is invisible to anyone looking.
-    button.classList.toggle('woc-tab-active', active);
-  }
   drawTable(seconds);
   outcomes.textContent = outcomeLine();
 }
@@ -512,6 +543,7 @@ woc.setInterval(repaint, REPAINT_MS);
 
 woc.keys.bind('toggle', () => {
   panel.toggle();
+  repaint();
 });
 
 woc.keys.bind('reset', () => {
@@ -522,4 +554,6 @@ woc.keys.bind('reset', () => {
 
 // A changed row cap has to take effect on the next repaint rather than at the next
 // hit, or the table sits on the old shape until something is attacked.
-woc.onSettingsChange(repaint);
+woc.onSettingsChange(() => {
+  repaint();
+});

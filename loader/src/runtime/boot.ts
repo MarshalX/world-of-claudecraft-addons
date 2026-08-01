@@ -10,6 +10,7 @@ import { connectHost, type HostConnection } from './bridge.ts';
 import { type DiagnosticsReading, readDiagnostics } from './diagnostics.ts';
 import { clearTimer, setTimer } from './dom-timers.ts';
 import { createHostEventHandler } from './host-events.ts';
+import { createLoaderBinds, type LoaderBinds } from './keys/loader-binds.ts';
 import { type GameProbe, probeGame } from './probe.ts';
 import { waitForDocument } from './ready.ts';
 import { createRuntimeServices, type RuntimeServices } from './services.ts';
@@ -20,6 +21,7 @@ import { createGameSurfaces, type GameSurfaces } from './surfaces.ts';
 import { type MountedUi, mountUi } from './ui/mount.ts';
 // The three sheets bundled as text and joined into the one injected <style>.
 import { LOADER_CSS } from './ui/styles/index.ts';
+import { createProjector } from './world/project.ts';
 
 /** Held so the manager's Diagnostics pane can report the probe after the fact. */
 interface ProbeSlot {
@@ -60,6 +62,8 @@ interface StartedRuntime {
   shared: SharedServices;
   services: RuntimeServices;
   supervisor: Supervisor;
+  /** The loader's own keybinds, which outlive every addon. */
+  loaderBinds: LoaderBinds;
 }
 
 /** The supervisor as the manager sees it, resolved lazily. See startUi. */
@@ -114,6 +118,23 @@ function diagnosticsFor(deps: UiStartDeps): DiagnosticsReading {
   });
 }
 
+/**
+ * The loader's own keybinds, registered after the UI because what they switch is
+ * part of the UI kit.
+ *
+ * The first binds that belong to the loader rather than to an addon; see
+ * keys/loader-binds.ts for why they reuse the addon keybind store.
+ */
+function bindLoaderKeys(services: RuntimeServices, ui: MountedUi): LoaderBinds {
+  return createLoaderBinds({
+    hub: services.storage,
+    dispatcher: services.dispatcher,
+    onUnlock: () => {
+      ui.kit.unlock.toggle();
+    },
+  });
+}
+
 /** Everything mountUi reads, gathered so startUi stays a wiring function. */
 function uiDeps(
   deps: UiStartDeps,
@@ -133,6 +154,7 @@ function uiDeps(
     storage: host?.storage ?? null,
     ...view,
     ...pageServices(),
+    project: createProjector(() => deps.surfaces.world.game()),
     storageHub: services.storage,
     gameBindings: services.gameBindings,
     dispatcher: services.dispatcher,
@@ -146,6 +168,10 @@ function pageServices() {
   return {
     setTimer,
     clearTimer,
+    schedule: (frame: () => void) => globalThis.requestAnimationFrame(frame),
+    cancelFrame: (id: number) => {
+      globalThis.cancelAnimationFrame(id);
+    },
     viewport: () => ({ w: globalThis.innerWidth, h: globalThis.innerHeight }),
     // The same reader the sound engine uses for its pack. Both are same-origin game
     // content, and the kit's per-class art manifests are the second consumer.
@@ -183,6 +209,8 @@ async function startUi(deps: UiStartDeps): Promise<StartedRuntime> {
   const slot = supervisorSlot();
   const ui = mountUi(uiDeps(deps, services, slot.view));
 
+  const loaderBinds = bindLoaderKeys(services, ui);
+
   const shared = services.withKit(ui.kit);
   const supervisor = createSupervisor({
     shared,
@@ -214,7 +242,7 @@ async function startUi(deps: UiStartDeps): Promise<StartedRuntime> {
   // the socket hook, the keydown listener, the UI kit, and the storage hub.
   await supervisor.sync();
 
-  return { ui, shared, services, supervisor };
+  return { ui, shared, services, supervisor, loaderBinds };
 }
 
 export interface RuntimeBoot {

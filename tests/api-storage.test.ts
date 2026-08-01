@@ -8,15 +8,26 @@
 import { describe, expect, it } from 'vitest';
 import { createStorage } from '../loader/src/runtime/api/storage.ts';
 import { addonNamespace, configNamespace } from '../loader/src/shared/storage-keys.ts';
-import { createFakeStorage } from './fakes/storage.ts';
+import { createFakeStorage, type FakeStorage } from './fakes/storage.ts';
 
 const FQID = 'official/combat-meter';
 const OTHER = 'official/cooldown-bars';
 
+/** The account-wide half, which is what everything below the first block tests. */
+function mount(hub: FakeStorage, fqid: string = FQID) {
+  return createStorage({
+    hub,
+    fqid,
+    channel: 'pbe',
+    character: () => 'Claudemoon/Marshal',
+    known: () => Promise.resolve(),
+  });
+}
+
 describe('the addon key-value store', () => {
   it('round-trips a value', async () => {
     const hub = createFakeStorage();
-    const storage = createStorage(hub, FQID);
+    const storage = mount(hub);
 
     await storage.set('history', [1, 2, 3]);
 
@@ -25,8 +36,8 @@ describe('the addon key-value store', () => {
 
   it('namespaces by fqid, so two addons cannot collide on a key', async () => {
     const hub = createFakeStorage();
-    const mine = createStorage(hub, FQID);
-    const theirs = createStorage(hub, OTHER);
+    const mine = mount(hub);
+    const theirs = mount(hub, OTHER);
 
     await mine.set('state', 'mine');
     await theirs.set('state', 'theirs');
@@ -38,13 +49,13 @@ describe('the addon key-value store', () => {
   it('writes into the addon namespace and nowhere else', async () => {
     const hub = createFakeStorage();
 
-    await createStorage(hub, FQID).set('state', 1);
+    await mount(hub).set('state', 1);
 
     expect(Object.keys(hub.dump())).toEqual([`${addonNamespace(FQID)}/state`]);
   });
 
   it('answers the fallback for a key never written', async () => {
-    const storage = createStorage(createFakeStorage(), FQID);
+    const storage = mount(createFakeStorage());
 
     expect(await storage.get('missing', 'default')).toBe('default');
     expect(await storage.get('missing')).toBeUndefined();
@@ -52,14 +63,14 @@ describe('the addon key-value store', () => {
 
   // A stored null is a value the addon chose. Only an absent key falls back.
   it('answers a stored null rather than the fallback', async () => {
-    const storage = createStorage(createFakeStorage(), FQID);
+    const storage = mount(createFakeStorage());
     await storage.set('cleared', null);
 
     expect(await storage.get('cleared', 'default')).toBeNull();
   });
 
   it('deletes', async () => {
-    const storage = createStorage(createFakeStorage(), FQID);
+    const storage = mount(createFakeStorage());
     await storage.set('state', 1);
 
     await storage.delete('state');
@@ -68,7 +79,7 @@ describe('the addon key-value store', () => {
   });
 
   it("lists this addon's own keys, without the namespace", async () => {
-    const storage = createStorage(createFakeStorage(), FQID);
+    const storage = mount(createFakeStorage());
     await storage.set('a', 1);
     await storage.set('b', 2);
 
@@ -81,7 +92,7 @@ describe('the addon key-value store', () => {
   it('does not see loader-owned config, and cannot overwrite it', async () => {
     const hub = createFakeStorage();
     await hub.set(configNamespace(FQID), 'values', { window: 5 });
-    const storage = createStorage(hub, FQID);
+    const storage = mount(hub);
 
     await storage.set('values', 'addon data');
 
@@ -91,13 +102,13 @@ describe('the addon key-value store', () => {
 
   it("does not list another addon's keys", async () => {
     const hub = createFakeStorage();
-    await createStorage(hub, OTHER).set('theirs', 1);
+    await mount(hub, OTHER).set('theirs', 1);
 
-    expect(await createStorage(hub, FQID).keys()).toEqual([]);
+    expect(await mount(hub).keys()).toEqual([]);
   });
 
   it('rejects rather than answering an empty store with no bridge', async () => {
-    const storage = createStorage(createFakeStorage({ connected: false }), FQID);
+    const storage = mount(createFakeStorage({ connected: false }));
 
     await expect(storage.get('state')).rejects.toThrow();
     await expect(storage.set('state', 1)).rejects.toThrow();

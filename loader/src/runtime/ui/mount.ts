@@ -24,15 +24,19 @@ import type { GameBindings } from '../keys/game-bindings.ts';
 import type { LogBuffer } from '../log/buffer.ts';
 import type { StorageHub } from '../storage/hub.ts';
 import type { AddonStatus } from '../supervisor.ts';
+import type { Projector } from '../world/project.ts';
 import { ANCHORS, ANCHORS_REQUIRED_IN_GAME } from './anchors.ts';
 import { ENTRY_ID } from './esc-inject.ts';
+import { type Anchors, createAnchors } from './kit/anchor3d.ts';
 import { type Banner, createBanner } from './kit/banner.ts';
 import { createIconUrls, type IconUrls } from './kit/icons.ts';
 import { createGameInjector, type GameInjector } from './kit/injections.ts';
+import { createMenus, type Menus } from './kit/menu.ts';
 import { createSkillArt } from './kit/skill-art.ts';
 import { createStacking, type Stacking } from './kit/stacking.ts';
 import { createToaster, type Toaster } from './kit/toast.ts';
 import { createTooltips, type Tooltips } from './kit/tooltip.ts';
+import { createUnlockMode, type UnlockMode } from './kit/unlock.ts';
 import { type ConfigService, createConfigService } from './manager/config.ts';
 import type { GeometryStorage } from './manager/geometry-store.ts';
 import { type Manager, type ManagerRegistry, mountManager } from './manager/index.tsx';
@@ -85,7 +89,7 @@ interface ManagerPair {
  * whose stores to open. One indirection breaks the cycle, and it is only ever
  * called in response to a storage change, which cannot happen before both exist.
  */
-function mountManagerPair(deps: UiDeps, root: HTMLElement): ManagerPair {
+function mountManagerPair(deps: UiDeps, root: HTMLElement, unlock: UnlockMode): ManagerPair {
   let repaintManager = (): void => undefined;
 
   const config = createConfigService({
@@ -100,6 +104,7 @@ function mountManagerPair(deps: UiDeps, root: HTMLElement): ManagerPair {
   const manager = mountManager({
     doc: deps.doc,
     root,
+    unlock,
     registry: deps.registry,
     market: deps.market,
     dev: deps.dev,
@@ -159,7 +164,7 @@ function raisingManager(manager: Manager, raise: () => void): Manager {
   };
 }
 
-function buildKit(deps: UiDeps, root: HTMLElement, manager: Manager): UiKit {
+function buildKit(deps: UiDeps, root: HTMLElement, manager: Manager, unlock: UnlockMode): UiKit {
   const injector = createGameInjector({
     doc: deps.doc,
     onHud: () => {
@@ -180,10 +185,19 @@ function buildKit(deps: UiDeps, root: HTMLElement, manager: Manager): UiKit {
   const toaster = createToaster({ doc: deps.doc, root, ...timers });
   const banner = createBanner({ doc: deps.doc, root, ...timers });
   const tooltips = createTooltips({ doc: deps.doc, root, viewport: deps.viewport });
+  const menus = createMenus({ doc: deps.doc, root, viewport: deps.viewport });
+  const anchors = createAnchors({
+    doc: deps.doc,
+    root,
+    project: deps.project,
+    viewport: deps.viewport,
+    schedule: deps.schedule,
+    cancel: deps.cancelFrame,
+  });
   const stacking = createStacking({ root });
   const icons = createIconUrls(createSkillArt({ fetchJson: deps.fetchJson }));
 
-  return { root, toaster, banner, tooltips, injector, stacking, icons };
+  return { root, toaster, banner, tooltips, menus, anchors, injector, stacking, icons, unlock };
 }
 
 export interface UiDeps {
@@ -205,7 +219,17 @@ export interface UiDeps {
   formatTime: (at: number) => string;
   setTimer: (handler: () => void, ms: number) => number;
   clearTimer: (id: number) => void;
+  /** The frame clock, for the one loop every world anchor shares. */
+  schedule: (frame: () => void) => number;
+  cancelFrame: (id: number) => void;
   viewport: () => { w: number; h: number };
+  /**
+   * A world point to a point on screen, or null when the game cannot be asked.
+   *
+   * Passed in rather than read here, so the kit keeps no claim about the game:
+   * the assertion lives in runtime/world/project.ts with every other one.
+   */
+  project: Projector;
   /** Same-origin JSON, for the per-class skill-art manifests. */
   fetchJson: (url: string) => Promise<unknown>;
   /** The storage hub and the game's bindings, for the per-addon settings pages. */
@@ -228,6 +252,13 @@ export interface UiKit {
   /** The one centre-screen warning slot. Shared for the reason toasts are. */
   banner: Banner;
   tooltips: Tooltips;
+  /** The one open context menu. Shared for the reason the banner slot is. */
+  menus: Menus;
+  /**
+   * Elements kept over world points. Shared because they share one frame loop:
+   * ten anchors are one callback, not ten.
+   */
+  anchors: Anchors;
   injector: GameInjector;
   /** Which loader window is in front. Shared with the manager. */
   stacking: Stacking;
@@ -236,6 +267,13 @@ export interface UiKit {
    * file. Shared rather than per addon so two addons cost one manifest fetch.
    */
   icons: IconUrls;
+  /**
+   * The arrange-your-UI switch. Shared, because it is one mode for every frame.
+   *
+   * Not on the addon API: an addon has no business turning it on, and one that
+   * did would be rearranging a player's screen for them.
+   */
+  unlock: UnlockMode;
 }
 
 export interface MountedUi {
@@ -247,8 +285,12 @@ export interface MountedUi {
 
 export function mountUi(deps: UiDeps): MountedUi {
   const root = mountRoot({ doc: deps.doc, css: deps.css });
-  const { manager, config } = mountManagerPair(deps, root.el);
-  const kit = buildKit(deps, root.el, manager);
+  // Built here rather than inside either half, because BOTH need the same one:
+  // the manager draws the switch, the loader's keybind flips it, and two
+  // instances would mean a checkbox that disagrees with the screen.
+  const unlock = createUnlockMode(root.el);
+  const { manager, config } = mountManagerPair(deps, root.el, unlock);
+  const kit = buildKit(deps, root.el, manager, unlock);
   const raised = raisingManager(manager, () => {
     const el = root.el.querySelector(MANAGER_SELECTOR);
     if (el instanceof HTMLElement) {
@@ -263,6 +305,8 @@ export function mountUi(deps: UiDeps): MountedUi {
     dispose: () => {
       kit.injector.dispose();
       kit.tooltips.dispose();
+      kit.menus.dispose();
+      kit.anchors.dispose();
       kit.toaster.dispose();
       kit.banner.dispose();
       kit.stacking.dispose();

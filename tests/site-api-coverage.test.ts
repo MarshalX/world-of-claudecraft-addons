@@ -27,6 +27,7 @@ describe('the published API surface', () => {
   it('covers every API domain the woc object exposes', () => {
     const owners = new Set(surface.map((one) => one.owner));
     expect([...owners].sort()).toEqual([
+      'BusApi',
       'KeysApi',
       'NetApi',
       'SoundApi',

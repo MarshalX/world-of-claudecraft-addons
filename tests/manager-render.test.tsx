@@ -9,6 +9,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { DiagnosticsReading } from '../loader/src/runtime/diagnostics.ts';
 import { CLOSE_PATH } from '../loader/src/runtime/ui/kit/close-glyph.ts';
+import { createUnlockMode } from '../loader/src/runtime/ui/kit/unlock.ts';
 import type { ManagerRegistry } from '../loader/src/runtime/ui/manager/index.tsx';
 import { mountManager } from '../loader/src/runtime/ui/manager/index.tsx';
 import { UI_TEXT } from '../loader/src/runtime/ui/manager/strings.ts';
@@ -73,6 +74,7 @@ function open(registry: Partial<ManagerRegistry> | null) {
     storage: null,
     channel: 'pbe',
     readDiagnostics: () => READING,
+    unlock: createUnlockMode(document.createElement('div')),
     ...managerServices(document),
   });
   manager.open();
@@ -113,6 +115,7 @@ describe('opening and closing', () => {
       storage: null,
       channel: 'pbe',
       readDiagnostics: () => READING,
+      unlock: createUnlockMode(document.createElement('div')),
       ...managerServices(document),
     });
 
@@ -202,16 +205,31 @@ describe('the installed pane', () => {
     expect(text()).toContain('1.2.0');
   });
 
+  // Selected by its accessible name rather than by being the only toggle in the
+  // pane: the arrange-your-UI switch is a toggle here too, and a positional
+  // selector would silently start clicking that one instead.
   it('sends a toggle to the registry', async () => {
     const setEnabled = vi.fn(() => Promise.resolve());
     open({ list: () => Promise.resolve([addon()]), setEnabled });
+    const selector = '.woc-toggle input[aria-label*="Better Minimap"]';
     await vi.waitFor(() => {
-      expect(document.querySelector('.woc-toggle input')).not.toBeNull();
+      expect(document.querySelector(selector)).not.toBeNull();
     });
 
-    document.querySelector<HTMLInputElement>('.woc-toggle input')?.click();
+    document.querySelector<HTMLInputElement>(selector)?.click();
 
     expect(setEnabled).toHaveBeenCalledWith('official/minimap', false);
+  });
+
+  it('offers the arrange-your-UI switch, which belongs to no addon', async () => {
+    open({ list: () => Promise.resolve([]), setEnabled: vi.fn() });
+
+    await vi.waitFor(() => {
+      expect(document.querySelector('.woc-unlock-row')).not.toBeNull();
+    });
+    // Shown with nothing installed too: a player who came here to find a window
+    // they cannot see should find the control that shows them where it is.
+    expect(text()).toContain('Unlock frames');
   });
 
   // The host emits registry.changed when another tab writes, and the runtime

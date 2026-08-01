@@ -20,7 +20,8 @@
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { BANNER_ID, createBanner } from '../loader/src/runtime/ui/kit/banner.ts';
-import { clampFraction, createBar } from '../loader/src/runtime/ui/kit/bar.ts';
+import { createBar } from '../loader/src/runtime/ui/kit/bar.ts';
+import { clampFraction } from '../loader/src/runtime/ui/kit/readout.ts';
 
 function root(): HTMLElement {
   const el = document.createElement('div');
@@ -225,6 +226,53 @@ describe('a bar"s fill fraction', () => {
     bar.update({ fraction: Number.NaN });
 
     expect(part(bar, '.woc-bar-fill').style.width).toBe('0.00%');
+  });
+});
+
+// An addon animates a readout from its own frame loop, so `update` runs per row per
+// frame and nearly always says what the row already says. Every one of those used to
+// write anyway: three textContent assignments, ten classList calls to swap one tone,
+// and a style property, each of which dirties style recalc for the loader's subtree.
+//
+// The COST is invisible to a suite, so what is pinned is the only thing that is
+// visible: a repeat must touch nothing at all. The second case is what keeps the
+// first from passing vacuously, since an observer that was never wired up correctly
+// would report no records for a real change too.
+describe('a readout told what it already says', () => {
+  function touches(el: HTMLElement, run: () => void): number {
+    const observer = new MutationObserver(() => undefined);
+    observer.observe(el, {
+      attributes: true,
+      characterData: true,
+      childList: true,
+      subtree: true,
+    });
+    run();
+    const seen = observer.takeRecords().length;
+    observer.disconnect();
+    return seen;
+  }
+
+  const shown = {
+    label: 'Fireball',
+    value: '4.2s',
+    detail: '12 hits, 24% crit',
+    fraction: 0.5,
+    school: 'fire',
+    tone: 'warn',
+  } as const;
+
+  it('writes nothing at all when every part repeats', () => {
+    const bar = createBar(document, shown);
+
+    expect(touches(bar.el, () => bar.update(shown))).toBe(0);
+  });
+
+  it('still writes when one part actually moves', () => {
+    const bar = createBar(document, shown);
+
+    expect(touches(bar.el, () => bar.update({ ...shown, value: '4.1s' }))).toBeGreaterThan(0);
+    expect(part(bar, '.woc-bar-value').textContent).toBe('4.1s');
   });
 });
 

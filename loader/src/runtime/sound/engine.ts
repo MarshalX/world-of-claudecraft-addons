@@ -7,13 +7,7 @@
 
 import { diagError } from '../../shared/diag.ts';
 import type { Teardown } from '../disposal.ts';
-import {
-  fallbackCueUrl,
-  PACK_URL,
-  parseSoundPack,
-  type SoundClip,
-  type SoundPack,
-} from './pack.ts';
+import { fallbackCueUrl, fetchSoundPack, type SoundClip, type SoundPack } from './pack.ts';
 
 /**
  * The floor between two plays of the same cue.
@@ -76,8 +70,16 @@ interface PlayOpts {
 interface SoundEngine {
   /** Empty until the pack has loaded. */
   cues: () => string[];
-  /** Resolves once the pack has been fetched, successfully or not. */
+  /** Reads the pack if nothing has yet, and resolves once it is in, failed or not. */
   ready: () => Promise<void>;
+  /**
+   * Start reading the pack without waiting for it.
+   *
+   * For a caller that knows a cue is coming but is not playing one yet, which is
+   * what an addon declaring the `sound` permission is telling the loader. Without
+   * it the read starts on the first `play`, and that cue takes the fallback URL.
+   */
+  warm: () => void;
   play: (cue: string, opts?: PlayOpts) => void;
   preload: (cues: readonly string[]) => Promise<void>;
   /** Resume the sink on the first user gesture. Returns the listener teardown. */
@@ -119,29 +121,6 @@ function chooseVariant(clip: SoundClip, pick: (count: number) => number): string
     return variants[index] as string;
   }
   return variants[0] as string;
-}
-
-/**
- * Fetch and parse the game's pack, or an empty one having said why it is empty.
- *
- * Every failure is reported and then swallowed: the caller carries on with
- * fallback URLs, which is lossy but audible, where rejecting would leave the
- * engine with nothing to do but report the same thing again.
- */
-async function loadPack(deps: Pick<SoundEngineDeps, 'fetchJson'>): Promise<SoundPack> {
-  let raw: unknown;
-  try {
-    raw = await deps.fetchJson(PACK_URL);
-  } catch (err) {
-    diagError('could not fetch the game sound pack, cue names will be unavailable', err);
-    return new Map();
-  }
-  const result = parseSoundPack(raw);
-  if (!result.ok) {
-    diagError(`could not read the game sound pack: ${result.reason}`);
-    return new Map();
-  }
-  return result.pack;
 }
 
 interface BufferCache {
@@ -190,6 +169,35 @@ interface EngineState {
   disposed: boolean;
   readonly lastPlayed: Map<string, number>;
   readonly buffers: BufferCache;
+  /** The one pack read, started by whoever needs it first. Null until then. */
+  loading: Promise<void> | null;
+}
+
+/**
+ * Start the pack read, or hand back the one already running.
+ *
+ * The pack is 119 kB and used to be fetched when the engine was BUILT, which is at
+ * loader boot, so every page load paid for it whether or not a single installed
+ * addon ever played a cue. It is content the game serves for its own audio, and
+ * fetching it alongside the game's own boot assets is a request the player waits
+ * behind for something most sessions never use.
+ *
+ * The read reports its own failures and resolves with an empty pack, so there is
+ * nothing here to reject and a failed read is not retried: a second attempt would
+ * fetch the same missing file again on the next cue, and the fallback path already
+ * covers the case.
+ */
+function startPack(deps: Pick<SoundEngineDeps, 'fetchJson'>, state: EngineState): void {
+  state.loading ??= fetchSoundPack(deps.fetchJson).then((pack) => {
+    state.pack = pack;
+  });
+}
+
+/** The same read, for a caller that has to wait for it. */
+function ensurePack(deps: Pick<SoundEngineDeps, 'fetchJson'>, state: EngineState): Promise<void> {
+  startPack(deps, state);
+  // `startPack` always leaves one behind. The coalesce is for the type alone.
+  return state.loading ?? Promise.resolve();
 }
 
 /** The pack's clip for a cue, or the degraded stand-in for one it does not list. */
@@ -287,26 +295,35 @@ function createSoundEngine(deps: SoundEngineDeps): SoundEngine {
     disposed: false,
     lastPlayed: new Map(),
     buffers: createBufferCache(deps),
+    loading: null,
   };
 
-  const ready = loadPack(deps).then((pack) => {
-    state.pack = pack;
-  });
-  // The engine reports its own failures and callers proceed on the fallback
-  // path, so nothing is left to reject to.
-  ready.catch(() => undefined);
-
   return {
-    cues: () => [...state.pack.keys()].sort(),
+    cues: () => {
+      // Answers what is known NOW, as it always has, and starts the read so the
+      // next call can answer properly. An addon listing cues before the pack has
+      // landed got an empty array before this was lazy too.
+      startPack(deps, state);
+      return [...state.pack.keys()].sort();
+    },
 
-    ready: () => ready,
+    ready: () => ensurePack(deps, state),
+
+    warm: () => {
+      startPack(deps, state);
+    },
 
     play: (cue, opts) => {
+      // Kicked off, never awaited. `play` has always been able to run before the
+      // pack landed and falls back to a guessed URL when it does, so awaiting here
+      // would change a cue that is merely untuned into one that is late. What keeps
+      // that window small is `warm`, called when an addon declaring sound starts.
+      startPack(deps, state);
       playCue(deps, state, cue, opts);
     },
 
     preload: async (cues) => {
-      await ready;
+      await ensurePack(deps, state);
       await preloadCues(deps, state, cues);
     },
 

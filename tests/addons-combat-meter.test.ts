@@ -109,6 +109,8 @@ interface MeterHarness extends SharedHarness {
   detailOf: (label: string) => string;
   /** Switch tables the way a player does. */
   openTab: (label: string) => void;
+  /** Press the addon's own show/hide bind, the way a player does. */
+  togglePanel: () => void;
 }
 
 /** Any total order will do: the sort exists to make the assertion order-free. */
@@ -147,15 +149,45 @@ function abilityOf(hit: Hit): string | null {
   return 'Aimed Shot';
 }
 
+/**
+ * A spellbook in the game's own shape, carrying the divergence this addon turns on.
+ *
+ * `arcane_shot` is displayed as "Fell Shot", so an event names one thing and the art
+ * is filed under another. Both are here so a test can prove the join runs backwards
+ * correctly rather than that some string reached some attribute.
+ */
+const KNOWN = [
+  {
+    def: { id: 'arcane_shot', name: 'Fell Shot', school: 'arcane', requiresTarget: true },
+    rank: 1,
+    cost: 25,
+    castTime: 0,
+    cooldown: 6,
+  },
+];
+
+/**
+ * Start the addon and wait for its window to actually come up.
+ *
+ * A window that saves its state starts hidden and is shown once that state arrives,
+ * and the answer is keyed per character, so it takes a watcher sample to find the
+ * character and then a storage read to come back. Every case here is about what the
+ * meter DRAWS, and it does not draw to a window nobody can see.
+ */
 async function run(): Promise<MeterHarness> {
   const player = liveEntity({ set: { templateId: 'priest' } });
-  const world = { entities: new Map([[PLAYER_ID, player]]), player };
+  const world = { entities: new Map([[PLAYER_ID, player]]), player, known: KNOWN };
   const harness = createSharedServices(document, createFakeStorage(), {
     game: Promise.resolve({ world }),
   });
   teardown.push(harness.dispose);
   const addon = await loadAddon({ shared: harness.shared, row: row(), source: SOURCE });
   teardown.push(addon.dispose);
+  // The sample resolves the character; the awaits let the read keyed on it return.
+  harness.shared.world.watcher.poll();
+  await Promise.resolve();
+  await Promise.resolve();
+  await Promise.resolve();
 
   return {
     ...harness,
@@ -197,14 +229,87 @@ async function run(): Promise<MeterHarness> {
       ),
     figureOf: (label) => rowFor(label)?.querySelector('.woc-bar-value')?.textContent ?? '',
     detailOf: (label) => rowFor(label)?.querySelector('.woc-bar-detail')?.textContent ?? '',
+    // Selected inside the meter's own strip, by the kit's class rather than by
+    // one of the addon's: the buttons are the loader's now, and the addon marks
+    // only the strip it appended them in.
     openTab: (label) => {
-      const button = [...document.querySelectorAll('.woc-meter-tab')].find(
+      const button = [...document.querySelectorAll('.woc-meter-tabs .woc-tab')].find(
         (el) => el.textContent === label,
       );
       (button as HTMLButtonElement | undefined)?.click();
     },
+    // The addon's own default bind, pressed at the dispatcher: the same path a
+    // player takes, rather than a call to the frame the addon happens to hold.
+    togglePanel: () => {
+      harness.press('Alt+KeyD');
+    },
   };
 }
+
+// The two surfaces the meter stopped hand-rolling.
+//
+// The strip used to be this addon's own buttons wearing the kit's classes, with
+// its own copy of which tab was open, its own marking, and its own idea of how to
+// announce it. The tooltip used to be the ability name and nothing else, because
+// an attachment made when a row is built cannot carry numbers that change every
+// repaint.
+describe('what it takes from the kit', () => {
+  function hover(label: string): string {
+    const bar = document.querySelector(`[data-ability="${label}"]`);
+    bar?.dispatchEvent(new Event('pointerenter'));
+    return document.getElementById('woc-tooltip')?.textContent ?? '';
+  }
+
+  it('draws its tabs with the loader strip rather than its own buttons', async () => {
+    await run();
+
+    // A nav of kit tabs, marked the way the manager's own strip is marked.
+    expect(document.querySelectorAll('.woc-meter-tabs .woc-tab')).toHaveLength(3);
+    expect(document.querySelector('.woc-meter-tabs .woc-tab-active')?.textContent).toBe('Damage');
+  });
+
+  it('lets the strip own which tab is marked', async () => {
+    const h = await run();
+
+    h.openTab('Healing');
+
+    expect(document.querySelector('.woc-meter-tabs .woc-tab-active')?.textContent).toBe('Healing');
+  });
+
+  // The reason the tooltip is a function: the row is hovered long after it was
+  // built, and what it has to say is the tally as it is now.
+  it('answers a hover with the numbers as they are, not as they were', async () => {
+    const h = await run();
+    h.hit({ ability: 'Aimed Shot', amount: 100 });
+    h.tick();
+    expect(hover('Aimed Shot')).toContain('1 hits');
+
+    h.hit({ ability: 'Aimed Shot', amount: 100 });
+    h.tick();
+
+    expect(hover('Aimed Shot')).toContain('2 hits');
+  });
+
+  it('names the ability in the tooltip title', async () => {
+    const h = await run();
+    h.hit({ ability: 'Aimed Shot', amount: 100 });
+    h.tick();
+
+    hover('Aimed Shot');
+
+    expect(document.querySelector('.woc-tip-title')?.textContent).toBe('Aimed Shot');
+  });
+
+  // A row with no art is one this character did not cast, which the row itself
+  // cannot say: it just has an empty icon slot, the same as art that failed.
+  it('says when a row is not from your own spellbook', async () => {
+    const h = await run();
+    h.hit({ ability: 'Cleave', amount: 100 });
+    h.tick();
+
+    expect(hover('Cleave')).toContain('not in your spellbook');
+  });
+});
 
 describe('its manifest', () => {
   it('validates against the shared schema', () => {
@@ -682,26 +787,43 @@ describe('disabling it', () => {
   });
 });
 
-// The rows carry NO ability art, and that is asserted rather than left implicit,
-// because it is a decision someone will reasonably try to undo.
+// Ability art, which for a long time this addon could not draw at all.
 //
 // Skill art is filed under an ability's ID and a combat event carries its display
 // NAME, and the two have diverged in the game: `arcane_shot` is shown everywhere as
-// "Fell Shot", so no derivation from the name reaches the art. A first version
-// slugified the name and drew icons for the two hunter abilities whose names still
-// happened to match their ids, which read as random rather than as a limitation.
+// "Fell Shot". A first version slugified the name into `fell_shot` and drew icons for
+// only the abilities whose names still happened to match their ids, which read as
+// random rather than as a limitation, so the art was removed entirely.
 //
-// Cooldown Bars keeps its icons because a cooldown map is keyed by the id, which is
-// also what the art is filed under. It pays for that on the other side, with a label
-// derived from the id that may not be what the game calls the ability.
-describe('the absence of ability art', () => {
-  it('draws no icon, whatever the event named the ability', async () => {
+// `world.abilities` carries the id and the name together, so the join now runs
+// backwards and the art is exact. What it covers is the player's OWN kit, which is
+// why the second case here matters as much as the first: a mob's ability has no id to
+// find, and drawing nothing is the correct answer rather than a failure.
+describe('ability art', () => {
+  it('draws art from the ID for an ability the event named differently', async () => {
     const h = await run();
 
     h.hit({ ability: 'Fell Shot' });
     h.tick();
 
-    expect(rowFor('Fell Shot')?.querySelector('.woc-bar-icon[src]')).toBeNull();
+    const icon = rowFor('Fell Shot')?.querySelector('img.woc-bar-icon');
+    // The id, never a slug of the name: `fell_shot` is not a file that exists.
+    expect(icon?.getAttribute('src')).toContain('arcane_shot');
+    expect(icon?.hasAttribute('hidden')).toBe(false);
+  });
+
+  it('draws none for an ability that is not the player own, which has no id to find', async () => {
+    const h = await run();
+
+    h.hit({ ability: 'Crushing Blow' });
+    h.tick();
+
+    const icon = rowFor('Crushing Blow')?.querySelector('img.woc-bar-icon');
+    // No src AT ALL rather than an empty one. An empty src resolves against the
+    // document base, so writing one would point every art-less row at the game's own
+    // page; the slot is built with none and a null icon leaves it that way.
+    expect(icon?.hasAttribute('src')).toBe(false);
+    expect(icon?.hasAttribute('hidden')).toBe(true);
   });
 
   // The names ARE right, and that is the half this addon has. It shows what the game
@@ -783,5 +905,75 @@ describe('colouring rows by school', () => {
     h.openTab('Taken');
 
     expect(rowFor('Shadow Bolt')?.classList.contains('woc-bar-school-shadow')).toBe(true);
+  });
+});
+
+// A hidden panel is not drawn to. Twice a second is small, but it is a sort of every
+// ability plus a row update each, for a window nobody is looking at, for the whole
+// session. What must NOT stop is the tallying, which runs off the socket, or the
+// fight timeout, which is what decides a fight has ended.
+describe('a panel nobody can see', () => {
+  it('keeps tallying while hidden and shows the fight when it comes back', async () => {
+    const h = await run();
+
+    h.togglePanel();
+    h.hit({ amount: 500 });
+    h.tick();
+    expect(h.labels()).toEqual([]);
+
+    h.togglePanel();
+
+    expect(h.fight()).toContain('500 damage');
+    expect(h.labels()).toEqual(['Aimed Shot']);
+  });
+
+  // The timeout has to keep running or a fight that ended while the panel was away
+  // reopens looking live, with an average still decaying against a clock nobody
+  // stopped.
+  it('still ends the fight while hidden', async () => {
+    const h = await run();
+
+    h.hit();
+    h.togglePanel();
+    h.tick(SECOND * 10);
+    h.togglePanel();
+
+    expect(h.fight()).toContain('last fight');
+  });
+
+  // The whole point of the previous two together: a fight fought entirely with the
+  // panel away is still there to read afterwards, rows and figures and all, rather
+  // than only its summary line or nothing at all.
+  it('shows a whole fight that happened and ended while it was away', async () => {
+    const h = await run();
+
+    h.togglePanel();
+    h.hit({ ability: 'Fell Shot', amount: 300 });
+    h.hit({ ability: 'Fell Shot', amount: 100 });
+    h.hit({ ability: 'Melee', amount: 100 });
+    h.tick(SECOND * 10);
+    h.togglePanel();
+
+    expect(h.fight()).toContain('500 damage');
+    expect(h.fight()).toContain('last fight');
+    expect(h.labels()).toEqual(['Fell Shot', 'Melee']);
+    expect(h.figureOf('Fell Shot')).toContain('400');
+    expect(h.detailOf('Fell Shot')).toContain('2 hits');
+  });
+
+  // The honest limit, and it is not new: the meter holds ONE fight, so a fight that
+  // starts while the panel is away replaces the one before it exactly as it would
+  // with the panel open. "Last fight" means the most recent, not a history.
+  it('replaces the old fight when a new one starts while hidden', async () => {
+    const h = await run();
+
+    h.hit({ ability: 'Fell Shot', amount: 300 });
+    h.togglePanel();
+    h.tick(SECOND * 10);
+    h.hit({ ability: 'Melee', amount: 50 });
+    h.togglePanel();
+
+    expect(h.fight()).toContain('50 damage');
+    expect(h.labels()).toEqual(['Melee']);
   });
 });

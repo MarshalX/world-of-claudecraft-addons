@@ -7,6 +7,8 @@
 import type { DisposalBag } from '../disposal.ts';
 import { unlessFrozen } from '../freeze.ts';
 import type { SubscribeOpts, Unsubscribe } from '../net/bus.ts';
+import type { EventKind, EventPayload } from '../net/events.ts';
+import type { FrameType } from '../net/frames.ts';
 import type { NetHub } from '../net/hub.ts';
 import type { NetState } from '../net/state.ts';
 
@@ -85,12 +87,32 @@ export interface WaitForOpts {
 }
 
 export interface NetApi {
-  on: (type: string, handler: (frame: unknown) => void, opts?: SubscribeOpts) => Unsubscribe;
-  onEvent: (kind: string, handler: (event: unknown) => void, opts?: SubscribeOpts) => Unsubscribe;
+  /**
+   * A frame type, not any string.
+   *
+   * Closed where `onEvent` is open, and the difference is the subject: event
+   * kinds are content that a game release adds to, while the frame types are the
+   * protocol's own small set. The published types have always said `FrameType`
+   * here; this said `string` until the parity check for `net` was written and
+   * found them disagreeing.
+   */
+  on: (type: FrameType, handler: (frame: unknown) => void, opts?: SubscribeOpts) => Unsubscribe;
+  /**
+   * The handler is typed from the kind, and any kind is still accepted.
+   *
+   * `EventKind` is open, so a kind the catalogue does not describe compiles and
+   * hands over `unknown`, exactly as every kind did before the catalogue existed.
+   * Narrowing took nothing away.
+   */
+  onEvent: <K extends EventKind>(
+    kind: K,
+    handler: (event: EventPayload<K>) => void,
+    opts?: SubscribeOpts,
+  ) => Unsubscribe;
   onAnyEvent: (handler: (event: unknown) => void, opts?: SubscribeOpts) => Unsubscribe;
   onRaw: (handler: (frame: unknown) => void, opts?: SubscribeOpts) => Unsubscribe;
   onSend: (handler: (frame: unknown) => void, opts?: SubscribeOpts) => Unsubscribe;
-  waitFor: (type: string, opts?: WaitForOpts) => Promise<unknown>;
+  waitFor: (type: FrameType, opts?: WaitForOpts) => Promise<unknown>;
   readonly state: NetState;
 }
 
@@ -110,7 +132,12 @@ export function createNet(hub: NetHub, bag: DisposalBag, timers: NetTimers): Net
   const waitDeps: WaitDeps = { hub, bag, timers };
   return {
     on: (type, handler, opts) => tracked(bag, hub.onFrame(type, unlessFrozen(handler), opts)),
-    onEvent: (kind, handler, opts) => tracked(bag, hub.onEvent(kind, unlessFrozen(handler), opts)),
+    // The bus carries parsed JSON, so what arrives is `unknown` and the typed
+    // payload is a CLAIM, the same shape of claim `world.on` makes about its
+    // keys. It is checked the same way too: the dev-harness addon subscribes
+    // against a live game and reports a record that does not look like the type.
+    onEvent: (kind, handler, opts) =>
+      tracked(bag, hub.onEvent(kind, unlessFrozen(handler as (event: unknown) => void), opts)),
     onAnyEvent: (handler, opts) => tracked(bag, hub.onAnyEvent(unlessFrozen(handler), opts)),
     onRaw: (handler, opts) => tracked(bag, hub.onRaw(unlessFrozen(handler), opts)),
     onSend: (handler, opts) => tracked(bag, hub.onSend(unlessFrozen(handler), opts)),

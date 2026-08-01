@@ -104,6 +104,29 @@ function browseRows(
 }
 
 /**
+ * Why Browse has nothing to draw, which is three different facts.
+ *
+ * `unread` stopped being the ordinary case when the catalog store started
+ * seeding the indexes on its first read, so the note that says to press Refresh
+ * has to stop being the ordinary answer with it: what is left when a seeded list
+ * is still empty is usually a source that could not be READ, and telling a player
+ * to refresh an index that just answered 404 sends them at the one control that
+ * will not help. `unreadable` names it and points at the pane that says which
+ * source and why.
+ */
+type BrowseEmptiness = 'unread' | 'unreadable' | 'empty';
+
+function browseEmptiness(markets: readonly MarketplaceState[]): BrowseEmptiness {
+  if (markets.every((market) => market.fetchedAt === null && market.error === null)) {
+    return 'unread';
+  }
+  if (markets.some((market) => market.error !== null)) {
+    return 'unreadable';
+  }
+  return 'empty';
+}
+
+/**
  * The update rows nothing is holding back.
  *
  * A pinned addon is left out of "update all" and out of the count beside the
@@ -114,5 +137,5 @@ function pendingUpdates(updates: readonly UpdateRow[]): UpdateRow[] {
   return updates.filter((row) => row.pin === null);
 }
 
-export type { BrowseFilter, BrowseRow };
-export { browseRows, catalogTags, NO_FILTER, pendingUpdates };
+export type { BrowseEmptiness, BrowseFilter, BrowseRow };
+export { browseEmptiness, browseRows, catalogTags, NO_FILTER, pendingUpdates };

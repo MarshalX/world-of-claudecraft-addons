@@ -12,6 +12,7 @@
 import type { Channel } from '../shared/hosts.ts';
 import type { StorageApi } from '../shared/protocol.ts';
 import type { SharedServices } from './api/index.ts';
+import { type BusHub, createBusHub } from './bus/hub.ts';
 import { characterId } from './character.ts';
 import { parseGameVersion } from './game-version.ts';
 import { createKeyDispatcher, type KeyDispatcher } from './keys/dispatcher.ts';
@@ -43,6 +44,7 @@ interface RuntimeServices {
   /** Complete the shared services once the UI kit exists. */
   withKit: (kit: UiKit) => SharedServices;
   storage: StorageHub;
+  bus: BusHub;
   dispatcher: KeyDispatcher;
   sound: SoundEngine;
   logs: LogBuffer;
@@ -108,13 +110,96 @@ function characterKey(surfaces: GameSurfaces): string | null {
   return characterId(surfaces.net.state().realm, playerName(backend));
 }
 
-function createRuntimeServices(deps: ServicesDeps): RuntimeServices {
+/**
+ * Resolves the first time there is a character to key per-character state on.
+ *
+ * The loader boots at document-start and an addon builds its frames on its first
+ * line, both of which are long before a player has a character. Everything keyed
+ * per character therefore has a moment it becomes READABLE, and this is it.
+ *
+ * Watched rather than polled: `player` changing is the event, and the subscription
+ * drops itself the moment it answers. The name alone is not enough, since the realm
+ * comes off the socket's hello, so every change re-asks the same question rather
+ * than assuming the first one is it.
+ *
+ * Built on demand and memoised, never at boot. The world watcher runs a frame loop
+ * for as long as anything is subscribed, and `world/watch.ts` promises that an
+ * addon which never calls `world.on` costs nothing at all. Subscribing here at
+ * startup would quietly make that false for every session, including one with no
+ * addons installed; asking for it is what an addon with a SAVED frame does.
+ *
+ * There is deliberately no timeout, for the reason `waitForGame` has none: a
+ * player can sit on the login screen for as long as they like.
+ */
+function whenCharacterKnown(surfaces: GameSurfaces): Promise<void> {
+  if (characterKey(surfaces) !== null) {
+    return Promise.resolve();
+  }
+  return new Promise<void>((resolve) => {
+    const off = surfaces.world.watcher.on('player', () => {
+      if (characterKey(surfaces) !== null) {
+        off();
+        resolve();
+      }
+    });
+  });
+}
+
+/** The memo behind `characterKnown`, so the subscription is made at most once. */
+function characterWaiter(surfaces: GameSurfaces): () => Promise<void> {
+  let waiting: Promise<void> | null = null;
+  return () => {
+    waiting ??= whenCharacterKnown(surfaces);
+    return waiting;
+  };
+}
+
+/** The long-lived services, before the UI kit exists to complete them. */
+type BuiltServices = Pick<
+  RuntimeServices,
+  'bus' | 'dispatcher' | 'gameBindings' | 'logs' | 'sound' | 'storage'
+>;
+
+/**
+ * The same services, in the shape the addon API reads them through.
+ *
+ * Every reader here is a FUNCTION rather than a value, and deliberately so: the
+ * loader boots at document-start, so the game version, the character and the
+ * viewport are all things that do not exist yet at the moment this object is
+ * built and would each be captured as null forever.
+ */
+function sharedServices(deps: ServicesDeps, built: BuiltServices): Omit<SharedServices, 'kit'> {
   const { scope, surfaces } = deps;
   const doc = scope.document;
+  return {
+    ...built,
+    doc,
+    window: scope,
+    net: surfaces.net,
+    world: surfaces.world,
+    channel: deps.channel,
+    host: scope.location.origin,
+
+    gameVersion: () => readGameVersion(doc),
+
+    character: () => characterKey(surfaces),
+
+    characterKnown: characterWaiter(surfaces),
+
+    now: () => scope.performance.now(),
+    wallClock: () => Date.now(),
+    viewport: () => ({ w: scope.innerWidth, h: scope.innerHeight }),
+    pick: (count: number) => Math.floor(Math.random() * count),
+  };
+}
+
+function createRuntimeServices(deps: ServicesDeps): RuntimeServices {
+  const { scope, surfaces } = deps;
 
   const storage = createStorageHub(deps.storage);
+  const bus = createBusHub();
   const logs = createLogBuffer();
-  const dispatcher = createKeyDispatcher({ target: scope, doc });
+  const dispatcher = createKeyDispatcher({ target: scope, doc: scope.document });
 
   const sound = buildSoundEngine(scope);
   const disarm = sound.arm(scope);
@@ -124,37 +209,25 @@ function createRuntimeServices(deps: ServicesDeps): RuntimeServices {
     storage: () => safeLocalStorage(scope),
   });
 
-  const withoutKit = {
-    doc,
-    window: scope,
-    net: surfaces.net,
-    world: surfaces.world,
+  const withoutKit = sharedServices(deps, {
     storage,
+    bus,
     sound,
     dispatcher,
     gameBindings,
     logs,
-    channel: deps.channel,
-    host: scope.location.origin,
-
-    gameVersion: () => readGameVersion(doc),
-
-    character: () => characterKey(surfaces),
-
-    now: () => scope.performance.now(),
-    wallClock: () => Date.now(),
-    viewport: () => ({ w: scope.innerWidth, h: scope.innerHeight }),
-    pick: (count: number) => Math.floor(Math.random() * count),
-  };
+  });
 
   return {
     withKit: (kit) => ({ ...withoutKit, kit }),
     storage,
+    bus,
     dispatcher,
     sound,
     logs,
     gameBindings,
     dispose: () => {
+      bus.dispose();
       disarm();
       sound.dispose();
       dispatcher.dispose();

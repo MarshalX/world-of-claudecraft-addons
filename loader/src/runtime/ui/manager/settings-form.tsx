@@ -8,9 +8,14 @@
 // Every control is committed on change rather than behind a Save button. The
 // store persists per field and a running addon sees each edit through its own
 // change event, so a Save would be a second concept for no extra safety.
+//
+// The SHAPE of a field is kit/field-shape.ts, shared with the plain-DOM builders
+// an addon gets as `ui.field`. This is one of that shape's two renderers, and the
+// classes come from there so a rename cannot style half the loader's fields.
 
 import type { SettingDecl } from '../../../shared/schema.ts';
 import type { SettingValue, SettingValues } from '../../settings/values.ts';
+import { FIELD_CLASS } from '../kit/field-shape.ts';
 import { ErrorNote } from './error-note.tsx';
 import { fieldId } from './fields.ts';
 import { UI_TEXT } from './strings.ts';
@@ -23,7 +28,7 @@ interface FieldProps {
 
 function BooleanField(props: FieldProps & { domId: string }) {
   return (
-    <label className="woc-field woc-field-inline" htmlFor={props.domId}>
+    <label className={FIELD_CLASS.rowInline} htmlFor={props.domId}>
       <input
         id={props.domId}
         type="checkbox"
@@ -32,7 +37,7 @@ function BooleanField(props: FieldProps & { domId: string }) {
           props.onChange(props.decl.id, (event.currentTarget as HTMLInputElement).checked);
         }}
       />
-      <span className="woc-field-label">{props.decl.label}</span>
+      <span className={FIELD_CLASS.label}>{props.decl.label}</span>
     </label>
   );
 }
@@ -43,14 +48,14 @@ function NumberField(props: FieldProps & { domId: string }) {
     return null;
   }
   return (
-    <div className="woc-field">
-      <label className="woc-field-label" htmlFor={props.domId}>
+    <div className={FIELD_CLASS.row}>
+      <label className={FIELD_CLASS.label} htmlFor={props.domId}>
         {decl.label}
       </label>
       <input
         id={props.domId}
         type="number"
-        className="woc-input"
+        className={FIELD_CLASS.control}
         value={String(props.value)}
         min={decl.min}
         max={decl.max}
@@ -73,13 +78,13 @@ function SelectField(props: FieldProps & { domId: string }) {
     return null;
   }
   return (
-    <div className="woc-field">
-      <label className="woc-field-label" htmlFor={props.domId}>
+    <div className={FIELD_CLASS.row}>
+      <label className={FIELD_CLASS.label} htmlFor={props.domId}>
         {decl.label}
       </label>
       <select
         id={props.domId}
-        className="woc-input"
+        className={FIELD_CLASS.control}
         value={String(props.value)}
         onChange={(event) => {
           props.onChange(decl.id, (event.currentTarget as HTMLSelectElement).value);
@@ -97,14 +102,14 @@ function SelectField(props: FieldProps & { domId: string }) {
 
 function StringField(props: FieldProps & { domId: string }) {
   return (
-    <div className="woc-field">
-      <label className="woc-field-label" htmlFor={props.domId}>
+    <div className={FIELD_CLASS.row}>
+      <label className={FIELD_CLASS.label} htmlFor={props.domId}>
         {props.decl.label}
       </label>
       <input
         id={props.domId}
         type="text"
-        className="woc-input"
+        className={FIELD_CLASS.control}
         value={String(props.value)}
         onChange={(event) => {
           props.onChange(props.decl.id, (event.currentTarget as HTMLInputElement).value);
@@ -143,7 +148,7 @@ export function SettingsForm(props: SettingsFormProps) {
   return (
     <>
       <ErrorNote error={props.error} />
-      <div className="woc-form">
+      <div className={FIELD_CLASS.form}>
         {props.decls.map((decl) => (
           <Field
             key={decl.id}

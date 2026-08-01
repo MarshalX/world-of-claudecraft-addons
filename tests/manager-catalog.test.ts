@@ -8,6 +8,7 @@
 
 import { describe, expect, it } from 'vitest';
 import {
+  browseEmptiness,
   browseRows,
   catalogTags,
   pendingUpdates,
@@ -155,6 +156,39 @@ describe('catalogTags', () => {
 
   it('is empty when nothing on offer is tagged', () => {
     expect(catalogTags([marketState(OFFICIAL, [marketEntry()])])).toEqual([]);
+  });
+});
+
+// Browse draws one blank list for reasons that need different things done about
+// them, and the catalog store seeding the indexes is what made the distinction
+// matter: "press Refresh" stopped being the ordinary answer, so it had to stop
+// being the only one.
+describe('browseEmptiness', () => {
+  it('is unread while no source has been read and none has failed', () => {
+    const markets = [marketState(OFFICIAL, [], { fetchedAt: null })];
+
+    expect(browseEmptiness(markets)).toBe('unread');
+  });
+
+  it('is unreadable once a source has reported an error', () => {
+    const markets = [marketState(OFFICIAL, [], { fetchedAt: null, error: 'HTTP 404' })];
+
+    expect(browseEmptiness(markets)).toBe('unreadable');
+  });
+
+  // The actionable one wins: a source that could not be read is a thing to go
+  // and look at, and one that is merely empty is not.
+  it('is unreadable when one source failed and another read cleanly', () => {
+    const markets = [
+      marketState(OFFICIAL, []),
+      marketState(LOCAL, [], { error: 'connection refused' }),
+    ];
+
+    expect(browseEmptiness(markets)).toBe('unreadable');
+  });
+
+  it('is empty when every source was read and none offers anything', () => {
+    expect(browseEmptiness([marketState(OFFICIAL, [])])).toBe('empty');
   });
 });
 

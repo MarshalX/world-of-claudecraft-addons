@@ -75,6 +75,16 @@ export const AddonManifest = z.object({
   name: z.string().min(1),
   version: z.string().regex(SEMVER_RE, 'must be semver, e.g. "1.2.0"'),
   apiVersion: z.number().int(),
+  /**
+   * The smallest API minor carrying every member this addon uses.
+   *
+   * Optional, and absent reads as 0, which is what an addon published before the
+   * minor existed was written against. That default is the point: the loader
+   * accepts other people's marketplaces, so an addon already in the wild
+   * declaring only `apiVersion` keeps working rather than being refused by a
+   * field its author never saw.
+   */
+  apiMinor: z.number().int().min(0).optional(),
   author: z.string().min(1),
   description: z.string().min(1),
   entry: z

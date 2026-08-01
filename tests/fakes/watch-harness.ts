@@ -4,17 +4,42 @@
 // The frame clock is manual: the sampler schedules itself, so a real one would
 // make every assertion a race.
 
+import {
+  type AbilityIndex,
+  createAbilityReader,
+} from '../../loader/src/runtime/world/abilities.ts';
 import type { WorldBackend } from '../../loader/src/runtime/world/backend.ts';
+import {
+  type CharacterInfo,
+  type ProfessionInfo,
+  readCharacter,
+  readProfessions,
+  readTalents,
+  type TalentInfo,
+} from '../../loader/src/runtime/world/character.ts';
+import { type CombatState, readCombat } from '../../loader/src/runtime/world/combat.ts';
 import { castsOf, type EntityCast, type Hazard } from '../../loader/src/runtime/world/derived.ts';
+import { type EncounterInfo, readEncounter } from '../../loader/src/runtime/world/encounter.ts';
 import type { Aura, Entity, WorldQuests } from '../../loader/src/runtime/world/game-types.ts';
+import { type GroupInfo, readGroup } from '../../loader/src/runtime/world/group.ts';
+import { readThreat, type ThreatTable } from '../../loader/src/runtime/world/threat.ts';
 import { createWorldWatcher, type WorldWatcher } from '../../loader/src/runtime/world/watch.ts';
 import { PLAYER_ENTITY } from './frames.ts';
+
+/** Roughly one animation frame at 60 Hz, which is what the sampler rides. */
+const FRAME_MS = 16.7;
 
 export interface LiveWorld {
   player: Record<string, unknown>;
   entities: Map<number, unknown>;
   hazards: Hazard[] | null;
+  /** The minimap's zone label, which the loader reads from the DOM in the real one. */
+  zone: string | null;
+  /** The sim clock, which the loader tracks off the snapshot head in the real one. */
+  simNow: number | null;
   markers: Map<number, number> | null;
+  /** The game's resolved ability list, in its own shape: entries carrying a `def`. */
+  known: unknown[];
 }
 
 export interface WatchHarness {
@@ -23,6 +48,14 @@ export interface WatchHarness {
   errors: unknown[];
   /** Frames currently scheduled. Zero means the sampler is not running. */
   frames: () => number;
+  /**
+   * Run the scheduled frame, having moved the clock on by one.
+   *
+   * The clock moves because a real animation frame carries a new timestamp, and the
+   * sampler has a floor between samples: a `frame()` that did not advance time would
+   * model a browser that fires rAF twice in the same instant, which is a thing no
+   * browser does and would make the floor untestable.
+   */
   frame: () => void;
   /** Stands in for the game arriving or never having arrived. */
   setAttached: (on: boolean) => void;
@@ -33,12 +66,17 @@ export function watchHarness(): WatchHarness {
     player: { ...PLAYER_ENTITY } as Record<string, unknown>,
     entities: new Map<number, unknown>(),
     hazards: null,
+    zone: null,
+    simNow: null,
     markers: null,
+    known: [],
   };
+  const readAbilities = createAbilityReader();
   let attached = true;
   const errors: unknown[] = [];
   const scheduled = new Map<number, () => void>();
   let nextFrame = 1;
+  let clock = 0;
 
   // `live` stays loose so a test can move one field at a time, including into a
   // shape the game would never produce, which is half of what these suites are
@@ -60,6 +98,43 @@ export function watchHarness(): WatchHarness {
     get inventory(): null {
       return null;
     },
+    get equipment(): null {
+      return null;
+    },
+    get bags(): null {
+      return null;
+    },
+    get bagCapacity(): null {
+      return null;
+    },
+    get copper(): null {
+      return null;
+    },
+    get zone(): string | null {
+      return live.zone;
+    },
+    // Through the real readers, like `abilities` and `combat`: a test that moves
+    // a progression field on the fixture has to see what an addon would.
+    get character(): CharacterInfo | null {
+      return readCharacter(live);
+    },
+    get talents(): TalentInfo | null {
+      return readTalents(live);
+    },
+    get professions(): ProfessionInfo | null {
+      return readProfessions(live);
+    },
+    get group(): GroupInfo | null {
+      return readGroup(live, live.simNow);
+    },
+    get encounter(): EncounterInfo | null {
+      return readEncounter(live);
+    },
+    threat: (entityId: number): ThreatTable =>
+      readThreat(
+        (live.entities.get(entityId) as Entity | undefined) ?? null,
+        (live.player as { id?: number }).id ?? null,
+      ),
     get quests(): WorldQuests {
       return { log: null, done: null };
     },
@@ -83,6 +158,25 @@ export function watchHarness(): WatchHarness {
     get markers(): ReadonlyMap<number, number> | null {
       return live.markers;
     },
+    // Through the real reader, like `casts` and for the same reason: a test that
+    // moves the fixture's known list has to see what an addon would, including
+    // the memoization, since that is the part with behaviour worth regressing on.
+    get abilities(): AbilityIndex {
+      return readAbilities(live);
+    },
+    // Read through the real rule, so a test that puts a hate table on a fixture
+    // mob sees the same answer an addon would. No party and no damage clock, so
+    // what this exercises is the entity branches, which are the ones a watcher
+    // test can actually move.
+    get combat(): CombatState {
+      return readCombat({
+        player: live.player as unknown as Entity,
+        party: null,
+        entities: live.entities as ReadonlyMap<number, Entity>,
+        lastDamageAt: null,
+        now: 0,
+      });
+    },
     raw: live,
   } satisfies WorldBackend;
 
@@ -104,6 +198,7 @@ export function watchHarness(): WatchHarness {
     cancel: (id) => {
       scheduled.delete(id);
     },
+    now: () => clock,
     onError: (_key, err) => errors.push(err),
   });
 
@@ -113,6 +208,7 @@ export function watchHarness(): WatchHarness {
     errors,
     frames: () => scheduled.size,
     frame: () => {
+      clock += FRAME_MS;
       for (const run of [...scheduled.values()]) {
         scheduled.clear();
         run();

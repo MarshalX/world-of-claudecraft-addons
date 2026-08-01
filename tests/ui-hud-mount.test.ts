@@ -166,6 +166,11 @@ describe('the composed UI', () => {
       doc: document,
       css: '',
       fetchJson: () => new Promise<unknown>(() => undefined),
+      // No world anchors in these cases, so the frame clock is never asked for a
+      // frame and the projector is never called.
+      schedule: () => 0,
+      cancelFrame: () => undefined,
+      project: () => null,
       registry: null,
       storage: null,
       channel: 'pbe',
@@ -189,6 +194,11 @@ describe('the composed UI', () => {
       doc: document,
       css: '',
       fetchJson: () => new Promise<unknown>(() => undefined),
+      // No world anchors in these cases, so the frame clock is never asked for a
+      // frame and the projector is never called.
+      schedule: () => 0,
+      cancelFrame: () => undefined,
+      project: () => null,
       registry: null,
       storage: null,
       channel: 'pbe',
@@ -212,6 +222,11 @@ describe('the composed UI', () => {
       doc: document,
       css: '',
       fetchJson: () => new Promise<unknown>(() => undefined),
+      // No world anchors in these cases, so the frame clock is never asked for a
+      // frame and the projector is never called.
+      schedule: () => 0,
+      cancelFrame: () => undefined,
+      project: () => null,
       registry: null,
       storage: null,
       channel: 'pbe',
@@ -257,6 +272,11 @@ describe('addon UI against the HUD', () => {
       doc: document,
       css: '',
       fetchJson: () => new Promise<unknown>(() => undefined),
+      // No world anchors in these cases, so the frame clock is never asked for a
+      // frame and the projector is never called.
+      schedule: () => 0,
+      cancelFrame: () => undefined,
+      project: () => null,
       registry: null,
       storage: null,
       channel: 'pbe',
@@ -358,6 +378,11 @@ describe('the manager and the window order', () => {
       doc: document,
       css: '',
       fetchJson: () => new Promise<unknown>(() => undefined),
+      // No world anchors in these cases, so the frame clock is never asked for a
+      // frame and the projector is never called.
+      schedule: () => 0,
+      cancelFrame: () => undefined,
+      project: () => null,
       registry: null,
       storage: null,
       channel: 'pbe',

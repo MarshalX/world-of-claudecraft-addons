@@ -1,10 +1,11 @@
 // What the three marketplace panes read, and what their controls do.
 //
-// The property this suite exists for is that nothing on the reading path goes to
-// the network. Opening the manager reads the source list, the installed set, and
-// the update rows, and if any of those fetched then every open of the window
-// would cost a request per marketplace before it could draw. Refresh is the one
-// control that is allowed to.
+// The property this suite exists for is that the reading path fetches at most
+// once a session. Opening the manager reads the source list, the installed set,
+// and the update rows, and if any of those fetched then every open of the window
+// would cost a request per marketplace before it could draw. `market.ensure` is
+// the one call on that path allowed to go to the network, and only for a source
+// this session has not read at all; Refresh is the one control that always may.
 //
 // The other half is that every action reloads afterwards rather than guessing.
 // The host is what decides whether a write landed, so a pane that predicted the
@@ -42,6 +43,8 @@ interface Options {
   updates?: UpdateRow[];
   /** Null puts the store in the state it has when the bridge never connected. */
   bridged?: boolean;
+  /** A seeding read the test resolves by hand, to pin what waits on it. */
+  seeding?: Promise<void>;
 }
 
 function open(options: Options = {}) {
@@ -55,6 +58,7 @@ function open(options: Options = {}) {
     add: vi.fn<MarketApi['add']>(() => Promise.resolve()),
     remove: vi.fn<MarketApi['remove']>(() => Promise.resolve()),
     setRef: vi.fn<MarketApi['setRef']>(() => Promise.resolve()),
+    ensure: vi.fn<MarketApi['ensure']>(() => options.seeding ?? Promise.resolve()),
     list: vi.fn<MarketApi['list']>(() => Promise.resolve([marketState(OFFICIAL, [marketEntry()])])),
     updates: vi.fn<CatalogRegistry['updates']>(() => Promise.resolve(options.updates ?? [])),
   };
@@ -68,6 +72,7 @@ function open(options: Options = {}) {
   };
   const market: MarketApi = fakeMarketApi({
     list: calls.list,
+    ensure: calls.ensure,
     refresh: calls.refresh,
     add: calls.add,
     remove: calls.remove,
@@ -137,6 +142,38 @@ describe('the reading', () => {
     await settled(store);
 
     expect(calls.refresh).not.toHaveBeenCalled();
+  });
+
+  // Without this the indexes are empty on a fresh session, so Browse has nothing
+  // to list and the update comparison runs against no rows at all.
+  it('seeds the indexes before it reads them', async () => {
+    const { store, calls } = open();
+
+    store.load();
+    await settled(store);
+
+    expect(calls.ensure).toHaveBeenCalled();
+  });
+
+  // Ahead of the three reads rather than beside them: all three answer from the
+  // index cache, and one running alongside would read a cache still being filled.
+  it('waits for the seeding before reading anything', async () => {
+    let seeded = (): void => undefined;
+    const seeding = new Promise<void>((resolve) => {
+      seeded = resolve;
+    });
+    const { store, calls } = open({ seeding });
+
+    store.load();
+    await until(() => {
+      expect(calls.ensure).toHaveBeenCalled();
+    });
+    expect(calls.list).not.toHaveBeenCalled();
+    expect(calls.updates).not.toHaveBeenCalled();
+
+    seeded();
+    await settled(store);
+    expect(calls.list).toHaveBeenCalled();
   });
 
   it('reports failed with nothing read when the bridge never connected', async () => {

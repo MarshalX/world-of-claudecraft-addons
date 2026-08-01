@@ -8,18 +8,22 @@
 // It needs a document, so a suite importing this declares happy-dom.
 
 import type { SharedServices } from '../../loader/src/runtime/api/index.ts';
+import { createBusHub } from '../../loader/src/runtime/bus/hub.ts';
 import { createKeyDispatcher } from '../../loader/src/runtime/keys/dispatcher.ts';
 import { createGameBindings } from '../../loader/src/runtime/keys/game-bindings.ts';
 import { createLogBuffer } from '../../loader/src/runtime/log/buffer.ts';
 import { createNetHub } from '../../loader/src/runtime/net/hub.ts';
 import { createSoundEngine } from '../../loader/src/runtime/sound/engine.ts';
+import { createAnchors } from '../../loader/src/runtime/ui/kit/anchor3d.ts';
 import { createBanner } from '../../loader/src/runtime/ui/kit/banner.ts';
 import { createIconUrls } from '../../loader/src/runtime/ui/kit/icons.ts';
 import { createGameInjector } from '../../loader/src/runtime/ui/kit/injections.ts';
+import { createMenus } from '../../loader/src/runtime/ui/kit/menu.ts';
 import { createSkillArt } from '../../loader/src/runtime/ui/kit/skill-art.ts';
 import { createStacking } from '../../loader/src/runtime/ui/kit/stacking.ts';
 import { createToaster } from '../../loader/src/runtime/ui/kit/toast.ts';
 import { createTooltips } from '../../loader/src/runtime/ui/kit/tooltip.ts';
+import { createUnlockMode } from '../../loader/src/runtime/ui/kit/unlock.ts';
 import { createWorldHub } from '../../loader/src/runtime/world/hub.ts';
 import { createFakeStorage, type FakeStorage } from './storage.ts';
 
@@ -123,6 +127,17 @@ function createSharedServices(
   // before the class manifest lands is in.
   const icons = createIconUrls(createSkillArt({ fetchJson: () => new Promise(() => undefined) }));
   const tooltips = createTooltips({ doc, root, viewport: () => VIEWPORT });
+  const menus = createMenus({ doc, root, viewport: () => VIEWPORT });
+  // The projector answers, so an addon's anchor lands somewhere; the frame clock
+  // does not, so nothing here runs a loop a suite would have to stop.
+  const anchors = createAnchors({
+    doc,
+    root,
+    project: () => ({ x: 100, y: 200, behind: false }),
+    viewport: () => VIEWPORT,
+    schedule: () => 0,
+    cancel: () => undefined,
+  });
   const keyTarget = new EventTarget();
   const dispatcher = createKeyDispatcher({ target: keyTarget, doc });
   const logs = createLogBuffer();
@@ -144,8 +159,15 @@ function createSharedServices(
       game: options.game ?? new Promise(() => undefined),
       schedule: () => 0,
       cancel: () => undefined,
+      // No damage clock in a fake: the combat reading falls through to its state
+      // branches, which is what a test driving world state wants to exercise.
+      lastDamageAt: () => null,
+      now: () => 0,
+      zoneName: () => null,
+      simNow: () => null,
     }),
     storage: hub,
+    bus: createBusHub(),
     sound: createSoundEngine({
       sink: {
         running: () => true,
@@ -163,11 +185,24 @@ function createSharedServices(
     dispatcher,
     gameBindings: createGameBindings({ game: () => null, storage: () => null }),
     logs,
-    kit: { root, injector, toaster, banner, tooltips, stacking, icons },
+    kit: {
+      root,
+      injector,
+      toaster,
+      banner,
+      tooltips,
+      menus,
+      anchors,
+      stacking,
+      icons,
+      unlock: createUnlockMode(root),
+    },
     channel: 'pbe',
     host: 'https://pbe.worldofclaudecraft.com',
     gameVersion: () => ({ version: '0.31.0', build: '202607290011' }),
     character: () => 'Claudemoon/Marshal',
+    // Always in the world here, so every per-character read is answerable at once.
+    characterKnown: () => Promise.resolve(),
     now,
     wallClock: () => WALL_CLOCK_MS,
     viewport: () => VIEWPORT,
@@ -202,6 +237,8 @@ function createSharedServices(
     dispose: () => {
       injector.dispose();
       tooltips.dispose();
+      menus.dispose();
+      anchors.dispose();
       toaster.dispose();
       banner.dispose();
       dispatcher.dispose();

@@ -1,4 +1,5 @@
 import type { Unsubscribe } from './addon.js';
+import type { EventKind, EventPayload } from './events.js';
 
 export type FrameType =
   | 'hello'
@@ -54,6 +55,12 @@ export interface NetApi {
   /**
    * One decoded event kind out of the 'events' frames.
    *
+   * The handler's argument is typed FROM THE KIND for every kind `EventPayloads`
+   * describes, so `onEvent('damage', ...)` receives a `DamageEvent` with nothing
+   * to narrow. Any other kind is still accepted and hands over `unknown`: the
+   * game emits far more kinds than are described there, and describing some took
+   * none of the others away.
+   *
    * `castStart` does NOT cover a mob. It is emitted for a player cast, a pet,
    * gathering and fishing, and nothing else: every mob mechanic that shows a cast
    * bar sets its cast state directly, and that state reaches you only on the
@@ -61,7 +68,11 @@ export interface NetApi {
    * has no way to tell that from a boss that never casts. Read `world.casts`, or
    * subscribe with `world.on('casts', ...)`, for anything but your own casting.
    */
-  onEvent: (kind: string, handler: (event: unknown) => void, opts?: SubscribeOpts) => Unsubscribe;
+  onEvent: <K extends EventKind>(
+    kind: K,
+    handler: (event: EventPayload<K>) => void,
+    opts?: SubscribeOpts,
+  ) => Unsubscribe;
   onAnyEvent: (handler: (event: unknown) => void, opts?: SubscribeOpts) => Unsubscribe;
   /** Every inbound frame, whatever its type. */
   onRaw: (handler: (frame: unknown) => void, opts?: SubscribeOpts) => Unsubscribe;

@@ -12,6 +12,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { DiagnosticsReading } from '../loader/src/runtime/diagnostics.ts';
 import { createGameBindings } from '../loader/src/runtime/keys/game-bindings.ts';
 import { createLogBuffer } from '../loader/src/runtime/log/buffer.ts';
+import { createUnlockMode } from '../loader/src/runtime/ui/kit/unlock.ts';
 import { createConfigService } from '../loader/src/runtime/ui/manager/config.ts';
 import type { ManagerRegistry } from '../loader/src/runtime/ui/manager/index.tsx';
 import { mountManager } from '../loader/src/runtime/ui/manager/index.tsx';
@@ -105,8 +106,11 @@ interface OpenOptions {
 function open(options: OpenOptions = {}) {
   const hub = options.hub ?? createFakeStorage();
   const logs = options.logs ?? createLogBuffer();
+  // Held in a variable rather than read from the options, so a test can replace
+  // the row the way an update does and re-read it through `manager.invalidate`.
+  let installed = options.installed ?? addon();
   const registry: ManagerRegistry = fakeRegistry({
-    list: async () => [options.installed ?? addon()],
+    list: async () => [installed],
     setEnabled: options.setEnabled ?? (async () => undefined),
   });
   const root = document.createElement('div');
@@ -134,6 +138,7 @@ function open(options: OpenOptions = {}) {
     logs,
     market: null,
     dev: null,
+    unlock: createUnlockMode(document.createElement('div')),
     ...supervisorServices(),
   });
   const repaint = (): void => {
@@ -143,7 +148,17 @@ function open(options: OpenOptions = {}) {
   };
 
   manager.open();
-  return { hub, logs, manager, config };
+  return {
+    hub,
+    logs,
+    manager,
+    config,
+    /** What an update does to the registry: the same fqid, a different manifest. */
+    update: (next: InstalledAddon) => {
+      installed = next;
+      manager.invalidate();
+    },
+  };
 }
 
 function click(selector: string): void {
@@ -163,6 +178,92 @@ function text(): string {
 
 afterEach(() => {
   document.body.innerHTML = '';
+});
+
+// An addon updated while its page is open, which is the reported failure.
+//
+// The pane renders its controls from the ROW read fresh and writes them through
+// stores built when the page was opened. With nothing re-checking that pair, an
+// update that declared a new setting drew its control over stores that had never
+// heard of it, and choosing a value answered "no setting declared with id
+// 'layout'". Nothing about it was stored, so reinstalling did not clear it.
+describe('an addon updated while its page is open', () => {
+  function withLayout(): InstalledAddon {
+    const full = addon();
+    return {
+      ...full,
+      manifest: {
+        ...full.manifest,
+        version: '1.3.0',
+        settings: [
+          ...(full.manifest.settings ?? []),
+          {
+            id: 'layout',
+            type: 'select',
+            label: 'How the timers are drawn',
+            default: 'bars',
+            options: ['bars', 'tiles'],
+          },
+        ],
+      },
+    };
+  }
+
+  async function openPage() {
+    const harness = open();
+    await settle();
+    clickLabelled(UI_TEXT.configure);
+    await settle();
+    return harness;
+  }
+
+  function pick(id: string, value: string): void {
+    const field = document.getElementById(`woc-setting-official-combat-meter-${id}`);
+    const select = field as HTMLSelectElement | null;
+    if (select !== null) {
+      select.value = value;
+      select.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+  }
+
+  it('draws the control the update added', async () => {
+    const harness = await openPage();
+
+    harness.update(withLayout());
+    await settle();
+
+    expect(text()).toContain('How the timers are drawn');
+  });
+
+  it('accepts a value for it rather than refusing its own field', async () => {
+    const harness = await openPage();
+    harness.update(withLayout());
+    await settle();
+
+    pick('layout', 'tiles');
+    await settle();
+
+    expect(text()).not.toContain('no setting declared');
+    const select = document.getElementById('woc-setting-official-combat-meter-layout');
+    expect((select as HTMLSelectElement).value).toBe('tiles');
+  });
+
+  // The settings already on screen belong to the same addon and the same storage,
+  // so a rebuild must not read as a reset.
+  it('keeps what the player had already set', async () => {
+    const hub = createFakeStorage();
+    await hub.set(configNamespace(FQID), SETTINGS_KEY, { window: 30 });
+    const harness = open({ hub });
+    await settle();
+    clickLabelled(UI_TEXT.configure);
+    await settle();
+
+    harness.update(withLayout());
+    await settle();
+
+    const field = document.getElementById('woc-setting-official-combat-meter-window');
+    expect((field as HTMLInputElement).value).toBe('30');
+  });
 });
 
 describe('reaching an addon page', () => {

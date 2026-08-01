@@ -11,7 +11,7 @@
 // dragged back from" is one rule with one test, not one per surface.
 
 import type { Teardown } from '../../disposal.ts';
-import { clampBox, initialBox, type Viewport } from '../frame/geometry.ts';
+import { clampBox, initialBox, type SizeBounds, type Viewport } from '../frame/geometry.ts';
 import {
   type InteractiveFrame,
   type InteractiveFrameDeps,
@@ -19,14 +19,13 @@ import {
 } from '../frame/interactive.ts';
 import { buildChrome, type Chrome, type FrameChrome, type FrameOpts } from './frame-chrome.ts';
 import type { FrameState, FrameStateStore } from './frame-state.ts';
+import { createVisibility } from './frame-visibility.ts';
 
 /** What a frame with no width of its own opens at. */
 const DEFAULT_FRAME_WIDTH = 240;
 const DEFAULT_FRAME_HEIGHT = 120;
 const DEFAULT_WINDOW_WIDTH = 480;
 const DEFAULT_WINDOW_HEIGHT = 320;
-
-const HIDDEN_CLASS = 'woc-hidden';
 
 interface AddonFrame {
   /** The frame element. Addon-owned; the loader only positions it. */
@@ -71,6 +70,35 @@ function defaultSize(chrome: FrameChrome, opts: FrameOpts): Viewport {
   return { w: opts.width ?? DEFAULT_FRAME_WIDTH, h: opts.height ?? DEFAULT_FRAME_HEIGHT };
 }
 
+/**
+ * What the addon said the frame may be sized between.
+ *
+ * The minimum falls back to the OPENING SIZE, which is the behaviour every frame
+ * had before there was an option, and it is worth naming because it surprises
+ * people: a frame created at 400 wide could not then be dragged narrower than
+ * 400. The alternative fallback is the structural floor, and it was rejected as a
+ * default rather than as an idea. Changing it would silently let the player shrink
+ * every frame of every already-published addon down to 72 by 28, including the
+ * ones whose layout stops making sense well before that, and an addon that wants
+ * the floor can now say so. So the surprise stays, and `minWidth` is the way out
+ * of it rather than a new default nobody asked for.
+ *
+ * Both are absent rather than undefined when unset: exactOptionalPropertyTypes,
+ * and clampSize reads an absent maximum as the viewport.
+ */
+function sizeBounds(opts: FrameOpts, size: Viewport): SizeBounds {
+  const bounds: SizeBounds = {
+    min: { w: opts.minWidth ?? size.w, h: opts.minHeight ?? size.h },
+  };
+  if (opts.maxWidth !== undefined || opts.maxHeight !== undefined) {
+    bounds.max = {
+      w: opts.maxWidth ?? Number.POSITIVE_INFINITY,
+      h: opts.maxHeight ?? Number.POSITIVE_INFINITY,
+    };
+  }
+  return bounds;
+}
+
 /** What the drag and clamp layer is told about one frame. */
 function gestureDeps(
   deps: FrameDeps,
@@ -79,16 +107,17 @@ function gestureDeps(
   onCommit: () => void,
 ): InteractiveFrameDeps {
   const resizable = deps.opts.resizable ?? deps.chrome === 'window';
+  const bounds = sizeBounds(deps.opts, size);
   const gestures: InteractiveFrameDeps = {
     el: chrome.el,
     handle: chrome.handle,
     viewport: deps.viewport,
-    box: initialBox(deps.viewport(), size),
+    box: initialBox(deps.viewport(), size, bounds),
     onCommit,
     resizable,
-    // The size the addon asked for is also its floor. Without this every clamp
-    // after the first would inflate it back to the manager's minimum.
-    min: size,
+    // Passed to every clamp, not just the first: without it a re-clamp after a
+    // drag or a viewport change inflates the frame back to the manager's minimum.
+    bounds,
   };
   if (!resizable) {
     // A content-sized frame reports what its content made it, so the clamp works
@@ -98,6 +127,11 @@ function gestureDeps(
       h: chrome.el.offsetHeight || size.h,
     });
   }
+  // Assigned rather than spread: exactOptionalPropertyTypes rejects an explicit
+  // undefined, and an addon that wants no callback must not install one.
+  if (deps.opts.onMove !== undefined) {
+    gestures.onBox = deps.opts.onMove;
+  }
   return gestures;
 }
 
@@ -106,29 +140,42 @@ interface FrameMechanics {
   interactive: InteractiveFrame;
   isVisible: () => boolean;
   setVisible: (next: boolean) => void;
+  /** Apply what storage said, unless the addon or the player has spoken first. */
+  restoreVisible: (next: boolean) => void;
+  /** The saved state has been read back. Nothing persists before this. */
+  settled: () => void;
   isDestroyed: () => boolean;
   destroy: () => void;
 }
 
 function mountFrame(deps: FrameDeps, chrome: Chrome, size: Viewport): FrameMechanics {
   const { opts } = deps;
-  let visible = opts.visible ?? true;
   let destroyed = false;
 
-  const applyVisibility = (): void => {
-    chrome.el.classList.toggle(HIDDEN_CLASS, !visible);
-  };
-  applyVisibility();
   deps.root.appendChild(chrome.el);
 
-  const persist = (): void => {
-    if (!destroyed) {
-      deps.store?.save(opts.id, { box: interactive.box(), visible });
-    }
-  };
+  // Everything about WHEN a frame is on screen, including why a saved one starts
+  // hidden, is in kit/frame-visibility.ts.
+  const vis = createVisibility({
+    el: chrome.el,
+    wanted: opts.visible ?? true,
+    stored: deps.store !== null,
+    onShown: () => {
+      interactive.refit();
+      deps.raise?.(chrome.el);
+    },
+    save: (visible) => {
+      if (!destroyed) {
+        deps.store?.save(opts.id, { box: interactive.box(), visible });
+      }
+    },
+  });
 
+  // `vis.commit` by reference: the end of a gesture is a write of what is already
+  // on screen, and routing it through anything that compares first would make a
+  // drag that changed only the position save nothing at all.
   const interactive: InteractiveFrame = makeFrameInteractive(
-    gestureDeps(deps, chrome, size, persist),
+    gestureDeps(deps, chrome, size, vis.commit),
   );
 
   const onWindowResize = (): void => {
@@ -136,29 +183,16 @@ function mountFrame(deps: FrameDeps, chrome: Chrome, size: Viewport): FrameMecha
   };
   deps.window.addEventListener('resize', onWindowResize);
 
-  const setVisible = (next: boolean): void => {
-    if (visible === next) {
-      return;
-    }
-    visible = next;
-    applyVisibility();
-    // Re-clamped on show: the viewport may have changed while it was hidden, and
-    // a hidden element measures as zero so the clamp could not run then.
-    if (visible) {
-      interactive.refit();
-      deps.raise?.(chrome.el);
-    }
-    persist();
-  };
-
   chrome.close?.addEventListener('click', () => {
-    setVisible(false);
+    vis.set(false);
   });
 
   return {
     interactive,
-    isVisible: () => visible,
-    setVisible,
+    isVisible: vis.isVisible,
+    setVisible: vis.set,
+    restoreVisible: vis.restore,
+    settled: vis.settled,
     isDestroyed: () => destroyed,
 
     destroy: () => {
@@ -176,6 +210,11 @@ function mountFrame(deps: FrameDeps, chrome: Chrome, size: Viewport): FrameMecha
 /**
  * Move the frame to its saved placement whenever storage answers, and only if
  * the addon has not already been disabled by then.
+ *
+ * The answer arrives at world entry, because a per-character key cannot be built
+ * before there is a character. Until it does, a saved frame is hidden, so this is
+ * also what puts it on screen: the null case is not "nothing to do" but "there was
+ * nothing stored, so use what the addon asked for".
  */
 function restoreSaved(deps: FrameDeps, size: Viewport, frame: FrameMechanics): void {
   if (deps.store === null) {
@@ -184,11 +223,20 @@ function restoreSaved(deps: FrameDeps, size: Viewport, frame: FrameMechanics): v
   deps.store
     .load(deps.opts.id)
     .then((state: FrameState | null) => {
-      if (state === null || frame.isDestroyed()) {
+      if (frame.isDestroyed()) {
         return;
       }
-      frame.interactive.place(clampBox(state.box, deps.viewport(), size));
-      frame.setVisible(state.visible);
+      if (state === null) {
+        frame.restoreVisible(deps.opts.visible ?? true);
+        frame.settled();
+        return;
+      }
+      // Re-derived rather than threaded through: sizeBounds is pure, and a
+      // restored box has to meet the same bounds a dragged one does, or a box
+      // saved before the addon declared a minimum would come back under it.
+      frame.interactive.place(clampBox(state.box, deps.viewport(), sizeBounds(deps.opts, size)));
+      frame.restoreVisible(state.visible);
+      frame.settled();
     })
     .catch(() => undefined);
 }
@@ -246,4 +294,4 @@ function frameTeardown(frame: AddonFrame): Teardown {
 }
 
 export type { AddonFrame, FrameDeps };
-export { createAddonFrame, DEFAULT_FRAME_WIDTH, frameTeardown, HIDDEN_CLASS };
+export { createAddonFrame, DEFAULT_FRAME_WIDTH, frameTeardown };

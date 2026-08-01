@@ -8,6 +8,7 @@
 // code of their own.
 
 import type { AddonInfo, GameInfo, Unsubscribe } from './addon.js';
+import type { BusApi } from './bus.js';
 import type { KeysApi } from './keys.js';
 import type { NetApi } from './net.js';
 import type { SoundApi } from './sound.js';
@@ -19,52 +20,108 @@ declare global {
   const woc: WocApi;
 }
 
+export type { AbilityIndex, AbilityInfo } from './abilities.js';
 export type { AddonInfo, GameInfo, Unsubscribe } from './addon.js';
-export type { KnownCue } from './cues.generated.js';
-export type { KnownSkillIcon, SkillIconClass } from './icons.generated.js';
-export type { ConflictReport, KeysApi } from './keys.js';
-export type { FrameType, NetApi, NetState, SubscribeOpts } from './net.js';
-export type { Cue, PlayOpts, SoundApi } from './sound.js';
-export type { StorageApi } from './storage.js';
+export type { BusApi, BusMessage } from './bus.js';
 export type {
-  AbilityIconId,
-  AlertOpts,
-  BannerKind,
-  BannerOpts,
-  BannerSize,
-  Bar,
-  BarOpts,
-  BarSchool,
-  BarTone,
-  BarUpdate,
-  Frame,
-  FrameDensity,
-  FrameOpts,
-  IconClass,
-  IconUrls,
-  MicroButtonOpts,
-  ToastOpts,
-  UiApi,
-} from './ui.js';
+  CharacterInfo,
+  DeedStats,
+  ProfessionInfo,
+  SavedLoadout,
+  TalentInfo,
+  TalentRole,
+  TalentRowLevel,
+} from './character.js';
+export type { KnownCue } from './cues.generated.js';
 export type {
   AbilityCharge,
   Aura,
   AuraKind,
   CoreStats,
   Entity,
-  EntityCast,
   EntityKind,
-  Hazard,
-  HazardKind,
-  InvSlot,
-  PartyInfo,
-  PartyMember,
-  PartyMemberAura,
-  QuestProgress,
   ResourceType,
   School,
   Vec3,
   WeaponInfo,
+} from './entity.js';
+export type {
+  EncounterInfo,
+  GroupInfo,
+  LootRoll,
+  MasterLoot,
+  RunInfo,
+  ThreatRow,
+  ThreatTable,
+} from './group.js';
+export type { KnownSkillIcon, SkillIconClass } from './icons.generated.js';
+export type { ConflictReport, KeysApi } from './keys.js';
+export type { FrameType, NetApi, NetState, SubscribeOpts } from './net.js';
+export type { Cue, PlayOpts, SoundApi } from './sound.js';
+export type { CharacterStore, StorageApi } from './storage.js';
+export type {
+  AbilityIconId,
+  AlertOpts,
+  Anchor3d,
+  Anchor3dOpts,
+  BannerKind,
+  BannerOpts,
+  BannerSize,
+  Frame,
+  FrameBox,
+  FrameDensity,
+  FrameOpts,
+  IconClass,
+  IconUrls,
+  MicroButtonOpts,
+  PointSource,
+  ToastOpts,
+  UiApi,
+  WorldPoint,
+} from './ui.js';
+export type {
+  Field,
+  FieldBuilders,
+  FieldOpts,
+  MenuItem,
+  SelectOpts,
+  SliderOpts,
+  Tab,
+  Tabs,
+  TabsOpts,
+  TextOpts,
+  TooltipContent,
+  TooltipInput,
+  TooltipLine,
+  TooltipTone,
+} from './ui-controls.js';
+export type {
+  Bar,
+  BarOpts,
+  BarSchool,
+  BarTone,
+  BarUpdate,
+  Tile,
+  TileOpts,
+  TileSchool,
+  TileTone,
+  TileUpdate,
+} from './ui-timers.js';
+export type {
+  AuraQuery,
+  CombatSource,
+  CombatState,
+  EntityCast,
+  EquipSlot,
+  Hazard,
+  HazardKind,
+  InvSlot,
+  PartyAuraQuery,
+  PartyInfo,
+  PartyMember,
+  PartyMemberAura,
+  QuestProgress,
+  UnitToken,
   WorldApi,
   WorldKey,
   WorldQuests,
@@ -74,7 +131,20 @@ export type {
 export interface WocApi {
   readonly addon: AddonInfo;
   readonly game: GameInfo;
+  /**
+   * The API major this loader implements. An addon runs only on a matching one.
+   */
   readonly api: number;
+  /**
+   * How much surface that major has grown, bumped by every additive change.
+   *
+   * Declare the minor you need as `apiMinor` in your addon.json and the loader
+   * refuses to start you on an older one, with a message naming both. Read this
+   * only when you want to degrade rather than be refused: an addon that declares
+   * a lower minor and feature-detects can keep working on an older loader with
+   * one feature switched off.
+   */
+  readonly apiMinor: number;
 
   readonly net: NetApi;
   readonly world: WorldApi;
@@ -82,6 +152,8 @@ export interface WocApi {
   readonly sound: SoundApi;
   readonly keys: KeysApi;
   readonly storage: StorageApi;
+  /** Publish and subscribe between addons, in this page. */
+  readonly bus: BusApi;
 
   /** Settings declared in addon.json, hydrated before your code runs. */
   readonly settings: Readonly<Record<string, unknown>>;

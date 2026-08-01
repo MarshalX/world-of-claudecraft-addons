@@ -53,6 +53,75 @@ woc.world.inventory       // your bags, slot by slot
 woc.world.quests          // the log, and each quest's progress
 ```
 
+What you own, and where you are:
+
+```js
+woc.world.equipment       // worn gear by slot: { mainhand: 'redbrook_blade', ... }
+woc.world.bags            // the bag sockets, an item id or null each
+woc.world.bagCapacity     // total slots; used slots is inventory.length
+woc.world.copper          // money
+woc.world.zone            // the zone name the game is displaying
+```
+
+An item id does not resolve to a **name**, a quality, or any stats. That content ships inside the client bundle and is reachable from nothing the loader can see, so what an id gets you is its icon through `ui.icon.item`, and the ability to tell one item from another. Names arrive only where an event carries one.
+
+`world.zone` is localized display text rather than an id, for the same class of reason: the zone table is content behind a pure function of your position, so the loader reads the game's own minimap label instead. Show it or watch it change; comparing it against a hardcoded string only works for players running your language. Underground it names the delve, because that is what the game puts there. There is no subzone: the game announces a landmark once when you walk into one and never clears it when you leave, so a reading taken from it would name somewhere you left an hour ago.
+
+`bagCapacity` derives from `bags` and has no key of its own, so watch `bags`.
+
+Position comes off the entity rather than the zone, and every entity has it, not just you:
+
+```js
+const { x, y, z } = woc.world.player.pos;   // yards: x east-west, z north-south, y height
+woc.world.player.facing;                    // radians, 0 is +z
+woc.world.player.prevPos;                   // last tick, which the game interpolates from
+```
+
+Those are the same numbers the game's own coordinate readout floors for display. `prevPos` is there because the client renders between ticks: comparing it against `pos` tells you which way something is actually moving, which a single sample cannot.
+
+### Your character sheet
+
+```js
+woc.world.character       // xp, rested, honor, renown, title, deeds
+woc.world.talents         // your build and your saved loadouts
+woc.world.professions     // craft and gathering skill counters
+```
+
+All three ride your own self payload, so they exist for **you and nobody else**: there is no way to read another player's sheet, and that is the game's decision rather than an omission here.
+
+`character` carries `xp`, `lifetimeXp` (which keeps rising past the cap), `restedXp`, `prestigeRank`, `honor`, `lifetimeHonor`, `renown`, `milestones`, the `deeds` you have earned with the day each landed, and a `deedStats` block of lifetime counters. `activeTitle` is a **deed id**, never display text, so it identifies your title rather than spelling it: the deed table is content an addon cannot reach.
+
+A counter at 0 in `deedStats` genuinely means it never happened. That is worth saying because it is unusual on this API, where a zero often means a field nobody writes. Here the client fills the whole set from defaults and the server sends every counter it keeps.
+
+`talents` gives you the build itself: `rows` maps a row level to the option chosen on it, so counting its entries is how many points are spent.
+
+`professions` is deliberately just the two skill counter maps. The game's professions facet also carries a state view and a crafting identity block, both marked as stubs in its own source with work still in flight, so their shape is the least settled thing an addon could build on.
+
+`level` is not here, and not because it was left out: the game writes it on the entity record rather than on the self payload, so it is `world.player.level`. That is worth more than a copy here would be, because it means every entity carries one and you can read a mob's level or another player's the same way.
+
+### The group, the run, and threat
+
+```js
+woc.world.group           // loot rolls you owe an answer, master loot, lockouts
+woc.world.encounter       // the instanced run you are inside, and your clears
+woc.world.threat(id)      // one mob's hate table, measured against you
+```
+
+`threat` is the server's own threat model rather than anything derived on the client, so a pull warning built on it agrees with the decision the mob is about to make:
+
+```js
+const table = woc.world.threat(woc.world.target.id);
+if (table.share !== null && table.share > 0.9) warn('about to pull');
+```
+
+The table is capped at its top eight rows, so it tells you who is about to pull and cannot tell you where the twentieth person in a raid stands. It exists only for a **mob in combat**, so an empty reading means "not fighting" or "not a mob", never "everyone is at zero". Being absent from a table is not the same as being at zero on it, so `mine` is `null` in the first case.
+
+**The two kinds of time on this API meet here**, and the difference is not cosmetic. A loot roll's `remaining` is seconds, like every other timer: the game sends a deadline on its own sim clock, which nothing hands an addon, so the loader tracks that clock off the snapshot and does the subtraction for you. It is `null` only in the window between your addon starting and the first snapshot arriving. A raid lockout is the opposite: an absolute epoch millisecond stamp, published exactly as sent, because that form survives a reconnect and compares directly against `Date.now()`.
+
+A loot roll is also one of the few places an item id arrives with a readable `itemName` beside it.
+
+`encounter` is deliberately narrow: which run, how far through, and whether it is over. The game's own run record also carries module lists, objective state, affixes and rite state, and that is content moving faster than anything else this API reads, so an addon written against the wide shape would break on an update to a corner of it nobody was using. `world.raw` is there if you need the rest.
+
 Combat state, all of it read-per-frame rather than pushed:
 
 ```js
@@ -62,9 +131,60 @@ woc.world.targetAuras     // and on your target
 woc.world.casts           // ReadonlyMap<entityId, EntityCast> for anything casting
 woc.world.hazards         // ground effects, with radius and kind
 woc.world.markers         // raid markers, by entity
+woc.world.abilities       // your spellbook, with lookups by id and by name
+woc.world.combat          // { active, source }: whether you are fighting
 ```
 
 `world.cooldowns` is keyed by real ability id, which makes it one of the few places an id is safe to assume. `world.hazards` and `world.markers` are what a positional addon reads.
+
+`world.abilities` is how you get between an ability's id and its display name, which have diverged: skill art is filed under `arcane_shot`, while a combat event names it `Fell Shot`. Without this you can hold one and never reach the other.
+
+```js
+// an event gave you a name; get the id, and then the art
+const info = woc.world.abilities.byName(event.ability);
+const url = info && woc.ui.icon.ability(info.id, woc.world.player.templateId);
+
+// a cooldown map gave you an id; get something worth showing a player
+const label = woc.world.abilities.byId(id)?.name ?? id;
+```
+
+It covers YOUR OWN known kit, so an ability a mob casts is not in it and `byName` answers null. It is empty rather than absent before world entry, and its `cost`, `castTime` and `cooldown` are resolved after your talents rather than the ability's base figures.
+
+`world.combat` is the one reading here the game does not send. There is no combat flag for you on the wire, so the loader answers from the best signal available and tells you which one it used:
+
+```js
+woc.world.on('combat', ({ active, source }) => {
+  if (active) meter.begin();
+});
+```
+
+`source` is `party` when you are grouped, since the server sets a combat flag per member; `threat` when a nearby mob's hate table has you on it, which is server state too; `pvp` when a hostile player has you selected; and `recent` when none of those answered and damage involving you landed in the last five seconds. Only that last one is a guess. Most addons can ignore the source entirely; read it when acting on a false positive would be worse than acting late.
+
+There IS an `inCombat` field on the entity and it is never written, so it reads false forever. That is not an oversight in this API, it is the reason this reading exists.
+
+### Naming a unit
+
+```js
+woc.world.unit('target');        // the same Entity world.target gives you
+woc.world.unit('targettarget');  // what your target is fighting
+woc.world.unit('pet');           // your companion
+woc.world.unit('party1');        // the first group member who is not you
+```
+
+`world.unit` resolves a unit the way an addon thinks about one, and `targettarget` is the reason to use it rather than writing the lookup yourself. A mob does not carry `targetId`: the server fills that field from a SELECTION, and a mob does not select, so on every mob it is present, correctly typed, and permanently null. What a mob is fighting rides `aggroTargetId` instead. The resolver reads whichever field the target's kind actually fills, so a target-of-target display works on the units it is usually pointed at.
+
+`partyN` counts the other members, so `party1` is the first person who is not you; `raidN` counts everyone including you. Both resolve to an **entity**, which means both answer null for a member too far away to have one even while `world.party` still lists them. For a raid display read the party rows, which are complete, and reach for an entity only when you need something a row does not carry.
+
+### Filtering auras
+
+```js
+const mine = woc.world.aurasOn('target', { mine: true, kind: 'dot' });
+const debuffs = woc.world.partyAuras(pid, { debuff: true });
+```
+
+`mine` is the filter a dot tracker needs and the one most often forgotten. Two players can carry the same debuff on one target, and without it a display shows a full timer while your own effect quietly expires.
+
+`partyAuras` is separate because a party row's auras are a smaller shape than an entity's: an id, a kind, whole seconds, and a debuff flag, with no source. That is also why `PartyAuraQuery` has no `mine`, rather than one that silently matches nothing.
 
 ```js
 woc.world.on('cooldowns', rebuild);
@@ -83,7 +203,41 @@ Windows, and the pieces that go in them.
 
 <!-- include: addons/cooldown-bars/main.js#frame -->
 
-`ui.frame` is a light HUD panel and `ui.window` is a full one with a body that fills. Both take `density: 'comfortable' | 'compact'`. Comfortable is the default: 16px labels on a 40px minimum, the tap-target floor the game itself holds to. Compact gives that floor up deliberately, for a dense readout you glance at rather than operate.
+`ui.frame` is a light HUD panel and `ui.window` is a full one with a body that fills. Both take `density: 'comfortable' | 'compact' | 'bare'`. Comfortable is the default: 16px labels on a 40px minimum, the tap-target floor the game itself holds to. Compact gives that floor up deliberately, for a dense readout you glance at rather than operate.
+
+`bare` removes the chrome altogether: no panel behind your content, no padding, no title bar. Reach for it when the thing on screen IS your content, a row of timers floating on the HUD rather than a panel holding them.
+
+```js
+const overlay = woc.ui.frame({ id: 'timers', title: 'Timers', density: 'bare', save: true });
+```
+
+Two things follow from having no title bar, and both are deliberate. The frame is dragged by **its own content** instead, with buttons and fields inside it left clickable, so bare suits a readout rather than a form. And `ui.window` ignores it and stays comfortable: a window's close button lives in the title bar, and a panel the player cannot dismiss is worse than one drawn more heavily than it asked for.
+
+Keep the `title` even so. It is not drawn, but it is the frame's accessible name, and it is the label the loader shows while frames are unlocked.
+
+**A bare frame can be invisible, and that is what the unlock mode is for.** An overlay whose content is a list of timers has no pixels at all while nothing is running, which is exactly when a player wants to position it. Pressing `Alt+U`, or flipping "Unlock frames" at the top of the manager's Installed pane, outlines and labels every addon frame, gives an empty one a minimum size, and makes the whole outline draggable. Turning it off puts everything back.
+
+You get that for free: it is one mode on the loader's root, so any frame you create takes part without asking. It is also why you should not build your own idle placeholder before trying it.
+
+### Laying out against your own frame
+
+`resizable: true` puts the box in the player's hands, and `onMove` tells you where it ended up. The loader owns that box: it writes the position, and the size of a resizable frame, and it re-clamps both when the viewport changes and when a saved box is restored, so this is the only account of it you can trust.
+
+```js
+woc.ui.frame({ id: 'strip', resizable: true, height: 40, onMove: (box) => scaleTo(box.h) });
+```
+
+Use it rather than measuring `frame.el`. A measurement forces a synchronous layout, and a display that scales with its frame would pay for one on every frame it draws. It fires on a drag, on a resize at pointer rate, on the async restore of a saved box, and when the window is resized under you, but never for the initial placement, which is the size you asked for and therefore already hold. A throw inside it is caught and written to your addon's log rather than breaking the gesture the player is in the middle of.
+
+**By default a frame cannot be dragged smaller than the size it was created at.** That catches people out, so it is worth stating plainly: `width: 400` is also a floor of 400 unless you say otherwise. Say otherwise with `minWidth` and `minHeight`, and cap the other end with `maxWidth` and `maxHeight`.
+
+```js
+woc.ui.frame({ id: 'strip', resizable: true, width: 400, height: 40, minWidth: 120, maxHeight: 96 });
+```
+
+Where the four disagree, the order is fixed: a frame is never taken below the size at which it could no longer be grabbed, the viewport beats your minimum so a frame asking to be wider than the screen can still fit one, and your minimum beats your maximum. State only the axis you mean; the other is left alone.
+
+Cooldown Bars uses the pair for its tile strip: the frame's height is the icon size, and every tile follows it through `size` on `tile.update`. The width is deliberately only room to grow into. Icons sized to fill the width would have to shrink as more cooldowns started, so they would change size in the middle of a fight, which is exactly when a player is picking one out by shape.
 
 `ui.bar` is the loader's timer row, and `ui.tooltip` attaches a description to any element you own:
 
@@ -92,6 +246,91 @@ Windows, and the pieces that go in them.
 A bar's fill can be tinted by damage school, which is a separate axis from `tone`. Tone is urgency; a school is what kind of damage a row is made of. Where both are set, tone wins.
 
 <!-- include: addons/combat-meter/main.js#school-tint -->
+
+### What a hovered row says
+
+`ui.tooltip` takes a string, which is what it always took, or the whole tooltip: a title, an icon from `ui.icon`, and lines that each carry a tone.
+
+<!-- include: addons/cooldown-bars/main.js#tooltip -->
+
+You never write dismissal. The loader takes a tooltip down on leave, on blur, when its anchor is removed from the document, and when the pointer moves anywhere the anchor is not. The last two exist because the first two do not fire in cases addons hit constantly, which [Patterns](/docs/patterns) covers.
+
+**Pass a function when the answer changes.** It is called at the moment the tooltip is shown, so a row reports the numbers under the pointer rather than the numbers it was built with, and the content is assembled for the one row being hovered instead of for every row on screen. Both shipped addons do this: the meter's rows carry their full breakdown, and a cooldown says how much is left and whether it even knows the ability's full length.
+
+The tones are `default`, `muted`, `good`, `warn` and `danger`, and they say what a line MEANS rather than how loud it is. They are not a bar's tones: a fill can only express urgency, while a line can be flavour text, a cost, or a requirement you do not meet.
+
+Everything is written as text and never as markup, because an ability name and a player name both reach you from the wire.
+
+### Timers as squares
+
+`ui.tile` is the same timer in the other shape: the game's art with a radial sweep over it, a countdown on top, and a stack count in the corner.
+
+<!-- include: addons/cooldown-bars/main.js#tile -->
+
+Pick between the two by what carries the meaning. A bar has room for a name, so it suits a list you read; a tile has none, so the art is the label and it suits a strip you glance at, which is what an aura display and a cooldown row are. There is no linear sweep on a tile, because that is `ui.bar`.
+
+`fraction` is what is LEFT, the same as a bar's, and the wedge gives the art back as it runs down. Neither one animates itself: subscribe for the set changing and move `fraction` from a frame loop, which is the pattern the whole world API is built around.
+
+A tile's border takes the same `school` and `tone` axes a bar's fill does. Its square defaults to 40px, the tap-target floor the game holds its own controls to, and `size` gives that up deliberately for a dense strip.
+
+`label` is never drawn. It is how the tile is announced, as one image named for everything it says, since there is nowhere to put a name on a square that is all art. A tile without one is hidden from assistive technology rather than announced as a bare number.
+
+Cooldown Bars offers both under a `layout` setting, which is worth reading as the worked example: the two widgets take the same `{el, update, destroy}`, so everything between the builder and the screen is written once and only two things branch. A charge count goes in a bar's figure and in a tile's corner, and a tile's countdown loses its decimal because 40 pixels will not hold "119.4s".
+
+### Your own settings pane
+
+`ui.field` is the four labelled controls the manager's own forms are drawn with, and `ui.tabs` is its tab strip. Reuse them and a form inside your frame answers to that frame's density and matches the game, with no palette copied into your addon.
+
+```js
+const window_ = woc.ui.field.slider({ label: 'Rolling window', value: 5, min: 1, max: 60,
+  onChange: (next) => woc.storage.set('window', next) });
+pane.appendChild(window_.el);
+```
+
+Every field hands back the same four things: `el` to place, `value()` to read, `set()` to move it, and `destroy()`. **`set` does not call your handler back** — it is what a reset button and a reload use, and a setter that reported itself would write the value it was just given straight back to storage.
+
+The four are `checkbox`, `select`, `slider` and `text`. A checkbox puts its label beside the box and the other three put it above, which is not a style choice: a checkbox reads as a sentence with a box in front of it. A slider shows its number, because a range input on its own says nothing about where it is. A text field reports as you type rather than on blur, so a value abandoned by closing the window is not silently lost.
+
+`ui.tabs` is separate from the family because tabs are navigation rather than a value the player is setting, and only one of those is worth persisting. The loader owns the strip; which pane it reveals is yours.
+
+```js
+const strip = woc.ui.tabs({ tabs: [{ id: 'damage', label: 'Damage' }, { id: 'healing', label: 'Healing' }],
+  onSelect: (id) => show(id) });
+```
+
+### Per-row actions
+
+`ui.menu` opens a context menu at an element or at a point, which is how an addon offers actions without spending frame space on a button per row.
+
+```js
+row.addEventListener('contextmenu', (event) => {
+  event.preventDefault();
+  woc.ui.menu({ x: event.clientX, y: event.clientY }, [
+    { label: 'Reset this ability', onSelect: () => reset(id) },
+    { label: 'Hide it', onSelect: () => hide(id), separator: true },
+  ]);
+});
+```
+
+The reason this is in the loader rather than in your addon is the **dismissal**. A menu has to close on select, on Escape, on a click anywhere else including one a game control swallows, and when your addon is disabled with it open. Every one of those listens to something you do not own, and hand-rolling it gets three of the four right.
+
+There is one menu for the whole loader and opening a second closes the first. An item can be `disabled`, and `separator` draws a rule above it, ignored on the first item where it would draw a lid on the menu instead.
+
+### Over a point in the world
+
+`ui.anchor3d` hands you an element the loader keeps positioned over a world point: nameplates, ground markers, a target arrow, a pin on a gathering node.
+
+```js
+const plate = woc.ui.anchor3d(() => woc.world.target?.pos ?? null, { offset: { y: -40 } });
+plate.el.className = 'my-nameplate';
+plate.el.textContent = 'Bog Bloat';
+```
+
+Pass a fixed point for something that does not move, or a **function** for something that does, and the anchor follows it without your addon running a loop. Returning null hides it, which is the honest answer for a unit that has despawned.
+
+It hides itself when the point is behind the camera, when it is off screen by more than `margin`, and whenever the game cannot be asked at all, which includes every moment before world entry. Your element is centred on the point, so `margin` defaults to 64 rather than 0: an element centred on a point that has just left the edge is still half on screen.
+
+This is the only surface here that reads the game's **renderer** rather than its world model, and it is the reason it cannot be written in an addon. Every anchor shares one frame loop, and a frame in which nothing moved on screen writes nothing at all, so a camera nobody is turning costs you nothing.
 
 ### Saying something
 
@@ -166,7 +405,38 @@ const saved = await woc.storage.keys();
 
 `storage.get` takes a fallback, so a first run needs no special case. `storage.keys` lists what you have stored, which is what an addon offering its own "clear my data" control needs.
 
-Per-character state is keyed on realm plus character name rather than on the session's entity id, which is reissued every login.
+### One character at a time
+
+`storage.character` is the same four calls, scoped to whoever is logged in. Use it for anything a player would be surprised to find shared between their tank and their alt: a layout, a threshold, a list of what this character has seen. Keep `woc.storage` for a preference that is really about the player.
+
+```js
+await woc.world.ready;
+await woc.storage.character.set('layout', { x: 20, y: 40 });
+```
+
+It is its own store rather than a view over the other one, so `layout` here and `layout` above are two different values and `keys()` on either answers only about itself. The key is derived from the realm and the character name, never from the session's entity id, which is reissued every login: keyed on that, everything would scatter across a fresh set of keys each time and read to the player as nothing ever having been saved.
+
+**A read waits for the character. A write refuses to.** Your first line runs at document-start, on the landing page, where nobody has logged in yet. A read called there simply settles later, at world entry, with the data of whoever actually logged in, which is the answer you wanted whichever character that turns out to be. A write cannot do that, because its value was decided when you called it: held until world entry, it would store something computed before anyone knew whose it was against whichever character the player then picked. So it rejects, and the error says to await `world.ready` first.
+
+## bus
+
+Publish and subscribe between addons, inside this page. An addon is one file with no imports and no shared libraries, so this is the only way two of them cooperate.
+
+```js
+// in the meter
+woc.bus.emit('totals', { top: 'Fell Shot', dps: 812 });
+
+// in the display, a different addon
+woc.bus.on('official/combat-meter', 'totals', ({ payload }) => draw(payload));
+```
+
+That is the case it exists for: a meter that publishes its totals lets somebody else write the display without forking the meter, and a boss addon that publishes a phase lets three cosmetic addons react to it.
+
+**You name the publisher you are listening to, not just a topic.** Two addons can both publish `totals` without being confused for each other, and nobody can take a name by publishing under it first. Pass `bus.anySender` when any publisher will do, and read `message.from` to see who it was. That field is stamped by the loader from the sending addon's id: a sender cannot set it, change it, or claim to be someone else, which is what makes it worth deciding anything on.
+
+Three more things shape what you can build on it. You never receive your own messages, because self-delivery is how a loop starts. Delivery is synchronous, inside your `emit` call, so keep handlers cheap and never assume one ran: nobody may be listening, and the addon you are talking to may not be installed. And there is no request-response, deliberately: awaiting a reply from an addon that may be disabled, may never have been installed, or may simply not answer is a hang with no timeout anyone chose. Publish both ways instead.
+
+A throw in your handler is logged against your addon and does not stop the message reaching anyone else. Everything you publish stays in this page and never reaches the network, but treat it as readable by every other installed addon.
 
 ## The rest of woc
 

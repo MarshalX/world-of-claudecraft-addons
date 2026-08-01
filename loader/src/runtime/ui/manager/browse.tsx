@@ -12,8 +12,9 @@
 // no way to tell it was being asked.
 
 import { useState } from 'preact/hooks';
-import type { BrowseFilter, BrowseRow } from './catalog.ts';
-import { browseRows, catalogTags } from './catalog.ts';
+import { FIELD_CLASS } from '../kit/field-shape.ts';
+import type { BrowseEmptiness, BrowseFilter, BrowseRow } from './catalog.ts';
+import { browseEmptiness, browseRows, catalogTags } from './catalog.ts';
 import type { CatalogState, CatalogStore } from './catalog-store.ts';
 import { ErrorNote } from './error-note.tsx';
 import { InstallConfirm } from './install-confirm.tsx';
@@ -98,6 +99,16 @@ interface FilterProps {
   onChange: (filter: BrowseFilter) => void;
 }
 
+/**
+ * The two filter controls, named so their labels can point at them.
+ *
+ * Fixed rather than generated: the manager is one window with one Browse pane, so
+ * these exist at most once in the document. The `woc-` prefix is what keeps them
+ * out of the game's own id space, which this document is shared with.
+ */
+const SEARCH_ID = 'woc-browse-search';
+const TAG_ID = 'woc-browse-tag';
+
 /** Absent when no source in the list tags anything, since it would filter nothing. */
 function TagFilter(props: FilterProps) {
   const { filter } = props;
@@ -105,10 +116,13 @@ function TagFilter(props: FilterProps) {
     return null;
   }
   return (
-    <label className="woc-field">
-      <span className="woc-field-label">{UI_TEXT.browseTag}</span>
+    <div className={FIELD_CLASS.row}>
+      <label className={FIELD_CLASS.label} htmlFor={TAG_ID}>
+        {UI_TEXT.browseTag}
+      </label>
       <select
-        className="woc-input"
+        id={TAG_ID}
+        className={FIELD_CLASS.control}
         value={filter.tag ?? ''}
         onChange={(event) => {
           const picked = (event.currentTarget as HTMLSelectElement).value;
@@ -122,7 +136,7 @@ function TagFilter(props: FilterProps) {
           </option>
         ))}
       </select>
-    </label>
+    </div>
   );
 }
 
@@ -130,18 +144,21 @@ function Filters(props: FilterProps) {
   const { filter } = props;
   return (
     <div className="woc-filters">
-      <label className="woc-field">
-        <span className="woc-field-label">{UI_TEXT.browseSearch}</span>
+      <div className={FIELD_CLASS.row}>
+        <label className={FIELD_CLASS.label} htmlFor={SEARCH_ID}>
+          {UI_TEXT.browseSearch}
+        </label>
         <input
+          id={SEARCH_ID}
           type="search"
-          className="woc-input"
+          className={FIELD_CLASS.control}
           value={filter.query}
           placeholder={UI_TEXT.browseSearchPlaceholder}
           onInput={(event) => {
             props.onChange({ ...filter, query: (event.currentTarget as HTMLInputElement).value });
           }}
         />
-      </label>
+      </div>
       <TagFilter tags={props.tags} filter={filter} onChange={props.onChange} />
     </div>
   );
@@ -151,23 +168,37 @@ interface ResultsProps {
   rows: readonly BrowseRow[];
   /** Whether any source offers anything at all, which is a different emptiness. */
   anyOffered: boolean;
+  /** Why nothing is offered, when nothing is. */
+  emptiness: BrowseEmptiness;
   busy: string | null;
   onInstall: (fqid: string) => void;
+}
+
+/** Which note an empty list gets, once the search has been ruled out. */
+function emptyNote(emptiness: BrowseEmptiness): string {
+  if (emptiness === 'unread') {
+    return UI_TEXT.browseEmpty;
+  }
+  if (emptiness === 'unreadable') {
+    return UI_TEXT.browseUnreadable;
+  }
+  return UI_TEXT.browseNoAddons;
 }
 
 /**
  * The rows, or the right kind of nothing.
  *
- * "No source has been read yet" and "your search matched nothing" look identical
- * on screen and mean opposite things, and only one of them is fixed by pressing
- * Refresh.
+ * "Your search matched nothing", "no source has been read yet", "a source could
+ * not be read" and "every source is genuinely empty" are one blank list on
+ * screen and four different things to do about it, and only the middle two are
+ * about Refresh at all.
  */
 function Results(props: ResultsProps) {
   if (props.rows.length === 0) {
     if (props.anyOffered) {
       return <p className="woc-note">{UI_TEXT.browseNoMatch}</p>;
     }
-    return <p className="woc-note">{UI_TEXT.browseEmpty}</p>;
+    return <p className="woc-note">{emptyNote(props.emptiness)}</p>;
   }
   return (
     <ul className="woc-list">
@@ -229,6 +260,7 @@ export function BrowsePane(props: BrowsePaneProps) {
       <Results
         rows={rows}
         anyOffered={state.markets.some((market) => market.addons.length > 0)}
+        emptiness={browseEmptiness(state.markets)}
         busy={state.busy}
         onInstall={setConfirming}
       />

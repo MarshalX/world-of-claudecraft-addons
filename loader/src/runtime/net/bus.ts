@@ -89,10 +89,17 @@ function publishTo(bus: BusState, topic: string, value: unknown): void {
   if (subs === undefined) {
     return;
   }
+  // ONE timestamp for the whole publish, read before any handler runs. Every
+  // subscriber on a topic is being told about the same frame, and `deliver` calls
+  // ADDON code, so reading the clock per subscription measured a later handler's
+  // throttle window from the moment an earlier one finished rather than from when
+  // the frame arrived: a slow handler ahead of a throttled one silently ate part of
+  // its window, and the amount depended on what some other addon was doing.
+  const at = bus.deps.now();
   // Iterate a copy: a once handler, a quarantine, or a handler that unsubscribes
   // a sibling all mutate the set mid-dispatch.
   for (const sub of [...subs]) {
-    if (subs.has(sub) && due(sub, bus.deps.now())) {
+    if (subs.has(sub) && due(sub, at)) {
       if (sub.once) {
         forget(bus, topic, sub);
       }

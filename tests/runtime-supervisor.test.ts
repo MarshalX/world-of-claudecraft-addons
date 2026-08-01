@@ -21,6 +21,8 @@ function manifest(overrides: Partial<AddonManifest> = {}): AddonManifest {
     name: 'Combat Meter',
     version: '1.2.0',
     apiVersion: 1,
+    // Present by default so the case that DROPS it is testing something.
+    apiMinor: 1,
     author: 'MarshalX',
     description: 'Rolling damage per second.',
     entry: 'main.js',
@@ -153,6 +155,33 @@ describe('reconciling', () => {
     expect(document.querySelectorAll('.woc-frame, .woc-window')).toHaveLength(0);
   });
 
+  // And a version bump is not what makes a manifest new. A marketplace serves one
+  // manifest per REF, so the dev server hands back whatever is on disk and a moved
+  // tag hands back another author's edit, both under the version already installed.
+  //
+  // It matters because the declarations are what `woc.settings` and `woc.keys` are
+  // built from, and a value hydrates only for a declared id: an addon left running
+  // across this change can never see the setting the change added, which reads to
+  // the player as a control that does nothing.
+  it('restarts one whose declarations changed under the same version', async () => {
+    const { supervisor, state, sources, harness } = open();
+    await supervisor.sync();
+
+    state.rows = [
+      row({
+        manifest: manifest({
+          settings: [
+            { id: 'layout', type: 'select', label: 'Layout', default: 'bars', options: ['bars'] },
+          ],
+        }),
+      }),
+    ];
+    sources[FQID] = 'woc.log("relisted");';
+    await supervisor.sync();
+
+    expect(harness.shared.logs.tail(FQID).map((entry) => entry.text)).toContain('relisted');
+  });
+
   it('forgets an addon that was uninstalled', async () => {
     const { supervisor, state } = open();
     await supervisor.sync();
@@ -278,6 +307,35 @@ describe('an addon that cannot run here', () => {
     expect(incompatibility(row({ manifest: manifest({ apiVersion }) }), 'pbe')).toContain(
       'loader API version',
     );
+  });
+
+  /**
+   * The minor is the OPPOSITE comparison to the major, and the asymmetry is the
+   * whole design: the surface only grows within a major, so a loader further
+   * ahead is fine and one behind is not.
+   *
+   * What this refusal replaces is the silent case. An addon needing a member this
+   * loader lacks used to be accepted, started, and reported running, and then
+   * threw against an undefined member on whatever frame first reached it, with
+   * nothing badging it because only the LOAD is wrapped.
+   */
+  it('refuses an addon needing a minor beyond what this loader implements', () => {
+    const reason = incompatibility(row({ manifest: manifest({ apiMinor: 99 }) }), 'pbe');
+
+    expect(reason).toContain('needs loader API 1.99');
+    expect(reason).toContain('Update the loader');
+  });
+
+  it('accepts an addon needing a minor this loader has grown past', () => {
+    expect(incompatibility(row({ manifest: manifest({ apiMinor: 0 }) }), 'pbe')).toBeNull();
+  });
+
+  // Absent reads as 0. An addon published before the minor existed was written
+  // against 1.0, and must not be refused by a field its author never saw.
+  it('accepts an addon that declares no minor at all', () => {
+    const { apiMinor: _dropped, ...noMinor } = manifest();
+
+    expect(incompatibility(row({ manifest: noMinor }), 'pbe')).toBeNull();
   });
 });
 

@@ -16,6 +16,10 @@
 // the loader's own root, or plays a sound.
 
 const CHECK_TIMEOUT_MS = 3000;
+/** Long enough that one player action repaints once, short enough to feel live. */
+const REFRESH_DEBOUNCE_MS = 150;
+const COPPER_PER_SILVER = 100;
+const COPPER_PER_GOLD = 10_000;
 const TOAST_MS = 2500;
 const BANNER_MS = 2000;
 const MS_PER_SECOND = 1000;
@@ -24,6 +28,24 @@ const DEMO_SECONDS = 4;
 const DEMO_WIDTH = 190;
 /** Under this share left the kit draws a bar warm, which the demo shows off. */
 const DEMO_WARN = 0.25;
+/** How far above a unit's own point its plate floats, in screen pixels. */
+const PLATE_LIFT = 48;
+/** How often the anchor demo rewrites its labels. Its POSITION is the loader's job. */
+const ANCHOR_TICK_MS = 200;
+const DECIMALS_YARDS = 1;
+
+/**
+ * The three squares the tile demonstration drains: label, ability, class, school.
+ *
+ * The last one names an ability nothing ships art for, so its slot collapses and
+ * the square is left with its wedge and its figures on nothing. That is the case a
+ * cooldown display meets constantly and the one a screenshot has to show.
+ */
+const DEMO_TILES = [
+  ['Fireball', 'fireball', 'mage', 'fire'],
+  ['Frostbolt', 'frostbolt', 'mage', 'frost'],
+  ['Nothing painted', 'not_an_ability', 'mage', 'shadow'],
+];
 
 /**
  * Every key the published types say `world.on` accepts.
@@ -40,6 +62,15 @@ const WORLD_KEYS = [
   'entities',
   'party',
   'inventory',
+  'equipment',
+  'bags',
+  'copper',
+  'zone',
+  'character',
+  'talents',
+  'professions',
+  'group',
+  'encounter',
   'quests',
   'cooldowns',
   'auras',
@@ -47,6 +78,8 @@ const WORLD_KEYS = [
   'targetAuras',
   'hazards',
   'markers',
+  'abilities',
+  'combat',
 ];
 /** An arbitrary nested value, to show that storage is not flattened to strings. */
 const PROBE_VALUE = Object.freeze(['a', ['b'], { c: true }]);
@@ -151,6 +184,102 @@ async function checkStorage() {
     return result('storage', false, 'delete left the value behind');
   }
   return result('storage', true, `round trip and delete over ${String(keys.length)} key(s)`);
+}
+
+/**
+ * The per-character store.
+ *
+ * The FIRST write is what decides which half of this runs, rather than a reading
+ * of `world.player`. The two do move together in the loader, since both come off
+ * the same backend, but inferring one from the other would make this check fail
+ * whenever that coupling was the thing that broke, which is the reverse of useful.
+ * Asking the store is the only question with an authoritative answer.
+ *
+ * Which half runs is therefore reported rather than asserted. The refusal itself
+ * has a unit suite with a fake that can hold world entry open; what cannot be
+ * checked anywhere but here is that any of this reached the object an addon is
+ * handed, and that a real round trip through the userscript manager comes back.
+ */
+async function checkCharacterStorage() {
+  const store = woc.storage.character;
+  if (typeof store?.set !== 'function') {
+    return result('character storage', false, 'storage.character is not on the object');
+  }
+  const key = 'harness-probe';
+  // Not a read, deliberately: a read before world entry is CONTRACTED not to
+  // settle, so awaiting one here would hang the slow half for the session.
+  const refusal = await store
+    .set(key, PROBE_VALUE)
+    .then(() => null)
+    .catch((err) => String(err));
+  if (refusal !== null) {
+    return result('character storage', true, 'no character yet, so a write was refused');
+  }
+
+  const read = await store.get(key);
+  const keys = await store.keys();
+  await store.delete(key);
+  const gone = await store.get(key, 'absent');
+
+  if (JSON.stringify(read) !== JSON.stringify(PROBE_VALUE)) {
+    return result('character storage', false, `read back ${JSON.stringify(read)}`);
+  }
+  // The derivation has to come back OFF: a raw listing would hand this addon the
+  // key with the realm and character still on it, and every other character's too.
+  if (!keys.includes(key)) {
+    return result('character storage', false, `keys() did not list it: ${keys.join(', ')}`);
+  }
+  if (gone !== 'absent') {
+    return result('character storage', false, 'delete left the value behind');
+  }
+  // Separate stores, not one with a prefix. Written last so the account-wide key
+  // it leaves behind is the one checkStorage already cleans up.
+  await woc.storage.set(key, 'account-wide');
+  const stillMine = await store.get(key, 'absent');
+  await woc.storage.delete(key);
+  if (stillMine !== 'absent') {
+    return result('character storage', false, 'an account-wide key was visible as this character');
+  }
+  return result('character storage', true, `round trip over ${String(keys.length)} key(s)`);
+}
+
+/**
+ * The bus, checked against ITSELF, which is the only thing one addon can do.
+ *
+ * The harness cannot prove two addons reach each other, because it is one addon
+ * and the loader deliberately never delivers anybody their own messages. So what
+ * is checked here is exactly that refusal, plus the surface being callable and
+ * the wildcard being a real value rather than undefined. A second addon on the
+ * marketplace publishing to it would be the only way to check delivery, and it
+ * would be checking the hub's unit suite a second time.
+ */
+function checkBus() {
+  const { bus } = woc;
+  if (typeof bus?.emit !== 'function' || typeof bus.on !== 'function') {
+    return result('bus', false, 'woc.bus is not callable');
+  }
+  if (typeof bus.anySender !== 'string' || bus.anySender === '') {
+    return result('bus', false, `anySender is ${typeOf(bus.anySender)}`);
+  }
+  let heard = 0;
+  const offOwn = bus.on(woc.addon.fqid, 'harness-probe', () => {
+    heard += 1;
+  });
+  const offAny = bus.on(bus.anySender, 'harness-probe', () => {
+    heard += 1;
+  });
+  bus.emit('harness-probe', PROBE_VALUE);
+  offOwn();
+  offAny();
+
+  if (heard > 0) {
+    return result('bus', false, `an addon was handed its own message ${String(heard)} time(s)`);
+  }
+  return result(
+    'bus',
+    true,
+    `callable, and does not talk to itself (anySender "${bus.anySender}")`,
+  );
 }
 
 /**
@@ -278,6 +407,150 @@ function checkCasts() {
   }
   const names = [...casts.values()].map((cast) => cast.ability);
   return result('casts', true, `${String(casts.size)} casting: ${names.join(', ')}`);
+}
+
+/**
+ * Whether this document has the loader's stylesheet in it at all.
+ *
+ * The control for the measurement below, and it needs one: the harness also runs
+ * headless, where CSS text does not survive into the environment, and a rule that
+ * is missing because no sheet was ever injected has to be told apart from a rule
+ * that is missing because its class was renamed. A loader window is absolutely
+ * positioned by the chrome sheet, so a static one means there is no sheet here.
+ */
+function sheetLive() {
+  return getComputedStyle(win.el).position === 'absolute';
+}
+
+/**
+ * The square timer, and the half of it a unit suite cannot reach.
+ *
+ * A test can assert the classes the kit writes on the element. It cannot assert
+ * that the SHEET declaring those classes exists, because CSS text does not survive
+ * into that environment, so a class renamed on one side of that seam passes every
+ * test and draws nothing. In a real page it is measurable: a tile that computes as
+ * an ordinary box is a tile whose rules never arrived.
+ *
+ * The probe is attached and taken away again in the same call. A style cannot be
+ * computed for an element outside the document, and every rule in the kit is scoped
+ * under the loader's own root, so measuring it anywhere else would report the same
+ * nothing a missing sheet does.
+ */
+function checkTile() {
+  if (typeof woc.ui.tile !== 'function') {
+    return result('tile', false, 'ui.tile is not callable');
+  }
+  const tile = woc.ui.tile({ label: 'Probe', fraction: 0.5, count: 2, school: 'frost' });
+  stage.appendChild(tile.el);
+  const swept = tile.el
+    .querySelector('.woc-tile-sweep')
+    ?.style.getPropertyValue('--woc-tile-sweep');
+  const drawn = getComputedStyle(tile.el).borderTopWidth;
+  const styled = sheetLive();
+  const announced = tile.el.getAttribute('aria-label');
+  tile.destroy();
+
+  // Half a timer left has to be half the square GIVEN BACK, not half of it covered:
+  // the public fraction is what remains and the wedge takes what has elapsed.
+  if (swept !== '50.00%') {
+    return result('tile', false, `a half-spent timer swept ${swept ?? 'nothing'}`);
+  }
+  if (announced !== 'Probe, 2') {
+    return result('tile', false, `announced as ${String(announced)}`);
+  }
+  if (!styled) {
+    return result('tile', true, 'sweep and name written, no sheet in this document to measure');
+  }
+  if (drawn === '' || drawn === '0px') {
+    return result('tile', false, 'the loader has a sheet, and none of it reaches a tile');
+  }
+  return result('tile', true, `sweep written, sheet live at a ${drawn} border`);
+}
+
+/**
+ * The settings-pane surfaces, checked for the thing a unit suite cannot see.
+ *
+ * Every one of these is built here and taken away again in the same call. What is
+ * being asked is not whether a checkbox works, which its own suite covers, but
+ * whether the loader wired these to the object an addon is handed at all: a
+ * builder that never reached `woc.ui` typechecks everywhere and throws only here.
+ *
+ * The setter is checked rather than the change event, because it is the half an
+ * addon gets wrong: `set` must move the control WITHOUT calling back, or a pane
+ * that saves on change writes the value it was just given straight back.
+ */
+function checkFields() {
+  const { field, tabs } = woc.ui;
+  if (typeof field?.checkbox !== 'function' || typeof tabs !== 'function') {
+    return result('fields', false, 'ui.field or ui.tabs is not callable');
+  }
+  let reported = 0;
+  const check = field.checkbox({
+    label: 'Probe',
+    value: false,
+    onChange: () => {
+      reported += 1;
+    },
+  });
+  check.set(true);
+  const moved = check.value();
+  check.destroy();
+
+  const strip = tabs({
+    tabs: [
+      { id: 'a', label: 'A' },
+      { id: 'b', label: 'B' },
+    ],
+    onSelect: () => {
+      reported += 1;
+    },
+  });
+  strip.select('b');
+  const active = strip.active();
+  strip.destroy();
+
+  if (!moved) {
+    return result('fields', false, 'set() did not move the control');
+  }
+  if (active !== 'b') {
+    return result('fields', false, `select() left the strip on ${active}`);
+  }
+  if (reported > 0) {
+    return result('fields', false, `set() called back ${String(reported)} time(s)`);
+  }
+  return result('fields', true, 'four fields and a tab strip, none of them calling back on set');
+}
+
+function checkAnchor() {
+  if (typeof woc.ui.anchor3d !== 'function') {
+    return result('anchor', false, 'ui.anchor3d is not callable');
+  }
+  const { player } = woc.world;
+  const anchor = woc.ui.anchor3d(() => player?.pos ?? null);
+  const placed = anchor.el.isConnected;
+  const { visible } = anchor;
+  anchor.destroy();
+
+  if (!placed) {
+    return result('anchor', false, 'the anchor was never put in the loader root');
+  }
+  if (anchor.el.isConnected) {
+    return result('anchor', false, 'destroy left the element behind');
+  }
+  if (player === null) {
+    return result('anchor', true, 'no player yet, so there is no point to project');
+  }
+  // Visible or not is the camera's business: the player can be behind it, which
+  // is exactly what the anchor is supposed to hide for.
+  return result('anchor', true, `anchored to you, ${onScreenWord(visible)}`);
+}
+
+/** Whether the first frame had placed it yet, said in words a reader can use. */
+function onScreenWord(visible) {
+  if (visible) {
+    return 'on screen';
+  }
+  return 'off screen or not yet placed';
 }
 
 /**
@@ -424,21 +697,142 @@ function checkShadowedGlobals() {
   return result('shadowed globals', true, `${String(SHADOW_PROBES.length)} globals shadowed`);
 }
 
-async function runChecks() {
-  const immediate = [
-    checkIdentity(),
-    checkGame(),
-    checkSettings(),
-    checkKeys(),
-    checkWorld(),
-    checkWorldKeys(),
-    checkCasts(),
-    checkIcons(),
-    checkNet(),
-    checkShadowedGlobals(),
-  ];
-  const awaited = await Promise.all([checkStorage(), checkSound(), checkTimers(), checkSkillArt()]);
-  return [...immediate, ...awaited];
+/** What a display could guess from an id alone, which is the thing being replaced. */
+function titleCase(id) {
+  return id
+    .split('_')
+    .map((word) => word.slice(0, 1).toUpperCase() + word.slice(1))
+    .join(' ');
+}
+
+/**
+ * The spellbook, and the id-to-name bridge it exists for.
+ *
+ * The round trip is the whole point, so that is what is asserted: every ability
+ * has to come back as ITSELF through both lookups. An index that answered a
+ * plausible-looking neighbour would pass a spot check on one ability and be
+ * wrong everywhere else.
+ *
+ * The lookups are also checked for rejecting a name that is not the player's,
+ * because that is the case a meter hits constantly: every mob ability reaches it
+ * as a display name with no id behind it, and a null is the honest answer.
+ */
+function checkAbilities() {
+  const book = woc.world.abilities;
+  if (book === undefined || typeof book.byId !== 'function') {
+    return result('abilities', false, 'world.abilities is not an index');
+  }
+  if (book.known.length === 0) {
+    return result('abilities', true, 'empty, no world yet (login screen or loading)');
+  }
+  const broken = [];
+  for (const info of book.known) {
+    if (book.byId(info.id) !== info || book.byName(info.name) !== info) {
+      broken.push(info.id);
+    }
+  }
+  if (broken.length > 0) {
+    return result('abilities', false, `did not round trip: ${broken.join(', ')}`);
+  }
+  if (book.byName('  not an ability') !== null) {
+    return result('abilities', false, 'byName answered for a name nobody has');
+  }
+  // How many names a title-cased id would have got WRONG, which is what a display
+  // had to fall back on before this surface existed. A count of zero here would
+  // mean the bridge is not earning its place on this character.
+  const diverged = book.known.filter((info) => info.name !== titleCase(info.id));
+  return result(
+    'abilities',
+    true,
+    `${String(book.known.length)} known, ${String(diverged.length)} unguessable from the id`,
+  );
+}
+
+/**
+ * The checks that describe the LIVE world, in report order.
+ *
+ * Separated from the rest because they are the ones whose answer changes while
+ * the player plays, and because they are cheap: reading state the loader already
+ * holds. They are re-run from `world.on` as things move, so a line that says
+ * "no target, so target-of-target went unchecked" becomes a real check the
+ * moment a target is picked, rather than staying vacuous until someone presses
+ * a button. That matters more than it sounds: most of the world surface can only
+ * be verified while something is actually happening.
+ */
+const LIVE_CHECKS = [
+  checkWorld,
+  checkAbilities,
+  checkCombat,
+  checkMobTargeting,
+  checkUnits,
+  checkAuraQueries,
+  checkHoldings,
+  checkCharacter,
+  checkGroup,
+  checkCasts,
+];
+
+/** Everything else, which answers the same way all session and is run on demand. */
+const STATIC_CHECKS = [
+  checkIdentity,
+  checkGame,
+  checkSettings,
+  checkKeys,
+  checkWorldKeys,
+  checkIcons,
+  checkTile,
+  checkFields,
+  checkAnchor,
+  checkBus,
+  checkNet,
+  checkShadowedGlobals,
+];
+
+/**
+ * The world keys a live check reads, so a change to any of them repaints.
+ *
+ * Deliberately the keys the checks CONSUME rather than every key that exists:
+ * subscribing to all of them would wake the harness on traffic no line here
+ * reports, and the point is that a repaint means a reported value moved.
+ */
+const LIVE_KEYS = [
+  'player',
+  'target',
+  'entities',
+  'party',
+  'combat',
+  'zone',
+  'copper',
+  'bags',
+  'equipment',
+  'inventory',
+  'character',
+  'talents',
+  'abilities',
+  'casts',
+  'group',
+  'encounter',
+];
+
+/**
+ * The slow half: a storage round trip, a pack fetch, a timer, an image load.
+ *
+ * These are never re-run on a world change. A storage round trip writes through
+ * the bridge to the userscript manager, so repeating it every time a target
+ * changes would be real waste to answer a question whose answer cannot move.
+ */
+async function runSlowChecks() {
+  return await Promise.all([
+    checkStorage(),
+    checkCharacterStorage(),
+    checkSound(),
+    checkTimers(),
+    checkSkillArt(),
+  ]);
+}
+
+function runLiveChecks() {
+  return [...STATIC_CHECKS.map((check) => check()), ...LIVE_CHECKS.map((check) => check())];
 }
 
 const win = woc.ui.window({
@@ -449,6 +843,341 @@ const win = woc.ui.window({
   save: true,
   visible: woc.settings['open-on-load'] === true,
 });
+
+/**
+ * The report, in a container of its own so a live repaint cannot take the
+ * controls with it, or wipe a bar demo half way through its drain.
+ */
+const report = document.createElement('div');
+/** Where a demo puts something to look at, kept outside the repainting half. */
+const stage = document.createElement('div');
+win.body.append(report, stage);
+
+/** The slow half's last answer, held so a live repaint can show it unchanged. */
+let slowResults = [];
+
+/**
+ * Copper as the game writes it, so the readout matches what a player sees.
+ *
+ * Bare copper when there is nothing above it, rather than an empty string.
+ */
+function money(copper) {
+  const gold = Math.floor(copper / COPPER_PER_GOLD);
+  const silver = Math.floor((copper % COPPER_PER_GOLD) / COPPER_PER_SILVER);
+  const loose = copper % COPPER_PER_SILVER;
+  const parts = [];
+  if (gold > 0) {
+    parts.push(`${String(gold)}g`);
+  }
+  if (silver > 0) {
+    parts.push(`${String(silver)}s`);
+  }
+  if (loose > 0 || parts.length === 0) {
+    parts.push(`${String(loose)}c`);
+  }
+  return parts.join(' ');
+}
+
+/**
+ * The gear, bag and money reads, and the zone label behind the DOM.
+ *
+ * `bagCapacity` is checked against `inventory.length` rather than against a
+ * number: it is derived on the client from the equipped bags, so a capacity
+ * below what is already carried means the derivation broke, and that is the only
+ * thing about it a check can know without the game's own bag table.
+ *
+ * The zone is the interesting one. It is the single read whose source is the
+ * game's DOM rather than its world object, so a game update that renames the
+ * element leaves it silently null. In game, null is a failure worth reporting.
+ */
+function checkHoldings() {
+  const { world } = woc;
+  const { inventory, bags, bagCapacity, equipment, copper, zone } = world;
+  if (inventory === null) {
+    return result('holdings', true, 'no world yet');
+  }
+  if (!Array.isArray(bags)) {
+    return result('holdings', false, 'bags is not an array');
+  }
+  if (typeof bagCapacity !== 'number' || bagCapacity < inventory.length) {
+    return result(
+      'holdings',
+      false,
+      `bagCapacity ${String(bagCapacity)} is below the ${String(inventory.length)} slots in use`,
+    );
+  }
+  if (equipment === null || typeof equipment !== 'object') {
+    return result('holdings', false, 'equipment is not a slot map');
+  }
+  if (typeof copper !== 'number') {
+    return result('holdings', false, `copper is ${typeOf(copper)}`);
+  }
+  if (zone === null) {
+    return result('holdings', false, 'the zone label did not resolve, so its anchor has moved');
+  }
+  const worn = Object.keys(equipment).length;
+  return result(
+    'holdings',
+    true,
+    `in ${zone}: ${String(worn)} worn, ${String(inventory.length)}/${String(bagCapacity)} bags, ${money(copper)}`,
+  );
+}
+
+/**
+ * The character sheet.
+ *
+ *
+ * The numbers themselves cannot be checked against anything: only the live game
+ * knows how much experience the player has. What is checked is the shape, and
+ * that lifetime totals are not BELOW their live counterparts, which is the one
+ * invariant these fields have with each other.
+ */
+function checkCharacter() {
+  const { character, talents, professions } = woc.world;
+  if (character === null) {
+    return result('character', true, 'no world yet');
+  }
+  if (typeof character.xp !== 'number' || typeof character.renown !== 'number') {
+    return result('character', false, 'the sheet is not carrying numbers');
+  }
+  if (character.lifetimeXp < character.xp) {
+    return result(
+      'character',
+      false,
+      `lifetimeXp ${String(character.lifetimeXp)} is below xp ${String(character.xp)}`,
+    );
+  }
+  if (character.lifetimeHonor < character.honor) {
+    return result('character', false, 'lifetimeHonor is below honor');
+  }
+  if (!(character.deeds instanceof Map)) {
+    return result('character', false, 'deeds is not a Map');
+  }
+  if (!(character.deedStats.visited instanceof Set)) {
+    return result('character', false, 'deedStats.visited is not a Set');
+  }
+  if (talents === null || professions === null) {
+    return result('character', false, 'the sheet resolved but talents or professions did not');
+  }
+  return result(
+    'character',
+    true,
+    `${String(character.deeds.size)} deeds, renown ${String(character.renown)}, ` +
+      `${String(Object.keys(talents.rows).length)} talent rows`,
+  );
+}
+
+/** The player's own row straight off the entity, for comparing the projection against. */
+function rawThreat(entity, playerId) {
+  if (!(entity.threat instanceof Map)) {
+    return null;
+  }
+  return entity.threat.get(playerId) ?? null;
+}
+
+function runWord(current) {
+  if (current === null) {
+    return 'not in a run';
+  }
+  return `${current.delveId} ${String(current.moduleIndex)}/${String(current.moduleCount)}`;
+}
+
+/**
+ * The group, the run, and a mob's hate table.
+ *
+ * The threat half is checked against the entity it came from rather than against
+ * a number: the rows must be sorted, and the player's own row must agree with
+ * the raw table. A projection that quietly stopped sorting would still look
+ * plausible on screen, and a pull warning built on it would fire at the wrong
+ * moment.
+ *
+ * The loot roll half watches the clock conversion. A roll whose `remaining` is
+ * null while the world is up means the loader never got the sim's clock off the
+ * snapshot, which is silent everywhere else.
+ */
+function checkGroup() {
+  const { group, encounter, threat, target } = woc.world;
+  if (group === null || encounter === null) {
+    return result('group', true, 'no world yet');
+  }
+  const unclocked = group.rolls.filter((roll) => roll.remaining === null);
+  if (unclocked.length > 0) {
+    return result('group', false, `${String(unclocked.length)} rolls with no clock to time them`);
+  }
+  if (target !== null) {
+    const table = threat(target.id);
+    const sorted = [...table.rows].sort((a, b) => b.threat - a.threat);
+    if (table.rows.some((row, at) => row.threat !== sorted[at].threat)) {
+      return result('group', false, 'the hate table came back unsorted');
+    }
+    const raw = rawThreat(target, woc.world.player.id);
+    if (table.mine !== raw) {
+      return result('group', false, `mine is ${String(table.mine)}, the table says ${String(raw)}`);
+    }
+    if (table.rows.length > 0) {
+      return result(
+        'group',
+        true,
+        `${String(table.rows.length)} on the hate table, mine ${String(table.mine)} of ${String(table.top)}`,
+      );
+    }
+  }
+  const inside = runWord(encounter.run);
+  return result(
+    'group',
+    true,
+    `${String(group.rolls.length)} rolls, ${String(group.lockouts.size)} lockouts, ${inside}`,
+  );
+}
+
+/** Whichever field this kind of entity fills, which is the thing being checked. */
+function fightingId(entity) {
+  if (entity.kind === 'mob') {
+    return entity.aggroTargetId;
+  }
+  return entity.targetId;
+}
+
+/**
+ * Unit tokens, against the state they are resolved from.
+ *
+ * Every assertion here is one an addon would otherwise trust silently: that
+ * `player` and `target` agree with the plain reads, that an unknown token is a
+ * null rather than a throw, and that `targettarget` on a MOB target is not the
+ * permanently-null field. The last one cannot be checked without a mob target,
+ * so it reports what it could see rather than passing quietly.
+ */
+function checkUnits() {
+  const { world } = woc;
+  if (typeof world.unit !== 'function') {
+    return result('units', false, 'world.unit is not callable');
+  }
+  if (world.unit('player') !== world.player) {
+    return result('units', false, 'the player token did not resolve to world.player');
+  }
+  if (world.unit('target') !== world.target) {
+    return result('units', false, 'the target token did not resolve to world.target');
+  }
+  if (world.unit('nonsense') !== null) {
+    return result('units', false, 'an unknown token answered with something');
+  }
+  const { target } = world;
+  if (target === null) {
+    return result('units', true, 'no target, so target-of-target went unchecked');
+  }
+  const victim = world.unit('targettarget');
+  const expected = fightingId(target);
+  if ((victim?.id ?? null) !== (expected ?? null)) {
+    return result(
+      'units',
+      false,
+      `targettarget resolved ${victim?.id ?? null}, expected ${expected}`,
+    );
+  }
+  return result('units', true, `target is a ${target.kind}, fighting ${expected ?? 'nobody'}`);
+}
+
+/**
+ * The aura filters, checked against the unfiltered list they narrow.
+ *
+ * A filter that returned everything would pass any spot check on a player with
+ * one aura, so this compares counts against a hand-rolled filter over the same
+ * list: the surface has to agree with what the caller would have written.
+ */
+function checkAuraQueries() {
+  const { world } = woc;
+  if (typeof world.aurasOn !== 'function') {
+    return result('aura queries', false, 'world.aurasOn is not callable');
+  }
+  if (world.aurasOn('nonsense').length > 0) {
+    return result('aura queries', false, 'an unresolvable unit answered with auras');
+  }
+  const all = world.aurasOn('player');
+  const mine = world.aurasOn('player', { mine: true });
+  const { player } = world;
+  if (player === null) {
+    return result('aura queries', true, 'no world yet');
+  }
+  const expected = all.filter((one) => one.sourceId === player.id).length;
+  if (mine.length !== expected) {
+    return result('aura queries', false, `mine kept ${mine.length}, expected ${expected}`);
+  }
+  return result('aura queries', true, `${all.length} on you, ${mine.length} your own`);
+}
+
+function combatWord(active) {
+  if (active) {
+    return 'in combat';
+  }
+  return 'idle';
+}
+
+/**
+ * The combat reading, and the honesty of the source it travels with.
+ *
+ * There is no combat flag on the wire, so this cannot check the ANSWER against
+ * anything: only the live game knows whether the player is fighting. What it can
+ * check is that the shape holds and that the source is one the loader claims to
+ * produce, which is what catches the reading degrading to a bare boolean or to a
+ * source string nothing documents.
+ *
+ * The interesting line is the last one. A `recent` reading means every branch
+ * backed by server state declined and a five second timer answered instead,
+ * which is the one case an addon may want to treat differently, so the harness
+ * reports which branch replied rather than just that one did.
+ */
+function checkCombat() {
+  const state = woc.world.combat;
+  if (state === null || typeof state !== 'object') {
+    return result('combat', false, 'world.combat is not a reading');
+  }
+  if (typeof state.active !== 'boolean') {
+    return result('combat', false, `active is ${typeof state.active}, expected a boolean`);
+  }
+  const sources = ['party', 'threat', 'pvp', 'recent', 'none'];
+  if (!sources.includes(state.source)) {
+    return result('combat', false, `source is '${state.source}', which is not one of the five`);
+  }
+  if (!state.active && state.source !== 'none') {
+    return result('combat', false, `inactive but sourced to '${state.source}'`);
+  }
+  return result('combat', true, `${combatWord(state.active)} via ${state.source}`);
+}
+
+/**
+ * A mob's target, which is NOT on the field that looks like it.
+ *
+ * `targetId` is filled from a selection and a mob does not select, so on every
+ * mob it is present, correctly typed, and permanently null; what a mob is
+ * fighting rides `aggroTargetId`, and its hate table rides `threat`. This is the
+ * `inCombat` trap one level down, so the harness watches for the day the game
+ * starts filling `targetId` on mobs, which would make the published note wrong.
+ */
+function checkMobTargeting() {
+  const mobs = [...woc.world.entities.values()].filter((entity) => entity.kind === 'mob');
+  if (mobs.length === 0) {
+    return result('mob targeting', true, 'no mobs in scope');
+  }
+  const withThreat = mobs.filter((mob) => mob.threat instanceof Map && mob.threat.size > 0);
+  const wrongShape = mobs.filter((mob) => !(mob.threat instanceof Map));
+  if (wrongShape.length > 0) {
+    return result('mob targeting', false, `${wrongShape.length} mobs carry no threat Map`);
+  }
+  const selecting = mobs.filter((mob) => mob.targetId !== null);
+  if (selecting.length > 0) {
+    return result(
+      'mob targeting',
+      false,
+      `${selecting.length} mobs carry targetId, which the types say never happens`,
+    );
+  }
+  const aggroed = mobs.filter((mob) => mob.aggroTargetId !== null);
+  return result(
+    'mob targeting',
+    true,
+    `${mobs.length} mobs, ${aggroed.length} attacking, ${withThreat.length} with a hate table`,
+  );
+}
 
 function element(tag, className, text) {
   const el = document.createElement(tag);
@@ -502,7 +1231,7 @@ function renderResults(results) {
     list.append(row);
   }
 
-  win.body.replaceChildren(
+  report.replaceChildren(
     element('p', undefined, `${String(passed)} of ${String(results.length)} checks passed.`),
     list,
   );
@@ -517,24 +1246,41 @@ function button(label, onClick) {
   return el;
 }
 
+/**
+ * Re-run the live half and repaint, keeping the slow half's last answer.
+ *
+ * Skipped while the window is hidden: the checks are cheap, but painting a
+ * report nobody is looking at is not, and the harness has no business doing DOM
+ * work at snapshot rate in the background of somebody's fight.
+ */
+function refresh() {
+  if (!win.visible) {
+    return;
+  }
+  renderResults([...runLiveChecks(), ...slowResults]);
+}
+
+/**
+ * The full pass: the slow half as well, which is what a button press is for.
+ *
+ * The slow results are then held so a live repaint can show them without
+ * redoing a storage round trip on every target change.
+ */
 function run() {
-  win.body.replaceChildren(element('p', undefined, 'Running the checks...'));
-  runChecks()
+  report.replaceChildren(element('p', undefined, 'Running the checks...'));
+  runSlowChecks()
     .then((results) => {
-      const allPassed = renderResults(results);
-      win.body.append(controls());
+      slowResults = results;
+      const allPassed = renderResults([...runLiveChecks(), ...slowResults]);
       if (allPassed) {
         woc.log('every check passed');
       } else {
-        woc.warn(
-          'some checks failed',
-          results.filter((entry) => !entry.ok).map((e) => e.name),
-        );
+        woc.warn('some checks failed');
       }
     })
     .catch((err) => {
       woc.error('the harness itself threw', err);
-      win.body.replaceChildren(element('p', undefined, `The harness threw: ${String(err)}`));
+      report.replaceChildren(element('p', undefined, `The harness threw: ${String(err)}`));
     });
 }
 
@@ -554,7 +1300,7 @@ function demoBar() {
     detail: 'a bar, drained from a frame loop',
   });
   bar.el.style.width = `${String(DEMO_WIDTH)}px`;
-  win.body.appendChild(bar.el);
+  stage.appendChild(bar.el);
 
   const startedAt = woc.now();
   const drain = () => {
@@ -575,12 +1321,271 @@ function demoBar() {
   drain();
 }
 
+/**
+ * The same timer as a square, drained beside the bar so the two can be compared.
+ *
+ * A row of them rather than one, because everything a tile gets wrong is only
+ * visible against its neighbours: whether the wedges sweep the same way, whether
+ * the countdown stays put while its digits change, whether a school border reads
+ * as a border or as a colour someone spilled on the art.
+ *
+ * One of the three deliberately points at art that does not exist. The kit hides a
+ * slot whose image fails, and on a tile that leaves a bare square with its timer
+ * still on it, which is the case a cooldown display hits constantly and the one
+ * worth looking at rather than asserting.
+ */
+function demoTiles() {
+  const row = element('div');
+  row.style.display = 'flex';
+  row.style.gap = '4px';
+  row.style.marginTop = '6px';
+  stage.appendChild(row);
+
+  const tiles = DEMO_TILES.map(([label, ability, cls, school]) => {
+    const tile = woc.ui.tile({ label, icon: woc.ui.icon.ability(ability, cls), school, count: 2 });
+    row.appendChild(tile.el);
+    return tile;
+  });
+
+  const startedAt = woc.now();
+  const drain = () => {
+    const elapsed = (woc.now() - startedAt) / MS_PER_SECOND;
+    const left = Math.max(DEMO_SECONDS - elapsed, 0);
+    if (left <= 0) {
+      row.remove();
+      for (const tile of tiles) {
+        tile.destroy();
+      }
+      return;
+    }
+    const fraction = left / DEMO_SECONDS;
+    for (const tile of tiles) {
+      tile.update({ fraction, value: left.toFixed(0), tone: barTone(fraction) });
+    }
+    woc.requestAnimationFrame(drain);
+  };
+  drain();
+}
+
 /** Warm as it runs out, which is the tone change the kit draws. */
 function barTone(fraction) {
   if (fraction <= DEMO_WARN) {
     return 'warn';
   }
   return 'default';
+}
+
+/**
+ * A settings pane built from the kit, which is the point of the field family.
+ *
+ * A manual demonstration rather than a check for the same reason the bar is: a
+ * suite can assert the value a control reports and cannot see whether the row
+ * lines up with the one under it, whether the slider's number is readable while
+ * it moves, or whether any of it looks like it belongs in a loader frame.
+ */
+function demoForm() {
+  const form = element('div', 'woc-form');
+  form.style.marginTop = '8px';
+  stage.replaceChildren(form);
+
+  const say = (what) => {
+    woc.log('form:', what);
+  };
+  form.append(
+    woc.ui.field.checkbox({ label: 'Include pet damage', value: true, onChange: say }).el,
+    woc.ui.field.slider({ label: 'Rolling window', value: 5, min: 1, max: 60, onChange: say }).el,
+    woc.ui.field.select({
+      label: 'Anchor',
+      value: 'top',
+      options: ['top', 'bottom'],
+      onChange: say,
+    }).el,
+    woc.ui.field.text({ label: 'Window title', value: 'DPS', placeholder: 'DPS', onChange: say })
+      .el,
+    woc.ui.tabs({
+      tabs: [
+        { id: 'damage', label: 'Damage' },
+        { id: 'healing', label: 'Healing' },
+      ],
+      onSelect: say,
+    }).el,
+  );
+}
+
+/**
+ * A context menu, opened at the button that asked for it.
+ *
+ * The half worth looking at is the dismissal: it has to go on Escape, on a click
+ * anywhere else including one the game's own controls swallow, and on choosing
+ * something. None of that is visible in an assertion.
+ */
+function demoMenu(at) {
+  woc.ui.menu(at, [
+    { label: 'Reset the meter', onSelect: () => woc.log('menu: reset') },
+    { label: 'Nothing to report', onSelect: () => undefined, disabled: true },
+    { label: 'Close this addon', onSelect: () => woc.log('menu: close'), separator: true },
+  ]);
+}
+
+/**
+ * The tooltip in its structured form, on a row that names an ability.
+ *
+ * A string still works and is what most attachments want; this is the case the
+ * builder exists for, where a hovered row says what the game's own tooltips say.
+ */
+function demoTooltip() {
+  const row = element('div', 'woc-row-desc', 'Hover me: a tooltip with a title, art and tones');
+  row.style.marginTop = '8px';
+  stage.replaceChildren(row);
+  woc.ui.tooltip(row, {
+    title: 'Fireball',
+    icon: woc.ui.icon.ability('fireball', 'mage'),
+    lines: [
+      '55 mana',
+      { text: '35 yd range, 2.5 sec cast', tone: 'muted' },
+      { text: 'Deals fire damage to the target.', tone: 'default' },
+      { text: 'Requires a target you are in combat with', tone: 'danger' },
+    ],
+  });
+}
+
+/**
+ * A badge to hang on a world anchor.
+ *
+ * Styled inline from the GAME's own custom properties rather than from a copy of
+ * them: an addon inherits the same tokens the loader does, so a badge written this
+ * way follows the player's theme. The loader gives an anchor no look of its own on
+ * purpose, since what belongs over a world point is the addon's business.
+ */
+function anchorBadge(text) {
+  const badge = element('div', undefined, text);
+  badge.style.padding = '2px 8px';
+  badge.style.whiteSpace = 'nowrap';
+  badge.style.fontSize = '13px';
+  badge.style.borderRadius = 'var(--radius-sm, 4px)';
+  badge.style.border = '1px solid var(--color-border-default, rgb(78 61 29))';
+  badge.style.background = 'var(--panel-base, rgb(21 21 31))';
+  badge.style.color = 'var(--gold, rgb(255 209 0))';
+  return badge;
+}
+
+/**
+ * A world point that will still mean this point later.
+ *
+ * The game mutates an entity's `pos` IN PLACE rather than replacing it, so holding
+ * the object holds "wherever that unit is now" and never "where it was". The first
+ * version of this demo pinned a marker correctly, because the anchor is built from
+ * the components, and then measured the distance against the live object: it read
+ * 0.0 yd from anywhere on the map, which is exactly what measuring the player
+ * against themselves looks like.
+ */
+function snapshot(pos) {
+  if (pos === null || pos === undefined) {
+    return null;
+  }
+  return { x: pos.x, y: pos.y, z: pos.z };
+}
+
+/** Yards along the ground: y is height, so the distance a player reads ignores it. */
+function groundDistance(from, to) {
+  if (from === null || to === null) {
+    return null;
+  }
+  return Math.hypot(to.x - from.x, to.z - from.z);
+}
+
+function distanceWord(from, to) {
+  const yards = groundDistance(from, to);
+  if (yards === null) {
+    return 'no player';
+  }
+  return `${yards.toFixed(DECIMALS_YARDS)} yd`;
+}
+
+/** The unit a plate follows: your target if you have one, otherwise you. */
+function platedUnit() {
+  return woc.world.target ?? woc.world.player;
+}
+
+/**
+ * What the following plate says.
+ *
+ * With no target it plates YOU, and the distance from you to yourself is zero: a
+ * true number that demonstrates nothing, and one that reads exactly like the bug
+ * the pinned badge had. So it says what it is instead, and the distance appears
+ * when there is something to be a distance from.
+ */
+function plateText() {
+  const unit = platedUnit();
+  if (unit === null) {
+    return 'nobody';
+  }
+  if (unit === woc.world.player) {
+    return `${unit.name} (you, take a target)`;
+  }
+  return `${unit.name} (${distanceWord(woc.world.player?.pos ?? null, unit.pos)})`;
+}
+
+/**
+ * Two anchors, because the two halves fail differently.
+ *
+ * The FOLLOWING one takes a function, so it tracks whatever it is pointed at with
+ * no loop in this addon: walk, turn, or change target and it keeps up. The PINNED
+ * one is a fixed point captured where you stood, which is the only way to see the
+ * culling work: walk away and it shrinks into the distance, turn around and it
+ * goes, since a point behind the camera has no place on screen.
+ *
+ * The labels are rewritten on a slow timer and the POSITIONS are not: an addon
+ * that moved these itself would be running a second frame loop beside the loader's
+ * to answer a question the loader already answers every frame.
+ */
+function startAnchors() {
+  const plate = woc.ui.anchor3d(() => platedUnit()?.pos ?? null, { offset: { y: -PLATE_LIFT } });
+  const plateBadge = anchorBadge('');
+  plate.el.appendChild(plateBadge);
+
+  const here = snapshot(woc.world.player?.pos);
+  const pin = woc.ui.anchor3d(here ?? { x: 0, y: 0, z: 0 });
+  const pinBadge = anchorBadge('');
+  pin.el.appendChild(pinBadge);
+
+  const label = () => {
+    plateBadge.textContent = plateText();
+    pinBadge.textContent = `pinned, ${distanceWord(woc.world.player?.pos ?? null, here)} away`;
+  };
+  label();
+  const timer = woc.setInterval(label, ANCHOR_TICK_MS);
+
+  return () => {
+    woc.clearInterval(timer);
+    plate.destroy();
+    pin.destroy();
+  };
+}
+
+/** The demo's teardown while it is running, or null while it is not. */
+let stopAnchors = null;
+
+/**
+ * Put two anchors in the world, or take them away again.
+ *
+ * A toggle rather than a one-shot: the point of these is to walk around and watch
+ * them behave, which is not something that finishes on a timer the way a draining
+ * bar does.
+ */
+function demoAnchors() {
+  if (stopAnchors !== null) {
+    stopAnchors();
+    stopAnchors = null;
+    woc.ui.toast('Anchors removed', { timeout: TOAST_MS });
+    return;
+  }
+  if (woc.world.player === null) {
+    woc.ui.toast('No world yet, so there is nothing to anchor to', { timeout: TOAST_MS });
+    return;
+  }
+  stopAnchors = startAnchors();
+  woc.ui.toast('Anchors placed: walk away and turn around', { timeout: TOAST_MS });
 }
 
 /** Null is a cancelled prompt, which is not a failure. */
@@ -659,6 +1664,11 @@ const ANNOUNCEMENTS = [
 /** The manual half: the surfaces a check cannot assert, only a person can see. */
 function controls() {
   const row = element('div');
+  // Built first so the menu can be opened AT it: `ui.menu` takes an element or a
+  // point, and anchoring to the control that asked is the ordinary case.
+  const menuButton = button('Menu', () => {
+    demoMenu(menuButton);
+  });
   row.style.display = 'flex';
   row.style.flexWrap = 'wrap';
   row.style.gap = '6px';
@@ -671,6 +1681,11 @@ function controls() {
     }),
     ...ANNOUNCEMENTS.map(([label, show]) => button(label, show)),
     button('Bar', demoBar),
+    button('Tiles', demoTiles),
+    button('Form', demoForm),
+    button('Tooltip', demoTooltip),
+    button('Anchors', demoAnchors),
+    menuButton,
     button('Alert', showAlert),
     button('Capture a key', captureKey),
   );
@@ -679,9 +1694,44 @@ function controls() {
   return row;
 }
 
+/**
+ * Repaint on the next tick rather than on every key that moved.
+ *
+ * Several of the watched keys change on the same frame constantly: taking a
+ * target moves `target`, `casts` and `entities` at once. Without this the
+ * harness would run its live half three times to paint one answer.
+ */
+let pending = null;
+
+function scheduleRefresh() {
+  if (pending !== null) {
+    return;
+  }
+  pending = woc.setTimeout(() => {
+    pending = null;
+    refresh();
+  }, REFRESH_DEBOUNCE_MS);
+}
+
+// Subscribed for the whole session rather than only while the window is open.
+// The watcher samples a subscribed key once per animation frame, so this does
+// cost something with the report hidden, and the honest reason to accept it is
+// that this is a development addon: the alternative is unsubscribing on hide,
+// and the window's own close button gives no way to know it happened.
+for (const key of LIVE_KEYS) {
+  woc.world.on(key, scheduleRefresh);
+}
+
+/** Opening the window repaints it: it may have been hidden for a whole fight. */
+function openReport() {
+  win.show();
+  refresh();
+}
+
 woc.keys.bind('toggle', () => {
   win.toggle();
   woc.sound.play('ui_click');
+  refresh();
 });
 
 woc.keys.bind('run', () => {
@@ -694,15 +1744,14 @@ woc.ui.microButton({
   label: 'Dev Harness',
   onClick: () => {
     win.toggle();
+    refresh();
   },
 });
 
 woc.ui.menuEntry({
   id: 'harness',
   label: 'Dev Harness',
-  onClick: () => {
-    win.show();
-  },
+  onClick: openReport,
 });
 
 // A settings change re-runs the checks, which is what makes the manager's
@@ -715,5 +1764,9 @@ woc.onSettingsChange(() => {
 woc.onDispose(() => {
   woc.log(`disposed after ${String(uptimeSeconds())}s`);
 });
+
+// Appended once, after the containers: a live repaint replaces the report and
+// must not take the buttons with it.
+win.body.insertBefore(controls(), stage);
 
 run();

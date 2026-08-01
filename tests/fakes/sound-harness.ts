@@ -57,6 +57,8 @@ export interface SoundHarness {
   /** Every cue the sink was asked to start, in order. */
   started: Started[];
   fetched: string[];
+  /** How many times the pack itself was read. The pack is fetched lazily and once. */
+  packReads: () => number;
   advance: (ms: number) => void;
   suspend: () => void;
   /** Stands in for the random pick a family cue would otherwise make. */
@@ -66,6 +68,7 @@ export interface SoundHarness {
 export function soundHarness(options?: SoundHarnessOptions): SoundHarness {
   const started: Started[] = [];
   const fetched: string[] = [];
+  let packReads = 0;
   let running = options?.running !== false;
   let now = 0;
   let variant = 0;
@@ -89,6 +92,7 @@ export function soundHarness(options?: SoundHarnessOptions): SoundHarness {
   const engine = createSoundEngine({
     sink,
     fetchJson: () => {
+      packReads += 1;
       if (options?.packFails === true) {
         return Promise.reject(new Error('offline'));
       }
@@ -108,6 +112,7 @@ export function soundHarness(options?: SoundHarnessOptions): SoundHarness {
     sink,
     started,
     fetched,
+    packReads: () => packReads,
     advance: (ms: number) => {
       now += ms;
     },

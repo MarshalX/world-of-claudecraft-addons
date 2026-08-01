@@ -43,17 +43,37 @@ function reportHandlerError(topic: string, err: unknown, quarantined: boolean): 
   diagError(`an addon handler for ${topic} threw`, err);
 }
 
+/**
+ * One event, frozen against its OWN subscribers and then delivered.
+ *
+ * Per event rather than freezing the whole frame once for the list, and the question
+ * is asked here rather than hoisted out of the loop: a handler that subscribes to
+ * another kind while this event is being delivered must not then be handed an
+ * unfrozen one.
+ */
+function publishEvent(bus: FrameBus, event: unknown): void {
+  const anySubscribed = bus.hasSubscribers(ANY_EVENT_TOPIC);
+  const kind = fieldString(event, 'type');
+  if (kind === null) {
+    if (anySubscribed) {
+      bus.publish(ANY_EVENT_TOPIC, deepFreeze(event));
+    }
+    return;
+  }
+  const topic = eventTopic(kind);
+  if (anySubscribed || bus.hasSubscribers(topic)) {
+    deepFreeze(event);
+  }
+  if (anySubscribed) {
+    bus.publish(ANY_EVENT_TOPIC, event);
+  }
+  bus.publish(topic, event);
+}
+
 /** Fan a decoded events frame out to the per-kind topics. */
 function publishEvents(bus: FrameBus, frame: Frame): void {
-  const anySubscribed = bus.hasSubscribers(ANY_EVENT_TOPIC);
   for (const event of fieldArray(frame, 'list')) {
-    if (anySubscribed) {
-      bus.publish(ANY_EVENT_TOPIC, event);
-    }
-    const kind = fieldString(event, 'type');
-    if (kind !== null) {
-      bus.publish(eventTopic(kind), event);
-    }
+    publishEvent(bus, event);
   }
 }
 
@@ -67,16 +87,26 @@ function createTaps(bus: FrameBus, tracker: NetStateTracker, now: () => number):
       if (frame === null) {
         return;
       }
-      // State is polled through net.state, so it tracks whether or not anything
-      // is subscribed. Freezing only isolates handlers from each other, so it is
-      // skipped entirely when there are none.
+      // State is polled through net.state, so it tracks whether or not anything is
+      // subscribed. Everything the loader reads for itself is taken HERE, at the
+      // tap, and never by subscribing: a loader-owned subscription is
+      // indistinguishable from an addon's, and would defeat the gate below.
       tracker.noteFrame(frame, now());
-      if (bus.size === 0) {
-        return;
+      const topic = frameTopic(frame.t);
+      // Freezing only isolates handlers from each other, so it is worth its walk
+      // over the whole frame only when a handler will actually be handed one. A
+      // snapshot is the frame this matters for: it is the largest thing on the
+      // socket and it arrives 20 times a second, and a player running a meter that
+      // subscribes to combat EVENTS was paying to freeze every one of them.
+      //
+      // Read immediately before the publishes it guards, with nothing between, so
+      // there is no window in which a subscriber could appear and be handed the
+      // frame unfrozen.
+      if (bus.hasSubscribers(RAW_TOPIC) || bus.hasSubscribers(topic)) {
+        deepFreeze(frame);
       }
-      deepFreeze(frame);
       bus.publish(RAW_TOPIC, frame);
-      bus.publish(frameTopic(frame.t), frame);
+      bus.publish(topic, frame);
       if (frame.t === 'events') {
         publishEvents(bus, frame);
       }
@@ -110,6 +140,14 @@ export interface NetHub {
   onEvent: (kind: string, handler: Handler, opts?: SubscribeOpts) => Unsubscribe;
   onAnyEvent: (handler: Handler, opts?: SubscribeOpts) => Unsubscribe;
   state: () => NetState;
+  /**
+   * The sim's clock in seconds, or null before the first snapshot.
+   *
+   * Off the snapshot HEAD, so it is net state rather than world state. Not on
+   * `state()`, which is the addon-facing reading: see the note in net/state.ts for
+   * why a raw sim time is not something to publish.
+   */
+  simNow: () => number | null;
   dispose: () => void;
 }
 
@@ -125,6 +163,7 @@ export function createNetHub(deps: NetHubDeps): NetHub {
     onEvent: (kind, handler, opts) => bus.subscribe(eventTopic(kind), handler, opts),
     onAnyEvent: (handler, opts) => bus.subscribe(ANY_EVENT_TOPIC, handler, opts),
     state: () => tracker.snapshot(),
+    simNow: () => tracker.simNow(),
     dispose: () => {
       uninstall();
       bus.clear();

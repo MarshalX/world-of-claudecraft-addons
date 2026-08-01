@@ -1,6 +1,6 @@
 /// <reference types="@woc-addons/types" />
 
-// Cooldown Bars: one draining bar per ability you are waiting on.
+// Cooldown Bars: one draining timer per ability you are waiting on.
 //
 // The point of this example is the difference between the two things the world
 // API gives you. `world.on('cooldowns')` reports the SET changing: a cooldown
@@ -8,17 +8,18 @@
 // down, because at the frame rate that would be a handler call per ability per
 // frame reporting nothing anyone acts on.
 //
-// So the drawing is the addon's own. The subscription decides WHICH bars exist
+// So the drawing is the addon's own. The subscription decides WHICH rows exist
 // and a frame loop decides how full each one is, reading `world.cooldowns` as it
 // goes. That split is the pattern for anything that has to animate: subscribe
 // for the change, animate from the read.
 //
-// The rows themselves come from `woc.ui.bar`, which is the loader's own timer row:
-// an icon, a name that truncates, a fill behind both, and a right-aligned figure in
-// tabular figures so the digits do not shuffle as they count down. This addon used
-// to build that out of about twenty inline style declarations, and the reason it no
-// longer does is that Combat Meter had built the same thing slightly differently.
-// Anything an addon draws that looks like a timer should come from here.
+// The rows themselves come from the loader's kit rather than from this file. A
+// `woc.ui.bar` is an icon, a name that truncates, a fill behind both, and a
+// right-aligned figure in tabular figures so the digits do not shuffle as they count
+// down. This addon used to build that out of about twenty inline style declarations,
+// and the reason it no longer does is that Combat Meter had built the same thing
+// slightly differently. Anything an addon draws that looks like a timer comes from
+// here, in one of the two shapes the last paragraph describes.
 //
 // The full length of an ordinary cooldown is not published. What is readable is how
 // much is LEFT, so a bar's total is whatever it had left the moment it appeared.
@@ -54,6 +55,28 @@
 // What is NOT read is `maxCharges`. The server keeps the maximum to itself, so the
 // field is present, numeric, and permanently zero, which is why the count reads as
 // "2 left" rather than as "2 of 3".
+//
+// The rows come in two shapes, and the `layout` setting picks between them. A bar
+// is a row with the ability's NAME on it, read down a column; a tile is a square
+// where the art is the label, read across a strip. Both are kit primitives with the
+// same {el, update, destroy}, so everything below the two builders is written once
+// and neither shape is the special case. What genuinely differs is where a charge
+// count goes and how much room the countdown has, and that is nearly the whole of
+// it: the rest is the direction of one flex line.
+//
+// The strip is also RESIZABLE, and its height is the icon size. That is the one
+// place this addon asks the loader for something rather than drawing it: a frame's
+// box belongs to the loader, which writes it on a drag, on a viewport change and on
+// a restore, so `onMove` is how an addon lays out against it. Measuring the element
+// instead would force a synchronous layout on every frame of a display that already
+// writes styles on every frame.
+//
+// The height is the size and the width is only room to grow into, which is a
+// deliberate choice rather than an omission: tiles sized to fill the width would
+// have to shrink as more cooldowns started, so the icons would change size in the
+// middle of a fight, which is exactly when a player is picking one out by shape.
+// A frame cannot be dragged SMALLER than the size it was created at, so the strip
+// starts at the tap-target floor the game holds its own controls to and grows.
 
 const DECIMALS = 1;
 const FRAME_WIDTH = 220;
@@ -62,9 +85,24 @@ const DEFAULT_MAX_BARS = 8;
 const GCD_SECONDS = 1.5;
 /** Below this share left, the row goes warm: it is about to be ready. */
 const NEARLY_READY = 0.25;
+/** Over this, a tile's countdown is drawn in minutes: 40 pixels does not fit "119". */
+const SECONDS_PER_MINUTE = 60;
+/**
+ * The tile strip's starting height, which is also its floor and its icon size.
+ *
+ * 40 is the tap-target floor the game holds its own controls to, and the kit's own
+ * default tile. It is the floor here because a frame's minimum IS the size it was
+ * created at, so this is the smallest the strip can be dragged.
+ */
+const TILE_START = 40;
+/** How wide the strip starts. Only room to grow into: see the note at the top. */
+const STRIP_WIDTH = 260;
 
-/** Ability id to the bar tracking it: the kit row, and what it had left when seen. */
-const bars = new Map();
+/** Ability id to the row tracking it: the kit widget, and what it had left when seen. */
+const rows = new Map();
+
+/** The current icon size, which is the strip's height. Ignored by the bars layout. */
+let tileSize = TILE_START;
 
 function settingNumber(id, fallback) {
   const value = woc.settings[id];
@@ -83,24 +121,31 @@ function settingFlag(id, fallback) {
 }
 
 /**
- * 'aimed_shot' reads as 'Aimed Shot'. A cooldown map is keyed by ability ID.
+ * 'aimed_shot' reads as 'Aimed Shot'. The FALLBACK, not the label.
  *
- * Which means this label is derived from the id and MAY NOT BE WHAT THE GAME CALLS IT.
- * The two have diverged: `arcane_shot` is displayed as "Fell Shot" in the game, so this
- * row says "Arcane Shot" for an ability nothing else calls that. Nothing readable from
- * an addon carries an id and its display name together for a damaging ability, and the
- * only complete source is a hashed, minified i18n bundle that is not worth depending
- * on. Combat Meter has the opposite half of the same problem, stated in its header.
- *
- * So the id is what is shown, because the id is what is KNOWN. It is also what the
- * icon is filed under, which is why the art on these rows is right even when the name
- * beside it is stale.
+ * A guess from the id, and it is wrong wherever the two have diverged: `arcane_shot`
+ * is displayed as "Fell Shot", so this returns a name nothing else in the game calls
+ * that ability. It is only reached for an id the spellbook does not carry, which is
+ * something you did not learn: an item cooldown, or an ability granted by something
+ * other than your class kit. Wrong-but-readable beats blank for those.
  */
 function readable(abilityId) {
   return abilityId
     .split('_')
     .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
     .join(' ');
+}
+
+/**
+ * What the game actually calls this ability.
+ *
+ * A cooldown map is keyed by ability ID, and the id and the display name have
+ * diverged, so for a long time these rows showed a title-cased id and there was no
+ * way to do better. `world.abilities` is that way: it carries both for everything in
+ * your own kit, which is everything with a cooldown you can see.
+ */
+function abilityName(abilityId) {
+  return woc.world.abilities.byId(abilityId)?.name ?? readable(abilityId);
 }
 
 /**
@@ -114,21 +159,95 @@ function playerClass() {
   return woc.world.player?.templateId ?? '';
 }
 
-// #region frame
-const frame = woc.ui.frame({
-  id: 'bars',
-  title: 'Cooldowns',
-  width: FRAME_WIDTH,
-  save: true,
-});
+/** Whether the timers are drawn as squares. Anything unrecognised is the default. */
+function drawsTiles() {
+  return woc.settings.layout === 'tiles';
+}
 
+// One flex line, whose DIRECTION is the layout. It outlives the frame, because a
+// layout change rebuilds the frame and this keeps every row that survives it.
 const list = document.createElement('div');
 list.className = 'woc-cd-list';
 list.style.display = 'flex';
-list.style.flexDirection = 'column';
 list.style.gap = '3px';
+
+/**
+ * The overlay. Bare, and resizable only where resizing means something.
+ *
+ * Bare: the rows ARE the display, so a panel behind them is furniture around a
+ * thing that needs none. The title is kept even though nothing draws it, because
+ * it is the frame's accessible name and the label the loader shows while frames
+ * are unlocked.
+ *
+ * The trade is that this frame is invisible while nothing is on cooldown, which is
+ * most of the time out of combat. That is correct for an overlay and is why the
+ * loader has an unlock mode: it outlines every frame, empty ones included, so this
+ * can be positioned at rest.
+ *
+ * Only the tile strip resizes. A column of bars is sized by its content, and a
+ * fixed height would either pad it out or hide the row that just started.
+ *
+ * The two layouts are two frame IDS, which means two saved boxes. Sharing one was
+ * the obvious thing and is wrong: a frame's id is its persistence key, a column of
+ * five bars saves a box a couple of hundred pixels tall, and restoring that height
+ * into the strip would open it with icons the size of a portrait. They are also
+ * different shapes that want different corners of the screen. 'bars' keeps its name
+ * so a player who has already positioned it does not lose that.
+ */
+// #region frame
+function buildFrame() {
+  if (!drawsTiles()) {
+    return woc.ui.frame({
+      id: 'bars',
+      title: 'Cooldowns',
+      width: FRAME_WIDTH,
+      density: 'bare',
+      save: true,
+    });
+  }
+  return woc.ui.frame({
+    id: 'tiles',
+    title: 'Cooldowns',
+    width: STRIP_WIDTH,
+    height: TILE_START,
+    resizable: true,
+    density: 'bare',
+    save: true,
+    onMove: (box) => {
+      resize(box.h);
+    },
+  });
+}
+
+let frame = buildFrame();
 frame.body.appendChild(list);
 // #endregion
+
+/**
+ * Follow the strip's height, which is the icon size.
+ *
+ * Called at pointer rate while a resize is in progress, so it does nothing when the
+ * height has not actually moved: a drag along the bottom edge changes the height on
+ * every event, but a drag along the side changes only x and w.
+ */
+function resize(height) {
+  if (height === tileSize || height <= 0) {
+    return;
+  }
+  tileSize = height;
+  for (const row of rows.values()) {
+    row.ui.update({ size: tileSize });
+  }
+}
+
+/** Column of bars, or strip of tiles. One declaration, because that is all it is. */
+function applyLayout() {
+  list.style.flexDirection = 'column';
+  if (drawsTiles()) {
+    list.style.flexDirection = 'row';
+  }
+}
+applyLayout();
 
 /**
  * One row, from the kit rather than hand-built.
@@ -142,7 +261,7 @@ frame.body.appendChild(list);
  */
 // #region bar
 function createBar(abilityId) {
-  const name = readable(abilityId);
+  const name = abilityName(abilityId);
   const bar = woc.ui.bar({
     label: name,
     icon: woc.ui.icon.ability(abilityId, playerClass()),
@@ -150,10 +269,61 @@ function createBar(abilityId) {
   });
   bar.el.dataset.ability = abilityId;
   // The full name is one hover away, so truncating costs nothing.
-  woc.ui.tooltip(bar.el, name);
+  woc.ui.tooltip(bar.el, () => timerTooltip(abilityId));
   return bar;
 }
 // #endregion
+
+/**
+ * The same timer as a square, for the strip layout.
+ *
+ * The label is passed and never drawn: a tile is all art, so that string is how the
+ * tile is announced rather than what it shows. The tooltip matters more here than on
+ * a bar for the same reason, since the art is the only thing naming the ability, and
+ * an ability with no painted file leaves a square with nothing on it but the sweep.
+ */
+// #region tile
+function createTile(abilityId) {
+  const name = abilityName(abilityId);
+  const tile = woc.ui.tile({
+    label: name,
+    icon: woc.ui.icon.ability(abilityId, playerClass()),
+    className: 'woc-cd-tile',
+    // Whatever the strip is at now, so a tile that appears mid-fight matches the
+    // ones beside it rather than the size the strip was created at.
+    size: tileSize,
+  });
+  tile.el.dataset.ability = abilityId;
+  woc.ui.tooltip(tile.el, () => timerTooltip(abilityId));
+  return tile;
+}
+// #endregion
+
+// #region tooltip
+function timerTooltip(abilityId) {
+  const name = abilityName(abilityId);
+  const entry = timers().find((row) => row.abilityId === abilityId);
+  if (entry === undefined) {
+    return name;
+  }
+  const lines = [`${entry.remaining.toFixed(DECIMALS)}s left`];
+  if (typeof entry.charges === 'number' && entry.charges > 0) {
+    lines.push({ text: `${String(entry.charges)} charge(s) ready`, tone: 'good' });
+  }
+  if (entry.total === null) {
+    lines.push({ text: 'length unknown, measured from when it was first seen', tone: 'muted' });
+  }
+  return { title: name, icon: woc.ui.icon.ability(abilityId, playerClass()), lines };
+}
+// #endregion
+
+/** One timer in the shape the player picked. The kind travels with it: see `paint`. */
+function createRow(abilityId) {
+  if (drawsTiles()) {
+    return { ui: createTile(abilityId), tile: true };
+  }
+  return { ui: createBar(abilityId), tile: false };
+}
 
 /**
  * The shortest cooldown worth a bar.
@@ -184,15 +354,15 @@ function chargePools() {
  * addon: it is a real total, published, so the fill is right on the first frame.
  */
 function rechargingAbilities() {
-  const rows = [];
+  const found = [];
   for (const [abilityId, pool] of chargePools()) {
     const remaining = Number(pool?.recharge);
     const total = Number(pool?.rechargeLength);
     if (remaining > 0 && total > 0) {
-      rows.push({ abilityId, remaining, total, charges: Number(pool?.charges) });
+      found.push({ abilityId, remaining, total, charges: Number(pool?.charges) });
     }
   }
-  return rows;
+  return found;
 }
 
 /** Everything running, in whatever order the game's map is in. */
@@ -204,7 +374,7 @@ function runningCooldowns() {
   const floor = shortestShown();
   const running = [];
   for (const [abilityId, remaining] of live) {
-    if (remaining > 0 && (remaining >= floor || bars.has(abilityId))) {
+    if (remaining > 0 && (remaining >= floor || rows.has(abilityId))) {
       running.push({ abilityId, remaining, total: null, charges: null });
     }
   }
@@ -217,54 +387,71 @@ function runningCooldowns() {
  * An ability whose pool has emptied is ALSO on cooldown, because the empty-pool
  * timer rides the ordinary cooldown wire. One row per ability, and the charge
  * reading wins where there is one, because it is the one with a real total.
+ *
+ * The charge pools are passed in rather than read here, because the frame loop has
+ * already had to read them to know whether there is anything to do at all. Reading
+ * them again would be the same walk twice in one frame.
  */
-function timers() {
-  const rows = rechargingAbilities();
-  const exact = new Set(rows.map((entry) => entry.abilityId));
+function timersFrom(recharging) {
+  const found = [...recharging];
+  const exact = new Set(found.map((entry) => entry.abilityId));
   for (const entry of runningCooldowns()) {
     if (!exact.has(entry.abilityId)) {
-      rows.push(entry);
+      found.push(entry);
     }
   }
-  return rows;
+  return found;
+}
+
+/** The same reading for the callers that have no pool list already in hand. */
+function timers() {
+  return timersFrom(rechargingAbilities());
 }
 
 /**
- * Rebuild the set of bars from what is running.
+ * Rebuild the set of rows from what is running.
  *
- * A bar that is already up keeps the total it was created with, so a rebuild does
+ * A row that is already up keeps the total it was created with, so a rebuild does
  * not restart its fill. A row with a published total is marked exact and is never
  * re-baselined, since there is nothing to learn.
+ *
+ * The reading is a parameter, not a read. Everything below here runs inside one
+ * frame and has to agree about what is running: taking a fresh reading per function
+ * was three walks of the cooldown map for one frame, and the last of them could
+ * legitimately disagree with the first about which rows exist.
  */
-function syncBars() {
-  const running = timers();
+function syncRows(running) {
   const seen = new Set(running.map((entry) => entry.abilityId));
 
-  for (const [abilityId, row] of bars) {
+  for (const [abilityId, row] of rows) {
     if (!seen.has(abilityId)) {
-      row.bar.destroy();
-      bars.delete(abilityId);
+      row.ui.destroy();
+      rows.delete(abilityId);
     }
   }
 
   for (const { abilityId, remaining, total } of running) {
-    if (!bars.has(abilityId)) {
-      const bar = createBar(abilityId);
-      bars.set(abilityId, {
-        bar,
+    if (!rows.has(abilityId)) {
+      rows.set(abilityId, {
+        ...createRow(abilityId),
         total: total ?? remaining,
         seen: remaining,
         exact: total !== null,
       });
     }
   }
-  draw();
+  draw(running);
+}
+
+/** The three callers that want a sync but have no reading in hand. */
+function resync() {
+  syncRows(timers());
 }
 
 /** Soonest ready first, which is the order the next decision is made in. */
-function drawOrder() {
-  return timers()
-    .filter((entry) => bars.has(entry.abilityId))
+function drawOrder(running) {
+  return running
+    .filter((entry) => rows.has(entry.abilityId))
     .sort((a, b) => a.remaining - b.remaining)
     .slice(0, settingNumber('max-bars', DEFAULT_MAX_BARS));
 }
@@ -303,52 +490,95 @@ function figure(remaining, charges) {
   return left;
 }
 
-function draw() {
-  const order = drawOrder();
+/**
+ * The same figure with 40 pixels to say it in.
+ *
+ * A tile has no room for "119.4s" and no room for a charge count beside the time
+ * either, so the seconds lose their decimal and their unit, anything over a minute
+ * is drawn in minutes, and the count moves to the corner the kit keeps for it.
+ * Rounded UP, so a tile never reads 0 while the ability is still coming back.
+ */
+function countdown(remaining) {
+  if (remaining >= SECONDS_PER_MINUTE) {
+    return `${String(Math.ceil(remaining / SECONDS_PER_MINUTE))}m`;
+  }
+  return String(Math.ceil(remaining));
+}
+
+/**
+ * Tell one row where its timer has got to, in the terms its shape understands.
+ *
+ * The two kit widgets take the same three fields for the timer itself, so the only
+ * branch is the charge count: a bar has one figure and carries it in parentheses,
+ * a tile has a corner for it and a `count` field that hides itself when there is
+ * nothing to show.
+ */
+function paint(row, remaining, charges, fraction) {
+  const tone = toneFor(fraction);
+  if (row.tile) {
+    row.ui.update({ fraction, value: countdown(remaining), count: charges, tone });
+    return;
+  }
+  row.ui.update({ fraction, value: figure(remaining, charges), tone });
+}
+
+function draw(running) {
+  const order = drawOrder(running);
   const shown = new Set(order.map((entry) => entry.abilityId));
-  for (const [abilityId, row] of bars) {
+  for (const [abilityId, row] of rows) {
     if (!shown.has(abilityId)) {
-      row.bar.el.remove();
+      row.ui.el.remove();
     }
   }
-  for (const { abilityId, remaining, charges } of order) {
-    const row = bars.get(abilityId);
-    rebaseline(row, remaining);
-    const fraction = Math.min(remaining / row.total, 1);
-    row.bar.update({
-      fraction,
-      value: figure(remaining, charges),
-      tone: toneFor(fraction),
-    });
-    list.appendChild(row.bar.el);
+  for (const [at, entry] of order.entries()) {
+    const row = rows.get(entry.abilityId);
+    rebaseline(row, entry.remaining);
+    const fraction = Math.min(entry.remaining / row.total, 1);
+    paint(row, entry.remaining, entry.charges, fraction);
+    place(row.ui.el, at);
   }
 }
+
+/**
+ * Put a row at its position, and only if it is not there already.
+ */
+// #region place
+function place(el, at) {
+  if (list.children[at] !== el) {
+    list.insertBefore(el, list.children[at] ?? null);
+  }
+}
+// #endregion
 
 // #region subscribe-and-animate
 // The cooldown set changes here; the numbers move in the frame loop below.
 // Sampling the set every frame instead would be a Map walk per frame to notice
 // nothing. Charges are the other way round, and the frame loop says why.
-woc.world.on('cooldowns', syncBars);
+woc.world.on('cooldowns', resync);
 
 /**
- * Redraw while anything is running, and stand down when nothing is.
- *
- * `syncBars` rather than `draw` when a charge pool is recharging: a charge coming
- * back while the pool still holds a use changes no cooldown id, so the
- * subscription cannot raise or drop those rows and only the loop can.
+ * Redraw while anything is running, and do as little as possible when nothing is.
  */
+let wasVisible = false;
+
 function tick() {
-  if (rechargingAbilities().length > 0) {
-    syncBars();
-  } else if (bars.size > 0) {
-    draw();
+  const { visible } = frame;
+  const appeared = visible && !wasVisible;
+  wasVisible = visible;
+  if (visible) {
+    const recharging = rechargingAbilities();
+    if (appeared || recharging.length > 0) {
+      syncRows(timersFrom(recharging));
+    } else if (rows.size > 0) {
+      draw(timersFrom(recharging));
+    }
   }
   woc.requestAnimationFrame(tick);
 }
 woc.requestAnimationFrame(tick);
 // #endregion
 
-syncBars();
+resync();
 
 // #region keybind
 woc.keys.bind('toggle', () => {
@@ -356,4 +586,32 @@ woc.keys.bind('toggle', () => {
 });
 // #endregion
 
-woc.onSettingsChange(syncBars);
+/**
+ * Throw every row away and start again.
+ *
+ * A row's SHAPE is decided when it is built, so a layout change cannot be repainted
+ * into: the elements themselves have to go. Everything else a settings change can
+ * move (how many rows, whether short cooldowns count) is answered by the next sync,
+ * and rebuilding for those costs one frame of a display that redraws every frame
+ * anyway.
+ */
+function rebuild() {
+  for (const [abilityId, row] of rows) {
+    row.ui.destroy();
+    rows.delete(abilityId);
+  }
+  // The frame goes too, because whether it resizes is decided when it is built.
+  // Rebuilding under the same id restores the same saved box, so the overlay does
+  // not move; the tile size goes back to the floor and the restore moves it again.
+  const previous = frame;
+  // Back to the floor BEFORE the new frame exists, because a restored box reports
+  // its height through onMove and that answer has to win rather than be overwritten.
+  tileSize = TILE_START;
+  frame = buildFrame();
+  frame.body.appendChild(list);
+  previous.destroy();
+  applyLayout();
+  resync();
+}
+
+woc.onSettingsChange(rebuild);

@@ -23,98 +23,62 @@
 // passed through. A NaN reaching a style property drops the declaration silently,
 // which reads as a bar stuck at its last width, and the arithmetic behind a timer
 // fraction divides by a total an addon may not have yet.
+//
+// The tone and school vocabulary, that clamp, and the decorative art element live in
+// kit/readout.ts, which is what this row and the square one in kit/tile.ts share.
 
 import type { Teardown } from '../../disposal.ts';
+import type {
+  ArtSlot,
+  ReadoutSchool,
+  ReadoutTone,
+  StyleSlot,
+  TextSlot,
+  VariantState,
+} from './readout.ts';
+import {
+  applyVariants,
+  buildArt,
+  clampFraction,
+  styleSlot,
+  textSlot,
+  toneClass,
+  variantState,
+  writeArt,
+  writeStyle,
+  writeText,
+  writeTextHiding,
+} from './readout.ts';
 
 const FULL_PERCENT = 100;
 const DECIMALS = 2;
 
-/** The tones the sheet draws. Anything else falls back to the first. */
-const TONES = Object.freeze(['default', 'warn', 'danger'] as const);
+/** What every one of this row's variant classes starts with. */
+const PREFIX = 'woc-bar';
 
-/**
- * The game's own damage schools, which the sheet tints a fill by.
- *
- * A SEPARATE axis from tone, not more values on it. Tone is urgency, which is why
- * Cooldown Bars sets 'warn' as an ability comes back up; a school is what KIND of
- * damage a row is made of. Folding them into one enum would make `tone: 'frost'` and
- * `tone: 'danger'` look like alternatives when they answer different questions.
- *
- * The palette is not invented here: the game already publishes one as
- * `--color-debuff-*` custom properties for its own debuff borders, and the loader
- * inherits those like every other token. So a row tinted by school matches the colour
- * the player already reads on the aura icon for the same school.
- */
-const SCHOOLS = Object.freeze([
-  'physical',
-  'fire',
-  'frost',
-  'arcane',
-  'shadow',
-  'holy',
-  'nature',
-] as const);
+type BarTone = ReadoutTone;
 
-type BarTone = (typeof TONES)[number];
+type BarSchool = ReadoutSchool;
 
-type BarSchool = (typeof SCHOOLS)[number];
-
-function toneClass(tone: unknown): string {
-  if (typeof tone === 'string' && (TONES as readonly string[]).includes(tone)) {
-    return `woc-bar-${tone}`;
-  }
-  return `woc-bar-${TONES[0]}`;
+function setFraction(fill: StyleSlot, fraction: unknown): void {
+  writeStyle(fill, `${(clampFraction(fraction) * FULL_PERCENT).toFixed(DECIMALS)}%`);
 }
 
 /**
- * The school class, or none for a school the game does not have.
+ * The row, as its own updates address it.
  *
- * No fallback tint: an unrecognised school means the sheet has nothing true to say
- * about the row, and inventing a colour would claim a damage type that is not the
- * one the event reported. The tone's own fill shows through instead.
+ * Slots rather than elements, because a bar is animated from an addon's frame loop
+ * and an update that repeats what is already on screen has to cost nothing. See the
+ * note at the top of kit/readout.ts.
  */
-function schoolClass(school: unknown): string | null {
-  if (typeof school === 'string' && (SCHOOLS as readonly string[]).includes(school)) {
-    return `woc-bar-school-${school}`;
-  }
-  return null;
-}
-
-/** 0 through 1, with anything unusable read as empty rather than as a dropped rule. */
-function clampFraction(fraction: unknown): number {
-  if (typeof fraction !== 'number' || !Number.isFinite(fraction)) {
-    return 0;
-  }
-  return Math.min(Math.max(fraction, 0), 1);
-}
-
-function setFraction(fill: HTMLElement, fraction: unknown): void {
-  fill.style.width = `${(clampFraction(fraction) * FULL_PERCENT).toFixed(DECIMALS)}%`;
-}
-
-function buildIcon(doc: Document): HTMLImageElement {
-  const icon = doc.createElement('img');
-  icon.className = 'woc-bar-icon';
-  // The art is decorative: the label beside it already names the ability, and an
-  // alt repeating that would have a screen reader read every row twice.
-  icon.alt = '';
-  icon.setAttribute('aria-hidden', 'true');
-  // Not every ability ships painted art, so a URL that does not resolve is an
-  // ordinary outcome rather than a fault. Hiding the slot collapses the row's gap
-  // instead of leaving a broken-image glyph where the icon would be.
-  icon.addEventListener('error', () => {
-    icon.hidden = true;
-  });
-  return icon;
-}
-
 interface BarParts {
   el: HTMLElement;
-  fill: HTMLElement;
-  icon: HTMLImageElement;
-  label: HTMLElement;
-  value: HTMLElement;
-  detail: HTMLElement;
+  fill: StyleSlot;
+  icon: ArtSlot;
+  label: TextSlot;
+  value: TextSlot;
+  detail: TextSlot;
+  variants: VariantState;
 }
 
 function span(doc: Document, className: string): HTMLElement {
@@ -137,7 +101,7 @@ function span(doc: Document, className: string): HTMLElement {
  */
 function buildBar(doc: Document, opts: BarOpts): BarParts {
   const el = doc.createElement('div');
-  el.className = `woc-bar ${toneClass(opts.tone)}`;
+  el.className = `woc-bar ${toneClass(PREFIX, opts.tone)}`;
   if (opts.className !== undefined) {
     el.classList.add(opts.className);
   }
@@ -145,22 +109,29 @@ function buildBar(doc: Document, opts: BarOpts): BarParts {
   const fill = doc.createElement('div');
   fill.className = 'woc-bar-fill';
 
-  const icon = buildIcon(doc);
-  icon.hidden = true;
+  const icon = buildArt(doc, 'woc-bar-icon');
 
   const label = span(doc, 'woc-bar-label');
   const value = span(doc, 'woc-bar-value');
 
   const head = doc.createElement('div');
   head.className = 'woc-bar-head';
-  head.append(icon, label, value);
+  head.append(icon.el, label, value);
 
   const detail = doc.createElement('div');
   detail.className = 'woc-bar-detail';
   detail.hidden = true;
 
   el.append(fill, head, detail);
-  return { el, fill, icon, label, value, detail };
+  return {
+    el,
+    fill: styleSlot(fill, 'width'),
+    icon,
+    label: textSlot(label),
+    value: textSlot(value),
+    detail: textSlot(detail),
+    variants: variantState(opts.tone),
+  };
 }
 
 /** Everything a bar can be told, all of it optional on an update. */
@@ -208,45 +179,15 @@ interface Bar {
 /** The three text slots. The detail hides itself when cleared. */
 function applyText(parts: BarParts, next: BarUpdate): void {
   if (next.label !== undefined) {
-    // textContent, never innerHTML: an ability name reaches this from the wire.
-    parts.label.textContent = next.label;
+    writeText(parts.label, next.label);
   }
   if (next.value !== undefined) {
-    parts.value.textContent = next.value;
+    writeText(parts.value, next.value);
   }
   if (next.detail !== undefined) {
-    parts.detail.textContent = next.detail;
     // Hidden rather than emptied, so a row whose detail was switched off does not
     // leave the gap the second line's own spacing would otherwise still take.
-    parts.detail.hidden = next.detail.length === 0;
-  }
-}
-
-/**
- * The two variant axes, each swapped rather than accumulated.
- *
- * A row reused for another ability must not end up carrying two schools' classes, or
- * two tones', at once. Which of the two WINS is settled in the sheet by source order,
- * not here: this only records what the caller said.
- */
-function applyVariants(el: HTMLElement, next: BarUpdate): void {
-  if (next.tone !== undefined) {
-    el.classList.remove(...TONES.map((tone) => `woc-bar-${tone}`));
-    el.classList.add(toneClass(next.tone));
-  }
-  if (next.school !== undefined) {
-    el.classList.remove(...SCHOOLS.map((school) => `woc-bar-school-${school}`));
-    const applied = schoolClass(next.school);
-    if (applied !== null) {
-      el.classList.add(applied);
-    }
-  }
-}
-
-function applyIcon(icon: HTMLImageElement, next: BarUpdate): void {
-  if (next.icon !== undefined) {
-    icon.hidden = next.icon === null;
-    icon.src = next.icon ?? '';
+    writeTextHiding(parts.detail, next.detail);
   }
 }
 
@@ -255,8 +196,10 @@ function createBar(doc: Document, opts: BarOpts = {}): Bar {
 
   const update = (next: BarUpdate): void => {
     applyText(parts, next);
-    applyVariants(parts.el, next);
-    applyIcon(parts.icon, next);
+    applyVariants(parts.el, PREFIX, next, parts.variants);
+    if (next.icon !== undefined) {
+      writeArt(parts.icon, next.icon);
+    }
     if (next.fraction !== undefined) {
       setFraction(parts.fill, next.fraction);
     }
@@ -276,4 +219,4 @@ function createBar(doc: Document, opts: BarOpts = {}): Bar {
 }
 
 export type { Bar, BarOpts, BarSchool, BarTone, BarUpdate };
-export { clampFraction, createBar, SCHOOLS as BAR_SCHOOLS, TONES as BAR_TONES };
+export { createBar };

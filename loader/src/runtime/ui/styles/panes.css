@@ -284,3 +284,15 @@
 #woc-addons .woc-log-error {
   color: var(--color-text-error, rgb(255 143 133));
 }
+
+/* The arrange-your-UI switch at the top of the Installed pane.
+   Its own class rather than `.woc-row`, which means an installed addon. */
+#woc-addons .woc-unlock-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 0;
+  margin-bottom: 6px;
+  border-bottom: 1px solid var(--color-border-default, rgb(78 61 29));
+}

@@ -22,6 +22,8 @@ const FIELDS: Record<string, string> = {
     'Semver. A marketplace serves one version per ref, so this is what an update compares against.',
   apiVersion:
     'The addon API major, currently `1`. A loader that cannot honour it marks the addon incompatible and never evaluates it, rather than running it and failing somewhere unhelpful.',
+  apiMinor:
+    'The smallest API minor carrying every member you use, currently up to `1`. Optional, and leaving it out means `0`. The major says which contract you were written against; this says how much of it had been built, because the surface only ever grows within a major. Declare it and an older loader refuses you by name and is never even offered the update; leave it low and feature-detect with `woc.apiMinor` if you would rather degrade than be refused. Each member in the API reference says which minor introduced it.',
   author: 'Shown on every row and on the install confirmation.',
   description:
     'One line. It is what Browse shows and what the install confirmation repeats, so write it for someone deciding whether to trust you.',

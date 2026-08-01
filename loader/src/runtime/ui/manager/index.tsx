@@ -17,15 +17,16 @@ import type { DiagnosticsReading } from '../../diagnostics.ts';
 import { createFreezeControl, type FreezeControl } from '../../freeze.ts';
 import type { LogBuffer } from '../../log/buffer.ts';
 import type { AddonStatus } from '../../supervisor.ts';
+import type { UnlockMode } from '../kit/unlock.ts';
 import { ManagerApp } from './app.tsx';
 import type { CatalogRegistry } from './catalog-actions.ts';
-import { type CatalogStore, createCatalogStore } from './catalog-store.ts';
+import type { CatalogStore } from './catalog-store.ts';
 import type { ConfigService, ConflictReading } from './config.ts';
-import { createDevStore, type DevStore } from './dev-store.ts';
-import { createGeometryStore, type GeometryStorage, type GeometryStore } from './geometry-store.ts';
-import { type AddonSelection, createSelection } from './selection.ts';
+import type { DevStore } from './dev-store.ts';
+import type { GeometryStorage, GeometryStore } from './geometry-store.ts';
+import type { AddonSelection } from './selection.ts';
 import type { InstalledRegistry, InstalledStore } from './store.ts';
-import { createInstalledStore } from './store.ts';
+import { createStores, loadPanes } from './stores.ts';
 
 /**
  * Every registry member the manager's panes reach for.
@@ -57,6 +58,14 @@ interface ManagerDeps {
   config: ConfigService | null;
   /** Swallow the next key press, for the keybind editor. */
   capture: () => Promise<string | null>;
+  /**
+   * The arrange-your-UI mode, shared with the loader's own keybind.
+   *
+   * Passed in rather than created here, unlike the freeze: the freeze is the
+   * manager's alone, while this one is also flipped from outside, so the manager
+   * has to be looking at the same object rather than at a copy of the state.
+   */
+  unlock: UnlockMode;
   logs: LogBuffer;
   /** Renders a wall-clock reading. Injected so the pure panes stay locale-free. */
   formatTime: (at: number) => string;
@@ -82,6 +91,8 @@ interface Manager {
 
 interface Frame {
   container: HTMLElement;
+  /** Stop following the unlock mode. See createFrame. */
+  stopWatchingUnlock: () => void;
   store: InstalledStore;
   dev: DevStore;
   catalog: CatalogStore;
@@ -148,6 +159,8 @@ function renderApp(deps: ManagerDeps, view: FrameView, container: HTMLElement): 
       formatTime={deps.formatTime}
       readDiagnostics={deps.readDiagnostics}
       onClose={view.onClose}
+      unlocked={deps.unlock.unlocked}
+      onUnlock={deps.unlock.set}
       box={view.geometry.box()}
       onGeometry={view.geometry.save}
       openAddon={view.selection.addon()}
@@ -163,51 +176,23 @@ function renderApp(deps: ManagerDeps, view: FrameView, container: HTMLElement): 
 }
 
 /**
+ * Repaint when the arrange-your-UI mode is flipped from somewhere else.
+ *
+ * The manager draws a checkbox for it and the loader's keybind flips the same
+ * mode, so without this the checkbox would show the opposite of what the screen
+ * is doing for as long as the window stayed open.
+ */
+function followUnlock(deps: ManagerDeps, paint: () => void): () => void {
+  return deps.unlock.onChange(paint);
+}
+
+/**
  * The window's own state: its container, its stores, and the open flag.
  *
  * Split out so mountManager stays a wiring function. The mutual reference
  * between paint and close is why the two are built together rather than passed
  * to each other.
  */
-/**
- * The stores the window reads, all repainting through one callback.
- *
- * They load outside the component tree, so opening the window paints whatever is
- * already loaded and a reload driven from another tab does not need the window
- * to be open.
- */
-function createStores(deps: ManagerDeps, repaint: () => void) {
-  const store = createInstalledStore({ registry: deps.registry, onChange: repaint });
-  const dev = createDevStore({ dev: deps.dev, market: deps.market, onChange: repaint });
-  const catalog = createCatalogStore({
-    market: deps.market,
-    registry: deps.registry,
-    onChange: repaint,
-  });
-  const geometry = createGeometryStore({ storage: deps.storage, channel: deps.channel });
-  const selection = createSelection({
-    config: deps.config,
-    find: (fqid) => store.state().rows.find((row) => row.fqid === fqid) ?? null,
-    repaint,
-  });
-  return { store, dev, catalog, geometry, selection };
-}
-
-/**
- * What opening the window reads, none of which goes to the network.
- *
- * Loaded on open rather than at boot: a player who never opens the manager should
- * not pay for a bridge round trip. All three are loaded whatever tab is being
- * opened, since deferring to the tab would make every tab's first paint its
- * loading state. The dev reading is three storage reads and the catalog answers
- * from the indexes as they were last read. Refresh is what fetches.
- */
-function loadPanes(panes: Pick<FrameView, 'store' | 'dev' | 'catalog'>): void {
-  panes.store.reload();
-  panes.dev.load();
-  panes.catalog.load();
-}
-
 function createFrame(deps: ManagerDeps): Frame {
   const container = deps.doc.createElement('div');
   container.className = 'woc-manager';
@@ -220,6 +205,9 @@ function createFrame(deps: ManagerDeps): Frame {
     paint();
   });
   const freeze = createFreezeControl(deps.doc);
+  const stopWatchingUnlock = followUnlock(deps, () => {
+    paint();
+  });
 
   const close = (): void => {
     open = false;
@@ -251,6 +239,7 @@ function createFrame(deps: ManagerDeps): Frame {
 
   return {
     container,
+    stopWatchingUnlock,
     store,
     dev,
     catalog,
@@ -266,8 +255,19 @@ function createFrame(deps: ManagerDeps): Frame {
 }
 
 function mountManager(deps: ManagerDeps): Manager {
-  const { container, store, dev, catalog, geometry, close, isOpen, paint, show, closeAddon } =
-    createFrame(deps);
+  const {
+    container,
+    store,
+    dev,
+    catalog,
+    geometry,
+    close,
+    isOpen,
+    paint,
+    show,
+    closeAddon,
+    stopWatchingUnlock,
+  } = createFrame(deps);
 
   // Read once at mount rather than on every open, so the first open does not
   // wait on a bridge round trip and later ones use what is already in hand.
@@ -304,6 +304,7 @@ function mountManager(deps: ManagerDeps): Manager {
     repaint: paint,
 
     dispose: () => {
+      stopWatchingUnlock();
       render(null, container);
       container.remove();
     },

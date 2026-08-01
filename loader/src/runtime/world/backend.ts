@@ -12,9 +12,31 @@
 // world-ready: the types are asserted here and verified there.
 
 import { fieldValue } from '../net/frames.ts';
+import { type AbilityIndex, createAbilityReader } from './abilities.ts';
+import {
+  type CharacterInfo,
+  type ProfessionInfo,
+  readCharacter,
+  readProfessions,
+  readTalents,
+  type TalentInfo,
+} from './character.ts';
+import { type CombatState, readCombat } from './combat.ts';
 import { castsOf, type EntityCast, type Hazard, hazardsOf, markersOf } from './derived.ts';
-import type { Aura, Entity, InvSlot, PartyInfo, QuestProgress, WorldQuests } from './game-types.ts';
+import { type EncounterInfo, readEncounter } from './encounter.ts';
+import { mergeLive } from './facade.ts';
+import type {
+  Aura,
+  Entity,
+  EquipSlot,
+  InvSlot,
+  PartyInfo,
+  QuestProgress,
+  WorldQuests,
+} from './game-types.ts';
+import { type GroupInfo, readGroup } from './group.ts';
 import { readonlyMapView } from './readonly-map.ts';
+import { readThreat, type ThreatTable } from './threat.ts';
 
 const NO_ENTITIES: ReadonlyMap<number, Entity> = new Map<number, Entity>();
 
@@ -46,6 +68,27 @@ function readAs<T>(source: unknown, field: string): T | null {
   return fieldValue(source, field) as T | null;
 }
 
+/**
+ * The combat reading, gathered from the three live collections it consults.
+ *
+ * Its own function rather than an inline getter because it is the one read here
+ * that takes several parts of the world at once; the rule it feeds lives in
+ * `combat.ts` and knows nothing about the game object.
+ */
+function combatOf(
+  world: unknown,
+  entities: ReadonlyMap<number, Entity>,
+  deps: BackendDeps,
+): CombatState {
+  return readCombat({
+    player: readAs<Entity>(world, 'player'),
+    party: readAs<PartyInfo>(world, 'partyInfo'),
+    entities,
+    lastDamageAt: deps.lastDamageAt(),
+    now: deps.now(),
+  });
+}
+
 /** The entity the player has selected, resolved through the roster. */
 function targetOf(world: unknown, entities: ReadonlyMap<number, Entity>): Entity | null {
   const id = fieldValue(fieldValue(world, 'player'), 'targetId');
@@ -63,53 +106,8 @@ function questsOf(world: unknown): WorldQuests {
   };
 }
 
-export interface WorldBackend {
-  /** Which backend answered, so the manager's diagnostics can show it. */
-  readonly kind: string;
-  readonly player: Entity | null;
-  readonly target: Entity | null;
-  readonly entities: ReadonlyMap<number, Entity>;
-  readonly party: PartyInfo | null;
-  readonly inventory: readonly InvSlot[] | null;
-  readonly quests: WorldQuests;
-  /**
-   * Ability id to seconds remaining.
-   *
-   * Declared readonly, which is a type-level guard and not a boundary: this is
-   * the game's own live Map, the same one its HUD reads, so a cast defeats it.
-   * `entities` is wrapped for real because addons hold it; this is read fresh.
-   */
-  readonly cooldowns: ReadonlyMap<string, number> | null;
-  readonly auras: readonly Aura[] | null;
-  /**
-   * Everything in scope that is casting, derived rather than read.
-   *
-   * There is no such collection on the game object: cast state lives on each
-   * entity, and the event that would announce it fires for a player only. See
-   * `world/derived.ts` for why that makes this the only way to see a boss cast.
-   */
-  readonly casts: ReadonlyMap<number, EntityCast>;
-  /** The target's auras, which `capture('target')` alone cannot report moving. */
-  readonly targetAuras: readonly Aura[] | null;
-  readonly hazards: readonly Hazard[] | null;
-  readonly markers: ReadonlyMap<number, number> | null;
-  /** The real IWorld the game is running. */
-  readonly raw: unknown;
-}
-
-/**
- * Read __game.world, or null when the hook does not carry one.
- *
- * Every member is a getter: the game mutates these objects in place, so reading
- * on access is what makes the facade live rather than a stale copy.
- */
-export function createGameBackend(game: unknown): WorldBackend | null {
-  const world = fieldValue(game, 'world');
-  if (world === null) {
-    return null;
-  }
-  const entities = entityMapReader(world);
-
+/** The reads that pass straight through to a member of the game's own world. */
+function coreReads(world: unknown, entities: () => ReadonlyMap<number, Entity>) {
   return {
     kind: 'game',
 
@@ -133,6 +131,22 @@ export function createGameBackend(game: unknown): WorldBackend | null {
       return readAs<InvSlot[]>(world, 'inventory');
     },
 
+    get equipment(): Partial<Record<EquipSlot, string>> | null {
+      return readAs<Partial<Record<EquipSlot, string>>>(world, 'equipment');
+    },
+
+    get bags(): readonly (string | null)[] | null {
+      return readAs<(string | null)[]>(world, 'bags');
+    },
+
+    get bagCapacity(): number | null {
+      return readAs<number>(world, 'bagCapacity');
+    },
+
+    get copper(): number | null {
+      return readAs<number>(world, 'copper');
+    },
+
     get quests(): WorldQuests {
       return questsOf(world);
     },
@@ -144,7 +158,113 @@ export function createGameBackend(game: unknown): WorldBackend | null {
     get auras(): readonly Aura[] | null {
       return readAs<Aura[]>(fieldValue(world, 'player'), 'auras');
     },
+  };
+}
 
+export interface WorldBackend {
+  /** Which backend answered, so the manager's diagnostics can show it. */
+  readonly kind: string;
+  readonly player: Entity | null;
+  readonly target: Entity | null;
+  readonly entities: ReadonlyMap<number, Entity>;
+  readonly party: PartyInfo | null;
+  readonly inventory: readonly InvSlot[] | null;
+  /** Worn gear by slot, item ids only. A slot with nothing in it is absent. */
+  readonly equipment: Partial<Record<EquipSlot, string>> | null;
+  /** The four bag sockets, an item id per equipped bag and null for an empty socket. */
+  readonly bags: readonly (string | null)[] | null;
+  /** Total slots across the backpack and every equipped bag. */
+  readonly bagCapacity: number | null;
+  /** Money, in copper. */
+  readonly copper: number | null;
+  /** The zone name the game is displaying. See `world/zone.ts`. */
+  readonly zone: string | null;
+  /** Progression, deeds and titles. See `world/character.ts`. */
+  readonly character: CharacterInfo | null;
+  readonly talents: TalentInfo | null;
+  readonly professions: ProfessionInfo | null;
+  /** Loot rolls, master loot and raid lockouts. See `world/group.ts`. */
+  readonly group: GroupInfo | null;
+  /** The instanced run in progress, thin by design. See `world/encounter.ts`. */
+  readonly encounter: EncounterInfo | null;
+  /** One entity's hate table, measured against the player. */
+  readonly threat: (entityId: number) => ThreatTable;
+  readonly quests: WorldQuests;
+  /**
+   * Ability id to seconds remaining.
+   *
+   * Declared readonly, which is a type-level guard and not a boundary: this is
+   * the game's own live Map, the same one its HUD reads, so a cast defeats it.
+   * `entities` is wrapped for real because addons hold it; this is read fresh.
+   */
+  readonly cooldowns: ReadonlyMap<string, number> | null;
+  readonly auras: readonly Aura[] | null;
+  /**
+   * Everything in scope that is casting, derived rather than read.
+   *
+   * There is no such collection on the game object: cast state lives on each
+   * entity, and the event that would announce it fires for a player only. See
+   * `world/derived.ts` for why that makes this the only way to see a boss cast.
+   */
+  readonly casts: ReadonlyMap<number, EntityCast>;
+  /** The target's auras, which `capture('target')` alone cannot report moving. */
+  readonly targetAuras: readonly Aura[] | null;
+  readonly hazards: readonly Hazard[] | null;
+  readonly markers: ReadonlyMap<number, number> | null;
+  /**
+   * The player's own spellbook, projected and memoized.
+   *
+   * Never null, because it is a lookup rather than a reading: an empty index
+   * answers the same questions as a populated one. It is also the only member
+   * here backed by a STATEFUL reader, since the game rebuilds its resolved list
+   * on every snapshot and re-projecting twenty abilities at that rate would
+   * allocate for nothing.
+   */
+  readonly abilities: AbilityIndex;
+  /**
+   * Whether the player is fighting, and which signal said so.
+   *
+   * Derived rather than read: the game sends no combat flag for the self record.
+   * See `world/combat.ts` for the order the signals are consulted in and why the
+   * answer carries its own source.
+   */
+  readonly combat: CombatState;
+  /** The real IWorld the game is running. */
+  readonly raw: unknown;
+}
+
+/** What the combat reading needs that the game object does not carry. */
+export interface BackendDeps {
+  /** When damage involving the player last landed. See `world/combat-clock.ts`. */
+  lastDamageAt: () => number | null;
+  /** The sim's own clock, which deadlines are measured against. */
+  simNow: () => number | null;
+  now: () => number;
+  /**
+   * The zone name off the game's own minimap label.
+   *
+   * A dep rather than a read off the world object because it is the one member
+   * here whose source is the DOM: the zone table is content the loader cannot
+   * reach. See `world/zone.ts`.
+   */
+  zoneName: () => string | null;
+}
+
+/**
+ * Read __game.world, or null when the hook does not carry one.
+ *
+ * Every member is a getter: the game mutates these objects in place, so reading
+ * on access is what makes the facade live rather than a stale copy.
+ */
+export function createGameBackend(game: unknown, deps: BackendDeps): WorldBackend | null {
+  const world = fieldValue(game, 'world');
+  if (world === null) {
+    return null;
+  }
+  const entities = entityMapReader(world);
+  const abilities = createAbilityReader();
+
+  return mergeLive(coreReads(world, entities), {
     get casts(): ReadonlyMap<number, EntityCast> {
       return castsOf(entities());
     },
@@ -161,6 +281,41 @@ export function createGameBackend(game: unknown): WorldBackend | null {
       return markersOf(world);
     },
 
+    get abilities(): AbilityIndex {
+      return abilities(world);
+    },
+
+    get combat(): CombatState {
+      return combatOf(world, entities(), deps);
+    },
+
+    get zone(): string | null {
+      return deps.zoneName();
+    },
+
+    get character(): CharacterInfo | null {
+      return readCharacter(world);
+    },
+
+    get talents(): TalentInfo | null {
+      return readTalents(world);
+    },
+
+    get professions(): ProfessionInfo | null {
+      return readProfessions(world);
+    },
+
+    get group(): GroupInfo | null {
+      return readGroup(world, deps.simNow());
+    },
+
+    get encounter(): EncounterInfo | null {
+      return readEncounter(world);
+    },
+
+    threat: (entityId: number): ThreatTable =>
+      readThreat(entities().get(entityId) ?? null, readAs<Entity>(world, 'player')?.id ?? null),
+
     raw: world,
-  };
+  });
 }

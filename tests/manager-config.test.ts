@@ -82,10 +82,10 @@ describe('opening an addon', () => {
   it('peeks without loading, so a reopen paints instantly', async () => {
     const { service } = open();
 
-    expect(service.peek(FQID)).toBeNull();
+    expect(service.peek(addon())).toBeNull();
     await service.open(addon());
 
-    expect(service.peek(FQID)).not.toBeNull();
+    expect(service.peek(addon())).not.toBeNull();
   });
 
   it('works for an addon that declares neither settings nor keybinds', async () => {
@@ -95,6 +95,85 @@ describe('opening an addon', () => {
 
     expect(config.settings.values()).toEqual({});
     expect(config.keybinds.ids()).toEqual([]);
+  });
+});
+
+// What the cache must NOT do, reported from a live session.
+//
+// A store is a function of its declarations: it hydrates from them and refuses a
+// write to anything they do not name. The form beside it renders from the row's
+// manifest read fresh. So a cache keyed on the fqid alone put a new control on
+// screen backed by a store that had never heard of it, and choosing a value
+// answered "no setting declared with id 'layout'". Reinstalling did not clear it,
+// because what was stale was the map rather than storage.
+describe('an addon whose manifest changed', () => {
+  const withLayout: InstalledAddon['manifest']['settings'] = [
+    { id: 'window', type: 'number', label: 'Window', default: 5, min: 1, max: 60 },
+    { id: 'layout', type: 'select', label: 'Layout', default: 'bars', options: ['bars', 'tiles'] },
+  ];
+
+  it('accepts a setting the update added', async () => {
+    const { service } = open();
+    await service.open(addon());
+
+    const config = await service.open(addon({ settings: withLayout }));
+
+    await expect(config.settings.set('layout', 'tiles')).resolves.toBeUndefined();
+    expect(config.settings.values()).toMatchObject({ layout: 'tiles' });
+  });
+
+  it('offers a keybind the update added', async () => {
+    const { service } = open();
+    await service.open(addon());
+
+    const config = await service.open(
+      addon({
+        keybinds: [
+          { id: 'toggle', label: 'Toggle', default: 'Alt+KeyD' },
+          { id: 'reset', label: 'Reset', default: 'Alt+KeyR' },
+        ],
+      }),
+    );
+
+    expect(config.keybinds.ids()).toEqual(['toggle', 'reset']);
+  });
+
+  // The rebuild has to release the old pair, or a manager left open across a few
+  // updates keeps a storage subscription per version of every addon it has shown.
+  it('releases the stores it replaced', async () => {
+    const { hub, service } = open();
+    const stale = await service.open(addon());
+
+    await service.open(addon({ settings: withLayout }));
+    hub.remote(configNamespace(FQID), SETTINGS_KEY, { window: 42 });
+
+    expect(stale.settings.values()).toMatchObject({ window: 5 });
+  });
+
+  // The cache still has to be a cache: a row that did not change must not pay for
+  // a round trip, which is what made this worth keeping rather than dropping.
+  it('keeps the pair when nothing about the declarations moved', async () => {
+    const { service } = open();
+
+    const first = await service.open(addon());
+    const second = await service.open(addon({ version: '9.9.9', description: 'reworded' }));
+
+    expect(second).toBe(first);
+  });
+
+  // Hydration is a bridge round trip, so an update can land inside one. The load
+  // that started for the new row owns the cache: the older one resolving late must
+  // not put its declarations back.
+  it('does not let a load overtaken mid-hydrate write itself back', async () => {
+    const { service } = open();
+
+    const stale = service.open(addon());
+    const fresh = service.open(addon({ settings: withLayout }));
+    await Promise.all([stale, fresh]);
+
+    const reopened = await service.open(addon({ settings: withLayout }));
+    expect(reopened).toBe(await fresh);
+    await expect(reopened.settings.set('layout', 'tiles')).resolves.toBeUndefined();
   });
 });
 
@@ -178,6 +257,6 @@ describe('dispose', () => {
     hub.remote(configNamespace(FQID), SETTINGS_KEY, { window: 42 });
 
     expect(config.settings.values()).toMatchObject({ window: 5 });
-    expect(service.peek(FQID)).toBeNull();
+    expect(service.peek(addon())).toBeNull();
   });
 });

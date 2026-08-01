@@ -52,6 +52,19 @@ interface Viewport {
   h: number;
 }
 
+/**
+ * What a caller may pin a frame's size between.
+ *
+ * Both are the CALLER's numbers, stated before anything knows how big the screen
+ * is. Reconciling them with a viewport that may be smaller than either is
+ * clampSize's job, and keeping that in one place is the point of passing the
+ * request around rather than a pre-resolved pair.
+ */
+interface SizeBounds {
+  min?: Viewport;
+  max?: Viewport;
+}
+
 function clampNumber(value: number, low: number, high: number): number {
   // Written low-last so a viewport smaller than the minimum still yields the
   // low bound rather than an inverted range.
@@ -76,24 +89,44 @@ function isFrameBox(value: unknown): value is FrameBox {
 }
 
 /**
+ * The size half of clampBox, which is where every bound meets every other one.
+ *
+ * FOUR numbers claim the same axis and they contradict each other freely, so the
+ * order they win in is the whole rule:
+ *
+ *  1. The FLOOR beats everything. A frame below it cannot be reliably grabbed,
+ *     and a frame that cannot be grabbed cannot be fixed, so this is the one
+ *     bound no caller is allowed to argue with.
+ *  2. The VIEWPORT beats the caller's minimum. Without that a frame asking to be
+ *     wider than the screen makes that width its own floor, and a 900-pixel frame
+ *     stays 900 pixels wide on a phone.
+ *  3. The caller's MINIMUM beats its maximum. A max below the min is a
+ *     contradiction someone has to break, and only one of the two is about the
+ *     frame staying usable.
+ *
+ * An absent maximum is the viewport, which is where the size was already capped
+ * before there was a maximum to state.
+ */
+function clampSize(box: FrameBox, viewport: Viewport, bounds?: SizeBounds): Viewport {
+  const wanted = bounds?.min ?? { w: MIN_WIDTH, h: MIN_HEIGHT };
+  const minW = Math.max(FLOOR_WIDTH, Math.min(wanted.w, viewport.w));
+  const minH = Math.max(FLOOR_HEIGHT, Math.min(wanted.h, viewport.h));
+  const cap = bounds?.max ?? viewport;
+  const maxW = Math.max(minW, Math.min(cap.w, viewport.w));
+  const maxH = Math.max(minH, Math.min(cap.h, viewport.h));
+
+  return { w: clampNumber(box.w, minW, maxW), h: clampNumber(box.h, minH, maxH) };
+}
+
+/**
  * Fit a box to the viewport, keeping it grabbable.
  *
  * Size is clamped before position, since the position bounds depend on the
  * clamped size: doing it the other way lets a too-wide window pin itself to the
  * left edge and then keep its width.
- *
- * `min` is the caller's own minimum. It is floored, so an addon asking for a
- * 4-pixel frame does not get one it can never grab again, and it is CAPPED at
- * the viewport, so a frame asking to be wider than the screen can still shrink
- * to fit it. Without that cap the requested size becomes its own floor and a
- * 900-pixel frame stays 900 pixels wide on a phone.
  */
-function clampBox(box: FrameBox, viewport: Viewport, min?: Viewport): FrameBox {
-  const wanted = min ?? { w: MIN_WIDTH, h: MIN_HEIGHT };
-  const minW = Math.max(FLOOR_WIDTH, Math.min(wanted.w, viewport.w));
-  const minH = Math.max(FLOOR_HEIGHT, Math.min(wanted.h, viewport.h));
-  const w = clampNumber(box.w, minW, Math.max(minW, viewport.w));
-  const h = clampNumber(box.h, minH, Math.max(minH, viewport.h));
+function clampBox(box: FrameBox, viewport: Viewport, bounds?: SizeBounds): FrameBox {
+  const { w, h } = clampSize(box, viewport, bounds);
 
   // Leftward, the window may hang off screen as long as a grabbable strip of
   // title bar remains; rightward it may not pass the edge by more than that.
@@ -130,7 +163,7 @@ function defaultBox(viewport: Viewport): FrameBox {
  * so a frame with no saved position lands somewhere the player will see it
  * rather than under the HUD's own furniture at an edge.
  */
-function initialBox(viewport: Viewport, size: Viewport): FrameBox {
+function initialBox(viewport: Viewport, size: Viewport, bounds?: SizeBounds): FrameBox {
   return clampBox(
     {
       w: size.w,
@@ -139,9 +172,20 @@ function initialBox(viewport: Viewport, size: Viewport): FrameBox {
       y: Math.round(viewport.h * DEFAULT_TOP_SHARE),
     },
     viewport,
-    size,
+    bounds ?? { min: size },
   );
 }
 
-export type { FrameBox, Viewport };
-export { clampBox, defaultBox, initialBox, isFrameBox, MIN_HEIGHT, MIN_WIDTH };
+export type { FrameBox, SizeBounds, Viewport };
+export {
+  clampBox,
+  clampNumber,
+  clampSize,
+  defaultBox,
+  FLOOR_HEIGHT,
+  FLOOR_WIDTH,
+  initialBox,
+  isFrameBox,
+  MIN_HEIGHT,
+  MIN_WIDTH,
+};

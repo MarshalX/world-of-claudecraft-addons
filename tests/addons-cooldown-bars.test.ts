@@ -16,12 +16,22 @@ import SOURCE from '../addons/cooldown-bars/main.js?raw';
 import { loadAddon } from '../loader/src/runtime/loader.ts';
 import type { InstalledAddon } from '../loader/src/shared/protocol.ts';
 import { validateManifest } from '../loader/src/shared/schema.ts';
+import { perCharacterKey, uiNamespace } from '../loader/src/shared/storage-keys.ts';
 import { liveEntity } from './fakes/entity.ts';
 import { PLAYER_ENTITY } from './fakes/frames.ts';
 import { createSharedServices, type SharedHarness } from './fakes/shared-services.ts';
 import { createFakeStorage } from './fakes/storage.ts';
 
 const FQID = 'official/cooldown-bars';
+/** What tests/fakes/shared-services.ts says the player is called. */
+const CHARACTER = 'Claudemoon/Marshal';
+
+interface FrameBox {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
 const MANIFEST_JSON: unknown = JSON.parse(MANIFEST_TEXT);
 const PLAYER_ID = PLAYER_ENTITY.id;
 /** Long enough to clear the addon's global-cooldown floor. */
@@ -80,18 +90,58 @@ interface BarsHarness extends SharedHarness {
   iconOf: (abilityId: string) => string;
 }
 
+/** Let the async frame restore land before reading what it did. */
+async function settleFrames(): Promise<void> {
+  await Promise.resolve();
+  await Promise.resolve();
+  await Promise.resolve();
+}
+
 function barFor(abilityId: string): Element | null {
   return document.querySelector(`[data-ability="${abilityId}"]`);
 }
 
-async function run(): Promise<BarsHarness> {
+/**
+ * Start the addon, optionally with settings already stored.
+ *
+ * Seeded BEFORE the addon loads, because the loader hydrates settings and then
+ * evaluates: an addon reads `woc.settings` while it builds its first frame, which
+ * is exactly when the layout is decided.
+ *
+ * This is the raw start, BEFORE the overlay has come up. Nearly every case wants
+ * `run` instead; this one exists for the cases whose subject is the window between
+ * a frame being built and its stored state landing.
+ */
+async function start(
+  settings: Record<string, unknown> = {},
+  frames: Record<string, { box: FrameBox; visible: boolean }> = {},
+): Promise<BarsHarness> {
+  const storage = createFakeStorage();
+  await storage.set(`config:${FQID}`, 'values', settings);
+  await Promise.all(
+    Object.entries(frames).map(([frameId, state]) =>
+      storage.set(uiNamespace(FQID), perCharacterKey('pbe', CHARACTER, frameId), state),
+    ),
+  );
   const cooldowns = new Map<string, number>();
   const abilityCharges: Record<string, unknown> = {};
   // `templateId` on a player is the CLASS, which is the directory the game files a
   // skill icon under. Without it there is nothing to build an icon URL from.
   const player = liveEntity({ set: { cooldowns, abilityCharges, templateId: 'hunter' } });
-  const world = { entities: new Map([[PLAYER_ID, player]]), player };
-  const harness = createSharedServices(document, createFakeStorage(), {
+  // The spellbook in the game's own shape. `arcane_shot` is displayed as "Fell
+  // Shot", which is the divergence a label read from the id alone gets wrong, and
+  // `rapid_fire` is deliberately absent so the fallback stays covered too.
+  const known = [
+    {
+      def: { id: 'arcane_shot', name: 'Fell Shot', school: 'arcane', requiresTarget: true },
+      rank: 3,
+      cost: 55,
+      castTime: 0,
+      cooldown: 5.4,
+    },
+  ];
+  const world = { entities: new Map([[PLAYER_ID, player]]), player, known };
+  const harness = createSharedServices(document, storage, {
     game: Promise.resolve({ world }),
   });
   teardown.push(harness.dispose);
@@ -125,6 +175,27 @@ async function run(): Promise<BarsHarness> {
     iconOf: (abilityId) =>
       barFor(abilityId)?.querySelector('.woc-bar-icon')?.getAttribute('src') ?? '',
   };
+}
+
+/**
+ * `start`, plus the wait for the overlay to actually come up.
+ *
+ * A frame that saves its state starts hidden and is shown once that state arrives,
+ * and the answer is keyed per character, so it takes a watcher sample to find the
+ * character and then a storage read to come back. Every case about what the display
+ * DOES wants that to have happened: a hidden frame is not a state a player reads the
+ * display in, and it is the state the addon's own frame loop stands down for.
+ */
+async function run(
+  settings: Record<string, unknown> = {},
+  frames: Record<string, { box: FrameBox; visible: boolean }> = {},
+): Promise<BarsHarness> {
+  const harness = await start(settings, frames);
+  // The sample is what resolves the character; the settle is what lets the read
+  // keyed on it come back.
+  harness.poll();
+  await settleFrames();
+  return harness;
 }
 
 describe('its manifest', () => {
@@ -189,7 +260,24 @@ describe('which bars are up', () => {
     expect(h.drawn()).toEqual(['multi_shot', 'aimed_shot', 'rapid_fire']);
   });
 
-  it('reads the ability id as a name', async () => {
+  // The label the game itself uses, which a cooldown map cannot supply on its own:
+  // it is keyed by id, and the id and the display name have diverged. Reading
+  // `arcane_shot` as "Arcane Shot" is what these rows used to show, and it names an
+  // ability nothing else in the game calls that.
+  it('calls an ability what the game calls it, not what its id suggests', async () => {
+    const h = await run();
+
+    h.cooldown('arcane_shot', LONG);
+    h.poll();
+
+    expect(barFor('arcane_shot')?.textContent).toContain('Fell Shot');
+    expect(barFor('arcane_shot')?.textContent).not.toContain('Arcane Shot');
+  });
+
+  // An id the spellbook does not carry is something the player did not learn: an
+  // item cooldown, or an ability granted from outside the class kit. A guess from
+  // the id beats a blank row for those.
+  it('falls back to the id for an ability outside the spellbook', async () => {
     const h = await run();
 
     h.cooldown('rapid_fire', LONG);
@@ -455,6 +543,326 @@ describe('an ability regenerating a charge', () => {
     h.frame();
 
     expect(h.drawn()).toEqual([]);
+  });
+});
+
+// The two shapes a timer can take.
+//
+// The layout is chosen when a row is BUILT, which is the whole reason a settings
+// change tears the rows down instead of repainting them: an element cannot change
+// from a bar into a tile, and a display that kept its old elements would answer the
+// setting only for cooldowns that started afterwards.
+//
+// What the shapes share is asserted too. Everything the addon does between the
+// builder and the screen (which rows exist, their order, the re-baselining, the
+// tone) is written once and must not have quietly become bar-only.
+describe('the tile layout', () => {
+  function tileFor(abilityId: string): HTMLElement | null {
+    return document.querySelector(`.woc-tile[data-ability="${abilityId}"]`);
+  }
+
+  function sweepOf(abilityId: string): string {
+    const wedge = tileFor(abilityId)?.querySelector<HTMLElement>('.woc-tile-sweep');
+    return wedge?.style.getPropertyValue('--woc-tile-sweep') ?? '';
+  }
+
+  it('draws squares rather than rows when it is picked', async () => {
+    const h = await run({ layout: 'tiles' });
+
+    h.cooldown('aimed_shot', LONG);
+    h.poll();
+
+    expect(tileFor('aimed_shot')).not.toBeNull();
+    expect(document.querySelector('.woc-bar')).toBeNull();
+  });
+
+  // A strip, not a column: the frame is content-sized, so this one declaration is
+  // the difference between a row of squares and a stack of them.
+  it('lays the strip out across rather than down', async () => {
+    await run({ layout: 'tiles' });
+
+    const list = document.querySelector<HTMLElement>('.woc-cd-list');
+
+    expect(list?.style.flexDirection).toBe('row');
+  });
+
+  // The sweep takes the ELAPSED share while the addon holds a remaining, so a
+  // half-spent cooldown is the case that tells a correct conversion from an
+  // inverted one: both ends look right under either.
+  it('sweeps the square as the cooldown runs down', async () => {
+    const h = await run({ layout: 'tiles' });
+    h.cooldown('aimed_shot', LONG);
+    h.poll();
+
+    h.cooldown('aimed_shot', LONG / 2);
+    h.frame();
+
+    expect(sweepOf('aimed_shot')).toBe('50.00%');
+  });
+
+  // 40 pixels of art has no room for "119.4s", so the seconds lose their decimal
+  // and anything over a minute is drawn in minutes.
+  it.each([
+    [4.2, '5'],
+    [30, '30'],
+    [180, '3m'],
+  ])('reads %ss left as "%s"', async (remaining, shown) => {
+    const h = await run({ layout: 'tiles' });
+
+    h.cooldown('aimed_shot', remaining);
+    h.poll();
+
+    expect(tileFor('aimed_shot')?.querySelector('.woc-tile-value')?.textContent).toBe(shown);
+  });
+
+  // A bar carries its charge count in the same figure as the time; a tile has a
+  // corner for it, which is the one place the two shapes genuinely differ.
+  it('puts a charge count in the corner instead of in the countdown', async () => {
+    const h = await run({ layout: 'tiles' });
+
+    h.charges('twinstrike', { charges: 1, recharge: 6, length: 12 });
+    h.frame();
+
+    expect(tileFor('twinstrike')?.querySelector('.woc-tile-count')?.textContent).toBe('1');
+    expect(tileFor('twinstrike')?.querySelector('.woc-tile-value')?.textContent).toBe('6');
+  });
+
+  // The shared half: ordering is not part of either builder, so it has to survive
+  // the switch. Soonest ready first still, left to right.
+  it('keeps the soonest ready first', async () => {
+    const h = await run({ layout: 'tiles' });
+
+    h.cooldown('rapid_fire', 180);
+    h.cooldown('aimed_shot', LONG);
+    h.poll();
+
+    expect(h.drawn()).toEqual(['aimed_shot', 'rapid_fire']);
+  });
+
+  // The ability's name is nowhere on a tile: the art is the label. So the name has
+  // to reach assistive technology some other way, and that is what `label` is for.
+  it('announces the ability it cannot draw a name for', async () => {
+    const h = await run({ layout: 'tiles' });
+
+    h.cooldown('arcane_shot', LONG);
+    h.poll();
+
+    expect(tileFor('arcane_shot')?.getAttribute('aria-label')).toContain('Fell Shot');
+  });
+
+  // Another tab writing the setting, which is how it actually changes: the manager
+  // is a different surface and the storage change is what reaches a running addon.
+  it('swaps every row when the setting changes under it', async () => {
+    const h = await run();
+    h.cooldown('aimed_shot', LONG);
+    h.poll();
+    expect(document.querySelectorAll('.woc-bar')).toHaveLength(1);
+
+    h.hub.remote(`config:${FQID}`, 'values', { layout: 'tiles' });
+
+    expect(document.querySelectorAll('.woc-bar')).toHaveLength(0);
+    expect(tileFor('aimed_shot')).not.toBeNull();
+  });
+
+  // A rebuild destroys rows, and a destroyed row must not be left in the map: the
+  // next frame would append an element belonging to nothing back into the strip.
+  it('leaves no orphan behind when it swaps', async () => {
+    const h = await run();
+    h.cooldown('aimed_shot', LONG);
+    h.poll();
+
+    h.hub.remote(`config:${FQID}`, 'values', { layout: 'tiles' });
+    h.frame();
+
+    expect(h.drawn()).toEqual(['aimed_shot']);
+  });
+});
+
+// Resizing the strip, which is how a player picks the icon size.
+//
+// The height IS the size: the loader owns a resizable frame's box and reports it
+// through `onMove`, and the addon writes that height onto every tile. Measuring the
+// element instead would force a layout on every frame of a display that already
+// writes styles every frame.
+//
+// Driven here by the SAVED box, because that is the same path a drag takes: the
+// restore lands asynchronously and reports through the same callback, so a strip a
+// player sized last session comes back at that size.
+describe('the size of the strip', () => {
+  function sizeOf(abilityId: string): string {
+    const tile = document.querySelector<HTMLElement>(`.woc-tile[data-ability="${abilityId}"]`);
+    return tile?.style.getPropertyValue('--woc-tile-size') ?? '';
+  }
+
+  it('starts at the tap-target floor the game holds its controls to', async () => {
+    const h = await run({ layout: 'tiles' });
+
+    h.cooldown('aimed_shot', LONG);
+    h.poll();
+
+    expect(sizeOf('aimed_shot')).toBe('40px');
+  });
+
+  // The tile is drawn BEFORE the restore lands, which is the live path: a tile
+  // already on screen has to be resized rather than rebuilt, or a drag would throw
+  // away the art the browser has decoded on every pointer move.
+  //
+  // `start` rather than `run`, because that window IS the subject: waiting for the
+  // overlay to come up would wait for the very restore this is watching land.
+  it('resizes a tile that is already on screen', async () => {
+    const h = await start(
+      { layout: 'tiles' },
+      { tiles: { box: { x: 20, y: 20, w: 300, h: 64 }, visible: true } },
+    );
+    h.cooldown('aimed_shot', LONG);
+    h.poll();
+    expect(sizeOf('aimed_shot')).toBe('40px');
+
+    await vi.waitFor(() => {
+      expect(sizeOf('aimed_shot')).toBe('64px');
+    });
+  });
+
+  // The two layouts save separately. Sharing one key would restore a column of
+  // five bars' worth of height into the strip, which opens it with icons the size
+  // of a portrait.
+  it('does not take its height from the box the bars layout saved', async () => {
+    const h = await run(
+      { layout: 'tiles' },
+      { bars: { box: { x: 20, y: 20, w: 220, h: 260 }, visible: true } },
+    );
+
+    h.cooldown('aimed_shot', LONG);
+    h.poll();
+    await settleFrames();
+
+    expect(sizeOf('aimed_shot')).toBe('40px');
+  });
+
+  // The column is sized by its content: a fixed height would either pad it out or
+  // hide the row that just started.
+  it('leaves the bars layout unresizable', async () => {
+    await run();
+
+    await vi.waitFor(() => {
+      expect(document.querySelector('[data-woc-frame="bars"]')).not.toBeNull();
+    });
+    const frame = document.querySelector<HTMLElement>('[data-woc-frame="bars"]');
+    expect(frame?.style.height).toBe('');
+  });
+});
+
+// What a timer says when you hover it.
+//
+// A function rather than a string, because the answer changes every frame: an
+// attachment made when the row was built would report what was left at the moment
+// the ability went on cooldown. It is also the only place the two layouts say the
+// same thing, since a tile has room for neither the name nor the charge count.
+describe('the tooltip on a timer', () => {
+  function hover(abilityId: string): string {
+    document
+      .querySelector(`[data-ability="${abilityId}"]`)
+      ?.dispatchEvent(new Event('pointerenter'));
+    return document.getElementById('woc-tooltip')?.textContent ?? '';
+  }
+
+  it('names the ability the way the game does', async () => {
+    const h = await run();
+    h.cooldown('arcane_shot', LONG);
+    h.poll();
+
+    hover('arcane_shot');
+
+    expect(document.querySelector('.woc-tip-title')?.textContent).toBe('Fell Shot');
+  });
+
+  it('answers with what is left now, not with what was left when it started', async () => {
+    const h = await run();
+    h.cooldown('aimed_shot', LONG);
+    h.poll();
+    expect(hover('aimed_shot')).toContain('30.0s left');
+
+    h.cooldown('aimed_shot', LONG / 2);
+    h.frame();
+
+    expect(hover('aimed_shot')).toContain('15.0s left');
+  });
+
+  // The honest half. Every ordinary cooldown is measured against what it had left
+  // when first seen, which is a floor rather than the length, and the row itself
+  // has nowhere to say so.
+  it('admits when it does not know the full length', async () => {
+    const h = await run();
+
+    h.cooldown('aimed_shot', LONG);
+    h.poll();
+
+    expect(hover('aimed_shot')).toContain('length unknown');
+  });
+
+  // A charge pool publishes a real length, so its bar is measured against the
+  // truth and the tooltip must not claim otherwise.
+  it('says nothing about an unknown length for a charge pool', async () => {
+    const h = await run();
+
+    h.charges('twinstrike', { charges: 1, recharge: 6, length: 12 });
+    h.frame();
+
+    const said = hover('twinstrike');
+    expect(said).not.toContain('length unknown');
+    expect(said).toContain('1 charge(s) ready');
+  });
+
+  // The tile is the case that needs it most: the square carries the sweep and a
+  // countdown, and nothing else at all.
+  it('says the same thing under a tile', async () => {
+    const h = await run({ layout: 'tiles' });
+    h.cooldown('arcane_shot', LONG);
+    h.poll();
+
+    expect(hover('arcane_shot')).toContain('Fell Shot');
+  });
+});
+
+// Rows are re-ordered, not re-appended.
+//
+// `appendChild` on an element already in the document MOVES it, which is a removal
+// and an insertion, and the browser drops an element's hover state on the removal.
+// Doing it to every row on every animation frame stranded the tooltip on whatever
+// the pointer was over: reported from a live session, with the row still on screen
+// under it. The kit no longer lets that orphan a tooltip; this is the other half,
+// which is not handing it the problem sixty times a second.
+describe('how rows are placed', () => {
+  it('leaves a row alone when its position has not changed', async () => {
+    const h = await run();
+    h.cooldown('aimed_shot', LONG);
+    h.cooldown('rapid_fire', 180);
+    h.poll();
+    const first = document.querySelector('[data-ability="aimed_shot"]');
+    const observer = new MutationObserver(() => undefined);
+    const list = document.querySelector('.woc-cd-list') as HTMLElement;
+    observer.observe(list, { childList: true });
+
+    h.frame();
+    h.frame();
+
+    // Nothing was inserted or removed, so nothing was moved.
+    expect(observer.takeRecords()).toEqual([]);
+    expect(document.querySelector('[data-ability="aimed_shot"]')).toBe(first);
+    observer.disconnect();
+  });
+
+  it('still reorders when the order actually changes', async () => {
+    const h = await run();
+    h.cooldown('aimed_shot', 20);
+    h.cooldown('rapid_fire', 10);
+    h.poll();
+    expect(h.drawn()).toEqual(['rapid_fire', 'aimed_shot']);
+
+    h.cooldown('rapid_fire', 30);
+    h.frame();
+
+    expect(h.drawn()).toEqual(['aimed_shot', 'rapid_fire']);
   });
 });
 

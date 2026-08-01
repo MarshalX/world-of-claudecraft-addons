@@ -27,6 +27,15 @@ describe('world keys', () => {
       'entities',
       'party',
       'inventory',
+      'equipment',
+      'bags',
+      'copper',
+      'zone',
+      'character',
+      'talents',
+      'professions',
+      'group',
+      'encounter',
       'quests',
       'cooldowns',
       'auras',
@@ -34,6 +43,8 @@ describe('world keys', () => {
       'targetAuras',
       'hazards',
       'markers',
+      'abilities',
+      'combat',
     ]);
   });
 

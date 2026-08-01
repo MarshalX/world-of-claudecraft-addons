@@ -11,13 +11,16 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createUi, elementId } from '../loader/src/runtime/api/ui.ts';
 import { DisposalBag } from '../loader/src/runtime/disposal.ts';
+import { createAnchors } from '../loader/src/runtime/ui/kit/anchor3d.ts';
 import { createBanner } from '../loader/src/runtime/ui/kit/banner.ts';
 import { createIconUrls } from '../loader/src/runtime/ui/kit/icons.ts';
 import { createGameInjector } from '../loader/src/runtime/ui/kit/injections.ts';
+import { createMenus } from '../loader/src/runtime/ui/kit/menu.ts';
 import { createSkillArt } from '../loader/src/runtime/ui/kit/skill-art.ts';
 import { createStacking } from '../loader/src/runtime/ui/kit/stacking.ts';
 import { createToaster } from '../loader/src/runtime/ui/kit/toast.ts';
 import { createTooltips } from '../loader/src/runtime/ui/kit/tooltip.ts';
+import { createUnlockMode } from '../loader/src/runtime/ui/kit/unlock.ts';
 import type { UiKit } from '../loader/src/runtime/ui/mount.ts';
 import { enterWorld, mountStartScreen } from './fakes/game-dom.ts';
 
@@ -63,7 +66,18 @@ function open() {
     toaster: createToaster({ doc: document, root, ...timers }),
     banner: createBanner({ doc: document, root, ...timers }),
     tooltips: createTooltips({ doc: document, root, viewport: () => VIEW }),
+    menus: createMenus({ doc: document, root, viewport: () => VIEW }),
+    // A projector that answers, so an anchor an addon creates has somewhere to be.
+    anchors: createAnchors({
+      doc: document,
+      root,
+      project: () => ({ x: 100, y: 200, behind: false }),
+      viewport: () => VIEW,
+      schedule: () => 0,
+      cancel: () => undefined,
+    }),
     stacking: createStacking({ root }),
+    unlock: createUnlockMode(root),
     // A manifest reader whose fetch never settles, which is the state a first row is
     // drawn in: `has` answers "not known yet", so the builder hands back the URL and
     // the image decides. A suite that wanted the authoritative answer would resolve it.
@@ -71,16 +85,18 @@ function open() {
   };
 
   const bag = new DisposalBag();
+  const onError = vi.fn();
   const ui = createUi({
     doc: document,
     kit,
     fqid: FQID,
     bag,
+    onError,
     frameStore: null,
     viewport: () => VIEW,
     window: globalThis,
   });
-  return { bag, kit, ui };
+  return { bag, kit, ui, onError };
 }
 
 describe('creating surfaces', () => {
@@ -135,6 +151,15 @@ describe('creating surfaces', () => {
     expect(document.querySelector('.woc-bar')).toBeNull();
   });
 
+  it('hands back a tile the same way', () => {
+    const { ui } = open();
+
+    const tile = ui.tile({ label: 'Aimed Shot', fraction: 0.5 });
+
+    expect(tile.el.classList.contains('woc-tile')).toBe(true);
+    expect(document.querySelector('.woc-tile')).toBeNull();
+  });
+
   it('carries the icon URL builders', () => {
     const { ui } = open();
 
@@ -150,6 +175,93 @@ describe('creating surfaces', () => {
     el.dispatchEvent(new Event('pointerenter'));
 
     expect(document.getElementById('woc-tooltip')?.textContent).toBe('Toggle the meter');
+  });
+});
+
+// A frame's onMove runs inside the loader's own pointer handling, which is the
+// same position a socket tap runs in: a throw there must not break the gesture the
+// player is in the middle of, and it must not be swallowed either. Reported through
+// the addon's own log, which is what the manager's log tail shows a player.
+describe('a frame callback that throws', () => {
+  it('reports it and leaves the frame working', () => {
+    const { ui, onError } = open();
+    ui.frame({
+      id: 'strip',
+      resizable: true,
+      onMove: () => {
+        throw new Error('the addon is broken');
+      },
+    });
+
+    expect(() => globalThis.dispatchEvent(new Event('resize'))).not.toThrow();
+    expect(onError).toHaveBeenCalledOnce();
+    expect(onError.mock.calls[0]?.[0]).toContain('strip');
+  });
+});
+
+// The three surfaces commit 8 added, checked here for the one thing their own
+// suites cannot see: that they reached the object an addon is handed, and that
+// what they create is released with the addon.
+describe('the settings-pane surfaces', () => {
+  it('hands back a field for the addon to place itself', () => {
+    const { ui } = open();
+
+    const field = ui.field.checkbox({ label: 'Show pet', value: true, onChange: vi.fn() });
+
+    expect(field.el.classList.contains('woc-field')).toBe(true);
+    expect(document.querySelector('.woc-field')).toBeNull();
+  });
+
+  it('carries all four field builders', () => {
+    const { ui } = open();
+
+    expect(Object.keys(ui.field).sort()).toEqual(['checkbox', 'select', 'slider', 'text']);
+  });
+
+  it('hands back a tab strip', () => {
+    const { ui } = open();
+
+    const strip = ui.tabs({ tabs: [{ id: 'a', label: 'A' }], onSelect: vi.fn() });
+
+    expect(strip.active()).toBe('a');
+  });
+
+  it('opens a menu in the loader root', () => {
+    const { ui, kit } = open();
+
+    ui.menu({ x: 10, y: 10 }, [{ label: 'Reset', onSelect: vi.fn() }]);
+
+    expect(kit.root.querySelector('.woc-menu')).not.toBeNull();
+  });
+
+  // Disable is hot, with no page reload. A menu is the loudest of these to leave
+  // behind: it sits in the overlay band above every window.
+  it('takes an open menu, its fields and its tabs away on dispose', () => {
+    const { bag, ui, kit } = open();
+    kit.root.append(
+      ui.field.text({ label: 'Title', value: '', onChange: vi.fn() }).el,
+      ui.tabs({ tabs: [{ id: 'a', label: 'A' }], onSelect: vi.fn() }).el,
+    );
+    ui.menu({ x: 10, y: 10 }, [{ label: 'Reset', onSelect: vi.fn() }]);
+
+    bag.dispose();
+
+    expect(document.querySelector('.woc-menu')).toBeNull();
+    expect(document.querySelector('.woc-field')).toBeNull();
+    expect(document.querySelector('.woc-tabs')).toBeNull();
+  });
+
+  // A tooltip took a string and still does: the structured form is an addition,
+  // because a published surface changing shape is what moves the API major.
+  it('takes both a string and structured content', () => {
+    const { ui } = open();
+    const el = document.createElement('button');
+    document.body.appendChild(el);
+
+    ui.tooltip(el, { title: 'Fell Shot', lines: ['55 mana'] });
+    el.dispatchEvent(new Event('pointerenter'));
+
+    expect(document.querySelector('.woc-tip-title')?.textContent).toBe('Fell Shot');
   });
 });
 
@@ -237,6 +349,17 @@ describe('disposal', () => {
     bag.dispose();
 
     expect(document.querySelectorAll('.woc-bar')).toHaveLength(0);
+  });
+
+  // A strip of tiles is the same kind of leak, and there are usually more of them:
+  // an aura display rebuilds its whole row every time an effect lands.
+  it('removes every tile the addon put on screen', () => {
+    const { bag, ui, kit } = open();
+    kit.root.append(ui.tile({ label: 'Renew' }).el, ui.tile({ label: 'Rejuvenation' }).el);
+
+    bag.dispose();
+
+    expect(document.querySelectorAll('.woc-tile')).toHaveLength(0);
   });
 
   // The addon's await is mid-way through something, so being disabled has to

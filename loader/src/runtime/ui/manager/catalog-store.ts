@@ -57,12 +57,19 @@ const IDLE: CatalogState = {
  * they were last read and `registry.updates` compares against those. Refresh is
  * what goes to the network, which is what keeps opening the manager from costing
  * a request per source before it can draw anything.
+ *
+ * `ensure` is the exception, and is awaited AHEAD of the three rather than
+ * beside them: all three answer from the index cache, so running it alongside
+ * would have them read a cache this call is still filling. It fetches only for a
+ * source this session has never read, so the first open of a session pays and no
+ * other open does.
  */
 async function read(deps: CatalogStoreDeps): Promise<CatalogState> {
   const { market, registry } = deps;
   if (market === null || registry === null) {
     return { ...IDLE, status: 'failed' };
   }
+  await market.ensure();
   const [markets, rows, updates] = await Promise.all([
     market.list(),
     registry.list(),

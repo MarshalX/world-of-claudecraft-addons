@@ -1,8 +1,17 @@
 import type { Unsubscribe } from './addon.js';
 import type { KnownSkillIcon, SkillIconClass } from './icons.generated.js';
-import type { School } from './world.js';
+import type { FieldBuilders, MenuItem, Tabs, TabsOpts, TooltipInput } from './ui-controls.js';
+import type { Bar, BarOpts, Tile, TileOpts } from './ui-timers.js';
 
-export type FrameDensity = 'comfortable' | 'compact';
+export type FrameDensity = 'comfortable' | 'compact' | 'bare';
+
+/** Where a frame is, in page pixels. The loader owns it; see `FrameOpts.onMove`. */
+export interface FrameBox {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
 
 export interface FrameOpts {
   /** Unique within your addon. It is the persistence key, so keep it stable. */
@@ -32,11 +41,40 @@ export interface FrameOpts {
    * the tap floor, which is why it is opt-in: pick it for a desktop readout, not
    * for a form.
    *
+   * 'bare' removes the chrome altogether: no panel behind your content, no
+   * padding, no title bar. It is for an overlay that IS its content, a row of
+   * timers floating on the HUD rather than a panel holding them. Two things
+   * follow from having no title bar, and both are deliberate:
+   *
+   *  - The frame is dragged by its own content instead. Buttons, inputs and
+   *    selects inside it stay clickable, so a bare frame full of controls is
+   *    still awkward to move: it suits a readout, not a form.
+   *  - `ui.window` IGNORES it and stays comfortable. A window's close button
+   *    lives in the title bar, and a panel the player cannot dismiss is worse
+   *    than one drawn more heavily than asked for.
+   *
    * It also reaches your own controls: a `.woc-btn` or `.woc-tab` inside a
    * compact frame is drawn compact too, so reusing those classes gets you the
    * matching density for free.
    */
   density?: FrameDensity;
+  /**
+   * Where the frame ended up, after every move the loader made.
+   *
+   * The loader owns the box. It writes the position, and for a `resizable` frame
+   * the size, and it re-clamps both when the viewport changes and when a saved box
+   * is restored. Use this rather than measuring `frame.el`: a measurement forces a
+   * synchronous layout, and a display that scales with its frame would pay for one
+   * on every frame it draws.
+   *
+   * Fires on a drag, on a resize (at pointer rate, so keep it cheap), on the async
+   * restore of a saved box, and when the window is resized under it. NOT for the
+   * initial placement, which is the size you asked for and therefore already hold.
+   *
+   * A throw here is caught and written to your addon's log rather than breaking
+   * the gesture the player is in the middle of.
+   */
+  onMove?: (box: FrameBox) => void;
 }
 
 export interface Frame {
@@ -88,72 +126,20 @@ export interface BannerOpts {
   detail?: string;
 }
 
-export type BarTone = 'default' | 'warn' | 'danger';
-
-/**
- * A damage school to tint a bar's fill by. The same union `Aura.school` uses.
- *
- * A SEPARATE axis from `tone`, not more values on it. Tone is urgency, which is what
- * a cooldown row says as an ability comes back up; a school is what KIND of damage the
- * row is made of. Where both are set, tone wins.
- *
- * The colours are the GAME'S, taken from the custom properties it tints its own debuff
- * borders with, so a row you colour this way matches what the player already reads for
- * the same school on an aura icon. That is also why there is no way to pass a colour:
- * two addons colouring by school should look the same, which is the point of the kit.
- */
-export type BarSchool = School;
-
-/** Everything a bar can be told. All of it is optional on an update. */
-export interface BarUpdate {
-  label?: string;
-  /**
-   * An icon URL, from `ui.icon`, or null for none.
-   *
-   * The slot is re-shown on every change, so a row reused for another ability
-   * gets its icon back even if the previous URL had failed to load.
-   */
-  icon?: string | null;
-  /**
-   * 0 through 1.
-   *
-   * Clamped, and anything that is not a finite number reads as 0. That is
-   * deliberate: a timer fraction divides by a total, and a NaN reaching a style
-   * property drops the declaration silently, which looks like a stuck bar.
-   */
-  fraction?: number;
-  /** The right-hand figure, usually a countdown. Drawn with tabular figures. */
-  value?: string;
-  /**
-   * Tint the fill by the game's own colour for a damage school.
-   *
-   * `damage` events carry `school`, so a meter can colour a row by what kind of damage
-   * it was. `heal2` does NOT carry one, which is why null is allowed: pass what the
-   * event gave you rather than omitting the property on some rows and not others.
-   * Null and an unrecognised value both tint nothing rather than guessing.
-   */
-  school?: BarSchool | null;
-  /**
-   * A quieter second line under the head, e.g. a hit count and crit rate.
-   *
-   * The fill spans both lines, so a share reads as the whole row's rather than as a
-   * bar on one line of it. An empty string hides the line again.
-   */
-  detail?: string;
-  tone?: BarTone;
+export interface AlertButton {
+  id: string;
+  label: string;
+  /** Drawn as the affirmative action, and focused when the modal opens. */
+  primary?: boolean;
+  /** What Escape and a backdrop click resolve to. At most one. */
+  cancel?: boolean;
 }
 
-export interface BarOpts extends BarUpdate {
-  /** Added alongside the kit's own classes, so you can style your own rows. */
-  className?: string;
-}
-
-export interface Bar {
-  /** The row. Append it where you want it; the loader does not place it. */
-  readonly el: HTMLElement;
-  update: (next: BarUpdate) => void;
-  /** Removes the row. Also done for you when your addon is disabled. */
-  destroy: () => void;
+export interface AlertOpts {
+  title?: string;
+  message: string;
+  /** Defaults to a single dismissing "OK". */
+  buttons?: readonly AlertButton[];
 }
 
 /**
@@ -211,20 +197,46 @@ export interface IconUrls {
   preload: (cls: IconClass) => Promise<void>;
 }
 
-export interface AlertButton {
-  id: string;
-  label: string;
-  /** Drawn as the affirmative action, and focused when the modal opens. */
-  primary?: boolean;
-  /** What Escape and a backdrop click resolve to. At most one. */
-  cancel?: boolean;
+/** A point in the world: x east-west, y height, z north-south, in yards. */
+export interface WorldPoint {
+  x: number;
+  y: number;
+  z: number;
 }
 
-export interface AlertOpts {
-  title?: string;
-  message: string;
-  /** Defaults to a single dismissing "OK". */
-  buttons?: readonly AlertButton[];
+/**
+ * A fixed point, or a function asked for one on every frame.
+ *
+ * The function form is what anything that MOVES needs: pass `() => entity.pos` and
+ * the anchor follows it without your addon running a loop of its own. Returning
+ * null hides the anchor, which is the honest answer for a unit that has gone.
+ */
+export type PointSource = WorldPoint | (() => WorldPoint | null);
+
+export interface Anchor3dOpts {
+  /** Added to the element, so you can style your own. */
+  className?: string;
+  /** Shifts the element from the point, in screen pixels. Down is positive. */
+  offset?: { x?: number; y?: number };
+  /**
+   * How far off screen the point may be before the anchor hides. Defaults to 64.
+   *
+   * Not zero, because your element is CENTRED on the point: one whose point has
+   * just left the edge is still half on screen, and hiding it there makes a
+   * nameplate blink out while the unit wearing it is still visible.
+   */
+  margin?: number;
+}
+
+export interface Anchor3d {
+  /** The element. Fill it; the loader owns only where it sits. */
+  readonly el: HTMLElement;
+  /** Whether it is on screen right now, which is worth checking before drawing. */
+  readonly visible: boolean;
+  /** Point it somewhere else, at a fixed point or at a function. */
+  moveTo: (at: PointSource) => void;
+  /** Removes it. Also done for you when your addon is disabled. */
+  destroy: () => void;
 }
 
 export interface MicroButtonOpts {
@@ -272,8 +284,68 @@ export interface UiApi {
    * Inside a `density: 'compact'` frame the row is drawn compact too.
    */
   bar: (opts?: BarOpts) => Bar;
+  /**
+   * The square form of the same thing: art, a radial sweep over it, a countdown
+   * and a stack count.
+   *
+   * Reach for this where the ART is the label and a strip of them is read at a
+   * glance, which is what an aura display and a cooldown row are. Reach for `ui.bar`
+   * where each timer needs a name beside it. There is no linear sweep here because
+   * that is `ui.bar`, and one thing drawn two ways is how two addons end up looking
+   * different for no reason anyone chose.
+   *
+   * It does not animate itself, exactly as a bar does not: subscribe for the set
+   * changing and move `fraction` from a frame loop.
+   */
+  tile: (opts?: TileOpts) => Tile;
   /** Where the game's own art lives, so no addon writes a path. */
   icon: IconUrls;
+  /**
+   * Labelled controls for your own settings pane.
+   *
+   * Each hands back `{ el, value, set, destroy }`, so a pane that saves to
+   * `woc.storage` reads them all the same way, and `set` moves a control without
+   * calling your handler back, which is what a reset needs.
+   */
+  field: FieldBuilders;
+  /**
+   * A tab strip. Which pane it reveals is yours: the loader owns the strip only.
+   *
+   * A strip rather than a field, because tabs are navigation rather than a value
+   * the player is setting, and only one of those is worth persisting.
+   */
+  tabs: (opts: TabsOpts) => Tabs;
+  /**
+   * A context menu at an element or at a point, for per-row actions.
+   *
+   * There is ONE for the whole loader and opening a second closes the first: two
+   * open context menus is not a state anyone means to be in. It closes on select,
+   * on Escape, on a click anywhere else, and when your addon is disabled, which is
+   * the part worth having in the loader rather than in each addon.
+   *
+   * Returns a close. Calling it once another menu has opened does nothing, so a
+   * late teardown cannot take down someone else's menu.
+   */
+  menu: (at: Element | { x: number; y: number }, items: readonly MenuItem[]) => Unsubscribe;
+  /**
+   * An element the loader keeps over a point in the world.
+   *
+   * Nameplates, ground markers, a target arrow, a pin on a gathering node: all the
+   * same thing, and none of them buildable by an addon, because the projection is
+   * on the game's renderer and nothing else published here needs it.
+   *
+   * ```js
+   * const plate = woc.ui.anchor3d(() => woc.world.target?.pos ?? null, { offset: { y: -40 } });
+   * plate.el.textContent = woc.world.target.name;
+   * ```
+   *
+   * Every anchor shares ONE frame loop, and nothing is written unless the point
+   * moved on screen, so a camera nobody is turning costs nothing. It hides itself
+   * when the point is behind the camera, when it is off screen by more than
+   * `margin`, and whenever the game cannot be asked at all, which includes every
+   * moment before world entry.
+   */
+  anchor3d: (at: PointSource, opts?: Anchor3dOpts) => Anchor3d;
   /**
    * Resolves with the id of the button pressed, or with the cancel button's id
    * when dismissed, or null when there was no cancel button.
@@ -285,6 +357,15 @@ export interface UiApi {
   microButton: (opts: MicroButtonOpts) => Unsubscribe;
   /** An entry in the game menu, below the loader's own "Addons". */
   menuEntry: (opts: MenuEntryOpts) => Unsubscribe;
-  /** Shows on hover and on focus. */
-  tooltip: (el: Element, text: string) => Unsubscribe;
+  /**
+   * Shows on hover and on focus.
+   *
+   * A string is one line, which is what this took before and still does. The
+   * structured form adds a title, an icon from `ui.icon`, and a tone per line, so
+   * a hovered row can say what the game's own tooltips say.
+   *
+   * Everything is written as text, never as markup: an ability name and a player
+   * name both reach this from the wire.
+   */
+  tooltip: (el: Element, content: TooltipInput) => Unsubscribe;
 }

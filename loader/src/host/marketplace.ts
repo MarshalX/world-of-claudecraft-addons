@@ -1,15 +1,9 @@
 // Fetching each source's index, and the two dev-mode switches.
 //
-// Index state is per session rather than persisted: the fetcher's ETag cache is
-// what survives a page reload, so a second copy here would be a second thing to
-// keep in step with it. `fetchedAt: null` therefore means "not read this
-// session", which the manager renders differently from an index that was read
-// and found empty.
-//
-// The list itself is host/market-list.ts and the switches are
-// host/dev-settings.ts; this is what turns them into the bridge's MarketApi.
+// The list itself is host/market-list.ts, the per-session index cache is
+// host/market-indexes.ts, and the switches are host/dev-settings.ts; this is
+// what turns the three of them into the bridge's MarketApi.
 
-import { describeError } from '../shared/diag.ts';
 import {
   githubMarketplace,
   isBuiltinMarketplace,
@@ -32,18 +26,10 @@ import { inSeries } from '../shared/sequence.ts';
 import type { DevSettings } from './dev-settings.ts';
 import { readDevSettings, writeDevSettings } from './dev-settings.ts';
 import type { Fetcher } from './fetcher.ts';
-import { readRows } from './market-index.ts';
+import type { IndexCache } from './market-indexes.ts';
+import { createIndexCache } from './market-indexes.ts';
 import type { ListStorage } from './market-list.ts';
 import { addStored, readAll, removeStored, repointStored } from './market-list.ts';
-
-/** The mutable half of MarketplaceState: what a read of one source produces. */
-interface IndexState {
-  fetchedAt: number | null;
-  addons: MarketplaceEntry[];
-  /** The rows came from enumerating the repository rather than from an index. */
-  degraded: boolean;
-  error: string | null;
-}
 
 interface MarketDeps {
   storage: ListStorage;
@@ -66,44 +52,6 @@ interface MarketService {
   devSettings: () => Promise<DevSettings>;
 }
 
-const EMPTY: IndexState = { fetchedAt: null, addons: [], degraded: false, error: null };
-
-/** The per-session index cache, and the one operation that fills it. */
-function createIndexes(deps: MarketDeps) {
-  const indexes = new Map<string, IndexState>();
-  const stateFor = (id: string): IndexState => indexes.get(id) ?? EMPTY;
-
-  const report = (id: string, state: 'ok' | 'error', error?: string): void => {
-    if (error === undefined) {
-      deps.emit({ k: 'market.progress', id, state });
-    } else {
-      deps.emit({ k: 'market.progress', id, state, error });
-    }
-    deps.emit({ k: 'market.changed', id });
-  };
-
-  /**
-   * Read one source, replacing its state either way.
-   *
-   * A source that fails keeps whatever rows it published last: it should not
-   * also take away what a player is looking at.
-   */
-  const load = async (ref: MarketplaceRef): Promise<void> => {
-    deps.emit({ k: 'market.progress', id: ref.id, state: 'fetching' });
-    try {
-      const { addons, degraded } = await readRows(deps.fetcher, ref);
-      indexes.set(ref.id, { fetchedAt: deps.now(), addons, degraded, error: null });
-      report(ref.id, 'ok');
-    } catch (err) {
-      const error = describeError(err);
-      indexes.set(ref.id, { ...stateFor(ref.id), error });
-      report(ref.id, 'error', error);
-    }
-  };
-
-  return { indexes, stateFor, load };
-}
-
 /** A normalized source moved onto an explicit ref, or left where the URL put it. */
 function pinRef(ref: MarketplaceRef, wanted: string | undefined): NormalizeResult {
   const trimmed = wanted?.trim() ?? '';
@@ -123,7 +71,7 @@ function pinRef(ref: MarketplaceRef, wanted: string | undefined): NormalizeResul
  */
 function createListApi(
   deps: MarketDeps,
-  indexes: ReturnType<typeof createIndexes>,
+  indexes: IndexCache,
 ): Pick<MarketApi, 'add' | 'remove' | 'setRef'> {
   const { storage, emit } = deps;
 
@@ -147,7 +95,7 @@ function createListApi(
 
     remove: async (id) => {
       await removeStored(storage, id);
-      indexes.indexes.delete(id);
+      indexes.drop(id);
       emit({ k: 'market.changed', id });
     },
 
@@ -157,7 +105,7 @@ function createListApi(
       // they are not its contents any more. Dropping them rather than leaving
       // them to be replaced means a failed load reports nothing rather than the
       // previous tag's addons under the new tag's name.
-      indexes.indexes.delete(id);
+      indexes.drop(id);
       emit({ k: 'market.changed', id });
       await indexes.load(moved);
     },
@@ -167,11 +115,15 @@ function createListApi(
 /** The MarketApi, over the source list and the index cache. */
 function createMarketApi(
   deps: MarketDeps,
-  indexes: ReturnType<typeof createIndexes>,
+  indexes: IndexCache,
   refs: () => Promise<MarketplaceRef[]>,
 ): MarketApi {
   return {
     ...createListApi(deps, indexes),
+
+    ensure: async () => {
+      await indexes.ensure(await refs());
+    },
 
     list: async () =>
       (await refs()).map(
@@ -200,7 +152,7 @@ function createMarketApi(
 }
 
 /** The dev switches, plus what the pane reads about the local source. */
-function createDevApi(deps: MarketDeps, indexes: ReturnType<typeof createIndexes>): DevApi {
+function createDevApi(deps: MarketDeps, indexes: IndexCache): DevApi {
   const { storage, emit } = deps;
 
   const set = async (patch: Partial<DevSettings>): Promise<void> => {
@@ -229,7 +181,7 @@ function createDevApi(deps: MarketDeps, indexes: ReturnType<typeof createIndexes
         await indexes.load(LOCAL);
         return;
       }
-      indexes.indexes.delete(LOCAL.id);
+      indexes.drop(LOCAL.id);
       emit({ k: 'market.changed', id: LOCAL.id });
     },
 
@@ -240,7 +192,7 @@ function createDevApi(deps: MarketDeps, indexes: ReturnType<typeof createIndexes
 }
 
 function createMarketService(deps: MarketDeps): MarketService {
-  const indexes = createIndexes(deps);
+  const indexes = createIndexCache(deps);
   const refs = (): Promise<MarketplaceRef[]> => readAll(deps.storage);
 
   return {

@@ -141,11 +141,11 @@ describe('a caller-supplied minimum', () => {
   it('lets a small frame keep the size it asked for', () => {
     const small = { w: 220, h: 90 };
 
-    expect(clampBox({ x: 40, y: 40, ...small }, VIEW, small)).toMatchObject(small);
+    expect(clampBox({ x: 40, y: 40, ...small }, VIEW, { min: small })).toMatchObject(small);
   });
 
   it('still floors a frame too small to grab by its title bar', () => {
-    const box = clampBox({ x: 0, y: 0, w: 4, h: 2 }, VIEW, { w: 4, h: 2 });
+    const box = clampBox({ x: 0, y: 0, w: 4, h: 2 }, VIEW, { min: { w: 4, h: 2 } });
 
     expect(box.w).toBeGreaterThanOrEqual(72);
     expect(box.h).toBeGreaterThanOrEqual(28);
@@ -164,14 +164,14 @@ describe('a caller-supplied minimum', () => {
   it('lets a narrow frame reach both edges', () => {
     const small = { w: 90, h: 40 };
 
-    expect(clampBox({ x: -500, y: 10, ...small }, VIEW, small).x).toBe(0);
-    expect(clampBox({ x: 5000, y: 10, ...small }, VIEW, small).x).toBe(VIEW.w - small.w);
+    expect(clampBox({ x: -500, y: 10, ...small }, VIEW, { min: small }).x).toBe(0);
+    expect(clampBox({ x: 5000, y: 10, ...small }, VIEW, { min: small }).x).toBe(VIEW.w - small.w);
   });
 
   it('still lets a wide window hang off the left with a strip showing', () => {
     const wide = { w: 800, h: 400 };
 
-    expect(clampBox({ x: -5000, y: 10, ...wide }, VIEW, wide).x).toBe(120 - wide.w);
+    expect(clampBox({ x: -5000, y: 10, ...wide }, VIEW, { min: wide }).x).toBe(120 - wide.w);
   });
 });
 
@@ -192,5 +192,77 @@ describe('initialBox', () => {
       expect(Number.isFinite(value)).toBe(true);
     }
     expect(box.w).toBeLessThanOrEqual(320);
+  });
+});
+
+// The four numbers that claim one axis: the structural floor, the viewport, the
+// caller's minimum and the caller's maximum. They contradict each other freely,
+// so what is pinned here is the ORDER they win in rather than any one of them.
+describe('a caller-supplied maximum', () => {
+  it('stops a frame growing past it', () => {
+    const box = clampBox({ x: 0, y: 0, w: 5000, h: 5000 }, VIEW, {
+      min: { w: 100, h: 50 },
+      max: { w: 400, h: 200 },
+    });
+
+    expect(box).toMatchObject({ w: 400, h: 200 });
+  });
+
+  it('leaves a frame under it alone', () => {
+    const box = clampBox({ x: 0, y: 0, w: 300, h: 150 }, VIEW, {
+      min: { w: 100, h: 50 },
+      max: { w: 400, h: 200 },
+    });
+
+    expect(box).toMatchObject({ w: 300, h: 150 });
+  });
+
+  it('caps at the viewport when there is no maximum', () => {
+    const box = clampBox({ x: 0, y: 0, w: 5000, h: 5000 }, VIEW, { min: { w: 100, h: 50 } });
+
+    expect(box).toMatchObject({ w: VIEW.w, h: VIEW.h });
+  });
+
+  // A max wider than the screen is not an error and does not widen anything: the
+  // viewport was already the cap before a maximum could be stated.
+  it('is still capped by the viewport itself', () => {
+    const box = clampBox({ x: 0, y: 0, w: 5000, h: 5000 }, VIEW, {
+      min: { w: 100, h: 50 },
+      max: { w: 9000, h: 9000 },
+    });
+
+    expect(box).toMatchObject({ w: VIEW.w, h: VIEW.h });
+  });
+
+  // Someone has to break the contradiction, and only one of the two bounds is
+  // about the frame staying usable.
+  it('loses to the minimum when the two cross', () => {
+    const box = clampBox({ x: 0, y: 0, w: 300, h: 300 }, VIEW, {
+      min: { w: 400, h: 200 },
+      max: { w: 100, h: 50 },
+    });
+
+    expect(box).toMatchObject({ w: 400, h: 200 });
+  });
+
+  // The floor is the bound nobody argues with: a frame below it cannot be
+  // grabbed, and a frame that cannot be grabbed cannot be fixed.
+  it('never takes a frame below the floor', () => {
+    const box = clampBox({ x: 0, y: 0, w: 300, h: 300 }, VIEW, {
+      min: { w: 1, h: 1 },
+      max: { w: 2, h: 2 },
+    });
+
+    expect(box.w).toBeGreaterThanOrEqual(72);
+    expect(box.h).toBeGreaterThanOrEqual(28);
+  });
+
+  // The regression the option exists for: before it, a frame's opening size was
+  // its permanent floor, so a resizable strip could never be dragged smaller
+  // than the size its addon happened to create it at.
+  it('lets a frame shrink below the size it opened at', () => {
+    const box = clampBox({ x: 0, y: 0, w: 120, h: 60 }, VIEW, { min: { w: 80, h: 40 } });
+
+    expect(box).toMatchObject({ w: 120, h: 60 });
   });
 });

@@ -56,6 +56,15 @@ interface ManagerAppProps {
   formatTime: (at: number) => string;
   readDiagnostics: () => DiagnosticsReading;
   onClose: () => void;
+  /**
+   * Whether the arrange-your-UI mode is on, and the switch for it.
+   *
+   * Threaded through rather than read from the kit, so the manager stays a pure
+   * render over props: the mode can also be toggled by the loader's keybind, and
+   * the repaint that follows is what keeps this control honest.
+   */
+  unlocked: boolean;
+  onUnlock: (on: boolean) => void;
   /** Null until the player has moved or resized the window. */
   box: FrameBox | null;
   onGeometry: (box: FrameBox) => void;
@@ -118,6 +127,8 @@ function InstalledTab(props: { app: ManagerAppProps }) {
       statuses={app.statuses}
       onToggle={app.onToggle}
       onOpen={app.onOpenAddon}
+      unlocked={app.unlocked}
+      onUnlock={app.onUnlock}
     />
   );
 }

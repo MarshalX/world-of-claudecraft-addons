@@ -5,7 +5,7 @@
 // hold woc.world from its first line and await woc.world.ready separately.
 
 import { diagError } from '../../shared/diag.ts';
-import { createGameBackend, type WorldBackend } from './backend.ts';
+import { type BackendDeps, createGameBackend, type WorldBackend } from './backend.ts';
 import { checkEntityShape } from './shape.ts';
 import { createWorldWatcher, type WorldWatcher } from './watch.ts';
 
@@ -30,7 +30,7 @@ function reportShapeDrift(backend: WorldBackend): void {
   }
 }
 
-export interface WorldHubDeps {
+export interface WorldHubDeps extends BackendDeps {
   /** Resolves with the __game object. See runtime/ready.ts. */
   game: Promise<unknown>;
   schedule: (frame: () => void) => number;
@@ -54,12 +54,18 @@ export function createWorldHub(deps: WorldHubDeps): WorldHub {
     backend: () => backend,
     schedule: deps.schedule,
     cancel: deps.cancel,
+    now: deps.now,
     onError: (key, err) => diagError(`an addon handler for world.on('${key}') threw`, err),
   });
 
   const ready = deps.game.then((handle) => {
     game = handle;
-    backend = createGameBackend(handle);
+    backend = createGameBackend(handle, {
+      lastDamageAt: deps.lastDamageAt,
+      now: deps.now,
+      zoneName: deps.zoneName,
+      simNow: deps.simNow,
+    });
     if (backend === null) {
       throw new Error('__game has no world member, so the world API cannot be backed');
     }

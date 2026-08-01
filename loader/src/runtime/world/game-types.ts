@@ -144,7 +144,41 @@ export interface Entity {
   dead: boolean;
 
   hostile: boolean;
+  /**
+   * The SELECTED target, and it is sent for a player or a bot ONLY.
+   *
+   * A mob never carries one: the server emits this as `tgt` from the selected
+   * target, and a mob's is always null because a mob tracks what it is fighting
+   * on `aggroTargetId` instead. So this is the `inCombat` trap for anything that
+   * is not a player, present and of the right kind and permanently null, and one
+   * recorded session confirmed it across every mob that was actively attacking.
+   * Resolve a target's target through `aggroTargetId` when the target is a mob.
+   */
   targetId: number | null;
+  /**
+   * What a MOB is attacking, which is the field that actually answers it.
+   *
+   * Null on a player, whose selection is `targetId`, and null on a mob that is
+   * not fighting anyone.
+   */
+  aggroTargetId: number | null;
+  /**
+   * A living mob's own hate table, entity id to threat, capped at the top eight.
+   *
+   * The server's real threat model rather than anything derived here, so the
+   * numbers are comparable across sources. Empty on a player, and empty on a mob
+   * that is not in combat, which is what makes "does this table contain me" a
+   * sound combat reading rather than a guess. The cap means that in a large group
+   * it is the top of the table and not the whole of it.
+   */
+  threat: Map<number, number>;
+  /**
+   * The owning player's entity id for a controlled pet, null for anything wild.
+   *
+   * The one way to find a pet: it is an ordinary mob entity otherwise, so
+   * nothing else distinguishes a hunter's companion from the wolf next to it.
+   */
+  ownerId: number | null;
   /** The ability id being cast, or null. */
   castingAbility: string | null;
   /** Seconds left on the cast, against `castTotal`. Both 0 when not casting. */
@@ -233,6 +267,26 @@ export interface PartyInfo {
   raid: boolean;
   members: PartyMember[];
 }
+
+/**
+ * A slot a piece of gear is worn in.
+ *
+ * The game's own set, and closed rather than a string: it is the shape of a
+ * paperdoll rather than content that grows with a release.
+ */
+export type EquipSlot =
+  | 'mainhand'
+  | 'offhand'
+  | 'helmet'
+  | 'neck'
+  | 'shoulder'
+  | 'chest'
+  | 'waist'
+  | 'legs'
+  | 'gloves'
+  | 'feet'
+  | 'ring1'
+  | 'ring2';
 
 /** One stack in the bags. */
 export interface InvSlot {

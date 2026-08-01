@@ -7,6 +7,9 @@
 // three components.
 
 export const UI_TEXT = {
+  unlockFrames: 'Unlock frames',
+  unlockFramesHint:
+    'Outline every addon frame so you can drag it, including one that is drawing nothing right now.',
   title: 'Addons',
   close: 'Close',
   /** The accessible name is `close`; this is only what the button draws. */
@@ -58,6 +61,8 @@ export const UI_TEXT = {
   browseTag: 'Category',
   browseAllTags: 'All',
   browseEmpty: 'No marketplace has been read yet. Refresh to fetch their indexes.',
+  browseUnreadable: 'A marketplace could not be read. The Marketplaces tab says which, and why.',
+  browseNoAddons: 'No marketplace in your list offers anything yet.',
   browseNoMatch: 'Nothing here matches that search.',
   browseInstall: 'Install',
   browseInstalled: 'Installed',

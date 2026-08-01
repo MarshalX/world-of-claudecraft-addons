@@ -14,6 +14,7 @@
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { DiagnosticsReading } from '../loader/src/runtime/diagnostics.ts';
+import { createUnlockMode } from '../loader/src/runtime/ui/kit/unlock.ts';
 import { mountManager } from '../loader/src/runtime/ui/manager/index.tsx';
 import { UI_TEXT } from '../loader/src/runtime/ui/manager/strings.ts';
 import type { MarketplaceRef } from '../loader/src/shared/marketplace.ts';
@@ -107,6 +108,7 @@ function open(options: Options = {}) {
       refresh: calls.refresh,
     }),
     dev: null,
+    unlock: createUnlockMode(document.createElement('div')),
   });
   cleanups.push(manager.dispose);
   manager.open();
@@ -182,6 +184,20 @@ describe('the Browse pane', () => {
     await until(() => {
       expect(text()).toContain(UI_TEXT.browseEmpty);
     });
+  });
+
+  // Seeding the indexes on the first read is what makes this the ordinary way
+  // for Browse to be empty, and "Refresh to fetch their indexes" is the wrong
+  // advice for it: the index was just fetched, and it answered 404.
+  it('points at the Marketplaces tab when a source could not be read', async () => {
+    await browse({
+      markets: [marketState(OFFICIAL, [], { fetchedAt: null, error: 'HTTP 404' })],
+    });
+
+    await until(() => {
+      expect(text()).toContain(UI_TEXT.browseUnreadable);
+    });
+    expect(text()).not.toContain(UI_TEXT.browseEmpty);
   });
 
   it('reports an unmatched search differently from an unread source', async () => {
@@ -354,8 +370,10 @@ describe('the Marketplaces pane', () => {
       expect(buttonNamed(UI_TEXT.marketsAdd)).toBeDefined();
     });
 
-    type('.woc-form label:first-of-type input', 'someone/their-addons');
-    type('.woc-form label:last-of-type input', 'v2.0.0');
+    // By id rather than by position: the two controls are named so their labels
+    // can point at them, which is also what makes them findable without counting.
+    type('#woc-market-url', 'someone/their-addons');
+    type('#woc-market-ref', 'v2.0.0');
     await Promise.resolve();
     buttonNamed(UI_TEXT.marketsAdd)?.click();
 

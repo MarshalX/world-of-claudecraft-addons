@@ -9,8 +9,13 @@
 // `signature.ts`, which holds the array `world.on` validates against and the
 // capture behind each one; `tests/world-shape.test.ts` asserts the two agree.
 
+import type { AbilityIndex } from './abilities.ts';
+import type { CharacterInfo, ProfessionInfo, TalentInfo } from './character.ts';
+import type { CombatState } from './combat.ts';
 import type { EntityCast, Hazard } from './derived.ts';
-import type { Aura, Entity, InvSlot, PartyInfo, WorldQuests } from './game-types.ts';
+import type { EncounterInfo } from './encounter.ts';
+import type { Aura, Entity, EquipSlot, InvSlot, PartyInfo, WorldQuests } from './game-types.ts';
+import type { GroupInfo } from './group.ts';
 
 export interface WorldValues {
   player: Entity | null;
@@ -18,6 +23,22 @@ export interface WorldValues {
   entities: ReadonlyMap<number, Entity>;
   party: PartyInfo | null;
   inventory: readonly InvSlot[] | null;
+  equipment: Partial<Record<EquipSlot, string>> | null;
+  /** The equipped bag sockets. `bagCapacity` derives from this, so watch this. */
+  bags: readonly (string | null)[] | null;
+  copper: number | null;
+  /**
+   * The zone name the game is displaying, or null before the HUD exists.
+   *
+   * Localized display text rather than an id: the zone table is content the
+   * loader cannot reach, so this is read off the game's own minimap label.
+   */
+  zone: string | null;
+  character: CharacterInfo | null;
+  talents: TalentInfo | null;
+  professions: ProfessionInfo | null;
+  group: GroupInfo | null;
+  encounter: EncounterInfo | null;
   quests: WorldQuests | null;
   cooldowns: ReadonlyMap<string, number> | null;
   auras: readonly Aura[] | null;
@@ -28,4 +49,21 @@ export interface WorldValues {
   hazards: readonly Hazard[] | null;
   /** Entity id to raid target marker, 0 through 7. */
   markers: ReadonlyMap<number, number> | null;
+  /**
+   * The player's own spellbook, with lookups by id and by display name.
+   *
+   * Never null, like `entities` and `casts` and unlike the rest: it is a lookup
+   * surface, and making every call site guard the namespace before asking it a
+   * question would be a null check per event in a combat handler. Empty until
+   * the world is up.
+   */
+  abilities: AbilityIndex;
+  /**
+   * Whether the player is fighting, with the signal that answered.
+   *
+   * Never null, like `abilities` and `casts`: it is a derived reading rather
+   * than a value the game hands over, so before the world exists it is simply
+   * inactive rather than unknown.
+   */
+  combat: CombatState;
 }

@@ -83,6 +83,9 @@ function fakeMarket(
     },
     api: {
       list: () => Promise.resolve(states),
+      // The registry reads the indexes as they are; seeding them is the
+      // manager's call, ahead of the read that reaches here.
+      ensure: () => Promise.resolve(),
       add: unused,
       remove: unused,
       setRef: unused,

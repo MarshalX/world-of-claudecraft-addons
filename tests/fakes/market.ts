@@ -21,6 +21,8 @@ function marketEntry(overrides: Partial<MarketplaceEntry> = {}): MarketplaceEntr
     name: 'Combat Meter',
     version: '1.2.0',
     apiVersion: 1,
+    // Present by default so a case that DROPS it is testing something.
+    apiMinor: 1,
     author: 'MarshalX',
     description: 'What your damage is made of.',
     entry: 'main.js',
@@ -56,6 +58,7 @@ function marketState(
 function fakeMarketApi(overrides: Partial<MarketApi> = {}): MarketApi {
   return {
     list: () => Promise.resolve([]),
+    ensure: () => Promise.resolve(),
     add: () => Promise.resolve(),
     remove: () => Promise.resolve(),
     setRef: () => Promise.resolve(),
