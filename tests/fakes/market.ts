@@ -58,6 +58,7 @@ function marketState(
 function fakeMarketApi(overrides: Partial<MarketApi> = {}): MarketApi {
   return {
     list: () => Promise.resolve([]),
+    ensure: () => Promise.resolve(),
     add: () => Promise.resolve(),
     remove: () => Promise.resolve(),
     setRef: () => Promise.resolve(),

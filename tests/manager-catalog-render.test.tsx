@@ -186,6 +186,20 @@ describe('the Browse pane', () => {
     });
   });
 
+  // Seeding the indexes on the first read is what makes this the ordinary way
+  // for Browse to be empty, and "Refresh to fetch their indexes" is the wrong
+  // advice for it: the index was just fetched, and it answered 404.
+  it('points at the Marketplaces tab when a source could not be read', async () => {
+    await browse({
+      markets: [marketState(OFFICIAL, [], { fetchedAt: null, error: 'HTTP 404' })],
+    });
+
+    await until(() => {
+      expect(text()).toContain(UI_TEXT.browseUnreadable);
+    });
+    expect(text()).not.toContain(UI_TEXT.browseEmpty);
+  });
+
   it('reports an unmatched search differently from an unread source', async () => {
     await browse();
     await until(() => {

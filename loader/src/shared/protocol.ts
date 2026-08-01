@@ -111,6 +111,19 @@ export interface RegistryApi {
 export interface MarketApi {
   list: () => Promise<MarketplaceState[]>;
   /**
+   * Read any source this session has not read yet, and nothing else.
+   *
+   * What the manager calls before it lists, since `list` answers from the index
+   * cache and that cache is per session: without this the first read of every
+   * session answers from nothing, so Browse is empty until Refresh and the
+   * update check silently compares against no rows.
+   *
+   * The once-per-session refusal is here rather than in the manager so a second
+   * caller cannot turn it back into a fetch per open. A source that failed
+   * counts as read; Refresh is what retries one.
+   */
+  ensure: () => Promise<void>;
+  /**
    * Accept a source, optionally pinned.
    *
    * The ref is a separate argument rather than something the player has to

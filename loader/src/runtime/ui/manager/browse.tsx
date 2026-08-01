@@ -13,8 +13,8 @@
 
 import { useState } from 'preact/hooks';
 import { FIELD_CLASS } from '../kit/field-shape.ts';
-import type { BrowseFilter, BrowseRow } from './catalog.ts';
-import { browseRows, catalogTags } from './catalog.ts';
+import type { BrowseEmptiness, BrowseFilter, BrowseRow } from './catalog.ts';
+import { browseEmptiness, browseRows, catalogTags } from './catalog.ts';
 import type { CatalogState, CatalogStore } from './catalog-store.ts';
 import { ErrorNote } from './error-note.tsx';
 import { InstallConfirm } from './install-confirm.tsx';
@@ -168,23 +168,37 @@ interface ResultsProps {
   rows: readonly BrowseRow[];
   /** Whether any source offers anything at all, which is a different emptiness. */
   anyOffered: boolean;
+  /** Why nothing is offered, when nothing is. */
+  emptiness: BrowseEmptiness;
   busy: string | null;
   onInstall: (fqid: string) => void;
+}
+
+/** Which note an empty list gets, once the search has been ruled out. */
+function emptyNote(emptiness: BrowseEmptiness): string {
+  if (emptiness === 'unread') {
+    return UI_TEXT.browseEmpty;
+  }
+  if (emptiness === 'unreadable') {
+    return UI_TEXT.browseUnreadable;
+  }
+  return UI_TEXT.browseNoAddons;
 }
 
 /**
  * The rows, or the right kind of nothing.
  *
- * "No source has been read yet" and "your search matched nothing" look identical
- * on screen and mean opposite things, and only one of them is fixed by pressing
- * Refresh.
+ * "Your search matched nothing", "no source has been read yet", "a source could
+ * not be read" and "every source is genuinely empty" are one blank list on
+ * screen and four different things to do about it, and only the middle two are
+ * about Refresh at all.
  */
 function Results(props: ResultsProps) {
   if (props.rows.length === 0) {
     if (props.anyOffered) {
       return <p className="woc-note">{UI_TEXT.browseNoMatch}</p>;
     }
-    return <p className="woc-note">{UI_TEXT.browseEmpty}</p>;
+    return <p className="woc-note">{emptyNote(props.emptiness)}</p>;
   }
   return (
     <ul className="woc-list">
@@ -246,6 +260,7 @@ export function BrowsePane(props: BrowsePaneProps) {
       <Results
         rows={rows}
         anyOffered={state.markets.some((market) => market.addons.length > 0)}
+        emptiness={browseEmptiness(state.markets)}
         busy={state.busy}
         onInstall={setConfirming}
       />

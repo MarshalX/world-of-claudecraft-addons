@@ -85,13 +85,16 @@ function createStores(deps: StoresDeps, repaint: () => void): ManagerStores {
 }
 
 /**
- * What opening the window reads, none of which goes to the network.
+ * What opening the window reads.
  *
  * Loaded on open rather than at boot: a player who never opens the manager should
  * not pay for a bridge round trip. All three are loaded whatever tab is being
  * opened, since deferring to the tab would make every tab's first paint its
- * loading state. The dev reading is three storage reads and the catalog answers
- * from the indexes as they were last read. Refresh is what fetches.
+ * loading state. The dev reading is three storage reads, and the catalog answers
+ * from the indexes as they were last read, having first read any source this
+ * session has not read at all. So the FIRST open of a session costs a conditional
+ * request per source and every open after it costs none; Refresh is what fetches
+ * unconditionally.
  */
 function loadPanes(panes: Pick<ManagerStores, 'store' | 'dev' | 'catalog'>): void {
   panes.store.reload();

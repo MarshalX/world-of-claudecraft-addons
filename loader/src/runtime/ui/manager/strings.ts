@@ -61,6 +61,8 @@ export const UI_TEXT = {
   browseTag: 'Category',
   browseAllTags: 'All',
   browseEmpty: 'No marketplace has been read yet. Refresh to fetch their indexes.',
+  browseUnreadable: 'A marketplace could not be read. The Marketplaces tab says which, and why.',
+  browseNoAddons: 'No marketplace in your list offers anything yet.',
   browseNoMatch: 'Nothing here matches that search.',
   browseInstall: 'Install',
   browseInstalled: 'Installed',
