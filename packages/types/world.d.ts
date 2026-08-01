@@ -6,6 +6,7 @@
 
 import type { AbilityIndex } from './abilities.js';
 import type { Unsubscribe } from './addon.js';
+import type { CharacterInfo, ProfessionInfo, TalentInfo } from './character.js';
 import type { Aura, AuraKind, Entity, ResourceType } from './entity.js';
 
 /** A compact aura summary for a party row. Not the full `Aura`. */
@@ -231,6 +232,9 @@ export interface WorldValues {
   bags: readonly (string | null)[] | null;
   copper: number | null;
   zone: string | null;
+  character: CharacterInfo | null;
+  talents: TalentInfo | null;
+  professions: ProfessionInfo | null;
   quests: WorldQuests | null;
   cooldowns: ReadonlyMap<string, number> | null;
   auras: readonly Aura[] | null;
@@ -311,6 +315,20 @@ export interface WorldApi {
    * taken from it would name somewhere you left an hour ago.
    */
   readonly zone: string | null;
+
+  /**
+   * Your progression, deeds and title. Null before world entry.
+   *
+   * All of it rides your own self payload, so there is no equivalent for another
+   * player: nothing here can be read about anyone else.
+   */
+  readonly character: CharacterInfo | null;
+
+  /** Your build, your saved loadouts, and how many points you have spent. */
+  readonly talents: TalentInfo | null;
+
+  /** Your profession skill counters. See `ProfessionInfo` for what is left out. */
+  readonly professions: ProfessionInfo | null;
 
   readonly quests: WorldQuests | null;
   /** Your ability cooldowns: ability id to seconds remaining. */

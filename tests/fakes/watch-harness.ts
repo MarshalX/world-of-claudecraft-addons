@@ -9,6 +9,14 @@ import {
   createAbilityReader,
 } from '../../loader/src/runtime/world/abilities.ts';
 import type { WorldBackend } from '../../loader/src/runtime/world/backend.ts';
+import {
+  type CharacterInfo,
+  type ProfessionInfo,
+  readCharacter,
+  readProfessions,
+  readTalents,
+  type TalentInfo,
+} from '../../loader/src/runtime/world/character.ts';
 import { type CombatState, readCombat } from '../../loader/src/runtime/world/combat.ts';
 import { castsOf, type EntityCast, type Hazard } from '../../loader/src/runtime/world/derived.ts';
 import type { Aura, Entity, WorldQuests } from '../../loader/src/runtime/world/game-types.ts';
@@ -86,6 +94,17 @@ export function watchHarness(): WatchHarness {
     },
     get zone(): string | null {
       return live.zone;
+    },
+    // Through the real readers, like `abilities` and `combat`: a test that moves
+    // a progression field on the fixture has to see what an addon would.
+    get character(): CharacterInfo | null {
+      return readCharacter(live);
+    },
+    get talents(): TalentInfo | null {
+      return readTalents(live);
+    },
+    get professions(): ProfessionInfo | null {
+      return readProfessions(live);
     },
     get quests(): WorldQuests {
       return { log: null, done: null };

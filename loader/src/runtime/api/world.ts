@@ -11,7 +11,7 @@
 import type { DisposalBag } from '../disposal.ts';
 import { unlessFrozen } from '../freeze.ts';
 import type { Unsubscribe } from '../net/bus.ts';
-import { type AbilityIndex, emptyAbilities } from '../world/abilities.ts';
+import type { AbilityIndex } from '../world/abilities.ts';
 import {
   type AuraQuery,
   filterAuras,
@@ -20,8 +20,8 @@ import {
   NONE,
   type PartyAuraQuery,
 } from '../world/auras.ts';
-import type { WorldBackend } from '../world/backend.ts';
-import { type CombatState, OUT_OF_COMBAT } from '../world/combat.ts';
+import type { CharacterInfo, ProfessionInfo, TalentInfo } from '../world/character.ts';
+import type { CombatState } from '../world/combat.ts';
 import type { EntityCast, Hazard } from '../world/derived.ts';
 import { mergeLive } from '../world/facade.ts';
 import type {
@@ -34,147 +34,10 @@ import type {
   WorldQuests,
 } from '../world/game-types.ts';
 import type { WorldHub } from '../world/hub.ts';
-import { readonlyMapView } from '../world/readonly-map.ts';
 import { isWorldKey, WORLD_KEYS, type WorldKey } from '../world/signature.ts';
 import { resolveUnit, type UnitContext, type UnitToken } from '../world/units.ts';
 import type { WorldValues } from '../world/values.ts';
-
-/**
- * The roster before the game exists.
- *
- * A read-only view rather than a bare Map, and built per read rather than
- * shared. A bare Map would break the published contract for the whole window
- * between an addon's first line and world entry, so `entities.clear()` would
- * throw after entry and quietly succeed before it. Sharing one would be worse:
- * a write from one addon would land in what every other addon reads.
- */
-function emptyEntities(): ReadonlyMap<number, Entity> {
-  return readonlyMapView(new Map<number, Entity>());
-}
-
-/**
- * No cast before the game exists.
- *
- * A bare Map is right here where it is wrong for `entities`: this one is built by
- * the loader on every read rather than being the game's own live collection, so a
- * write into it lands in something already discarded and cannot reach another
- * addon. It is not wrapped because wrapping every derived read would be a
- * per-frame allocation to guard a value nobody holds.
- */
-function emptyCasts(): ReadonlyMap<number, EntityCast> {
-  return new Map<number, EntityCast>();
-}
-
-/** Every read answers null before the game exists, rather than throwing at an addon. */
-function fromBackend<T>(hub: WorldHub, read: (backend: WorldBackend) => T | null): T | null {
-  const backend = hub.backend();
-  if (backend === null) {
-    return null;
-  }
-  return read(backend);
-}
-
-/** The reads that come straight off the backend, each null until the game is up. */
-function gameReads(hub: WorldHub) {
-  return {
-    get player(): Entity | null {
-      return fromBackend(hub, (backend) => backend.player);
-    },
-
-    get target(): Entity | null {
-      return fromBackend(hub, (backend) => backend.target);
-    },
-
-    get entities(): ReadonlyMap<number, Entity> {
-      const backend = hub.backend();
-      if (backend === null) {
-        return emptyEntities();
-      }
-      return backend.entities;
-    },
-
-    get party(): PartyInfo | null {
-      return fromBackend(hub, (backend) => backend.party);
-    },
-
-    get inventory(): readonly InvSlot[] | null {
-      return fromBackend(hub, (backend) => backend.inventory);
-    },
-
-    get equipment(): Partial<Record<EquipSlot, string>> | null {
-      return fromBackend(hub, (backend) => backend.equipment);
-    },
-
-    get bags(): readonly (string | null)[] | null {
-      return fromBackend(hub, (backend) => backend.bags);
-    },
-
-    get bagCapacity(): number | null {
-      return fromBackend(hub, (backend) => backend.bagCapacity);
-    },
-
-    get copper(): number | null {
-      return fromBackend(hub, (backend) => backend.copper);
-    },
-
-    get zone(): string | null {
-      return fromBackend(hub, (backend) => backend.zone);
-    },
-
-    get quests(): WorldQuests | null {
-      return fromBackend(hub, (backend) => backend.quests);
-    },
-
-    get cooldowns(): ReadonlyMap<string, number> | null {
-      return fromBackend(hub, (backend) => backend.cooldowns);
-    },
-
-    get auras(): readonly Aura[] | null {
-      return fromBackend(hub, (backend) => backend.auras);
-    },
-  };
-}
-
-/** The reads the loader computes. See `world/derived.ts` for why each exists. */
-function derivedReads(hub: WorldHub) {
-  return {
-    get casts(): ReadonlyMap<number, EntityCast> {
-      const backend = hub.backend();
-      if (backend === null) {
-        return emptyCasts();
-      }
-      return backend.casts;
-    },
-
-    get targetAuras(): readonly Aura[] | null {
-      return fromBackend(hub, (backend) => backend.targetAuras);
-    },
-
-    get hazards(): readonly Hazard[] | null {
-      return fromBackend(hub, (backend) => backend.hazards);
-    },
-
-    get markers(): ReadonlyMap<number, number> | null {
-      return fromBackend(hub, (backend) => backend.markers);
-    },
-
-    get abilities(): AbilityIndex {
-      const backend = hub.backend();
-      if (backend === null) {
-        return emptyAbilities();
-      }
-      return backend.abilities;
-    },
-
-    get combat(): CombatState {
-      const backend = hub.backend();
-      if (backend === null) {
-        return OUT_OF_COMBAT;
-      }
-      return backend.combat;
-    },
-  };
-}
+import { derivedReads, emptyEntities, fromBackend, gameReads, selfReads } from './world-reads.ts';
 
 /** Null before world entry, which is the one case `mine` cannot be answered in. */
 function playerIdOf(ctx: UnitContext): number | null {
@@ -276,6 +139,11 @@ export interface WorldApi {
   readonly copper: number | null;
   /** The zone name the game is displaying. Localized text, never an id. */
   readonly zone: string | null;
+  /** Progression, deeds and titles. Null before world entry. */
+  readonly character: CharacterInfo | null;
+  readonly talents: TalentInfo | null;
+  /** The two profession counter maps. See `world/character.ts` for what is left out. */
+  readonly professions: ProfessionInfo | null;
   readonly quests: WorldQuests | null;
   readonly cooldowns: ReadonlyMap<string, number> | null;
   readonly auras: readonly Aura[] | null;
@@ -334,7 +202,7 @@ export interface WorldApi {
 
 export function createWorld(hub: WorldHub, bag: DisposalBag): WorldApi {
   return mergeLive(
-    mergeLive(gameReads(hub), derivedReads(hub)),
+    mergeLive(gameReads(hub), mergeLive(selfReads(hub), derivedReads(hub))),
     mergeLive(lookups(hub), controls(hub, bag)),
   );
 }

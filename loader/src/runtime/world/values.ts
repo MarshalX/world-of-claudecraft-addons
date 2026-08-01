@@ -10,6 +10,7 @@
 // capture behind each one; `tests/world-shape.test.ts` asserts the two agree.
 
 import type { AbilityIndex } from './abilities.ts';
+import type { CharacterInfo, ProfessionInfo, TalentInfo } from './character.ts';
 import type { CombatState } from './combat.ts';
 import type { EntityCast, Hazard } from './derived.ts';
 import type { Aura, Entity, EquipSlot, InvSlot, PartyInfo, WorldQuests } from './game-types.ts';
@@ -31,6 +32,9 @@ export interface WorldValues {
    * loader cannot reach, so this is read off the game's own minimap label.
    */
   zone: string | null;
+  character: CharacterInfo | null;
+  talents: TalentInfo | null;
+  professions: ProfessionInfo | null;
   quests: WorldQuests | null;
   cooldowns: ReadonlyMap<string, number> | null;
   auras: readonly Aura[] | null;

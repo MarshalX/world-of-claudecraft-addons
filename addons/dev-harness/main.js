@@ -44,6 +44,9 @@ const WORLD_KEYS = [
   'bags',
   'copper',
   'zone',
+  'character',
+  'talents',
+  'professions',
   'quests',
   'cooldowns',
   'auras',
@@ -495,6 +498,7 @@ async function runChecks() {
     checkUnits(),
     checkAuraQueries(),
     checkHoldings(),
+    checkCharacter(),
     checkCasts(),
     checkIcons(),
     checkNet(),
@@ -555,6 +559,50 @@ function checkHoldings() {
     'holdings',
     true,
     `in ${zone}: ${String(worn)} slots worn, ${String(inventory.length)}/${String(bagCapacity)} bag slots`,
+  );
+}
+
+/**
+ * The character sheet.
+ *
+ *
+ * The numbers themselves cannot be checked against anything: only the live game
+ * knows how much experience the player has. What is checked is the shape, and
+ * that lifetime totals are not BELOW their live counterparts, which is the one
+ * invariant these fields have with each other.
+ */
+function checkCharacter() {
+  const { character, talents, professions } = woc.world;
+  if (character === null) {
+    return result('character', true, 'no world yet');
+  }
+  if (typeof character.xp !== 'number' || typeof character.renown !== 'number') {
+    return result('character', false, 'the sheet is not carrying numbers');
+  }
+  if (character.lifetimeXp < character.xp) {
+    return result(
+      'character',
+      false,
+      `lifetimeXp ${String(character.lifetimeXp)} is below xp ${String(character.xp)}`,
+    );
+  }
+  if (character.lifetimeHonor < character.honor) {
+    return result('character', false, 'lifetimeHonor is below honor');
+  }
+  if (!(character.deeds instanceof Map)) {
+    return result('character', false, 'deeds is not a Map');
+  }
+  if (!(character.deedStats.visited instanceof Set)) {
+    return result('character', false, 'deedStats.visited is not a Set');
+  }
+  if (talents === null || professions === null) {
+    return result('character', false, 'the sheet resolved but talents or professions did not');
+  }
+  return result(
+    'character',
+    true,
+    `${String(character.deeds.size)} deeds, renown ${String(character.renown)}, ` +
+      `${String(Object.keys(talents.rows).length)} talent rows`,
   );
 }
 

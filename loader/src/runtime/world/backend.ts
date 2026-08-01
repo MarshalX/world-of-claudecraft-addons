@@ -13,6 +13,14 @@
 
 import { fieldValue } from '../net/frames.ts';
 import { type AbilityIndex, createAbilityReader } from './abilities.ts';
+import {
+  type CharacterInfo,
+  type ProfessionInfo,
+  readCharacter,
+  readProfessions,
+  readTalents,
+  type TalentInfo,
+} from './character.ts';
 import { type CombatState, readCombat } from './combat.ts';
 import { castsOf, type EntityCast, type Hazard, hazardsOf, markersOf } from './derived.ts';
 import { mergeLive } from './facade.ts';
@@ -168,6 +176,10 @@ export interface WorldBackend {
   readonly copper: number | null;
   /** The zone name the game is displaying. See `world/zone.ts`. */
   readonly zone: string | null;
+  /** Progression, deeds and titles. See `world/character.ts`. */
+  readonly character: CharacterInfo | null;
+  readonly talents: TalentInfo | null;
+  readonly professions: ProfessionInfo | null;
   readonly quests: WorldQuests;
   /**
    * Ability id to seconds remaining.
@@ -268,6 +280,18 @@ export function createGameBackend(game: unknown, deps: BackendDeps): WorldBacken
 
     get zone(): string | null {
       return deps.zoneName();
+    },
+
+    get character(): CharacterInfo | null {
+      return readCharacter(world);
+    },
+
+    get talents(): TalentInfo | null {
+      return readTalents(world);
+    },
+
+    get professions(): ProfessionInfo | null {
+      return readProfessions(world);
     },
 
     raw: world,

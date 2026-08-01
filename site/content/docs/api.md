@@ -79,6 +79,26 @@ woc.world.player.prevPos;                   // last tick, which the game interpo
 
 Those are the same numbers the game's own coordinate readout floors for display. `prevPos` is there because the client renders between ticks: comparing it against `pos` tells you which way something is actually moving, which a single sample cannot.
 
+### Your character sheet
+
+```js
+woc.world.character       // xp, rested, honor, renown, title, deeds
+woc.world.talents         // your build and your saved loadouts
+woc.world.professions     // craft and gathering skill counters
+```
+
+All three ride your own self payload, so they exist for **you and nobody else**: there is no way to read another player's sheet, and that is the game's decision rather than an omission here.
+
+`character` carries `xp`, `lifetimeXp` (which keeps rising past the cap), `restedXp`, `prestigeRank`, `honor`, `lifetimeHonor`, `renown`, `milestones`, the `deeds` you have earned with the day each landed, and a `deedStats` block of lifetime counters. `activeTitle` is a **deed id**, never display text, so it identifies your title rather than spelling it: the deed table is content an addon cannot reach.
+
+A counter at 0 in `deedStats` genuinely means it never happened. That is worth saying because it is unusual on this API, where a zero often means a field nobody writes. Here the client fills the whole set from defaults and the server sends every counter it keeps.
+
+`talents` gives you the build itself: `rows` maps a row level to the option chosen on it, so counting its entries is how many points are spent.
+
+`professions` is deliberately just the two skill counter maps. The game's professions facet also carries a state view and a crafting identity block, both marked as stubs in its own source with work still in flight, so their shape is the least settled thing an addon could build on.
+
+`level` is not here, and not because it was left out: the game writes it on the entity record rather than on the self payload, so it is `world.player.level`. That is worth more than a copy here would be, because it means every entity carries one and you can read a mob's level or another player's the same way.
+
 Combat state, all of it read-per-frame rather than pushed:
 
 ```js

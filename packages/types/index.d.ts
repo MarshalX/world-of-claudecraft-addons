@@ -21,6 +21,15 @@ declare global {
 
 export type { AbilityIndex, AbilityInfo } from './abilities.js';
 export type { AddonInfo, GameInfo, Unsubscribe } from './addon.js';
+export type {
+  CharacterInfo,
+  DeedStats,
+  ProfessionInfo,
+  SavedLoadout,
+  TalentInfo,
+  TalentRole,
+  TalentRowLevel,
+} from './character.js';
 export type { KnownCue } from './cues.generated.js';
 export type {
   AbilityCharge,
