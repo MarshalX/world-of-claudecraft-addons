@@ -59,7 +59,11 @@ export function createWorldHub(deps: WorldHubDeps): WorldHub {
 
   const ready = deps.game.then((handle) => {
     game = handle;
-    backend = createGameBackend(handle, { lastDamageAt: deps.lastDamageAt, now: deps.now });
+    backend = createGameBackend(handle, {
+      lastDamageAt: deps.lastDamageAt,
+      now: deps.now,
+      zoneName: deps.zoneName,
+    });
     if (backend === null) {
       throw new Error('__game has no world member, so the world API cannot be backed');
     }

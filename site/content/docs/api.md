@@ -53,6 +53,32 @@ woc.world.inventory       // your bags, slot by slot
 woc.world.quests          // the log, and each quest's progress
 ```
 
+What you own, and where you are:
+
+```js
+woc.world.equipment       // worn gear by slot: { mainhand: 'redbrook_blade', ... }
+woc.world.bags            // the bag sockets, an item id or null each
+woc.world.bagCapacity     // total slots; used slots is inventory.length
+woc.world.copper          // money
+woc.world.zone            // the zone name the game is displaying
+```
+
+An item id does not resolve to a **name**, a quality, or any stats. That content ships inside the client bundle and is reachable from nothing the loader can see, so what an id gets you is its icon through `ui.icon.item`, and the ability to tell one item from another. Names arrive only where an event carries one.
+
+`world.zone` is localized display text rather than an id, for the same class of reason: the zone table is content behind a pure function of your position, so the loader reads the game's own minimap label instead. Show it or watch it change; comparing it against a hardcoded string only works for players running your language. Underground it names the delve, because that is what the game puts there. There is no subzone: the game announces a landmark once when you walk into one and never clears it when you leave, so a reading taken from it would name somewhere you left an hour ago.
+
+`bagCapacity` derives from `bags` and has no key of its own, so watch `bags`.
+
+Position comes off the entity rather than the zone, and every entity has it, not just you:
+
+```js
+const { x, y, z } = woc.world.player.pos;   // yards: x east-west, z north-south, y height
+woc.world.player.facing;                    // radians, 0 is +z
+woc.world.player.prevPos;                   // last tick, which the game interpolates from
+```
+
+Those are the same numbers the game's own coordinate readout floors for display. `prevPos` is there because the client renders between ticks: comparing it against `pos` tells you which way something is actually moving, which a single sample cannot.
+
 Combat state, all of it read-per-frame rather than pushed:
 
 ```js

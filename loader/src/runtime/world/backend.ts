@@ -16,7 +16,15 @@ import { type AbilityIndex, createAbilityReader } from './abilities.ts';
 import { type CombatState, readCombat } from './combat.ts';
 import { castsOf, type EntityCast, type Hazard, hazardsOf, markersOf } from './derived.ts';
 import { mergeLive } from './facade.ts';
-import type { Aura, Entity, InvSlot, PartyInfo, QuestProgress, WorldQuests } from './game-types.ts';
+import type {
+  Aura,
+  Entity,
+  EquipSlot,
+  InvSlot,
+  PartyInfo,
+  QuestProgress,
+  WorldQuests,
+} from './game-types.ts';
 import { readonlyMapView } from './readonly-map.ts';
 
 const NO_ENTITIES: ReadonlyMap<number, Entity> = new Map<number, Entity>();
@@ -112,6 +120,22 @@ function coreReads(world: unknown, entities: () => ReadonlyMap<number, Entity>) 
       return readAs<InvSlot[]>(world, 'inventory');
     },
 
+    get equipment(): Partial<Record<EquipSlot, string>> | null {
+      return readAs<Partial<Record<EquipSlot, string>>>(world, 'equipment');
+    },
+
+    get bags(): readonly (string | null)[] | null {
+      return readAs<(string | null)[]>(world, 'bags');
+    },
+
+    get bagCapacity(): number | null {
+      return readAs<number>(world, 'bagCapacity');
+    },
+
+    get copper(): number | null {
+      return readAs<number>(world, 'copper');
+    },
+
     get quests(): WorldQuests {
       return questsOf(world);
     },
@@ -134,6 +158,16 @@ export interface WorldBackend {
   readonly entities: ReadonlyMap<number, Entity>;
   readonly party: PartyInfo | null;
   readonly inventory: readonly InvSlot[] | null;
+  /** Worn gear by slot, item ids only. A slot with nothing in it is absent. */
+  readonly equipment: Partial<Record<EquipSlot, string>> | null;
+  /** The four bag sockets, an item id per equipped bag and null for an empty socket. */
+  readonly bags: readonly (string | null)[] | null;
+  /** Total slots across the backpack and every equipped bag. */
+  readonly bagCapacity: number | null;
+  /** Money, in copper. */
+  readonly copper: number | null;
+  /** The zone name the game is displaying. See `world/zone.ts`. */
+  readonly zone: string | null;
   readonly quests: WorldQuests;
   /**
    * Ability id to seconds remaining.
@@ -183,6 +217,14 @@ export interface BackendDeps {
   /** When damage involving the player last landed. See `world/combat-clock.ts`. */
   lastDamageAt: () => number | null;
   now: () => number;
+  /**
+   * The zone name off the game's own minimap label.
+   *
+   * A dep rather than a read off the world object because it is the one member
+   * here whose source is the DOM: the zone table is content the loader cannot
+   * reach. See `world/zone.ts`.
+   */
+  zoneName: () => string | null;
 }
 
 /**
@@ -222,6 +264,10 @@ export function createGameBackend(game: unknown, deps: BackendDeps): WorldBacken
 
     get combat(): CombatState {
       return combatOf(world, entities(), deps);
+    },
+
+    get zone(): string | null {
+      return deps.zoneName();
     },
 
     raw: world,

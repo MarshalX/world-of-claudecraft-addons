@@ -64,6 +64,7 @@ export type {
   CombatSource,
   CombatState,
   EntityCast,
+  EquipSlot,
   Hazard,
   HazardKind,
   InvSlot,

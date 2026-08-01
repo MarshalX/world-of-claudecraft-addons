@@ -40,6 +40,10 @@ const WORLD_KEYS = [
   'entities',
   'party',
   'inventory',
+  'equipment',
+  'bags',
+  'copper',
+  'zone',
   'quests',
   'cooldowns',
   'auras',
@@ -490,6 +494,7 @@ async function runChecks() {
     checkMobTargeting(),
     checkUnits(),
     checkAuraQueries(),
+    checkHoldings(),
     checkCasts(),
     checkIcons(),
     checkNet(),
@@ -507,6 +512,51 @@ const win = woc.ui.window({
   save: true,
   visible: woc.settings['open-on-load'] === true,
 });
+
+/**
+ * The gear, bag and money reads, and the zone label behind the DOM.
+ *
+ * `bagCapacity` is checked against `inventory.length` rather than against a
+ * number: it is derived on the client from the equipped bags, so a capacity
+ * below what is already carried means the derivation broke, and that is the only
+ * thing about it a check can know without the game's own bag table.
+ *
+ * The zone is the interesting one. It is the single read whose source is the
+ * game's DOM rather than its world object, so a game update that renames the
+ * element leaves it silently null. In game, null is a failure worth reporting.
+ */
+function checkHoldings() {
+  const { world } = woc;
+  const { inventory, bags, bagCapacity, equipment, copper, zone } = world;
+  if (inventory === null) {
+    return result('holdings', true, 'no world yet');
+  }
+  if (!Array.isArray(bags)) {
+    return result('holdings', false, 'bags is not an array');
+  }
+  if (typeof bagCapacity !== 'number' || bagCapacity < inventory.length) {
+    return result(
+      'holdings',
+      false,
+      `bagCapacity ${String(bagCapacity)} is below the ${String(inventory.length)} slots in use`,
+    );
+  }
+  if (equipment === null || typeof equipment !== 'object') {
+    return result('holdings', false, 'equipment is not a slot map');
+  }
+  if (typeof copper !== 'number') {
+    return result('holdings', false, `copper is ${typeOf(copper)}`);
+  }
+  if (zone === null) {
+    return result('holdings', false, 'the zone label did not resolve, so its anchor has moved');
+  }
+  const worn = Object.keys(equipment).length;
+  return result(
+    'holdings',
+    true,
+    `in ${zone}: ${String(worn)} slots worn, ${String(inventory.length)}/${String(bagCapacity)} bag slots`,
+  );
+}
 
 /** Whichever field this kind of entity fills, which is the thing being checked. */
 function fightingId(entity) {

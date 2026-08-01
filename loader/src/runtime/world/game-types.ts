@@ -268,6 +268,26 @@ export interface PartyInfo {
   members: PartyMember[];
 }
 
+/**
+ * A slot a piece of gear is worn in.
+ *
+ * The game's own set, and closed rather than a string: it is the shape of a
+ * paperdoll rather than content that grows with a release.
+ */
+export type EquipSlot =
+  | 'mainhand'
+  | 'offhand'
+  | 'helmet'
+  | 'neck'
+  | 'shoulder'
+  | 'chest'
+  | 'waist'
+  | 'legs'
+  | 'gloves'
+  | 'feet'
+  | 'ring1'
+  | 'ring2';
+
 /** One stack in the bags. */
 export interface InvSlot {
   itemId: string;

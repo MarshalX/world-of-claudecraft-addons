@@ -12,7 +12,7 @@
 import type { AbilityIndex } from './abilities.ts';
 import type { CombatState } from './combat.ts';
 import type { EntityCast, Hazard } from './derived.ts';
-import type { Aura, Entity, InvSlot, PartyInfo, WorldQuests } from './game-types.ts';
+import type { Aura, Entity, EquipSlot, InvSlot, PartyInfo, WorldQuests } from './game-types.ts';
 
 export interface WorldValues {
   player: Entity | null;
@@ -20,6 +20,17 @@ export interface WorldValues {
   entities: ReadonlyMap<number, Entity>;
   party: PartyInfo | null;
   inventory: readonly InvSlot[] | null;
+  equipment: Partial<Record<EquipSlot, string>> | null;
+  /** The equipped bag sockets. `bagCapacity` derives from this, so watch this. */
+  bags: readonly (string | null)[] | null;
+  copper: number | null;
+  /**
+   * The zone name the game is displaying, or null before the HUD exists.
+   *
+   * Localized display text rather than an id: the zone table is content the
+   * loader cannot reach, so this is read off the game's own minimap label.
+   */
+  zone: string | null;
   quests: WorldQuests | null;
   cooldowns: ReadonlyMap<string, number> | null;
   auras: readonly Aura[] | null;

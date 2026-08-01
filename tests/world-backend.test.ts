@@ -20,7 +20,7 @@ function gameWorld(over: Record<string, unknown> = {}): Record<string, unknown> 
 }
 
 /** No damage clock: these cases drive the state branches, not the fallback. */
-const DEPS = { lastDamageAt: () => null, now: () => 0 };
+const DEPS = { lastDamageAt: () => null, now: () => 0, zoneName: () => null };
 
 const backendOf = (game: Record<string, unknown>) => {
   const backend = createGameBackend(game, DEPS);

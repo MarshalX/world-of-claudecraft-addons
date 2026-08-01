@@ -11,6 +11,7 @@ import { createNetHub, type NetHub } from './net/hub.ts';
 import { waitForGame } from './ready.ts';
 import { createCombatClock } from './world/combat-clock.ts';
 import { createWorldHub, type WorldHub } from './world/hub.ts';
+import { createZoneReader } from './world/zone.ts';
 
 const GAME_GLOBAL = '__game';
 const SOCKET_GLOBAL = 'WebSocket';
@@ -60,6 +61,7 @@ export function createGameSurfaces(): GameSurfaces {
     cancel: (id) => globalThis.cancelAnimationFrame(id),
     lastDamageAt: combat.lastDamageAt,
     now: () => performance.now(),
+    zoneName: createZoneReader(globalThis.document),
   });
 
   return {

@@ -62,6 +62,26 @@ export interface PartyInfo {
   members: PartyMember[];
 }
 
+/**
+ * A slot a piece of gear is worn in.
+ *
+ * Closed rather than a string: this is the shape of a paperdoll, not content
+ * that grows with a game release.
+ */
+export type EquipSlot =
+  | 'mainhand'
+  | 'offhand'
+  | 'helmet'
+  | 'neck'
+  | 'shoulder'
+  | 'chest'
+  | 'waist'
+  | 'legs'
+  | 'gloves'
+  | 'feet'
+  | 'ring1'
+  | 'ring2';
+
 /** One stack in the bags. */
 export interface InvSlot {
   itemId: string;
@@ -207,6 +227,10 @@ export interface WorldValues {
   entities: ReadonlyMap<number, Entity>;
   party: PartyInfo | null;
   inventory: readonly InvSlot[] | null;
+  equipment: Partial<Record<EquipSlot, string>> | null;
+  bags: readonly (string | null)[] | null;
+  copper: number | null;
+  zone: string | null;
   quests: WorldQuests | null;
   cooldowns: ReadonlyMap<string, number> | null;
   auras: readonly Aura[] | null;
@@ -245,6 +269,49 @@ export interface WorldApi {
 
   readonly party: PartyInfo | null;
   readonly inventory: readonly InvSlot[] | null;
+
+  /**
+   * Worn gear by slot, item ids only. A slot with nothing in it is absent.
+   *
+   * An item id does not resolve to a NAME, a quality or any stats: that content
+   * ships inside the client bundle and is reachable from nothing the loader can
+   * see. What you can do with an id is show its icon, through `ui.icon.item`,
+   * and tell one from another.
+   */
+  readonly equipment: Partial<Record<EquipSlot, string>> | null;
+
+  /** The bag sockets: an item id per equipped bag, null for an empty socket. */
+  readonly bags: readonly (string | null)[] | null;
+
+  /**
+   * Total slots across the backpack and every equipped bag.
+   *
+   * Derived from `bags`, so watch `bags` rather than this: there is no separate
+   * key for it. Used slots is `inventory.length`.
+   */
+  readonly bagCapacity: number | null;
+
+  /** Money, in copper. */
+  readonly copper: number | null;
+
+  /**
+   * The zone name the game is displaying, or null before the HUD exists.
+   *
+   * Localized DISPLAY TEXT, never an id, and that limit is not an oversight: the
+   * zone table is content inside the client bundle behind a pure function of
+   * your position, and nothing the loader can reach exposes either the table or
+   * the id. This is read off the game's own minimap label, so it is what the game
+   * says you are looking at, which underground is the delve rather than a zone.
+   *
+   * Show it, or watch it change. Comparing it against a hardcoded string works
+   * only for players running your language.
+   *
+   * There is no subzone here. The game announces a landmark once as a banner
+   * when you walk into one and never clears it when you leave, so a reading
+   * taken from it would name somewhere you left an hour ago.
+   */
+  readonly zone: string | null;
+
   readonly quests: WorldQuests | null;
   /** Your ability cooldowns: ability id to seconds remaining. */
   readonly cooldowns: ReadonlyMap<string, number> | null;

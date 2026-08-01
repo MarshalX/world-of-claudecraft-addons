@@ -34,6 +34,15 @@ export const ANCHORS = {
   microColumn: '#side-buttons-col-b',
   /** The game-menu micro button, which the Addons button is placed next to. */
   microOptions: '#mm-options',
+  /**
+   * The minimap's zone name, written by the minimap painter every frame.
+   *
+   * The one place the loader can read where the player is. The zone table is
+   * content, so there is no id to be had, and the delve painter owns this same
+   * element underground, which is why the reading is "what the game says you are
+   * looking at" rather than an overworld zone.
+   */
+  zoneLabel: '#zone-label',
   /** The footer build readout, and the only anchor here outside the HUD template. */
   gameVersion: '#game-version',
 } as const;
@@ -55,6 +64,7 @@ export const ANCHORS_REQUIRED_IN_GAME: readonly AnchorKey[] = [
   'optionsMenu',
   'microColumn',
   'microOptions',
+  'zoneLabel',
 ];
 
 /** The classes the game puts on a menu entry, reused so ours is styled by the game. */

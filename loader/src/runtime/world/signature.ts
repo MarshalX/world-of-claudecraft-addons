@@ -15,6 +15,10 @@ const KEYS = [
   'entities',
   'party',
   'inventory',
+  'equipment',
+  'bags',
+  'copper',
+  'zone',
   'quests',
   'cooldowns',
   'auras',
@@ -105,6 +109,17 @@ function partySignature(party: unknown): string {
     (row) => `${joinFields(row, PARTY_MEMBER_FIELDS)}/${rowAuras(row)}`,
   );
   return `${leader}|${rows.join(',')}`;
+}
+
+/** Slot to item id, sorted, so the order the game happens to serialize in cannot fire it. */
+function equipmentSignature(equipment: unknown): string {
+  if (equipment === null || typeof equipment !== 'object') {
+    return '';
+  }
+  return Object.entries(equipment as Record<string, unknown>)
+    .map(([slot, itemId]) => `${slot}=${String(itemId)}`)
+    .sort(byCodePoint)
+    .join(',');
 }
 
 function inventorySignature(inventory: unknown): string {
@@ -256,6 +271,17 @@ export function capture(key: WorldKey, value: unknown): Capture {
       return partySignature(value);
     case 'inventory':
       return inventorySignature(value);
+    // Worn gear changes one slot at a time and the whole map is a dozen entries,
+    // so the signature is the map itself rather than anything cleverer.
+    case 'equipment':
+      return equipmentSignature(value);
+    case 'bags':
+      return eachOf(value)
+        .map((bag) => String(bag))
+        .join(',');
+    case 'copper':
+    case 'zone':
+      return String(value);
     case 'quests':
       return questSignature(value);
     case 'cooldowns':

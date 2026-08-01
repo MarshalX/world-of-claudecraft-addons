@@ -112,6 +112,7 @@ async function worldHarness() {
     },
     lastDamageAt: () => null,
     now: () => 0,
+    zoneName: () => null,
   });
   await hub.ready;
 

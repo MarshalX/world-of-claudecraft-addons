@@ -148,6 +148,7 @@ function createSharedServices(
       // branches, which is what a test driving world state wants to exercise.
       lastDamageAt: () => null,
       now: () => 0,
+      zoneName: () => null,
     }),
     storage: hub,
     sound: createSoundEngine({

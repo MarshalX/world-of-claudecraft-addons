@@ -27,6 +27,7 @@ import { mergeLive } from '../world/facade.ts';
 import type {
   Aura,
   Entity,
+  EquipSlot,
   InvSlot,
   PartyInfo,
   PartyMemberAura,
@@ -98,6 +99,26 @@ function gameReads(hub: WorldHub) {
 
     get inventory(): readonly InvSlot[] | null {
       return fromBackend(hub, (backend) => backend.inventory);
+    },
+
+    get equipment(): Partial<Record<EquipSlot, string>> | null {
+      return fromBackend(hub, (backend) => backend.equipment);
+    },
+
+    get bags(): readonly (string | null)[] | null {
+      return fromBackend(hub, (backend) => backend.bags);
+    },
+
+    get bagCapacity(): number | null {
+      return fromBackend(hub, (backend) => backend.bagCapacity);
+    },
+
+    get copper(): number | null {
+      return fromBackend(hub, (backend) => backend.copper);
+    },
+
+    get zone(): string | null {
+      return fromBackend(hub, (backend) => backend.zone);
     },
 
     get quests(): WorldQuests | null {
@@ -245,6 +266,16 @@ export interface WorldApi {
   readonly entities: ReadonlyMap<number, Entity>;
   readonly party: PartyInfo | null;
   readonly inventory: readonly InvSlot[] | null;
+  /** Worn gear by slot, item ids only. A slot with nothing in it is absent. */
+  readonly equipment: Partial<Record<EquipSlot, string>> | null;
+  /** The bag sockets: an item id per equipped bag, null for an empty socket. */
+  readonly bags: readonly (string | null)[] | null;
+  /** Total slots across the backpack and every equipped bag. Derived from `bags`. */
+  readonly bagCapacity: number | null;
+  /** Money, in copper. */
+  readonly copper: number | null;
+  /** The zone name the game is displaying. Localized text, never an id. */
+  readonly zone: string | null;
   readonly quests: WorldQuests | null;
   readonly cooldowns: ReadonlyMap<string, number> | null;
   readonly auras: readonly Aura[] | null;

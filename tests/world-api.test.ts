@@ -47,6 +47,7 @@ function harness(game: Record<string, unknown> | null = null): Harness {
     },
     lastDamageAt: () => null,
     now: () => 0,
+    zoneName: () => null,
   });
   const bag = new DisposalBag();
 

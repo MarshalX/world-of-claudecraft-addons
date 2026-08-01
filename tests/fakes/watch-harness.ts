@@ -19,6 +19,8 @@ export interface LiveWorld {
   player: Record<string, unknown>;
   entities: Map<number, unknown>;
   hazards: Hazard[] | null;
+  /** The minimap's zone label, which the loader reads from the DOM in the real one. */
+  zone: string | null;
   markers: Map<number, number> | null;
   /** The game's resolved ability list, in its own shape: entries carrying a `def`. */
   known: unknown[];
@@ -40,6 +42,7 @@ export function watchHarness(): WatchHarness {
     player: { ...PLAYER_ENTITY } as Record<string, unknown>,
     entities: new Map<number, unknown>(),
     hazards: null,
+    zone: null,
     markers: null,
     known: [],
   };
@@ -68,6 +71,21 @@ export function watchHarness(): WatchHarness {
     },
     get inventory(): null {
       return null;
+    },
+    get equipment(): null {
+      return null;
+    },
+    get bags(): null {
+      return null;
+    },
+    get bagCapacity(): null {
+      return null;
+    },
+    get copper(): null {
+      return null;
+    },
+    get zone(): string | null {
+      return live.zone;
     },
     get quests(): WorldQuests {
       return { log: null, done: null };

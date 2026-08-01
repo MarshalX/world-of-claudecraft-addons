@@ -103,7 +103,6 @@ describe('resolveUnit', () => {
     expect(resolveUnit('pet', context([entity(ME), wild]))).toBeNull();
   });
 
-
   // party counts the others and raid counts everyone, so the same member has a
   // different index under each form. Getting this backwards puts the player in
   // their own party frame.
