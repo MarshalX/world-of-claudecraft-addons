@@ -7,6 +7,9 @@
 // three components.
 
 export const UI_TEXT = {
+  unlockFrames: 'Unlock frames',
+  unlockFramesHint:
+    'Outline every addon frame so you can drag it, including one that is drawing nothing right now.',
   title: 'Addons',
   close: 'Close',
   /** The accessible name is `close`; this is only what the button draws. */

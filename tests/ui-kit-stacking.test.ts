@@ -148,27 +148,44 @@ describe('clicking a window', () => {
   });
 });
 
+/**
+ * Both ceiling cases drive the counter to WINDOW_Z_CEILING one raise at a time,
+ * which is a hundred thousand style writes each. That is around a quarter of a
+ * second on an idle machine and comfortably past the default five second budget
+ * on a loaded one: they timed out in a full parallel run while passing alone,
+ * once this suite grew enough to make the machine contend.
+ *
+ * The cost is inherent rather than accidental. What is under test is that the
+ * ceiling is ENFORCED, and the only way in from outside is to reach it, so
+ * making this cheap would mean exposing the counter for a test to preset.
+ */
+const CEILING_TIMEOUT_MS = 30_000;
+
 describe('the ceiling', () => {
   // Toasts, the modal backdrop and the tooltip sit above WINDOW_Z_CEILING, so
   // "above every window" has to be true of every window there can ever be, not
   // just of the ones anyone expects. Without the renumbering pass the only
   // defence is that nobody clicks that many times, which is not a defence.
-  it('renumbers rather than climbing into the overlay bands', () => {
-    const host = root();
-    const stacking = createStacking({ root: host });
-    const first = window_(host, 'first');
-    const second = window_(host, 'second');
+  it(
+    'renumbers rather than climbing into the overlay bands',
+    () => {
+      const host = root();
+      const stacking = createStacking({ root: host });
+      const first = window_(host, 'first');
+      const second = window_(host, 'second');
 
-    for (let click = 0; click <= WINDOW_Z_CEILING; click += 1) {
-      stacking.raise(first);
-    }
-    stacking.raise(second);
+      for (let click = 0; click <= WINDOW_Z_CEILING; click += 1) {
+        stacking.raise(first);
+      }
+      stacking.raise(second);
 
-    expect(z(first)).toBeLessThanOrEqual(WINDOW_Z_CEILING);
-    expect(z(second)).toBeLessThanOrEqual(WINDOW_Z_CEILING);
-    // And the order the renumbering preserved is the order it was raised in.
-    expect(z(second)).toBeGreaterThan(z(first));
-  });
+      expect(z(first)).toBeLessThanOrEqual(WINDOW_Z_CEILING);
+      expect(z(second)).toBeLessThanOrEqual(WINDOW_Z_CEILING);
+      // And the order the renumbering preserved is the order it was raised in.
+      expect(z(second)).toBeGreaterThan(z(first));
+    },
+    CEILING_TIMEOUT_MS,
+  );
 
   // A window that has been closed must not hold a slot in the renumbering, or a
   // long session would renumber ever-growing lists of dead elements.
@@ -178,22 +195,26 @@ describe('the ceiling', () => {
   // dropped the live pair renumbers to 1 and 2, and with it retained they would
   // start at 2 instead. Asserting the top window's value would not tell the two
   // apart, which is what the first version of this test got wrong.
-  it('drops windows that have left the document when it renumbers', () => {
-    const host = root();
-    const stacking = createStacking({ root: host });
-    const gone = window_(host, 'gone');
-    const bottom = window_(host, 'bottom');
-    const top = window_(host, 'top');
-    stacking.raise(gone);
-    stacking.raise(bottom);
-    stacking.raise(top);
-    gone.remove();
-
-    for (let click = 0; click <= WINDOW_Z_CEILING; click += 1) {
+  it(
+    'drops windows that have left the document when it renumbers',
+    () => {
+      const host = root();
+      const stacking = createStacking({ root: host });
+      const gone = window_(host, 'gone');
+      const bottom = window_(host, 'bottom');
+      const top = window_(host, 'top');
+      stacking.raise(gone);
+      stacking.raise(bottom);
       stacking.raise(top);
-    }
+      gone.remove();
 
-    expect(z(bottom)).toBe(1);
-    expect(z(top)).toBeGreaterThan(z(bottom));
-  });
+      for (let click = 0; click <= WINDOW_Z_CEILING; click += 1) {
+        stacking.raise(top);
+      }
+
+      expect(z(bottom)).toBe(1);
+      expect(z(top)).toBeGreaterThan(z(bottom));
+    },
+    CEILING_TIMEOUT_MS,
+  );
 });

@@ -18,6 +18,7 @@ import { createSkillArt } from '../loader/src/runtime/ui/kit/skill-art.ts';
 import { createStacking } from '../loader/src/runtime/ui/kit/stacking.ts';
 import { createToaster } from '../loader/src/runtime/ui/kit/toast.ts';
 import { createTooltips } from '../loader/src/runtime/ui/kit/tooltip.ts';
+import { createUnlockMode } from '../loader/src/runtime/ui/kit/unlock.ts';
 import type { UiKit } from '../loader/src/runtime/ui/mount.ts';
 import { enterWorld, mountStartScreen } from './fakes/game-dom.ts';
 
@@ -64,6 +65,7 @@ function open() {
     banner: createBanner({ doc: document, root, ...timers }),
     tooltips: createTooltips({ doc: document, root, viewport: () => VIEW }),
     stacking: createStacking({ root }),
+    unlock: createUnlockMode(root),
     // A manifest reader whose fetch never settles, which is the state a first row is
     // drawn in: `has` answers "not known yet", so the builder hands back the URL and
     // the image decides. A suite that wanted the authoritative answer would resolve it.

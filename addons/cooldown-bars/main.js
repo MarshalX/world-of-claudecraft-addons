@@ -122,10 +122,20 @@ function playerClass() {
 }
 
 // #region frame
+// Bare: the rows ARE the display, so a panel behind them is furniture around a
+// thing that needs none. The title is kept even though nothing draws it, because
+// it is the frame's accessible name and the label the loader shows while frames
+// are unlocked.
+//
+// The trade is that this frame is invisible while nothing is on cooldown, which
+// is most of the time out of combat. That is correct for an overlay and is why
+// the loader has an unlock mode: it outlines every frame, empty ones included,
+// so this can be positioned at rest.
 const frame = woc.ui.frame({
   id: 'bars',
   title: 'Cooldowns',
   width: FRAME_WIDTH,
+  density: 'bare',
   save: true,
 });
 

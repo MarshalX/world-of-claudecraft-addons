@@ -17,6 +17,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { DiagnosticsReading } from '../loader/src/runtime/diagnostics.ts';
 import { isFrozen, setFrozen } from '../loader/src/runtime/freeze.ts';
+import { createUnlockMode } from '../loader/src/runtime/ui/kit/unlock.ts';
 import { mountManager } from '../loader/src/runtime/ui/manager/index.tsx';
 import { UI_TEXT } from '../loader/src/runtime/ui/manager/strings.ts';
 import { TABS } from '../loader/src/runtime/ui/manager/tabs.ts';
@@ -121,6 +122,7 @@ async function open(options: Options = {}) {
     storage: null,
     channel: 'pbe',
     readDiagnostics: () => READING,
+    unlock: createUnlockMode(document.createElement('div')),
     ...managerServices(document),
     market: fakeMarketApi({
       list: () => Promise.resolve(markets(options.addons ?? [offered()])),
@@ -305,6 +307,7 @@ describe('with no bridge', () => {
       storage: null,
       channel: 'pbe',
       readDiagnostics: () => READING,
+      unlock: createUnlockMode(document.createElement('div')),
       ...managerServices(document),
     });
     cleanups.push(manager.dispose);

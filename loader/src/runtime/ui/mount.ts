@@ -33,6 +33,7 @@ import { createSkillArt } from './kit/skill-art.ts';
 import { createStacking, type Stacking } from './kit/stacking.ts';
 import { createToaster, type Toaster } from './kit/toast.ts';
 import { createTooltips, type Tooltips } from './kit/tooltip.ts';
+import { createUnlockMode, type UnlockMode } from './kit/unlock.ts';
 import { type ConfigService, createConfigService } from './manager/config.ts';
 import type { GeometryStorage } from './manager/geometry-store.ts';
 import { type Manager, type ManagerRegistry, mountManager } from './manager/index.tsx';
@@ -85,7 +86,7 @@ interface ManagerPair {
  * whose stores to open. One indirection breaks the cycle, and it is only ever
  * called in response to a storage change, which cannot happen before both exist.
  */
-function mountManagerPair(deps: UiDeps, root: HTMLElement): ManagerPair {
+function mountManagerPair(deps: UiDeps, root: HTMLElement, unlock: UnlockMode): ManagerPair {
   let repaintManager = (): void => undefined;
 
   const config = createConfigService({
@@ -100,6 +101,7 @@ function mountManagerPair(deps: UiDeps, root: HTMLElement): ManagerPair {
   const manager = mountManager({
     doc: deps.doc,
     root,
+    unlock,
     registry: deps.registry,
     market: deps.market,
     dev: deps.dev,
@@ -159,7 +161,7 @@ function raisingManager(manager: Manager, raise: () => void): Manager {
   };
 }
 
-function buildKit(deps: UiDeps, root: HTMLElement, manager: Manager): UiKit {
+function buildKit(deps: UiDeps, root: HTMLElement, manager: Manager, unlock: UnlockMode): UiKit {
   const injector = createGameInjector({
     doc: deps.doc,
     onHud: () => {
@@ -183,7 +185,7 @@ function buildKit(deps: UiDeps, root: HTMLElement, manager: Manager): UiKit {
   const stacking = createStacking({ root });
   const icons = createIconUrls(createSkillArt({ fetchJson: deps.fetchJson }));
 
-  return { root, toaster, banner, tooltips, injector, stacking, icons };
+  return { root, toaster, banner, tooltips, injector, stacking, icons, unlock };
 }
 
 export interface UiDeps {
@@ -236,6 +238,13 @@ export interface UiKit {
    * file. Shared rather than per addon so two addons cost one manifest fetch.
    */
   icons: IconUrls;
+  /**
+   * The arrange-your-UI switch. Shared, because it is one mode for every frame.
+   *
+   * Not on the addon API: an addon has no business turning it on, and one that
+   * did would be rearranging a player's screen for them.
+   */
+  unlock: UnlockMode;
 }
 
 export interface MountedUi {
@@ -247,8 +256,12 @@ export interface MountedUi {
 
 export function mountUi(deps: UiDeps): MountedUi {
   const root = mountRoot({ doc: deps.doc, css: deps.css });
-  const { manager, config } = mountManagerPair(deps, root.el);
-  const kit = buildKit(deps, root.el, manager);
+  // Built here rather than inside either half, because BOTH need the same one:
+  // the manager draws the switch, the loader's keybind flips it, and two
+  // instances would mean a checkbox that disagrees with the screen.
+  const unlock = createUnlockMode(root.el);
+  const { manager, config } = mountManagerPair(deps, root.el, unlock);
+  const kit = buildKit(deps, root.el, manager, unlock);
   const raised = raisingManager(manager, () => {
     const el = root.el.querySelector(MANAGER_SELECTOR);
     if (el instanceof HTMLElement) {

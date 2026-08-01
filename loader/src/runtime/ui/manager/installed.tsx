@@ -72,15 +72,50 @@ function AddonRow(props: RowProps) {
   );
 }
 
+/**
+ * The arrange-your-UI switch, at the top of the pane rather than beside a row.
+ *
+ * It belongs to no addon: it outlines EVERY addon frame at once, including ones
+ * currently drawing nothing, which is the only way to grab a bare overlay whose
+ * content is empty. Putting it on a row would suggest otherwise.
+ *
+ * Shown even with nothing installed, because a player arriving here to find out
+ * why they cannot see an addon's window should find the control that shows them
+ * where it is.
+ */
+function UnlockRow(props: { unlocked: boolean; onUnlock: (on: boolean) => void }) {
+  return (
+    // Deliberately NOT a `.woc-row`: that class means "an installed addon", and
+    // a control that borrowed it would be counted as one by anything selecting
+    // rows, this pane's own tests included.
+    <div className="woc-unlock-row">
+      <div className="woc-row-main">
+        <span className="woc-row-name">{UI_TEXT.unlockFrames}</span>
+        <span className="woc-row-desc">{UI_TEXT.unlockFramesHint}</span>
+      </div>
+      <div className="woc-row-actions">
+        <EnableToggle
+          enabled={props.unlocked}
+          label={UI_TEXT.unlockFrames}
+          onToggle={props.onUnlock}
+        />
+      </div>
+    </div>
+  );
+}
+
 interface InstalledPaneProps {
   state: InstalledState;
   statuses: readonly AddonStatus[];
   onToggle: (fqid: string, on: boolean) => void;
   onOpen: (fqid: string) => void;
+  unlocked: boolean;
+  onUnlock: (on: boolean) => void;
 }
 
 export function InstalledPane(props: InstalledPaneProps) {
   const { state } = props;
+  const unlock = <UnlockRow unlocked={props.unlocked} onUnlock={props.onUnlock} />;
 
   if (state.status === 'idle' || state.status === 'loading') {
     return <p className="woc-note">{UI_TEXT.installedLoading}</p>;
@@ -91,11 +126,17 @@ export function InstalledPane(props: InstalledPaneProps) {
     return <p className="woc-note woc-note-bad">{state.error ?? UI_TEXT.installedUnreachable}</p>;
   }
   if (state.rows.length === 0) {
-    return <p className="woc-note">{UI_TEXT.installedEmpty}</p>;
+    return (
+      <>
+        {unlock}
+        <p className="woc-note">{UI_TEXT.installedEmpty}</p>
+      </>
+    );
   }
 
   return (
     <>
+      {unlock}
       <ErrorNote error={state.error} />
       <ul className="woc-list">
         {state.rows.map((addon) => (

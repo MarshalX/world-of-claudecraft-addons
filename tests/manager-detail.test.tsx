@@ -12,6 +12,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { DiagnosticsReading } from '../loader/src/runtime/diagnostics.ts';
 import { createGameBindings } from '../loader/src/runtime/keys/game-bindings.ts';
 import { createLogBuffer } from '../loader/src/runtime/log/buffer.ts';
+import { createUnlockMode } from '../loader/src/runtime/ui/kit/unlock.ts';
 import { createConfigService } from '../loader/src/runtime/ui/manager/config.ts';
 import type { ManagerRegistry } from '../loader/src/runtime/ui/manager/index.tsx';
 import { mountManager } from '../loader/src/runtime/ui/manager/index.tsx';
@@ -134,6 +135,7 @@ function open(options: OpenOptions = {}) {
     logs,
     market: null,
     dev: null,
+    unlock: createUnlockMode(document.createElement('div')),
     ...supervisorServices(),
   });
   const repaint = (): void => {

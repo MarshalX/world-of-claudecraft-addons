@@ -14,6 +14,7 @@
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { DiagnosticsReading } from '../loader/src/runtime/diagnostics.ts';
+import { createUnlockMode } from '../loader/src/runtime/ui/kit/unlock.ts';
 import { mountManager } from '../loader/src/runtime/ui/manager/index.tsx';
 import { UI_TEXT } from '../loader/src/runtime/ui/manager/strings.ts';
 import type { MarketplaceRef } from '../loader/src/shared/marketplace.ts';
@@ -107,6 +108,7 @@ function open(options: Options = {}) {
       refresh: calls.refresh,
     }),
     dev: null,
+    unlock: createUnlockMode(document.createElement('div')),
   });
   cleanups.push(manager.dispose);
   manager.open();

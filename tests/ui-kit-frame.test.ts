@@ -9,7 +9,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { CLOSE_PATH } from '../loader/src/runtime/ui/kit/close-glyph.ts';
 import { createAddonFrame, HIDDEN_CLASS } from '../loader/src/runtime/ui/kit/frame.ts';
-import type { FrameOpts } from '../loader/src/runtime/ui/kit/frame-chrome.ts';
+import { buildChrome, type FrameOpts } from '../loader/src/runtime/ui/kit/frame-chrome.ts';
 import { createFrameStateStore } from '../loader/src/runtime/ui/kit/frame-state.ts';
 import { frameKey, uiNamespace } from '../loader/src/shared/storage-keys.ts';
 import { createFakeStorage, type FakeStorage } from './fakes/storage.ts';
@@ -104,6 +104,81 @@ describe('chrome', () => {
 
     expect(frame.el.querySelector('.woc-title')?.textContent).toBe('Healing');
     expect(frame.el.getAttribute('aria-label')).toBe('Healing');
+  });
+});
+
+describe('the bare density', () => {
+  it('draws no title bar at all, rather than one hidden by a rule', () => {
+    const bare = open({ id: 'overlay', title: 'Cooldowns', density: 'bare' });
+
+    expect(bare.el.querySelector('.woc-titlebar')).toBeNull();
+    expect(bare.el.classList.contains('woc-density-bare')).toBe(true);
+  });
+
+  // A hidden bar would still be a row in the accessibility tree; no bar means the
+  // frame's only name is its label, so the label has to be there.
+  it('still names itself for assistive technology', () => {
+    const bare = open({ id: 'overlay', title: 'Cooldowns', density: 'bare' });
+
+    expect(bare.el.getAttribute('aria-label')).toBe('Cooldowns');
+    bare.setTitle('Timers');
+    expect(bare.el.getAttribute('aria-label')).toBe('Timers');
+  });
+
+  // The residue this was found leaving: with the game's panel class on, an empty
+  // bare frame still drew that class's border, so it read as a stray dot on the
+  // HUD rather than as nothing at all.
+  it('does not wear the game panel class, which is what draws the border', () => {
+    const bare = open({ id: 'overlay', density: 'bare' });
+    const normal = open({ id: 'panel' });
+
+    expect(bare.el.classList.contains('panel')).toBe(false);
+    expect(normal.el.classList.contains('panel')).toBe(true);
+  });
+
+  it('keeps the body, which is the whole point of it', () => {
+    const bare = open({ id: 'overlay', density: 'bare' });
+
+    expect(bare.body.classList.contains('woc-frame-body')).toBe(true);
+    expect(bare.el.contains(bare.body)).toBe(true);
+  });
+
+  // The refusal. A window's close button lives in the title bar bare removes, so
+  // honouring it would hand back a panel the player cannot dismiss.
+  it('is refused on a window, which would otherwise lose its close button', () => {
+    const win = open({ id: 'panel', density: 'bare' }, 'window');
+
+    expect(win.el.classList.contains('woc-density-bare')).toBe(false);
+    expect(win.el.classList.contains('woc-density-comfortable')).toBe(true);
+    expect(win.el.querySelector('.woc-close')).not.toBeNull();
+  });
+
+  // Load-bearing: the frame is handed to the gesture layer as its own drag
+  // handle, and without it a bare frame has nothing to grab and cannot be moved
+  // at all. The title bar is the handle for every other density.
+  it('is its own drag handle, since there is no title bar to grab', () => {
+    const bare = buildChrome({
+      doc: document,
+      fqid: FQID,
+      chrome: 'frame',
+      opts: { id: 'overlay', density: 'bare' },
+    });
+    const normal = buildChrome({
+      doc: document,
+      fqid: FQID,
+      chrome: 'frame',
+      opts: { id: 'panel' },
+    });
+
+    expect(bare.handle).toBe(bare.el);
+    expect(normal.handle).not.toBe(normal.el);
+    expect(normal.handle.classList.contains('woc-titlebar')).toBe(true);
+  });
+
+  it('falls back to comfortable for a density nobody offers', () => {
+    const odd = open({ id: 'overlay', density: 'roomy' as 'bare' });
+
+    expect(odd.el.classList.contains('woc-density-comfortable')).toBe(true);
   });
 });
 

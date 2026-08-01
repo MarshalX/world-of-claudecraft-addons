@@ -2,7 +2,7 @@ import type { Unsubscribe } from './addon.js';
 import type { School } from './entity.js';
 import type { KnownSkillIcon, SkillIconClass } from './icons.generated.js';
 
-export type FrameDensity = 'comfortable' | 'compact';
+export type FrameDensity = 'comfortable' | 'compact' | 'bare';
 
 export interface FrameOpts {
   /** Unique within your addon. It is the persistence key, so keep it stable. */
@@ -31,6 +31,18 @@ export interface FrameOpts {
    * title bar and close button the loudest things in the panel. Compact gives up
    * the tap floor, which is why it is opt-in: pick it for a desktop readout, not
    * for a form.
+   *
+   * 'bare' removes the chrome altogether: no panel behind your content, no
+   * padding, no title bar. It is for an overlay that IS its content, a row of
+   * timers floating on the HUD rather than a panel holding them. Two things
+   * follow from having no title bar, and both are deliberate:
+   *
+   *  - The frame is dragged by its own content instead. Buttons, inputs and
+   *    selects inside it stay clickable, so a bare frame full of controls is
+   *    still awkward to move: it suits a readout, not a form.
+   *  - `ui.window` IGNORES it and stays comfortable. A window's close button
+   *    lives in the title bar, and a panel the player cannot dismiss is worse
+   *    than one drawn more heavily than asked for.
    *
    * It also reaches your own controls: a `.woc-btn` or `.woc-tab` inside a
    * compact frame is drawn compact too, so reusing those classes gets you the

@@ -239,3 +239,82 @@
   /* biome-ignore lint/complexity/noImportantStyles: same, for the transition half. Without it a bar mid-transition keeps sliding under a freeze and photographs half way. */
   transition: none !important;
 }
+
+/* The bare density (ui.frame `density: 'bare'`).
+ *
+ * The third position on the axis the enum was chosen for: chrome removed
+ * entirely, so what is on screen is the addon's own content and nothing else.
+ * A row of timers floating on the HUD rather than a panel holding them.
+ *
+ * The background is unset rather than made transparent, because the base rule
+ * sets a colour AND an image and leaving either behind would show a band under
+ * content that has none of its own.
+ *
+ * There is no title bar to grab, so the whole frame is the drag handle
+ * (ui/kit/frame-chrome.ts hands the element itself back as the handle, and
+ * interactjs still ignores buttons and fields inside it). Nothing here draws an
+ * outline: an overlay that outlined itself would be a panel again, and the
+ * cursor is what says the frame can be moved.
+ */
+#woc-addons .woc-window.woc-density-bare {
+  background-color: transparent;
+  background-image: none;
+  padding: 0;
+  gap: 4px;
+  border-radius: 0;
+  cursor: move;
+  /* Belt and braces. The game's `panel` class is not applied to a bare frame at
+     all (ui/kit/frame-chrome.ts), which is what actually removes the border; these
+     make sure nothing else can put one back, because an empty bare frame with a
+     border is not an empty frame, it is a dot sitting on the HUD. */
+  border: none;
+  box-shadow: none;
+}
+
+/* The content is the handle, so the move cursor belongs on the frame and not on
+   what an addon put inside it: a button in a bare frame is still a button. */
+#woc-addons .woc-density-bare button,
+#woc-addons .woc-density-bare input,
+#woc-addons .woc-density-bare select,
+#woc-addons .woc-density-bare textarea {
+  cursor: auto;
+}
+
+/* The arrange-your-UI mode (ui/kit/unlock.ts).
+ *
+ * While the root carries this class every addon frame is outlined and labelled,
+ * so a frame can be found and grabbed even when it is drawing nothing. The
+ * minimum size is the load-bearing part: a bare overlay whose content list is
+ * empty is zero pixels, and an outline around zero pixels is still nothing to
+ * aim at.
+ *
+ * Only addon frames, never the manager: the manager is a window the player
+ * already opened deliberately and can already grab by its title bar, and
+ * outlining it would put a label over the control that turns the mode off.
+ */
+#woc-addons.woc-unlocked .woc-addon-frame {
+  outline: 1px dashed var(--color-border-default, rgb(78 61 29));
+  outline-offset: 2px;
+  min-width: 120px;
+  min-height: 28px;
+  cursor: move;
+}
+
+/* The label comes off the attributes the frame already carries, so nothing has
+   to be measured, positioned, or kept in step with the frame it names. */
+#woc-addons.woc-unlocked .woc-addon-frame::before {
+  content: attr(data-woc-addon) " · " attr(data-woc-frame);
+  position: absolute;
+  bottom: 100%;
+  left: 0;
+  margin-bottom: 3px;
+  padding: 1px 5px;
+  font-size: 11px;
+  line-height: 1.5;
+  white-space: nowrap;
+  color: var(--color-text-muted, rgb(153 141 106));
+  background: var(--panel-base, rgb(21 21 31));
+  border: 1px solid var(--color-border-default, rgb(78 61 29));
+  border-radius: var(--radius-sm, 4px);
+  pointer-events: none;
+}

@@ -20,6 +20,7 @@ import { createSkillArt } from '../../loader/src/runtime/ui/kit/skill-art.ts';
 import { createStacking } from '../../loader/src/runtime/ui/kit/stacking.ts';
 import { createToaster } from '../../loader/src/runtime/ui/kit/toast.ts';
 import { createTooltips } from '../../loader/src/runtime/ui/kit/tooltip.ts';
+import { createUnlockMode } from '../../loader/src/runtime/ui/kit/unlock.ts';
 import { createWorldHub } from '../../loader/src/runtime/world/hub.ts';
 import { createFakeStorage, type FakeStorage } from './storage.ts';
 
@@ -169,7 +170,16 @@ function createSharedServices(
     dispatcher,
     gameBindings: createGameBindings({ game: () => null, storage: () => null }),
     logs,
-    kit: { root, injector, toaster, banner, tooltips, stacking, icons },
+    kit: {
+      root,
+      injector,
+      toaster,
+      banner,
+      tooltips,
+      stacking,
+      icons,
+      unlock: createUnlockMode(root),
+    },
     channel: 'pbe',
     host: 'https://pbe.worldofclaudecraft.com',
     gameVersion: () => ({ version: '0.31.0', build: '202607290011' }),

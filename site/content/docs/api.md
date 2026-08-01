@@ -203,7 +203,21 @@ Windows, and the pieces that go in them.
 
 <!-- include: addons/cooldown-bars/main.js#frame -->
 
-`ui.frame` is a light HUD panel and `ui.window` is a full one with a body that fills. Both take `density: 'comfortable' | 'compact'`. Comfortable is the default: 16px labels on a 40px minimum, the tap-target floor the game itself holds to. Compact gives that floor up deliberately, for a dense readout you glance at rather than operate.
+`ui.frame` is a light HUD panel and `ui.window` is a full one with a body that fills. Both take `density: 'comfortable' | 'compact' | 'bare'`. Comfortable is the default: 16px labels on a 40px minimum, the tap-target floor the game itself holds to. Compact gives that floor up deliberately, for a dense readout you glance at rather than operate.
+
+`bare` removes the chrome altogether: no panel behind your content, no padding, no title bar. Reach for it when the thing on screen IS your content, a row of timers floating on the HUD rather than a panel holding them.
+
+```js
+const overlay = woc.ui.frame({ id: 'timers', title: 'Timers', density: 'bare', save: true });
+```
+
+Two things follow from having no title bar, and both are deliberate. The frame is dragged by **its own content** instead, with buttons and fields inside it left clickable, so bare suits a readout rather than a form. And `ui.window` ignores it and stays comfortable: a window's close button lives in the title bar, and a panel the player cannot dismiss is worse than one drawn more heavily than it asked for.
+
+Keep the `title` even so. It is not drawn, but it is the frame's accessible name, and it is the label the loader shows while frames are unlocked.
+
+**A bare frame can be invisible, and that is what the unlock mode is for.** An overlay whose content is a list of timers has no pixels at all while nothing is running, which is exactly when a player wants to position it. Pressing `Alt+U`, or flipping "Unlock frames" at the top of the manager's Installed pane, outlines and labels every addon frame, gives an empty one a minimum size, and makes the whole outline draggable. Turning it off puts everything back.
+
+You get that for free: it is one mode on the loader's root, so any frame you create takes part without asking. It is also why you should not build your own idle placeholder before trying it.
 
 `ui.bar` is the loader's timer row, and `ui.tooltip` attaches a description to any element you own:
 
