@@ -99,8 +99,13 @@ export interface TileUpdate {
    * A tile with NO label is hidden from assistive technology outright. Art with a
    * wedge over it and no name is not something anyone can act on, and announcing a
    * bare "4.2" is worse than silence.
+   *
+   * Pass `null` to put a tile BACK to unnamed, which is what one being reused for
+   * something else needs. Since apiMinor 2: before it, a name could be set and never
+   * unset, so a tile that had held something and now holds nothing went on
+   * announcing what used to be in it.
    */
-  label?: string;
+  label?: string | null;
   /** An icon URL, from `ui.icon`, or null for none. The slot hides itself if it fails. */
   icon?: string | null;
   /**

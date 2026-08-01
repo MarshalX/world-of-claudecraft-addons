@@ -13,6 +13,7 @@ import { createUi, elementId } from '../loader/src/runtime/api/ui.ts';
 import { DisposalBag } from '../loader/src/runtime/disposal.ts';
 import { createAnchors } from '../loader/src/runtime/ui/kit/anchor3d.ts';
 import { createBanner } from '../loader/src/runtime/ui/kit/banner.ts';
+import { createFrameRoster } from '../loader/src/runtime/ui/kit/frame-roster.ts';
 import { createIconUrls } from '../loader/src/runtime/ui/kit/icons.ts';
 import { createGameInjector } from '../loader/src/runtime/ui/kit/injections.ts';
 import { createMenus } from '../loader/src/runtime/ui/kit/menu.ts';
@@ -62,6 +63,7 @@ function open() {
 
   const kit: UiKit = {
     root,
+    roster: createFrameRoster(),
     injector,
     toaster: createToaster({ doc: document, root, ...timers }),
     banner: createBanner({ doc: document, root, ...timers }),

@@ -26,9 +26,9 @@ import type { StorageHub } from '../storage/hub.ts';
 import type { AddonStatus } from '../supervisor.ts';
 import type { Projector } from '../world/project.ts';
 import { ANCHORS, ANCHORS_REQUIRED_IN_GAME } from './anchors.ts';
-import { ENTRY_ID } from './esc-inject.ts';
 import { type Anchors, createAnchors } from './kit/anchor3d.ts';
 import { type Banner, createBanner } from './kit/banner.ts';
+import { createFrameRoster, type FrameRoster } from './kit/frame-roster.ts';
 import { createIconUrls, type IconUrls } from './kit/icons.ts';
 import { createGameInjector, type GameInjector } from './kit/injections.ts';
 import { createMenus, type Menus } from './kit/menu.ts';
@@ -40,11 +40,10 @@ import { createUnlockMode, type UnlockMode } from './kit/unlock.ts';
 import { type ConfigService, createConfigService } from './manager/config.ts';
 import type { GeometryStorage } from './manager/geometry-store.ts';
 import { type Manager, type ManagerRegistry, mountManager } from './manager/index.tsx';
-import { BUTTON_ID } from './micro-button.ts';
 import { mountRoot, NO_HUD_CLASS } from './root.ts';
+import { addLoaderRoutes } from './routes.ts';
 
 /** The one label both in-game entry points carry. */
-const LABEL = 'Addons';
 
 /**
  * The manager's own window, by a stable hook rather than by its classes.
@@ -178,8 +177,6 @@ function buildKit(deps: UiDeps, root: HTMLElement, manager: Manager, unlock: Unl
   const onOpen = (): void => {
     manager.toggle();
   };
-  injector.add({ kind: 'menu', id: ENTRY_ID, label: LABEL, onOpen });
-  injector.add({ kind: 'micro', id: BUTTON_ID, label: LABEL, onOpen });
 
   const timers = { setTimer: deps.setTimer, clearTimer: deps.clearTimer };
   const toaster = createToaster({ doc: deps.doc, root, ...timers });
@@ -195,9 +192,24 @@ function buildKit(deps: UiDeps, root: HTMLElement, manager: Manager, unlock: Unl
     cancel: deps.cancelFrame,
   });
   const stacking = createStacking({ root });
+  const roster = createFrameRoster();
+
+  addLoaderRoutes({ doc: deps.doc, injector, menus, roster, unlock, onOpen });
   const icons = createIconUrls(createSkillArt({ fetchJson: deps.fetchJson }));
 
-  return { root, toaster, banner, tooltips, menus, anchors, injector, stacking, icons, unlock };
+  return {
+    root,
+    toaster,
+    banner,
+    tooltips,
+    menus,
+    anchors,
+    injector,
+    stacking,
+    roster,
+    icons,
+    unlock,
+  };
 }
 
 export interface UiDeps {
@@ -262,6 +274,14 @@ export interface UiKit {
   injector: GameInjector;
   /** Which loader window is in front. Shared with the manager. */
   stacking: Stacking;
+  /**
+   * Every frame the loader is holding, so a closed one can be found again.
+   *
+   * Shared for the reason stacking and the unlock mode are: a player looking for
+   * a window they closed should not have to know which addon owns it, and any
+   * frame a future addon builds is in the list the day it is written.
+   */
+  roster: FrameRoster;
   /**
    * Where the game's art lives, over one shared reading of which abilities have a
    * file. Shared rather than per addon so two addons cost one manifest fetch.

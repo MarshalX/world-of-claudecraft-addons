@@ -61,13 +61,32 @@ function anchorPoint(at: Element | { x: number; y: number }): { x: number; y: nu
 }
 
 /**
- * Keep the whole menu on screen.
+ * The least room a menu is given before it starts scrolling.
+ *
+ * A floor rather than a target: on a viewport shorter than this the menu takes
+ * what there is, because a menu clipped to nothing is worse than one that
+ * overhangs a little.
+ */
+const MIN_MENU_HEIGHT_PX = 120;
+
+/**
+ * Keep the whole menu on screen, in BOTH directions.
  *
  * Measured after it is in the document and unhidden: a hidden element measures as
  * zero, so a placement computed before that puts every menu in the same wrong
  * corner. The same order kit/tooltip.ts uses, for the same reason.
+ *
+ * The height cap is written before the measurement rather than after, so what is
+ * measured is a menu that already fits and the clamp below has something true to
+ * work with. Without it a long menu had its `top` pinned to the margin and then
+ * simply ran off the bottom of the window: clamping a position can only move a
+ * box, and a box taller than the viewport has nowhere to be moved to. The rail
+ * button's own menu found it, at twenty-five rows, but it is every menu's
+ * problem: `ui.menu` is on the addon API and an addon listing its own rows has
+ * no way to know how many will fit.
  */
 function place(el: HTMLElement, point: { x: number; y: number }, view: { w: number; h: number }) {
+  el.style.maxHeight = `${Math.max(MIN_MENU_HEIGHT_PX, view.h - EDGE_MARGIN_PX * 2)}px`;
   const size = el.getBoundingClientRect();
   const maxLeft = Math.max(EDGE_MARGIN_PX, view.w - size.width - EDGE_MARGIN_PX);
   const maxTop = Math.max(EDGE_MARGIN_PX, view.h - size.height - EDGE_MARGIN_PX);

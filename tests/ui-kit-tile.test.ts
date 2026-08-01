@@ -106,6 +106,29 @@ describe('the accessible name', () => {
     expect(tile.el.getAttribute('aria-hidden')).toBeNull();
     expect(tile.el.getAttribute('aria-label')).toBe('Fell Shot, 4.2s');
   });
+
+  // A strip reuses its tiles rather than rebuilding them, so a name that could be
+  // set and never unset is a tile that goes on announcing what it used to hold. A
+  // bag grid found it: a square vacated by a stack kept the stack's name, which a
+  // sighted player could see was empty and a screen reader could not.
+  it('goes back to unnamed when the label is nulled', () => {
+    const tile = createTile(document, { label: 'Bone Fragments', value: '' });
+
+    tile.update({ label: null });
+
+    expect(tile.el.getAttribute('aria-hidden')).toBe('true');
+    expect(tile.el.getAttribute('aria-label')).toBeNull();
+  });
+
+  // Undefined is "leave it alone", which is what every other member of an update
+  // means and is what lets a caller move one figure without restating the rest.
+  it('leaves the name alone when the label is simply absent', () => {
+    const tile = createTile(document, { label: 'Fell Shot' });
+
+    tile.update({ value: '2.0s' });
+
+    expect(tile.el.getAttribute('aria-label')).toBe('Fell Shot, 2.0s');
+  });
 });
 
 describe('the figures', () => {

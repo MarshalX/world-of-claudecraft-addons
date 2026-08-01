@@ -54,6 +54,12 @@ interface FrameOpts {
   /** Unique within the addon. It is the persistence key, so it must be stable. */
   id: string;
   title?: string;
+  /**
+   * Draw a close button in the title bar. A window always has one regardless.
+   *
+   * Ignored on a `bare` frame, which has no title bar to put it in.
+   */
+  closable?: boolean;
   width?: number;
   height?: number;
   /**
@@ -136,9 +142,29 @@ function roleFor(chrome: FrameChrome): string {
   return 'group';
 }
 
-/** The close button, or null for a frame, which deliberately has none. */
-function buildClose(doc: Document, chrome: FrameChrome): HTMLButtonElement | null {
-  if (chrome !== 'window') {
+/**
+ * Whether this frame gets a close button.
+ *
+ * A window always does: it is a panel the player opens and closes, and that is
+ * what makes it a window. A frame does so only when it ASKS, because a frame is
+ * ordinarily a HUD readout that lives on screen and is toggled by a keybind.
+ *
+ * The option is refused on a bare frame, and that refusal is the same one
+ * `densityOf` makes about a bare window: the button lives in a title bar that
+ * `bare` removes, so honouring it would be a promise with nowhere to keep it. A
+ * bare frame is dismissed by its keybind or by the unlock mode, which is what
+ * those exist for.
+ */
+function wantsClose(opts: FrameOpts, chrome: FrameChrome, density: FrameDensity): boolean {
+  if (chrome === 'window') {
+    return true;
+  }
+  return opts.closable === true && density !== 'bare';
+}
+
+/** The close button, or null for a frame that did not ask for one. */
+function buildClose(doc: Document, wanted: boolean): HTMLButtonElement | null {
+  if (!wanted) {
     return null;
   }
   const close = doc.createElement('button');
@@ -175,7 +201,7 @@ function buildChrome(deps: ChromeDeps): Chrome {
   handle.appendChild(title);
   el.setAttribute('aria-label', opts.title ?? opts.id);
 
-  const close = buildClose(doc, deps.chrome);
+  const close = buildClose(doc, wantsClose(opts, deps.chrome, density));
   if (close !== null) {
     handle.appendChild(close);
   }

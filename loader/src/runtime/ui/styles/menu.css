@@ -17,6 +17,10 @@
   flex-direction: column;
   min-width: 160px;
   max-width: 280px;
+  /* The height cap itself is written by kit/menu.ts, which is the only thing that
+     knows the viewport. This is what makes a capped menu usable rather than
+     merely clipped. */
+  overflow-y: auto;
   padding: 4px;
   border-radius: var(--radius-sm, 4px);
   z-index: 100002;

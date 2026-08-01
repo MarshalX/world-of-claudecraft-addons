@@ -169,8 +169,16 @@ interface TileUpdate {
    * There is nowhere to put a name on a square whose whole face is the art, so this
    * is the accessible name of the tile as a WHOLE, recomposed with the figures
    * whenever one of them moves. See `applyName` for what a tile without one does.
+   *
+   * `null` puts it BACK to unnamed, which is what a tile being reused for something
+   * else needs. Without it a name could be set and never unset, so a tile that had
+   * held a thing and now holds nothing went on announcing what used to be in it: a
+   * bag grid found exactly that, where a square vacated by a stack kept the stack's
+   * name. Passing `''` reaches the same place by a different road, since a name
+   * composes to nothing and the tile goes back to being decorative art, but it says
+   * "this is called the empty string" rather than "this has no name".
    */
-  label?: string;
+  label?: string | null;
   /** An icon URL, from `ui.icon`, or null for none. */
   icon?: string | null;
   /** 0 through 1 of the timer REMAINING, as `ui.bar` takes. Clamped. */

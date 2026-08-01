@@ -13,9 +13,11 @@ import { createKeyDispatcher } from '../../loader/src/runtime/keys/dispatcher.ts
 import { createGameBindings } from '../../loader/src/runtime/keys/game-bindings.ts';
 import { createLogBuffer } from '../../loader/src/runtime/log/buffer.ts';
 import { createNetHub } from '../../loader/src/runtime/net/hub.ts';
+import type { NetState } from '../../loader/src/runtime/net/state.ts';
 import { createSoundEngine } from '../../loader/src/runtime/sound/engine.ts';
 import { createAnchors } from '../../loader/src/runtime/ui/kit/anchor3d.ts';
 import { createBanner } from '../../loader/src/runtime/ui/kit/banner.ts';
+import { createFrameRoster } from '../../loader/src/runtime/ui/kit/frame-roster.ts';
 import { createIconUrls } from '../../loader/src/runtime/ui/kit/icons.ts';
 import { createGameInjector } from '../../loader/src/runtime/ui/kit/injections.ts';
 import { createMenus } from '../../loader/src/runtime/ui/kit/menu.ts';
@@ -88,6 +90,20 @@ interface SharedHarness {
   inbound: (frame: unknown) => void;
   /** Move the addon-visible clock. Reads `woc.now()`, not wall clock. */
   advance: (ms: number) => void;
+  /**
+   * Override part of what `net.state` answers.
+   *
+   * Here rather than in each suite because the one field addons actually reach
+   * for, `latencyMs`, cannot be produced by driving this fake: it is measured by
+   * pairing an OUTBOUND input frame's sequence number against the acknowledgement
+   * a later snapshot carries, and only the inbound tap is wired. So a suite that
+   * needs a latency reading has to state one, and stating it in one blessed place
+   * beats every addon inventing its own stub.
+   *
+   * Replaces the accessor rather than a stored value, which is what `net.state`
+   * reads through on every access, so a reading taken after this call sees it.
+   */
+  netState: (patch: Partial<NetState>) => void;
   dispose: () => void;
 }
 
@@ -194,6 +210,7 @@ function createSharedServices(
       menus,
       anchors,
       stacking,
+      roster: createFrameRoster(),
       icons,
       unlock: createUnlockMode(root),
     },
@@ -231,6 +248,11 @@ function createSharedServices(
     inbound: (frame) => {
       deliver?.(JSON.stringify(frame));
     },
+    netState: (patch) => {
+      const base = shared.net.state();
+      shared.net.state = () => ({ ...base, ...patch });
+    },
+
     advance: (ms) => {
       clock += ms;
     },
