@@ -5,14 +5,22 @@
   "apiVersion": 1,
   "apiMinor": 1,
   "author": "MarshalX",
-  "description": "Exercises every part of the addon API and reports what worked, so a loader change can be checked in the game rather than only in a test.",
+  "description": "Exercises every part of the addon API and reports what worked, repainting as the world moves, so a loader change can be checked in the game rather than only in a test.",
   "entry": "main.js",
   "homepage": "https://github.com/MarshalX/world-of-claudecraft-addons",
   "tags": ["development"],
   "permissions": ["net.read", "world.read", "ui", "sound", "keys", "storage"],
   "keybinds": [
-    { "id": "toggle", "label": "Toggle the harness window", "default": "Alt+KeyH" },
-    { "id": "run", "label": "Run the checks again", "default": "Alt+Shift+KeyH" }
+    {
+      "id": "toggle",
+      "label": "Toggle the harness window",
+      "default": "Alt+KeyH"
+    },
+    {
+      "id": "run",
+      "label": "Run the checks again",
+      "default": "Alt+Shift+KeyH"
+    }
   ],
   "settings": [
     {
@@ -39,7 +47,7 @@
       "id": "detail",
       "type": "select",
       "label": "How much each check reports",
-      "default": "failures",
+      "default": "everything",
       "options": ["failures", "everything"]
     }
   ]

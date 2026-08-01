@@ -2,7 +2,7 @@
   "schema": 1,
   "name": "Official Marketplace",
   "maintainer": "MarshalX",
-  "generated": "2026-07-31T21:08:16.195Z",
+  "generated": "2026-08-01T00:29:38.599Z",
   "addons": [
     {
       "id": "combat-meter",
@@ -118,7 +118,7 @@
       "apiVersion": 1,
       "apiMinor": 1,
       "author": "MarshalX",
-      "description": "Exercises every part of the addon API and reports what worked, so a loader change can be checked in the game rather than only in a test.",
+      "description": "Exercises every part of the addon API and reports what worked, repainting as the world moves, so a loader change can be checked in the game rather than only in a test.",
       "entry": "main.js",
       "homepage": "https://github.com/MarshalX/world-of-claudecraft-addons",
       "tags": [
@@ -169,7 +169,7 @@
           "id": "detail",
           "type": "select",
           "label": "How much each check reports",
-          "default": "failures",
+          "default": "everything",
           "options": [
             "failures",
             "everything"

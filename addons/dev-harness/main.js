@@ -16,6 +16,10 @@
 // the loader's own root, or plays a sound.
 
 const CHECK_TIMEOUT_MS = 3000;
+/** Long enough that one player action repaints once, short enough to feel live. */
+const REFRESH_DEBOUNCE_MS = 150;
+const COPPER_PER_SILVER = 100;
+const COPPER_PER_GOLD = 10_000;
 const TOAST_MS = 2500;
 const BANNER_MS = 2000;
 const MS_PER_SECOND = 1000;
@@ -484,28 +488,78 @@ function checkAbilities() {
   );
 }
 
-async function runChecks() {
-  const immediate = [
-    checkIdentity(),
-    checkGame(),
-    checkSettings(),
-    checkKeys(),
-    checkWorld(),
-    checkWorldKeys(),
-    checkAbilities(),
-    checkCombat(),
-    checkMobTargeting(),
-    checkUnits(),
-    checkAuraQueries(),
-    checkHoldings(),
-    checkCharacter(),
-    checkCasts(),
-    checkIcons(),
-    checkNet(),
-    checkShadowedGlobals(),
-  ];
-  const awaited = await Promise.all([checkStorage(), checkSound(), checkTimers(), checkSkillArt()]);
-  return [...immediate, ...awaited];
+/**
+ * The checks that describe the LIVE world, in report order.
+ *
+ * Separated from the rest because they are the ones whose answer changes while
+ * the player plays, and because they are cheap: reading state the loader already
+ * holds. They are re-run from `world.on` as things move, so a line that says
+ * "no target, so target-of-target went unchecked" becomes a real check the
+ * moment a target is picked, rather than staying vacuous until someone presses
+ * a button. That matters more than it sounds: most of the world surface can only
+ * be verified while something is actually happening.
+ */
+const LIVE_CHECKS = [
+  checkWorld,
+  checkAbilities,
+  checkCombat,
+  checkMobTargeting,
+  checkUnits,
+  checkAuraQueries,
+  checkHoldings,
+  checkCharacter,
+  checkCasts,
+];
+
+/** Everything else, which answers the same way all session and is run on demand. */
+const STATIC_CHECKS = [
+  checkIdentity,
+  checkGame,
+  checkSettings,
+  checkKeys,
+  checkWorldKeys,
+  checkIcons,
+  checkNet,
+  checkShadowedGlobals,
+];
+
+/**
+ * The world keys a live check reads, so a change to any of them repaints.
+ *
+ * Deliberately the keys the checks CONSUME rather than every key that exists:
+ * subscribing to all of them would wake the harness on traffic no line here
+ * reports, and the point is that a repaint means a reported value moved.
+ */
+const LIVE_KEYS = [
+  'player',
+  'target',
+  'entities',
+  'party',
+  'combat',
+  'zone',
+  'copper',
+  'bags',
+  'equipment',
+  'inventory',
+  'character',
+  'talents',
+  'abilities',
+  'casts',
+];
+
+/**
+ * The slow half: a storage round trip, a pack fetch, a timer, an image load.
+ *
+ * These are never re-run on a world change. A storage round trip writes through
+ * the bridge to the userscript manager, so repeating it every time a target
+ * changes would be real waste to answer a question whose answer cannot move.
+ */
+async function runSlowChecks() {
+  return await Promise.all([checkStorage(), checkSound(), checkTimers(), checkSkillArt()]);
+}
+
+function runLiveChecks() {
+  return [...STATIC_CHECKS.map((check) => check()), ...LIVE_CHECKS.map((check) => check())];
 }
 
 const win = woc.ui.window({
@@ -516,6 +570,40 @@ const win = woc.ui.window({
   save: true,
   visible: woc.settings['open-on-load'] === true,
 });
+
+/**
+ * The report, in a container of its own so a live repaint cannot take the
+ * controls with it, or wipe a bar demo half way through its drain.
+ */
+const report = document.createElement('div');
+/** Where a demo puts something to look at, kept outside the repainting half. */
+const stage = document.createElement('div');
+win.body.append(report, stage);
+
+/** The slow half's last answer, held so a live repaint can show it unchanged. */
+let slowResults = [];
+
+/**
+ * Copper as the game writes it, so the readout matches what a player sees.
+ *
+ * Bare copper when there is nothing above it, rather than an empty string.
+ */
+function money(copper) {
+  const gold = Math.floor(copper / COPPER_PER_GOLD);
+  const silver = Math.floor((copper % COPPER_PER_GOLD) / COPPER_PER_SILVER);
+  const loose = copper % COPPER_PER_SILVER;
+  const parts = [];
+  if (gold > 0) {
+    parts.push(`${String(gold)}g`);
+  }
+  if (silver > 0) {
+    parts.push(`${String(silver)}s`);
+  }
+  if (loose > 0 || parts.length === 0) {
+    parts.push(`${String(loose)}c`);
+  }
+  return parts.join(' ');
+}
 
 /**
  * The gear, bag and money reads, and the zone label behind the DOM.
@@ -558,7 +646,7 @@ function checkHoldings() {
   return result(
     'holdings',
     true,
-    `in ${zone}: ${String(worn)} slots worn, ${String(inventory.length)}/${String(bagCapacity)} bag slots`,
+    `in ${zone}: ${String(worn)} worn, ${String(inventory.length)}/${String(bagCapacity)} bags, ${money(copper)}`,
   );
 }
 
@@ -807,7 +895,7 @@ function renderResults(results) {
     list.append(row);
   }
 
-  win.body.replaceChildren(
+  report.replaceChildren(
     element('p', undefined, `${String(passed)} of ${String(results.length)} checks passed.`),
     list,
   );
@@ -822,24 +910,41 @@ function button(label, onClick) {
   return el;
 }
 
+/**
+ * Re-run the live half and repaint, keeping the slow half's last answer.
+ *
+ * Skipped while the window is hidden: the checks are cheap, but painting a
+ * report nobody is looking at is not, and the harness has no business doing DOM
+ * work at snapshot rate in the background of somebody's fight.
+ */
+function refresh() {
+  if (!win.visible) {
+    return;
+  }
+  renderResults([...runLiveChecks(), ...slowResults]);
+}
+
+/**
+ * The full pass: the slow half as well, which is what a button press is for.
+ *
+ * The slow results are then held so a live repaint can show them without
+ * redoing a storage round trip on every target change.
+ */
 function run() {
-  win.body.replaceChildren(element('p', undefined, 'Running the checks...'));
-  runChecks()
+  report.replaceChildren(element('p', undefined, 'Running the checks...'));
+  runSlowChecks()
     .then((results) => {
-      const allPassed = renderResults(results);
-      win.body.append(controls());
+      slowResults = results;
+      const allPassed = renderResults([...runLiveChecks(), ...slowResults]);
       if (allPassed) {
         woc.log('every check passed');
       } else {
-        woc.warn(
-          'some checks failed',
-          results.filter((entry) => !entry.ok).map((e) => e.name),
-        );
+        woc.warn('some checks failed');
       }
     })
     .catch((err) => {
       woc.error('the harness itself threw', err);
-      win.body.replaceChildren(element('p', undefined, `The harness threw: ${String(err)}`));
+      report.replaceChildren(element('p', undefined, `The harness threw: ${String(err)}`));
     });
 }
 
@@ -859,7 +964,7 @@ function demoBar() {
     detail: 'a bar, drained from a frame loop',
   });
   bar.el.style.width = `${String(DEMO_WIDTH)}px`;
-  win.body.appendChild(bar.el);
+  stage.appendChild(bar.el);
 
   const startedAt = woc.now();
   const drain = () => {
@@ -984,9 +1089,44 @@ function controls() {
   return row;
 }
 
+/**
+ * Repaint on the next tick rather than on every key that moved.
+ *
+ * Several of the watched keys change on the same frame constantly: taking a
+ * target moves `target`, `casts` and `entities` at once. Without this the
+ * harness would run its live half three times to paint one answer.
+ */
+let pending = null;
+
+function scheduleRefresh() {
+  if (pending !== null) {
+    return;
+  }
+  pending = woc.setTimeout(() => {
+    pending = null;
+    refresh();
+  }, REFRESH_DEBOUNCE_MS);
+}
+
+// Subscribed for the whole session rather than only while the window is open.
+// The watcher samples a subscribed key once per animation frame, so this does
+// cost something with the report hidden, and the honest reason to accept it is
+// that this is a development addon: the alternative is unsubscribing on hide,
+// and the window's own close button gives no way to know it happened.
+for (const key of LIVE_KEYS) {
+  woc.world.on(key, scheduleRefresh);
+}
+
+/** Opening the window repaints it: it may have been hidden for a whole fight. */
+function openReport() {
+  win.show();
+  refresh();
+}
+
 woc.keys.bind('toggle', () => {
   win.toggle();
   woc.sound.play('ui_click');
+  refresh();
 });
 
 woc.keys.bind('run', () => {
@@ -999,15 +1139,14 @@ woc.ui.microButton({
   label: 'Dev Harness',
   onClick: () => {
     win.toggle();
+    refresh();
   },
 });
 
 woc.ui.menuEntry({
   id: 'harness',
   label: 'Dev Harness',
-  onClick: () => {
-    win.show();
-  },
+  onClick: openReport,
 });
 
 // A settings change re-runs the checks, which is what makes the manager's
@@ -1020,5 +1159,9 @@ woc.onSettingsChange(() => {
 woc.onDispose(() => {
   woc.log(`disposed after ${String(uptimeSeconds())}s`);
 });
+
+// Appended once, after the containers: a live repaint replaces the report and
+// must not take the buttons with it.
+win.body.insertBefore(controls(), stage);
 
 run();
