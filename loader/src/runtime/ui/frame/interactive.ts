@@ -11,7 +11,14 @@
 // `data-positioned` on the element turns that centring off (see styles.css).
 
 import interact from 'interactjs';
-import { clampBox, type FrameBox, MIN_HEIGHT, MIN_WIDTH, type Viewport } from './geometry.ts';
+import {
+  clampBox,
+  type FrameBox,
+  MIN_HEIGHT,
+  MIN_WIDTH,
+  type SizeBounds,
+  type Viewport,
+} from './geometry.ts';
 
 interface InteractiveFrameDeps {
   el: HTMLElement;
@@ -50,13 +57,14 @@ interface InteractiveFrameDeps {
    */
   measure?: () => Viewport;
   /**
-   * The smallest this frame may be. Defaults to the manager's own minimum.
+   * How small and how large this frame may be. Defaults to the manager's own
+   * minimum and to the viewport.
    *
    * Passed on to every clamp, not just the first: without it a re-clamp after a
    * drag or a viewport change silently inflates an addon frame back to the
    * manager's 360 by 220, which is a settings window rather than a HUD readout.
    */
-  min?: Viewport;
+  bounds?: SizeBounds;
 }
 
 interface InteractiveFrame {
@@ -80,8 +88,8 @@ function paint(el: HTMLElement, box: FrameBox, sized: boolean): void {
 
 /** The live box, and the only route by which it is allowed to change. */
 interface BoxKeeper {
-  /** The smallest this frame may be. The resize modifier needs it too. */
-  min: Viewport;
+  /** What the frame may be sized between. The resize modifier needs it too. */
+  bounds: SizeBounds;
   box: () => FrameBox;
   move: (next: FrameBox) => void;
 }
@@ -103,20 +111,55 @@ function createBoxKeeper(deps: InteractiveFrameDeps, resizable: boolean): BoxKee
     return { ...next, w: measured.w, h: measured.h };
   };
 
-  const min = deps.min ?? { w: MIN_WIDTH, h: MIN_HEIGHT };
+  const bounds: SizeBounds = { min: deps.bounds?.min ?? { w: MIN_WIDTH, h: MIN_HEIGHT } };
+  // Assigned rather than spread: exactOptionalPropertyTypes rejects an explicit
+  // undefined, and an absent maximum has to stay absent for clampSize to read it
+  // as "the viewport" rather than as a cap of undefined.
+  if (deps.bounds?.max !== undefined) {
+    bounds.max = deps.bounds.max;
+  }
 
-  let box = clampBox(withSize(deps.box), deps.viewport(), min);
+  let box = clampBox(withSize(deps.box), deps.viewport(), bounds);
   paint(deps.el, box, resizable);
 
   return {
-    min,
+    bounds,
     box: () => box,
     move: (next) => {
-      box = clampBox(withSize(next), deps.viewport(), min);
+      box = clampBox(withSize(next), deps.viewport(), bounds);
       paint(deps.el, box, resizable);
       deps.onBox?.(box);
     },
   };
+}
+
+/** What interactjs is told a resize may produce. Its own naming, not the kit's. */
+interface SizeLimit {
+  width: number;
+  height: number;
+}
+
+interface RestrictSizeOpts {
+  min: SizeLimit;
+  max?: SizeLimit;
+}
+
+/**
+ * The same bounds again, for interactjs to hold the gesture inside.
+ *
+ * Redundant with the clamp on paper and not in practice: the clamp decides where
+ * the frame is DRAWN, while interactjs keeps its own rect, and without this the
+ * two diverge as soon as the pointer passes a bound. The frame stops at the
+ * bound, the rect keeps growing, and the frame then does nothing at all until the
+ * pointer travels all the way back to where the rect agrees with it again.
+ */
+function restrictOpts(bounds: SizeBounds): RestrictSizeOpts {
+  const min = bounds.min ?? { w: MIN_WIDTH, h: MIN_HEIGHT };
+  const opts: RestrictSizeOpts = { min: { width: min.w, height: min.h } };
+  if (bounds.max !== undefined) {
+    opts.max = { width: bounds.max.w, height: bounds.max.h };
+  }
+  return opts;
 }
 
 /**
@@ -168,9 +211,7 @@ function attachGestures(
         },
         end: commit,
       },
-      modifiers: [
-        interact.modifiers.restrictSize({ min: { width: keeper.min.w, height: keeper.min.h } }),
-      ],
+      modifiers: [interact.modifiers.restrictSize(restrictOpts(keeper.bounds))],
     });
   }
 

@@ -186,7 +186,7 @@ describe('what it reports without a game', () => {
   it('passes every check', async () => {
     await run();
 
-    expect(await report()).toContain('25 of 25 checks passed');
+    expect(await report()).toContain('27 of 27 checks passed');
   });
 
   it('names no check as failed', async () => {

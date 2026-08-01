@@ -229,7 +229,13 @@ woc.ui.frame({ id: 'strip', resizable: true, height: 40, onMove: (box) => scaleT
 
 Use it rather than measuring `frame.el`. A measurement forces a synchronous layout, and a display that scales with its frame would pay for one on every frame it draws. It fires on a drag, on a resize at pointer rate, on the async restore of a saved box, and when the window is resized under you, but never for the initial placement, which is the size you asked for and therefore already hold. A throw inside it is caught and written to your addon's log rather than breaking the gesture the player is in the middle of.
 
-**A frame cannot be dragged smaller than the size it was created at.** So create it at the smallest you want to allow, and let the player grow it from there.
+**By default a frame cannot be dragged smaller than the size it was created at.** That catches people out, so it is worth stating plainly: `width: 400` is also a floor of 400 unless you say otherwise. Say otherwise with `minWidth` and `minHeight`, and cap the other end with `maxWidth` and `maxHeight`.
+
+```js
+woc.ui.frame({ id: 'strip', resizable: true, width: 400, height: 40, minWidth: 120, maxHeight: 96 });
+```
+
+Where the four disagree, the order is fixed: a frame is never taken below the size at which it could no longer be grabbed, the viewport beats your minimum so a frame asking to be wider than the screen can still fit one, and your minimum beats your maximum. State only the axis you mean; the other is left alone.
 
 Cooldown Bars uses the pair for its tile strip: the frame's height is the icon size, and every tile follows it through `size` on `tile.update`. The width is deliberately only room to grow into. Icons sized to fill the width would have to shrink as more cooldowns started, so they would change size in the middle of a fight, which is exactly when a player is picking one out by shape.
 
@@ -399,7 +405,38 @@ const saved = await woc.storage.keys();
 
 `storage.get` takes a fallback, so a first run needs no special case. `storage.keys` lists what you have stored, which is what an addon offering its own "clear my data" control needs.
 
-Per-character state is keyed on realm plus character name rather than on the session's entity id, which is reissued every login.
+### One character at a time
+
+`storage.character` is the same four calls, scoped to whoever is logged in. Use it for anything a player would be surprised to find shared between their tank and their alt: a layout, a threshold, a list of what this character has seen. Keep `woc.storage` for a preference that is really about the player.
+
+```js
+await woc.world.ready;
+await woc.storage.character.set('layout', { x: 20, y: 40 });
+```
+
+It is its own store rather than a view over the other one, so `layout` here and `layout` above are two different values and `keys()` on either answers only about itself. The key is derived from the realm and the character name, never from the session's entity id, which is reissued every login: keyed on that, everything would scatter across a fresh set of keys each time and read to the player as nothing ever having been saved.
+
+**A read waits for the character. A write refuses to.** Your first line runs at document-start, on the landing page, where nobody has logged in yet. A read called there simply settles later, at world entry, with the data of whoever actually logged in, which is the answer you wanted whichever character that turns out to be. A write cannot do that, because its value was decided when you called it: held until world entry, it would store something computed before anyone knew whose it was against whichever character the player then picked. So it rejects, and the error says to await `world.ready` first.
+
+## bus
+
+Publish and subscribe between addons, inside this page. An addon is one file with no imports and no shared libraries, so this is the only way two of them cooperate.
+
+```js
+// in the meter
+woc.bus.emit('totals', { top: 'Fell Shot', dps: 812 });
+
+// in the display, a different addon
+woc.bus.on('official/combat-meter', 'totals', ({ payload }) => draw(payload));
+```
+
+That is the case it exists for: a meter that publishes its totals lets somebody else write the display without forking the meter, and a boss addon that publishes a phase lets three cosmetic addons react to it.
+
+**You name the publisher you are listening to, not just a topic.** Two addons can both publish `totals` without being confused for each other, and nobody can take a name by publishing under it first. Pass `bus.anySender` when any publisher will do, and read `message.from` to see who it was. That field is stamped by the loader from the sending addon's id: a sender cannot set it, change it, or claim to be someone else, which is what makes it worth deciding anything on.
+
+Three more things shape what you can build on it. You never receive your own messages, because self-delivery is how a loop starts. Delivery is synchronous, inside your `emit` call, so keep handlers cheap and never assume one ran: nobody may be listening, and the addon you are talking to may not be installed. And there is no request-response, deliberately: awaiting a reply from an addon that may be disabled, may never have been installed, or may simply not answer is a hang with no timeout anyone chose. Publish both ways instead.
+
+A throw in your handler is logged against your addon and does not stop the message reaching anyone else. Everything you publish stays in this page and never reaches the network, but treat it as readable by every other installed addon.
 
 ## The rest of woc
 

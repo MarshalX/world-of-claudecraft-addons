@@ -16,7 +16,7 @@ import SOURCE from '../addons/cooldown-bars/main.js?raw';
 import { loadAddon } from '../loader/src/runtime/loader.ts';
 import type { InstalledAddon } from '../loader/src/shared/protocol.ts';
 import { validateManifest } from '../loader/src/shared/schema.ts';
-import { frameKey, uiNamespace } from '../loader/src/shared/storage-keys.ts';
+import { perCharacterKey, uiNamespace } from '../loader/src/shared/storage-keys.ts';
 import { liveEntity } from './fakes/entity.ts';
 import { PLAYER_ENTITY } from './fakes/frames.ts';
 import { createSharedServices, type SharedHarness } from './fakes/shared-services.ts';
@@ -116,7 +116,7 @@ async function run(
   await storage.set(`config:${FQID}`, 'values', settings);
   await Promise.all(
     Object.entries(frames).map(([frameId, state]) =>
-      storage.set(uiNamespace(FQID), frameKey('pbe', CHARACTER, frameId), state),
+      storage.set(uiNamespace(FQID), perCharacterKey('pbe', CHARACTER, frameId), state),
     ),
   );
   const cooldowns = new Map<string, number>();

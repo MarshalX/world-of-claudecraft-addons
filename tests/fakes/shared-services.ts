@@ -8,6 +8,7 @@
 // It needs a document, so a suite importing this declares happy-dom.
 
 import type { SharedServices } from '../../loader/src/runtime/api/index.ts';
+import { createBusHub } from '../../loader/src/runtime/bus/hub.ts';
 import { createKeyDispatcher } from '../../loader/src/runtime/keys/dispatcher.ts';
 import { createGameBindings } from '../../loader/src/runtime/keys/game-bindings.ts';
 import { createLogBuffer } from '../../loader/src/runtime/log/buffer.ts';
@@ -166,6 +167,7 @@ function createSharedServices(
       simNow: () => null,
     }),
     storage: hub,
+    bus: createBusHub(),
     sound: createSoundEngine({
       sink: {
         running: () => true,

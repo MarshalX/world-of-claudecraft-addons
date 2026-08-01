@@ -8,6 +8,7 @@
 // code of their own.
 
 import type { AddonInfo, GameInfo, Unsubscribe } from './addon.js';
+import type { BusApi } from './bus.js';
 import type { KeysApi } from './keys.js';
 import type { NetApi } from './net.js';
 import type { SoundApi } from './sound.js';
@@ -21,6 +22,7 @@ declare global {
 
 export type { AbilityIndex, AbilityInfo } from './abilities.js';
 export type { AddonInfo, GameInfo, Unsubscribe } from './addon.js';
+export type { BusApi, BusMessage } from './bus.js';
 export type {
   CharacterInfo,
   DeedStats,
@@ -56,7 +58,7 @@ export type { KnownSkillIcon, SkillIconClass } from './icons.generated.js';
 export type { ConflictReport, KeysApi } from './keys.js';
 export type { FrameType, NetApi, NetState, SubscribeOpts } from './net.js';
 export type { Cue, PlayOpts, SoundApi } from './sound.js';
-export type { StorageApi } from './storage.js';
+export type { CharacterStore, StorageApi } from './storage.js';
 export type {
   AbilityIconId,
   AlertOpts,
@@ -150,6 +152,8 @@ export interface WocApi {
   readonly sound: SoundApi;
   readonly keys: KeysApi;
   readonly storage: StorageApi;
+  /** Publish and subscribe between addons, in this page. */
+  readonly bus: BusApi;
 
   /** Settings declared in addon.json, hydrated before your code runs. */
   readonly settings: Readonly<Record<string, unknown>>;

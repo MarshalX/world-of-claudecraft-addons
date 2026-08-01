@@ -23,7 +23,7 @@
 
 import { diagError } from '../../../shared/diag.ts';
 import type { Channel } from '../../../shared/hosts.ts';
-import { frameKey, uiNamespace } from '../../../shared/storage-keys.ts';
+import { perCharacterKey, uiNamespace } from '../../../shared/storage-keys.ts';
 import type { StorageHub } from '../../storage/hub.ts';
 import { type FrameBox, isFrameBox } from '../frame/geometry.ts';
 
@@ -80,7 +80,7 @@ function createFrameStateStore(deps: FrameStateDeps): FrameStateStore {
     if (character === null) {
       return null;
     }
-    return frameKey(deps.channel, character, frameId);
+    return perCharacterKey(deps.channel, character, frameId);
   };
 
   return {

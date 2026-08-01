@@ -11,7 +11,7 @@
 // dragged back from" is one rule with one test, not one per surface.
 
 import type { Teardown } from '../../disposal.ts';
-import { clampBox, initialBox, type Viewport } from '../frame/geometry.ts';
+import { clampBox, initialBox, type SizeBounds, type Viewport } from '../frame/geometry.ts';
 import {
   type InteractiveFrame,
   type InteractiveFrameDeps,
@@ -70,6 +70,35 @@ function defaultSize(chrome: FrameChrome, opts: FrameOpts): Viewport {
   return { w: opts.width ?? DEFAULT_FRAME_WIDTH, h: opts.height ?? DEFAULT_FRAME_HEIGHT };
 }
 
+/**
+ * What the addon said the frame may be sized between.
+ *
+ * The minimum falls back to the OPENING SIZE, which is the behaviour every frame
+ * had before there was an option, and it is worth naming because it surprises
+ * people: a frame created at 400 wide could not then be dragged narrower than
+ * 400. The alternative fallback is the structural floor, and it was rejected as a
+ * default rather than as an idea. Changing it would silently let the player shrink
+ * every frame of every already-published addon down to 72 by 28, including the
+ * ones whose layout stops making sense well before that, and an addon that wants
+ * the floor can now say so. So the surprise stays, and `minWidth` is the way out
+ * of it rather than a new default nobody asked for.
+ *
+ * Both are absent rather than undefined when unset: exactOptionalPropertyTypes,
+ * and clampSize reads an absent maximum as the viewport.
+ */
+function sizeBounds(opts: FrameOpts, size: Viewport): SizeBounds {
+  const bounds: SizeBounds = {
+    min: { w: opts.minWidth ?? size.w, h: opts.minHeight ?? size.h },
+  };
+  if (opts.maxWidth !== undefined || opts.maxHeight !== undefined) {
+    bounds.max = {
+      w: opts.maxWidth ?? Number.POSITIVE_INFINITY,
+      h: opts.maxHeight ?? Number.POSITIVE_INFINITY,
+    };
+  }
+  return bounds;
+}
+
 /** What the drag and clamp layer is told about one frame. */
 function gestureDeps(
   deps: FrameDeps,
@@ -78,16 +107,17 @@ function gestureDeps(
   onCommit: () => void,
 ): InteractiveFrameDeps {
   const resizable = deps.opts.resizable ?? deps.chrome === 'window';
+  const bounds = sizeBounds(deps.opts, size);
   const gestures: InteractiveFrameDeps = {
     el: chrome.el,
     handle: chrome.handle,
     viewport: deps.viewport,
-    box: initialBox(deps.viewport(), size),
+    box: initialBox(deps.viewport(), size, bounds),
     onCommit,
     resizable,
-    // The size the addon asked for is also its floor. Without this every clamp
-    // after the first would inflate it back to the manager's minimum.
-    min: size,
+    // Passed to every clamp, not just the first: without it a re-clamp after a
+    // drag or a viewport change inflates the frame back to the manager's minimum.
+    bounds,
   };
   if (!resizable) {
     // A content-sized frame reports what its content made it, so the clamp works
@@ -201,7 +231,10 @@ function restoreSaved(deps: FrameDeps, size: Viewport, frame: FrameMechanics): v
         frame.settled();
         return;
       }
-      frame.interactive.place(clampBox(state.box, deps.viewport(), size));
+      // Re-derived rather than threaded through: sizeBounds is pure, and a
+      // restored box has to meet the same bounds a dragged one does, or a box
+      // saved before the addon declared a minimum would come back under it.
+      frame.interactive.place(clampBox(state.box, deps.viewport(), sizeBounds(deps.opts, size)));
       frame.restoreVisible(state.visible);
       frame.settled();
     })

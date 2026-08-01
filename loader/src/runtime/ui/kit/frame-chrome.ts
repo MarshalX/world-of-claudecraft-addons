@@ -56,6 +56,19 @@ interface FrameOpts {
   title?: string;
   width?: number;
   height?: number;
+  /**
+   * How far the player may shrink it. Defaults to the opening size.
+   *
+   * That default is what every frame did before the option existed, and it is
+   * why the option exists: a resizable frame could not be dragged narrower than
+   * the width it was created at. See kit/frame.ts sizeBounds for why the default
+   * was left alone rather than lowered to the structural floor.
+   */
+  minWidth?: number;
+  minHeight?: number;
+  /** How far the player may grow it. Defaults to the viewport. */
+  maxWidth?: number;
+  maxHeight?: number;
   /** Persist position and visibility for this character. */
   save?: boolean;
   /** Defaults to true for a window and false for a frame. */

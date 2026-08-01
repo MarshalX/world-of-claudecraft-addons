@@ -12,6 +12,7 @@
 import type { Channel } from '../shared/hosts.ts';
 import type { StorageApi } from '../shared/protocol.ts';
 import type { SharedServices } from './api/index.ts';
+import { type BusHub, createBusHub } from './bus/hub.ts';
 import { characterId } from './character.ts';
 import { parseGameVersion } from './game-version.ts';
 import { createKeyDispatcher, type KeyDispatcher } from './keys/dispatcher.ts';
@@ -43,6 +44,7 @@ interface RuntimeServices {
   /** Complete the shared services once the UI kit exists. */
   withKit: (kit: UiKit) => SharedServices;
   storage: StorageHub;
+  bus: BusHub;
   dispatcher: KeyDispatcher;
   sound: SoundEngine;
   logs: LogBuffer;
@@ -152,32 +154,29 @@ function characterWaiter(surfaces: GameSurfaces): () => Promise<void> {
   };
 }
 
-function createRuntimeServices(deps: ServicesDeps): RuntimeServices {
+/** The long-lived services, before the UI kit exists to complete them. */
+type BuiltServices = Pick<
+  RuntimeServices,
+  'bus' | 'dispatcher' | 'gameBindings' | 'logs' | 'sound' | 'storage'
+>;
+
+/**
+ * The same services, in the shape the addon API reads them through.
+ *
+ * Every reader here is a FUNCTION rather than a value, and deliberately so: the
+ * loader boots at document-start, so the game version, the character and the
+ * viewport are all things that do not exist yet at the moment this object is
+ * built and would each be captured as null forever.
+ */
+function sharedServices(deps: ServicesDeps, built: BuiltServices): Omit<SharedServices, 'kit'> {
   const { scope, surfaces } = deps;
   const doc = scope.document;
-
-  const storage = createStorageHub(deps.storage);
-  const logs = createLogBuffer();
-  const dispatcher = createKeyDispatcher({ target: scope, doc });
-
-  const sound = buildSoundEngine(scope);
-  const disarm = sound.arm(scope);
-
-  const gameBindings = createGameBindings({
-    game: () => surfaces.world.game(),
-    storage: () => safeLocalStorage(scope),
-  });
-
-  const withoutKit = {
+  return {
+    ...built,
     doc,
     window: scope,
     net: surfaces.net,
     world: surfaces.world,
-    storage,
-    sound,
-    dispatcher,
-    gameBindings,
-    logs,
     channel: deps.channel,
     host: scope.location.origin,
 
@@ -192,15 +191,43 @@ function createRuntimeServices(deps: ServicesDeps): RuntimeServices {
     viewport: () => ({ w: scope.innerWidth, h: scope.innerHeight }),
     pick: (count: number) => Math.floor(Math.random() * count),
   };
+}
+
+function createRuntimeServices(deps: ServicesDeps): RuntimeServices {
+  const { scope, surfaces } = deps;
+
+  const storage = createStorageHub(deps.storage);
+  const bus = createBusHub();
+  const logs = createLogBuffer();
+  const dispatcher = createKeyDispatcher({ target: scope, doc: scope.document });
+
+  const sound = buildSoundEngine(scope);
+  const disarm = sound.arm(scope);
+
+  const gameBindings = createGameBindings({
+    game: () => surfaces.world.game(),
+    storage: () => safeLocalStorage(scope),
+  });
+
+  const withoutKit = sharedServices(deps, {
+    storage,
+    bus,
+    sound,
+    dispatcher,
+    gameBindings,
+    logs,
+  });
 
   return {
     withKit: (kit) => ({ ...withoutKit, kit }),
     storage,
+    bus,
     dispatcher,
     sound,
     logs,
     gameBindings,
     dispose: () => {
+      bus.dispose();
       disarm();
       sound.dispose();
       dispatcher.dispose();

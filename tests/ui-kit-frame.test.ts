@@ -12,7 +12,7 @@ import { createAddonFrame } from '../loader/src/runtime/ui/kit/frame.ts';
 import { buildChrome, type FrameOpts } from '../loader/src/runtime/ui/kit/frame-chrome.ts';
 import { createFrameStateStore } from '../loader/src/runtime/ui/kit/frame-state.ts';
 import { HIDDEN_CLASS } from '../loader/src/runtime/ui/kit/frame-visibility.ts';
-import { frameKey, uiNamespace } from '../loader/src/shared/storage-keys.ts';
+import { perCharacterKey, uiNamespace } from '../loader/src/shared/storage-keys.ts';
 import { createFakeStorage, type FakeStorage } from './fakes/storage.ts';
 
 const FQID = 'official/combat-meter';
@@ -236,6 +236,81 @@ describe('sizing', () => {
   });
 });
 
+// The bounds are arithmetic and the arithmetic is proved in frame-geometry.test.ts.
+// What is proved HERE is the wiring: that an addon's four numbers reach the clamp
+// at all, on the paths a player actually reaches them by. The restore path is the
+// one worth pinning, because it is the only one that puts a box the loader did not
+// just compute back into the frame.
+describe('the size bounds', () => {
+  const saved = async (hub: FakeStorage, box: { w: number; h: number }): Promise<void> => {
+    await hub.set(uiNamespace(FQID), perCharacterKey('pbe', CHARACTER, 'strip'), {
+      box: { x: 40, y: 60, ...box },
+      visible: true,
+    });
+  };
+
+  // The regression the option exists for. Before it, the size a frame was created
+  // at was its permanent floor, so a resizable strip could never be made smaller
+  // than whatever width its addon happened to open it at.
+  it('lets a saved box come back smaller than the opening size', async () => {
+    const hub = createFakeStorage();
+    await saved(hub, { w: 140, h: 80 });
+
+    const frame = open(
+      { id: 'strip', save: true, resizable: true, width: 400, height: 200, minWidth: 100 },
+      'frame',
+      hub,
+    );
+    await vi.waitUntil(() => frame.el.style.width === '140px');
+
+    expect(frame.el.style.width).toBe('140px');
+  });
+
+  it('holds a saved box up to the minimum', async () => {
+    const hub = createFakeStorage();
+    await saved(hub, { w: 90, h: 80 });
+
+    const frame = open(
+      { id: 'strip', save: true, resizable: true, width: 400, minWidth: 200, minHeight: 120 },
+      'frame',
+      hub,
+    );
+    await vi.waitUntil(() => frame.el.style.width === '200px');
+
+    expect(frame.el.style.height).toBe('120px');
+  });
+
+  it('holds a saved box down to the maximum', async () => {
+    const hub = createFakeStorage();
+    await saved(hub, { w: 900, h: 700 });
+
+    const frame = open(
+      { id: 'strip', save: true, resizable: true, width: 400, maxWidth: 500, maxHeight: 300 },
+      'frame',
+      hub,
+    );
+    await vi.waitUntil(() => frame.el.style.width === '500px');
+
+    expect(frame.el.style.height).toBe('300px');
+  });
+
+  // An addon that states one axis has said nothing about the other, and the other
+  // must not become bounded by whatever the first one was.
+  it('leaves the axis an addon did not bound alone', async () => {
+    const hub = createFakeStorage();
+    await saved(hub, { w: 900, h: 700 });
+
+    const frame = open(
+      { id: 'strip', save: true, resizable: true, width: 400, maxWidth: 500 },
+      'frame',
+      hub,
+    );
+    await vi.waitUntil(() => frame.el.style.width === '500px');
+
+    expect(frame.el.style.height).toBe('700px');
+  });
+});
+
 // Telling an addon where its frame ended up.
 //
 // The loader owns the box: it writes the position, the size of a resizable frame,
@@ -246,7 +321,7 @@ describe('sizing', () => {
 describe('onMove', () => {
   it('reports the box a saved state restored', async () => {
     const hub = createFakeStorage();
-    await hub.set(uiNamespace(FQID), frameKey('pbe', CHARACTER, 'meter'), {
+    await hub.set(uiNamespace(FQID), perCharacterKey('pbe', CHARACTER, 'meter'), {
       box: { x: 40, y: 60, w: 240, h: 120 },
       visible: true,
     });
@@ -354,7 +429,7 @@ describe('a frame whose state is saved', () => {
   // The one the player notices: a window they closed came back on every reload.
   it('stays hidden when that is what was stored', async () => {
     const hub = createFakeStorage();
-    await hub.set(uiNamespace(FQID), frameKey('pbe', CHARACTER, 'meter'), {
+    await hub.set(uiNamespace(FQID), perCharacterKey('pbe', CHARACTER, 'meter'), {
       box: { x: 40, y: 60, w: 240, h: 120 },
       visible: false,
     });
@@ -369,7 +444,7 @@ describe('a frame whose state is saved', () => {
   // pressed the addon's own toggle key on the loading screen. Their press wins.
   it('does not overrule a toggle pressed before the answer arrived', async () => {
     const hub = createFakeStorage();
-    await hub.set(uiNamespace(FQID), frameKey('pbe', CHARACTER, 'meter'), {
+    await hub.set(uiNamespace(FQID), perCharacterKey('pbe', CHARACTER, 'meter'), {
       box: { x: 40, y: 60, w: 240, h: 120 },
       visible: false,
     });
@@ -385,8 +460,8 @@ describe('a frame whose state is saved', () => {
   // rather than against the default one it was sitting at when pressed.
   it('records a press made before the answer, without losing the saved box', async () => {
     const hub = createFakeStorage();
-    const key = `${uiNamespace(FQID)}/${frameKey('pbe', CHARACTER, 'meter')}`;
-    await hub.set(uiNamespace(FQID), frameKey('pbe', CHARACTER, 'meter'), {
+    const key = `${uiNamespace(FQID)}/${perCharacterKey('pbe', CHARACTER, 'meter')}`;
+    await hub.set(uiNamespace(FQID), perCharacterKey('pbe', CHARACTER, 'meter'), {
       box: { x: 40, y: 60, w: 240, h: 120 },
       visible: false,
     });
@@ -424,7 +499,7 @@ describe('persistence', () => {
     frame.hide();
     await vi.waitFor(() => expect(Object.keys(hub.dump())).toHaveLength(1));
 
-    const key = `${uiNamespace(FQID)}/${frameKey('pbe', CHARACTER, 'meter')}`;
+    const key = `${uiNamespace(FQID)}/${perCharacterKey('pbe', CHARACTER, 'meter')}`;
     expect(hub.dump()[key]).toMatchObject({ visible: false });
   });
 
@@ -441,7 +516,7 @@ describe('persistence', () => {
 
     drag(frame.el.querySelector<HTMLElement>('.woc-titlebar') as HTMLElement);
 
-    const key = `${uiNamespace(FQID)}/${frameKey('pbe', CHARACTER, 'meter')}`;
+    const key = `${uiNamespace(FQID)}/${perCharacterKey('pbe', CHARACTER, 'meter')}`;
     await vi.waitFor(() => {
       expect(hub.dump()[key]).toBeDefined();
     });
@@ -460,7 +535,7 @@ describe('persistence', () => {
 
   it('restores a saved position and visibility', async () => {
     const hub = createFakeStorage();
-    await hub.set(uiNamespace(FQID), frameKey('pbe', CHARACTER, 'meter'), {
+    await hub.set(uiNamespace(FQID), perCharacterKey('pbe', CHARACTER, 'meter'), {
       box: { x: 40, y: 60, w: 240, h: 120 },
       visible: false,
     });
@@ -477,7 +552,7 @@ describe('persistence', () => {
   // strand the frame off screen with nothing to say why.
   it('ignores a stored state that is not one', async () => {
     const hub = createFakeStorage();
-    await hub.set(uiNamespace(FQID), frameKey('pbe', CHARACTER, 'meter'), {
+    await hub.set(uiNamespace(FQID), perCharacterKey('pbe', CHARACTER, 'meter'), {
       box: { x: Number.NaN, y: 0, w: 1, h: 1 },
       visible: true,
     });
@@ -517,7 +592,7 @@ describe('persistence', () => {
     const known = new Promise<void>((resolve) => {
       arrive = resolve;
     });
-    await hub.set(uiNamespace(FQID), frameKey('pbe', CHARACTER, 'meter'), {
+    await hub.set(uiNamespace(FQID), perCharacterKey('pbe', CHARACTER, 'meter'), {
       box: { x: 7, y: 8, w: 9, h: 10 },
       visible: true,
     });
@@ -575,7 +650,7 @@ describe('destroy', () => {
   // has already been disabled.
   it('does not resurrect a destroyed frame when its saved state arrives', async () => {
     const hub = createFakeStorage();
-    await hub.set(uiNamespace(FQID), frameKey('pbe', CHARACTER, 'meter'), {
+    await hub.set(uiNamespace(FQID), perCharacterKey('pbe', CHARACTER, 'meter'), {
       box: { x: 40, y: 60, w: 240, h: 120 },
       visible: true,
     });

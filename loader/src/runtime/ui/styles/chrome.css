@@ -282,22 +282,60 @@
 
 /* The arrange-your-UI mode (ui/kit/unlock.ts).
  *
- * While the root carries this class every addon frame is outlined and labelled,
- * so a frame can be found and grabbed even when it is drawing nothing. The
- * minimum size is the load-bearing part: a bare overlay whose content list is
+ * While the root carries this class every addon frame is outlined, washed and
+ * labelled, so a frame can be found and grabbed even when it is drawing nothing.
+ * The minimum size is the load-bearing part: a bare overlay whose content list is
  * empty is zero pixels, and an outline around zero pixels is still nothing to
  * aim at.
+ *
+ * It is drawn LOUDLY on purpose, and the first version was not. A hairline in the
+ * default border colour is a reasonable outline on a blank page and close to
+ * invisible over a game: the HUD is dense, the background is whatever the player
+ * is standing in, and the one moment this mode is on is the moment the player is
+ * hunting for a frame they have already failed to find. There is no cost to being
+ * loud here, because the mode is off in play and every pixel of it goes away with
+ * the switch.
+ *
+ * Gold rather than the border token because gold is what this game accents WITH,
+ * so the outline reads as a control rather than as a rendering fault.
  *
  * Only addon frames, never the manager: the manager is a window the player
  * already opened deliberately and can already grab by its title bar, and
  * outlining it would put a label over the control that turns the mode off.
  */
 #woc-addons.woc-unlocked .woc-addon-frame {
-  outline: 1px dashed var(--color-border-default, rgb(78 61 29));
-  outline-offset: 2px;
+  /* `outline` rather than a border or a shadow, and not only because it takes
+     part in no layout: the bare density resets `border` and `box-shadow` to strip
+     its chrome, at a specificity this rule does not beat, so either of those would
+     be drawn on every frame EXCEPT the empty overlay this mode exists for. */
+  outline: 2px dashed var(--gold, rgb(255 209 0));
+  outline-offset: 3px;
   min-width: 120px;
-  min-height: 28px;
+  /* The tap-target floor the game holds every control to, rather than the 28px
+     structural floor a frame is allowed to shrink to. This mode is one the player
+     OPERATES, and an empty frame is a target before it is a frame. */
+  min-height: 40px;
   cursor: move;
+}
+
+/* The area, not just the edge. An empty bare frame outlined alone is a hairline
+   rectangle around nothing, which says where a frame's border is without saying
+   that there is a frame there to grab.
+
+   `opacity` on a dedicated element rather than a translucent colour, the same way
+   ui/styles/bar.css tints a fill: the tokens are opaque and a var() cannot be
+   given alpha without color-mix. Over the top rather than behind, so it tints a
+   panel frame as well as a bare one, and it is what makes the whole surface read
+   as claimed by the mode. `pointer-events: none` keeps it out of the drag it is
+   advertising. */
+#woc-addons.woc-unlocked .woc-addon-frame::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: var(--gold, rgb(255 209 0));
+  opacity: 0.12;
+  border-radius: inherit;
+  pointer-events: none;
 }
 
 /* The label comes off the attributes the frame already carries, so nothing has
@@ -307,14 +345,18 @@
   position: absolute;
   bottom: 100%;
   left: 0;
-  margin-bottom: 3px;
-  padding: 1px 5px;
-  font-size: 11px;
+  margin-bottom: 5px;
+  padding: 2px 7px;
+  font-size: 12px;
+  font-weight: 600;
   line-height: 1.5;
   white-space: nowrap;
-  color: var(--color-text-muted, rgb(153 141 106));
+  color: var(--gold, rgb(255 209 0));
   background: var(--panel-base, rgb(21 21 31));
-  border: 1px solid var(--color-border-default, rgb(78 61 29));
+  border: 1px solid var(--gold-dim, rgb(200 168 56));
   border-radius: var(--radius-sm, 4px);
+  /* The frame it names may be one pixel of someone else's overlay, so the label
+     must not be the thing that is hidden behind it. */
+  box-shadow: 0 1px 4px rgb(0 0 0 / 0.6);
   pointer-events: none;
 }

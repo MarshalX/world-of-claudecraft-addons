@@ -187,6 +187,102 @@ async function checkStorage() {
 }
 
 /**
+ * The per-character store.
+ *
+ * The FIRST write is what decides which half of this runs, rather than a reading
+ * of `world.player`. The two do move together in the loader, since both come off
+ * the same backend, but inferring one from the other would make this check fail
+ * whenever that coupling was the thing that broke, which is the reverse of useful.
+ * Asking the store is the only question with an authoritative answer.
+ *
+ * Which half runs is therefore reported rather than asserted. The refusal itself
+ * has a unit suite with a fake that can hold world entry open; what cannot be
+ * checked anywhere but here is that any of this reached the object an addon is
+ * handed, and that a real round trip through the userscript manager comes back.
+ */
+async function checkCharacterStorage() {
+  const store = woc.storage.character;
+  if (typeof store?.set !== 'function') {
+    return result('character storage', false, 'storage.character is not on the object');
+  }
+  const key = 'harness-probe';
+  // Not a read, deliberately: a read before world entry is CONTRACTED not to
+  // settle, so awaiting one here would hang the slow half for the session.
+  const refusal = await store
+    .set(key, PROBE_VALUE)
+    .then(() => null)
+    .catch((err) => String(err));
+  if (refusal !== null) {
+    return result('character storage', true, 'no character yet, so a write was refused');
+  }
+
+  const read = await store.get(key);
+  const keys = await store.keys();
+  await store.delete(key);
+  const gone = await store.get(key, 'absent');
+
+  if (JSON.stringify(read) !== JSON.stringify(PROBE_VALUE)) {
+    return result('character storage', false, `read back ${JSON.stringify(read)}`);
+  }
+  // The derivation has to come back OFF: a raw listing would hand this addon the
+  // key with the realm and character still on it, and every other character's too.
+  if (!keys.includes(key)) {
+    return result('character storage', false, `keys() did not list it: ${keys.join(', ')}`);
+  }
+  if (gone !== 'absent') {
+    return result('character storage', false, 'delete left the value behind');
+  }
+  // Separate stores, not one with a prefix. Written last so the account-wide key
+  // it leaves behind is the one checkStorage already cleans up.
+  await woc.storage.set(key, 'account-wide');
+  const stillMine = await store.get(key, 'absent');
+  await woc.storage.delete(key);
+  if (stillMine !== 'absent') {
+    return result('character storage', false, 'an account-wide key was visible as this character');
+  }
+  return result('character storage', true, `round trip over ${String(keys.length)} key(s)`);
+}
+
+/**
+ * The bus, checked against ITSELF, which is the only thing one addon can do.
+ *
+ * The harness cannot prove two addons reach each other, because it is one addon
+ * and the loader deliberately never delivers anybody their own messages. So what
+ * is checked here is exactly that refusal, plus the surface being callable and
+ * the wildcard being a real value rather than undefined. A second addon on the
+ * marketplace publishing to it would be the only way to check delivery, and it
+ * would be checking the hub's unit suite a second time.
+ */
+function checkBus() {
+  const { bus } = woc;
+  if (typeof bus?.emit !== 'function' || typeof bus.on !== 'function') {
+    return result('bus', false, 'woc.bus is not callable');
+  }
+  if (typeof bus.anySender !== 'string' || bus.anySender === '') {
+    return result('bus', false, `anySender is ${typeOf(bus.anySender)}`);
+  }
+  let heard = 0;
+  const offOwn = bus.on(woc.addon.fqid, 'harness-probe', () => {
+    heard += 1;
+  });
+  const offAny = bus.on(bus.anySender, 'harness-probe', () => {
+    heard += 1;
+  });
+  bus.emit('harness-probe', PROBE_VALUE);
+  offOwn();
+  offAny();
+
+  if (heard > 0) {
+    return result('bus', false, `an addon was handed its own message ${String(heard)} time(s)`);
+  }
+  return result(
+    'bus',
+    true,
+    `callable, and does not talk to itself (anySender "${bus.anySender}")`,
+  );
+}
+
+/**
  * The cue list is empty until the SFX pack has been fetched, and `preload`
  * resolving is what says it has been. Reading `cues()` on the addon's first pass
  * is a race with that fetch, so preloading nothing is how to wait for it.
@@ -687,6 +783,7 @@ const STATIC_CHECKS = [
   checkTile,
   checkFields,
   checkAnchor,
+  checkBus,
   checkNet,
   checkShadowedGlobals,
 ];
@@ -725,7 +822,13 @@ const LIVE_KEYS = [
  * changes would be real waste to answer a question whose answer cannot move.
  */
 async function runSlowChecks() {
-  return await Promise.all([checkStorage(), checkSound(), checkTimers(), checkSkillArt()]);
+  return await Promise.all([
+    checkStorage(),
+    checkCharacterStorage(),
+    checkSound(),
+    checkTimers(),
+    checkSkillArt(),
+  ]);
 }
 
 function runLiveChecks() {
