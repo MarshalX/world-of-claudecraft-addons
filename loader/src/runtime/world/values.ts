@@ -13,7 +13,9 @@ import type { AbilityIndex } from './abilities.ts';
 import type { CharacterInfo, ProfessionInfo, TalentInfo } from './character.ts';
 import type { CombatState } from './combat.ts';
 import type { EntityCast, Hazard } from './derived.ts';
+import type { EncounterInfo } from './encounter.ts';
 import type { Aura, Entity, EquipSlot, InvSlot, PartyInfo, WorldQuests } from './game-types.ts';
+import type { GroupInfo } from './group.ts';
 
 export interface WorldValues {
   player: Entity | null;
@@ -35,6 +37,8 @@ export interface WorldValues {
   character: CharacterInfo | null;
   talents: TalentInfo | null;
   professions: ProfessionInfo | null;
+  group: GroupInfo | null;
+  encounter: EncounterInfo | null;
   quests: WorldQuests | null;
   cooldowns: ReadonlyMap<string, number> | null;
   auras: readonly Aura[] | null;

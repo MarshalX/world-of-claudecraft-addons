@@ -19,7 +19,10 @@ import {
 } from '../../loader/src/runtime/world/character.ts';
 import { type CombatState, readCombat } from '../../loader/src/runtime/world/combat.ts';
 import { castsOf, type EntityCast, type Hazard } from '../../loader/src/runtime/world/derived.ts';
+import { type EncounterInfo, readEncounter } from '../../loader/src/runtime/world/encounter.ts';
 import type { Aura, Entity, WorldQuests } from '../../loader/src/runtime/world/game-types.ts';
+import { type GroupInfo, readGroup } from '../../loader/src/runtime/world/group.ts';
+import { readThreat, type ThreatTable } from '../../loader/src/runtime/world/threat.ts';
 import { createWorldWatcher, type WorldWatcher } from '../../loader/src/runtime/world/watch.ts';
 import { PLAYER_ENTITY } from './frames.ts';
 
@@ -29,6 +32,8 @@ export interface LiveWorld {
   hazards: Hazard[] | null;
   /** The minimap's zone label, which the loader reads from the DOM in the real one. */
   zone: string | null;
+  /** The sim clock, which the loader tracks off the snapshot head in the real one. */
+  simNow: number | null;
   markers: Map<number, number> | null;
   /** The game's resolved ability list, in its own shape: entries carrying a `def`. */
   known: unknown[];
@@ -51,6 +56,7 @@ export function watchHarness(): WatchHarness {
     entities: new Map<number, unknown>(),
     hazards: null,
     zone: null,
+    simNow: null,
     markers: null,
     known: [],
   };
@@ -106,6 +112,17 @@ export function watchHarness(): WatchHarness {
     get professions(): ProfessionInfo | null {
       return readProfessions(live);
     },
+    get group(): GroupInfo | null {
+      return readGroup(live, live.simNow);
+    },
+    get encounter(): EncounterInfo | null {
+      return readEncounter(live);
+    },
+    threat: (entityId: number): ThreatTable =>
+      readThreat(
+        (live.entities.get(entityId) as Entity | undefined) ?? null,
+        (live.player as { id?: number }).id ?? null,
+      ),
     get quests(): WorldQuests {
       return { log: null, done: null };
     },

@@ -8,6 +8,7 @@
 
 import { fieldNumber, fieldString, fieldValue } from '../net/frames.ts';
 import { abilityIndexSignature } from './abilities.ts';
+import { encounterSignature, groupSignature } from './signature-group.ts';
 import { characterSignature, countsSignature, talentSignature } from './signature-sheet.ts';
 import {
   auraSignature,
@@ -38,6 +39,8 @@ const KEYS = [
   'character',
   'talents',
   'professions',
+  'group',
+  'encounter',
   'quests',
   'cooldowns',
   'auras',
@@ -50,17 +53,30 @@ const KEYS = [
 ] as const;
 
 /**
- * The three character-sheet keys, split out to keep the switch below readable.
+ * The keys about the player's own record and their group, split out to keep the
+ * switch below inside a function body.
  *
  * They share nothing with the world keys around them: those describe what is
- * happening near the player, and these describe the player's own record.
+ * happening near the player, and these describe what the player and their group
+ * have.
  */
-function sheetCapture(key: 'character' | 'talents' | 'professions', value: unknown): string {
+function sheetCapture(
+  key: 'character' | 'talents' | 'professions' | 'group' | 'encounter',
+  value: unknown,
+): string {
   if (key === 'character') {
     return characterSignature(value);
   }
   if (key === 'talents') {
     return talentSignature(value);
+  }
+  // Which rolls are open and which lockouts stand, never how long is left on
+  // either: a roll's countdown moves every frame and a lockout's is hours.
+  if (key === 'group') {
+    return groupSignature(value);
+  }
+  if (key === 'encounter') {
+    return encounterSignature(value);
   }
   // Two counter maps, so the signature is the counters themselves: a skill only
   // moves when the player did something worth repainting for.
@@ -127,6 +143,8 @@ export function capture(key: WorldKey, value: unknown): Capture {
     case 'character':
     case 'talents':
     case 'professions':
+    case 'group':
+    case 'encounter':
       return sheetCapture(key, value);
     case 'quests':
       return questSignature(value);

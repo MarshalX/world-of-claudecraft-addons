@@ -43,6 +43,15 @@ export type {
   Vec3,
   WeaponInfo,
 } from './entity.js';
+export type {
+  EncounterInfo,
+  GroupInfo,
+  LootRoll,
+  MasterLoot,
+  RunInfo,
+  ThreatRow,
+  ThreatTable,
+} from './group.js';
 export type { KnownSkillIcon, SkillIconClass } from './icons.generated.js';
 export type { ConflictReport, KeysApi } from './keys.js';
 export type { FrameType, NetApi, NetState, SubscribeOpts } from './net.js';

@@ -23,6 +23,7 @@ import {
 import type { CharacterInfo, ProfessionInfo, TalentInfo } from '../world/character.ts';
 import type { CombatState } from '../world/combat.ts';
 import type { EntityCast, Hazard } from '../world/derived.ts';
+import type { EncounterInfo } from '../world/encounter.ts';
 import { mergeLive } from '../world/facade.ts';
 import type {
   Aura,
@@ -33,8 +34,10 @@ import type {
   PartyMemberAura,
   WorldQuests,
 } from '../world/game-types.ts';
+import type { GroupInfo } from '../world/group.ts';
 import type { WorldHub } from '../world/hub.ts';
 import { isWorldKey, WORLD_KEYS, type WorldKey } from '../world/signature.ts';
+import { NO_THREAT, type ThreatTable } from '../world/threat.ts';
 import { resolveUnit, type UnitContext, type UnitToken } from '../world/units.ts';
 import type { WorldValues } from '../world/values.ts';
 import { derivedReads, emptyEntities, fromBackend, gameReads, selfReads } from './world-reads.ts';
@@ -75,6 +78,14 @@ function lookups(hub: WorldHub) {
         return NONE;
       }
       return filterAuras(unit.auras, query, playerIdOf(ctx));
+    },
+
+    threat: (entityId: number): ThreatTable => {
+      const backend = hub.backend();
+      if (backend === null) {
+        return NO_THREAT;
+      }
+      return backend.threat(entityId);
     },
 
     partyAuras: (pid: number, query: PartyAuraQuery = {}): readonly PartyMemberAura[] => {
@@ -144,6 +155,13 @@ export interface WorldApi {
   readonly talents: TalentInfo | null;
   /** The two profession counter maps. See `world/character.ts` for what is left out. */
   readonly professions: ProfessionInfo | null;
+  /** Loot rolls, master loot and raid lockouts. */
+  readonly group: GroupInfo | null;
+  /** The instanced run in progress, thin by design. */
+  readonly encounter: EncounterInfo | null;
+
+  /** One entity's hate table, sorted and measured against you. */
+  threat: (entityId: number) => ThreatTable;
   readonly quests: WorldQuests | null;
   readonly cooldowns: ReadonlyMap<string, number> | null;
   readonly auras: readonly Aura[] | null;

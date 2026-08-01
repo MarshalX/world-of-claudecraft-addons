@@ -149,6 +149,7 @@ function createSharedServices(
       lastDamageAt: () => null,
       now: () => 0,
       zoneName: () => null,
+      simNow: () => null,
     }),
     storage: hub,
     sound: createSoundEngine({

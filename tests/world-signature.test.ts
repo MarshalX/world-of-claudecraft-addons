@@ -34,6 +34,8 @@ describe('world keys', () => {
       'character',
       'talents',
       'professions',
+      'group',
+      'encounter',
       'quests',
       'cooldowns',
       'auras',

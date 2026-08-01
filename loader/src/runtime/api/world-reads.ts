@@ -10,6 +10,7 @@ import type { WorldBackend } from '../world/backend.ts';
 import type { CharacterInfo, ProfessionInfo, TalentInfo } from '../world/character.ts';
 import { type CombatState, OUT_OF_COMBAT } from '../world/combat.ts';
 import type { EntityCast, Hazard } from '../world/derived.ts';
+import type { EncounterInfo } from '../world/encounter.ts';
 import type {
   Aura,
   Entity,
@@ -18,6 +19,7 @@ import type {
   PartyInfo,
   WorldQuests,
 } from '../world/game-types.ts';
+import type { GroupInfo } from '../world/group.ts';
 import type { WorldHub } from '../world/hub.ts';
 import { readonlyMapView } from '../world/readonly-map.ts';
 
@@ -136,6 +138,14 @@ export function selfReads(hub: WorldHub) {
 
     get professions(): ProfessionInfo | null {
       return fromBackend(hub, (backend) => backend.professions);
+    },
+
+    get group(): GroupInfo | null {
+      return fromBackend(hub, (backend) => backend.group);
+    },
+
+    get encounter(): EncounterInfo | null {
+      return fromBackend(hub, (backend) => backend.encounter);
     },
   };
 }

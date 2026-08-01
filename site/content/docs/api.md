@@ -99,6 +99,29 @@ A counter at 0 in `deedStats` genuinely means it never happened. That is worth s
 
 `level` is not here, and not because it was left out: the game writes it on the entity record rather than on the self payload, so it is `world.player.level`. That is worth more than a copy here would be, because it means every entity carries one and you can read a mob's level or another player's the same way.
 
+### The group, the run, and threat
+
+```js
+woc.world.group           // loot rolls you owe an answer, master loot, lockouts
+woc.world.encounter       // the instanced run you are inside, and your clears
+woc.world.threat(id)      // one mob's hate table, measured against you
+```
+
+`threat` is the server's own threat model rather than anything derived on the client, so a pull warning built on it agrees with the decision the mob is about to make:
+
+```js
+const table = woc.world.threat(woc.world.target.id);
+if (table.share !== null && table.share > 0.9) warn('about to pull');
+```
+
+The table is capped at its top eight rows, so it tells you who is about to pull and cannot tell you where the twentieth person in a raid stands. It exists only for a **mob in combat**, so an empty reading means "not fighting" or "not a mob", never "everyone is at zero". Being absent from a table is not the same as being at zero on it, so `mine` is `null` in the first case.
+
+**The two kinds of time on this API meet here**, and the difference is not cosmetic. A loot roll's `remaining` is seconds, like every other timer: the game sends a deadline on its own sim clock, which nothing hands an addon, so the loader tracks that clock off the snapshot and does the subtraction for you. It is `null` only in the window between your addon starting and the first snapshot arriving. A raid lockout is the opposite: an absolute epoch millisecond stamp, published exactly as sent, because that form survives a reconnect and compares directly against `Date.now()`.
+
+A loot roll is also one of the few places an item id arrives with a readable `itemName` beside it.
+
+`encounter` is deliberately narrow: which run, how far through, and whether it is over. The game's own run record also carries module lists, objective state, affixes and rite state, and that is content moving faster than anything else this API reads, so an addon written against the wide shape would break on an update to a corner of it nobody was using. `world.raw` is there if you need the rest.
+
 Combat state, all of it read-per-frame rather than pushed:
 
 ```js

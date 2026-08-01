@@ -51,6 +51,8 @@ const WORLD_KEYS = [
   'character',
   'talents',
   'professions',
+  'group',
+  'encounter',
   'quests',
   'cooldowns',
   'auras',
@@ -508,6 +510,7 @@ const LIVE_CHECKS = [
   checkAuraQueries,
   checkHoldings,
   checkCharacter,
+  checkGroup,
   checkCasts,
 ];
 
@@ -545,6 +548,8 @@ const LIVE_KEYS = [
   'talents',
   'abilities',
   'casts',
+  'group',
+  'encounter',
 ];
 
 /**
@@ -691,6 +696,69 @@ function checkCharacter() {
     true,
     `${String(character.deeds.size)} deeds, renown ${String(character.renown)}, ` +
       `${String(Object.keys(talents.rows).length)} talent rows`,
+  );
+}
+
+/** The player's own row straight off the entity, for comparing the projection against. */
+function rawThreat(entity, playerId) {
+  if (!(entity.threat instanceof Map)) {
+    return null;
+  }
+  return entity.threat.get(playerId) ?? null;
+}
+
+function runWord(current) {
+  if (current === null) {
+    return 'not in a run';
+  }
+  return `${current.delveId} ${String(current.moduleIndex)}/${String(current.moduleCount)}`;
+}
+
+/**
+ * The group, the run, and a mob's hate table.
+ *
+ * The threat half is checked against the entity it came from rather than against
+ * a number: the rows must be sorted, and the player's own row must agree with
+ * the raw table. A projection that quietly stopped sorting would still look
+ * plausible on screen, and a pull warning built on it would fire at the wrong
+ * moment.
+ *
+ * The loot roll half watches the clock conversion. A roll whose `remaining` is
+ * null while the world is up means the loader never got the sim's clock off the
+ * snapshot, which is silent everywhere else.
+ */
+function checkGroup() {
+  const { group, encounter, threat, target } = woc.world;
+  if (group === null || encounter === null) {
+    return result('group', true, 'no world yet');
+  }
+  const unclocked = group.rolls.filter((roll) => roll.remaining === null);
+  if (unclocked.length > 0) {
+    return result('group', false, `${String(unclocked.length)} rolls with no clock to time them`);
+  }
+  if (target !== null) {
+    const table = threat(target.id);
+    const sorted = [...table.rows].sort((a, b) => b.threat - a.threat);
+    if (table.rows.some((row, at) => row.threat !== sorted[at].threat)) {
+      return result('group', false, 'the hate table came back unsorted');
+    }
+    const raw = rawThreat(target, woc.world.player.id);
+    if (table.mine !== raw) {
+      return result('group', false, `mine is ${String(table.mine)}, the table says ${String(raw)}`);
+    }
+    if (table.rows.length > 0) {
+      return result(
+        'group',
+        true,
+        `${String(table.rows.length)} on the hate table, mine ${String(table.mine)} of ${String(table.top)}`,
+      );
+    }
+  }
+  const inside = runWord(encounter.run);
+  return result(
+    'group',
+    true,
+    `${String(group.rolls.length)} rolls, ${String(group.lockouts.size)} lockouts, ${inside}`,
   );
 }
 

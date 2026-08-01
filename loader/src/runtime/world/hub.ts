@@ -63,6 +63,7 @@ export function createWorldHub(deps: WorldHubDeps): WorldHub {
       lastDamageAt: deps.lastDamageAt,
       now: deps.now,
       zoneName: deps.zoneName,
+      simNow: deps.simNow,
     });
     if (backend === null) {
       throw new Error('__game has no world member, so the world API cannot be backed');

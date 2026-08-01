@@ -23,6 +23,7 @@ import {
 } from './character.ts';
 import { type CombatState, readCombat } from './combat.ts';
 import { castsOf, type EntityCast, type Hazard, hazardsOf, markersOf } from './derived.ts';
+import { type EncounterInfo, readEncounter } from './encounter.ts';
 import { mergeLive } from './facade.ts';
 import type {
   Aura,
@@ -33,7 +34,9 @@ import type {
   QuestProgress,
   WorldQuests,
 } from './game-types.ts';
+import { type GroupInfo, readGroup } from './group.ts';
 import { readonlyMapView } from './readonly-map.ts';
+import { readThreat, type ThreatTable } from './threat.ts';
 
 const NO_ENTITIES: ReadonlyMap<number, Entity> = new Map<number, Entity>();
 
@@ -180,6 +183,12 @@ export interface WorldBackend {
   readonly character: CharacterInfo | null;
   readonly talents: TalentInfo | null;
   readonly professions: ProfessionInfo | null;
+  /** Loot rolls, master loot and raid lockouts. See `world/group.ts`. */
+  readonly group: GroupInfo | null;
+  /** The instanced run in progress, thin by design. See `world/encounter.ts`. */
+  readonly encounter: EncounterInfo | null;
+  /** One entity's hate table, measured against the player. */
+  readonly threat: (entityId: number) => ThreatTable;
   readonly quests: WorldQuests;
   /**
    * Ability id to seconds remaining.
@@ -228,6 +237,8 @@ export interface WorldBackend {
 export interface BackendDeps {
   /** When damage involving the player last landed. See `world/combat-clock.ts`. */
   lastDamageAt: () => number | null;
+  /** The sim's own clock, which deadlines are measured against. */
+  simNow: () => number | null;
   now: () => number;
   /**
    * The zone name off the game's own minimap label.
@@ -293,6 +304,17 @@ export function createGameBackend(game: unknown, deps: BackendDeps): WorldBacken
     get professions(): ProfessionInfo | null {
       return readProfessions(world);
     },
+
+    get group(): GroupInfo | null {
+      return readGroup(world, deps.simNow());
+    },
+
+    get encounter(): EncounterInfo | null {
+      return readEncounter(world);
+    },
+
+    threat: (entityId: number): ThreatTable =>
+      readThreat(entities().get(entityId) ?? null, readAs<Entity>(world, 'player')?.id ?? null),
 
     raw: world,
   });

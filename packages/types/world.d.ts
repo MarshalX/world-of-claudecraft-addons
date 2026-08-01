@@ -8,6 +8,7 @@ import type { AbilityIndex } from './abilities.js';
 import type { Unsubscribe } from './addon.js';
 import type { CharacterInfo, ProfessionInfo, TalentInfo } from './character.js';
 import type { Aura, AuraKind, Entity, ResourceType } from './entity.js';
+import type { EncounterInfo, GroupInfo, ThreatTable } from './group.js';
 
 /** A compact aura summary for a party row. Not the full `Aura`. */
 export interface PartyMemberAura {
@@ -235,6 +236,8 @@ export interface WorldValues {
   character: CharacterInfo | null;
   talents: TalentInfo | null;
   professions: ProfessionInfo | null;
+  group: GroupInfo | null;
+  encounter: EncounterInfo | null;
   quests: WorldQuests | null;
   cooldowns: ReadonlyMap<string, number> | null;
   auras: readonly Aura[] | null;
@@ -329,6 +332,26 @@ export interface WorldApi {
 
   /** Your profession skill counters. See `ProfessionInfo` for what is left out. */
   readonly professions: ProfessionInfo | null;
+
+  /** Loot rolls you have been asked to answer, master loot, and raid lockouts. */
+  readonly group: GroupInfo | null;
+
+  /** The instanced run you are inside, or null out in the world. */
+  readonly encounter: EncounterInfo | null;
+
+  /**
+   * One mob's hate table, sorted and measured against you.
+   *
+   * The server's own threat model, so a pull warning built on it agrees with the
+   * decision the mob is about to make. Empty for anything that is not a mob in
+   * combat.
+   *
+   * ```js
+   * const table = woc.world.threat(woc.world.target.id);
+   * if (table.share !== null && table.share > 0.9) warn('about to pull');
+   * ```
+   */
+  threat: (entityId: number) => ThreatTable;
 
   readonly quests: WorldQuests | null;
   /** Your ability cooldowns: ability id to seconds remaining. */

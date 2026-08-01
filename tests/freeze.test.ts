@@ -113,6 +113,7 @@ async function worldHarness() {
     lastDamageAt: () => null,
     now: () => 0,
     zoneName: () => null,
+    simNow: () => null,
   });
   await hub.ready;
 
