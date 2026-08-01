@@ -1,10 +1,10 @@
 ---
 title: Patterns
 order: 4
-summary: The four things nobody derives from the API surface, each learned the expensive way.
+summary: The things nobody derives from the API surface, each learned the expensive way.
 ---
 
-Everything on this page is invisible in a signature. Three of the four shipped as bugs first.
+Everything on this page is invisible in a signature. Most of it shipped as a bug first.
 
 ## Subscribe for the set, animate from the read
 
@@ -40,6 +40,18 @@ woc.onDispose(() => observer.disconnect());
 
 Use `woc.setTimeout` and `woc.requestAnimationFrame` rather than the page's, and register anything else with `woc.onDispose`.
 
+## Redrawing a list moves every row in it
+
+`appendChild` on an element that is already in the document does not leave it where it is. It removes it and inserts it again. So the obvious way to redraw a sorted list, appending every row in order, moves every row on every repaint even when nothing has changed position.
+
+The churn is the smaller cost. The one that bites is that **a browser drops an element's hover state when it is removed, and fires no leave event for it**. Anything attached to that row on hover is then stranded: as far as the browser is concerned the pointer was never over it, so moving away produces nothing.
+
+Place a row only when it is not already in that slot:
+
+<!-- include: addons/cooldown-bars/main.js#place -->
+
+The loader now takes a tooltip down when the pointer moves anywhere its anchor is not. The pattern still holds: an element you move is an element that loses whatever the browser was tracking about it, and you are paying for the move either way.
+
 ## Reuse the kit before styling your own
 
 Give a button `class="woc-btn"` or a tab `class="woc-tab"` and it is drawn at your frame's density with the loader's hover and focus treatment, rather than an imitation of it.
@@ -50,7 +62,7 @@ Do not hand-roll a timer row either. `woc.ui.bar` is one: an icon, a name that t
 
 The combat meter hand-rolled inline button styles first, and the two addons ended up drawing the same row two slightly different ways. That is what the kit exists to prevent.
 
-## A fifth, for anything reading combat events
+## An event's ability is a name, not an id
 
 An event's `ability` field is a display **name**, not an ability id. Every `damage` and `heal2` emit fills it from `ability.name`; only `castStart` and `spellfx` carry `ability.id`. The declared type is `string | null` for both, so nothing tells you which you have.
 

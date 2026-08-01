@@ -367,6 +367,60 @@ function checkTile() {
 }
 
 /**
+ * The settings-pane surfaces, checked for the thing a unit suite cannot see.
+ *
+ * Every one of these is built here and taken away again in the same call. What is
+ * being asked is not whether a checkbox works, which its own suite covers, but
+ * whether the loader wired these to the object an addon is handed at all: a
+ * builder that never reached `woc.ui` typechecks everywhere and throws only here.
+ *
+ * The setter is checked rather than the change event, because it is the half an
+ * addon gets wrong: `set` must move the control WITHOUT calling back, or a pane
+ * that saves on change writes the value it was just given straight back.
+ */
+function checkFields() {
+  const { field, tabs } = woc.ui;
+  if (typeof field?.checkbox !== 'function' || typeof tabs !== 'function') {
+    return result('fields', false, 'ui.field or ui.tabs is not callable');
+  }
+  let reported = 0;
+  const check = field.checkbox({
+    label: 'Probe',
+    value: false,
+    onChange: () => {
+      reported += 1;
+    },
+  });
+  check.set(true);
+  const moved = check.value();
+  check.destroy();
+
+  const strip = tabs({
+    tabs: [
+      { id: 'a', label: 'A' },
+      { id: 'b', label: 'B' },
+    ],
+    onSelect: () => {
+      reported += 1;
+    },
+  });
+  strip.select('b');
+  const active = strip.active();
+  strip.destroy();
+
+  if (!moved) {
+    return result('fields', false, 'set() did not move the control');
+  }
+  if (active !== 'b') {
+    return result('fields', false, `select() left the strip on ${active}`);
+  }
+  if (reported > 0) {
+    return result('fields', false, `set() called back ${String(reported)} time(s)`);
+  }
+  return result('fields', true, 'four fields and a tab strip, none of them calling back on set');
+}
+
+/**
  * The icon URL builders answer, and refuse an id they cannot build a name from.
  *
  * Whether any given URL RESOLVES is not checked and cannot be from here: only some
@@ -594,6 +648,7 @@ const STATIC_CHECKS = [
   checkWorldKeys,
   checkIcons,
   checkTile,
+  checkFields,
   checkNet,
   checkShadowedGlobals,
 ];
@@ -1179,6 +1234,80 @@ function barTone(fraction) {
   return 'default';
 }
 
+/**
+ * A settings pane built from the kit, which is the point of the field family.
+ *
+ * A manual demonstration rather than a check for the same reason the bar is: a
+ * suite can assert the value a control reports and cannot see whether the row
+ * lines up with the one under it, whether the slider's number is readable while
+ * it moves, or whether any of it looks like it belongs in a loader frame.
+ */
+function demoForm() {
+  const form = element('div', 'woc-form');
+  form.style.marginTop = '8px';
+  stage.replaceChildren(form);
+
+  const say = (what) => {
+    woc.log('form:', what);
+  };
+  form.append(
+    woc.ui.field.checkbox({ label: 'Include pet damage', value: true, onChange: say }).el,
+    woc.ui.field.slider({ label: 'Rolling window', value: 5, min: 1, max: 60, onChange: say }).el,
+    woc.ui.field.select({
+      label: 'Anchor',
+      value: 'top',
+      options: ['top', 'bottom'],
+      onChange: say,
+    }).el,
+    woc.ui.field.text({ label: 'Window title', value: 'DPS', placeholder: 'DPS', onChange: say })
+      .el,
+    woc.ui.tabs({
+      tabs: [
+        { id: 'damage', label: 'Damage' },
+        { id: 'healing', label: 'Healing' },
+      ],
+      onSelect: say,
+    }).el,
+  );
+}
+
+/**
+ * A context menu, opened at the button that asked for it.
+ *
+ * The half worth looking at is the dismissal: it has to go on Escape, on a click
+ * anywhere else including one the game's own controls swallow, and on choosing
+ * something. None of that is visible in an assertion.
+ */
+function demoMenu(at) {
+  woc.ui.menu(at, [
+    { label: 'Reset the meter', onSelect: () => woc.log('menu: reset') },
+    { label: 'Nothing to report', onSelect: () => undefined, disabled: true },
+    { label: 'Close this addon', onSelect: () => woc.log('menu: close'), separator: true },
+  ]);
+}
+
+/**
+ * The tooltip in its structured form, on a row that names an ability.
+ *
+ * A string still works and is what most attachments want; this is the case the
+ * builder exists for, where a hovered row says what the game's own tooltips say.
+ */
+function demoTooltip() {
+  const row = element('div', 'woc-row-desc', 'Hover me: a tooltip with a title, art and tones');
+  row.style.marginTop = '8px';
+  stage.replaceChildren(row);
+  woc.ui.tooltip(row, {
+    title: 'Fireball',
+    icon: woc.ui.icon.ability('fireball', 'mage'),
+    lines: [
+      '55 mana',
+      { text: '35 yd range, 2.5 sec cast', tone: 'muted' },
+      { text: 'Deals fire damage to the target.', tone: 'default' },
+      { text: 'Requires a target you are in combat with', tone: 'danger' },
+    ],
+  });
+}
+
 /** Null is a cancelled prompt, which is not a failure. */
 function describeCapture(combo) {
   if (combo === null) {
@@ -1255,6 +1384,11 @@ const ANNOUNCEMENTS = [
 /** The manual half: the surfaces a check cannot assert, only a person can see. */
 function controls() {
   const row = element('div');
+  // Built first so the menu can be opened AT it: `ui.menu` takes an element or a
+  // point, and anchoring to the control that asked is the ordinary case.
+  const menuButton = button('Menu', () => {
+    demoMenu(menuButton);
+  });
   row.style.display = 'flex';
   row.style.flexWrap = 'wrap';
   row.style.gap = '6px';
@@ -1268,6 +1402,9 @@ function controls() {
     ...ANNOUNCEMENTS.map(([label, show]) => button(label, show)),
     button('Bar', demoBar),
     button('Tiles', demoTiles),
+    button('Form', demoForm),
+    button('Tooltip', demoTooltip),
+    menuButton,
     button('Alert', showAlert),
     button('Capture a key', captureKey),
   );

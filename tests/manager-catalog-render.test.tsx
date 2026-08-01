@@ -356,8 +356,10 @@ describe('the Marketplaces pane', () => {
       expect(buttonNamed(UI_TEXT.marketsAdd)).toBeDefined();
     });
 
-    type('.woc-form label:first-of-type input', 'someone/their-addons');
-    type('.woc-form label:last-of-type input', 'v2.0.0');
+    // By id rather than by position: the two controls are named so their labels
+    // can point at them, which is also what makes them findable without counting.
+    type('#woc-market-url', 'someone/their-addons');
+    type('#woc-market-ref', 'v2.0.0');
     await Promise.resolve();
     buttonNamed(UI_TEXT.marketsAdd)?.click();
 

@@ -29,6 +29,7 @@ import { ENTRY_ID } from './esc-inject.ts';
 import { type Banner, createBanner } from './kit/banner.ts';
 import { createIconUrls, type IconUrls } from './kit/icons.ts';
 import { createGameInjector, type GameInjector } from './kit/injections.ts';
+import { createMenus, type Menus } from './kit/menu.ts';
 import { createSkillArt } from './kit/skill-art.ts';
 import { createStacking, type Stacking } from './kit/stacking.ts';
 import { createToaster, type Toaster } from './kit/toast.ts';
@@ -182,10 +183,11 @@ function buildKit(deps: UiDeps, root: HTMLElement, manager: Manager, unlock: Unl
   const toaster = createToaster({ doc: deps.doc, root, ...timers });
   const banner = createBanner({ doc: deps.doc, root, ...timers });
   const tooltips = createTooltips({ doc: deps.doc, root, viewport: deps.viewport });
+  const menus = createMenus({ doc: deps.doc, root, viewport: deps.viewport });
   const stacking = createStacking({ root });
   const icons = createIconUrls(createSkillArt({ fetchJson: deps.fetchJson }));
 
-  return { root, toaster, banner, tooltips, injector, stacking, icons, unlock };
+  return { root, toaster, banner, tooltips, menus, injector, stacking, icons, unlock };
 }
 
 export interface UiDeps {
@@ -230,6 +232,8 @@ export interface UiKit {
   /** The one centre-screen warning slot. Shared for the reason toasts are. */
   banner: Banner;
   tooltips: Tooltips;
+  /** The one open context menu. Shared for the reason the banner slot is. */
+  menus: Menus;
   injector: GameInjector;
   /** Which loader window is in front. Shared with the manager. */
   stacking: Stacking;
@@ -276,6 +280,7 @@ export function mountUi(deps: UiDeps): MountedUi {
     dispose: () => {
       kit.injector.dispose();
       kit.tooltips.dispose();
+      kit.menus.dispose();
       kit.toaster.dispose();
       kit.banner.dispose();
       kit.stacking.dispose();

@@ -8,8 +8,30 @@
 // invisible to a keyboard, and the game's own tooltips have the same gap; this
 // is the one place the kit is deliberately better than what it is matching,
 // because the alternative is shipping the gap to every addon.
+//
+// WHAT is drawn lives in kit/tooltip-content.ts. This file is the element, its
+// placement and the attachment lifecycle, and it takes either a string or the
+// structured form without caring which.
+//
+// A shown tooltip is dismissed by THREE things, and each covers a hole the others
+// leave. `pointerleave` is the ordinary one. The removal observer covers an anchor
+// taken out of the document while the pointer is over it, which fires no leave at
+// all. And a pointer move away from the anchor covers the case those two miss
+// together: an anchor that is still in the document but which the browser has
+// stopped considering hovered.
+//
+// That third case is not hypothetical and is the second stuck tooltip reported
+// from a live session, both times from Cooldown Bars. Re-appending an element that
+// is already in the DOM MOVES it, which is a removal and an insertion, and the
+// browser drops the hover state on the removal without firing a leave. The list
+// re-appends its rows on every animation frame to keep them in order, so a
+// tooltip shown at 60fps was near-certain to be orphaned within a frame or two:
+// the pointer was never again "over" the anchor as far as the browser was
+// concerned, so no event it could listen for was ever coming.
 
 import type { Teardown } from '../../disposal.ts';
+import type { TooltipInput } from './tooltip-content.ts';
+import { renderTooltip } from './tooltip-content.ts';
 
 const TOOLTIP_ID = 'woc-tooltip';
 
@@ -25,8 +47,8 @@ interface TooltipDeps {
 }
 
 interface Tooltips {
-  /** Attach text to an element. Returns a detach, also held by the disposal bag. */
-  attach: (el: Element, text: string) => Teardown;
+  /** Attach content to an element. Returns a detach, also held by the disposal bag. */
+  attach: (el: Element, content: TooltipInput) => Teardown;
   dispose: () => void;
 }
 
@@ -132,17 +154,17 @@ interface AttachContext {
   deps: TooltipDeps;
   attachments: Attachments;
   /** Draw the tip for this anchor and remember that it is the visible one. */
-  showFor: (el: Element, text: string) => void;
+  showFor: (el: Element, content: TooltipInput) => void;
   hide: () => void;
   /** Whether the visible tooltip belongs to this anchor. */
   isShown: (el: Element) => boolean;
 }
 
-function attachTooltip(ctx: AttachContext, el: Element, text: string): Teardown {
+function attachTooltip(ctx: AttachContext, el: Element, content: TooltipInput): Teardown {
   ctx.attachments.reap();
 
   const show = (): void => {
-    ctx.showFor(el, text);
+    ctx.showFor(el, content);
   };
 
   el.addEventListener('pointerenter', show);
@@ -166,48 +188,98 @@ function attachTooltip(ctx: AttachContext, el: Element, text: string): Teardown 
   return detach;
 }
 
+/** What the dismissal watchers need from the tooltip that owns them. */
+interface DismissDeps {
+  deps: TooltipDeps;
+  /** The anchor whose tooltip is up, or null. */
+  shown: () => Element | null;
+  hide: () => void;
+  /** Release attachments whose anchors have gone. See `createAttachments`. */
+  reap: () => void;
+}
+
+/**
+ * Everything that takes a shown tooltip down, started and stopped together.
+ *
+ * Both watchers exist only while something is on screen, which is what makes them
+ * affordable: a pointer move is a `contains` call on one element, and the observer
+ * is scoped to the loader's own root rather than the document, so it does not wake
+ * on every change the game's HUD makes at snapshot rate.
+ */
+function createDismissal(own: DismissDeps): { start: () => void; stop: () => void } {
+  const { doc } = own.deps;
+  let watcher: MutationObserver | null = null;
+
+  /**
+   * The pointer is somewhere the anchor is not.
+   *
+   * Capture phase and on the document, because the move that matters may be over
+   * the game's own DOM, and a bubbling listener never sees an event whose handler
+   * stops propagation. This is the watcher that covers an anchor the browser has
+   * stopped considering hovered while it is still in the document: see the note at
+   * the top of this file.
+   */
+  const onPointerMove = (event: Event): void => {
+    const anchor = own.shown();
+    const target = event.target as Node | null;
+    if (anchor !== null && (target === null || !anchor.contains(target))) {
+      own.hide();
+    }
+  };
+
+  return {
+    start: () => {
+      doc.addEventListener('pointermove', onPointerMove, { capture: true });
+      if (watcher !== null) {
+        return;
+      }
+      watcher = new MutationObserver(() => {
+        if (own.shown()?.isConnected === false) {
+          own.hide();
+        }
+        own.reap();
+      });
+      watcher.observe(own.deps.root, { childList: true, subtree: true });
+    },
+
+    stop: () => {
+      doc.removeEventListener('pointermove', onPointerMove, { capture: true });
+      watcher?.disconnect();
+      watcher = null;
+    },
+  };
+}
+
 function createTooltips(deps: TooltipDeps): Tooltips {
   const attachments = createAttachments();
   /** The anchor the visible tooltip belongs to, or null when nothing is shown. */
   let shown: Element | null = null;
-  /**
-   * Watches for the shown anchor being removed. Runs ONLY while one is shown.
-   *
-   * Scoped to the loader's own root rather than to the document: addon DOM lives
-   * there and the game's HUD does not, so the mutations it wakes for are the ones
-   * that can actually take an anchor away. A body-level subtree observer would
-   * fire on every HUD change the game makes at snapshot rate to answer the same
-   * one question.
-   */
-  let watcher: MutationObserver | null = null;
 
   const hide = (): void => {
     shown = null;
-    watcher?.disconnect();
-    watcher = null;
+    dismissal.stop();
     const tip = deps.doc.getElementById(TOOLTIP_ID);
     if (tip !== null) {
       tip.hidden = true;
     }
   };
 
-  const showFor = (el: Element, text: string): void => {
+  const dismissal = createDismissal({
+    deps,
+    shown: () => shown,
+    hide,
+    reap: attachments.reap,
+  });
+
+  const showFor = (el: Element, content: TooltipInput): void => {
     const tip = ensureTip(deps);
-    tip.textContent = text;
+    renderTooltip(deps.doc, tip, content);
     tip.hidden = false;
     // Placed after unhiding: a hidden element measures as zero, so the first
     // placement would put every tooltip in the same wrong spot.
     place(tip, el, deps.viewport());
     shown = el;
-    if (watcher === null) {
-      watcher = new MutationObserver(() => {
-        if (shown !== null && !shown.isConnected) {
-          hide();
-        }
-        attachments.reap();
-      });
-      watcher.observe(deps.root, { childList: true, subtree: true });
-    }
+    dismissal.start();
   };
 
   const ctx: AttachContext = {
@@ -219,7 +291,7 @@ function createTooltips(deps: TooltipDeps): Tooltips {
   };
 
   return {
-    attach: (el, text) => attachTooltip(ctx, el, text),
+    attach: (el, content) => attachTooltip(ctx, el, content),
     dispose: () => {
       for (const entry of attachments.all()) {
         entry.detach();

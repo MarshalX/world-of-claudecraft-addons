@@ -144,4 +144,4 @@ function initialBox(viewport: Viewport, size: Viewport): FrameBox {
 }
 
 export type { FrameBox, Viewport };
-export { clampBox, defaultBox, initialBox, isFrameBox, MIN_HEIGHT, MIN_WIDTH };
+export { clampBox, clampNumber, defaultBox, initialBox, isFrameBox, MIN_HEIGHT, MIN_WIDTH };

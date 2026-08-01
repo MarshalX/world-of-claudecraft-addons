@@ -724,6 +724,120 @@ describe('the size of the strip', () => {
   });
 });
 
+// What a timer says when you hover it.
+//
+// A function rather than a string, because the answer changes every frame: an
+// attachment made when the row was built would report what was left at the moment
+// the ability went on cooldown. It is also the only place the two layouts say the
+// same thing, since a tile has room for neither the name nor the charge count.
+describe('the tooltip on a timer', () => {
+  function hover(abilityId: string): string {
+    document
+      .querySelector(`[data-ability="${abilityId}"]`)
+      ?.dispatchEvent(new Event('pointerenter'));
+    return document.getElementById('woc-tooltip')?.textContent ?? '';
+  }
+
+  it('names the ability the way the game does', async () => {
+    const h = await run();
+    h.cooldown('arcane_shot', LONG);
+    h.poll();
+
+    hover('arcane_shot');
+
+    expect(document.querySelector('.woc-tip-title')?.textContent).toBe('Fell Shot');
+  });
+
+  it('answers with what is left now, not with what was left when it started', async () => {
+    const h = await run();
+    h.cooldown('aimed_shot', LONG);
+    h.poll();
+    expect(hover('aimed_shot')).toContain('30.0s left');
+
+    h.cooldown('aimed_shot', LONG / 2);
+    h.frame();
+
+    expect(hover('aimed_shot')).toContain('15.0s left');
+  });
+
+  // The honest half. Every ordinary cooldown is measured against what it had left
+  // when first seen, which is a floor rather than the length, and the row itself
+  // has nowhere to say so.
+  it('admits when it does not know the full length', async () => {
+    const h = await run();
+
+    h.cooldown('aimed_shot', LONG);
+    h.poll();
+
+    expect(hover('aimed_shot')).toContain('length unknown');
+  });
+
+  // A charge pool publishes a real length, so its bar is measured against the
+  // truth and the tooltip must not claim otherwise.
+  it('says nothing about an unknown length for a charge pool', async () => {
+    const h = await run();
+
+    h.charges('twinstrike', { charges: 1, recharge: 6, length: 12 });
+    h.frame();
+
+    const said = hover('twinstrike');
+    expect(said).not.toContain('length unknown');
+    expect(said).toContain('1 charge(s) ready');
+  });
+
+  // The tile is the case that needs it most: the square carries the sweep and a
+  // countdown, and nothing else at all.
+  it('says the same thing under a tile', async () => {
+    const h = await run({ layout: 'tiles' });
+    h.cooldown('arcane_shot', LONG);
+    h.poll();
+
+    expect(hover('arcane_shot')).toContain('Fell Shot');
+  });
+});
+
+// Rows are re-ordered, not re-appended.
+//
+// `appendChild` on an element already in the document MOVES it, which is a removal
+// and an insertion, and the browser drops an element's hover state on the removal.
+// Doing it to every row on every animation frame stranded the tooltip on whatever
+// the pointer was over: reported from a live session, with the row still on screen
+// under it. The kit no longer lets that orphan a tooltip; this is the other half,
+// which is not handing it the problem sixty times a second.
+describe('how rows are placed', () => {
+  it('leaves a row alone when its position has not changed', async () => {
+    const h = await run();
+    h.cooldown('aimed_shot', LONG);
+    h.cooldown('rapid_fire', 180);
+    h.poll();
+    const first = document.querySelector('[data-ability="aimed_shot"]');
+    const observer = new MutationObserver(() => undefined);
+    const list = document.querySelector('.woc-cd-list') as HTMLElement;
+    observer.observe(list, { childList: true });
+
+    h.frame();
+    h.frame();
+
+    // Nothing was inserted or removed, so nothing was moved.
+    expect(observer.takeRecords()).toEqual([]);
+    expect(document.querySelector('[data-ability="aimed_shot"]')).toBe(first);
+    observer.disconnect();
+  });
+
+  it('still reorders when the order actually changes', async () => {
+    const h = await run();
+    h.cooldown('aimed_shot', 20);
+    h.cooldown('rapid_fire', 10);
+    h.poll();
+    expect(h.drawn()).toEqual(['rapid_fire', 'aimed_shot']);
+
+    h.cooldown('rapid_fire', 30);
+    h.frame();
+
+    expect(h.drawn()).toEqual(['aimed_shot', 'rapid_fire']);
+  });
+});
+
 // The icon comes from the loader's own URL builder rather than from a path the addon
 // wrote, which is what makes a game update that moves the directory one edit in the
 // loader instead of a silent break in every addon.

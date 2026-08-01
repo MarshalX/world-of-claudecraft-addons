@@ -131,6 +131,59 @@
   z-index: 100003;
 }
 
+/* Inside a tooltip. The head is the icon and the name; the lines are the body.
+   Structured content is kit/tooltip-content.ts; a plain string renders as one
+   line, so a tooltip that was a sentence before this existed is unchanged. */
+#woc-tooltip .woc-tip-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 4px;
+}
+
+#woc-tooltip .woc-tip-icon {
+  width: 20px;
+  height: 20px;
+  border-radius: 3px;
+  /* The art is square; cropping keeps an ability recognisable where squashing
+     would not, the same reason kit/bar.ts crops its own slot. */
+  object-fit: cover;
+}
+
+/* The game's own heading colour, inherited rather than copied. */
+#woc-tooltip .woc-tip-title {
+  color: var(--gold, rgb(255 209 0));
+  font-weight: 700;
+}
+
+#woc-tooltip .woc-tip-line {
+  margin: 0;
+}
+
+#woc-tooltip .woc-tip-line + .woc-tip-line {
+  margin-top: 2px;
+}
+
+/* Tone is what a line MEANS. Four named colours and no way to pass one, for the
+   reason a bar's school tint has none: two addons saying the same kind of thing
+   should look the same. The two error colours are the game's own tokens; muted is
+   the token it writes secondary text in. */
+#woc-tooltip .woc-tip-muted {
+  color: var(--color-text-muted, rgb(153 141 106));
+}
+
+#woc-tooltip .woc-tip-good {
+  color: var(--color-text-success, rgb(126 200 116));
+}
+
+#woc-tooltip .woc-tip-warn {
+  color: var(--gold-dim, rgb(200 168 56));
+}
+
+#woc-tooltip .woc-tip-danger {
+  color: var(--color-text-error, rgb(255 143 133));
+}
+
 /* Rail-button glyphs, sized to match the game's own micro-button icons.
    These two selectors are the only unscoped rules in the sheet, because these
    are the only loader elements that live inside the game's own DOM rather than

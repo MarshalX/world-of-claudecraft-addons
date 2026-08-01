@@ -14,6 +14,7 @@
 import { useState } from 'preact/hooks';
 import { type MarketplaceRef, OFFICIAL_ID } from '../../../shared/marketplace.ts';
 import type { MarketplaceState } from '../../../shared/protocol.ts';
+import { FIELD_CLASS } from '../kit/field-shape.ts';
 import type { CatalogState, CatalogStore } from './catalog-store.ts';
 import { ErrorNote } from './error-note.tsx';
 import { UI_TEXT } from './strings.ts';
@@ -82,7 +83,7 @@ function PinControl(props: { current: string; busy: boolean; onPin: (ref: string
     <>
       <input
         type="text"
-        className="woc-input woc-combo"
+        className={`${FIELD_CLASS.control} woc-combo`}
         value={draft}
         placeholder={UI_TEXT.marketsPinPlaceholder}
         aria-label={UI_TEXT.marketsPin}
@@ -212,38 +213,52 @@ function MarketRow(props: RowProps) {
  * in scope. The warning is what that friction is, so it comes before the input
  * and not as a footnote under the button.
  */
+/**
+ * The add form's two controls, named so their labels can point at them.
+ *
+ * Fixed for the reason Browse's are: one manager window, one Marketplaces pane.
+ */
+const URL_ID = 'woc-market-url';
+const REF_ID = 'woc-market-ref';
+
 function AddForm(props: { busy: boolean; onAdd: (url: string, ref: string) => void }) {
   const [url, setUrl] = useState('');
   const [ref, setRef] = useState('');
 
   return (
-    <section className="woc-form">
+    <section className={FIELD_CLASS.form}>
       <h4 className="woc-subhead">{UI_TEXT.marketsAddHeading}</h4>
       <p className="woc-note woc-note-warn">{UI_TEXT.marketsAddWarning}</p>
-      <label className="woc-field">
-        <span className="woc-field-label">{UI_TEXT.marketsAddUrl}</span>
+      <div className={FIELD_CLASS.row}>
+        <label className={FIELD_CLASS.label} htmlFor={URL_ID}>
+          {UI_TEXT.marketsAddUrl}
+        </label>
         <input
+          id={URL_ID}
           type="text"
-          className="woc-input"
+          className={FIELD_CLASS.control}
           value={url}
           placeholder={UI_TEXT.marketsAddUrlPlaceholder}
           onInput={(event) => {
             setUrl((event.currentTarget as HTMLInputElement).value);
           }}
         />
-      </label>
-      <label className="woc-field">
-        <span className="woc-field-label">{UI_TEXT.marketsAddRef}</span>
+      </div>
+      <div className={FIELD_CLASS.row}>
+        <label className={FIELD_CLASS.label} htmlFor={REF_ID}>
+          {UI_TEXT.marketsAddRef}
+        </label>
         <input
+          id={REF_ID}
           type="text"
-          className="woc-input"
+          className={FIELD_CLASS.control}
           value={ref}
           placeholder={UI_TEXT.marketsPinPlaceholder}
           onInput={(event) => {
             setRef((event.currentTarget as HTMLInputElement).value);
           }}
         />
-      </label>
+      </div>
       <div className="woc-row-actions">
         <button
           type="button"

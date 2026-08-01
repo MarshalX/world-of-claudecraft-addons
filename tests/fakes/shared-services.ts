@@ -16,6 +16,7 @@ import { createSoundEngine } from '../../loader/src/runtime/sound/engine.ts';
 import { createBanner } from '../../loader/src/runtime/ui/kit/banner.ts';
 import { createIconUrls } from '../../loader/src/runtime/ui/kit/icons.ts';
 import { createGameInjector } from '../../loader/src/runtime/ui/kit/injections.ts';
+import { createMenus } from '../../loader/src/runtime/ui/kit/menu.ts';
 import { createSkillArt } from '../../loader/src/runtime/ui/kit/skill-art.ts';
 import { createStacking } from '../../loader/src/runtime/ui/kit/stacking.ts';
 import { createToaster } from '../../loader/src/runtime/ui/kit/toast.ts';
@@ -124,6 +125,7 @@ function createSharedServices(
   // before the class manifest lands is in.
   const icons = createIconUrls(createSkillArt({ fetchJson: () => new Promise(() => undefined) }));
   const tooltips = createTooltips({ doc, root, viewport: () => VIEWPORT });
+  const menus = createMenus({ doc, root, viewport: () => VIEWPORT });
   const keyTarget = new EventTarget();
   const dispatcher = createKeyDispatcher({ target: keyTarget, doc });
   const logs = createLogBuffer();
@@ -176,6 +178,7 @@ function createSharedServices(
       toaster,
       banner,
       tooltips,
+      menus,
       stacking,
       icons,
       unlock: createUnlockMode(root),
@@ -220,6 +223,7 @@ function createSharedServices(
     dispose: () => {
       injector.dispose();
       tooltips.dispose();
+      menus.dispose();
       toaster.dispose();
       banner.dispose();
       dispatcher.dispose();

@@ -241,6 +241,20 @@ A bar's fill can be tinted by damage school, which is a separate axis from `tone
 
 <!-- include: addons/combat-meter/main.js#school-tint -->
 
+### What a hovered row says
+
+`ui.tooltip` takes a string, which is what it always took, or the whole tooltip: a title, an icon from `ui.icon`, and lines that each carry a tone.
+
+<!-- include: addons/cooldown-bars/main.js#tooltip -->
+
+You never write dismissal. The loader takes a tooltip down on leave, on blur, when its anchor is removed from the document, and when the pointer moves anywhere the anchor is not. The last two exist because the first two do not fire in cases addons hit constantly, which [Patterns](/docs/patterns) covers.
+
+**Pass a function when the answer changes.** It is called at the moment the tooltip is shown, so a row reports the numbers under the pointer rather than the numbers it was built with, and the content is assembled for the one row being hovered instead of for every row on screen. Both shipped addons do this: the meter's rows carry their full breakdown, and a cooldown says how much is left and whether it even knows the ability's full length.
+
+The tones are `default`, `muted`, `good`, `warn` and `danger`, and they say what a line MEANS rather than how loud it is. They are not a bar's tones: a fill can only express urgency, while a line can be flavour text, a cost, or a requirement you do not meet.
+
+Everything is written as text and never as markup, because an ability name and a player name both reach you from the wire.
+
 ### Timers as squares
 
 `ui.tile` is the same timer in the other shape: the game's art with a radial sweep over it, a countdown on top, and a stack count in the corner.
@@ -256,6 +270,45 @@ A tile's border takes the same `school` and `tone` axes a bar's fill does. Its s
 `label` is never drawn. It is how the tile is announced, as one image named for everything it says, since there is nowhere to put a name on a square that is all art. A tile without one is hidden from assistive technology rather than announced as a bare number.
 
 Cooldown Bars offers both under a `layout` setting, which is worth reading as the worked example: the two widgets take the same `{el, update, destroy}`, so everything between the builder and the screen is written once and only two things branch. A charge count goes in a bar's figure and in a tile's corner, and a tile's countdown loses its decimal because 40 pixels will not hold "119.4s".
+
+### Your own settings pane
+
+`ui.field` is the four labelled controls the manager's own forms are drawn with, and `ui.tabs` is its tab strip. Reuse them and a form inside your frame answers to that frame's density and matches the game, with no palette copied into your addon.
+
+```js
+const window_ = woc.ui.field.slider({ label: 'Rolling window', value: 5, min: 1, max: 60,
+  onChange: (next) => woc.storage.set('window', next) });
+pane.appendChild(window_.el);
+```
+
+Every field hands back the same four things: `el` to place, `value()` to read, `set()` to move it, and `destroy()`. **`set` does not call your handler back** — it is what a reset button and a reload use, and a setter that reported itself would write the value it was just given straight back to storage.
+
+The four are `checkbox`, `select`, `slider` and `text`. A checkbox puts its label beside the box and the other three put it above, which is not a style choice: a checkbox reads as a sentence with a box in front of it. A slider shows its number, because a range input on its own says nothing about where it is. A text field reports as you type rather than on blur, so a value abandoned by closing the window is not silently lost.
+
+`ui.tabs` is separate from the family because tabs are navigation rather than a value the player is setting, and only one of those is worth persisting. The loader owns the strip; which pane it reveals is yours.
+
+```js
+const strip = woc.ui.tabs({ tabs: [{ id: 'damage', label: 'Damage' }, { id: 'healing', label: 'Healing' }],
+  onSelect: (id) => show(id) });
+```
+
+### Per-row actions
+
+`ui.menu` opens a context menu at an element or at a point, which is how an addon offers actions without spending frame space on a button per row.
+
+```js
+row.addEventListener('contextmenu', (event) => {
+  event.preventDefault();
+  woc.ui.menu({ x: event.clientX, y: event.clientY }, [
+    { label: 'Reset this ability', onSelect: () => reset(id) },
+    { label: 'Hide it', onSelect: () => hide(id), separator: true },
+  ]);
+});
+```
+
+The reason this is in the loader rather than in your addon is the **dismissal**. A menu has to close on select, on Escape, on a click anywhere else including one a game control swallows, and when your addon is disabled with it open. Every one of those listens to something you do not own, and hand-rolling it gets three of the four right.
+
+There is one menu for the whole loader and opening a second closes the first. An item can be `disabled`, and `separator` draws a rule above it, ignored on the first item where it would draw a lid on the menu instead.
 
 ### Saying something
 

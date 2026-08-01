@@ -214,14 +214,82 @@ async function run(): Promise<MeterHarness> {
       ),
     figureOf: (label) => rowFor(label)?.querySelector('.woc-bar-value')?.textContent ?? '',
     detailOf: (label) => rowFor(label)?.querySelector('.woc-bar-detail')?.textContent ?? '',
+    // Selected inside the meter's own strip, by the kit's class rather than by
+    // one of the addon's: the buttons are the loader's now, and the addon marks
+    // only the strip it appended them in.
     openTab: (label) => {
-      const button = [...document.querySelectorAll('.woc-meter-tab')].find(
+      const button = [...document.querySelectorAll('.woc-meter-tabs .woc-tab')].find(
         (el) => el.textContent === label,
       );
       (button as HTMLButtonElement | undefined)?.click();
     },
   };
 }
+
+// The two surfaces the meter stopped hand-rolling.
+//
+// The strip used to be this addon's own buttons wearing the kit's classes, with
+// its own copy of which tab was open, its own marking, and its own idea of how to
+// announce it. The tooltip used to be the ability name and nothing else, because
+// an attachment made when a row is built cannot carry numbers that change every
+// repaint.
+describe('what it takes from the kit', () => {
+  function hover(label: string): string {
+    const bar = document.querySelector(`[data-ability="${label}"]`);
+    bar?.dispatchEvent(new Event('pointerenter'));
+    return document.getElementById('woc-tooltip')?.textContent ?? '';
+  }
+
+  it('draws its tabs with the loader strip rather than its own buttons', async () => {
+    await run();
+
+    // A nav of kit tabs, marked the way the manager's own strip is marked.
+    expect(document.querySelectorAll('.woc-meter-tabs .woc-tab')).toHaveLength(3);
+    expect(document.querySelector('.woc-meter-tabs .woc-tab-active')?.textContent).toBe('Damage');
+  });
+
+  it('lets the strip own which tab is marked', async () => {
+    const h = await run();
+
+    h.openTab('Healing');
+
+    expect(document.querySelector('.woc-meter-tabs .woc-tab-active')?.textContent).toBe('Healing');
+  });
+
+  // The reason the tooltip is a function: the row is hovered long after it was
+  // built, and what it has to say is the tally as it is now.
+  it('answers a hover with the numbers as they are, not as they were', async () => {
+    const h = await run();
+    h.hit({ ability: 'Aimed Shot', amount: 100 });
+    h.tick();
+    expect(hover('Aimed Shot')).toContain('1 hits');
+
+    h.hit({ ability: 'Aimed Shot', amount: 100 });
+    h.tick();
+
+    expect(hover('Aimed Shot')).toContain('2 hits');
+  });
+
+  it('names the ability in the tooltip title', async () => {
+    const h = await run();
+    h.hit({ ability: 'Aimed Shot', amount: 100 });
+    h.tick();
+
+    hover('Aimed Shot');
+
+    expect(document.querySelector('.woc-tip-title')?.textContent).toBe('Aimed Shot');
+  });
+
+  // A row with no art is one this character did not cast, which the row itself
+  // cannot say: it just has an empty icon slot, the same as art that failed.
+  it('says when a row is not from your own spellbook', async () => {
+    const h = await run();
+    h.hit({ ability: 'Cleave', amount: 100 });
+    h.tick();
+
+    expect(hover('Cleave')).toContain('not in your spellbook');
+  });
+});
 
 describe('its manifest', () => {
   it('validates against the shared schema', () => {

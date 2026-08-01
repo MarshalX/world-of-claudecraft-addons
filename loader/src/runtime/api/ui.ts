@@ -16,15 +16,21 @@ import { openAlert } from '../ui/kit/alert.ts';
 import type { BannerOpts } from '../ui/kit/banner.ts';
 import type { Bar, BarOpts } from '../ui/kit/bar.ts';
 import { createBar } from '../ui/kit/bar.ts';
+import type { Field, FieldOpts, SelectOpts, SliderOpts, TextOpts } from '../ui/kit/field.ts';
+import { createCheckbox, createSelect, createSlider, createText } from '../ui/kit/field.ts';
 import type { AddonFrame } from '../ui/kit/frame.ts';
 import { createAddonFrame } from '../ui/kit/frame.ts';
 import type { FrameOpts } from '../ui/kit/frame-chrome.ts';
 import type { FrameStateStore } from '../ui/kit/frame-state.ts';
 import type { IconUrls } from '../ui/kit/icons.ts';
 import type { InjectionSpec } from '../ui/kit/injections.ts';
+import type { MenuItem } from '../ui/kit/menu.ts';
+import type { Tabs, TabsOpts } from '../ui/kit/tabs.ts';
+import { createTabs } from '../ui/kit/tabs.ts';
 import type { Tile, TileOpts } from '../ui/kit/tile.ts';
 import { createTile } from '../ui/kit/tile.ts';
 import type { ToastOpts } from '../ui/kit/toast.ts';
+import type { TooltipInput } from '../ui/kit/tooltip-content.ts';
 import type { UiKit } from '../ui/mount.ts';
 
 interface MicroButtonOpts {
@@ -41,6 +47,19 @@ interface MenuEntryOpts {
   onClick: () => void;
 }
 
+/**
+ * The controls a settings pane is made of, grouped like `ui.icon`'s builders.
+ *
+ * One family answering one question, so it is one member rather than four leaves
+ * burying `frame`, `bar` and `tile` among them.
+ */
+interface FieldBuilders {
+  checkbox: (opts: FieldOpts<boolean>) => Field<boolean>;
+  select: (opts: SelectOpts) => Field<string>;
+  slider: (opts: SliderOpts) => Field<number>;
+  text: (opts: TextOpts) => Field<string>;
+}
+
 interface UiApi {
   /** A light, content-sized HUD frame: movable, no close button. */
   frame: (opts: FrameOpts) => AddonFrame;
@@ -55,13 +74,20 @@ interface UiApi {
   tile: (opts?: TileOpts) => Tile;
   /** Where the game's own art lives, so no addon writes a path. */
   icon: IconUrls;
+  /** Labelled controls, drawn as the manager draws its own. */
+  field: FieldBuilders;
+  /** A tab strip. The panes it switches between are the addon's own. */
+  tabs: (opts: TabsOpts) => Tabs;
+  /** A context menu at an element or a point. Closes on select, Escape or a click away. */
+  menu: (at: Element | { x: number; y: number }, items: readonly MenuItem[]) => Teardown;
   /** Resolves with the id of the button pressed, or null if dismissed. */
   alert: (opts: AlertOpts) => Promise<string | null>;
   /** A button on the game's own rail. Lands when the HUD does. */
   microButton: (opts: MicroButtonOpts) => Teardown;
   /** An entry in the game menu, below the loader's own "Addons". */
   menuEntry: (opts: MenuEntryOpts) => Teardown;
-  tooltip: (el: Element, text: string) => Teardown;
+  /** A line of text, or a title, an icon and lines with a tone each. */
+  tooltip: (el: Element, content: TooltipInput) => Teardown;
 }
 
 interface UiDeps {
@@ -124,6 +150,28 @@ function microSpec(fqid: string, opts: MicroButtonOpts): InjectionSpec {
 }
 
 /**
+ * A tooltip's content function, wrapped so a throw cannot break the hover.
+ *
+ * The function form is called inside the loader's own pointer handling, which is
+ * the same position `onMove` runs in and carries the same rule. An addon reading
+ * a tally that is not there yet must cost an empty tooltip and a logged warning,
+ * not a pointer that stops showing anything for the rest of the session.
+ */
+function guardedTooltip(deps: UiDeps, content: TooltipInput): TooltipInput {
+  if (typeof content !== 'function') {
+    return content;
+  }
+  return () => {
+    try {
+      return content();
+    } catch (err) {
+      deps.onError('a tooltip content function', err);
+      return '';
+    }
+  };
+}
+
+/**
  * The addon's own `onMove`, wrapped so a throw cannot break the gesture.
  *
  * This runs inside the loader's pointer handling, mid-drag, exactly as a socket
@@ -180,11 +228,33 @@ function addonBar(deps: UiDeps, opts: BarOpts | undefined): Bar {
   return bar;
 }
 
+/**
+ * A field whose removal is in the bag, like a bar's and a tile's.
+ *
+ * Generic over the value so the four builders share one line each rather than one
+ * wrapper each: what the bag needs is identical for all of them.
+ */
+function addonField<T, O>(deps: UiDeps, build: (doc: Document, opts: O) => Field<T>, opts: O) {
+  const field = build(deps.doc, opts);
+  deps.bag.add(field.destroy);
+  return field;
+}
+
 /** The same, for the square form: a tile is DOM in someone else's frame too. */
 function addonTile(deps: UiDeps, opts: TileOpts | undefined): Tile {
   const tile = createTile(deps.doc, opts);
   deps.bag.add(tile.destroy);
   return tile;
+}
+
+/** The four builders, each bagged the same way. See `addonField`. */
+function fieldSurface(deps: UiDeps): FieldBuilders {
+  return {
+    checkbox: (opts) => addonField(deps, createCheckbox, opts),
+    select: (opts) => addonField(deps, createSelect, opts),
+    slider: (opts) => addonField(deps, createSlider, opts),
+    text: (opts) => addonField(deps, createText, opts),
+  };
 }
 
 function createUi(deps: UiDeps): UiApi {
@@ -203,6 +273,18 @@ function createUi(deps: UiDeps): UiApi {
     tile: (opts) => addonTile(deps, opts),
 
     icon: kit.icons,
+
+    field: fieldSurface(deps),
+
+    tabs: (opts) => {
+      const strip = createTabs(deps.doc, opts);
+      bag.add(strip.destroy);
+      return strip;
+    },
+
+    // Tracked rather than bagged raw: an addon disabled with a menu open must not
+    // leave it on screen, and closing it by hand must also drop it from the bag.
+    menu: (at, items) => tracked(bag, kit.menus.open(at, items)),
 
     alert: (opts) => {
       const modal = openAlert({ doc: deps.doc, root: kit.root }, opts);
@@ -225,7 +307,7 @@ function createUi(deps: UiDeps): UiApi {
         }),
       ),
 
-    tooltip: (el, text) => tracked(bag, kit.tooltips.attach(el, text)),
+    tooltip: (el, content) => tracked(bag, kit.tooltips.attach(el, guardedTooltip(deps, content))),
   };
 }
 

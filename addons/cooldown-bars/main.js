@@ -269,7 +269,7 @@ function createBar(abilityId) {
   });
   bar.el.dataset.ability = abilityId;
   // The full name is one hover away, so truncating costs nothing.
-  woc.ui.tooltip(bar.el, name);
+  woc.ui.tooltip(bar.el, () => timerTooltip(abilityId));
   return bar;
 }
 // #endregion
@@ -294,8 +294,26 @@ function createTile(abilityId) {
     size: tileSize,
   });
   tile.el.dataset.ability = abilityId;
-  woc.ui.tooltip(tile.el, name);
+  woc.ui.tooltip(tile.el, () => timerTooltip(abilityId));
   return tile;
+}
+// #endregion
+
+// #region tooltip
+function timerTooltip(abilityId) {
+  const name = abilityName(abilityId);
+  const entry = timers().find((row) => row.abilityId === abilityId);
+  if (entry === undefined) {
+    return name;
+  }
+  const lines = [`${entry.remaining.toFixed(DECIMALS)}s left`];
+  if (typeof entry.charges === 'number' && entry.charges > 0) {
+    lines.push({ text: `${String(entry.charges)} charge(s) ready`, tone: 'good' });
+  }
+  if (entry.total === null) {
+    lines.push({ text: 'length unknown, measured from when it was first seen', tone: 'muted' });
+  }
+  return { title: name, icon: woc.ui.icon.ability(abilityId, playerClass()), lines };
 }
 // #endregion
 
@@ -494,14 +512,25 @@ function draw() {
       row.ui.el.remove();
     }
   }
-  for (const { abilityId, remaining, charges } of order) {
-    const row = rows.get(abilityId);
-    rebaseline(row, remaining);
-    const fraction = Math.min(remaining / row.total, 1);
-    paint(row, remaining, charges, fraction);
-    list.appendChild(row.ui.el);
+  for (const [at, entry] of order.entries()) {
+    const row = rows.get(entry.abilityId);
+    rebaseline(row, entry.remaining);
+    const fraction = Math.min(entry.remaining / row.total, 1);
+    paint(row, entry.remaining, entry.charges, fraction);
+    place(row.ui.el, at);
   }
 }
+
+/**
+ * Put a row at its position, and only if it is not there already.
+ */
+// #region place
+function place(el, at) {
+  if (list.children[at] !== el) {
+    list.insertBefore(el, list.children[at] ?? null);
+  }
+}
+// #endregion
 
 // #region subscribe-and-animate
 // The cooldown set changes here; the numbers move in the frame loop below.

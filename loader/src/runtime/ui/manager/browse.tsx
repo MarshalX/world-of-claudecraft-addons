@@ -12,6 +12,7 @@
 // no way to tell it was being asked.
 
 import { useState } from 'preact/hooks';
+import { FIELD_CLASS } from '../kit/field-shape.ts';
 import type { BrowseFilter, BrowseRow } from './catalog.ts';
 import { browseRows, catalogTags } from './catalog.ts';
 import type { CatalogState, CatalogStore } from './catalog-store.ts';
@@ -98,6 +99,16 @@ interface FilterProps {
   onChange: (filter: BrowseFilter) => void;
 }
 
+/**
+ * The two filter controls, named so their labels can point at them.
+ *
+ * Fixed rather than generated: the manager is one window with one Browse pane, so
+ * these exist at most once in the document. The `woc-` prefix is what keeps them
+ * out of the game's own id space, which this document is shared with.
+ */
+const SEARCH_ID = 'woc-browse-search';
+const TAG_ID = 'woc-browse-tag';
+
 /** Absent when no source in the list tags anything, since it would filter nothing. */
 function TagFilter(props: FilterProps) {
   const { filter } = props;
@@ -105,10 +116,13 @@ function TagFilter(props: FilterProps) {
     return null;
   }
   return (
-    <label className="woc-field">
-      <span className="woc-field-label">{UI_TEXT.browseTag}</span>
+    <div className={FIELD_CLASS.row}>
+      <label className={FIELD_CLASS.label} htmlFor={TAG_ID}>
+        {UI_TEXT.browseTag}
+      </label>
       <select
-        className="woc-input"
+        id={TAG_ID}
+        className={FIELD_CLASS.control}
         value={filter.tag ?? ''}
         onChange={(event) => {
           const picked = (event.currentTarget as HTMLSelectElement).value;
@@ -122,7 +136,7 @@ function TagFilter(props: FilterProps) {
           </option>
         ))}
       </select>
-    </label>
+    </div>
   );
 }
 
@@ -130,18 +144,21 @@ function Filters(props: FilterProps) {
   const { filter } = props;
   return (
     <div className="woc-filters">
-      <label className="woc-field">
-        <span className="woc-field-label">{UI_TEXT.browseSearch}</span>
+      <div className={FIELD_CLASS.row}>
+        <label className={FIELD_CLASS.label} htmlFor={SEARCH_ID}>
+          {UI_TEXT.browseSearch}
+        </label>
         <input
+          id={SEARCH_ID}
           type="search"
-          className="woc-input"
+          className={FIELD_CLASS.control}
           value={filter.query}
           placeholder={UI_TEXT.browseSearchPlaceholder}
           onInput={(event) => {
             props.onChange({ ...filter, query: (event.currentTarget as HTMLInputElement).value });
           }}
         />
-      </label>
+      </div>
       <TagFilter tags={props.tags} filter={filter} onChange={props.onChange} />
     </div>
   );

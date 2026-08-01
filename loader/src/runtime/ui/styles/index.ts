@@ -10,7 +10,8 @@
 // element and none of them collide across the seams, so the order is about
 // readability rather than correctness: chrome sets a window up, panes fill it,
 // catalog refines the four marketplace surfaces, kit covers the surfaces an addon
-// asks the loader for, and bar, tile and banner are the three it assembles itself.
+// asks the loader for, menu covers the two of those with no rules anywhere else,
+// and bar, tile and banner are the three it assembles itself.
 //
 // One exception where the order is NOT the whole story. The reduced-motion floor
 // closes kit.css, and it carries !important because it has to outrank rules in the
@@ -46,11 +47,12 @@ import bar from './bar.css';
 import catalog from './catalog.css';
 import chrome from './chrome.css';
 import kit from './kit.css';
+import menu from './menu.css';
 import panes from './panes.css';
 import tile from './tile.css';
 
-// biome-ignore-end lint/correctness/noUnresolvedImports: the seven sheets above are the whole of it
+// biome-ignore-end lint/correctness/noUnresolvedImports: the eight sheets above are the whole of it
 
-const LOADER_CSS = [chrome, panes, catalog, kit, bar, tile, banner].join('\n');
+const LOADER_CSS = [chrome, panes, catalog, kit, menu, bar, tile, banner].join('\n');
 
 export { LOADER_CSS };

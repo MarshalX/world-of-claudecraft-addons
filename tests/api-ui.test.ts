@@ -14,6 +14,7 @@ import { DisposalBag } from '../loader/src/runtime/disposal.ts';
 import { createBanner } from '../loader/src/runtime/ui/kit/banner.ts';
 import { createIconUrls } from '../loader/src/runtime/ui/kit/icons.ts';
 import { createGameInjector } from '../loader/src/runtime/ui/kit/injections.ts';
+import { createMenus } from '../loader/src/runtime/ui/kit/menu.ts';
 import { createSkillArt } from '../loader/src/runtime/ui/kit/skill-art.ts';
 import { createStacking } from '../loader/src/runtime/ui/kit/stacking.ts';
 import { createToaster } from '../loader/src/runtime/ui/kit/toast.ts';
@@ -64,6 +65,7 @@ function open() {
     toaster: createToaster({ doc: document, root, ...timers }),
     banner: createBanner({ doc: document, root, ...timers }),
     tooltips: createTooltips({ doc: document, root, viewport: () => VIEW }),
+    menus: createMenus({ doc: document, root, viewport: () => VIEW }),
     stacking: createStacking({ root }),
     unlock: createUnlockMode(root),
     // A manifest reader whose fetch never settles, which is the state a first row is
@@ -184,6 +186,72 @@ describe('a frame callback that throws', () => {
     expect(() => globalThis.dispatchEvent(new Event('resize'))).not.toThrow();
     expect(onError).toHaveBeenCalledOnce();
     expect(onError.mock.calls[0]?.[0]).toContain('strip');
+  });
+});
+
+// The three surfaces commit 8 added, checked here for the one thing their own
+// suites cannot see: that they reached the object an addon is handed, and that
+// what they create is released with the addon.
+describe('the settings-pane surfaces', () => {
+  it('hands back a field for the addon to place itself', () => {
+    const { ui } = open();
+
+    const field = ui.field.checkbox({ label: 'Show pet', value: true, onChange: vi.fn() });
+
+    expect(field.el.classList.contains('woc-field')).toBe(true);
+    expect(document.querySelector('.woc-field')).toBeNull();
+  });
+
+  it('carries all four field builders', () => {
+    const { ui } = open();
+
+    expect(Object.keys(ui.field).sort()).toEqual(['checkbox', 'select', 'slider', 'text']);
+  });
+
+  it('hands back a tab strip', () => {
+    const { ui } = open();
+
+    const strip = ui.tabs({ tabs: [{ id: 'a', label: 'A' }], onSelect: vi.fn() });
+
+    expect(strip.active()).toBe('a');
+  });
+
+  it('opens a menu in the loader root', () => {
+    const { ui, kit } = open();
+
+    ui.menu({ x: 10, y: 10 }, [{ label: 'Reset', onSelect: vi.fn() }]);
+
+    expect(kit.root.querySelector('.woc-menu')).not.toBeNull();
+  });
+
+  // Disable is hot, with no page reload. A menu is the loudest of these to leave
+  // behind: it sits in the overlay band above every window.
+  it('takes an open menu, its fields and its tabs away on dispose', () => {
+    const { bag, ui, kit } = open();
+    kit.root.append(
+      ui.field.text({ label: 'Title', value: '', onChange: vi.fn() }).el,
+      ui.tabs({ tabs: [{ id: 'a', label: 'A' }], onSelect: vi.fn() }).el,
+    );
+    ui.menu({ x: 10, y: 10 }, [{ label: 'Reset', onSelect: vi.fn() }]);
+
+    bag.dispose();
+
+    expect(document.querySelector('.woc-menu')).toBeNull();
+    expect(document.querySelector('.woc-field')).toBeNull();
+    expect(document.querySelector('.woc-tabs')).toBeNull();
+  });
+
+  // A tooltip took a string and still does: the structured form is an addition,
+  // because a published surface changing shape is what moves the API major.
+  it('takes both a string and structured content', () => {
+    const { ui } = open();
+    const el = document.createElement('button');
+    document.body.appendChild(el);
+
+    ui.tooltip(el, { title: 'Fell Shot', lines: ['55 mana'] });
+    el.dispatchEvent(new Event('pointerenter'));
+
+    expect(document.querySelector('.woc-tip-title')?.textContent).toBe('Fell Shot');
   });
 });
 

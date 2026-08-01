@@ -301,11 +301,6 @@ const panel = woc.ui.window({
   save: true,
 });
 
-// The tabs come first, the way the game's own meter puts them: they say what the
-// numbers under them are, so reading them second is reading backwards.
-const tabs = document.createElement('div');
-tabs.className = 'woc-tabs woc-meter-tabs';
-
 const total = document.createElement('div');
 total.className = 'woc-meter-total';
 total.style.opacity = '0.75';
@@ -322,7 +317,20 @@ outcomes.className = 'woc-meter-outcomes';
 outcomes.style.marginTop = '6px';
 outcomes.style.opacity = '0.75';
 
-panel.body.append(tabs, total, table, outcomes);
+const strip = woc.ui.tabs({
+  tabs: TABLES.map((entry) => ({ id: entry.id, label: entry.label })),
+  active: tab,
+  onSelect: (id) => {
+    tab = id;
+    // Clearing is what makes the switch instant rather than one repaint late.
+    clearRows();
+    repaint();
+  },
+});
+// The addon's own marking, for its own styling. The kit's classes are already on it.
+strip.el.classList.add('woc-meter-tabs');
+
+panel.body.append(strip.el, total, table, outcomes);
 
 /** Ability label to its row, reused across repaints. */
 const rows = new Map();
@@ -335,31 +343,6 @@ function clearRows() {
   rows.clear();
   table.replaceChildren();
 }
-
-/**
- * One tab per table.
- *
- * `woc-tab` is the loader's own tab family, which the manager's strip uses, so
- * these get its hover and focus treatment rather than a private imitation. Inside
- * a compact frame it is drawn compact, which is what the density option is for.
- */
-function createTab(entry) {
-  const button = document.createElement('button');
-  button.type = 'button';
-  button.className = 'woc-tab woc-meter-tab';
-  button.dataset.tab = entry.id;
-  button.textContent = entry.label;
-  button.addEventListener('click', () => {
-    tab = entry.id;
-    // Clearing is what makes the switch instant rather than one repaint late.
-    clearRows();
-    repaint();
-  });
-  tabs.appendChild(button);
-  return button;
-}
-
-const tabButtons = TABLES.map(createTab);
 
 /**
  * One row, from the loader's own timer bar rather than hand-built.
@@ -388,10 +371,25 @@ const tabButtons = TABLES.map(createTab);
 function createRow(label, school) {
   const bar = woc.ui.bar({ label, school, icon: abilityArt(label), className: 'woc-meter-row' });
   bar.el.dataset.ability = label;
-  woc.ui.tooltip(bar.el, label);
+  woc.ui.tooltip(bar.el, () => rowTooltip(label, school));
   return bar;
 }
 // #endregion
+
+function rowTooltip(label, school) {
+  const tally = fight.tallies[tab].get(label);
+  if (tally === undefined) {
+    return label;
+  }
+  const lines = [detailText(tally)];
+  if (school !== null && school !== undefined) {
+    lines.push({ text: `${school} damage`, tone: 'muted' });
+  }
+  if (abilityArt(label) === null) {
+    lines.push({ text: 'not in your spellbook', tone: 'muted' });
+  }
+  return { title: label, icon: abilityArt(label), lines };
+}
 
 /**
  * The icon for a row, found from the display name the event gave us.
@@ -442,16 +440,26 @@ function detailLine(tally) {
   return '';
 }
 
-function drawRow(label, tally, whole, seconds) {
+/**
+ * Put a row at its position, and only if it is not there already.
+ */
+function place(el, at) {
+  if (table.children[at] !== el) {
+    table.insertBefore(el, table.children[at] ?? null);
+  }
+}
+
+/** One row, against the table it is part of: the whole, the clock, and its slot. */
+function drawRow(label, tally, table_) {
   const row = rows.get(label) ?? createRow(label, tally.school);
   rows.set(label, row);
-  const rate = (tally.total / seconds).toFixed(DECIMALS);
+  const rate = (tally.total / table_.seconds).toFixed(DECIMALS);
   row.update({
-    fraction: tally.total / Math.max(whole, 1),
-    value: `${num(tally.total)}  ${pct(tally.total, whole)}  ${rate}`,
+    fraction: tally.total / Math.max(table_.whole, 1),
+    value: `${num(tally.total)}  ${pct(tally.total, table_.whole)}  ${rate}`,
     detail: detailLine(tally),
   });
-  table.appendChild(row.el);
+  place(row.el, table_.at);
 }
 
 function drawTable(seconds) {
@@ -464,8 +472,8 @@ function drawTable(seconds) {
       rows.delete(label);
     }
   }
-  for (const [label, tally] of ordered) {
-    drawRow(label, tally, whole, seconds);
+  for (const [at, [label, tally]] of ordered.entries()) {
+    drawRow(label, tally, { whole, seconds, at });
   }
 }
 
@@ -519,13 +527,6 @@ function repaint() {
   const amount = num(fight.totals[tab]);
   total.textContent = `${amount} ${nounFor(tab)} in ${duration(seconds)}${fightSuffix()}`;
 
-  for (const button of tabButtons) {
-    const active = button.dataset.tab === tab;
-    button.setAttribute('aria-pressed', String(active));
-    // `woc-tab-active` is the loader's own marking, so the open tab looks the way
-    // the manager's does. aria-pressed alone is invisible to anyone looking.
-    button.classList.toggle('woc-tab-active', active);
-  }
   drawTable(seconds);
   outcomes.textContent = outcomeLine();
 }

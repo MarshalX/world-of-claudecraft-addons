@@ -1,0 +1,85 @@
+/* The context menu and the two field controls that had no rules yet.
+ *
+ * A sheet of its own rather than more of panes.css, which is the MANAGER's panes:
+ * everything here is a surface an addon asks the loader for, and the two change
+ * for different reasons. The controls an addon reuses (.woc-btn, .woc-input,
+ * .woc-field) are still declared there, because the manager is their first
+ * consumer and a copy here would be a second set to keep in step.
+ *
+ * The menu sits in the overlay band with the toasts, the modal and the tooltip,
+ * above every window whatever order they were clicked in. It is transient and
+ * cannot be arranged around, so being under a window it was opened from would
+ * only ever be wrong. Keep this in step with kit/stacking.ts's ceiling.
+ */
+#woc-addons .woc-menu {
+  position: fixed;
+  display: flex;
+  flex-direction: column;
+  min-width: 160px;
+  max-width: 280px;
+  padding: 4px;
+  border-radius: var(--radius-sm, 4px);
+  z-index: 100002;
+}
+
+#woc-addons .woc-menu-item {
+  background: none;
+  border: none;
+  border-radius: var(--radius-sm, 4px);
+  color: var(--color-text-light, rgb(240 235 216));
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 14px;
+  /* The tap-target floor the game holds its own controls to. A menu is operated
+     rather than glanced at, so it keeps the floor even inside a compact frame:
+     the frame's density says how tightly ITS chrome is drawn, and this is not in
+     the frame at all. */
+  min-height: 40px;
+  padding: 4px 10px;
+  text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+#woc-addons .woc-menu-item:hover:not(:disabled) {
+  background: rgb(255 255 255 / 8%);
+  color: var(--gold, rgb(255 209 0));
+}
+
+#woc-addons .woc-menu-item:disabled {
+  color: var(--color-text-muted, rgb(153 141 106));
+  cursor: default;
+}
+
+/* A rule ABOVE the item, drawn with margin so the groups either side keep their
+   own padding. kit/menu.ts refuses it on the first item, where it would draw a
+   lid on the menu rather than separate anything. */
+#woc-addons .woc-menu-cut {
+  border-top: 1px solid var(--color-border-default, rgb(78 61 29));
+  margin-top: 4px;
+  padding-top: 8px;
+}
+
+/* The slider's readout, which sits inside the field's label so the two read as
+   one line: "Rolling window   5". Tabular figures for the same reason a bar's
+   countdown has them, since this number moves while the player drags. */
+#woc-addons .woc-field-value {
+  color: var(--color-text-light, rgb(240 235 216));
+  font-variant-numeric: tabular-nums;
+  margin-left: 6px;
+}
+
+/* The range input. The game styles none of its own, so this is the one control
+   here with no game rule to inherit: it is drawn from the same tokens the rest
+   of the kit uses rather than invented, and left at the browser's own thumb,
+   which is the part a player's pointer and touch settings already tune. */
+#woc-addons .woc-slider {
+  width: 100%;
+  min-height: 40px;
+  accent-color: var(--gold-dim, rgb(200 168 56));
+}
+
+#woc-addons .woc-slider:disabled {
+  opacity: 0.5;
+}
