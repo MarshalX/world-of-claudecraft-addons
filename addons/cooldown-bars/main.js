@@ -21,40 +21,53 @@
 // slightly differently. Anything an addon draws that looks like a timer comes from
 // here, in one of the two shapes the last paragraph describes.
 //
-// The full length of an ordinary cooldown is not published. What is readable is how
-// much is LEFT, so a bar's total is whatever it had left the moment it appeared.
-// That is exact for a cooldown that starts while you are watching, and honest about
-// one that was already running when the addon loaded: it fills the bar from wherever
-// it was found rather than pretending to know the rest.
+// A bar's denominator comes from your own spellbook. `world.abilities.byId(id)`
+// carries the RESOLVED cooldown, after talents, which is the number a countdown has
+// to divide by, so a row for an ability you know is right on the first frame it is
+// drawn: it does not matter whether the cooldown started while you were watching or
+// was already half spent when the addon loaded.
+//
+// That covers your kit and nothing else. An item cooldown, or an ability granted by
+// something other than your class, is not in the spellbook and has no published
+// length anywhere, so those rows fall back to the only figure there is: whatever
+// they had left the moment they appeared. That is exact for one that starts while
+// you are watching and a floor for one that was already running, and the tooltip
+// says which of the two you are looking at rather than letting a full bar imply the
+// addon knows more than it does.
 //
 // A cooldown only ever counts DOWN, so a remaining that goes UP can only mean the
-// ability was re-armed, and the bar re-learns its length there. The game does this
-// in ways the set of running ids does not report: casting one shaman shock sets the
-// cooldown on every shock, so an entry with two seconds left jumps back to six with
-// no id joining or leaving, and the subscription stays silent. Without the
-// re-learn a bar whose first sighting was part-way down has a denominator smaller
-// than what is left, and reads FULL for the whole difference.
+// ability was re-armed, and a MEASURED row re-learns its length there. The game does
+// this in ways the set of running ids does not report: casting one shaman shock sets
+// the cooldown on every shock, so an entry with two seconds left jumps back to six
+// with no id joining or leaving, and the subscription stays silent. Without the
+// re-learn such a bar has a denominator smaller than what is left and reads FULL for
+// the whole difference. A row with a published length is never re-baselined, because
+// there is nothing left to learn.
 //
-// The one case that cannot be detected is a reset followed by a re-press onto a
-// shorter cooldown, where the new remaining lands below the old one: 30 then 15
-// then 10 is what draining looks like. If any frame catches the gap at zero the
-// bar is dropped and rebuilt correctly, and if none does the bar reads low until
-// it next reaches zero. Nothing on the wire distinguishes those two, so the addon
-// does not pretend to.
+// The one case a measured row cannot detect is a reset followed by a re-press onto a
+// shorter cooldown, where the new remaining lands below the old one: 30 then 15 then
+// 10 is what draining looks like. If any frame catches the gap at zero the bar is
+// dropped and rebuilt correctly, and if none does the bar reads low until it next
+// reaches zero. Nothing on the wire distinguishes those two, so the addon does not
+// pretend to. An ability in your spellbook is immune to the whole problem.
 //
-// CHARGES are the exception to all of that, and the only exact bar here. An ability
-// with a charge pool (Twinstrike, Double Charge, frost's second Ice Block) carries
-// a real recharge LENGTH alongside its remaining, so its bar has a true denominator
-// from the first frame and needs no re-learning at all. Those rows are read from
-// `world.player.abilityCharges` in the frame loop rather than from a subscription,
-// because a charge regenerating while the pool still holds a use changes no
-// cooldown id: the set stays exactly as it was and the subscription never fires.
-// Walking that record per frame is cheap in a way walking the cooldown map is not,
-// since only a handful of abilities have charges at all.
+// CHARGES are the other exact bar, and the one the spellbook cannot supply. An
+// ability with a charge pool (Twinstrike, Double Charge, frost's second Ice Block)
+// carries a real recharge LENGTH alongside its remaining, which is a different number
+// from the ability's cooldown, so those rows measure against that instead. They are
+// read from `world.player.abilityCharges` in the frame loop rather than from a
+// subscription, because a charge regenerating while the pool still holds a use
+// changes no cooldown id: the set stays exactly as it was and the subscription never
+// fires. Walking that record per frame is cheap in a way walking the cooldown map is
+// not, since only a handful of abilities have charges at all.
 //
-// What is NOT read is `maxCharges`. The server keeps the maximum to itself, so the
-// field is present, numeric, and permanently zero, which is why the count reads as
-// "2 left" rather than as "2 of 3".
+// The POOL SIZE is not on that record. `abilityCharges[id].maxCharges` is present,
+// numeric, and permanently zero, because the server keeps the maximum to itself and
+// the client zero-fills the field. The spellbook has it: `AbilityInfo.charges` is the
+// resolved pool size after talents, which is what lets a bar read "2/3" rather than
+// "2". A pool on an ability outside your kit has no maximum anywhere and draws the
+// bare count. A TILE draws the bare count either way: its corner takes a number, and
+// a square with just enough room for a countdown has none for a fraction beside it.
 //
 // The rows come in two shapes, and the `layout` setting picks between them. A bar
 // is a row with the ability's NAME on it, read down a column; a tile is a square
@@ -75,8 +88,15 @@
 // deliberate choice rather than an omission: tiles sized to fill the width would
 // have to shrink as more cooldowns started, so the icons would change size in the
 // middle of a fight, which is exactly when a player is picking one out by shape.
-// A frame cannot be dragged SMALLER than the size it was created at, so the strip
-// starts at the tap-target floor the game holds its own controls to and grows.
+//
+// BOTH SIZE BOUNDS ARE STATED, and stating them is what a bare frame owes the
+// player. A frame that states neither takes the size it opened at as its floor,
+// which made the strip's width the one number here that could not be taken back:
+// it opens at room for six squares and could never be dragged down to the two a
+// player was actually watching. The floor is ONE SQUARE on both axes, derived from
+// the tile floor rather than written down twice, because one square is the least
+// this strip can draw and a bare frame's body CLIPS rather than scrolls: a strip
+// dragged under what it draws loses a cooldown rather than gaining a scrollbar.
 
 const DECIMALS = 1;
 const FRAME_WIDTH = 220;
@@ -91,14 +111,20 @@ const SECONDS_PER_MINUTE = 60;
  * The tile strip's starting height, which is also its floor and its icon size.
  *
  * 40 is the tap-target floor the game holds its own controls to, and the kit's own
- * default tile. It is the floor here because a frame's minimum IS the size it was
- * created at, so this is the smallest the strip can be dragged.
+ * default tile. It is the floor rather than merely the start because a strip drawn
+ * below it is a display a player cannot hit and can barely read, and it is the
+ * floor on BOTH axes: the height is one square and the width is one square's worth
+ * of room to grow from.
  */
 const TILE_START = 40;
 /** How wide the strip starts. Only room to grow into: see the note at the top. */
 const STRIP_WIDTH = 260;
 
-/** Ability id to the row tracking it: the kit widget, and what it had left when seen. */
+/**
+ * Ability id to the row tracking it: the kit widget, the denominator it is drawn
+ * against, whether that denominator was published or measured, and the size of its
+ * charge pool where the spellbook named one.
+ */
 const rows = new Map();
 
 /** The current icon size, which is the strip's height. Ignored by the bars layout. */
@@ -142,10 +168,43 @@ function readable(abilityId) {
  * A cooldown map is keyed by ability ID, and the id and the display name have
  * diverged, so for a long time these rows showed a title-cased id and there was no
  * way to do better. `world.abilities` is that way: it carries both for everything in
- * your own kit, which is everything with a cooldown you can see.
+ * your own kit, and everything else falls through to the guess above.
  */
 function abilityName(abilityId) {
   return woc.world.abilities.byId(abilityId)?.name ?? readable(abilityId);
+}
+
+/**
+ * A published figure, or null where there is none.
+ *
+ * The two fields say "nothing here" differently and both have to land on null.
+ * `cooldown` is always a number and is 0 for an ability that has none, while
+ * `charges` is ABSENT for the ordinary ability with a single use. Taking either at
+ * face value would put a 0 or an undefined into a division.
+ */
+function stated(value) {
+  if (typeof value === 'number' && value > 0) {
+    return value;
+  }
+  return null;
+}
+
+/**
+ * What the spellbook already knows about an ability, before anything is watched.
+ *
+ * Both figures are resolved after talents, which is what makes them usable as they
+ * stand: a hunter who has spent the point reads 5.4 on `arcane_shot` where the
+ * content table says 6, and a bar dividing by 6 would sit at 90 percent the instant
+ * it was pressed. Both are null for an ability outside your kit, and the two nulls
+ * are answered differently: a missing length puts the row on the measured path, while
+ * a missing pool size just drops a denominator off the count.
+ *
+ * One lookup rather than two, because a row asks for both at the same moment and
+ * `byId` is the only call either of them needs.
+ */
+function published(abilityId) {
+  const info = woc.world.abilities.byId(abilityId);
+  return { length: stated(info?.cooldown), pool: stated(info?.charges) };
 }
 
 /**
@@ -213,6 +272,11 @@ function buildFrame() {
     resizable: true,
     density: 'bare',
     save: true,
+    // Both are the same constant, so nothing later can want them restated: the
+    // floor is one tap-target square whatever the bar budget is set to and however
+    // many cooldowns happen to be running.
+    minWidth: TILE_START,
+    minHeight: TILE_START,
     onMove: (box) => {
       resize(box.h);
     },
@@ -229,12 +293,17 @@ frame.body.appendChild(list);
  * Called at pointer rate while a resize is in progress, so it does nothing when the
  * height has not actually moved: a drag along the bottom edge changes the height on
  * every event, but a drag along the side changes only x and w.
+ *
+ * The floor is applied here as well as stated on the frame, because the icon size
+ * has to hold for a box from anywhere: a restored one, a viewport clamp, or a
+ * height a future bound lets through.
  */
 function resize(height) {
-  if (height === tileSize || height <= 0) {
+  const next = Math.max(Math.round(height), TILE_START);
+  if (next === tileSize) {
     return;
   }
-  tileSize = height;
+  tileSize = next;
   for (const row of rows.values()) {
     row.ui.update({ size: tileSize });
   }
@@ -299,18 +368,49 @@ function createTile(abilityId) {
 }
 // #endregion
 
+/**
+ * `charge` for one and `charges` for anything else.
+ *
+ * A tooltip is read by a player rather than parsed, so `charge(s)` is a form that
+ * belongs in a log line: the count is known here even when the pool size is not, so
+ * there is nothing to hedge about.
+ */
+function chargeWord(charges) {
+  if (charges === 1) {
+    return 'charge';
+  }
+  return 'charges';
+}
+
+/** `1 of 2 charges ready`, or the bare count for a pool with no published size. */
+function chargeLine(charges, pool) {
+  if (pool === null) {
+    return `${String(charges)} ${chargeWord(charges)} ready`;
+  }
+  return `${String(charges)} of ${String(pool)} charges ready`;
+}
+
 // #region tooltip
+/**
+ * What the row is, and how much of that is measured rather than known.
+ *
+ * The last line is read off the ROW rather than off the reading, because it is a
+ * statement about the denominator this particular bar is drawn against, and that was
+ * decided when the row was built. A row raised before the spellbook arrived stays
+ * measured for its whole life, and saying so is the point of the line.
+ */
 function timerTooltip(abilityId) {
   const name = abilityName(abilityId);
-  const entry = timers().find((row) => row.abilityId === abilityId);
-  if (entry === undefined) {
+  const entry = timers().find((timer) => timer.abilityId === abilityId);
+  const row = rows.get(abilityId);
+  if (entry === undefined || row === undefined) {
     return name;
   }
   const lines = [`${entry.remaining.toFixed(DECIMALS)}s left`];
   if (typeof entry.charges === 'number' && entry.charges > 0) {
-    lines.push({ text: `${String(entry.charges)} charge(s) ready`, tone: 'good' });
+    lines.push({ text: chargeLine(entry.charges, row.pool), tone: 'good' });
   }
-  if (entry.total === null) {
+  if (!row.exact) {
     lines.push({ text: 'length unknown, measured from when it was first seen', tone: 'muted' });
   }
   return { title: name, icon: woc.ui.icon.ability(abilityId, playerClass()), lines };
@@ -350,8 +450,9 @@ function chargePools() {
 /**
  * Every ability regenerating a charge, with the exact length to measure against.
  *
- * `rechargeLength` is what makes these rows different from every other bar in this
- * addon: it is a real total, published, so the fill is right on the first frame.
+ * `rechargeLength` is on the wire and is the RECHARGE, which is not the ability's
+ * cooldown and is not in the spellbook, so this is the one denominator here that
+ * `world.abilities` cannot supply and the reading has to carry itself.
  */
 function rechargingAbilities() {
   const found = [];
@@ -365,7 +466,13 @@ function rechargingAbilities() {
   return found;
 }
 
-/** Everything running, in whatever order the game's map is in. */
+/**
+ * Everything running, in whatever order the game's map is in.
+ *
+ * `total` is null on every entry, because the wire carries no length for an ordinary
+ * cooldown. Where a length exists it comes off the spellbook, and `syncRows` is where
+ * that join happens: this is what the game said, not what the addon worked out.
+ */
 function runningCooldowns() {
   const live = woc.world.cooldowns;
   if (live === null) {
@@ -415,6 +522,11 @@ function timers() {
  * not restart its fill. A row with a published total is marked exact and is never
  * re-baselined, since there is nothing to learn.
  *
+ * The spellbook is consulted HERE and not in the reading, so it costs one lookup per
+ * row rather than one per running cooldown per frame. A row's denominator cannot
+ * change under it anyway: what a resolved cooldown is was settled before the ability
+ * was pressed.
+ *
  * The reading is a parameter, not a read. Everything below here runs inside one
  * frame and has to agree about what is running: taking a fresh reading per function
  * was three walks of the cooldown map for one frame, and the last of them could
@@ -432,11 +544,14 @@ function syncRows(running) {
 
   for (const { abilityId, remaining, total } of running) {
     if (!rows.has(abilityId)) {
+      const known = published(abilityId);
+      const length = total ?? known.length;
       rows.set(abilityId, {
         ...createRow(abilityId),
-        total: total ?? remaining,
+        total: length ?? remaining,
         seen: remaining,
-        exact: total !== null,
+        exact: length !== null,
+        pool: known.pool,
       });
     }
   }
@@ -459,12 +574,15 @@ function drawOrder(running) {
 /**
  * Re-learn a cooldown's length if it went back up.
  *
- * The only signal there is. A cooldown counts down, so an increase can only be a
- * re-arm, and it is the one the set of running ids never reports: a shared
+ * The only signal a MEASURED row has. A cooldown counts down, so an increase can only
+ * be a re-arm, and it is the one the set of running ids never reports: a shared
  * cooldown re-arming an entry that is already running changes no id at all.
  *
- * A charge recharge is skipped: its total is published, so an increase there is a
- * fresh recharge starting against the same known length rather than news.
+ * Skipped for anything exact, which is now most rows: an increase against a published
+ * length is a fresh press or a fresh recharge starting from a number already known,
+ * rather than news about how long the ability takes. This survives for the residue,
+ * where it is still the only thing standing between an item cooldown found part-way
+ * down and a bar that reads full for the difference.
  */
 function rebaseline(row, remaining) {
   if (!row.exact && remaining > row.seen) {
@@ -481,11 +599,19 @@ function toneFor(fraction) {
   return 'default';
 }
 
-/** `4.2s`, or `4.2s (2)` for an ability still holding a charge while it recharges. */
-function figure(remaining, charges) {
+/** `2/3` where the pool's size is published, the bare count where it is not. */
+function chargeCount(charges, pool) {
+  if (pool === null) {
+    return String(charges);
+  }
+  return `${String(charges)}/${String(pool)}`;
+}
+
+/** `4.2s`, or `4.2s (2/3)` for an ability still holding a charge while it recharges. */
+function figure(remaining, charges, pool) {
   const left = `${remaining.toFixed(DECIMALS)}s`;
   if (typeof charges === 'number' && charges > 0) {
-    return `${left} (${String(charges)})`;
+    return `${left} (${chargeCount(charges, pool)})`;
   }
   return left;
 }
@@ -511,7 +637,8 @@ function countdown(remaining) {
  * The two kit widgets take the same three fields for the timer itself, so the only
  * branch is the charge count: a bar has one figure and carries it in parentheses,
  * a tile has a corner for it and a `count` field that hides itself when there is
- * nothing to show.
+ * nothing to show. That corner is a NUMBER, which is why only the bar shows the
+ * size of the pool; the tooltip gives it to both.
  */
 function paint(row, remaining, charges, fraction) {
   const tone = toneFor(fraction);
@@ -519,7 +646,7 @@ function paint(row, remaining, charges, fraction) {
     row.ui.update({ fraction, value: countdown(remaining), count: charges, tone });
     return;
   }
-  row.ui.update({ fraction, value: figure(remaining, charges), tone });
+  row.ui.update({ fraction, value: figure(remaining, charges, row.pool), tone });
 }
 
 function draw(running) {

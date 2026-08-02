@@ -115,6 +115,8 @@ const SCENARIOS: readonly Scenario[] = [
   {
     id: 'bars',
     label: 'Five draining bars',
+    preview: true,
+    alt: 'The Cooldowns overlay, five draining bars ordered by time remaining: Rapid Fire 4.4s, Fell Shot 5.8s, Counter Shot 10.4s, Twinstrike 97.5s with one of two charges back, and Aimed Shot 155.5s. Each row carries the ability art the game files under its id, except Twinstrike, for which the game ships none.',
     settings: { layout: 'bars' },
     world: aHunter,
     run: onCooldown,
