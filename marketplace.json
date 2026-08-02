@@ -2,7 +2,7 @@
   "schema": 1,
   "name": "Official Marketplace",
   "maintainer": "MarshalX",
-  "generated": "2026-08-02T19:43:03.000Z",
+  "generated": "2026-08-02T19:45:04.000Z",
   "addons": [
     {
       "id": "cadence",
@@ -364,6 +364,79 @@
         }
       ],
       "path": "addons/facemark"
+    },
+    {
+      "id": "foretell",
+      "name": "Foretell",
+      "version": "1.0.0",
+      "apiVersion": 1,
+      "apiMinor": 2,
+      "author": "MarshalX",
+      "description": "A cast bar for everything casting near you, soonest to land first, as a borderless column or floating over each caster. Reads the world's own cast state, so a boss mechanic that raises no cast event still gets a bar.",
+      "entry": "main.js",
+      "preview": {
+        "file": "preview.png",
+        "alt": "a borderless column of four draining bars, soonest to land first, each naming its caster underneath. Shadow Bolt? at 0.7 seconds by Vessken, its fill red because it lands within a second, and its name worked out by title-casing the ability id, which the game itself calls Gloom Bolt: the question mark is the display saying so. Rift Thunderhead? at 1.9 seconds by the boss Tempest Vharok, marked the same way and drawn in the plain fill with no icon, because skill art is filed under a player class and nothing on the wire says what school a mob cast is. Aether Darts at 2.4 seconds by Sorrelin and Pyrelance at 3.1 seconds by Ilvane, both abilities this mage also knows, so both carry the game's own name unmarked, its art, and the colour the game gives that school, arcane blue and fire orange."
+      },
+      "homepage": "https://github.com/MarshalX/world-of-claudecraft-addons",
+      "tags": [
+        "combat",
+        "raid",
+        "interface"
+      ],
+      "permissions": [
+        "world.read",
+        "ui",
+        "keys"
+      ],
+      "keybinds": [
+        {
+          "id": "toggle",
+          "label": "Show or hide the cast bars",
+          "default": "Alt+KeyF"
+        }
+      ],
+      "settings": [
+        {
+          "id": "layout",
+          "type": "select",
+          "label": "Where the cast bars are drawn",
+          "default": "list",
+          "options": [
+            "list",
+            "anchors"
+          ]
+        },
+        {
+          "id": "max-bars",
+          "type": "number",
+          "label": "Most cast bars to show at once",
+          "default": 5,
+          "min": 1,
+          "max": 20
+        },
+        {
+          "id": "min-cast",
+          "type": "number",
+          "label": "Shortest cast worth a bar, in seconds",
+          "default": 0,
+          "min": 0,
+          "max": 10
+        },
+        {
+          "id": "channels",
+          "type": "boolean",
+          "label": "Include channelled casts",
+          "default": true
+        },
+        {
+          "id": "friendly",
+          "type": "boolean",
+          "label": "Include casts by friendly units",
+          "default": false
+        }
+      ],
+      "path": "addons/foretell"
     },
     {
       "id": "longwatch",
