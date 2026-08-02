@@ -1,0 +1,158 @@
+{
+  "gameVersion": "0.33.1",
+  "source": "src/sim/data.ts, src/sim/respawn_policy.ts, src/ui/i18n.resolved.generated/en.ts",
+  "rares": [
+    {
+      "id": "aurelhorn",
+      "name": "Aurelhorn, First of the Herd",
+      "zone": "veiled_hollow",
+      "x": 22,
+      "z": 1110,
+      "respawn": 150
+    },
+    {
+      "id": "brutok_skullsmasher",
+      "name": "Brutok Skullsmasher",
+      "zone": "thornpeak_heights",
+      "x": -45,
+      "z": 768,
+      "respawn": 10800
+    },
+    {
+      "id": "captain_verlan",
+      "name": "Captain Verlan",
+      "zone": "eastbrook_vale",
+      "x": 92,
+      "z": 90,
+      "respawn": 180
+    },
+    {
+      "id": "gleamstag",
+      "name": "The Gleamstag",
+      "zone": "veiled_hollow",
+      "x": -145,
+      "z": 1100,
+      "respawn": 175
+    },
+    {
+      "id": "grix_the_tunnelking",
+      "name": "Grix the Tunnelking",
+      "zone": "eastbrook_vale",
+      "x": -95,
+      "z": -78,
+      "respawn": 10800
+    },
+    {
+      "id": "grubjaw",
+      "name": "Grubjaw the Glutton",
+      "zone": "mirefen_marsh",
+      "x": -120,
+      "z": 480,
+      "respawn": 100
+    },
+    {
+      "id": "ironvein_foreman",
+      "name": "Ironvein Foreman",
+      "zone": "thornpeak_heights",
+      "x": 100,
+      "z": 617,
+      "respawn": 3600
+    },
+    {
+      "id": "marrowlord_varkas",
+      "name": "Marrowlord Varkas",
+      "zone": "thornpeak_heights",
+      "x": -34,
+      "z": 842,
+      "respawn": 3600
+    },
+    {
+      "id": "mirejaw_the_ravenous",
+      "name": "Mirejaw the Ravenous",
+      "zone": "mirefen_marsh",
+      "x": -132,
+      "z": 333,
+      "respawn": 16200
+    },
+    {
+      "id": "mogger",
+      "name": "Mogger",
+      "zone": "eastbrook_vale",
+      "x": 118,
+      "z": -26,
+      "respawn": 100
+    },
+    {
+      "id": "old_cragmaw",
+      "name": "Old Cragmaw",
+      "zone": "thornpeak_heights",
+      "x": -82,
+      "z": 575,
+      "respawn": 180
+    },
+    {
+      "id": "old_greyjaw",
+      "name": "Old Greyjaw",
+      "zone": "eastbrook_vale",
+      "x": 0,
+      "z": 100,
+      "respawn": 100
+    },
+    {
+      "id": "old_marrowshell",
+      "name": "Old Marrowshell",
+      "zone": "veiled_hollow",
+      "x": 103,
+      "z": 1144,
+      "respawn": 150
+    },
+    {
+      "id": "sethrael_palecoil",
+      "name": "Sethrael the Palecoil",
+      "zone": "thornpeak_heights",
+      "x": -96,
+      "z": 814,
+      "respawn": 100
+    },
+    {
+      "id": "shardlord_kazzix",
+      "name": "Shardlord Kazzix",
+      "zone": "thornpeak_heights",
+      "x": 145,
+      "z": 815,
+      "respawn": 100
+    },
+    {
+      "id": "sister_nhalia",
+      "name": "Sister Nhalia",
+      "zone": "mirefen_marsh",
+      "x": 24,
+      "z": 492,
+      "respawn": 16200
+    },
+    {
+      "id": "sloomtooth_the_drowned",
+      "name": "Sloomtooth the Drowned",
+      "zone": "mirefen_marsh",
+      "x": 118,
+      "z": 455,
+      "respawn": 16200
+    },
+    {
+      "id": "voskar_emberwing",
+      "name": "Voskar the Emberwing",
+      "zone": "thornpeak_heights",
+      "x": 80,
+      "z": 845,
+      "respawn": 21600
+    },
+    {
+      "id": "wraithbinder_maldrec",
+      "name": "Wraithbinder Maldrec",
+      "zone": "eastbrook_vale",
+      "x": 88,
+      "z": 92,
+      "respawn": 10800
+    }
+  ]
+}
