@@ -1,0 +1,70 @@
+{
+  "id": "cadence",
+  "name": "Cadence",
+  "version": "1.0.0",
+  "apiVersion": 1,
+  "apiMinor": 2,
+  "author": "MarshalX",
+  "description": "The four timings a rotation is played against, on one thin strip: your swing, the global cooldown, your cast with a latency band, and your resource with combo points as pips.",
+  "entry": "main.js",
+  "preview": {
+    "file": "preview.png",
+    "alt": "On the left, Casting, four thin rows. Swing at 1.4s of the 2.3 second weapon it learned from, GCD at 0.9s, a cast row named Long Draw with 0.8s left, and a Focus bar at 62 of 100. A pale band lies across the last stretch of the cast, covering the 180ms round trip the loader measured, and it is a measurement rather than a promise that a press inside it queues. There are no pips: a hunter has no combo points. On the right, Combo points, the same four rows on a rogue. Swing at 0.6s of a 1.7 second dagger, GCD at 0.4s against the one second base the game gives this class alone, an empty Cast row keeping its place rather than appearing when a cast starts, and an Energy bar at 45 of 100. Under it a strip of five pips with three lit, five being the most points this session has shown rather than a maximum anything on the wire states."
+  },
+  "homepage": "https://github.com/MarshalX/world-of-claudecraft-addons",
+  "tags": ["combat", "interface"],
+  "permissions": ["world.read", "net.read", "ui", "keys"],
+  "keybinds": [
+    {
+      "id": "toggle",
+      "label": "Show or hide the strip",
+      "default": "Alt+KeyG"
+    }
+  ],
+  "settings": [
+    {
+      "id": "show-swing",
+      "type": "boolean",
+      "label": "Show the swing timer",
+      "default": true
+    },
+    {
+      "id": "show-gcd",
+      "type": "boolean",
+      "label": "Show the global cooldown",
+      "default": true
+    },
+    {
+      "id": "show-cast",
+      "type": "boolean",
+      "label": "Show the cast bar",
+      "default": true
+    },
+    {
+      "id": "show-power",
+      "type": "boolean",
+      "label": "Show your resource and combo points",
+      "default": true
+    },
+    {
+      "id": "bar-height",
+      "type": "number",
+      "label": "Row height in pixels",
+      "default": 14,
+      "min": 8,
+      "max": 32
+    },
+    {
+      "id": "show-latency",
+      "type": "boolean",
+      "label": "Draw the latency band on the cast bar",
+      "default": true
+    },
+    {
+      "id": "hide-out-of-combat",
+      "type": "boolean",
+      "label": "Hide the strip while you are not fighting",
+      "default": false
+    }
+  ]
+}
