@@ -9,13 +9,15 @@
 // with the game and with every other addon.
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { createUi, elementId } from '../loader/src/runtime/api/ui.ts';
+import { createUi } from '../loader/src/runtime/api/ui.ts';
+import { elementId } from '../loader/src/runtime/api/ui-injections.ts';
 import { DisposalBag } from '../loader/src/runtime/disposal.ts';
 import { createAnchors } from '../loader/src/runtime/ui/kit/anchor3d.ts';
 import { createBanner } from '../loader/src/runtime/ui/kit/banner.ts';
 import { createFrameRoster } from '../loader/src/runtime/ui/kit/frame-roster.ts';
 import { createIconUrls } from '../loader/src/runtime/ui/kit/icons.ts';
 import { createGameInjector } from '../loader/src/runtime/ui/kit/injections.ts';
+import { createItemArt } from '../loader/src/runtime/ui/kit/item-art.ts';
 import { createMenus } from '../loader/src/runtime/ui/kit/menu.ts';
 import { createSkillArt } from '../loader/src/runtime/ui/kit/skill-art.ts';
 import { createStacking } from '../loader/src/runtime/ui/kit/stacking.ts';
@@ -23,6 +25,8 @@ import { createToaster } from '../loader/src/runtime/ui/kit/toast.ts';
 import { createTooltips } from '../loader/src/runtime/ui/kit/tooltip.ts';
 import { createUnlockMode } from '../loader/src/runtime/ui/kit/unlock.ts';
 import type { UiKit } from '../loader/src/runtime/ui/mount.ts';
+import type { ScreenPoint } from '../loader/src/runtime/world/project.ts';
+import { inertFrameLoop } from './fakes/frame-loop.ts';
 import { enterWorld, mountStartScreen } from './fakes/game-dom.ts';
 
 const FQID = 'official/combat-meter';
@@ -30,6 +34,9 @@ const VIEW = { w: 1280, h: 800 };
 
 /** Everything a DOM id may contain. */
 const ID_SAFE = /^[a-zA-Z0-9-]+$/;
+
+/** A read that never settles, which is what leaves an art manifest unknown. */
+const PENDING_MANIFEST = (): Promise<unknown> => new Promise(() => undefined);
 
 async function settle(): Promise<void> {
   await Promise.resolve();
@@ -43,7 +50,17 @@ afterEach(() => {
     stop();
   }
   document.body.innerHTML = '';
+  project.mockReset();
+  project.mockReturnValue({ x: 100, y: 200, depth: 12, behind: false });
+  unitPoint.mockReset();
+  unitPoint.mockReturnValue(null);
 });
+
+/** In front of the camera and on screen, which is what most of this suite wants. */
+const project = vi.fn((): ScreenPoint | null => ({ x: 100, y: 200, depth: 12, behind: false }));
+
+/** Replaced per case by the few tests that are about a unit. */
+const unitPoint = vi.fn((): { x: number; y: number; z: number } | null => null);
 
 function open() {
   const root = document.createElement('div');
@@ -62,6 +79,8 @@ function open() {
   };
 
   const kit: UiKit = {
+    project,
+    unitPoint,
     root,
     roster: createFrameRoster(),
     injector,
@@ -69,21 +88,25 @@ function open() {
     banner: createBanner({ doc: document, root, ...timers }),
     tooltips: createTooltips({ doc: document, root, viewport: () => VIEW }),
     menus: createMenus({ doc: document, root, viewport: () => VIEW }),
-    // A projector that answers, so an anchor an addon creates has somewhere to be.
+    // A projector that answers, so an anchor an addon creates has somewhere to be,
+    // and a loop that never runs, so nothing here needs stopping.
     anchors: createAnchors({
       doc: document,
       root,
-      project: () => ({ x: 100, y: 200, behind: false }),
+      project,
+      unitPoint,
       viewport: () => VIEW,
-      schedule: () => 0,
-      cancel: () => undefined,
+      frames: inertFrameLoop(),
     }),
     stacking: createStacking({ root }),
     unlock: createUnlockMode(root),
-    // A manifest reader whose fetch never settles, which is the state a first row is
+    // Manifest readers whose fetch never settles, which is the state a first row is
     // drawn in: `has` answers "not known yet", so the builder hands back the URL and
     // the image decides. A suite that wanted the authoritative answer would resolve it.
-    icons: createIconUrls(createSkillArt({ fetchJson: () => new Promise(() => undefined) })),
+    icons: createIconUrls(
+      createSkillArt({ fetchJson: PENDING_MANIFEST }),
+      createItemArt({ fetchJson: PENDING_MANIFEST }),
+    ),
   };
 
   const bag = new DisposalBag();
@@ -432,5 +455,59 @@ describe('disposal', () => {
     dismiss();
 
     expect(bag.size).toBeLessThan(withToast);
+  });
+});
+
+// `ui.project` is the same read `ui.anchor3d` places by, with no element.
+//
+// What is worth pinning is what it REFUSES, because the refusal is the whole
+// safety of the call: there is deliberately no `onScreen` flag, since a flag is a
+// thing an addon can forget to read, and the point it would be forgotten on is the
+// one whose coordinates are finite and wrong.
+describe('projecting a point', () => {
+  const Point = { x: 1, y: 2, z: 3 };
+
+  it('answers where the point is, with its depth', () => {
+    const { ui } = open();
+
+    expect(ui.project(Point)).toEqual({ x: 100, y: 200, depth: 12 });
+  });
+
+  it.each([
+    ['a point the guard rejected', { x: 100, y: 200, depth: 12, behind: true }],
+    ['a game that cannot be asked', null],
+  ])('answers null for %s', (_case, answer) => {
+    const { ui } = open();
+    project.mockReturnValue(answer);
+
+    expect(ui.project(Point)).toBeNull();
+  });
+
+  // An off-screen point in front of the camera is what an arrow pointing at an
+  // off-screen unit is built from, so turning it into a null would remove a
+  // feature to save an addon one comparison.
+  it('answers a point that is off screen but in front', () => {
+    const { ui } = open();
+    project.mockReturnValue({ x: -900, y: 200, depth: 12, behind: false });
+
+    expect(ui.project(Point)?.x).toBe(-900);
+  });
+
+  it('resolves a unit through the same resolver anchor3d uses', () => {
+    const { ui } = open();
+    unitPoint.mockReturnValue({ x: 9, y: 9, z: 9 });
+
+    const at = ui.project({ unit: 'target' });
+
+    expect(unitPoint).toHaveBeenCalledExactlyOnceWith({ unit: 'target' });
+    expect(project).toHaveBeenCalledExactlyOnceWith(9, 9, 9);
+    expect(at).not.toBeNull();
+  });
+
+  it('answers null for a unit with no point, without asking the renderer', () => {
+    const { ui } = open();
+
+    expect(ui.project({ unit: 'target', over: 'head' })).toBeNull();
+    expect(project).not.toHaveBeenCalled();
   });
 });

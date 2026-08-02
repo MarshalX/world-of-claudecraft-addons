@@ -92,8 +92,6 @@ export const EXEMPT: Record<string, string> = {
   'woc.clearInterval': 'same, for woc.setInterval.',
   'woc.cancelAnimationFrame': 'same, for woc.requestAnimationFrame.',
   'woc.api': 'the API version number, which the manifest page covers as `apiVersion`.',
-  'woc.now':
-    'a monotonic clock. It behaves exactly as performance.now does and has no addon-specific behaviour to explain.',
   'woc.log':
     'console logging, prefixed with the addon id so a message can be traced back to its addon. The three levels are one idea and behave as console does.',
   'woc.warn':

@@ -13,10 +13,12 @@
 
 import { API_MINOR, API_VERSION } from '../../shared/api-version.ts';
 import type { DisposalBag, Teardown } from '../disposal.ts';
+import { reportedOnce } from '../frame-loop.ts';
 import type { SettingValues } from '../settings/values.ts';
 import { createLogSurface, createStores, createSurfaces } from './bind.ts';
 import type { AddonApi, AddonContext, GameIdentity, SharedServices, WocApi } from './context.ts';
 import { addonIdentity } from './context.ts';
+import type { LogApi } from './log.ts';
 import { createTimers } from './timers.ts';
 
 /** Both the bag and the addon hold the unsubscribe, so an explicit call drops both. */
@@ -25,6 +27,28 @@ function tracked(bag: DisposalBag, off: Teardown): Teardown {
   return () => {
     drop();
     off();
+  };
+}
+
+/**
+ * The addon's seat on the loader's one animation-frame loop.
+ *
+ * Bagged, so a disabled addon stops drawing without having written that: disable
+ * is hot with no page reload, and a bare frame loop would go on running against
+ * DOM the loader has already removed. Guarded against the ADDON's own log rather
+ * than the diagnostics channel, so a throw lands where its author is looking, and
+ * reported once rather than sixty times a second for the rest of the session.
+ */
+function frameSurface(
+  shared: SharedServices,
+  bag: DisposalBag,
+  log: LogApi,
+): Pick<WocApi, 'onFrame'> {
+  const report = (err: unknown): void => {
+    log.error('an onFrame handler threw, and further throws from it are not reported', err);
+  };
+  return {
+    onFrame: (handler) => tracked(bag, shared.frames.on(reportedOnce(report, handler))),
   };
 }
 
@@ -63,7 +87,11 @@ function createAddonApi(shared: SharedServices, addon: AddonContext): AddonApi {
 
     onDispose: (teardown) => bag.add(teardown),
 
+    ...frameSurface(shared, bag, log),
+
     now: shared.now,
+
+    wallClock: shared.wallClock,
   };
 
   return {

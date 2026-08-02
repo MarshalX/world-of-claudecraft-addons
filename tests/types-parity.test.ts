@@ -26,6 +26,7 @@ import type { WorldKey } from '../loader/src/runtime/world/signature.ts';
 import type { WorldValues } from '../loader/src/runtime/world/values.ts';
 import type { GameInfo } from '../packages/types/addon.js';
 import type { Entity as PublicEntity } from '../packages/types/entity.js';
+import type { WocApi as PublicWocApi } from '../packages/types/index.js';
 import type { KeysApi as PublicKeysApi } from '../packages/types/keys.js';
 import type { NetApi as PublicNetApi } from '../packages/types/net.js';
 import type { SoundApi as PublicSoundApi } from '../packages/types/sound.js';
@@ -115,6 +116,36 @@ const wocCarriesStorage: Assignable<WocApi['storage'], PublicStorageApi> = true;
 const wocCarriesWorld: Assignable<WocApi['world'], PublicWorldApi> = true;
 const wocCarriesNet: Assignable<WocApi['net'], PublicNetApi> = true;
 
+/**
+ * The two ROOT members that are not facets, and both are the same kind of trap.
+ *
+ * `data` and `wallClock` are functions on `woc` itself rather than objects, so
+ * the per-facet checks above cannot reach them: a published signature drifting
+ * from the loader's would typecheck everywhere and be wrong at the addon.
+ *
+ * Both directions, like every surface here. One alone would let the published
+ * package promise a `data` that resolves something the loader never returns,
+ * which is exactly the shape of the `keys.capture()` drift this file was written
+ * for.
+ */
+const wocCarriesData: Assignable<WocApi['data'], PublicWocApi['data']> = true;
+const publishedIsData: Assignable<PublicWocApi['data'], WocApi['data']> = true;
+const wocCarriesWallClock: Assignable<WocApi['wallClock'], PublicWocApi['wallClock']> = true;
+const publishedIsWallClock: Assignable<PublicWocApi['wallClock'], WocApi['wallClock']> = true;
+
+/**
+ * The monotonic clock, checked against the wall clock it must NOT be.
+ *
+ * They are both `() => number`, so nothing structural tells them apart and no
+ * assertion here can. What this pins is that the published surface still carries
+ * two of them: collapsing them back into one is the change that would make the
+ * documented choice meaningless, and it would otherwise pass silently.
+ */
+const publishedHasBothClocks: Assignable<
+  PublicWocApi,
+  { now: () => number; wallClock: () => number }
+> = true;
+
 describe('the published types', () => {
   it('match the implementation in both directions', () => {
     expect([
@@ -154,6 +185,11 @@ describe('the published types', () => {
       wocCarriesStorage,
       wocCarriesNet,
       wocCarriesWorld,
+      wocCarriesData,
+      publishedIsData,
+      wocCarriesWallClock,
+      publishedIsWallClock,
+      publishedHasBothClocks,
     ]).not.toContain(false);
   });
 });

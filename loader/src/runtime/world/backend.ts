@@ -13,17 +13,17 @@
 
 import { fieldValue } from '../net/frames.ts';
 import { type AbilityIndex, createAbilityReader } from './abilities.ts';
-import {
-  type CharacterInfo,
-  type ProfessionInfo,
-  readCharacter,
-  readProfessions,
-  readTalents,
-  type TalentInfo,
-} from './character.ts';
+import { type ContentReads, contentReads } from './backend-content.ts';
+import type { BackendDeps } from './backend-deps.ts';
+import { type EconomyReads, economyReads } from './backend-economy.ts';
+import { type GearReads, gearReads } from './backend-gear.ts';
+import { type GroundReads, groundReads } from './backend-ground.ts';
+import { readAs } from './backend-read.ts';
+import { type SheetReads, sheetReads } from './backend-sheet.ts';
+import { type SocialReads, socialReads } from './backend-social.ts';
+import { readCharacterKey } from './character-key.ts';
 import { type CombatState, readCombat } from './combat.ts';
-import { castsOf, type EntityCast, type Hazard, hazardsOf, markersOf } from './derived.ts';
-import { type EncounterInfo, readEncounter } from './encounter.ts';
+import { castsOf, type EntityCast } from './derived.ts';
 import { mergeLive } from './facade.ts';
 import type {
   Aura,
@@ -34,7 +34,7 @@ import type {
   QuestProgress,
   WorldQuests,
 } from './game-types.ts';
-import { type GroupInfo, readGroup } from './group.ts';
+import { type CorpseView, corpseViewOf, viewerOf } from './ground.ts';
 import { readonlyMapView } from './readonly-map.ts';
 import { readThreat, type ThreatTable } from './threat.ts';
 
@@ -61,11 +61,6 @@ function entityMapReader(world: unknown): () => ReadonlyMap<number, Entity> {
     }
     return view;
   };
-}
-
-/** A live game object, or null when the game does not carry that member yet. */
-function readAs<T>(source: unknown, field: string): T | null {
-  return fieldValue(source, field) as T | null;
 }
 
 /**
@@ -161,7 +156,64 @@ function coreReads(world: unknown, entities: () => ReadonlyMap<number, Entity>) 
   };
 }
 
-export interface WorldBackend {
+/**
+ * The reads the loader ASSEMBLES rather than passes through.
+ *
+ * Split from `createGameBackend` for the reason `coreReads` was: one object
+ * literal holding every getter is past the length a function body is allowed,
+ * and the split has to preserve the getters or the facade stops being live.
+ * These belong together because none of them is a member of the game's own
+ * world object.
+ */
+function derivedReads(
+  world: unknown,
+  entities: () => ReadonlyMap<number, Entity>,
+  abilities: (world: unknown) => AbilityIndex,
+  deps: BackendDeps,
+) {
+  return {
+    get casts(): ReadonlyMap<number, EntityCast> {
+      return castsOf(entities());
+    },
+
+    get targetAuras(): readonly Aura[] | null {
+      return readAs<Aura[]>(targetOf(world, entities()), 'auras');
+    },
+
+    get abilities(): AbilityIndex {
+      return abilities(world);
+    },
+
+    get combat(): CombatState {
+      return combatOf(world, entities(), deps);
+    },
+  };
+}
+
+/** The lookups and the escape hatch, which are not state reads. */
+function tailReads(world: unknown, entities: () => ReadonlyMap<number, Entity>, deps: BackendDeps) {
+  return {
+    threat: (entityId: number): ThreatTable =>
+      readThreat(entities().get(entityId) ?? null, readAs<Entity>(world, 'player')?.id ?? null),
+
+    corpseLoot: (entityId: number): CorpseView | null =>
+      corpseViewOf(entities().get(entityId) ?? null, entityId, viewerOf(world)),
+
+    get characterKey(): string | null {
+      return readCharacterKey(deps.realm(), world);
+    },
+
+    raw: world,
+  };
+}
+
+export interface WorldBackend
+  extends ContentReads,
+    EconomyReads,
+    GearReads,
+    GroundReads,
+    SheetReads,
+    SocialReads {
   /** Which backend answered, so the manager's diagnostics can show it. */
   readonly kind: string;
   readonly player: Entity | null;
@@ -177,18 +229,18 @@ export interface WorldBackend {
   readonly bagCapacity: number | null;
   /** Money, in copper. */
   readonly copper: number | null;
-  /** The zone name the game is displaying. See `world/zone.ts`. */
-  readonly zone: string | null;
-  /** Progression, deeds and titles. See `world/character.ts`. */
-  readonly character: CharacterInfo | null;
-  readonly talents: TalentInfo | null;
-  readonly professions: ProfessionInfo | null;
-  /** Loot rolls, master loot and raid lockouts. See `world/group.ts`. */
-  readonly group: GroupInfo | null;
-  /** The instanced run in progress, thin by design. See `world/encounter.ts`. */
-  readonly encounter: EncounterInfo | null;
+  /**
+   * Who is playing, as the key everything per-character is filed under.
+   *
+   * On the backend rather than only on the facade because the watcher reads
+   * `backend[key]` directly, and a character SWITCH inside one page load is a
+   * change an addon has to be told about.
+   */
+  readonly characterKey: string | null;
   /** One entity's hate table, measured against the player. */
   readonly threat: (entityId: number) => ThreatTable;
+  /** One corpse's contents filtered to what the player could take, or null. */
+  readonly corpseLoot: (entityId: number) => CorpseView | null;
   readonly quests: WorldQuests;
   /**
    * Ability id to seconds remaining.
@@ -209,8 +261,6 @@ export interface WorldBackend {
   readonly casts: ReadonlyMap<number, EntityCast>;
   /** The target's auras, which `capture('target')` alone cannot report moving. */
   readonly targetAuras: readonly Aura[] | null;
-  readonly hazards: readonly Hazard[] | null;
-  readonly markers: ReadonlyMap<number, number> | null;
   /**
    * The player's own spellbook, projected and memoized.
    *
@@ -233,23 +283,6 @@ export interface WorldBackend {
   readonly raw: unknown;
 }
 
-/** What the combat reading needs that the game object does not carry. */
-export interface BackendDeps {
-  /** When damage involving the player last landed. See `world/combat-clock.ts`. */
-  lastDamageAt: () => number | null;
-  /** The sim's own clock, which deadlines are measured against. */
-  simNow: () => number | null;
-  now: () => number;
-  /**
-   * The zone name off the game's own minimap label.
-   *
-   * A dep rather than a read off the world object because it is the one member
-   * here whose source is the DOM: the zone table is content the loader cannot
-   * reach. See `world/zone.ts`.
-   */
-  zoneName: () => string | null;
-}
-
 /**
  * Read __game.world, or null when the hook does not carry one.
  *
@@ -264,58 +297,20 @@ export function createGameBackend(game: unknown, deps: BackendDeps): WorldBacken
   const entities = entityMapReader(world);
   const abilities = createAbilityReader();
 
-  return mergeLive(coreReads(world, entities), {
-    get casts(): ReadonlyMap<number, EntityCast> {
-      return castsOf(entities());
-    },
-
-    get targetAuras(): readonly Aura[] | null {
-      return readAs<Aura[]>(targetOf(world, entities()), 'auras');
-    },
-
-    get hazards(): readonly Hazard[] | null {
-      return hazardsOf(world);
-    },
-
-    get markers(): ReadonlyMap<number, number> | null {
-      return markersOf(world);
-    },
-
-    get abilities(): AbilityIndex {
-      return abilities(world);
-    },
-
-    get combat(): CombatState {
-      return combatOf(world, entities(), deps);
-    },
-
-    get zone(): string | null {
-      return deps.zoneName();
-    },
-
-    get character(): CharacterInfo | null {
-      return readCharacter(world);
-    },
-
-    get talents(): TalentInfo | null {
-      return readTalents(world);
-    },
-
-    get professions(): ProfessionInfo | null {
-      return readProfessions(world);
-    },
-
-    get group(): GroupInfo | null {
-      return readGroup(world, deps.simNow());
-    },
-
-    get encounter(): EncounterInfo | null {
-      return readEncounter(world);
-    },
-
-    threat: (entityId: number): ThreatTable =>
-      readThreat(entities().get(entityId) ?? null, readAs<Entity>(world, 'player')?.id ?? null),
-
-    raw: world,
-  });
+  // Nested `mergeLive` rather than a spread of the groups: a spread READS every
+  // getter once at assembly time, which is the failure the helper's own comment
+  // describes and which would freeze the facade at a world of nulls.
+  return mergeLive(
+    mergeLive(
+      mergeLive(coreReads(world, entities), derivedReads(world, entities, abilities, deps)),
+      mergeLive(sheetReads(world, deps), socialReads(world)),
+    ),
+    mergeLive(
+      mergeLive(groundReads(world, entities), mergeLive(gearReads(world), contentReads(world))),
+      mergeLive(
+        economyReads(world, () => entities().size > 0),
+        tailReads(world, entities, deps),
+      ),
+    ),
+  );
 }

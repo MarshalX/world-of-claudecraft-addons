@@ -64,6 +64,43 @@ export function talentSignature(talents: unknown): string {
   );
 }
 
+/** The identity's scalars plus its three id arrays, which are sorted and bounded. */
+export function identitySignature(identity: unknown): string {
+  if (identity === null) {
+    return '';
+  }
+  const scalars = ['synced', 'switchCount', 'amendsProgress', 'amendsRequired'];
+  const ids = ['archetype', 'pairedMajor', 'hobbyCraft'].map(
+    (field) => fieldString(identity, field) ?? '',
+  );
+  return (
+    `${joinFields(identity, scalars)}:${ids.join(':')}` +
+    `:${fieldArray(identity, 'attunedPairs').join(',')}` +
+    `:${fieldArray(identity, 'knownRecipes').join(',')}` +
+    `:${fieldArray(identity, 'cadenceBlockedQuests').join(',')}`
+  );
+}
+
+/**
+ * The two counter maps, the identity, and the placed mobile station.
+ *
+ * The counters are the signature of themselves: a skill only moves when the player
+ * did something worth repainting for. The identity joins both id ARRAYS rather than
+ * taking their lengths, unlike the milestone count on the character sheet, because a
+ * work order coming off cooldown as another goes on is a same-length swap and that is
+ * exactly the transition a crafting panel exists to show. Both arrays are
+ * server-sorted and bounded by the recipes in content.
+ */
+export function professionsSignature(professions: unknown): string {
+  if (professions === null) {
+    return '';
+  }
+  const crafts = countsSignature(fieldValue(professions, 'craftSkills'));
+  const gathering = countsSignature(fieldValue(professions, 'gathering'));
+  const identity = identitySignature(fieldValue(professions, 'identity'));
+  return `${crafts}|${gathering}|${identity}|${fieldString(professions, 'mobileStation') ?? ''}`;
+}
+
 /** A counter map as one string, sorted so key order cannot fire a change. */
 export function countsSignature(counters: unknown): string {
   if (counters === null || typeof counters !== 'object') {

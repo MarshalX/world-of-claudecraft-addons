@@ -22,8 +22,15 @@ interface CatalogState {
   status: CatalogStatus;
   /** Every source in list order, official first, each with its cached index. */
   markets: readonly MarketplaceState[];
-  /** fqids of everything installed, so a row knows which control to draw. */
-  installed: ReadonlySet<string>;
+  /**
+   * fqid to enable flag for everything installed, so a row knows what to draw.
+   *
+   * A map rather than a set because "installed but switched off" is a thing a
+   * row has to be able to say, and a set can only answer whether the fqid is
+   * there. Browse's own control was already drawing the same "Installed" for an
+   * addon that is running and one that is not.
+   */
+  installed: ReadonlyMap<string, boolean>;
   /** Installed addons their marketplace now offers a newer version of. */
   updates: readonly UpdateRow[];
   /** What an action is running against, so its row can disable. Null when idle. */
@@ -44,7 +51,7 @@ interface CatalogStore extends CatalogActions {
 const IDLE: CatalogState = {
   status: 'idle',
   markets: [],
-  installed: new Set(),
+  installed: new Map(),
   updates: [],
   busy: null,
   error: null,
@@ -78,7 +85,7 @@ async function read(deps: CatalogStoreDeps): Promise<CatalogState> {
   return {
     status: 'ready',
     markets,
-    installed: new Set(rows.map((row) => row.fqid)),
+    installed: new Map(rows.map((row) => [row.fqid, row.enabled])),
     updates,
     busy: null,
     error: null,

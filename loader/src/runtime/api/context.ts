@@ -11,6 +11,7 @@ import type { Channel } from '../../shared/hosts.ts';
 import type { AddonManifest } from '../../shared/schema.ts';
 import type { BusHub } from '../bus/hub.ts';
 import type { DisposalBag, Teardown } from '../disposal.ts';
+import type { FrameLoop } from '../frame-loop.ts';
 import type { KeyDispatcher } from '../keys/dispatcher.ts';
 import type { GameBindings } from '../keys/game-bindings.ts';
 import type { LogBuffer } from '../log/buffer.ts';
@@ -62,12 +63,34 @@ interface WocApi extends TimersApi, LogApi {
   readonly storage: AddonStorageApi;
   /** Publish and subscribe between addons, in this page. */
   readonly bus: BusApi;
+  /**
+   * A JSON file from this addon's own directory, declared as `data` in the
+   * manifest. Fetched by the loader at install; this is a cached read.
+   */
+  data: (name: string) => Promise<unknown>;
   /** Hydrated from the manifest schema before the addon's code runs. */
   readonly settings: SettingValues;
   onSettingsChange: (handler: SettingsChangeHandler) => Teardown;
   onDispose: (teardown: Teardown) => Teardown;
-  /** Monotonic milliseconds. */
+  /**
+   * Run something on the loader's own animation-frame loop.
+   *
+   * `dt` is milliseconds since the previous frame, 0 on the first, clamped at 250.
+   * Top level rather than under `ui`, because a decay curve and a meter's
+   * arithmetic are as much a use of a frame tick as a sweep is.
+   */
+  onFrame: (handler: (dt: number) => void) => Teardown;
+  /** Monotonic milliseconds. Right for an interval, wrong for anything you store. */
   now: () => number;
+  /**
+   * Epoch milliseconds, as `Date.now` reads them.
+   *
+   * Declared next to `now` because the choice between them is the whole hazard:
+   * an author following the prefer-`woc` rule reaches for the monotonic one,
+   * stores it, and gets a stamp that reads as being in the future on the next
+   * page load, with nothing to indicate it.
+   */
+  wallClock: () => number;
 }
 
 /** Everything shared across every addon, built once by the runtime. */
@@ -83,6 +106,8 @@ interface SharedServices {
   dispatcher: KeyDispatcher;
   gameBindings: GameBindings;
   logs: LogBuffer;
+  /** The one animation-frame loop. See runtime/frame-loop.ts. */
+  frames: FrameLoop;
   kit: UiKit;
   channel: Channel;
   host: string;
@@ -101,6 +126,13 @@ interface SharedServices {
    * subscription, and only an addon with a saved frame ever asks.
    */
   characterKnown: () => Promise<void>;
+  /**
+   * One addon's declared data file, out of the host's install-time cache.
+   *
+   * A function rather than a hub, because there is no event to route and no state
+   * to hold: the host answers, the per-addon surface in api/data.ts memoises.
+   */
+  addonData: (fqid: string, name: string) => Promise<string>;
   now: () => number;
   wallClock: () => number;
   viewport: () => { w: number; h: number };

@@ -49,6 +49,7 @@ function harness(game: Record<string, unknown> | null = null): Harness {
     now: () => 0,
     zoneName: () => null,
     simNow: () => null,
+    realm: () => null,
   });
   const bag = new DisposalBag();
 

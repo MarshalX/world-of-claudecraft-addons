@@ -6,83 +6,16 @@
 
 import type { AbilityIndex } from './abilities.js';
 import type { Unsubscribe } from './addon.js';
+import type { ArenaStandings } from './arena.js';
 import type { CharacterInfo, ProfessionInfo, TalentInfo } from './character.js';
-import type { Aura, AuraKind, Entity, ResourceType } from './entity.js';
+import type { Recipe, Station } from './content.js';
+import type { BankState, MailState, MarketState } from './economy.js';
+import type { Aura, Entity, EquipSlot, ItemInstance, PublicItemInstance, Vec3 } from './entity.js';
+import type { FinderInfo, FinderListingRow } from './finder.js';
 import type { EncounterInfo, GroupInfo, ThreatTable } from './group.js';
-
-/** A compact aura summary for a party row. Not the full `Aura`. */
-export interface PartyMemberAura {
-  id: string;
-  kind: AuraKind;
-  /** 1 when the effect is a debuff. */
-  neg?: 1;
-  /** Whole seconds. Absent on an older snapshot. */
-  remaining?: number;
-}
-
-/**
- * One party or raid row.
- *
- * These are the terse wire names, not the entity's: a row carries `mhp` where an
- * entity carries `maxHp`, and the flags are 0 or 1 rather than booleans. Party
- * rows come straight off the socket, which is why they read differently from
- * everything else here.
- */
-export interface PartyMember {
-  pid: number;
-  name: string;
-  /** The class id, e.g. 'hunter'. */
-  cls: string;
-  level: number;
-  hp: number;
-  mhp: number;
-  res: number;
-  mres: number;
-  rtype: ResourceType | null;
-  x: number;
-  z: number;
-  dead: number;
-  inCombat: number;
-  /** Raid subgroup. */
-  group: 1 | 2;
-  /** Remaining absorb total. Absent on an older snapshot. */
-  absorb?: number;
-  role?: 'tank' | 'healer' | 'dps';
-  /** 0 only when the realm reports this member disconnected. */
-  connected?: number;
-  /** 1 while a living hostile is targeting this member. */
-  hasAggro?: number;
-  incomingHeal?: number;
-  /** Absent on an older snapshot, which decodes as "no auras". */
-  auras?: PartyMemberAura[];
-}
-
-export interface PartyInfo {
-  /** The leader's pid. */
-  leader: number;
-  raid: boolean;
-  members: PartyMember[];
-}
-
-/**
- * A slot a piece of gear is worn in.
- *
- * Closed rather than a string: this is the shape of a paperdoll, not content
- * that grows with a game release.
- */
-export type EquipSlot =
-  | 'mainhand'
-  | 'offhand'
-  | 'helmet'
-  | 'neck'
-  | 'shoulder'
-  | 'chest'
-  | 'waist'
-  | 'legs'
-  | 'gloves'
-  | 'feet'
-  | 'ring1'
-  | 'ring2';
+import type { MatchInfo } from './match.js';
+import type { PartyAuraQuery, PartyInfo, PartyMemberAura } from './party.js';
+import type { CorpseView, DeathZone, Hazard } from './world-ground.js';
 
 /** One stack in the bags. */
 export interface InvSlot {
@@ -90,6 +23,15 @@ export interface InvSlot {
   count: number;
   /** The bag cell it was dragged into. Absent when it was never placed by hand. */
   slot?: number;
+  /**
+   * What is baked into this specific copy. Absent on an ordinary fungible stack.
+   *
+   * The PUBLIC trim, everywhere this shape appears. Your own goods carry more on
+   * the game object, reachable through `world.raw`; a field that is present on
+   * three surfaces and absent on two is worse than one that is absent
+   * everywhere.
+   */
+  instance?: PublicItemInstance;
 }
 
 export interface QuestProgress {
@@ -125,28 +67,6 @@ export interface EntityCast {
   total: number;
   /** Whether it is a channel, which drains rather than completes. */
   channeling: boolean;
-}
-
-export type HazardKind = 'frostRing' | 'temporalHourglass';
-
-/**
- * A ground effect with a position, a radius and a life.
- *
- * These two are the only ground effects whose geometry rides the snapshot, and
- * they arrive filtered to what is near you. Every other ground AoE announces
- * itself once as a `spellfxAt` event and then lives only in the renderer, so
- * tracking those means keeping your own list from the events.
- */
-export interface Hazard {
-  id: string;
-  kind: HazardKind;
-  x: number;
-  z: number;
-  radius: number;
-  /** The inner edge of a ring's safe middle. 0 when the whole disc is hot. */
-  innerRadius: number;
-  duration: number;
-  remaining: number;
 }
 
 /**
@@ -209,19 +129,6 @@ export interface AuraQuery {
   mine?: boolean;
 }
 
-/**
- * The same over a party row's strip, which is a smaller shape.
- *
- * A row's auras carry an id, a kind, whole seconds, and a debuff flag. No
- * source, so there is no `mine` here rather than one that silently does nothing.
- */
-export interface PartyAuraQuery {
-  id?: string;
-  kind?: string;
-  /** True for debuffs only, false for buffs only, absent for both. */
-  debuff?: boolean;
-}
-
 /** What each read returns, and what the matching `world.on` key reports. */
 export interface WorldValues {
   player: Entity | null;
@@ -230,14 +137,26 @@ export interface WorldValues {
   party: PartyInfo | null;
   inventory: readonly InvSlot[] | null;
   equipment: Partial<Record<EquipSlot, string>> | null;
+  /** What is on the worn gear. Sparse: a plain piece has no key. Added in API minor 2. */
+  equipmentInstances: Partial<Record<EquipSlot, ItemInstance>> | null;
   bags: readonly (string | null)[] | null;
   copper: number | null;
   zone: string | null;
+  /** Who is playing, as the key per-character state is filed under. Added in API minor 2. */
+  characterKey: string | null;
   character: CharacterInfo | null;
   talents: TalentInfo | null;
   professions: ProfessionInfo | null;
   group: GroupInfo | null;
   encounter: EncounterInfo | null;
+  /** The competitive bout in progress. Added in API minor 2. */
+  match: MatchInfo | null;
+  /** Your standings and queue. Added in API minor 2. */
+  arena: ArenaStandings | null;
+  /** Your dungeon finder state. Added in API minor 2. */
+  finder: FinderInfo | null;
+  /** The realm's open premade listings. Added in API minor 2. */
+  finderBoard: readonly FinderListingRow[] | null;
   quests: WorldQuests | null;
   cooldowns: ReadonlyMap<string, number> | null;
   auras: readonly Aura[] | null;
@@ -245,8 +164,28 @@ export interface WorldValues {
   targetAuras: readonly Aura[] | null;
   hazards: readonly Hazard[] | null;
   markers: ReadonlyMap<number, number> | null;
+  /** Lethal rings on a rift boss floor. Added in API minor 2. */
+  deathZones: readonly DeathZone[] | null;
+  /** Every lootable corpse in scope. Never null, like `casts`. Added in API minor 2. */
+  corpses: ReadonlyMap<number, CorpseView>;
+  /** Gathering node id to seconds until you can harvest it. Added in API minor 2. */
+  nodeCooldowns: ReadonlyMap<string, number> | null;
+  /** Where your own body lies while your spirit is a ghost. Added in API minor 2. */
+  corpse: Vec3 | null;
   abilities: AbilityIndex;
   combat: CombatState;
+  /** The Merchant's book, or why there is not one. Never null. Added in API minor 2. */
+  market: MarketState;
+  /** Whether gold or goods wait at the Merchant. Added in API minor 2. */
+  marketCollectPending: boolean | null;
+  /** The mailbox, or why there is not one. Never null. Added in API minor 2. */
+  mail: MailState;
+  /** Delivered and unread letters. Added in API minor 2. */
+  mailUnread: number | null;
+  /** The deposit box, or why there is not one. Never null. Added in API minor 2. */
+  bank: BankState;
+  /** The buyback ring, most recent first. Added in API minor 2. */
+  buyback: readonly InvSlot[] | null;
 }
 
 /** The state keys `world.on` can watch. Anything else throws. */
@@ -287,6 +226,19 @@ export interface WorldApi {
    */
   readonly equipment: Partial<Record<EquipSlot, string>> | null;
 
+  /**
+   * What is ON your worn gear: enchants, masterwork and rift rolls, signers.
+   *
+   * Keyed like `equipment` and sparse: a plain piece has no key, so an absent
+   * slot means nothing is on it rather than nothing is worn. This is the
+   * untrimmed payload, unlike `world.player.equippedInstances`, which is the
+   * public projection the server sends about you to everybody else.
+   *
+   * It rides the heavy half of your own payload, so a change lands within a
+   * couple of seconds rather than on the next tick. Added in API minor 2.
+   */
+  readonly equipmentInstances: Partial<Record<EquipSlot, ItemInstance>> | null;
+
   /** The bag sockets: an item id per equipped bag, null for an empty socket. */
   readonly bags: readonly (string | null)[] | null;
 
@@ -320,6 +272,20 @@ export interface WorldApi {
   readonly zone: string | null;
 
   /**
+   * Who is playing, as the key per-character state is filed under.
+   *
+   * The value `woc.storage.character` derives its keys from, published so two
+   * addons keeping their own per-character records cannot disagree about whose
+   * they are. OPAQUE: do not parse it. Null before world entry.
+   *
+   * Watchable, because a character SWITCH inside one page load is real: the game
+   * clones and removes its HUD rather than reloading, so an addon holding a
+   * per-character view has to be told when it is looking at somebody else. Added
+   * in API minor 2.
+   */
+  readonly characterKey: string | null;
+
+  /**
    * Your progression, deeds and title. Null before world entry.
    *
    * All of it rides your own self payload, so there is no equivalent for another
@@ -338,6 +304,42 @@ export interface WorldApi {
 
   /** The instanced run you are inside, or null out in the world. */
   readonly encounter: EncounterInfo | null;
+
+  /**
+   * The competitive bout you are in, or null.
+   *
+   * One union over all six formats, discriminated on `format`, so a display asks
+   * what kind of bout this is rather than reading two unrelated members. A duel
+   * is a member of it.
+   *
+   * Everything but a duel is UP TO TEN SECONDS OLD, because the arena key is
+   * gated to 0.1 Hz on the server. That is the game's own cadence, so a Fiesta
+   * ring drawn from this agrees with the ring the game draws; a Yumi health bar
+   * does not, and the type says which events carry the live figures. Added in
+   * API minor 2.
+   */
+  readonly match: MatchInfo | null;
+
+  /**
+   * Your competitive standings, your queue and the live ladders.
+   *
+   * Present for every character, so this being non-null says nothing about
+   * whether you have ever played. Only the two ranked brackets mean anything:
+   * the unranked three carry a copy of the 2v2 record and an empty ladder. Added
+   * in API minor 2.
+   */
+  readonly arena: ArenaStandings | null;
+
+  /** Your dungeon finder state. Present whether or not you are queued. Added in API minor 2. */
+  readonly finder: FinderInfo | null;
+
+  /**
+   * The realm's open premade listings, or null before the first sync.
+   *
+   * Realm-shared and capped by the server, so it is what is offered rather than
+   * everything that exists. Added in API minor 2.
+   */
+  readonly finderBoard: readonly FinderListingRow[] | null;
 
   /**
    * One mob's hate table, sorted and measured against you.
@@ -376,6 +378,97 @@ export interface WorldApi {
   readonly targetAuras: readonly Aura[] | null;
 
   readonly hazards: readonly Hazard[] | null;
+
+  /**
+   * Lethal rings on a rift boss floor, or null outside one.
+   *
+   * NOT `hazards`, and the difference is worth knowing before you draw either. A
+   * hazard's geometry rides the snapshot and is complete for everything near
+   * you. A death zone is mirrored from a spawn event and counted down on your
+   * own client, so a zone placed before you came into range is missing and stays
+   * missing. The game's own rings have the same hole. Added in API minor 2.
+   */
+  readonly deathZones: readonly DeathZone[] | null;
+
+  /**
+   * Every lootable corpse in scope, with what you could take off each.
+   *
+   * Never null, like `casts`: it is a reading the loader assembles rather than a
+   * value the game hands over. Watch this rather than `entities` for a corpse
+   * becoming lootable, which is a field change on an entity that already existed
+   * and so is invisible to the entity set. Added in API minor 2.
+   */
+  readonly corpses: ReadonlyMap<number, CorpseView>;
+
+  /**
+   * Gathering node id to seconds until YOU can harvest it again.
+   *
+   * Per player, so a node another player just took is still yours. A node with
+   * no entry is ready. Added in API minor 2.
+   */
+  readonly nodeCooldowns: ReadonlyMap<string, number> | null;
+
+  /**
+   * Where your own body lies while your spirit is a ghost, or null.
+   *
+   * Yours alone: the server sends it to you and to nobody else, so there is no
+   * way to ask where another player's corpse is. Added in API minor 2.
+   */
+  readonly corpse: Vec3 | null;
+
+  /**
+   * One corpse's contents, filtered to what YOU could take.
+   *
+   * The wire carries a corpse's whole contents to every player in range,
+   * personal slots included, and the game's own loot window filters on read.
+   * This applies the same filter, so it is what a loot display should use;
+   * `Entity.loot` is the unfiltered list and shows people things they cannot
+   * have. Added in API minor 2.
+   */
+  corpseLoot: (entityId: number) => CorpseView | null;
+
+  /**
+   * The Merchant's book, one browsed page at a time, or why there is not one.
+   *
+   * Never null: read `status` first. `'near'` carries `info`; `'away'` and
+   * `'unknown'` carry null and no page to reach for. The distinction is the
+   * point of the shape, because "the filter matched nothing" and "you are not at
+   * the Merchant" are opposite facts that a nullable value collapses into one.
+   * Added in API minor 2.
+   */
+  readonly market: MarketState;
+
+  /**
+   * Whether gold or goods wait at the Merchant.
+   *
+   * Ungated, so it is readable anywhere in the world. This is the badge; the
+   * page above is the pane. Added in API minor 2.
+   */
+  readonly marketCollectPending: boolean | null;
+
+  /** The mailbox, or why there is not one. Read `status` first. Added in API minor 2. */
+  readonly mail: MailState;
+
+  /**
+   * Delivered letters you have not read.
+   *
+   * Ungated, so it is readable anywhere in the world. `world.mail` carries its
+   * own `unread` over the same letters; that one is the mailbox pane's figure
+   * and this one is the badge. Do not derive either from the other. Added in API
+   * minor 2.
+   */
+  readonly mailUnread: number | null;
+
+  /** The deposit box, or why there is not one. Read `status` first. Added in API minor 2. */
+  readonly bank: BankState;
+
+  /**
+   * The buyback ring: what you have sold to a vendor and can still take back.
+   *
+   * MOST RECENT FIRST. Ungated, unlike the three above: standing at a vendor is
+   * what lets you USE the ring, not what lets you see it. Added in API minor 2.
+   */
+  readonly buyback: readonly InvSlot[] | null;
 
   /**
    * Your spellbook, and the one way to turn an ability id into its display name
@@ -432,6 +525,70 @@ export interface WorldApi {
    * entity's, and because a row exists for a member who is nowhere near you.
    */
   partyAuras: (pid: number, query?: PartyAuraQuery) => readonly PartyMemberAura[];
+
+  /**
+   * Whether an effect is working AGAINST the unit carrying it.
+   *
+   * The game's own rule, not a heuristic: a kind in the harmful set, or a
+   * `buff_*` kind whose magnitude went negative, because a drain reuses the buff
+   * kind and flips the sign. Nothing on the wire answers this, and `value`
+   * cannot stand in for it: a damage-over-time's per-tick figure is positive
+   * exactly as a heal-over-time's is.
+   *
+   * A FUNCTION rather than a field on the aura, and that is not a style choice.
+   * The loader hands you the game's own aura objects rather than copies, so a
+   * field could only exist by mutating state the game's own HUD reads or by
+   * copying every aura on every read, which would break the object identity you
+   * use to track one effect across frames.
+   *
+   * Accepts either aura shape. A party row carries no `value`, and its `neg`
+   * flag is the server's own sign test on that value, so the answer for a row is
+   * the same function rather than an approximation of it.
+   *
+   * The harmful kind set is game CONTENT, so a kind added by a release these
+   * types predate reads as not harmful. That is the conservative direction: an
+   * unknown effect is not offered as something to remove. Added in API minor 2.
+   */
+  harmful: (aura: Aura | PartyMemberAura) => boolean;
+
+  /**
+   * Whether an effect can be removed, and in which direction.
+   *
+   * Three clauses, all from the game: not encounter-owned control, not the
+   * physical school, and the polarity the direction asks for. `offensive` strips
+   * a BENEFIT off an enemy; the default, false, strips a harmful effect off an
+   * ally.
+   *
+   * A party ROW cannot answer this and is refused rather than guessed at: a row
+   * carries neither a school nor `unbreakableControl`, and those are the two
+   * clauses that cost a player a global cooldown when skipped. Read the member's
+   * entity through `world.aurasOn('partyN')` for a member near enough to have
+   * one. Added in API minor 2.
+   */
+  dispellable: (aura: Aura, offensive?: boolean) => boolean;
+
+  /**
+   * The game's own recipe table, copied and frozen.
+   *
+   * A COPY: the game renders its own crafting window from the original, so a
+   * `.sort()` on the real array would reorder what the game draws.
+   *
+   * Static content, which is why there is no `world.on('recipes')` and never
+   * will be: a signature over the table would walk every recipe on every
+   * snapshot to report that nothing moved. What changes is on
+   * `world.professions`, including which of these you have learned. Empty rather
+   * than null before world entry. Added in API minor 2.
+   */
+  readonly recipes: readonly Recipe[];
+
+  /**
+   * The authored crafting stations, copied and frozen.
+   *
+   * Static, like `recipes`, and not a watch key for the same reason. Most
+   * recipes name a `stationType`; this is what turns that into a place. Added in
+   * API minor 2.
+   */
+  readonly stations: readonly Station[];
 
   /**
    * Entity id to raid target marker, 0 through 7.

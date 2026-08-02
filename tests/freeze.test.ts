@@ -123,6 +123,7 @@ async function worldHarness() {
     now: () => clock,
     zoneName: () => null,
     simNow: () => null,
+    realm: () => null,
   });
   await hub.ready;
 

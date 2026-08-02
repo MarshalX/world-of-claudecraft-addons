@@ -106,6 +106,26 @@ export interface RegistryApi {
    * network operation. The dev source is the exception: see DevApi.
    */
   source: (fqid: string) => Promise<string>;
+  /**
+   * One declared data file's raw text, from the cache written at install.
+   *
+   * A fourth thing across the bridge only if you count by name. It is addon
+   * SOURCE of a second kind: a file in the addon's own directory, named by its
+   * own manifest, fetched by the same fetcher down the same path as `entry`,
+   * cached in the same namespace and dropped by the same uninstall. The runtime
+   * cannot obtain it any other way, because reaching a marketplace at all is a
+   * sandbox capability.
+   *
+   * Raw TEXT rather than a parsed value. The host has no use for the shape, a
+   * string is the cheapest thing structured clone can carry, and parsing in the
+   * page realm keeps the published contract literally true: nothing validates
+   * what comes back.
+   *
+   * The dev source is the exception, exactly as it is for `source`: a local
+   * addon's file is re-read on every call so a regenerated table is what the
+   * next load sees.
+   */
+  data: (fqid: string, name: string) => Promise<string>;
 }
 
 export interface MarketApi {

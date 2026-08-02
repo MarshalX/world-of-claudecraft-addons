@@ -101,7 +101,7 @@ function catalogHasPreviews(markets: readonly MarketplaceState[]): boolean {
  */
 function browseRows(
   markets: readonly MarketplaceState[],
-  installed: ReadonlySet<string>,
+  installed: ReadonlyMap<string, boolean>,
   filter: BrowseFilter = NO_FILTER,
 ): BrowseRow[] {
   const rows: BrowseRow[] = [];
@@ -150,5 +150,30 @@ function pendingUpdates(updates: readonly UpdateRow[]): UpdateRow[] {
   return updates.filter((row) => row.pin === null);
 }
 
+/**
+ * Every bare addon id any source in the list offers.
+ *
+ * Bare rather than fully qualified, because it answers a question asked in bare
+ * ids: a `companions` entry names the addon the author meant, whichever source a
+ * player happens to have it from. See manager/companions.ts.
+ */
+function offeredIds(markets: readonly MarketplaceState[]): Set<string> {
+  const ids = new Set<string>();
+  for (const market of markets) {
+    for (const entry of market.addons) {
+      ids.add(entry.id);
+    }
+  }
+  return ids;
+}
+
 export type { BrowseEmptiness, BrowseFilter, BrowseRow };
-export { browseEmptiness, browseRows, catalogHasPreviews, catalogTags, NO_FILTER, pendingUpdates };
+export {
+  browseEmptiness,
+  browseRows,
+  catalogHasPreviews,
+  catalogTags,
+  NO_FILTER,
+  offeredIds,
+  pendingUpdates,
+};

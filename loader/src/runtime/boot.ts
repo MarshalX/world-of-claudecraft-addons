@@ -21,7 +21,9 @@ import { createGameSurfaces, type GameSurfaces } from './surfaces.ts';
 import { type MountedUi, mountUi } from './ui/mount.ts';
 // The three sheets bundled as text and joined into the one injected <style>.
 import { LOADER_CSS } from './ui/styles/index.ts';
+import { createUnitPoints } from './world/anchor-point.ts';
 import { createProjector } from './world/project.ts';
+import { contextOf } from './world/unit-context.ts';
 
 /** Held so the manager's Diagnostics pane can report the probe after the fact. */
 interface ProbeSlot {
@@ -154,7 +156,14 @@ function uiDeps(
     storage: host?.storage ?? null,
     ...view,
     ...pageServices(),
+    frames: services.frames,
     project: createProjector(() => deps.surfaces.world.game()),
+    // The same context `world.unit` resolves through, so an anchor pinned to
+    // 'target' and a readout describing 'target' cannot mean different units.
+    unitPoint: createUnitPoints({
+      game: () => deps.surfaces.world.game(),
+      context: () => contextOf(deps.surfaces.world),
+    }),
     storageHub: services.storage,
     gameBindings: services.gameBindings,
     dispatcher: services.dispatcher,
@@ -168,10 +177,6 @@ function pageServices() {
   return {
     setTimer,
     clearTimer,
-    schedule: (frame: () => void) => globalThis.requestAnimationFrame(frame),
-    cancelFrame: (id: number) => {
-      globalThis.cancelAnimationFrame(id);
-    },
     viewport: () => ({ w: globalThis.innerWidth, h: globalThis.innerHeight }),
     // The same reader the sound engine uses for its pack. Both are same-origin game
     // content, and the kit's per-class art manifests are the second consumer.
@@ -204,6 +209,7 @@ async function startUi(deps: UiStartDeps): Promise<StartedRuntime> {
     surfaces: deps.surfaces,
     channel: deps.channel,
     storage: host?.storage ?? null,
+    registry: host?.registry ?? null,
   });
 
   const slot = supervisorSlot();

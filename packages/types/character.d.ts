@@ -55,8 +55,26 @@ export interface DeedStats {
 }
 
 export interface CharacterInfo {
+  /**
+   * Progress within the CURRENT level, and FROZEN AT 0 once you hit the cap.
+   *
+   * Not a running total, and not a post-cap counter: the game returns before
+   * touching this bar for a capped character, and zeroes the remainder on the
+   * award that dings you to the cap. So a capped character reads 0 here forever
+   * and it is not a field that failed to arrive.
+   *
+   * A post-cap progression display therefore reads `lifetimeXp`, which is the one
+   * that keeps moving. This is the obvious field to reach for and it is the wrong
+   * one, which is why it says so here.
+   */
   xp: number;
-  /** Total ever earned, which keeps rising past the level cap. */
+  /**
+   * Total ever earned, which keeps rising past the level cap.
+   *
+   * Monotonic across the whole life of the character: it is credited on every
+   * award including at the cap, which is what makes post-cap progression work and
+   * what makes it the only field a virtual-level display can be built on.
+   */
   lifetimeXp: number;
   /** The rested pool, 0 when not rested. */
   restedXp: number;
@@ -79,17 +97,68 @@ export interface CharacterInfo {
 }
 
 /**
- * Profession skill, as two independent counter maps.
+ * Your crafting archetype, your pairs, and what you have learned.
  *
- * Deliberately narrow. The game's professions facet also carries a state view
- * and a crafting identity block, and both are marked as stubs in its own source
- * with a trail of in-flight work behind them, so their shape is the least
- * settled thing an addon could depend on. These two are plain skill counters and
- * are safe to build on.
+ * The server sends this as ONE value on purpose, so a client never evaluates a
+ * recipe against a pair from one tick and skills from another. Ids throughout:
+ * nothing here is display text.
+ *
+ * READ `synced` FIRST. Every other field, and `craftSkills` beside it, is a
+ * client-side default until the server's first crafting delta lands, and a
+ * default is indistinguishable from a real answer without this flag. An addon
+ * that draws a crafting panel before it flips is drawing zeroes it made up.
+ */
+export interface CraftingIdentity {
+  /** False until the game has received its first crafting value this session. */
+  synced: boolean;
+  /** The active archetype id, or null before attunement. An id, never a title. */
+  archetype: string | null;
+  pairedMajor: string | null;
+  hobbyCraft: string | null;
+  /** Canonical pair ids, sorted by the server. */
+  attunedPairs: readonly string[];
+  switchCount: number;
+  amendsProgress: number;
+  amendsRequired: number;
+  /**
+   * Recipe ids you LEARNED from a source, sorted.
+   *
+   * Not the set you can craft. A recipe whose `acquisition` list is empty is
+   * grandfathered: known to everyone, and absent from here for that reason rather
+   * than because it has not been learned. Cross-reference `world.recipes`.
+   */
+  knownRecipes: readonly string[];
+  /** Work orders inside their cooldown window, sorted. Empty on an older server. */
+  cadenceBlockedQuests: readonly string[];
+}
+
+/**
+ * Your profession standing: two skill counter maps, your crafting identity, and
+ * the mobile station you have placed.
+ *
+ * One member of the game's own professions facet is still left out. Its state
+ * view is marked as a stub in the game's own source with a trail of in-flight
+ * work behind it, so its shape is the least settled thing an addon could depend
+ * on. Everything here is settled.
  */
 export interface ProfessionInfo {
-  /** Craft id to skill. Independent and additive: gaining one never moves another. */
+  /**
+   * Craft id to skill. Independent and additive: gaining one never moves another.
+   *
+   * All zeroes until `identity.synced`, and that is a client-side default rather
+   * than a character with no craft skill. The two look identical; the flag is the
+   * only thing that tells them apart.
+   */
   craftSkills: Readonly<Record<string, number>>;
   /** Gathering profession id to proficiency, the same kind of counter. */
   gathering: Readonly<Record<string, number>>;
+  /** Archetype, pairs, and what has been learned. Read `identity.synced` first. */
+  identity: CraftingIdentity;
+  /**
+   * The craft id of the mobile station you have placed, or null when none is.
+   *
+   * A recipe naming a `stationType` can be crafted beside a mobile station whose
+   * craft maps to that type, as well as at an authored one in `world.stations`.
+   */
+  mobileStation: string | null;
 }

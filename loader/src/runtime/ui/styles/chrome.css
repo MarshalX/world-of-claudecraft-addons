@@ -271,6 +271,27 @@
   box-shadow: none;
 }
 
+/* A bare overlay CLIPS rather than scrolls.
+ *
+ * `.woc-frame-body` carries `overflow: auto` for every frame, which is right for a
+ * panel holding a list and wrong here: a scrollbar is chrome, and chrome is the
+ * whole of what this density removes. Reported from a live session, where scaling
+ * a bare strip down put a scrollbar over the game.
+ *
+ * Clipping rather than scrolling is also the honest behaviour for this shape. A
+ * strip is a fixed set of rows an addon chose to show; if it does not fit, the
+ * answer is a smaller row or fewer of them, which the addon controls, not a
+ * control the player has to operate mid-fight to see a cooldown. An addon that
+ * genuinely needs to scroll has asked for the wrong density.
+ *
+ * The floor that stops this mattering is the addon's own `minHeight`: a bare
+ * frame should not be resizable below the content it draws. Clipping is what
+ * happens when one has not set it, and a clipped row is a visible bug where a
+ * scrollbar is a plausible-looking one. */
+#woc-addons .woc-window.woc-density-bare .woc-frame-body {
+  overflow: hidden;
+}
+
 /* The content is the handle, so the move cursor belongs on the frame and not on
    what an addon put inside it: a button in a bare frame is still a button. */
 #woc-addons .woc-density-bare button,

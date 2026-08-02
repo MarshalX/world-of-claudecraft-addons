@@ -19,8 +19,10 @@ import {
   createAnchors,
   HIDDEN_CLASS,
 } from '../loader/src/runtime/ui/kit/anchor3d.ts';
-import type { Projector } from '../loader/src/runtime/world/project.ts';
+import type { UnitPointResolver } from '../loader/src/runtime/world/anchor-point.ts';
+import type { Projector, ScreenPoint } from '../loader/src/runtime/world/project.ts';
 import { createProjector } from '../loader/src/runtime/world/project.ts';
+import { createFrameClock } from './fakes/frame-loop.ts';
 
 const VIEW = { w: 1280, h: 800 };
 
@@ -31,39 +33,21 @@ function root(): HTMLElement {
   return el;
 }
 
-/** A frame clock a suite drives by hand, so a loop cannot run away with a test. */
-function clock() {
-  const frames: Array<() => void> = [];
-  let cancelled = 0;
-  return {
-    schedule: (frame: () => void) => {
-      frames.push(frame);
-      return frames.length;
-    },
-    cancel: () => {
-      cancelled += 1;
-    },
-    /** Run every frame scheduled so far, once. */
-    tick: () => {
-      for (const frame of frames.splice(0)) {
-        frame();
-      }
-    },
-    pending: () => frames.length,
-    cancelled: () => cancelled,
-  };
-}
+/** An identity view matrix, so a point's camera-space z is its own z. */
+const IDENTITY = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1];
 
-function open(project: Projector = () => ({ x: 100, y: 200, behind: false })) {
+const SOMEWHERE: ScreenPoint = { x: 100, y: 200, depth: 10, behind: false };
+
+function open(project: Projector = () => SOMEWHERE, unitPoint: UnitPointResolver = () => null) {
   const host = root();
-  const frames = clock();
+  const frames = createFrameClock();
   const anchors = createAnchors({
     doc: document,
     root: host,
     project,
+    unitPoint,
     viewport: () => VIEW,
-    schedule: frames.schedule,
-    cancel: frames.cancel,
+    frames: frames.loop,
   });
   return { anchors, frames, host };
 }
@@ -78,7 +62,7 @@ describe('the projection', () => {
       renderer: { worldToScreen: () => ({ x: 12.5, y: 40, behind: false }) },
     }));
 
-    expect(project(1, 2, 3)).toEqual({ x: 12.5, y: 40, behind: false });
+    expect(project(1, 2, 3)).toEqual({ x: 12.5, y: 40, depth: 0, behind: false });
   });
 
   // Everything before world entry, which is where an addon's first line runs.
@@ -126,6 +110,103 @@ describe('the projection', () => {
     game = { renderer: { worldToScreen: () => ({ x: 1, y: 2, behind: false }) } };
 
     expect(project(1, 2, 3)).not.toBeNull();
+  });
+});
+
+describe('the near-plane guard', () => {
+  // The live defect this guard fixes: `worldToScreen` reports only the FAR half of
+  // the depth test, so a point between the camera and the near plane comes back
+  // finite, wrong by any amount, and flagged as not behind. The game's own
+  // nameplates, chat bubbles and click picking all guard against exactly it.
+  function renderer(near: unknown, elements: unknown = IDENTITY) {
+    return {
+      renderer: {
+        worldToScreen: () => ({ x: 640, y: 400, behind: false }),
+        camera: { near, matrixWorldInverse: { elements } },
+      },
+    };
+  }
+
+  it('reports a point nearer than the near plane as behind', () => {
+    const project = createProjector(() => renderer(0.1));
+
+    // Camera space z of -0.05 with an identity view matrix: in front, but inside
+    // the near plane.
+    expect(project(0, 0, -0.05)?.behind).toBe(true);
+  });
+
+  it('keeps a point beyond the near plane', () => {
+    const project = createProjector(() => renderer(0.1));
+
+    expect(project(0, 0, -12)?.behind).toBe(false);
+  });
+
+  it('reports depth as yards in front of the camera', () => {
+    const project = createProjector(() => renderer(0.1));
+
+    expect(project(0, 0, -12)?.depth).toBe(12);
+  });
+
+  // A guard that turned every anchor off because a game update moved the camera
+  // would be worse than the over-trusting projection this file shipped with.
+  it.each([
+    ['no camera at all', undefined],
+    ['a matrix that is not an array', 'nonsense'],
+    ['a matrix that is too short', [1, 0, 0]],
+  ])('falls back to the raw flag with %s', (_case, elements) => {
+    const project = createProjector(() => ({
+      renderer: {
+        worldToScreen: () => ({ x: 640, y: 400, behind: false }),
+        camera: { near: 0.1, matrixWorldInverse: { elements } },
+      },
+    }));
+
+    expect(project(0, 0, -0.05)).toEqual({ x: 640, y: 400, depth: 0, behind: false });
+  });
+
+  // Degraded rather than refused: without a near plane the guard still answers the
+  // half of the question the raw flag does not.
+  it('degrades to the camera plane when near is unreadable', () => {
+    const project = createProjector(() => renderer(undefined));
+
+    expect(project(0, 0, -0.05)?.behind).toBe(false);
+    expect(project(0, 0, 5)?.behind).toBe(true);
+  });
+
+  it('hides an anchor the guard rejected', () => {
+    const { anchors, frames } = open(createProjector(() => renderer(0.1)));
+    const anchor = anchors.add({ x: 0, y: 0, z: -0.05 });
+
+    frames.tick();
+
+    expect(anchor.el.classList.contains(HIDDEN_CLASS)).toBe(true);
+    expect(anchor.el.style.left).toBe('');
+  });
+});
+
+describe('anchoring to a unit', () => {
+  it('resolves the unit through the shared resolver, every frame', () => {
+    const unitPoint = vi.fn(() => ({ x: 1, y: 2, z: 3 }));
+    const { anchors, frames } = open(undefined, unitPoint);
+    const anchor = anchors.add({ unit: 'target' });
+
+    frames.tick();
+    frames.tick();
+
+    expect(unitPoint).toHaveBeenCalledTimes(2);
+    expect(unitPoint).toHaveBeenLastCalledWith({ unit: 'target' });
+    expect(anchor.visible).toBe(true);
+  });
+
+  // The honest answer for a unit the game is not drawing: the same one the game
+  // gives, which is no nameplate at all.
+  it('hides when the unit has no point', () => {
+    const { anchors, frames } = open(undefined, () => null);
+    const anchor = anchors.add({ unit: 'target', over: 'head' });
+
+    frames.tick();
+
+    expect(anchor.visible).toBe(false);
   });
 });
 
@@ -199,7 +280,7 @@ describe('placing an anchor', () => {
 
 describe('what is hidden', () => {
   it('hides a point behind the camera', () => {
-    const { anchors, frames } = open(() => ({ x: 100, y: 200, behind: true }));
+    const { anchors, frames } = open(() => ({ ...SOMEWHERE, behind: true }));
     const anchor = anchors.add({ x: 0, y: 0, z: 0 });
 
     frames.tick();
@@ -208,7 +289,7 @@ describe('what is hidden', () => {
   });
 
   it('hides a point past the edge by more than the margin', () => {
-    const { anchors, frames } = open(() => ({ x: -400, y: 200, behind: false }));
+    const { anchors, frames } = open(() => ({ ...SOMEWHERE, x: -400 }));
     const anchor = anchors.add({ x: 0, y: 0, z: 0 });
 
     frames.tick();
@@ -219,7 +300,7 @@ describe('what is hidden', () => {
   // The element is centred on the point, so one just past the edge is still half
   // on screen: hiding it there makes a nameplate blink out while its unit shows.
   it('keeps a point just past the edge, within the margin', () => {
-    const { anchors, frames } = open(() => ({ x: -20, y: 200, behind: false }));
+    const { anchors, frames } = open(() => ({ ...SOMEWHERE, x: -20 }));
     const anchor = anchors.add({ x: 0, y: 0, z: 0 });
 
     frames.tick();
@@ -309,7 +390,7 @@ describe('the frame loop', () => {
   // Sub-pixel movement is a style write that changes nothing on screen.
   it('ignores a move smaller than a pixel', () => {
     let x = 100;
-    const { anchors, frames } = open(() => ({ x, y: 200, behind: false }));
+    const { anchors, frames } = open(() => ({ ...SOMEWHERE, x }));
     const anchor = anchors.add({ x: 0, y: 0, z: 0 });
     frames.tick();
 

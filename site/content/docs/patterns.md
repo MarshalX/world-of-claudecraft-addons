@@ -89,3 +89,144 @@ This shipped a bug: the meter built an icon URL from the field and asked the gam
 Healing has its own version of the same trap:
 
 <!-- include: addons/combat-meter/main.js#heal-attribution -->
+
+## An item's art name is not the item's name
+
+`woc.ui.icon.itemArtName(id)` answers the name the item's icon FILE was filed under. That is provenance metadata for the art, and the game gates it on being non-empty and on nothing else, so it drifts every time content is renamed and the art is not. Measured against game 0.33.0: of the 303 items whose art carries a name, 281 agree with the game's own display name and 21 do not. `baked_bread` is filed as "Freshly Baked Bread" and the game calls it "Cottage Loaf"; `stormcallers_handguards` is filed under its own id's spelling and the game calls it something else entirely.
+
+So it is a labelled fallback and never the item's name. Showing it beside the game's own tooltip is worse than showing nothing, because it looks like an answer. Nothing on this API can give you an item's real name: the item table is bundled into the game's own chunk and is not served. The one authoritative spelling that reaches a client is `itemName` on a loot roll.
+
+`woc.ui.icon.item(id)` is a different matter and is exact. The game serves a manifest of which item ids ship a file, so the builder returns null once it knows there is none rather than handing you a URL that 404s. Two things have no file and never will: a WEAPON, because weapon art is filed under a model name through a table the game does not serve at all, and an item whose art has not been commissioned yet. That is 235 of the game's 797 items today, 134 of them weapons.
+
+Until the manifest has been read the answer stays optimistic, so the first grid you draw is never worse off than it was before the manifest existed. `await woc.ui.icon.preloadItems()` first when a flash of broken images on the first paint would be worse than a frame's delay. It is one request for every item in the game.
+
+## Progress past the level cap is on a different field
+
+`character.xp` is progress within the CURRENT level, and it is frozen at 0 once you hit the cap. The game returns before touching that bar for a capped character and zeroes the remainder on the award that dings you to the cap, so a capped character reads 0 there for the rest of the character's life. It is the obvious field to reach for and it is the wrong one.
+
+`character.lifetimeXp` is the counter that carries post-cap progression. It is credited on every award including at the cap, which is what makes virtual levels work, and it is monotonic across the whole life of the character. A post-cap display reads that and computes its own virtual level from it.
+
+`character.restedXp` is sent every snapshot, so you can watch the pool rise and infer that the player is resting. Two honest limits: at low level the accrual is slow enough that the integer sits still for twenty seconds at a time, so a still counter is not proof of anything; and at the cap the pool is frozen outright, so it is not readable at all for exactly the players a post-cap addon is drawing. There is no resting FLAG on any surface, and there is no way to derive one: it needs the player's combat state and the game's own inn footprints, and neither is reachable.
+
+## Two clocks, and only one of them survives a reload
+
+`woc.now()` is monotonic milliseconds, the same clock `performance.now` reads. It starts at zero when the page loads, it never jumps, and it is the right clock for anything measuring an interval: a cast bar, a swing timer, a rate.
+
+`woc.wallClock()` is epoch milliseconds, the same clock `Date.now` reads. It is the right clock for exactly two things, and both of them cross a page load: a timestamp you are going to store, and a comparison against a value the server sent as an absolute stamp. `GroupInfo.lockouts` is the second kind, and its own documentation says to compare it against `Date.now()`.
+
+Storing a `woc.now()` reading is the trap. It is a number of milliseconds since **this** page load, so on the next one it is a stamp in the future by however long the last session ran, and nothing raises. Three addons written in one batch each worked this out separately, which is why it is written here.
+
+## A subscriber that waits hears nothing
+
+An addon that reads another addon's bus topic has to work with no publisher at all, because the publisher may not be installed, may be switched off, or may simply not have anything to say yet. There is no request-response on the bus and there never will be, so there is nothing to await and no timeout anyone chose.
+
+The convention that works: emit `<topic>:ask` once, render immediately without an answer, upgrade the display if answers arrive, and never treat silence as an error. A publisher answers an ask by emitting its topic as usual.
+
+Subscribe with `woc.bus.anySender` unless you genuinely mean one specific installation. Naming `official/lorebind` is correct only on the official marketplace: the same addon installed from a fork publishes under a different fqid, and a subscriber that hardcoded the source silently stops working for everyone not on it.
+
+If you want to say in your manifest that you work better with another addon, that is `companions`. It is a note the manager draws, not a dependency: it gates nothing and waits for nothing.
+
+## The global cooldown's length is computable, and the obvious version is wrong
+
+`player.gcdRemaining` counts down. It does not say what it counted down **from**, and a bar needs the length to draw a fill.
+
+Every input is published, so you can compute it exactly. Three things the version most people write gets wrong, and each of them is visible on screen:
+
+- **A rogue's base is 1.0 seconds, not 1.5.** Getting this wrong is a denominator that is a third too large on every rogue in the game.
+- **There is a 0.75 second floor.** Without it a well-hasted caster's bar reports a global shorter than any the game will ever give them.
+- **Haste auras add on top of the `spellHaste` stat, and the divisor is `1 + haste`.** Dividing by `spellHaste` itself is wrong in form as well as in the aura term.
+
+```js
+// The global cooldown's LENGTH, which `player.gcdRemaining` counts down from.
+function gcdLength(player, cls) {
+  let haste = player.spellHaste;
+  for (const aura of player.auras) {
+    if (aura.kind === 'buff_spellhaste') haste += aura.value;
+  }
+  const base = cls === 'rogue' ? 1.0 : 1.5;
+  return Math.max(0.75, base / (1 + Math.max(0, haste)));
+}
+```
+
+There is no subscription for this and there should not be: it is four published fields and one expression, and an addon that wants it wants the number rather than an event.
+
+## The swing timer cannot be computed, only observed
+
+The melee swing period looks like the same kind of arithmetic and is not. It divides by `meleeHaste`, which is a third stat that is **not on the wire**, and `spellHaste` cannot stand in for it.
+
+The game's own comment says set-bonus haste is one stat, so the two are equal. That is true of the shared term and false of the total: two melee specs carry a 10 percent `meleeHastePct` that never reaches `spellHaste`. So substituting is exactly 10 percent low on the specs whose swing bar matters most, which is a bar that finishes early on every single swing. Ranged is worse: it divides by `rangedHaste`, a third stat again.
+
+What works is to seed and then correct:
+
+```js
+// Seed from what IS published: the weapon's cadence, times every slow on you.
+function seedPeriod(player) {
+  let period = player.weapon?.speed ?? 2.0;
+  for (const aura of player.auras) {
+    if (aura.kind === 'attackspeed' || aura.kind === 'sanguine') period *= aura.value;
+  }
+  return period;
+}
+```
+
+Then watch the remaining time. A remaining that goes **up** is the swing landing and re-arming, and the interval between two of those is the real period, exact from the second swing onward. The seed is what you draw until then, and folding the slow auras in makes it right in the one case a bare `weapon.speed` is visibly wrong.
+
+## Some numbers are not on the surface at all, and guessing one is worse than saying so
+
+The combo point maximum is the clearest case. It is an inline literal in the award path, it is not a named constant, not on a content table, not class-conditional, and not sent. The game's current cap is 5 and its own interface draws a fixed strip rather than reading a maximum from anywhere.
+
+So do not hardcode 5. Size a strip to the largest count you have **seen this session** and say in the tooltip that that is what you are doing. A hardcoded number reads as authoritative and is silently wrong the release it changes; a learned one is right by construction and admits what it is.
+
+## Ranking effects is your addon's judgement, not a fact you can look up
+
+`world.harmful(aura)` answers the one part of "how bad is this" that is a fact: whether the effect works against the unit carrying it. It runs the game's own classification, over a full aura or a party row, so a dot with a positive per-tick figure and a root carrying zero both answer true.
+
+Severity is not a fact and there is no API for it. The game itself ranks effects three different ways for three different surfaces, and one of those rankings is keyed on ability **id** rather than kind, because two abilities can share a kind and belong in different tiers: a major defensive cooldown and a passive maintenance buff both arrive as `buff_dodge`, and only the id separates them. Any severity attached to a kind puts those two in the same tier by construction.
+
+A healer triaging under pressure wants control ranked above damage. A damage-taken display wants the reverse, and is also right. Keep your ranking short, local, and yours:
+
+```js
+const PRIORITY = { stun: 0, silence: 1, root: 2, dot: 3 };
+
+function rank(aura) {
+  return PRIORITY[aura.kind] ?? 9;
+}
+```
+
+## Diminishing returns are anchored when the control lands
+
+If you track a diminishing-returns ladder, the reset window starts when the effect is **applied**, not when it fades. The game stamps `landTime + reset` at the moment it resolves the control, and a fresh application re-stamps it from the new land time.
+
+Anchoring at fade puts the expiry a whole duration late: a 10 second polymorph on a 60 second window reads as still diminishing for 10 seconds after the game has cleared it, so a player who trusts the display holds a cast they could have landed at full length.
+
+Four more things a ladder display has to know, all of them the game's own rules:
+
+- **Roots and interrupt lockouts** run 100 / 50 / 25 percent on an 18 second window and then become **immune**. An immune application produces no aura at all, so there is nothing to observe: keep counting the stage you can no longer see.
+- **Polymorph and fear** run absolute seconds (10 / 5 / 1 and 8 / 4 / 2 / 1) on a 60 second window and **never** become immune. The ladder clamps to its last entry, so the fourth polymorph still lands at 1 second. Do not draw an immune stage for these.
+- **Stuns do not diminish at all**, and do not even stamp a window.
+- **It is player versus player only.** A mob never diminishes and is never diminished.
+
+And death clears the whole ladder, as does an arena or match reset. Drop everything you are tracking for a target when that target dies, or you will report a target as immune to a root that is about to land at full duration.
+
+## The loader runs one frame loop, and you should not always join it
+
+`woc.onFrame(handler)` puts your handler on the animation-frame loop the loader is running anyway. It is one browser callback for the whole loader instead of one per addon, it is dropped rather than queued while the loader is frozen, and it is unsubscribed when your addon is disabled without you writing that. Prefer it over `woc.requestAnimationFrame` re-armed from inside its own handler.
+
+`dt` is milliseconds since the previous frame, 0 on the first, and clamped at 250 so a tab returning from the background does not hand you half a minute to multiply by.
+
+**Join it for anything that has to move smoothly**: a sweep, a bar's fill, a decay curve, an anchor following a point. The loader positions every `ui.anchor3d` after your handler has run, so a point you move here is followed in the same frame rather than the next one.
+
+**Do not join it for a panel whose figures change once a second.** Wayline is the worked example and it is deliberately on `woc.setInterval(paint, 1000)`: every figure on that panel moves at most once a second, so joining a 60Hz loop would rewrite six identical strings sixty times a second to display nothing new. "The loader runs one loop" is not an instruction to put everything in it.
+
+**Keep it running while your frames are hidden**, unless you have a reason not to. `onFrame` does not stand down when your UI is not on screen, which is deliberate: a timer whose window is closed still has to know how much of an 18 second window has elapsed when the window opens again. If your handler is expensive, check whether the frame is visible inside it rather than unsubscribing.
+
+## An aura's icon comes from the caster's class, or from nowhere
+
+The game composites every aura icon on a canvas rather than serving files, so there is no `ui.icon.aura`. For an aura a player applied you can usually resolve the ability art instead:
+
+```js
+const caster = woc.world.entities.get(aura.sourceId);
+const art = caster?.kind === 'player' ? woc.ui.icon.ability(aura.id, caster.templateId) : null;
+```
+
+For an aura a mob applied there is nothing to point at, and no version of this API will change that. See [Boundaries](/docs/boundaries) for why.

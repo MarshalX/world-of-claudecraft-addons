@@ -130,7 +130,9 @@ describe('the reading', () => {
     const state = store.state();
     expect(state.status).toBe('ready');
     expect(state.markets.map((market) => market.ref.id)).toEqual(['official']);
-    expect([...state.installed]).toEqual([FQID]);
+    // A map rather than a set, because "installed but switched off" is a thing
+    // a Browse row and a companion note both have to be able to say.
+    expect([...state.installed]).toEqual([[FQID, true]]);
     expect(state.updates.map((row) => row.fqid)).toEqual([FQID]);
   });
 

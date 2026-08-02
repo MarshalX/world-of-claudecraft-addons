@@ -18,6 +18,9 @@
 // marked. Everything else is reachable through `world.raw`, which stays
 // `unknown` because the game promises nothing about it.
 
+import type { CorpseLoot } from './corpse-types.ts';
+import type { PublicItemInstance } from './items.ts';
+
 export interface Vec3 {
   x: number;
   y: number;
@@ -142,6 +145,15 @@ export interface Entity {
   maxResource: number;
   resourceType: ResourceType | null;
   dead: boolean;
+  /**
+   * True once a player has RELEASED, which `dead` alone cannot tell you.
+   *
+   * A dead player who has not released is lying where they fell and can be
+   * resurrected in place; a ghost has given that up and is running back. `dead`
+   * stays true through both, so this is the field a healer's display keys on.
+   * Always false for the living and for every non-player entity.
+   */
+  ghost: boolean;
 
   hostile: boolean;
   /**
@@ -162,6 +174,27 @@ export interface Entity {
    * not fighting anyone.
    */
   aggroTargetId: number | null;
+  /**
+   * The unit a taunt is FORCING this mob onto, null when nothing is.
+   *
+   * Written only on a mob, and only by a taunt: `aggroTargetId` says who a mob is
+   * hitting and this says whether that choice is being held rather than earned.
+   * On a player, an npc, an object and a controlled pet it is the `targetId` trap
+   * in a second place, present and correctly typed and permanently null, because
+   * nothing in the game ever writes one.
+   */
+  forcedTargetId: number | null;
+  /**
+   * Seconds left on that force, 0 when none is held.
+   *
+   * The window is short, so a display reading this has to be exact rather than
+   * polling slowly. A taunt can also raise threat and set NOTHING here: a mob
+   * whose template ignores taunts, a training dummy, and a boss taunted by a pet
+   * each take the threat and never turn. Those templates are bundled content, so
+   * an addon cannot tell that case from an expiry and must present a held taunt
+   * as a positive reading rather than presenting its absence as a failure.
+   */
+  forcedTargetTimer: number;
   /**
    * A living mob's own hate table, entity id to threat, capped at the top eight.
    *
@@ -186,6 +219,75 @@ export interface Entity {
   castTotal: number;
   channeling: boolean;
   auras: Aura[];
+
+  /**
+   * Whether the interact prompt offers something here, which is NOT "is a corpse".
+   *
+   * True on every ground pickup, every dungeon exit and every rift portal,
+   * because the game sets it on the object rather than on the loot. Read `loot`
+   * for a corpse's contents; a lootable entity with a null `loot` is scenery.
+   */
+  lootable: boolean;
+  /**
+   * A mob corpse's whole contents, or null.
+   *
+   * Sent for a mob only, and sent to EVERY player in range rather than to the
+   * looter: the server builds one record per corpse and shares it. So this holds
+   * slots you can see and cannot take. `world.corpseLoot()` applies the game's
+   * own rights rule and is what a loot display should read.
+   */
+  loot: CorpseLoot | null;
+  /** The first player to damage this mob, who owns its shared loot. Null on everything else. */
+  tappedById: number | null;
+  /** The player who took this corpse's profession harvest. Null when unclaimed. */
+  harvestClaimedBy: number | null;
+
+  // Worn gear and cosmetics, sent for a PLAYER (and therefore a bot) only. On
+  // every mob, npc and object these exist and hold an inert default, which is
+  // the `targetId` trap: check `kind === 'player'` before reading one.
+  /**
+   * The full worn set: slot to item id, empty for anything that is not a player.
+   *
+   * The server gates this on the entity being a player at the send site, so a mob
+   * is structurally incapable of carrying one however its own fields are set. An
+   * id resolves to an icon through `ui.icon.item` and to nothing else, the same
+   * limit `world.equipment` carries.
+   */
+  equippedItems: Partial<Record<EquipSlot, string>>;
+  /**
+   * Per-slot instance payloads for the worn set, trimmed by the server.
+   *
+   * Sparse: a slot is a key only while its piece carries a signer, an enchant or
+   * a roll, so a plain worn set is empty rather than a map of empty objects. For
+   * YOUR OWN gear read `world.equipmentInstances`, which is the untrimmed
+   * payload; this member is the public projection even on your own record.
+   */
+  equippedInstances: Partial<Record<EquipSlot, PublicItemInstance>>;
+  /**
+   * The held mainhand, which is NOT `equippedItems.mainhand`.
+   *
+   * The server fills this only when the equipped mainhand is a weapon, so a
+   * non-weapon in the hand slot leaves `equippedItems.mainhand` set and this
+   * null. Read this for what is being held, that for what is worn.
+   */
+  mainhandItemId: string | null;
+  /** The held offhand: a weapon, a held offhand item, or a shield. */
+  offhandItemId: string | null;
+  /**
+   * The active weapon-skin cosmetic, or null.
+   *
+   * A skin id, not an item id: `ui.icon.item` does not resolve one, and the kit
+   * hides an icon slot whose image fails, so asking costs an icon.
+   */
+  weaponSkinId: string | null;
+  /**
+   * The mount being ridden, or empty when on foot.
+   *
+   * A mount key rather than an item id, so it names the mount and resolves to no
+   * art. It is also the one cosmetic here the game's own sim reads, for movement
+   * speed, so it is a reliable answer to "is that player mounted".
+   */
+  mountKey: string;
 
   // Yours alone: the server sends these on the SELF record and nowhere else, so
   // on any other entity they hold an inert default rather than a real value.
@@ -218,7 +320,16 @@ export interface Entity {
 export interface PartyMemberAura {
   id: string;
   kind: AuraKind;
-  /** 1 when the effect is a debuff. */
+  /**
+   * 1 when the effect's MAGNITUDE is negative. Not "this is a debuff".
+   *
+   * The game sets it from `aura.value < 0` and nothing else, so a damage over
+   * time, a root, a stun and a silence all arrive without it: they are harmful
+   * by KIND rather than by sign. Reading it as a debuff flag is how a dispel
+   * display comes to drop most of what a healer would dispel.
+   *
+   * `world.harmful` is the answer, and it puts both clauses back together.
+   */
   neg?: 1;
   /** Whole seconds. Absent on an older snapshot. */
   remaining?: number;
@@ -294,6 +405,15 @@ export interface InvSlot {
   count: number;
   /** The bag cell it was dragged into. Absent when it was never placed by hand. */
   slot?: number;
+  /**
+   * What is baked into this specific copy. Absent on an ordinary fungible stack.
+   *
+   * The PUBLIC trim, everywhere this shape appears. Your own goods carry more on
+   * the game object, reachable through `world.raw`; a field that is present on
+   * three surfaces and absent on two is worse than one that is absent
+   * everywhere.
+   */
+  instance?: PublicItemInstance;
 }
 
 export interface QuestProgress {

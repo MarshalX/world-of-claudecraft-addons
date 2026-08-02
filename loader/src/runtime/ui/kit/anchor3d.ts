@@ -6,8 +6,11 @@
 // edge. Every one of them is impossible for an addon to write, because the
 // projection is on the renderer and nothing else the loader publishes needs it.
 //
-// ONE frame loop for every anchor, started with the first and stopped with the
-// last. Per-anchor loops would be the failure the world watcher already avoids:
+// ONE frame loop for every anchor, and it is the loader's own rather than this
+// file's: `runtime/frame-loop.ts` runs it and every addon's `woc.onFrame` is on
+// it too. Anchors register as its PAINT phase, which is what makes a point an
+// addon moved inside its own handler land in the same frame rather than the next
+// one. Per-anchor loops would be the failure the world watcher already avoids:
 // ten anchors would be ten callbacks the browser schedules separately to do the
 // same arithmetic against the same camera.
 //
@@ -21,6 +24,8 @@
 // place on screen.
 
 import type { Teardown } from '../../disposal.ts';
+import type { FrameLoop } from '../../frame-loop.ts';
+import type { UnitPoint, UnitPointResolver, WorldPoint } from '../../world/anchor-point.ts';
 import type { Projector, ScreenPoint } from '../../world/project.ts';
 
 const ANCHOR_CLASS = 'woc-anchor3d';
@@ -35,14 +40,14 @@ const HIDDEN_CLASS = 'woc-anchor3d-off';
  */
 const DEFAULT_MARGIN_PX = 64;
 
-interface WorldPoint {
-  x: number;
-  y: number;
-  z: number;
-}
-
-/** A fixed point, or one asked for every frame. Null from the function hides it. */
-type PointSource = WorldPoint | (() => WorldPoint | null);
+/**
+ * A fixed point, a unit, or one asked for every frame. A null hides the anchor.
+ *
+ * The unit form is resolved by world/anchor-point.ts rather than here, so the kit
+ * keeps no claim about the game: `over: 'head'` is a read of the renderer's own
+ * view of that unit and belongs beside every other read of it.
+ */
+type PointSource = WorldPoint | UnitPoint | (() => WorldPoint | null);
 
 interface Anchor3dOpts {
   /** Added to the element, so an addon can style its own. */
@@ -68,9 +73,11 @@ interface AnchorsDeps {
   /** The #woc-addons root. */
   root: HTMLElement;
   project: Projector;
+  /** A unit token or entity id to a world point. See world/anchor-point.ts. */
+  unitPoint: UnitPointResolver;
   viewport: () => { w: number; h: number };
-  schedule: (frame: () => void) => number;
-  cancel: (id: number) => void;
+  /** The loader's one loop. Anchors paint after every addon handler has run. */
+  frames: FrameLoop;
 }
 
 interface Anchors {
@@ -89,9 +96,12 @@ interface Live {
   visible: boolean;
 }
 
-function pointOf(at: PointSource): WorldPoint | null {
+function pointOf(at: PointSource, unitPoint: UnitPointResolver): WorldPoint | null {
   if (typeof at === 'function') {
     return at();
+  }
+  if ('unit' in at) {
+    return unitPoint(at);
   }
   return at;
 }
@@ -123,7 +133,7 @@ function setVisible(anchor: Live, on: boolean): void {
 
 /** Where this anchor's point is on screen, or null when it has no place. */
 function screenPoint(anchor: Live, deps: AnchorsDeps): ScreenPoint | null {
-  const world = pointOf(anchor.at);
+  const world = pointOf(anchor.at, deps.unitPoint);
   if (world === null) {
     return null;
   }
@@ -178,30 +188,25 @@ function build(deps: AnchorsDeps, at: PointSource, opts: Anchor3dOpts): Live {
 
 function createAnchors(deps: AnchorsDeps): Anchors {
   const live = new Set<Live>();
-  let frame: number | null = null;
-
-  const tick = (): void => {
-    for (const anchor of live) {
-      paint(anchor, deps);
-    }
-    // Rescheduled from inside, so the loop stops the moment the last anchor goes
-    // rather than running empty for the rest of the session.
-    frame = null;
-    if (live.size > 0) {
-      frame = deps.schedule(tick);
-    }
-  };
+  // ONE registration on the shared loop however many anchors there are, taken
+  // with the first and dropped with the last, so a session with no anchor leaves
+  // the loop with nothing to run.
+  let stop: Teardown | null = null;
 
   const start = (): void => {
-    frame ??= deps.schedule(tick);
+    stop ??= deps.frames.onPaint(() => {
+      for (const anchor of live) {
+        paint(anchor, deps);
+      }
+    });
   };
 
   const drop = (anchor: Live): void => {
     live.delete(anchor);
     anchor.el.remove();
-    if (live.size === 0 && frame !== null) {
-      deps.cancel(frame);
-      frame = null;
+    if (live.size === 0 && stop !== null) {
+      stop();
+      stop = null;
     }
   };
 
@@ -233,5 +238,5 @@ function createAnchors(deps: AnchorsDeps): Anchors {
   };
 }
 
-export type { Anchor3d, Anchor3dOpts, Anchors, AnchorsDeps, PointSource, WorldPoint };
+export type { Anchor3d, Anchor3dOpts, Anchors, AnchorsDeps, PointSource };
 export { ANCHOR_CLASS, createAnchors, HIDDEN_CLASS };

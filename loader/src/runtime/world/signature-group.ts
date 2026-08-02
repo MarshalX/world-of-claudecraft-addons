@@ -39,7 +39,27 @@ function looterOf(master: unknown): string {
   return String(fieldNumber(master, 'looter') ?? 0);
 }
 
-/** Which rolls are open, who is master looting, and which dungeons are locked. */
+/**
+ * Who has answered which roll.
+ *
+ * A vote landing IS the change, which is the whole point of the group status:
+ * `rolls` reports only that a roll opened. The deadline stays out, as it already
+ * does for `rolls`, so a timer ticking down is not mistaken for an answer.
+ */
+function votesOf(group: unknown): string {
+  return fieldArray(group, 'rollStatus')
+    .map((row) => {
+      const votes = fieldArray(row, 'votes')
+        .map((vote) => `${fieldNumber(vote, 'pid') ?? 0}:${fieldString(vote, 'choice') ?? ''}`)
+        .sort(byCodePoint)
+        .join(',');
+      return `${fieldNumber(row, 'rollId') ?? 0}=${votes}`;
+    })
+    .sort(byCodePoint)
+    .join(';');
+}
+
+/** Which rolls are open, who has answered them, who is master looting, and what is locked. */
 export function groupSignature(group: unknown): string {
   if (group === null) {
     return '';
@@ -49,7 +69,8 @@ export function groupSignature(group: unknown): string {
     .sort(byCodePoint)
     .join(',');
   const looter = looterOf(fieldValue(group, 'masterLoot'));
-  return `${rolls}|${looter}|${mapKeys(fieldValue(group, 'lockouts'))}`;
+  const locked = mapKeys(fieldValue(group, 'lockouts'));
+  return `${rolls}|${looter}|${locked}|${votesOf(group)}`;
 }
 
 /** Which run is up and how far through it, plus how many clears are recorded. */

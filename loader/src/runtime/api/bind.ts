@@ -16,6 +16,7 @@ import { createSettingsStore, type SettingsStore } from '../settings/store.ts';
 import { createFrameStateStore } from '../ui/kit/frame-state.ts';
 import { type BusApi, createBus } from './bus.ts';
 import type { AddonContext, SharedServices, WocApi } from './context.ts';
+import { createData } from './data.ts';
 import { createKeys, type KeysApi } from './keys.ts';
 import { createLog, type LogApi } from './log.ts';
 import { createNet, type NetTimers } from './net.ts';
@@ -119,6 +120,20 @@ function createStorageSurface(shared: SharedServices, addon: AddonContext): Addo
   });
 }
 
+/**
+ * The data surface: a declared JSON file from the addon's own directory.
+ *
+ * Bound to the manifest's own list rather than to anything the addon can supply,
+ * which is what makes the name a membership test instead of a path join.
+ */
+function createDataSurface(shared: SharedServices, addon: AddonContext): WocApi['data'] {
+  return createData({
+    fqid: addon.fqid,
+    declared: addon.manifest.data,
+    read: shared.addonData,
+  });
+}
+
 function createLogSurface(shared: SharedServices, addon: AddonContext): LogApi {
   return createLog({
     fqid: addon.fqid,
@@ -163,7 +178,10 @@ function createSoundSurface(shared: SharedServices, addon: AddonContext): SoundA
 }
 
 /** The domain surfaces, every one of them bound to the same addon and the same bag. */
-type AddonSurfaces = Pick<WocApi, 'bus' | 'keys' | 'net' | 'sound' | 'storage' | 'ui' | 'world'>;
+type AddonSurfaces = Pick<
+  WocApi,
+  'bus' | 'data' | 'keys' | 'net' | 'sound' | 'storage' | 'ui' | 'world'
+>;
 
 function createSurfaces(
   shared: SharedServices,
@@ -179,6 +197,7 @@ function createSurfaces(
     keys: createKeysSurface(shared, addon, keybinds),
     bus: createBusSurface(shared, addon, log),
     storage: createStorageSurface(shared, addon),
+    data: createDataSurface(shared, addon),
   };
 }
 

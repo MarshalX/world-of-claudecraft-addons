@@ -5,16 +5,26 @@
 // would make world.on('auras') fire at the frame rate and mean nothing. The
 // question each signature answers is "is this a different set of things", not
 // "has a number moved".
+//
+// `capture` is a DISPATCHER over one group function per subject, and the shape
+// is forced rather than chosen: one switch with a case per key is past the
+// length a function body is allowed, and every key added to it would have to
+// leave through the door rather than through the wall. Each group's predicate
+// and its dispatcher live in that group's own module, so a lane fills in its
+// signatures without touching this file.
 
 import { fieldNumber, fieldString, fieldValue } from '../net/frames.ts';
 import { abilityIndexSignature } from './abilities.ts';
+import { economyCapture, isEconomyKey } from './signature-economy.ts';
+import { gearCapture, isGearKey } from './signature-gear.ts';
+import { groundCapture, isGroundKey } from './signature-ground.ts';
 import { encounterSignature, groupSignature } from './signature-group.ts';
-import { characterSignature, countsSignature, talentSignature } from './signature-sheet.ts';
+import { isSocialKey, socialCapture } from './signature-match.ts';
+import { characterSignature, professionsSignature, talentSignature } from './signature-sheet.ts';
 import {
   auraSignature,
   castSignature,
   cooldownSignature,
-  equipmentSignature,
   hazardSignature,
   inventorySignature,
   joinFields,
@@ -33,14 +43,20 @@ const KEYS = [
   'party',
   'inventory',
   'equipment',
+  'equipmentInstances',
   'bags',
   'copper',
   'zone',
+  'characterKey',
   'character',
   'talents',
   'professions',
   'group',
   'encounter',
+  'match',
+  'arena',
+  'finder',
+  'finderBoard',
   'quests',
   'cooldowns',
   'auras',
@@ -48,22 +64,38 @@ const KEYS = [
   'targetAuras',
   'hazards',
   'markers',
+  'deathZones',
+  'corpses',
+  'nodeCooldowns',
+  'corpse',
   'abilities',
   'combat',
+  'market',
+  'marketCollectPending',
+  'mail',
+  'mailUnread',
+  'bank',
+  'buyback',
 ] as const;
 
+const SHEET_KEYS = ['character', 'talents', 'professions', 'group', 'encounter'] as const;
+
+type SheetKey = (typeof SHEET_KEYS)[number];
+
+const SHEET_SET: ReadonlySet<string> = new Set<string>(SHEET_KEYS);
+
+function isSheetKey(key: string): key is SheetKey {
+  return SHEET_SET.has(key);
+}
+
 /**
- * The keys about the player's own record and their group, split out to keep the
- * switch below inside a function body.
+ * The keys about the player's own record and their group.
  *
  * They share nothing with the world keys around them: those describe what is
  * happening near the player, and these describe what the player and their group
  * have.
  */
-function sheetCapture(
-  key: 'character' | 'talents' | 'professions' | 'group' | 'encounter',
-  value: unknown,
-): string {
+function sheetCapture(key: SheetKey, value: unknown): string {
   if (key === 'character') {
     return characterSignature(value);
   }
@@ -78,10 +110,42 @@ function sheetCapture(
   if (key === 'encounter') {
     return encounterSignature(value);
   }
-  // Two counter maps, so the signature is the counters themselves: a skill only
-  // moves when the player did something worth repainting for.
-  const crafts = countsSignature(fieldValue(value, 'craftSkills'));
-  return `${crafts}|${countsSignature(fieldValue(value, 'gathering'))}`;
+  // The two counter maps plus the crafting identity, because the identity's
+  // `synced` flag going true is the moment an unsynced default becomes a real
+  // reading, and nothing else on the key moves when it does. Watching only the
+  // counters would leave a pane showing zeroes it had no reason to repaint.
+  return professionsSignature(value);
+}
+
+/**
+ * The keys the loader COMPUTES over what is near the player.
+ *
+ * They belong together for the same reason `sheetCapture`'s do: none of these is
+ * a member of the game's own world object, so each is a reading the loader
+ * assembled, and each signature is a statement about that assembly rather than
+ * about a field the game happens to expose.
+ */
+function derivedCapture(
+  key: 'casts' | 'targetAuras' | 'hazards' | 'markers' | 'combat',
+  value: unknown,
+): string {
+  if (key === 'casts') {
+    return castSignature(value);
+  }
+  if (key === 'targetAuras') {
+    return stackedAuraSignature(value);
+  }
+  if (key === 'hazards') {
+    return hazardSignature(value);
+  }
+  if (key === 'markers') {
+    return markerSignature(value);
+  }
+  // The source is in the signature as well as the flag, so a fight that stays
+  // active while the loader's confidence in it changes is reported. A meter
+  // that trusts only the server's own answer needs to hear that moment; one
+  // that does not can ignore it, which is cheaper than never being told.
+  return `${String(fieldValue(value, 'active'))}:${fieldString(value, 'source') ?? ''}`;
 }
 
 function entityIds(entities: unknown): Set<number> {
@@ -108,18 +172,18 @@ function sameSet(a: ReadonlySet<number>, b: ReadonlySet<number>): boolean {
   return true;
 }
 
-export type WorldKey = (typeof KEYS)[number];
-
-export const WORLD_KEYS: readonly WorldKey[] = KEYS;
+type WorldKey = (typeof KEYS)[number];
 
 /** A string for every key but `entities`, where an exact id set is both cheaper and exact. */
-export type Capture = string | ReadonlySet<number>;
+type Capture = string | ReadonlySet<number>;
 
-export function isWorldKey(key: string): key is WorldKey {
-  return (KEYS as readonly string[]).includes(key);
-}
-
-export function capture(key: WorldKey, value: unknown): Capture {
+/**
+ * Every key that belongs to no lane group, which is where a new one starts.
+ *
+ * Its own function rather than the body of `capture`, so the dispatcher above it
+ * stays short enough that adding a group is a three line change.
+ */
+function worldCapture(key: WorldKey, value: unknown): Capture {
   switch (key) {
     case 'player':
       return joinFields(value, PLAYER_FIELDS);
@@ -131,51 +195,62 @@ export function capture(key: WorldKey, value: unknown): Capture {
       return partySignature(value);
     case 'inventory':
       return inventorySignature(value);
-    // Worn gear changes one slot at a time and the whole map is a dozen entries,
-    // so the signature is the map itself rather than anything cleverer.
-    case 'equipment':
-      return equipmentSignature(value);
     case 'bags':
       return stringsOf(value).join(',');
     case 'copper':
     case 'zone':
+    case 'characterKey':
       return String(value);
-    case 'character':
-    case 'talents':
-    case 'professions':
-    case 'group':
-    case 'encounter':
-      return sheetCapture(key, value);
     case 'quests':
       return questSignature(value);
     case 'cooldowns':
       return cooldownSignature(value);
     case 'auras':
       return auraSignature(value);
-    case 'casts':
-      return castSignature(value);
-    case 'targetAuras':
-      return stackedAuraSignature(value);
-    case 'hazards':
-      return hazardSignature(value);
-    case 'markers':
-      return markerSignature(value);
     case 'abilities':
       return abilityIndexSignature(value);
-    // The source is in the signature as well as the flag, so a fight that stays
-    // active while the loader's confidence in it changes is reported. A meter
-    // that trusts only the server's own answer needs to hear that moment; one
-    // that does not can ignore it, which is cheaper than never being told.
+    case 'casts':
+    case 'targetAuras':
+    case 'hazards':
+    case 'markers':
     case 'combat':
-      return `${String(fieldValue(value, 'active'))}:${fieldString(value, 'source') ?? ''}`;
+      return derivedCapture(key, value);
     default:
       return '';
   }
 }
 
-export function sameCapture(a: Capture, b: Capture): boolean {
+const WORLD_KEYS: readonly WorldKey[] = KEYS;
+
+function isWorldKey(key: string): key is WorldKey {
+  return (KEYS as readonly string[]).includes(key);
+}
+
+function capture(key: WorldKey, value: unknown): Capture {
+  if (isSheetKey(key)) {
+    return sheetCapture(key, value);
+  }
+  if (isSocialKey(key)) {
+    return socialCapture(key, value);
+  }
+  if (isEconomyKey(key)) {
+    return economyCapture(key, value);
+  }
+  if (isGroundKey(key)) {
+    return groundCapture(key, value);
+  }
+  if (isGearKey(key)) {
+    return gearCapture(key, value);
+  }
+  return worldCapture(key, value);
+}
+
+function sameCapture(a: Capture, b: Capture): boolean {
   if (typeof a === 'string' || typeof b === 'string') {
     return a === b;
   }
   return sameSet(a, b);
 }
+
+export type { Capture, WorldKey };
+export { capture, isWorldKey, sameCapture, WORLD_KEYS };

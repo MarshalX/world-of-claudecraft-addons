@@ -25,7 +25,7 @@ const THIRD_PARTY: MarketplaceRef = {
   source: { kind: 'github', owner: 'someone', repo: 'their-addons', ref: 'HEAD' },
 };
 
-const NOTHING = new Set<string>();
+const NOTHING = new Map<string, boolean>();
 
 /** The official source offering two addons, one of them tagged. */
 function twoSources() {
@@ -64,7 +64,7 @@ describe('browseRows', () => {
   // The whole reason the fqid exists. Marking one installed must not mark the
   // other, or a player would be told they already have an addon they do not.
   it('marks only the copy that is installed when two sources share an id', () => {
-    const rows = browseRows(twoSources(), new Set(['official/combat-meter']));
+    const rows = browseRows(twoSources(), new Map([['official/combat-meter', true]]));
 
     expect(rows.map((row) => [row.fqid, row.installed])).toEqual([
       ['official/combat-meter', true],

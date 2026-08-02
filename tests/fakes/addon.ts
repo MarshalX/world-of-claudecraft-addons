@@ -51,6 +51,16 @@ interface MountInput {
   game?: Promise<unknown>;
   /** Stored settings, seeded before the body is evaluated. */
   settings?: Record<string, unknown>;
+  /**
+   * Data files as the host's install-time cache holds them: raw TEXT keyed by
+   * the path the manifest declared, not a parsed value.
+   *
+   * Seeded before the body is evaluated, for the same reason `settings` is one
+   * line up. An addon carrying a table reads `woc.data` on its first line, and
+   * `api/data.ts` drops a REJECTED read from its memo rather than retrying, so a
+   * file seeded afterwards is not merely late: nothing ever recovers from it.
+   */
+  data?: Record<string, string>;
   /** Pass one in to seed other namespaces first, or to assert on it afterwards. */
   storage?: FakeStorage;
   marketplace?: string;
@@ -123,6 +133,10 @@ async function mountAddon(input: MountInput): Promise<AddonHarness> {
   } else {
     shared = createSharedServices(document, storage, { game: input.game });
   }
+  for (const [name, text] of Object.entries(input.data ?? {})) {
+    shared.addonData(row.fqid, name, text);
+  }
+
   let addon: LoadedAddon;
   try {
     addon = await loadAddon({ shared: shared.shared, row, source: input.source });

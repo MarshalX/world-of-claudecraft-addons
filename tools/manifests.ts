@@ -8,6 +8,7 @@
 import { type Dirent, readdirSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { DATA_MAX_BYTES } from '../loader/src/shared/addon-data.ts';
 import { API_VERSION } from '../loader/src/shared/api-version.ts';
 import type { AddonManifest, ValidationIssue } from '../loader/src/shared/schema.ts';
 import { validateManifest } from '../loader/src/shared/schema.ts';
@@ -97,12 +98,50 @@ function previewIssues(dir: string, file: string): ValidationIssue[] {
 }
 
 /**
+ * The checks on one declared data file, which are about the FILE rather than the
+ * manifest and so cannot live in the schema.
+ *
+ * Parsed rather than merely stat'd, because the host parses at install: a file
+ * that is not JSON is an addon that cannot be installed, and CI is where that
+ * should surface rather than in a player's manager. The ceiling is the same
+ * constant the host applies, imported rather than repeated.
+ *
+ * One file per call so the missing-file case can return early. A loop with a
+ * `continue` is the shape this would otherwise take, and `noContinue` is on.
+ */
+function dataFileIssues(dir: string, file: string): ValidationIssue[] {
+  const path = join(ADDONS_DIR, dir, file);
+  let text: string;
+  try {
+    text = readFileSync(path, 'utf8');
+  } catch {
+    return [{ path: 'data', message: `no such file: addons/${dir}/${file}` }];
+  }
+  const bytes = Buffer.byteLength(text);
+  if (bytes > DATA_MAX_BYTES) {
+    return [
+      {
+        path: 'data',
+        message: `${file} is ${bytes} bytes, over the ${DATA_MAX_BYTES} the loader fetches at install`,
+      },
+    ];
+  }
+  try {
+    JSON.parse(text);
+  } catch (err) {
+    return [{ path: 'data', message: `${file} is not valid JSON: ${String(err)}` }];
+  }
+  return [];
+}
+
+/**
  * Read, parse, and validate one addon directory.
  *
  * The checks past the schema are the ones a schema cannot express: the id has to
  * match the directory, because the directory is what the index publishes as the
  * path; the apiVersion has to be one this loader implements; and a declared
- * preview has to be a file that is actually there and actually a PNG.
+ * preview has to be a file that is actually there and actually a PNG, and a
+ * declared data file has to be there and actually parse.
  */
 function readAddon(dir: string): ReadResult {
   const file = join(ADDONS_DIR, dir, 'addon.json');
@@ -131,6 +170,9 @@ function readAddon(dir: string): ReadResult {
   const { preview } = result.value;
   if (preview !== undefined) {
     issues.push(...previewIssues(dir, preview.file));
+  }
+  for (const declared of result.value.data ?? []) {
+    issues.push(...dataFileIssues(dir, declared));
   }
   if (issues.length > 0) {
     return { dir, ok: false, issues };
