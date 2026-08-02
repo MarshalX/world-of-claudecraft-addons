@@ -41,14 +41,11 @@
   border-top: 1px solid var(--hairline);
   padding-top: 24px;
   margin-top: 32px;
+  max-width: 74ch;
 }
 
 .addon-block h2 {
   margin-bottom: 8px;
-}
-
-.addon-block > .muted {
-  max-width: 62ch;
 }
 
 /* A setting is a label and a line of facts about it. The facts are mono because
@@ -93,12 +90,11 @@
   gap: 12px;
   align-items: baseline;
   justify-content: space-between;
-  max-width: 62ch;
   border-bottom: 1px solid var(--hairline);
   padding-bottom: 10px;
 }
 
 .addon-companions {
   margin-top: 32px;
-  max-width: 62ch;
+  max-width: 74ch;
 }

@@ -125,9 +125,7 @@
   padding-block: 40px 0;
 }
 
-/* Docs: nav, prose, and the on-this-page aside. The prose column is capped at a
-   readable measure rather than filling, so a wide monitor does not produce
-   90-character lines in the one place people actually read at length. */
+/* Docs: nav, prose, and the on-this-page aside. */
 .docs {
   display: grid;
   grid-template-columns: minmax(210px, 240px) minmax(0, 1fr) minmax(180px, 220px);
@@ -140,12 +138,6 @@
   font-size: 17.5px;
   line-height: 1.62;
   min-width: 0;
-}
-
-.docs-prose > p,
-.docs-prose > ul,
-.docs-prose > ol {
-  max-width: 36em;
 }
 
 .docs-prose h2 {

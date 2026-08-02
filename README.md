@@ -38,17 +38,8 @@ The per-browser procedure lives on the site rather than here, because two copies
 
 ## What ships with it
 
-**[Combat Meter](addons/combat-meter)** — what your damage and healing are made of: a row per ability with crit rate, average and biggest hit, plus your real miss and dodge rates and what is hitting you. The game has its own meter; this answers what that one does not.
-
-<img src="addons/combat-meter/preview.png" width="420" alt="The Combat Meter panel showing 2,542 damage in 22 seconds, broken down into seven ability rows with hits, crit rate, average and max, each row tinted by damage school." />
-
-**[Cooldown Bars](addons/cooldown-bars)** — a draining bar for every ability on cooldown, soonest ready at the top, measured against the real length your spellbook resolves for it, as a column of named bars or a strip of swept icons. It is also **the example to copy**: one file, no build step, and it teaches the one thing that is not obvious from the API.
-
-<img src="addons/cooldown-bars/preview.png" width="260" alt="The Cooldowns overlay, five draining bars ordered by time remaining: Rapid Fire 4.4s, Fell Shot 5.8s, Counter Shot 10.4s, Twinstrike 97.5s with one of two charges back, and Aimed Shot 155.5s. Each row carries the ability art the game files under its id, except Twinstrike, for which the game ships none." />
-
-**[Dev Harness](addons/dev-harness)** — exercises every API surface and reports what it found, which is how the loader gets checked against a live game rather than only against a test.
-
-[The full catalog →](https://woc.marshal.dev/addons)
+<!-- addons:start -->
+<!-- addons:end -->
 
 ## For addon authors
 
