@@ -1,0 +1,75 @@
+{
+  "id": "facemark",
+  "name": "Facemark",
+  "version": "1.0.0",
+  "apiVersion": 1,
+  "apiMinor": 2,
+  "author": "MarshalX",
+  "description": "A nameplate over every unit near you: its name, its level, a health bar, a cast bar, the harmful effects on it, a threat edge and its raid mark.",
+  "entry": "main.js",
+  "preview": {
+    "file": "preview.png",
+    "alt": "two nameplates floating over the units they belong to. Tempest Vharok, level 22, the name in hostile red beside a yellow Star raid mark, a health bar at 58 percent, a cast bar reading Rift Thunderhead? because only the ability id reaches an addon and the name was worked out from it, and two effect tiles under it, Venom Barb and Rattling Shot, each carrying the art the game files under that ability. A red edge runs down its left, saying the player is top of its hate table. Beside it the friendly player Anserra at level 20 and 66 percent health, the name in player blue, no threat edge at all because a player keeps no hate table, and one effect on them, the boss snare Static Field, drawn as a bordered countdown with no picture because an effect a mob applied has none anywhere in the game."
+  },
+  "homepage": "https://github.com/MarshalX/world-of-claudecraft-addons",
+  "tags": ["interface", "world"],
+  "permissions": ["world.read", "ui", "keys"],
+  "keybinds": [
+    {
+      "id": "toggle",
+      "label": "Show or hide the plates",
+      "default": "Alt+Shift+KeyF"
+    }
+  ],
+  "settings": [
+    {
+      "id": "max-plates",
+      "type": "number",
+      "label": "Most plates drawn at once",
+      "default": 12,
+      "min": 1,
+      "max": 40
+    },
+    {
+      "id": "draw-distance",
+      "type": "number",
+      "label": "How far away a unit still gets a plate, in yards",
+      "default": 60,
+      "min": 5,
+      "max": 70
+    },
+    {
+      "id": "show",
+      "type": "select",
+      "label": "Which units get a plate",
+      "default": "hostile",
+      "options": ["hostile", "players", "everything"]
+    },
+    {
+      "id": "scale",
+      "type": "number",
+      "label": "How big a plate is drawn",
+      "default": 1,
+      "min": 0.6,
+      "max": 1.8
+    },
+    {
+      "id": "auras",
+      "type": "boolean",
+      "label": "Show the effects on a unit",
+      "default": true
+    },
+    {
+      "id": "casts",
+      "type": "boolean",
+      "label": "Show what a unit is casting",
+      "default": true
+    },
+    {
+      "id": "hide-full",
+      "type": "boolean",
+      "label": "Hide a plate for a unit at full health that is doing nothing",
+      "default": false
+    }
+  ]
+}
