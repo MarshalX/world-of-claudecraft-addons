@@ -9,44 +9,41 @@
 // deal, what you heal and what lands on you, plus the attack-table outcomes, which
 // is the readout that tells you whether you are hit capped.
 //
-// All of it is already on the socket. Damage events carry `ability`, `school`,
-// `crit`, `kind` and `absorbed`, and `heal2` carries `ability` and `crit`; the
-// game's own meter reads the same events and keeps only per-player totals. So this
-// aggregates information the player is already being sent, which is exactly the
-// line the loader stays on: it reads, and it never sends anything.
+// All of it is already on the socket: damage events carry `ability`, `school`, `crit`,
+// `kind` and `absorbed`, and `heal2` carries `ability` and `crit`. So this aggregates
+// what the player is already being sent, and never sends anything.
 //
 // A fight ends when nothing has landed for a while, rather than when the game says
 // combat dropped. `inCombat` is not on the wire, so on a client it is false for the
-// entire session; an earlier version read it, concluded every fight had ended, and
-// reset the total on every single hit. The idle timeout needs nothing from the
-// server, and it matches the 5 seconds the game's own meter uses to close an
-// encounter, so the segments line up.
+// entire session, and reading it concludes that every fight has ended and resets the
+// total on every hit. The idle timeout needs nothing from the server, and it matches
+// the 5 seconds the game's own meter uses to close an encounter, so the segments line
+// up.
 //
 // Three limits, stated rather than hidden.
 //
-// ICONS ONLY FOR YOUR OWN ABILITIES, and the reason is worth keeping. Skill art is
-// filed under the ability ID, while a combat event carries the display NAME: `damage`
-// and `heal2` fill that field from `ability.name`, and only `castStart` and `spellfx`
-// carry `ability.id`. The two have DIVERGED in the game:
+// ICONS ONLY FOR YOUR OWN ABILITIES. Skill art is filed under the ability ID, while a
+// combat event carries the display NAME: `damage` and `heal2` fill that field from
+// `ability.name`, and only `castStart` and `spellfx` carry `ability.id`. The two have
+// DIVERGED in the game, where `arcane_shot` is displayed as "Fell Shot", so slugifying
+// the name gives `fell_shot`, which is not a file. `world.abilities` carries the id and
+// the name together and walks that join backwards, and what it covers is YOUR OWN kit,
+// so a mob's ability has no id to find and gets no icon. A missing icon here therefore
+// means "not something you cast" rather than "we could not work it out", and it is why
+// the rows are also tinted by school: the tint reaches the rows the art cannot.
 //
-//   arcane_shot: { name: `Fell Shot`, ... }
+// PET DAMAGE IS NOT COUNTED, AND CANNOT BE. The server delivers a combat event only
+// when its `sourceId` or `targetId` is the viewer's own pid or one of their party's
+// pids. A pet is a `mob`-kind entity with its own entity id and a party's members are
+// player pids, so a pet's swing at a mob matches neither and is dropped before it is
+// ever serialized; `net` is read-only, and there is no recovering an event the server
+// did not send. The game's own meter folds pet output into the owner's row, which is
+// real and works OFFLINE where the client runs the sim itself, and is unreachable
+// online because the events it needs are filtered out one layer below it. A pet hitting
+// YOU is delivered, since you are the target, and lands in the Taken table.
 //
-// The id is `arcane_shot`, the art is `/ui/skills/hunter/arcane_shot.webp`, and every
-// event about it says "Fell Shot". Slugifying gives `fell_shot`, which does not exist.
-// A first version shipped exactly that and drew icons for the two hunter abilities
-// whose names happened to still match their ids, which read as random.
-//
-// `world.abilities` is what closed it: the loader reads the game's own resolved
-// spellbook, which carries the id and the name together, so `byName` walks the join
-// backwards and the art is exact. What it covers is YOUR OWN kit, so a mob's ability
-// still has no id to find and gets no icon. That is why a missing icon here means
-// "not something you cast" rather than "we could not work it out", and why the rows
-// are still tinted by school: the tint reaches the rows the art cannot.
-//
-// Damage a pet deals is not counted: the published surface does not say which entity
-// is yours, and guessing from position or name would be wrong often enough to be worse
-// than the omission. And there is no overhealing column, because no overheal figure
-// rides the wire at all; the healing here is what landed.
+// There is no overhealing column, because no overheal figure rides the wire at all; the
+// healing here is what landed.
 
 const MS_PER_SECOND = 1000;
 const REPAINT_MS = 500;
@@ -55,21 +52,15 @@ const PERCENT = 100;
 const SECONDS_PER_MINUTE = 60;
 const DEFAULT_TIMEOUT_SECONDS = 5;
 const DEFAULT_MAX_ROWS = 10;
-const WINDOW_WIDTH = 340;
-const WINDOW_HEIGHT = 320;
+const FRAME_WIDTH = 340;
+const FRAME_HEIGHT = 320;
 /** Auto-attacks arrive with no ability at all, and they are usually a real share. */
 const MELEE_LABEL = 'Melee';
 
 /** Attack-table outcomes, in the order they are worth reading. */
 const OUTCOMES = ['hit', 'miss', 'dodge', 'parry', 'block', 'resist'];
 
-/**
- * The three tables, in the order the game's own meter puts its tabs.
- *
- * A table rather than a branch per question: each entry is the tally map's key,
- * the tab's label, and the noun the summary line uses, so adding a fourth is one
- * row here and nothing else.
- */
+/** The three tables, in the order the game's own meter puts its tabs. */
 const TABLES = [
   { id: 'dealt', label: 'Damage', noun: 'damage' },
   { id: 'healed', label: 'Healing', noun: 'healing' },
@@ -77,10 +68,9 @@ const TABLES = [
 ];
 
 function emptyTally() {
-  // `school` is the one identifying thing about an ability that IS on a damage event
-  // and does not depend on the id, which is why the rows are coloured by it. First
-  // seen wins: an ability's school does not change, and re-reading it every hit would
-  // let one odd event recolour a row mid-fight.
+  // Rows are coloured by school: it is the one identifying thing on a damage event that
+  // does not depend on the ability id. First seen wins, so one odd event cannot recolour
+  // a row mid-fight.
   return { total: 0, count: 0, crits: 0, biggest: 0, absorbed: 0, school: null };
 }
 
@@ -131,21 +121,12 @@ function timeoutMs() {
 /**
  * What to call the ability behind one event: exactly what the event said.
  *
- * There was a title-casing pass here and it was DEAD CODE, which is worse than it
- * sounds. A combat event's `ability` is already a display name from every one of the
- * four places the game fills it: `ability.name`, `spell.name`, `queued.def.name`, and
- * a literal 'Auto Shot' or 'Wand' for a ranged auto-attack. So it never had an
- * underscore to split or a lowercase letter to raise.
- *
- * Removing it is the actual fix for how the icon bug hid. Title-casing turned
- * `measured_shot` and `Measured Shot` into the SAME label, so a row looked correct
- * whichever form the field held and no assertion about the frame could tell them
- * apart. Passing the value through means a wire that ever starts sending ids shows
- * `measured_shot` in the panel, which someone reports on the first fight, instead of
- * being laundered into something that looks right and builds the wrong icon URL.
- *
- * Cooldown Bars keeps its own version of that pass and is right to: it reads the
- * cooldown map, whose keys really are ids.
+ * The field is already a display name from every one of the four places the game fills
+ * it (`ability.name`, `spell.name`, `queued.def.name`, and a literal 'Auto Shot' or
+ * 'Wand' for a ranged auto-attack), so there is nothing here to title-case. Deliberately
+ * NOT laundered: a wire that ever starts sending ids shows `measured_shot` in the panel,
+ * which somebody reports on the first fight, rather than being tidied into something
+ * that looks right and builds the wrong icon URL.
  */
 function labelOf(event) {
   if (typeof event.ability !== 'string' || event.ability.length === 0) {
@@ -278,10 +259,9 @@ woc.net.onEvent('heal2', (event) => {
   if (player === null || event.sourceId !== player.id) {
     return;
   }
-  // `cueOnly` events carry no healing and exist to drive a sound. The game's own
-  // comment says a meter must ignore them by this FLAG rather than by amount, and
-  // it is right: a genuine direct heal can legitimately land at 0 on a target at
-  // full health, and inferring it from the amount would drop those too.
+  // `cueOnly` events carry no healing and exist to drive a sound. They must be skipped
+  // by this FLAG rather than by amount: a genuine direct heal can legitimately land at 0
+  // on a target already at full health, and inferring it from the amount drops those too.
   if (event.cueOnly === true) {
     return;
   }
@@ -292,12 +272,28 @@ woc.net.onEvent('heal2', (event) => {
 });
 // #endregion
 
-const panel = woc.ui.window({
+/**
+ * The panel.
+ *
+ * A frame rather than a window, because a window's close button is what marks a
+ * panel the player OPENS to read and then dismisses with the mouse. This is the
+ * other kind: a readout that lives on the HUD for the length of a fight, put up
+ * and taken down by the keybind the manifest declares for exactly that.
+ *
+ * `resizable` has to be spelled out, since a frame defaults to false and this one
+ * is not sized by its content: `max-rows` goes to 40, and forty rows is a panel
+ * taller than the game. The height is the box the player chose and the body
+ * scrolls inside it.
+ *
+ */
+const panel = woc.ui.frame({
   id: 'meter',
   title: 'Combat',
-  width: WINDOW_WIDTH,
-  height: WINDOW_HEIGHT,
+  width: FRAME_WIDTH,
+  height: FRAME_HEIGHT,
   density: 'compact',
+  resizable: true,
+  closable: true,
   save: true,
 });
 
@@ -345,27 +341,18 @@ function clearRows() {
 }
 
 /**
- * One row, from the loader's own timer bar rather than hand-built.
+ * One row, from the loader's own timer bar rather than hand-built. Its second line
+ * carries the per-ability detail with the fill spanning both, so the share reads as
+ * the whole row's rather than as a bar on the top line of it.
  *
- * The kit row is the same shape this addon used to assemble out of about twenty
- * inline style declarations, and Cooldown Bars had assembled a slightly different
- * one. What the shared version gets right and both copies had drifted on is which
- * part may shrink, whether the figure reserves its width before the name takes what
- * is left, and whether the numbers are tabular. Its second line is what carries the
- * per-ability detail, with the fill spanning both, so the share still reads as the
- * whole row's rather than as a bar on the top line of it.
+ * The art comes from the label by way of `world.abilities`, the only thing that turns
+ * the display name an event carries back into the id the icon is filed under. A row
+ * with no icon is therefore a row this character did not cast: a mob's ability, or
+ * Melee. That is a real distinction rather than a gap, so it is left visible.
  *
- * The art comes from the label by way of `world.abilities`, which is the only thing
- * that turns the display name an event carries back into the id the icon is filed
- * under. A row with no icon is therefore a row this character did not cast: a mob's
- * ability, or Melee, neither of which is in your own spellbook. That is a real
- * distinction rather than a gap, so it is left visible.
- *
- * The fill stays tinted by SCHOOL. It was the only way to tell two rows apart back
- * when there was no art, and it is still worth having with art: it survives on the
- * rows the icons cannot reach, and it says what KIND of damage a row is made of,
- * which an icon does not. Healing rows pass nothing, because `heal2` carries no
- * school.
+ * The fill is tinted by SCHOOL, which survives on the rows the icons cannot reach and
+ * says what KIND of damage a row is made of, which an icon does not. Healing rows pass
+ * nothing, because `heal2` carries no school.
  */
 // #region school-tint
 function createRow(label, school) {
@@ -393,10 +380,6 @@ function rowTooltip(label, school) {
 
 /**
  * The icon for a row, found from the display name the event gave us.
- *
- * The join that was impossible until `world.abilities` existed: an event names the
- * ability ("Fell Shot"), art is filed under the id (`arcane_shot`), and the two have
- * diverged. Slugifying the name was tried and produced `fell_shot`, which is nothing.
  *
  * Null for anything not in your own spellbook, which is every mob ability and Melee.
  * The kit hides its icon slot for a null or a URL that fails to load, so a row that
@@ -440,9 +423,7 @@ function detailLine(tally) {
   return '';
 }
 
-/**
- * Put a row at its position, and only if it is not there already.
- */
+/** Put a row at its position, and only if it is not there already. */
 function place(el, at) {
   if (table.children[at] !== el) {
     table.insertBefore(el, table.children[at] ?? null);
@@ -522,6 +503,8 @@ let neverDrawn = true;
 
 function repaint() {
   const now = woc.now();
+  // Ahead of the visibility check on purpose: a hidden panel keeps tallying, so it has
+  // to keep deciding when a fight ended.
   expireFight(now);
   if (!(panel.visible || neverDrawn)) {
     return;
@@ -539,6 +522,10 @@ function repaint() {
 }
 
 repaint();
+// Twice a second, and deliberately neither of the two obvious alternatives. Nothing here
+// moves on a frame, so `woc.onFrame` would redraw the same strings sixty times a second
+// between two hits; and a repaint per event would put a sort plus a write per row on the
+// game's event rate, which in a raid is not yours.
 woc.setInterval(repaint, REPAINT_MS);
 
 woc.keys.bind('toggle', () => {

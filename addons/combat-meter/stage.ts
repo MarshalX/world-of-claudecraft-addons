@@ -74,6 +74,20 @@ const KNOWN = Object.freeze([
     castTime: 0,
     cooldown: 0,
   },
+  {
+    def: { id: 'volley', name: 'Volley', school: 'arcane', requiresTarget: false },
+    rank: 1,
+    cost: 60,
+    castTime: 0,
+    cooldown: 30,
+  },
+  {
+    def: { id: 'raptor_strike', name: 'Raptor Strike', school: 'physical', requiresTarget: true },
+    rank: 4,
+    cost: 20,
+    castTime: 0,
+    cooldown: 6,
+  },
 ]);
 
 interface Blow {
@@ -111,6 +125,11 @@ const DEALT: readonly Blow[] = [
   { ability: 'Auto Shot', school: 'physical', amount: 231, after: 2200 },
   { ability: 'Serpent Sting', school: 'nature', amount: 124, after: 1300 },
   { ability: 'Aimed Shot', school: 'physical', amount: 388, after: 1800 },
+  { ability: 'Volley', school: 'arcane', amount: 274, after: 1100 },
+  { ability: 'Raptor Strike', school: 'physical', amount: 166, after: 1500 },
+  { ability: 'Volley', school: 'arcane', amount: 291, crit: true, after: 1900 },
+  { ability: 'Raptor Strike', school: 'physical', amount: 158, after: 1400 },
+  { ability: 'Volley', school: 'arcane', amount: 262, after: 2000 },
 ];
 
 /**
@@ -227,6 +246,8 @@ const SCENARIOS: readonly Scenario[] = [
   {
     id: 'damage',
     label: 'Damage, mid-fight',
+    preview: true,
+    alt: 'The Combat Meter panel on its Damage tab, reading 5,088 damage in 30s. Six ability rows (Aimed Shot 1,596, Fell Shot 1,334, Volley 827, Auto Shot 643, Serpent Sting 364, Raptor Strike 324) each show total, share and damage per second, over a second line of hits, crit rate, average and biggest hit. The fill behind each row is tinted by damage school, red for physical, blue for arcane and green for nature, and every row but Auto Shot carries the art the game ships for that ability. A summary line reads hit 89%, miss 5%, dodge 5%.',
     world: aHunter,
     run: async (stage) => {
       await exchange(stage, DEALT, OUTGOING);
