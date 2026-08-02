@@ -69,16 +69,21 @@ interface Rect {
 /**
  * Where everything one pane drew sits, together.
  *
- * The union rather than the first frame, matching what a single-panel capture
- * crops to: an addon may put up more than one frame and a pane around the first
- * would cut the others out of their own preview.
+ * The union rather than the first frame: an addon may put up more than one frame,
+ * and a pane around the first would cut the others out of their own preview.
+ *
+ * WORLD ANCHORS COUNT AS DRAWING, which is the whole picture for an addon that
+ * puts nothing in a frame at all. Facemark is one: its plates are anchors over
+ * units, so a crop that looked only for frames would report that a working addon
+ * had drawn nothing. A hidden anchor is excluded for free, since the loader hides
+ * one by `display: none` and a rect of no size is already filtered out below.
  */
-function framesIn(doc: Document): Rect {
-  const rects = [...doc.querySelectorAll('#woc-addons .woc-addon-frame')]
+function drawnIn(doc: Document): Rect {
+  const rects = [...doc.querySelectorAll('#woc-addons .woc-addon-frame, #woc-addons .woc-anchor3d')]
     .map((el) => el.getBoundingClientRect())
     .filter((rect) => rect.width > 0 && rect.height > 0);
   if (rects.length === 0) {
-    throw new Error('a sheet pane drew no frame');
+    throw new Error('a sheet pane drew nothing: no frame and no anchor');
   }
   const left = Math.min(...rects.map((rect) => rect.left));
   const top = Math.min(...rects.map((rect) => rect.top));
@@ -183,7 +188,7 @@ async function buildSheet(deps: SheetDeps): Promise<HTMLElement> {
     built.map(async ([figure, frame]) => {
       const paneDoc = await paneReady(frame);
       const view = figure.querySelector('.stage-pane-view');
-      cropPane(view as HTMLElement, frame, framesIn(paneDoc));
+      cropPane(view as HTMLElement, frame, drawnIn(paneDoc));
     }),
   );
   return sheet;

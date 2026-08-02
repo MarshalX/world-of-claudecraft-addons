@@ -163,6 +163,24 @@ interface SharedOptions {
    * replaced after `loadAddon` is one nothing reads.
    */
   viewport?: () => { w: number; h: number };
+  /**
+   * Where a world point lands on screen, and where a unit is in the world.
+   *
+   * The default pair is blind on purpose: one constant screen point for every
+   * world point, and no unit resolving at all. A suite about a decision an addon
+   * makes wants a camera it cannot accidentally depend on, and one that needs
+   * real positions says so by replacing `kit.project` and `kit.unitPoint`, which
+   * `ui.project` reads per call.
+   *
+   * These two options are for the case that patching cannot reach: `stage/`
+   * needs anchors to be PLACED, and `createAnchors` captures its projector and
+   * its unit resolver when it is built, so a function assigned to `kit`
+   * afterwards moves what `ui.project` answers and not where anything is drawn.
+   * See `stage/src/camera.ts`, which supplies the loader's own two modules over
+   * a fake renderer rather than a stand-in for their answers.
+   */
+  project?: SharedServices['kit']['project'];
+  unitPoint?: SharedServices['kit']['unitPoint'];
 }
 
 /**
@@ -215,14 +233,16 @@ function createSharedServices(
   // The real loop over a clock the suite steps. Nothing runs until `frames.tick`,
   // so a suite that is not about frames still starts nothing.
   const frames = createFrameClock();
-  const project = (): { x: number; y: number; depth: number; behind: boolean } => ({
-    x: 100,
-    y: 200,
-    depth: 10,
-    behind: false,
-  });
+  const project =
+    options.project ??
+    ((): { x: number; y: number; depth: number; behind: boolean } => ({
+      x: 100,
+      y: 200,
+      depth: 10,
+      behind: false,
+    }));
   // No unit has a place here: a suite that wants one fakes the world it needs.
-  const unitPoint = (): null => null;
+  const unitPoint = options.unitPoint ?? ((): null => null);
   const anchors = createAnchors({
     doc,
     root: hud,

@@ -71,6 +71,15 @@ interface MountInput {
    * reference when the addon's surface is assembled. See SharedOptions.
    */
   viewport?: () => { w: number; h: number };
+  /**
+   * The camera: where a world point lands, and where a unit is.
+   *
+   * Both default to blind, which is what a suite about a decision wants. They
+   * are forwarded rather than patched for the reason `viewport` is: the anchor
+   * kit captures them when it is built. See SharedOptions.
+   */
+  project?: SharedOptions['project'];
+  unitPoint?: SharedOptions['unitPoint'];
 }
 
 interface AddonHarness extends SharedHarness {
@@ -140,6 +149,12 @@ async function mountAddon(input: MountInput): Promise<AddonHarness> {
   }
   if (input.viewport !== undefined) {
     options.viewport = input.viewport;
+  }
+  if (input.project !== undefined) {
+    options.project = input.project;
+  }
+  if (input.unitPoint !== undefined) {
+    options.unitPoint = input.unitPoint;
   }
   const shared: SharedHarness = createSharedServices(document, storage, options);
   for (const [name, text] of Object.entries(input.data ?? {})) {

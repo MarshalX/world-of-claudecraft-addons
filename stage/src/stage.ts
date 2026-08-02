@@ -26,6 +26,7 @@ import { liveEntity } from '../../tests/fakes/entity.ts';
 import { PLAYER_ENTITY } from '../../tests/fakes/frames.ts';
 import type { SharedHarness } from '../../tests/fakes/shared-services.ts';
 import { createFakeStorage } from '../../tests/fakes/storage.ts';
+import { createStageCamera, type ModelSpec, type StageCamera } from './camera.ts';
 
 /**
  * Who the stage is logged in as.
@@ -93,6 +94,15 @@ interface WorldDraft {
   mob: (id: number, over?: Fake) => Fake;
   /** Write one field. A plain assignment, named so scenarios read alike. */
   set: (target: Fake, field: string, value: unknown) => void;
+  /**
+   * How tall the game is drawing one unit, which is the whole of what an overhead
+   * anchor is placed by. Two yards unless a scenario says otherwise.
+   *
+   * On the renderer rather than on the entity, because that is where it is in the
+   * real game: nothing on the wire carries a model height, which is why `over:
+   * 'head'` exists at all. See stage/src/camera.ts.
+   */
+  model: (id: number, spec: ModelSpec) => void;
 }
 
 /** The controls a scenario drives its world with, once the addon is up. */
@@ -233,7 +243,13 @@ function mobDefaults(id: number): Fake {
  * because a suite asserting on that Map is asserting on something real.
  */
 function createPlayer(): Fake {
-  return liveEntity({ set: { cooldowns: new Map<string, number>(), auras: [] } });
+  return liveEntity({
+    set: {
+      cooldowns: new Map<string, number>(),
+      auras: [],
+      kind: 'player',
+    },
+  });
 }
 
 /**
@@ -249,7 +265,12 @@ function createWorld(player: Fake, entities: Map<number, Fake>): Fake {
 }
 
 /** The half of the surface that works with no addon mounted. */
-function createDraft(world: Fake, player: Fake, entities: Map<number, Fake>): WorldDraft {
+function createDraft(
+  world: Fake,
+  player: Fake,
+  entities: Map<number, Fake>,
+  camera: StageCamera,
+): WorldDraft {
   return {
     world,
     player,
@@ -262,6 +283,7 @@ function createDraft(world: Fake, player: Fake, entities: Map<number, Fake>): Wo
     set: (target, field, value) => {
       target[field] = value;
     },
+    model: camera.model,
   };
 }
 
@@ -324,7 +346,8 @@ async function seedFrames(
 async function mountScenario(input: MountInput): Promise<MountedStage> {
   const player = createPlayer();
   const entities = new Map<number, Fake>([[PLAYER_ENTITY.id, player]]);
-  const draft = createDraft(createWorld(player, entities), player, entities);
+  const camera = createStageCamera({ entities, player, viewport: screenViewport });
+  const draft = createDraft(createWorld(player, entities), player, entities, camera);
   const { scenario } = input;
   scenario.world?.(draft);
 
@@ -337,10 +360,15 @@ async function mountScenario(input: MountInput): Promise<MountedStage> {
     manifest: input.manifest,
     source: input.source,
     storage,
-    game: Promise.resolve({ world: draft.world }),
+    // The renderer rides the same handle the world does, because that is where the
+    // game keeps it: an addon reads the world and the loader reads the renderer off
+    // one object, and splitting them here would be a shape no session ever has.
+    game: Promise.resolve({ world: draft.world, renderer: camera.renderer }),
     settings: scenario.settings ?? {},
     data: scenario.data ?? {},
     viewport: screenViewport,
+    project: camera.project,
+    unitPoint: camera.unitPoint,
   });
 
   const stage = createControls({ draft, harness });
