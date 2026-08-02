@@ -1,0 +1,53 @@
+{
+  "id": "wayline",
+  "name": "Wayline",
+  "version": "1.0.0",
+  "apiVersion": 1,
+  "apiMinor": 2,
+  "author": "MarshalX",
+  "description": "How far the next level is in time rather than in numbers: experience per hour over a rolling window, the kills and the time left to reach it, and a derived virtual level past the cap.",
+  "entry": "main.js",
+  "preview": {
+    "file": "preview.png",
+    "alt": "On the left, Levelling, a Level 12 row filled to 61 percent, reading 6,240 of the 10,100 the game asks for. Under it three figures: a rate of 9,200 xp/hr measured over the last ten minutes of play, 27 kills left at the average award of the eight in that window, and 25m to go at that pace. A Rested row below them holds 0.8 levels, 16 bubbles, banked against a cap of one and a half levels. On the right, Past the cap, the same panel on a character at the cap. The level row is full and reads max, with 90,379 earned past level 20 underneath, because the experience bar the game draws is frozen at 0 for the rest of that character's life. The three figures now count toward virtual 24 instead, and a Virtual 23 row at the bottom holds 13,587 of the 30,879 that level asks for, worked out here from the lifetime total the game does publish. The Rested row reads 0.0 levels, which is not an oversight: the pool stops filling at the cap."
+  },
+  "homepage": "https://github.com/MarshalX/world-of-claudecraft-addons",
+  "tags": ["progression", "interface"],
+  "permissions": ["net.read", "world.read", "ui", "storage", "keys"],
+  "keybinds": [
+    {
+      "id": "toggle",
+      "label": "Show or hide the panel",
+      "default": "Alt+KeyX"
+    }
+  ],
+  "settings": [
+    {
+      "id": "window-minutes",
+      "type": "number",
+      "label": "Minutes of play the rate is measured over",
+      "default": 10,
+      "min": 1,
+      "max": 60
+    },
+    {
+      "id": "rested-apart",
+      "type": "boolean",
+      "label": "Leave the rested bonus out of the rate",
+      "default": false
+    },
+    {
+      "id": "show-virtual",
+      "type": "boolean",
+      "label": "Show the virtual level past the cap",
+      "default": true
+    },
+    {
+      "id": "density",
+      "type": "select",
+      "label": "How tightly the panel is drawn",
+      "default": "compact",
+      "options": ["compact", "comfortable"]
+    }
+  ]
+}
