@@ -1,6 +1,7 @@
 import { defineConfig } from 'vite';
 import monkey from 'vite-plugin-monkey';
 import { LOADER_FILENAME, LOADER_META_FILENAME, LOADER_OUT_DIR } from './tools/artifact.ts';
+import { loaderIcon } from './tools/brand.ts';
 
 const HOSTS = [
   'https://worldofclaudecraft.com/*',
@@ -42,6 +43,11 @@ export default defineConfig({
         description: 'Addon platform for World of ClaudeCraft',
         author: 'MarshalX',
         license: 'MIT',
+        // Inlined from site/static/favicon.svg at build time, never pasted. A
+        // manager with no icon draws its own placeholder, which is what every
+        // script with no icon gets, and the script list is where a player looks
+        // to confirm the loader is what is running. See tools/brand.ts.
+        icon: loaderIcon(),
         match: HOSTS,
         'run-at': 'document-start',
         // Violentmonkey-only key, ignored by other managers. The page realm is
