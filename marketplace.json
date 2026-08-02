@@ -2,7 +2,7 @@
   "schema": 1,
   "name": "Official Marketplace",
   "maintainer": "MarshalX",
-  "generated": "2026-08-02T20:18:01.000Z",
+  "generated": "2026-08-02T21:02:54.000Z",
   "addons": [
     {
       "id": "cadence",
@@ -678,6 +678,100 @@
         }
       ],
       "path": "addons/purelight"
+    },
+    {
+      "id": "veinsight",
+      "name": "Veinsight",
+      "version": "1.0.0",
+      "apiVersion": 1,
+      "apiMinor": 2,
+      "author": "MarshalX",
+      "description": "Every ore vein, wood stand and herb patch in the world, pinned where it stands and listed nearest first with a distance, a bearing and your own respawn timer. Says which ones no tool in your bags can open.",
+      "entry": "main.js",
+      "preview": {
+        "file": "preview.png",
+        "alt": "a panel headed Veinsight, with three pins standing out in the world below it. The panel lists the seven gathering nodes in range in Eastbrook Vale, nearest first, under a note reading Timers are yours alone, nobody else can take a node off you. Each row is a draining bar carrying what the node is, the zone, the distance in yards and an arrow for the way to turn to reach it: a wood stand 19 yards off at 1m 1s, an ore vein at 27 yards at 1m 23s, two more ore veins at 30 and 33 reading Yours, a wood stand at 33 with 9 seconds left and drawn warm because it is nearly back, another at 44 reading Yours, and a herb patch 110 yards out reading Tool rather than a time, because there is no sickle in these bags and no waiting will open it. Below the panel, one pin over each of the three ore veins: a square tile on a thin pillar in the game's own grey for ore, each standing at its own height. The left one is dimmed and reads 83s, since it is the vein just harvested and still coming back, and the other two read Yours. The pillars are drawn three different ways to say how the ground under each pin was arrived at: solid where this character's own harvest measured it, dashed where somebody standing beside it gave it away, and dotted where nothing better was known and the pin sits at the player's own height."
+      },
+      "data": [
+        "nodes.json"
+      ],
+      "companions": [
+        "wayfarer"
+      ],
+      "homepage": "https://github.com/MarshalX/world-of-claudecraft-addons",
+      "tags": [
+        "world",
+        "interface"
+      ],
+      "permissions": [
+        "net.read",
+        "world.read",
+        "ui",
+        "storage",
+        "keys"
+      ],
+      "keybinds": [
+        {
+          "id": "toggle",
+          "label": "Show or hide the node list",
+          "default": "Alt+KeyV"
+        }
+      ],
+      "settings": [
+        {
+          "id": "show-ore",
+          "type": "boolean",
+          "label": "Ore veins",
+          "default": true
+        },
+        {
+          "id": "show-wood",
+          "type": "boolean",
+          "label": "Wood stands",
+          "default": true
+        },
+        {
+          "id": "show-herb",
+          "type": "boolean",
+          "label": "Herb patches",
+          "default": true
+        },
+        {
+          "id": "draw-distance",
+          "type": "number",
+          "label": "How far out to pin a node, in yards",
+          "default": 150,
+          "min": 20,
+          "max": 400
+        },
+        {
+          "id": "above-tier",
+          "type": "boolean",
+          "label": "Include nodes no tool you own can open",
+          "default": true
+        },
+        {
+          "id": "list-length",
+          "type": "number",
+          "label": "How many nodes the list holds",
+          "default": 6,
+          "min": 1,
+          "max": 20
+        },
+        {
+          "id": "this-zone-only",
+          "type": "boolean",
+          "label": "Only the zone I am in (needs a zone publisher installed)",
+          "default": false
+        },
+        {
+          "id": "route",
+          "type": "boolean",
+          "label": "Draw a route line through the nearest nodes",
+          "default": false
+        }
+      ],
+      "path": "addons/veinsight"
     },
     {
       "id": "wayline",
