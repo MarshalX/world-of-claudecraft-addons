@@ -2,7 +2,7 @@
   "schema": 1,
   "name": "Official Marketplace",
   "maintainer": "MarshalX",
-  "generated": "2026-08-02T17:37:11.000Z",
+  "generated": "2026-08-02T17:53:38.000Z",
   "addons": [
     {
       "id": "combat-meter",
@@ -73,16 +73,16 @@
     },
     {
       "id": "cooldown-bars",
-      "name": "Cooldown Bars (Example)",
-      "version": "1.1.0",
+      "name": "Cooldown Bars",
+      "version": "1.2.0",
       "apiVersion": 1,
       "apiMinor": 1,
       "author": "MarshalX",
-      "description": "A draining bar for every ability you have on cooldown, soonest ready first, with an exact one for anything regenerating a charge. Draws as a column of named bars or as a strip of swept icons.",
+      "description": "A draining bar for every ability you have on cooldown, soonest ready first, measured against the real length of anything in your own spellbook. Draws as a column of named bars or as a strip of swept icons.",
       "entry": "main.js",
       "preview": {
         "file": "preview.png",
-        "alt": "The Cooldowns panel, five draining bars ordered by time remaining: Rapid Fire 4.4s, Volley 5.8s, Counter Shot 10.4s, Wildheart 97.5s and Shellskin 155.5s, each with the ability's own icon."
+        "alt": "The Cooldowns overlay, five draining bars ordered by time remaining: Rapid Fire 4.4s, Fell Shot 5.8s, Counter Shot 10.4s, Twinstrike 97.5s with one of two charges back, and Aimed Shot 155.5s. Each row carries the ability art the game files under its id, except Twinstrike, for which the game ships none."
       },
       "homepage": "https://github.com/MarshalX/world-of-claudecraft-addons",
       "tags": [
