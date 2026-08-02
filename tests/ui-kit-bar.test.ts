@@ -276,6 +276,73 @@ describe('a readout told what it already says', () => {
   });
 });
 
+// Money is drawn rather than spelled out, which is the one value that is not a
+// string, so what these pin is the two things a coin row can get wrong: an empty
+// unit drawn anyway, and the discs leaving a screen reader with bare numbers.
+describe('a bar"s figure as money', () => {
+  function coins(bar: { el: HTMLElement }): string[] {
+    return [...bar.el.querySelectorAll('.woc-coin-part')].map(
+      (el) => `${el.querySelector('.woc-coin')?.className ?? ''}=${el.textContent ?? ''}`,
+    );
+  }
+
+  it('draws a coin per unit and leaves the empty ones out', () => {
+    const bar = createBar(document, { value: { copper: 780 } });
+
+    expect(coins(bar)).toEqual(['woc-coin woc-coin-silver=7', 'woc-coin woc-coin-copper=80']);
+  });
+
+  it('keeps copper when the whole amount is nothing', () => {
+    const bar = createBar(document, { value: { copper: 0 } });
+
+    expect(coins(bar)).toEqual(['woc-coin woc-coin-copper=0']);
+  });
+
+  // A price divided by a count the caller does not have yet is how a NaN reaches a
+  // readout, and `NaNg NaNs NaNc` is worse than a zero.
+  it('reads an amount that is not a number as nothing', () => {
+    const bar = createBar(document, { value: { copper: Number.NaN } });
+
+    expect(coins(bar)).toEqual(['woc-coin woc-coin-copper=0']);
+  });
+
+  // The discs carry the units and a disc reads as nothing at all, so a figure left
+  // to be read child by child announces "low 7 80".
+  it('is announced as one figure with its units in words', () => {
+    const bar = createBar(document, { value: { copper: 10_780, prefix: 'low' } });
+    const value = part(bar, '.woc-bar-value');
+
+    expect(value.getAttribute('role')).toBe('img');
+    expect(value.getAttribute('aria-label')).toBe('low 1 gold, 7 silver, 80 copper');
+  });
+
+  it('takes that announcement back when the row is reused for a plain figure', () => {
+    const bar = createBar(document, { value: { copper: 780 } });
+    bar.update({ value: '4.2s' });
+    const value = part(bar, '.woc-bar-value');
+
+    expect(value.textContent).toBe('4.2s');
+    expect(value.hasAttribute('aria-label')).toBe(false);
+    expect(value.hasAttribute('role')).toBe(false);
+  });
+
+  it('redraws nothing when the same amount is written again', () => {
+    const bar = createBar(document, { value: { copper: 780 } });
+    const observer = new MutationObserver(() => undefined);
+    observer.observe(bar.el, {
+      attributes: true,
+      characterData: true,
+      childList: true,
+      subtree: true,
+    });
+    bar.update({ value: { copper: 780 } });
+    const seen = observer.takeRecords().length;
+    observer.disconnect();
+
+    expect(seen).toBe(0);
+  });
+});
+
 describe('a bar"s icon', () => {
   it('is hidden until there is a URL for it', () => {
     const bar = createBar(document, { label: 'Melee' });

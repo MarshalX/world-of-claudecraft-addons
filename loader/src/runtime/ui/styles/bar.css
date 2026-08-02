@@ -128,6 +128,48 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* Money, drawn as the game draws it: a disc per unit and its figure beside it. See
+ * kit/money.ts, which builds these and says why the loader keeps its own classes
+ * rather than wearing the game's `.coin`.
+ *
+ * The three gradients are the game's own, read off `.coin.g`, `.coin.s` and
+ * `.coin.c` in its stylesheet, so a coin here is the coin a player already knows.
+ * They are values rather than tokens because the game declares no money custom
+ * property to inherit: nothing to fall back to, and nothing that a theme moves. */
+#woc-addons .woc-coin-part {
+  display: inline-flex;
+  align-items: center;
+}
+
+#woc-addons .woc-coin-part + .woc-coin-part {
+  margin-left: 5px;
+}
+
+#woc-addons .woc-coin-prefix {
+  margin-right: 5px;
+  opacity: 0.6;
+}
+
+#woc-addons .woc-coin {
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  margin-right: 3px;
+  border-radius: 50%;
+}
+
+#woc-addons .woc-coin-gold {
+  background: radial-gradient(circle at 35% 30%, rgb(255 233 138), rgb(184 134 11));
+}
+
+#woc-addons .woc-coin-silver {
+  background: radial-gradient(circle at 35% 30%, rgb(232 232 232), rgb(136 136 136));
+}
+
+#woc-addons .woc-coin-copper {
+  background: radial-gradient(circle at 35% 30%, rgb(232 168 122), rgb(139 69 19));
+}
+
 /* A compact frame's rows are read at a glance rather than operated, so they give
    up the tap-target floor the same way the frame's own chrome does. */
 #woc-addons .woc-density-compact .woc-bar {

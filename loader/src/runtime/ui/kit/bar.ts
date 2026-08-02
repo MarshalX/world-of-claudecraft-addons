@@ -28,6 +28,7 @@
 // kit/readout.ts, which is what this row and the square one in kit/tile.ts share.
 
 import type { Teardown } from '../../disposal.ts';
+import { type MoneyValue, writeValue } from './money.ts';
 import type {
   ArtSlot,
   ReadoutSchool,
@@ -147,8 +148,15 @@ interface BarUpdate {
   icon?: string | null;
   /** 0 through 1. Clamped, so a division by a total you do not have yet is safe. */
   fraction?: number;
-  /** The right-hand figure, usually a countdown. */
-  value?: string;
+  /**
+   * The right-hand figure, usually a countdown.
+   *
+   * An amount of copper instead of a string draws it as the game draws money: a
+   * coin per unit, empty units left out, announced as one figure in words. Its own
+   * shape rather than a formatted string, because a row of coins should look the
+   * same whichever addon drew it.
+   */
+  value?: string | MoneyValue;
   /**
    * Tint the fill by the game's own colour for a damage school.
    *
@@ -182,7 +190,7 @@ function applyText(parts: BarParts, next: BarUpdate): void {
     writeText(parts.label, next.label);
   }
   if (next.value !== undefined) {
-    writeText(parts.value, next.value);
+    writeValue(parts.value, next.value);
   }
   if (next.detail !== undefined) {
     // Hidden rather than emptied, so a row whose detail was switched off does not

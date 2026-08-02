@@ -26,6 +26,7 @@ import { rostered } from '../ui/kit/frame-roster.ts';
 import type { FrameStateStore } from '../ui/kit/frame-state.ts';
 import type { IconUrls } from '../ui/kit/icons.ts';
 import type { MenuItem } from '../ui/kit/menu.ts';
+import { moneyText } from '../ui/kit/money.ts';
 import type { Tabs, TabsOpts } from '../ui/kit/tabs.ts';
 import { createTabs } from '../ui/kit/tabs.ts';
 import type { Tile, TileOpts } from '../ui/kit/tile.ts';
@@ -66,6 +67,13 @@ interface UiApi {
   tile: (opts?: TileOpts) => Tile;
   /** Where the game's own art lives, so no addon writes a path. */
   icon: IconUrls;
+  /**
+   * Copper as the game writes it: `7s 80c`, empty units left out.
+   *
+   * For text, which is most of a tooltip. A readout draws it properly instead: pass
+   * `{ copper }` as a bar's `value` and it is drawn with the game's own coins.
+   */
+  money: (copper: number) => string;
   /** Labelled controls, drawn as the manager draws its own. */
   field: FieldBuilders;
   /** A tab strip. The panes it switches between are the addon's own. */
@@ -250,6 +258,8 @@ function createUi(deps: UiDeps): UiApi {
     tile: (opts) => addonTile(deps, opts),
 
     icon: kit.icons,
+
+    money: moneyText,
 
     field: fieldSurface(deps),
 

@@ -227,6 +227,18 @@ export interface UiApi {
   /** Where the game's own art lives, so no addon writes a path. */
   icon: IconUrls;
   /**
+   * Copper as the game writes it: `7s 80c`, with empty units left out.
+   *
+   * Every amount the game sends is counted in copper, and this is the one place the
+   * split into gold, silver and copper lives, so two addons showing a price cannot
+   * spell it differently.
+   *
+   * For TEXT, which is most of a tooltip line. Where the figure is a readout's own,
+   * pass `{ copper }` as a bar's `value` instead and it is drawn with the game's
+   * coins rather than spelled out.
+   */
+  money: (copper: number) => string;
+  /**
    * Labelled controls for your own settings pane.
    *
    * Each hands back `{ el, value, set, destroy }`, so a pane that saves to

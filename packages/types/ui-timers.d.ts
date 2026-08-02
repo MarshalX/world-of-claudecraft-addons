@@ -31,6 +31,20 @@ export type BarTone = 'default' | 'warn' | 'danger';
 export type BarSchool = School;
 
 /** Everything a bar can be told. All of it is optional on an update. */
+/** An amount of the game's own money, for a readout's figure. */
+export interface MoneyValue {
+  /** Copper, which is what every amount the game sends is counted in. */
+  copper: number;
+  /**
+   * A quiet word before the coins, e.g. `low` or `asking`.
+   *
+   * Part of the figure rather than of your own label, because it belongs where the
+   * number is: a bare amount at the end of a row reads as the price, and a row whose
+   * figure is the cheapest ever seen rather than today's has to say so.
+   */
+  prefix?: string;
+}
+
 export interface BarUpdate {
   label?: string;
   /**
@@ -48,8 +62,19 @@ export interface BarUpdate {
    * property drops the declaration silently, which looks like a stuck bar.
    */
   fraction?: number;
-  /** The right-hand figure, usually a countdown. Drawn with tabular figures. */
-  value?: string;
+  /**
+   * The right-hand figure, usually a countdown. Drawn with tabular figures.
+   *
+   * An amount of COPPER instead of a string is drawn the way the game draws money:
+   * a coin per unit with its figure beside it, empty units left out, and the whole
+   * thing announced as one amount in words. `prefix` puts a quiet word in front of
+   * it, for a figure that needs saying what it is: `{ copper: 780, prefix: 'low' }`.
+   *
+   * Its own shape rather than a string you formatted, so that a price drawn by one
+   * addon looks like a price drawn by another. `ui.money` is the same split as text,
+   * for a tooltip line, which takes no markup.
+   */
+  value?: string | MoneyValue;
   /**
    * Tint the fill by the game's own colour for a damage school.
    *
