@@ -66,6 +66,9 @@ export function createGameSurfaces(): GameSurfaces {
     // of it. A loader-owned subscription looks exactly like an addon's, so this one
     // used to keep every snapshot on the freezing path. See world/sim-clock.ts.
     simNow: net.simNow,
+    // Half of the character key, and it comes off the SOCKET rather than the
+    // world: the realm rides the hello frame. See world/character-key.ts.
+    realm: net.realm,
   });
 
   return {

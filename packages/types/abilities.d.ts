@@ -43,6 +43,50 @@ export interface AbilityInfo {
   passive?: boolean;
   /** Stored uses, for the few abilities that pool them. Absent when it is one. */
   charges?: number;
+  /**
+   * How long the effect this ability applies lasts, in seconds.
+   *
+   * The RANK-resolved base, not the figure a cast will produce. Talent duration
+   * modifiers are applied at cast time and are deliberately not folded in,
+   * because the use this exists for is a denominator: a diminishing-returns
+   * ladder expresses an observed duration as a fraction of the undiminished
+   * base, and a base that already moved is the wrong one to divide by.
+   *
+   * ABSENT rather than zero in three cases, and they are different questions
+   * rather than one missing number. An ability that applies no timed effect has
+   * no answer. An ability that applies several of different lengths (a stun and
+   * a slow) has two, and picking one would be a guess about which you meant. And
+   * a combo-point finisher's length is `base + perCombo * spent`, which has no
+   * value at all until the cast that spends the points.
+   *
+   * The game's own ability tooltip does not show this figure, so there is no
+   * on-screen number to check it against: it comes off the resolved effect the
+   * ability applies.
+   */
+  auraDuration?: number;
+
+  /**
+   * Bonus threat this ability adds on a successful use, flat.
+   *
+   * Resolved per rank like `cost` and `cooldown`, and overridden per rank where
+   * the ability says so. Absent, not 0, when the ability adds none: absent means
+   * nobody said and 0 would read as a measurement.
+   *
+   * `world.threat` answers how close you are to pulling. This answers which of
+   * your own abilities is doing it, which nothing in the game's own interface
+   * shows. Added in API minor 2.
+   */
+  threatFlat?: number;
+
+  /**
+   * Multiplier on the threat this ability's damage generates.
+   *
+   * The classic tanking figure: an ability that deals ordinary damage and
+   * generates more threat than it should carries it here. Absent rather than 1
+   * when the ability is plain, so a caller can tell "no modifier" from "a
+   * modifier that happens to be neutral". Added in API minor 2.
+   */
+  threatMult?: number;
 }
 
 /**

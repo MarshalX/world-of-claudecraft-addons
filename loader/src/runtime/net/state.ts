@@ -96,6 +96,14 @@ export interface NetStateTracker {
   snapshot: () => NetState;
   /** The sim's clock in seconds, or null before the first snapshot. */
   simNow: () => number | null;
+  /**
+   * The realm off the hello frame, or null before one has arrived.
+   *
+   * A direct accessor rather than `snapshot().realm` because `snapshot`
+   * allocates and freezes an object per call, and the world sampler reads this
+   * at up to forty times a second whenever an addon watches `characterKey`.
+   */
+  realm: () => string | null;
 }
 
 /**
@@ -154,5 +162,7 @@ export function createNetStateTracker(
       }),
 
     simNow: () => state.simTime,
+
+    realm: () => state.realm,
   };
 }

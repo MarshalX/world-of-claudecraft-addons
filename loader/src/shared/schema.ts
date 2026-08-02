@@ -36,6 +36,26 @@ const AddonId = z.string().regex(ID_RE, 'must be lower-case kebab-case, e.g. "co
 /** Browse renders one filter control per distinct tag across every source. */
 const MAX_TAGS = 6;
 
+/** How many sibling data files one addon may declare. */
+const MAX_DATA_FILES = 8;
+
+/**
+ * One JSON file in the addon's own directory, readable through `woc.data`.
+ *
+ * The same relative path `entry` and `preview` are, narrowed to `.json`: the
+ * surface hands back a PARSED value, so there is nothing else the loader would
+ * parse it as, and a declared `.txt` would be a file `woc.data` could only fail
+ * on. Written as a refinement rather than a second `.regex`, because
+ * `RelativeFile` already carries one and a refinement composes onto anything.
+ */
+const DataFile = RelativeFile.refine(
+  (p) => p.toLowerCase().endsWith('.json'),
+  'must be a .json file, because woc.data parses what it reads',
+);
+
+/** How many other addons one may be recommended alongside. See `companions`. */
+const MAX_COMPANIONS = 4;
+
 /**
  * The screenshot the manager and the site both show.
  *
@@ -120,6 +140,30 @@ export const AddonManifest = z.object({
   entry: RelativeFile,
   /** A screenshot in the addon's own directory. Absent is ordinary, not a defect. */
   preview: PreviewDecl.optional(),
+  /**
+   * JSON files in this addon's own directory, fetched by the host at install and
+   * read back through `woc.data(name)`.
+   *
+   * Declared rather than discovered, for the reason `entry` is declared: what the
+   * loader will fetch out of a marketplace has to be a fixed list the manifest
+   * states, never a path an addon composes at run time. It is also what makes the
+   * surface refusable, since `woc.data` checks its argument against this list
+   * instead of joining it onto a URL.
+   */
+  data: z
+    .array(DataFile)
+    .max(MAX_DATA_FILES)
+    .refine((files) => new Set(files).size === files.length, 'duplicate data file')
+    .optional(),
+  /**
+   * Other addons this one works better with. A NOTE, never a dependency.
+   *
+   * Bare addon ids rather than fqids: the same addon installed from a fork is a
+   * different fqid and is still the companion the author meant. It gates nothing,
+   * installs nothing, and stops nothing from starting. See the manager's
+   * `companions.ts` for how one is resolved.
+   */
+  companions: z.array(AddonId).max(MAX_COMPANIONS).optional(),
   homepage: z.string().url().optional(),
   /**
    * Browse's filter categories. Same shape as an addon id, so the filter can

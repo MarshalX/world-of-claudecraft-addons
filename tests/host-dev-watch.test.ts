@@ -40,14 +40,20 @@ function row(fqid: string, enabled = true): InstalledAddon {
   };
 }
 
-function indexRow(dir: string): MarketplaceEntry {
-  return { ...MANIFEST, id: dir, path: `addons/${dir}` };
+function indexRow(dir: string, data?: string[]): MarketplaceEntry {
+  const entry: MarketplaceEntry = { ...MANIFEST, id: dir, path: `addons/${dir}` };
+  if (data !== undefined) {
+    entry.data = data;
+  }
+  return entry;
 }
 
 interface Options {
   rows?: InstalledAddon[];
   files?: Record<string, string>;
   dev?: { enabled: boolean; hotReload: boolean };
+  /** Data files the index says each addon declares. See the data-file cases. */
+  data?: string[];
 }
 
 function open(options: Options = {}) {
@@ -63,9 +69,9 @@ function open(options: Options = {}) {
     entry: (fqid) => {
       const dir = fqid.split('/')[1] as string;
       if (fqid.startsWith('local/')) {
-        return Promise.resolve({ market: LOCAL, row: indexRow(dir) });
+        return Promise.resolve({ market: LOCAL, row: indexRow(dir, options.data) });
       }
-      return Promise.resolve({ market: OFFICIAL, row: indexRow(dir) });
+      return Promise.resolve({ market: OFFICIAL, row: indexRow(dir, options.data) });
     },
     devSettings: () => Promise.resolve(options.dev ?? { enabled: true, hotReload: true }),
   };
@@ -267,5 +273,50 @@ describe('overlapping polls', () => {
     await Promise.all([watch.poll(), watch.poll(), watch.poll()]);
 
     expect(http.calls).toEqual([LOCAL_URL]);
+  });
+});
+
+// A table an author regenerates is exactly the edit the watcher exists for, and
+// an addon that reads it once at load has no other way to pick it up. The pair
+// below is what catches both a watcher that ignores data files and one that
+// reports a reload on every tick.
+describe('declared data files', () => {
+  const DataUrl = 'http://localhost:5180/addons/dev-harness/items.json';
+
+  function withData() {
+    return open({ data: ['items.json'], files: { [LOCAL_URL]: 'v1', [DataUrl]: '{"a":1}' } });
+  }
+
+  it('reloads the addon when a data file changes', async () => {
+    const { watch, http, reloads } = withData();
+    await watch.poll();
+    http.put(DataUrl, '{"a":2}');
+
+    await watch.poll();
+
+    expect(reloads()).toHaveLength(2);
+    expect(reloads().at(-1)).toEqual({ k: 'addon.reload', fqid: LOCAL_FQID });
+  });
+
+  it('emits nothing when neither the body nor the data file moved', async () => {
+    const { watch, reloads } = withData();
+    await watch.poll();
+    const first = reloads().length;
+
+    await watch.poll();
+    await watch.poll();
+
+    expect(reloads()).toHaveLength(first);
+  });
+
+  it('emits ONE reload when both the body and a data file change together', async () => {
+    const { watch, http, reloads } = withData();
+    await watch.poll();
+    http.put(LOCAL_URL, 'v2');
+    http.put(DataUrl, '{"a":2}');
+
+    await watch.poll();
+
+    expect(reloads()).toHaveLength(2);
   });
 });

@@ -69,6 +69,8 @@ export const UI_TEXT = {
   browseInstallHint: 'Show what this addon declares, then install it.',
   browseInstalledHint: 'This addon is already in your Installed list.',
 
+  companions: 'Works better with',
+
   confirmHeading: 'Install',
   confirmFrom: 'From',
   confirmPermissions: 'This addon says it needs to',
@@ -172,4 +174,18 @@ export const UI_TEXT = {
   socketClosed: 'closed',
   latencyUnmeasured: 'not measured yet',
   unknown: 'unknown',
+} as const;
+
+/**
+ * What a player would do about one named companion, one line per state.
+ *
+ * Its own table rather than members of UI_TEXT, because the keys are a union the
+ * renderer indexes with rather than names a component reaches for, and a state
+ * added without its line would then be a missing property rather than a blank.
+ */
+export const COMPANION_TEXT = {
+  enabled: 'installed and running',
+  disabled: 'installed but switched off',
+  offered: 'available in Browse',
+  unknown: 'not offered by any source you have',
 } as const;

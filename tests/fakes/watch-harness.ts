@@ -21,7 +21,9 @@ import { type CombatState, readCombat } from '../../loader/src/runtime/world/com
 import { castsOf, type EntityCast, type Hazard } from '../../loader/src/runtime/world/derived.ts';
 import { type EncounterInfo, readEncounter } from '../../loader/src/runtime/world/encounter.ts';
 import type { Aura, Entity, WorldQuests } from '../../loader/src/runtime/world/game-types.ts';
+import type { CorpseView } from '../../loader/src/runtime/world/ground.ts';
 import { type GroupInfo, readGroup } from '../../loader/src/runtime/world/group.ts';
+import { UNKNOWN } from '../../loader/src/runtime/world/proximity.ts';
 import { readThreat, type ThreatTable } from '../../loader/src/runtime/world/threat.ts';
 import { createWorldWatcher, type WorldWatcher } from '../../loader/src/runtime/world/watch.ts';
 import { PLAYER_ENTITY } from './frames.ts';
@@ -177,6 +179,29 @@ export function watchHarness(): WatchHarness {
         now: 0,
       });
     },
+    // The keys this harness carries no fixture for. Plain values rather than
+    // getters because nothing here moves: a suite that wants one of them moving
+    // should give `live` a field for it and turn the entry into a getter, the
+    // way `hazards` and `markers` already are.
+    equipmentInstances: null,
+    characterKey: null,
+    match: null,
+    arena: null,
+    finder: null,
+    finderBoard: null,
+    deathZones: null,
+    corpses: new Map<number, CorpseView>(),
+    nodeCooldowns: null,
+    corpse: null,
+    corpseLoot: (): CorpseView | null => null,
+    market: UNKNOWN,
+    marketCollectPending: null,
+    mail: UNKNOWN,
+    mailUnread: null,
+    bank: UNKNOWN,
+    buyback: null,
+    recipes: [],
+    stations: [],
     raw: live,
   } satisfies WorldBackend;
 

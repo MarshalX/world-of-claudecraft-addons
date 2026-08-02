@@ -14,12 +14,28 @@
 import { useState } from 'preact/hooks';
 import { FIELD_CLASS } from '../kit/field-shape.ts';
 import type { BrowseEmptiness, BrowseFilter, BrowseRow } from './catalog.ts';
-import { browseEmptiness, browseRows, catalogHasPreviews, catalogTags } from './catalog.ts';
+import {
+  browseEmptiness,
+  browseRows,
+  catalogHasPreviews,
+  catalogTags,
+  offeredIds,
+} from './catalog.ts';
 import type { CatalogState, CatalogStore } from './catalog-store.ts';
+import type { CompanionContext } from './companions.ts';
+import { Companions } from './companions.tsx';
 import { ErrorNote } from './error-note.tsx';
 import { InstallConfirm } from './install-confirm.tsx';
 import { Preview } from './preview.tsx';
 import { UI_TEXT } from './strings.ts';
+
+/**
+ * The half of a companion reading that every row shares.
+ *
+ * Every row supplies the other half, its own `market`, because a companion id is
+ * resolved against the source the addon NAMING it came from before any other.
+ */
+type CatalogCompanions = Omit<CompanionContext, 'market'>;
 
 function Tags(props: { tags: readonly string[] | undefined }) {
   const tags = props.tags ?? [];
@@ -42,6 +58,8 @@ interface RowProps {
   busy: boolean;
   /** Whether anything on offer has a screenshot, so the column is worth drawing. */
   shots: boolean;
+  /** The installed set and what is on offer, for the companion note. */
+  companions: CatalogCompanions;
   onInstall: (fqid: string) => void;
 }
 
@@ -61,6 +79,7 @@ function Row(props: RowProps) {
         </span>
         <span className="woc-row-desc">{entry.description}</span>
         <Tags tags={entry.tags} />
+        <Companions ids={entry.companions} ctx={{ ...props.companions, market: row.market.id }} />
       </div>
       <div className="woc-row-actions">
         <button
@@ -182,6 +201,7 @@ interface ResultsProps {
   anyOffered: boolean;
   /** Why nothing is offered, when nothing is. */
   emptiness: BrowseEmptiness;
+  companions: CatalogCompanions;
   busy: string | null;
   onInstall: (fqid: string) => void;
 }
@@ -220,6 +240,7 @@ function Results(props: ResultsProps) {
           row={row}
           shots={props.shots}
           busy={props.busy === row.fqid}
+          companions={props.companions}
           onInstall={props.onInstall}
         />
       ))}
@@ -242,6 +263,10 @@ export function BrowsePane(props: BrowsePaneProps) {
   }
 
   const rows = browseRows(state.markets, state.installed, filter);
+  const companions: CatalogCompanions = {
+    installed: state.installed,
+    offered: offeredIds(state.markets),
+  };
   const pending = rows.find((row) => row.fqid === confirming);
   if (pending !== undefined) {
     return (
@@ -280,6 +305,7 @@ export function BrowsePane(props: BrowsePaneProps) {
         shots={catalogHasPreviews(state.markets)}
         anyOffered={state.markets.some((market) => market.addons.length > 0)}
         emptiness={browseEmptiness(state.markets)}
+        companions={companions}
         busy={state.busy}
         onInstall={setConfirming}
       />

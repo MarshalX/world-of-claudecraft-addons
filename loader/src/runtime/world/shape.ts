@@ -56,10 +56,15 @@ const SHAPE: Record<keyof Entity, FieldSpec> = {
   maxResource: { kind: 'number' },
   resourceType: { kind: 'string', nullable: true },
   dead: { kind: 'boolean' },
+  ghost: { kind: 'boolean' },
 
   hostile: { kind: 'boolean' },
   targetId: { kind: 'number', nullable: true },
   aggroTargetId: { kind: 'number', nullable: true },
+  // Neither is optional: the client entity factory initialises both on every
+  // entity, so an absence here is real drift rather than the ordinary case.
+  forcedTargetId: { kind: 'number', nullable: true },
+  forcedTargetTimer: { kind: 'number' },
   threat: { kind: 'map' },
   ownerId: { kind: 'number', nullable: true },
   castingAbility: { kind: 'string', nullable: true },
@@ -67,6 +72,26 @@ const SHAPE: Record<keyof Entity, FieldSpec> = {
   castTotal: { kind: 'number' },
   channeling: { kind: 'boolean' },
   auras: { kind: 'array' },
+
+  lootable: { kind: 'boolean' },
+  loot: { kind: 'object', nullable: true },
+  tappedById: { kind: 'number', nullable: true },
+  harvestClaimedBy: { kind: 'number', nullable: true },
+
+  // Worn gear and cosmetics. Objects here, because the slot set is sparse: a
+  // slot is a key only while something is in it, so there is no fixed member
+  // list to walk and NESTED_SHAPES cannot help. `matches` rejects an array for
+  // 'object', so a rework that turned the worn set into a slot ARRAY is caught;
+  // a rename of a SLOT KEY is not and cannot be, since every slot is optional
+  // and `checkField` returns null for a missing optional. A nested entry
+  // listing all twelve as optional would assert exactly nothing while looking
+  // like coverage, so do not add one.
+  equippedItems: { kind: 'object' },
+  equippedInstances: { kind: 'object' },
+  mainhandItemId: { kind: 'string', nullable: true },
+  offhandItemId: { kind: 'string', nullable: true },
+  weaponSkinId: { kind: 'string', nullable: true },
+  mountKey: { kind: 'string' },
 
   cooldowns: { kind: 'map' },
   gcdRemaining: { kind: 'number' },

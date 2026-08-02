@@ -20,6 +20,7 @@ import { createBanner } from '../../loader/src/runtime/ui/kit/banner.ts';
 import { createFrameRoster } from '../../loader/src/runtime/ui/kit/frame-roster.ts';
 import { createIconUrls } from '../../loader/src/runtime/ui/kit/icons.ts';
 import { createGameInjector } from '../../loader/src/runtime/ui/kit/injections.ts';
+import { createItemArt } from '../../loader/src/runtime/ui/kit/item-art.ts';
 import { createMenus } from '../../loader/src/runtime/ui/kit/menu.ts';
 import { createSkillArt } from '../../loader/src/runtime/ui/kit/skill-art.ts';
 import { createStacking } from '../../loader/src/runtime/ui/kit/stacking.ts';
@@ -27,6 +28,7 @@ import { createToaster } from '../../loader/src/runtime/ui/kit/toast.ts';
 import { createTooltips } from '../../loader/src/runtime/ui/kit/tooltip.ts';
 import { createUnlockMode } from '../../loader/src/runtime/ui/kit/unlock.ts';
 import { createWorldHub } from '../../loader/src/runtime/world/hub.ts';
+import { createFrameClock, type FrameClock } from './frame-loop.ts';
 import { createFakeStorage, type FakeStorage } from './storage.ts';
 
 const VIEWPORT = { w: 800, h: 600 };
@@ -75,6 +77,11 @@ const SOUND_PACK = {
     ],
   ]),
 };
+/** One addon's one file. A pair, because two addons may declare the same name. */
+function dataCell(fqid: string, name: string): string {
+  return `${fqid} ${name}`;
+}
+
 const NOW_MS = 1234;
 const WALL_CLOCK_MS = 1_700_000_000_000;
 
@@ -82,6 +89,8 @@ interface SharedHarness {
   shared: SharedServices;
   hub: FakeStorage;
   root: HTMLElement;
+  /** The one frame loop, driven by hand: `frames.tick()` runs one frame. */
+  frames: FrameClock;
   /** What the key dispatcher listens on, so a suite can press a key at it. */
   keyTarget: EventTarget;
   /** Press a combo, in the manifest's own spelling, e.g. 'Alt+Shift+KeyD'. */
@@ -90,6 +99,20 @@ interface SharedHarness {
   inbound: (frame: unknown) => void;
   /** Move the addon-visible clock. Reads `woc.now()`, not wall clock. */
   advance: (ms: number) => void;
+  /**
+   * Set what `woc.wallClock()` answers, in epoch milliseconds.
+   *
+   * Separate from `advance` rather than moved by it, because the whole point of
+   * having two clocks is that they come apart. A page reload is exactly the case
+   * an addon storing a stamp has to survive, and it is hours of WALL clock beside
+   * a monotonic clock that went back to zero. A suite that could only move both
+   * together could not express it.
+   *
+   * `vi.setSystemTime` does not reach this: the loader binds `shared.wallClock`
+   * by reference when the API is assembled, so the fake has to be the thing that
+   * moves.
+   */
+  setWallClock: (ms: number) => void;
   /**
    * Override part of what `net.state` answers.
    *
@@ -104,6 +127,15 @@ interface SharedHarness {
    * reads through on every access, so a reading taken after this call sees it.
    */
   netState: (patch: Partial<NetState>) => void;
+  /**
+   * Seed one addon's data file, as the host's install-time cache holds it: raw
+   * TEXT keyed by the path the manifest declared, not a parsed value.
+   *
+   * Nothing is seeded by default and the default reader REJECTS, so a suite that
+   * means to exercise `woc.data` has to say so. An empty stub that resolved would
+   * make an addon reading a file it never declared look like it worked.
+   */
+  addonData: (fqid: string, name: string, text: string) => void;
   dispose: () => void;
 }
 
@@ -132,6 +164,7 @@ function createSharedServices(
   // One clock behind both the net hub and woc.now(), so a suite that advances
   // time moves what an addon measures with and what the bus timestamps by.
   let clock = NOW_MS;
+  let wall = WALL_CLOCK_MS;
   const now = (): number => clock;
   let deliver: ((data: unknown) => void) | null = null;
 
@@ -139,25 +172,43 @@ function createSharedServices(
   const noTimers = { setTimer: () => 0, clearTimer: () => undefined };
   const toaster = createToaster({ doc, root, ...noTimers });
   const banner = createBanner({ doc, root, ...noTimers });
-  // Never settles, so `icon.ability` stays optimistic: the same state a row drawn
-  // before the class manifest lands is in.
-  const icons = createIconUrls(createSkillArt({ fetchJson: () => new Promise(() => undefined) }));
+  // Neither settles, so `icon.ability` and `icon.item` stay optimistic: the same
+  // state a row drawn before the art manifests land is in.
+  const pendingManifest = (): Promise<unknown> => new Promise(() => undefined);
+  const icons = createIconUrls(
+    createSkillArt({ fetchJson: pendingManifest }),
+    createItemArt({ fetchJson: pendingManifest }),
+  );
   const tooltips = createTooltips({ doc, root, viewport: () => VIEWPORT });
   const menus = createMenus({ doc, root, viewport: () => VIEWPORT });
   // The projector answers, so an addon's anchor lands somewhere; the frame clock
   // does not, so nothing here runs a loop a suite would have to stop.
+  // The real loop over a clock the suite steps. Nothing runs until `frames.tick`,
+  // so a suite that is not about frames still starts nothing.
+  const frames = createFrameClock();
+  const project = (): { x: number; y: number; depth: number; behind: boolean } => ({
+    x: 100,
+    y: 200,
+    depth: 10,
+    behind: false,
+  });
+  // No unit has a place here: a suite that wants one fakes the world it needs.
+  const unitPoint = (): null => null;
   const anchors = createAnchors({
     doc,
     root,
-    project: () => ({ x: 100, y: 200, behind: false }),
+    project,
+    unitPoint,
     viewport: () => VIEWPORT,
-    schedule: () => 0,
-    cancel: () => undefined,
+    frames: frames.loop,
   });
   const keyTarget = new EventTarget();
   const dispatcher = createKeyDispatcher({ target: keyTarget, doc });
   const logs = createLogBuffer();
   const stacking = createStacking({ root });
+  // Keyed on the pair, because two addons may legitimately declare the same
+  // file name and reading one another's would be the bug worth catching.
+  const dataFiles = new Map<string, string>();
 
   const shared: SharedServices = {
     doc,
@@ -181,6 +232,7 @@ function createSharedServices(
       now: () => 0,
       zoneName: () => null,
       simNow: () => null,
+      realm: () => null,
     }),
     storage: hub,
     bus: createBusHub(),
@@ -201,6 +253,7 @@ function createSharedServices(
     dispatcher,
     gameBindings: createGameBindings({ game: () => null, storage: () => null }),
     logs,
+    frames: frames.loop,
     kit: {
       root,
       injector,
@@ -213,6 +266,8 @@ function createSharedServices(
       roster: createFrameRoster(),
       icons,
       unlock: createUnlockMode(root),
+      project,
+      unitPoint,
     },
     channel: 'pbe',
     host: 'https://pbe.worldofclaudecraft.com',
@@ -220,8 +275,15 @@ function createSharedServices(
     character: () => 'Claudemoon/Marshal',
     // Always in the world here, so every per-character read is answerable at once.
     characterKnown: () => Promise.resolve(),
+    addonData: (fqid, name) => {
+      const text = dataFiles.get(dataCell(fqid, name));
+      if (text === undefined) {
+        return Promise.reject(new Error(`no data file "${name}" seeded for ${fqid}`));
+      }
+      return Promise.resolve(text);
+    },
     now,
-    wallClock: () => WALL_CLOCK_MS,
+    wallClock: () => wall,
     viewport: () => VIEWPORT,
     pick: () => 0,
   };
@@ -230,6 +292,7 @@ function createSharedServices(
     shared,
     hub,
     root,
+    frames,
     keyTarget,
     press: (combo) => {
       const parts = combo.split('+');
@@ -251,12 +314,27 @@ function createSharedServices(
     netState: (patch) => {
       const base = shared.net.state();
       shared.net.state = () => ({ ...base, ...patch });
+      // The realm has its own accessor, because the world backend reads it per
+      // sample and `state()` allocates. A patch that moved one and not the other
+      // would make `net.state().realm` and `world.characterKey` disagree in a
+      // suite, which is precisely the bug the one derivation exists to prevent.
+      if (patch.realm !== undefined) {
+        shared.net.realm = () => patch.realm ?? null;
+      }
+    },
+
+    addonData: (fqid, name, text) => {
+      dataFiles.set(dataCell(fqid, name), text);
     },
 
     advance: (ms) => {
       clock += ms;
     },
+    setWallClock: (ms) => {
+      wall = ms;
+    },
     dispose: () => {
+      frames.loop.dispose();
       injector.dispose();
       tooltips.dispose();
       menus.dispose();

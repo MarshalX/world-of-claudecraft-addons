@@ -11,8 +11,10 @@
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { DiagnosticsReading } from '../loader/src/runtime/diagnostics.ts';
+import { ENTRY_ID } from '../loader/src/runtime/ui/esc-inject.ts';
 import { whenHudMounts } from '../loader/src/runtime/ui/hud-mount.ts';
 import { mountUi } from '../loader/src/runtime/ui/mount.ts';
+import { inertFrameLoop } from './fakes/frame-loop.ts';
 import { enterWorld, leaveWorld, mountStartScreen } from './fakes/game-dom.ts';
 import { uiServices } from './fakes/ui-deps.ts';
 
@@ -168,8 +170,8 @@ describe('the composed UI', () => {
       fetchJson: () => new Promise<unknown>(() => undefined),
       // No world anchors in these cases, so the frame clock is never asked for a
       // frame and the projector is never called.
-      schedule: () => 0,
-      cancelFrame: () => undefined,
+      frames: inertFrameLoop(),
+      unitPoint: () => null,
       project: () => null,
       registry: null,
       storage: null,
@@ -196,8 +198,8 @@ describe('the composed UI', () => {
       fetchJson: () => new Promise<unknown>(() => undefined),
       // No world anchors in these cases, so the frame clock is never asked for a
       // frame and the projector is never called.
-      schedule: () => 0,
-      cancelFrame: () => undefined,
+      frames: inertFrameLoop(),
+      unitPoint: () => null,
       project: () => null,
       registry: null,
       storage: null,
@@ -224,8 +226,8 @@ describe('the composed UI', () => {
       fetchJson: () => new Promise<unknown>(() => undefined),
       // No world anchors in these cases, so the frame clock is never asked for a
       // frame and the projector is never called.
-      schedule: () => 0,
-      cancelFrame: () => undefined,
+      frames: inertFrameLoop(),
+      unitPoint: () => null,
       project: () => null,
       registry: null,
       storage: null,
@@ -274,8 +276,8 @@ describe('addon UI against the HUD', () => {
       fetchJson: () => new Promise<unknown>(() => undefined),
       // No world anchors in these cases, so the frame clock is never asked for a
       // frame and the projector is never called.
-      schedule: () => 0,
-      cancelFrame: () => undefined,
+      frames: inertFrameLoop(),
+      unitPoint: () => null,
       project: () => null,
       registry: null,
       storage: null,
@@ -368,9 +370,40 @@ describe('addon UI against the HUD', () => {
 // so the click that opens the manager is not one the stacking listener sees. A
 // manager that opened behind an addon frame would be the same bug the listener
 // exists to fix, reached by the one path the listener cannot cover.
+//
+// So the cases that matter are driven through a ROUTE rather than through the
+// manager the caller was handed. A live session found the difference: the raise
+// was wrapped around the returned manager, and the two in-game routes hold the
+// unwrapped one, so pressing Addons with a frame already on screen opened the
+// window behind it.
 describe('the manager and the window order', () => {
   function managerEl(): HTMLElement | null {
     return document.querySelector('[data-woc-manager]');
+  }
+
+  function z(el: HTMLElement | null): number {
+    return Number(el?.style.zIndex);
+  }
+
+  /** A window an addon owns, as the stacking service sees one. */
+  function addonWindow(root: HTMLElement): HTMLElement {
+    const el = document.createElement('section');
+    el.className = 'woc-window woc-addon-frame';
+    root.appendChild(el);
+    return el;
+  }
+
+  /**
+   * The game menu rendering its button list, which is when our entry can go in.
+   *
+   * The HUD template carries #options-menu empty, so world entry alone gives the
+   * entry nowhere to land: the menu is rebuilt with its list when the player
+   * opens it, and the observer in ui/esc-inject.ts is what catches that.
+   */
+  function renderMenuList(): void {
+    const list = document.createElement('div');
+    list.className = 'opt-list';
+    document.getElementById('options-menu')?.appendChild(list);
   }
 
   function mount() {
@@ -380,8 +413,8 @@ describe('the manager and the window order', () => {
       fetchJson: () => new Promise<unknown>(() => undefined),
       // No world anchors in these cases, so the frame clock is never asked for a
       // frame and the projector is never called.
-      schedule: () => 0,
-      cancelFrame: () => undefined,
+      frames: inertFrameLoop(),
+      unitPoint: () => null,
       project: () => null,
       registry: null,
       storage: null,
@@ -423,6 +456,39 @@ describe('the manager and the window order', () => {
     ui.manager.toggle();
 
     expect(Number(managerEl()?.style.zIndex)).toBeGreaterThan(opened);
+    ui.dispose();
+  });
+
+  // The reported case, over the route it was reported on.
+  it('opens in front of an addon frame from the game menu entry', async () => {
+    mountStartScreen(document);
+    const ui = mount();
+    enterWorld(document);
+    await settle();
+    renderMenuList();
+    await settle();
+    const frame = addonWindow(ui.kit.root);
+    ui.kit.stacking.raise(frame);
+
+    document.getElementById(ENTRY_ID)?.dispatchEvent(new Event('click'));
+
+    expect(managerEl()).not.toBeNull();
+    expect(z(managerEl())).toBeGreaterThan(z(frame));
+    ui.dispose();
+  });
+
+  // A route that asks for the manager while it is open but buried is asking to
+  // see it, and there is no click inside the root for the listener to read.
+  it('raises a window that was already open', () => {
+    mountStartScreen(document);
+    const ui = mount();
+    ui.manager.open();
+    const frame = addonWindow(ui.kit.root);
+    ui.kit.stacking.raise(frame);
+
+    ui.manager.open();
+
+    expect(z(managerEl())).toBeGreaterThan(z(frame));
     ui.dispose();
   });
 });

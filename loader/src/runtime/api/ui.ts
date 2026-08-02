@@ -25,7 +25,6 @@ import type { FrameOpts } from '../ui/kit/frame-chrome.ts';
 import { rostered } from '../ui/kit/frame-roster.ts';
 import type { FrameStateStore } from '../ui/kit/frame-state.ts';
 import type { IconUrls } from '../ui/kit/icons.ts';
-import type { InjectionSpec } from '../ui/kit/injections.ts';
 import type { MenuItem } from '../ui/kit/menu.ts';
 import type { Tabs, TabsOpts } from '../ui/kit/tabs.ts';
 import { createTabs } from '../ui/kit/tabs.ts';
@@ -34,20 +33,11 @@ import { createTile } from '../ui/kit/tile.ts';
 import type { ToastOpts } from '../ui/kit/toast.ts';
 import type { TooltipInput } from '../ui/kit/tooltip-content.ts';
 import type { UiKit } from '../ui/mount.ts';
-
-interface MicroButtonOpts {
-  id: string;
-  label: string;
-  onClick: () => void;
-  /** Inline SVG markup. Defaults to the loader's own glyph. */
-  glyph?: string;
-}
-
-interface MenuEntryOpts {
-  id: string;
-  label: string;
-  onClick: () => void;
-}
+import type { UnitPoint, WorldPoint } from '../world/anchor-point.ts';
+import type { ScreenPosition } from './ui-anchor.ts';
+import { addonAnchor, projected } from './ui-anchor.ts';
+import type { MenuEntryOpts, MicroButtonOpts } from './ui-injections.ts';
+import { injectionSurface } from './ui-injections.ts';
 
 /**
  * The controls a settings pane is made of, grouped like `ui.icon`'s builders.
@@ -84,6 +74,8 @@ interface UiApi {
   menu: (at: Element | { x: number; y: number }, items: readonly MenuItem[]) => Teardown;
   /** An element the loader keeps over a point in the world. */
   anchor3d: (at: PointSource, opts?: Anchor3dOpts) => Anchor3d;
+  /** Where a world point or a unit is on screen, or null when it must not be drawn. */
+  project: (at: WorldPoint | UnitPoint) => ScreenPosition | null;
   /** Resolves with the id of the button pressed, or null if dismissed. */
   alert: (opts: AlertOpts) => Promise<string | null>;
   /** A button on the game's own rail. Lands when the HUD does. */
@@ -107,17 +99,6 @@ interface UiDeps {
   window: Pick<EventTarget, 'addEventListener' | 'removeEventListener'>;
 }
 
-/**
- * Namespace an id the addon chose before it goes into the game's own DOM.
- *
- * Two addons may both call a button 'toggle', and the game's document is one id
- * space shared with the game itself. Prefixing is what stops the second addon's
- * button silently replacing the first's.
- */
-function elementId(fqid: string, kind: string, id: string): string {
-  return `woc-addon-${kind}-${fqid.replace(/[^a-zA-Z0-9-]/g, '-')}-${id}`;
-}
-
 /** Register a teardown so an explicit call also unregisters it from the bag. */
 function tracked(bag: DisposalBag, teardown: Teardown): Teardown {
   const drop = bag.add(teardown);
@@ -133,24 +114,6 @@ function storeFor(deps: UiDeps, opts: FrameOpts): FrameStateStore | null {
     return deps.frameStore;
   }
   return null;
-}
-
-/**
- * Assigned rather than spread, so an absent glyph never reaches the property at
- * all: exactOptionalPropertyTypes rejects an explicit undefined there, and the
- * button falls back to the loader's own glyph.
- */
-function microSpec(fqid: string, opts: MicroButtonOpts): InjectionSpec {
-  const spec: InjectionSpec = {
-    kind: 'micro',
-    id: elementId(fqid, 'micro', opts.id),
-    label: opts.label,
-    onOpen: opts.onClick,
-  };
-  if (opts.glyph !== undefined) {
-    spec.glyph = opts.glyph;
-  }
-  return spec;
 }
 
 /**
@@ -257,19 +220,6 @@ function addonTile(deps: UiDeps, opts: TileOpts | undefined): Tile {
   return tile;
 }
 
-/**
- * An anchor whose removal is in the bag.
- *
- * The bag holds the removal rather than a listener: an anchor left behind would go
- * on being positioned by the shared frame loop, over a world its addon has stopped
- * reading. It is the one leak here that costs a frame callback for the session.
- */
-function addonAnchor(deps: UiDeps, at: PointSource, opts: Anchor3dOpts | undefined): Anchor3d {
-  const anchor = deps.kit.anchors.add(at, opts);
-  deps.bag.add(anchor.destroy);
-  return anchor;
-}
-
 /** The four builders, each bagged the same way. See `addonField`. */
 function fieldSurface(deps: UiDeps): FieldBuilders {
   return {
@@ -281,9 +231,11 @@ function fieldSurface(deps: UiDeps): FieldBuilders {
 }
 
 function createUi(deps: UiDeps): UiApi {
-  const { kit, fqid, bag } = deps;
+  const { kit, bag } = deps;
 
   return {
+    ...injectionSurface(deps, (off) => tracked(bag, off)),
+
     frame: (opts) => addonFrame(deps, opts, 'frame'),
     window: (opts) => addonFrame(deps, opts, 'window'),
 
@@ -311,6 +263,8 @@ function createUi(deps: UiDeps): UiApi {
 
     anchor3d: (at, opts) => addonAnchor(deps, at, opts),
 
+    project: (at) => projected(deps, at),
+
     alert: (opts) => {
       const modal = openAlert({ doc: deps.doc, root: kit.root }, opts);
       // The bag closes it if the addon is disabled mid-question, which resolves
@@ -319,22 +273,9 @@ function createUi(deps: UiDeps): UiApi {
       return modal.answer.finally(drop);
     },
 
-    microButton: (opts) => tracked(bag, kit.injector.add(microSpec(fqid, opts))),
-
-    menuEntry: (opts) =>
-      tracked(
-        bag,
-        kit.injector.add({
-          kind: 'menu',
-          id: elementId(fqid, 'menu', opts.id),
-          label: opts.label,
-          onOpen: opts.onClick,
-        }),
-      ),
-
     tooltip: (el, content) => tracked(bag, kit.tooltips.attach(el, guardedTooltip(deps, content))),
   };
 }
 
-export type { MenuEntryOpts, MicroButtonOpts, UiApi, UiDeps };
-export { createUi, elementId };
+export type { UiApi, UiDeps };
+export { createUi };

@@ -20,7 +20,15 @@
 // ability it knows has none, instead of a URL that 404s. Until the manifest for a
 // class has been read the answer stays optimistic and the image decides, which is
 // what `kit/bar.ts` hiding its own icon slot on error has always covered.
+//
+// `kit/item-art.ts` does the same job for `item()`, off a second served manifest,
+// and the gap it describes is larger: a WEAPON's art is filed under a model name
+// through a table the game does not serve at all, so no weapon icon is reachable
+// from here and none can be. That manifest also carries the name each art file was
+// filed under, which `itemArtName()` serves as exactly that and never as the item's
+// name: nothing in the game keeps the two in step.
 
+import type { ItemArt } from './item-art.ts';
 import type { SkillArt } from './skill-art.ts';
 
 /** Painted class-ability art, one directory per class. */
@@ -69,7 +77,23 @@ export interface IconUrls {
   ability: (abilityId: string, cls: string) => string | null;
   /** A mob or npc portrait, by the `templateId` on its entity. */
   mob: (templateId: string) => string | null;
+  /**
+   * An item's icon, or null when there is none to point at.
+   *
+   * Null once the loader KNOWS the game ships no file, which it learns from the
+   * manifest the game serves. Before that has been read the answer is the URL and
+   * the image load decides. A WEAPON never has one: weapon art is filed under a
+   * model name through a table the game does not serve.
+   */
   item: (itemId: string) => string | null;
+  /**
+   * The name the item's ART was filed under, or null.
+   *
+   * Not the item's name. This is provenance for the icon file, so it drifts
+   * whenever content is renamed and the art is not. Null for an item with no file,
+   * for one whose art came from a generated batch, and before the manifest is read.
+   */
+  itemArtName: (itemId: string) => string | null;
   /**
    * Read a class's art manifest, so `ability` is exact from the first call.
    *
@@ -78,10 +102,12 @@ export interface IconUrls {
    * drawn would be worse than a frame's delay.
    */
   preload: (cls: string) => Promise<void>;
+  /** The same for items, so `item` and `itemArtName` are exact from the first call. */
+  preloadItems: () => Promise<void>;
 }
 
-/** The URL builders, over a source of truth about which abilities have a file. */
-export function createIconUrls(art: SkillArt): IconUrls {
+/** The URL builders, over a source of truth about which ids have a file. */
+export function createIconUrls(art: SkillArt, items: ItemArt): IconUrls {
   return {
     ability: (abilityId, cls) => {
       const ability = segment(abilityId);
@@ -110,9 +136,19 @@ export function createIconUrls(art: SkillArt): IconUrls {
       if (item === null) {
         return null;
       }
+      // Only a definite `false` withholds the URL, exactly as `ability` does:
+      // `null` is "not read yet", and treating it as absent would blank every cell
+      // of the first bag grid drawn in a session.
+      if (items.has(itemId) === false) {
+        return null;
+      }
       return `${ITEM_DIR}/${item}${EXTENSION}`;
     },
 
+    itemArtName: (itemId) => items.artName(itemId),
+
     preload: (cls) => art.preload(cls),
+
+    preloadItems: () => items.preload(),
   };
 }

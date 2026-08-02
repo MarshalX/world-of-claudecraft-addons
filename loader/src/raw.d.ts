@@ -22,6 +22,14 @@ declare module '*.d.ts?raw' {
   export default source;
 }
 
+// A generated VALUE module read as text, for the same guard. The runtime carries
+// the harmful-kind set as a value because nothing serves it, so that generator
+// writes a `.ts` as well as a `.d.ts` and both need pinning against a hand-edit.
+declare module '*.generated.ts?raw' {
+  const source: string;
+  export default source;
+}
+
 declare module '*.css' {
   const source: string;
   export default source;

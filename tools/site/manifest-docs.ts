@@ -31,6 +31,9 @@ const FIELDS: Record<string, string> = {
     'A relative path inside your directory, usually `main.js`. It must not traverse outside, and the file is evaluated as a function **body**: no exports, no registration call, `woc` already in scope.',
   preview:
     '`{ file, alt }`. A PNG in your own directory, usually `preview.png`, and one sentence saying what it shows. The manager draws it as a thumbnail in Browse and full size on the install confirmation, and the catalog page builds its own derivatives from the same file, so a screenshot is committed once and lives beside the addon rather than in a list somewhere else. Optional: no preview means a row and a card without one, never a failed build.',
+  data: 'JSON files in your own directory, up to eight, each under half a megabyte. The loader fetches them at install, caches them beside your code, and hands you the parsed value through `woc.data("items.json")`. This is what a large table should be: a file that regenerates as a file, rather than a region rewritten inside your source. There is deliberately no base URL, so nothing in your addon performs the request. Needs `apiMinor` 2.',
+  companions:
+    'Up to four other addon ids yours works better with. It is a NOTE and nothing else: the manager says whether each one is installed, switched off, or available, and it never gates your install, installs anything for the player, or stops you starting. Bare ids rather than fully-qualified ones, because the same addon installed from a fork is the companion you meant. Nothing on the `woc` surface changes, so do not raise `apiMinor` for it, and nothing checks that the id exists: a companion may live on a marketplace this repository has never heard of.',
   homepage: 'A URL shown on the addon row.',
   tags: 'Up to six, same shape as an id. They become the filter controls in Browse, which is why they are bounded and why two authors cannot publish `Combat` and `combat` as different tags.',
   gameVersion:

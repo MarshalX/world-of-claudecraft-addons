@@ -5,6 +5,8 @@
 
 import type { InstalledAddon } from '../../../shared/protocol.ts';
 import type { AddonStatus } from '../../supervisor.ts';
+import type { CompanionContext } from './companions.ts';
+import { Companions } from './companions.tsx';
 import { EnableToggle } from './enable-toggle.tsx';
 import { ErrorNote } from './error-note.tsx';
 import { statusView } from './status.ts';
@@ -14,6 +16,8 @@ import { UI_TEXT } from './strings.ts';
 interface RowProps {
   addon: InstalledAddon;
   statuses: readonly AddonStatus[];
+  /** The installed set and what is on offer, for the companion note. */
+  companions: Omit<CompanionContext, 'market'>;
   onToggle: (fqid: string, on: boolean) => void;
   onOpen: (fqid: string) => void;
 }
@@ -48,6 +52,10 @@ function AddonRow(props: RowProps) {
           {addon.manifest.version} {UI_TEXT.by} {addon.manifest.author}
         </span>
         <span className="woc-row-desc">{addon.manifest.description}</span>
+        <Companions
+          ids={addon.manifest.companions}
+          ctx={{ ...props.companions, market: addon.marketplace }}
+        />
       </div>
       <div className="woc-row-actions">
         <button
@@ -107,6 +115,15 @@ function UnlockRow(props: { unlocked: boolean; onUnlock: (on: boolean) => void }
 interface InstalledPaneProps {
   state: InstalledState;
   statuses: readonly AddonStatus[];
+  /**
+   * Every addon id any source offers, so a companion nobody has can say whether
+   * it is one Browse away or nowhere at all.
+   *
+   * From the catalog rather than from this pane's own rows, because those are
+   * two different questions and this pane only knows the answer to one. Empty
+   * while the catalog is still loading, which reads as `unknown` for one paint.
+   */
+  offered: ReadonlySet<string>;
   onToggle: (fqid: string, on: boolean) => void;
   onOpen: (fqid: string) => void;
   unlocked: boolean;
@@ -115,6 +132,12 @@ interface InstalledPaneProps {
 
 export function InstalledPane(props: InstalledPaneProps) {
   const { state } = props;
+  // The enable flags come off these rows directly, which is the reading this
+  // pane holds and the catalog store has to be told.
+  const companions = {
+    installed: new Map(state.rows.map((row) => [row.fqid, row.enabled])),
+    offered: props.offered,
+  };
   const unlock = <UnlockRow unlocked={props.unlocked} onUnlock={props.onUnlock} />;
 
   if (state.status === 'idle' || state.status === 'loading') {
@@ -144,6 +167,7 @@ export function InstalledPane(props: InstalledPaneProps) {
             key={addon.fqid}
             addon={addon}
             statuses={props.statuses}
+            companions={companions}
             onToggle={props.onToggle}
             onOpen={props.onOpen}
           />

@@ -20,7 +20,13 @@ function gameWorld(over: Record<string, unknown> = {}): Record<string, unknown> 
 }
 
 /** No damage clock: these cases drive the state branches, not the fallback. */
-const DEPS = { lastDamageAt: () => null, now: () => 0, zoneName: () => null, simNow: () => null };
+const DEPS = {
+  lastDamageAt: () => null,
+  now: () => 0,
+  zoneName: () => null,
+  simNow: () => null,
+  realm: () => null,
+};
 
 const backendOf = (game: Record<string, unknown>) => {
   const backend = createGameBackend(game, DEPS);
@@ -202,5 +208,44 @@ describe('readonlyMapView', () => {
   ])('throws on %s rather than reaching the game state', (_label, mutate) => {
     expect(mutate).toThrow(TypeError);
     expect(source.size).toBe(2);
+  });
+});
+
+// The ONE derivation of who is playing. The loader's own frame state, the
+// per-character storage namespace and this read all go through it, so a copy of
+// the arithmetic anywhere else is two answers to one question.
+describe('characterKey', () => {
+  const withRealm = (realm: string | null, over: Record<string, unknown> = {}) =>
+    createGameBackend(gameWorld(over), { ...DEPS, realm: () => realm });
+
+  it('joins the socket realm to the live player name', () => {
+    expect(withRealm('Claudemoon')?.characterKey).toBe('Claudemoon/Marshal');
+  });
+
+  // Null rather than a placeholder: one shared key would collect every
+  // character's state and hand the next player whatever the last one left.
+  it('is null before the player entity exists', () => {
+    expect(withRealm('Claudemoon', { player: null })?.characterKey).toBeNull();
+  });
+
+  it('is null when the realm is known and the name is not', () => {
+    expect(withRealm('Claudemoon', { player: { id: 1 } })?.characterKey).toBeNull();
+  });
+
+  // Offline play has no realm, and one browser profile can hold an offline
+  // character with the same name as one on a realm called anything.
+  it('keys offline play on the offline literal rather than on null', () => {
+    expect(withRealm(null)?.characterKey).toBe('offline/Marshal');
+  });
+
+  // Read live, like every other backend member: a character switch inside one
+  // page load is real, because the game clones and removes its HUD rather than
+  // reloading.
+  it('follows a character switch inside one session', () => {
+    const game = gameWorld();
+    const backend = createGameBackend(game, { ...DEPS, realm: () => 'Claudemoon' });
+    setAt(at(game, 'world'), 'player', { ...PLAYER_ENTITY, name: 'Alt' });
+
+    expect(backend?.characterKey).toBe('Claudemoon/Alt');
   });
 });

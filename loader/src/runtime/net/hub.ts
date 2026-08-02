@@ -148,6 +148,14 @@ export interface NetHub {
    * why a raw sim time is not something to publish.
    */
   simNow: () => number | null;
+  /**
+   * The realm off the hello frame, or null before one has arrived.
+   *
+   * Its own accessor for the reason `simNow` is one: `state()` allocates a
+   * frozen snapshot per call, and the world backend reads this per sample to
+   * derive `world.characterKey`.
+   */
+  realm: () => string | null;
   dispose: () => void;
 }
 
@@ -164,6 +172,7 @@ export function createNetHub(deps: NetHubDeps): NetHub {
     onAnyEvent: (handler, opts) => bus.subscribe(ANY_EVENT_TOPIC, handler, opts),
     state: () => tracker.snapshot(),
     simNow: () => tracker.simNow(),
+    realm: () => tracker.realm(),
     dispose: () => {
       uninstall();
       bus.clear();

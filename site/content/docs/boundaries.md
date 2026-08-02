@@ -36,3 +36,38 @@ So the read-only boundary is a rule the platform holds itself to and reviews for
 **It never reads `localStorage['woc_session']`**, which holds the account bearer token.
 
 **It redacts outbound frames before any addon sees them.** The client's first frame on every socket carries that same token, and the redaction matches on the field name rather than the frame type, so a game update or a new frame cannot slip one past.
+
+## Two things nobody can build, and why they are not on a roadmap
+
+These are the questions that come up most often and have no answer on any sanctioned surface. They are not gaps waiting to be closed: the information is not in the client in a form anything can reach, or it is not in the client at all. Both are recorded here so the next person to go looking finds the dead end already mapped rather than walking into it.
+
+### The height of the ground at a point
+
+There is no way to ask how high the terrain is at an arbitrary x and z, and no amount of API design changes that.
+
+The game computes terrain height from a module-scope function that is not on `window.__game` or on anything reachable from it, and there is no served heightmap of any kind: the game generates its own minimap colouring in the client from that same function, at a couple of hundred thousand calls per render. Nor does the wire carry one. A ground effect arrives as `{ x, z, radius }` with **no y at all**, so the server does not know a height to send either.
+
+`renderer.groundPoint` looks like the answer and is not. It intersects a horizontal plane at a height **you supply**, which is what click-to-move needs, so it takes the number you were hoping to get out of it.
+
+What to do instead, in the order they are worth trying:
+
+1. **Sample a nearby entity.** Mobs, npcs and players stand on the ground, so the `pos.y` of the nearest entity within a few yards of your point is a better estimate than your own position, and `world.entities` is already a live scatter of points known to be on the floor. Fall back to the player's `y` when nothing is near.
+2. **Capture the height once, do not track it.** Take it when the effect is first seen and hold it. Tracking live slides a ring up a ramp and drops it through the floor when the player jumps.
+3. **Draw something that survives being slightly wrong.** A ring at one height over sloping ground is approximate by construction. A marker with a vertical pillar or a fading column reads correctly when it is off by a yard; a flat ring reads as a bug.
+
+The related question, how many pixels a 30 yard radius covers on screen, IS answerable: project the centre and a point one radius away and measure the distance between them. `ui.project` documents that idiom. There is no single scale figure because under perspective a ground radius covers a different number of pixels across the screen than up it, so a published scalar would be right along one axis and wrong along the other.
+
+### An icon for an aura a mob applied
+
+The game serves no aura art at all. Every aura icon you see in its own HUD is composited on a canvas at runtime, from a bundled table, and cached as a data URL. There is no file to point at, so there is no URL the loader could hand you.
+
+It is worse than a naming problem, which is what it looks like at first. An aura's id is only an ability id when the game happens to have an ability by that name; the game's own HUD tests exactly that and falls back to a recipe derived from the aura's KIND when it does not. Mob-applied auras are full of ids no ability answers to (`<ability>_lockout` for an interrupt lockout, and a long tail of encounter-specific stuns), and those never had a file to begin with.
+
+What IS resolvable is an aura a **player** applied, which covers most of what a party or PvP display draws: the applying ability id is usually the aura's own id, and the caster's class is on their entity.
+
+```js
+const caster = woc.world.entities.get(aura.sourceId);
+const art = caster?.kind === 'player' ? woc.ui.icon.ability(aura.id, caster.templateId) : null;
+```
+
+`sourceId` is 0 when the game did not say, and `ui.icon.ability` answers null once it knows there is no file, so both dead ends come back as null rather than as a broken image. A blank slot on a mob debuff is not a bug you can fix: draw the aura's name, or a shape keyed to its kind, and move on.

@@ -10,10 +10,10 @@
 // place before the thing they observe happens.
 
 import type { Channel } from '../shared/hosts.ts';
-import type { StorageApi } from '../shared/protocol.ts';
+import type { RegistryApi, StorageApi } from '../shared/protocol.ts';
 import type { SharedServices } from './api/index.ts';
 import { type BusHub, createBusHub } from './bus/hub.ts';
-import { characterId } from './character.ts';
+import { createFrameLoop, type FrameLoop } from './frame-loop.ts';
 import { parseGameVersion } from './game-version.ts';
 import { createKeyDispatcher, type KeyDispatcher } from './keys/dispatcher.ts';
 import { createGameBindings, type GameBindings } from './keys/game-bindings.ts';
@@ -25,7 +25,6 @@ import { createStorageHub, type StorageHub } from './storage/hub.ts';
 import type { GameSurfaces } from './surfaces.ts';
 import { ANCHORS } from './ui/anchors.ts';
 import type { UiKit } from './ui/mount.ts';
-import type { WorldBackend } from './world/backend.ts';
 
 interface ServicesDeps {
   scope: Window;
@@ -33,6 +32,8 @@ interface ServicesDeps {
   channel: Channel;
   /** Null when the bridge handshake failed. Storage then rejects rather than lying. */
   storage: StorageApi | null;
+  /** Null when the bridge handshake failed. woc.data then rejects rather than lying. */
+  registry: Pick<RegistryApi, 'data'> | null;
 }
 
 /**
@@ -49,6 +50,8 @@ interface RuntimeServices {
   sound: SoundEngine;
   logs: LogBuffer;
   gameBindings: GameBindings;
+  /** The one animation-frame loop. World anchors and every `woc.onFrame` ride it. */
+  frames: FrameLoop;
   dispose: () => void;
 }
 
@@ -87,27 +90,36 @@ function readGameVersion(doc: Document): { version: string | null; build: string
   return { version: parsed.version, build: parsed.build };
 }
 
-/** The live player's name, or null before the player entity exists. */
-function playerName(backend: WorldBackend): unknown {
-  const player = backend.player as { name?: unknown } | null;
-  if (player === null) {
-    return null;
-  }
-  return player.name;
-}
-
 /**
  * The character in play, or null before world entry.
  *
- * Resolved per call: the loader boots at document-start, long before there is a
- * character, and every consumer of this reads it lazily for that reason.
+ * Read off the backend rather than derived here, so the loader has exactly ONE
+ * derivation of a character's identity and `world.characterKey` is provably the
+ * same value `woc.storage.character` keys on. Resolved per call: the loader
+ * boots at document-start, long before there is a character, and every consumer
+ * of this reads it lazily for that reason.
  */
 function characterKey(surfaces: GameSurfaces): string | null {
-  const backend = surfaces.world.backend();
-  if (backend === null) {
-    return null;
-  }
-  return characterId(surfaces.net.state().realm, playerName(backend));
+  return surfaces.world.backend()?.characterKey ?? null;
+}
+
+/**
+ * The host's copy of one addon's data file.
+ *
+ * A rejection rather than an empty string when the bridge never connected, for
+ * the reason storage/hub.ts rejects: an addon handed '' would read it as its own
+ * file being broken rather than as a loader with no host, and would go looking
+ * in the wrong place.
+ */
+function addonDataReader(
+  registry: Pick<RegistryApi, 'data'> | null,
+): (fqid: string, name: string) => Promise<string> {
+  return async (fqid, name) => {
+    if (registry === null) {
+      throw new Error(`${fqid}: woc.data is unavailable, the loader never connected to its host`);
+    }
+    return await registry.data(fqid, name);
+  };
 }
 
 /**
@@ -157,7 +169,7 @@ function characterWaiter(surfaces: GameSurfaces): () => Promise<void> {
 /** The long-lived services, before the UI kit exists to complete them. */
 type BuiltServices = Pick<
   RuntimeServices,
-  'bus' | 'dispatcher' | 'gameBindings' | 'logs' | 'sound' | 'storage'
+  'bus' | 'dispatcher' | 'frames' | 'gameBindings' | 'logs' | 'sound' | 'storage'
 >;
 
 /**
@@ -186,6 +198,8 @@ function sharedServices(deps: ServicesDeps, built: BuiltServices): Omit<SharedSe
 
     characterKnown: characterWaiter(surfaces),
 
+    addonData: addonDataReader(deps.registry),
+
     now: () => scope.performance.now(),
     wallClock: () => Date.now(),
     viewport: () => ({ w: scope.innerWidth, h: scope.innerHeight }),
@@ -209,6 +223,14 @@ function createRuntimeServices(deps: ServicesDeps): RuntimeServices {
     storage: () => safeLocalStorage(scope),
   });
 
+  const frames = createFrameLoop({
+    schedule: (frame) => scope.requestAnimationFrame(frame),
+    cancel: (id) => {
+      scope.cancelAnimationFrame(id);
+    },
+    now: () => scope.performance.now(),
+  });
+
   const withoutKit = sharedServices(deps, {
     storage,
     bus,
@@ -216,6 +238,7 @@ function createRuntimeServices(deps: ServicesDeps): RuntimeServices {
     dispatcher,
     gameBindings,
     logs,
+    frames,
   });
 
   return {
@@ -226,7 +249,11 @@ function createRuntimeServices(deps: ServicesDeps): RuntimeServices {
     sound,
     logs,
     gameBindings,
+    frames,
     dispose: () => {
+      // First, because everything it calls into is torn down below it and a
+      // frame scheduled after those would run against half a runtime.
+      frames.dispose();
       bus.dispose();
       disarm();
       sound.dispose();

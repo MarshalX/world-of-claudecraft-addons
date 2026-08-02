@@ -19,11 +19,13 @@
 import { diagError } from '../../shared/diag.ts';
 import type { DevApi, MarketApi } from '../../shared/protocol.ts';
 import type { DiagnosticsReading } from '../diagnostics.ts';
+import type { FrameLoop } from '../frame-loop.ts';
 import type { KeyDispatcher } from '../keys/dispatcher.ts';
 import type { GameBindings } from '../keys/game-bindings.ts';
 import type { LogBuffer } from '../log/buffer.ts';
 import type { StorageHub } from '../storage/hub.ts';
 import type { AddonStatus } from '../supervisor.ts';
+import type { UnitPointResolver } from '../world/anchor-point.ts';
 import type { Projector } from '../world/project.ts';
 import { ANCHORS, ANCHORS_REQUIRED_IN_GAME } from './anchors.ts';
 import { type Anchors, createAnchors } from './kit/anchor3d.ts';
@@ -31,6 +33,7 @@ import { type Banner, createBanner } from './kit/banner.ts';
 import { createFrameRoster, type FrameRoster } from './kit/frame-roster.ts';
 import { createIconUrls, type IconUrls } from './kit/icons.ts';
 import { createGameInjector, type GameInjector } from './kit/injections.ts';
+import { createItemArt } from './kit/item-art.ts';
 import { createMenus, type Menus } from './kit/menu.ts';
 import { createSkillArt } from './kit/skill-art.ts';
 import { createStacking, type Stacking } from './kit/stacking.ts';
@@ -42,17 +45,6 @@ import type { GeometryStorage } from './manager/geometry-store.ts';
 import { type Manager, type ManagerRegistry, mountManager } from './manager/index.tsx';
 import { mountRoot, NO_HUD_CLASS } from './root.ts';
 import { addLoaderRoutes } from './routes.ts';
-
-/** The one label both in-game entry points carry. */
-
-/**
- * The manager's own window, by a stable hook rather than by its classes.
- *
- * `.woc-window` matches every addon frame too, so there has to be something that
- * says which one is the manager's. An attribute rather than another class,
- * matching how a frame is found by `data-woc-frame`.
- */
-const MANAGER_SELECTOR = '[data-woc-manager]';
 
 /**
  * Report any anchor that should be there and is not.
@@ -81,6 +73,21 @@ interface ManagerPair {
 }
 
 /**
+ * What both halves of the UI are composed over, built before either of them.
+ *
+ * One object rather than three parameters threaded through two builders: the
+ * stacking service was the third, and it is shared for the reason the other two
+ * are, since window order is one answer for the manager and every addon frame
+ * together rather than one per surface.
+ */
+interface UiParts {
+  /** The #woc-addons root. See runtime/ui/root.ts. */
+  root: HTMLElement;
+  unlock: UnlockMode;
+  stacking: Stacking;
+}
+
+/**
  * The manager and the config service its pages edit through.
  *
  * Built as a pair because each needs the other: the service repaints the manager
@@ -88,7 +95,7 @@ interface ManagerPair {
  * whose stores to open. One indirection breaks the cycle, and it is only ever
  * called in response to a storage change, which cannot happen before both exist.
  */
-function mountManagerPair(deps: UiDeps, root: HTMLElement, unlock: UnlockMode): ManagerPair {
+function mountManagerPair(deps: UiDeps, parts: UiParts): ManagerPair {
   let repaintManager = (): void => undefined;
 
   const config = createConfigService({
@@ -102,8 +109,9 @@ function mountManagerPair(deps: UiDeps, root: HTMLElement, unlock: UnlockMode): 
 
   const manager = mountManager({
     doc: deps.doc,
-    root,
-    unlock,
+    root: parts.root,
+    unlock: parts.unlock,
+    raise: parts.stacking.raise,
     registry: deps.registry,
     market: deps.market,
     dev: deps.dev,
@@ -141,29 +149,8 @@ function mountManagerPair(deps: UiDeps, root: HTMLElement, unlock: UnlockMode): 
  * before any addon's, which is what keeps the loader's own entry at the top of
  * the rail and of the game menu.
  */
-/**
- * The manager, opening in front of whatever is already up.
- *
- * Both in-game routes to it are buttons in the game's own DOM, outside the root,
- * so the click that opens the manager is not one the stacking listener sees. A
- * manager that opened behind an addon frame would be the same bug the listener
- * exists to fix, reached by the one path the listener cannot cover.
- */
-function raisingManager(manager: Manager, raise: () => void): Manager {
-  return {
-    ...manager,
-    open: () => {
-      manager.open();
-      raise();
-    },
-    toggle: () => {
-      manager.toggle();
-      raise();
-    },
-  };
-}
-
-function buildKit(deps: UiDeps, root: HTMLElement, manager: Manager, unlock: UnlockMode): UiKit {
+function buildKit(deps: UiDeps, parts: UiParts, manager: Manager): UiKit {
+  const { root, unlock, stacking } = parts;
   const injector = createGameInjector({
     doc: deps.doc,
     onHud: () => {
@@ -187,15 +174,17 @@ function buildKit(deps: UiDeps, root: HTMLElement, manager: Manager, unlock: Unl
     doc: deps.doc,
     root,
     project: deps.project,
+    unitPoint: deps.unitPoint,
     viewport: deps.viewport,
-    schedule: deps.schedule,
-    cancel: deps.cancelFrame,
+    frames: deps.frames,
   });
-  const stacking = createStacking({ root });
   const roster = createFrameRoster();
 
   addLoaderRoutes({ doc: deps.doc, injector, menus, roster, unlock, onOpen });
-  const icons = createIconUrls(createSkillArt({ fetchJson: deps.fetchJson }));
+  const icons = createIconUrls(
+    createSkillArt({ fetchJson: deps.fetchJson }),
+    createItemArt({ fetchJson: deps.fetchJson }),
+  );
 
   return {
     root,
@@ -209,6 +198,8 @@ function buildKit(deps: UiDeps, root: HTMLElement, manager: Manager, unlock: Unl
     roster,
     icons,
     unlock,
+    project: deps.project,
+    unitPoint: deps.unitPoint,
   };
 }
 
@@ -231,9 +222,14 @@ export interface UiDeps {
   formatTime: (at: number) => string;
   setTimer: (handler: () => void, ms: number) => number;
   clearTimer: (id: number) => void;
-  /** The frame clock, for the one loop every world anchor shares. */
-  schedule: (frame: () => void) => number;
-  cancelFrame: (id: number) => void;
+  /**
+   * The loader's one animation-frame loop, which world anchors paint on.
+   *
+   * Not a clock any more: `woc.onFrame` puts addon handlers on the same loop, and
+   * the ORDER between the two phases is the reason it is one object rather than a
+   * schedule function. See runtime/frame-loop.ts.
+   */
+  frames: FrameLoop;
   viewport: () => { w: number; h: number };
   /**
    * A world point to a point on screen, or null when the game cannot be asked.
@@ -242,7 +238,15 @@ export interface UiDeps {
    * the assertion lives in runtime/world/project.ts with every other one.
    */
   project: Projector;
-  /** Same-origin JSON, for the per-class skill-art manifests. */
+  /**
+   * A unit token or an entity id to a world point, for `{ unit: 'target' }`.
+   *
+   * Passed in for the same reason `project` is: resolving a head point is a read
+   * of the renderer's own view of that unit, and it lives in
+   * runtime/world/anchor-point.ts beside every other claim about the game.
+   */
+  unitPoint: UnitPointResolver;
+  /** Same-origin JSON, for the game's served art manifests. */
   fetchJson: (url: string) => Promise<unknown>;
   /** The storage hub and the game's bindings, for the per-addon settings pages. */
   storageHub: StorageHub;
@@ -294,6 +298,13 @@ export interface UiKit {
    * did would be rearranging a player's screen for them.
    */
   unlock: UnlockMode;
+  /**
+   * A world point to a point on screen. The same read `ui.anchor3d` places by,
+   * published as `ui.project` with no element attached to it.
+   */
+  project: Projector;
+  /** The same unit resolution `ui.anchor3d` uses, so the two cannot disagree. */
+  unitPoint: UnitPointResolver;
 }
 
 export interface MountedUi {
@@ -309,17 +320,15 @@ export function mountUi(deps: UiDeps): MountedUi {
   // the manager draws the switch, the loader's keybind flips it, and two
   // instances would mean a checkbox that disagrees with the screen.
   const unlock = createUnlockMode(root.el);
-  const { manager, config } = mountManagerPair(deps, root.el, unlock);
-  const kit = buildKit(deps, root.el, manager, unlock);
-  const raised = raisingManager(manager, () => {
-    const el = root.el.querySelector(MANAGER_SELECTOR);
-    if (el instanceof HTMLElement) {
-      kit.stacking.raise(el);
-    }
-  });
+  // Ahead of both halves, because both raise through it: the manager when it is
+  // shown, and every addon frame when it is built or shown. It needs only the
+  // root, so nothing about the order costs anything.
+  const parts: UiParts = { root: root.el, unlock, stacking: createStacking({ root: root.el }) };
+  const { manager, config } = mountManagerPair(deps, parts);
+  const kit = buildKit(deps, parts, manager);
 
   return {
-    manager: raised,
+    manager,
     config,
     kit,
     dispose: () => {

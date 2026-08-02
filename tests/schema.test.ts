@@ -157,6 +157,48 @@ describe('validateManifest', () => {
     expect(r.ok).toBe(false);
   });
 
+  // The surface hands back a PARSED value, so a declared .txt would be a file
+  // woc.data could only ever fail on.
+  it('refuses a data file that is not .json', () => {
+    expect(validateManifest(withField('data', ['items.txt'])).ok).toBe(false);
+  });
+
+  it('accepts a declared data file', () => {
+    expect(validateManifest(withField('data', ['items.json'])).ok).toBe(true);
+  });
+
+  // Same base shape as `entry` and `preview.file`, so the same traversal risk is
+  // refused by the same rule: whatever this accepts is appended to a raw base.
+  it('refuses a data file that traverses out of the addon directory', () => {
+    expect(validateManifest(withField('data', ['../other/items.json'])).ok).toBe(false);
+  });
+
+  // A duplicate would be fetched twice at install and stored once, so the
+  // manifest and the cache would disagree about how many files there are.
+  it('refuses a duplicate data file', () => {
+    expect(validateManifest(withField('data', ['a.json', 'a.json'])).ok).toBe(false);
+  });
+
+  it('refuses more than eight data files', () => {
+    const files = Array.from({ length: 9 }, (_unused, at) => `f${at}.json`);
+    expect(validateManifest(withField('data', files)).ok).toBe(false);
+    expect(validateManifest(withField('data', files.slice(0, 8))).ok).toBe(true);
+  });
+
+  // Bare addon ids, never fqids: the same addon installed from a fork is a
+  // different fqid and is still the companion the author meant.
+  it('accepts companions as bare addon ids', () => {
+    expect(validateManifest(withField('companions', ['lorebind'])).ok).toBe(true);
+  });
+
+  it.each(['official/lorebind', 'Lorebind'])('refuses the companion %j', (id) => {
+    expect(validateManifest(withField('companions', [id])).ok).toBe(false);
+  });
+
+  it('refuses more than four companions', () => {
+    expect(validateManifest(withField('companions', ['a', 'b', 'c', 'd', 'e'])).ok).toBe(false);
+  });
+
   it.each([null, 'string', 42, []])('rejects non-object input %j', (input) => {
     expect(validateManifest(input).ok).toBe(false);
   });

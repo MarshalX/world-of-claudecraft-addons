@@ -9,9 +9,11 @@
 // would let a version that never wrote it pass.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { RegistryDeps } from '../loader/src/host/addon-fetch.ts';
 import { createFetcher } from '../loader/src/host/fetcher.ts';
-import type { RegistryDeps } from '../loader/src/host/registry.ts';
-import { createRegistry, sourceKey } from '../loader/src/host/registry.ts';
+import { createRegistry } from '../loader/src/host/registry.ts';
+import { dataKey, sourceKey } from '../loader/src/host/registry-keys.ts';
+import { DATA_MAX_BYTES } from '../loader/src/shared/addon-data.ts';
 import { LOCAL, OFFICIAL } from '../loader/src/shared/marketplace.ts';
 import type {
   InstalledAddon,
@@ -31,7 +33,14 @@ const NOT_INSTALLED = /not installed/;
 
 const RAW = 'https://raw.githubusercontent.com/MarshalX/world-of-claudecraft-addons/HEAD';
 const OFFICIAL_ENTRY_URL = `${RAW}/addons/minimap/main.js`;
+const OFFICIAL_ITEMS_URL = `${RAW}/addons/minimap/items.json`;
+const OFFICIAL_ZONES_URL = `${RAW}/addons/minimap/zones.json`;
 const LOCAL_ENTRY_URL = 'http://localhost:5180/addons/minimap/main.js';
+const LOCAL_ITEMS_URL = 'http://localhost:5180/addons/minimap/items.json';
+
+/** A manifest declaring data files, and the bodies that go with it. */
+const ITEMS = '{"sword":"Sword"}';
+const ZONES = '{"1":"Elwynn"}';
 
 const MANIFEST = {
   id: 'minimap',
@@ -67,17 +76,17 @@ function indexRow(overrides: Partial<MarketplaceEntry> = {}): MarketplaceEntry {
  * where a no-op would let a version that did call one pass.
  */
 function fakeMarket(
-  row: MarketplaceEntry = indexRow(),
+  cell: { row: MarketplaceEntry },
   states: MarketplaceState[] = [],
 ): RegistryDeps['market'] {
   const unused = () => Promise.reject(new Error('the registry does not write the source list'));
   return {
     entry: (fqid) => {
       if (fqid === FQID) {
-        return Promise.resolve({ market: OFFICIAL, row });
+        return Promise.resolve({ market: OFFICIAL, row: cell.row });
       }
       if (fqid === LOCAL_FQID) {
-        return Promise.resolve({ market: LOCAL, row });
+        return Promise.resolve({ market: LOCAL, row: cell.row });
       }
       return Promise.resolve(null);
     },
@@ -111,13 +120,17 @@ function harness(opts: HarnessOpts = {}) {
   const http = createFakeHttp(opts.files ?? { [OFFICIAL_ENTRY_URL]: 'woc.log("hi")' });
   const fetcher = createFetcher({ request: http.request, cache: createFakeValues() });
   const onChanged = vi.fn();
+  // A cell rather than a captured value, so a suite can move what the index
+  // offers between an install and the update that follows it. That is the only
+  // way to drive the case where a new version DROPS a data file.
+  const cell = { row: opts.row ?? indexRow() };
   const registry = createRegistry({
     storage,
-    market: fakeMarket(opts.row, opts.markets),
+    market: fakeMarket(cell, opts.markets),
     fetcher,
     onChanged,
   });
-  return { registry, storage, http, onChanged };
+  return { registry, storage, http, onChanged, cell };
 }
 
 // The corrupt-record cases report through the diagnostic channel by design.
@@ -312,6 +325,125 @@ describe('source', () => {
     http.remove(LOCAL_ENTRY_URL);
 
     await expect(registry.source(LOCAL_FQID)).resolves.toBe('first');
+  });
+});
+
+describe('data files', () => {
+  // The whole point of fetching at install: enabling an addon, and every later
+  // read, must not be a network call.
+  it('fetches every declared file at install and answers later reads from the cache', async () => {
+    const { registry, storage, http } = harness({
+      row: indexRow({ data: ['items.json', 'zones.json'] }),
+      files: {
+        [OFFICIAL_ENTRY_URL]: 'woc.log("hi")',
+        [OFFICIAL_ITEMS_URL]: ITEMS,
+        [OFFICIAL_ZONES_URL]: ZONES,
+      },
+    });
+
+    await registry.install(FQID);
+    const afterInstall = http.calls.length;
+
+    expect(storage.cells.get(`${NS}:${dataKey(FQID)}`)).toEqual({
+      'items.json': ITEMS,
+      'zones.json': ZONES,
+    });
+    await expect(registry.data(FQID, 'items.json')).resolves.toBe(ITEMS);
+    await expect(registry.data(FQID, 'zones.json')).resolves.toBe(ZONES);
+    expect(http.calls).toHaveLength(afterInstall);
+  });
+
+  // An addon that starts and then cannot read its own table is worse than one
+  // that never installed, because nothing says why.
+  it('fails the install when a data file is not JSON, leaving nothing behind', async () => {
+    const { registry, storage } = harness({
+      row: indexRow({ data: ['items.json'] }),
+      files: { [OFFICIAL_ENTRY_URL]: 'woc.log("hi")', [OFFICIAL_ITEMS_URL]: 'not json' },
+    });
+
+    await expect(registry.install(FQID)).rejects.toThrow(/is not JSON/);
+
+    expect(await registry.list()).toEqual([]);
+    expect(storage.cells.has(`${NS}:${sourceKey(FQID)}`)).toBe(false);
+    expect(storage.cells.has(`${NS}:${dataKey(FQID)}`)).toBe(false);
+  });
+
+  it('fails the install when a data file is over the ceiling, with the byte count', async () => {
+    const huge = `"${'x'.repeat(DATA_MAX_BYTES)}"`;
+    const { registry } = harness({
+      row: indexRow({ data: ['items.json'] }),
+      files: { [OFFICIAL_ENTRY_URL]: 'woc.log("hi")', [OFFICIAL_ITEMS_URL]: huge },
+    });
+
+    await expect(registry.install(FQID)).rejects.toThrow(String(huge.length));
+  });
+
+  // The record has to go with the addon, and so does every file's cache entry:
+  // a data file has exactly the same conditional-request problem the body does.
+  it('drops the record and forgets every file on uninstall, so a reinstall re-reads', async () => {
+    const { registry, storage, http } = harness({
+      row: indexRow({ data: ['items.json'] }),
+      files: { [OFFICIAL_ENTRY_URL]: 'woc.log("hi")', [OFFICIAL_ITEMS_URL]: ITEMS },
+    });
+    await registry.install(FQID);
+
+    await registry.uninstall(FQID);
+    expect(storage.cells.has(`${NS}:${dataKey(FQID)}`)).toBe(false);
+
+    http.put(OFFICIAL_ITEMS_URL, '{"sword":"Renamed"}');
+    await registry.install(FQID);
+
+    await expect(registry.data(FQID, 'items.json')).resolves.toBe('{"sword":"Renamed"}');
+  });
+
+  // The regression the empty branch of writeAddonData exists for: without it,
+  // woc.data would keep answering from a version nobody is running.
+  it('deletes the record when an update removes the last data file', async () => {
+    const { registry, storage, cell } = harness({
+      row: indexRow({ data: ['items.json'] }),
+      files: { [OFFICIAL_ENTRY_URL]: 'woc.log("hi")', [OFFICIAL_ITEMS_URL]: ITEMS },
+    });
+    await registry.install(FQID);
+    expect(storage.cells.has(`${NS}:${dataKey(FQID)}`)).toBe(true);
+
+    cell.row = indexRow({ version: '2.0.0' });
+    await registry.update(FQID);
+
+    expect(storage.cells.has(`${NS}:${dataKey(FQID)}`)).toBe(false);
+  });
+
+  // An addon installed before the field existed has no record at all. The
+  // message has to send the player at the update rather than at their addon.
+  it('rejects by name for an addon whose files were never fetched', async () => {
+    const { registry } = harness({ installed: [addon()] });
+
+    await expect(registry.data(FQID, 'items.json')).rejects.toThrow(/update it/);
+  });
+
+  // The same deliberate exception the body gets: a table an author just
+  // regenerated has to be what the next load reads.
+  it('re-reads a dev-server data file on every call', async () => {
+    const { registry, http } = harness({
+      row: indexRow({ data: ['items.json'] }),
+      files: { [LOCAL_ENTRY_URL]: 'first', [LOCAL_ITEMS_URL]: ITEMS },
+    });
+    await registry.install(LOCAL_FQID);
+    http.put(LOCAL_ITEMS_URL, ZONES);
+
+    await expect(registry.data(LOCAL_FQID, 'items.json')).resolves.toBe(ZONES);
+  });
+
+  // A dev server that is not running must leave the last copy working, rather
+  // than breaking an addon because a terminal was closed.
+  it('falls back to the cached copy when the dev server is unreachable', async () => {
+    const { registry, http } = harness({
+      row: indexRow({ data: ['items.json'] }),
+      files: { [LOCAL_ENTRY_URL]: 'first', [LOCAL_ITEMS_URL]: ITEMS },
+    });
+    await registry.install(LOCAL_FQID);
+    http.remove(LOCAL_ITEMS_URL);
+
+    await expect(registry.data(LOCAL_FQID, 'items.json')).resolves.toBe(ITEMS);
   });
 });
 

@@ -16,7 +16,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { DiagnosticsReading } from '../loader/src/runtime/diagnostics.ts';
 import { createUnlockMode } from '../loader/src/runtime/ui/kit/unlock.ts';
 import { mountManager } from '../loader/src/runtime/ui/manager/index.tsx';
-import { UI_TEXT } from '../loader/src/runtime/ui/manager/strings.ts';
+import { COMPANION_TEXT, UI_TEXT } from '../loader/src/runtime/ui/manager/strings.ts';
 import type { MarketplaceRef } from '../loader/src/shared/marketplace.ts';
 import { OFFICIAL } from '../loader/src/shared/marketplace.ts';
 import type { InstalledAddon, MarketplaceState, UpdateRow } from '../loader/src/shared/protocol.ts';
@@ -591,5 +591,52 @@ describe('the Updates pane', () => {
     });
 
     expect(calls.update.mock.calls).toEqual([[FQID], ['official/bag-sort']]);
+  });
+});
+
+// The companion note is a NOTE, and the refusal to make it anything else is the
+// design. Its own block rather than another case inside the Browse pane's,
+// because what it asserts is that the pane AROUND it did not change.
+describe('companion notes', () => {
+  async function browse(options: Options = {}) {
+    const opened = open(options);
+    await clickTab('Browse');
+    await until(() => {
+      expect(document.querySelector('.woc-browse')).not.toBeNull();
+    });
+    return opened;
+  }
+
+  // A companion is a NOTE. The refusal to make it anything else is the design,
+  // so it is pinned here: no gate on Install, no second install, no ordering.
+  it('draws a companion note without touching the Install control', async () => {
+    await browse({
+      markets: [marketState(OFFICIAL, [marketEntry({ companions: ['lorebind'] })])],
+    });
+
+    await until(() => {
+      expect(text()).toContain('lorebind');
+    });
+    expect(text()).toContain(UI_TEXT.companions);
+    expect(buttonNamed(`${UI_TEXT.browseInstall} Combat Meter`)?.disabled).toBe(false);
+  });
+
+  // The one message the field exists for, and the one a description could not
+  // have carried: the companion is here, and it is switched off.
+  it('says when a named companion is installed but switched off', async () => {
+    await browse({
+      markets: [
+        marketState(OFFICIAL, [
+          marketEntry({ companions: ['lorebind'] }),
+          marketEntry({ id: 'lorebind', name: 'Lorebind' }),
+        ]),
+      ],
+      installed: [{ ...installedRow('official/lorebind'), enabled: false }],
+    });
+
+    await until(() => {
+      expect(text()).toContain('lorebind');
+    });
+    expect(text()).toContain(COMPANION_TEXT.disabled);
   });
 });

@@ -9,6 +9,8 @@
 // can compile against. The loader checks it against a live game once per session
 // and reports what no longer matches.
 
+import type { CorpseLoot } from './world-ground.js';
+
 export interface Vec3 {
   x: number;
   y: number;
@@ -104,6 +106,87 @@ export interface WeaponInfo {
 }
 
 /**
+ * A slot a piece of gear is worn in.
+ *
+ * Closed rather than a string: this is the shape of a paperdoll, not content
+ * that grows with a game release.
+ */
+export type EquipSlot =
+  | 'mainhand'
+  | 'offhand'
+  | 'helmet'
+  | 'neck'
+  | 'shoulder'
+  | 'chest'
+  | 'waist'
+  | 'legs'
+  | 'gloves'
+  | 'feet'
+  | 'ring1'
+  | 'ring2';
+
+/**
+ * The public part of one worn item's instance payload.
+ *
+ * This is the SERVER's projection rather than a narrowing done by the loader:
+ * the send site copies exactly these three out of the full payload and drops the
+ * rest, so an inspecting client is never sent an item's bound owner, its
+ * remaining charges, or its rift forge record.
+ */
+export interface PublicItemInstance {
+  /** The player who signed or crafted this specific copy. */
+  signer?: string;
+  /** The enchant id applied to it. Content, so it resolves to nothing here. */
+  enchant?: string;
+  /**
+   * Values baked into this copy when it was made.
+   *
+   * `masterwork` marks a masterwork proc, whose `stats` are the baked tier delta
+   * rather than an enchant. `quality` is legacy: new crafts never write it, and a
+   * payload that carries it is an old copy still loading as before.
+   */
+  rolled?: { quality?: string; stats?: Record<string, number>; masterwork?: boolean };
+}
+
+/**
+ * Your OWN worn item's payload, which carries what the public one is trimmed of.
+ *
+ * Reachable only through `world.equipmentInstances`, off your self record. The
+ * same slot read off `world.player.equippedInstances` is the public projection
+ * above, because your own entity record goes through the same allowlist every
+ * other player's does.
+ */
+export interface ItemInstance extends PublicItemInstance {
+  /** The recipe that minted this copy, while it is worn. */
+  craftedRecipeId?: string;
+  /** The entity id this copy is bound to. */
+  boundTo?: number;
+  /** Set while the copy still binds on its first trade. */
+  bindOnTrade?: boolean;
+  /** Remaining uses per effect id, for a charge-limited piece. */
+  charges?: Record<string, number>;
+  /**
+   * Long-term Rift progression, for a piece earned there.
+   *
+   * `tier` is content and is left a string for the same reason `AuraKind` is: a
+   * copy of the union here would go stale while looking authoritative.
+   * `rolled.stats` is the aggregate the game actually applies; this record
+   * explains how it was earned.
+   */
+  rift?: {
+    sourceEventId: string;
+    tier: string;
+    power: number;
+    upgradeLevel: number;
+    maxUpgradeLevel: number;
+    baseStats: Record<string, number>;
+    enchant?: { stat: string; value: number };
+    gemSlots: number;
+    gems: string[];
+  };
+}
+
+/**
  * One thing in the world: a player, a mob, an npc, or a world object.
  *
  * Every field here is one the server actually sends. That is a narrower list
@@ -144,6 +227,15 @@ export interface Entity {
   maxResource: number;
   resourceType: ResourceType | null;
   dead: boolean;
+  /**
+   * True once a player has RELEASED, which `dead` alone cannot tell you.
+   *
+   * A dead player who has not released is lying where they fell and can be
+   * resurrected in place; a ghost has given that up and is running back. `dead`
+   * stays true through both, so this is the field a healer's display keys on.
+   * Always false for the living and for every non-player entity.
+   */
+  ghost: boolean;
 
   hostile: boolean;
   /**
@@ -161,6 +253,26 @@ export interface Entity {
    * What a MOB is attacking. Null on a player, whose selection is `targetId`.
    */
   aggroTargetId: number | null;
+  /**
+   * The unit a taunt is FORCING this mob onto, null when nothing is.
+   *
+   * `aggroTargetId` says who a mob is hitting; this says whether that choice is
+   * being held rather than earned. Written only on a mob, and only by a taunt: on
+   * a player, an npc, an object and a controlled pet it is the `targetId` trap in
+   * a second place, present and correctly typed and permanently null.
+   */
+  forcedTargetId: number | null;
+  /**
+   * Seconds left on that force, 0 when none is held.
+   *
+   * The window is short, so read it rather than polling slowly. A taunt can also
+   * raise threat and set NOTHING here: a mob whose template ignores taunts, a
+   * training dummy, and a boss taunted by a pet each take the threat and never
+   * turn. Those templates are bundled content, so you cannot tell that case from
+   * an expiry. Present a held taunt as a positive reading rather than presenting
+   * its absence as a failure.
+   */
+  forcedTargetTimer: number;
   /**
    * A living mob's hate table: entity id to threat, capped at the top eight.
    *
@@ -188,6 +300,75 @@ export interface Entity {
   castTotal: number;
   channeling: boolean;
   auras: Aura[];
+
+  /**
+   * Whether the interact prompt offers something here, which is NOT "is a corpse".
+   *
+   * True on every ground pickup, every dungeon exit and every rift portal,
+   * because the game sets it on the object rather than on the loot. Read `loot`
+   * for a corpse's contents; a lootable entity with a null `loot` is scenery.
+   */
+  lootable: boolean;
+  /**
+   * A mob corpse's whole contents, or null.
+   *
+   * Sent for a mob only, and sent to EVERY player in range rather than to the
+   * looter: the server builds one record per corpse and shares it. So this holds
+   * slots you can see and cannot take. `world.corpseLoot()` applies the game's
+   * own rights rule and is what a loot display should read.
+   */
+  loot: CorpseLoot | null;
+  /** The first player to damage this mob, who owns its shared loot. Null on everything else. */
+  tappedById: number | null;
+  /** The player who took this corpse's profession harvest. Null when unclaimed. */
+  harvestClaimedBy: number | null;
+
+  // Worn gear and cosmetics, sent for a PLAYER (and therefore a bot) only. On
+  // every mob, npc and object these exist and hold an inert default, which is
+  // the `targetId` trap: check `kind === 'player'` before reading one.
+  /**
+   * The full worn set: slot to item id, empty for anything that is not a player.
+   *
+   * The server gates this on the entity being a player at the send site, so a mob
+   * is structurally incapable of carrying one however its own fields are set. An
+   * id resolves to an icon through `ui.icon.item` and to nothing else, the same
+   * limit `world.equipment` carries.
+   */
+  equippedItems: Partial<Record<EquipSlot, string>>;
+  /**
+   * Per-slot instance payloads for the worn set, trimmed by the server.
+   *
+   * Sparse: a slot is a key only while its piece carries a signer, an enchant or
+   * a roll, so a plain worn set is empty rather than a map of empty objects. For
+   * YOUR OWN gear read `world.equipmentInstances`, which is the untrimmed
+   * payload; this member is the public projection even on your own record.
+   */
+  equippedInstances: Partial<Record<EquipSlot, PublicItemInstance>>;
+  /**
+   * The held mainhand, which is NOT `equippedItems.mainhand`.
+   *
+   * The server fills this only when the equipped mainhand is a weapon, so a
+   * non-weapon in the hand slot leaves `equippedItems.mainhand` set and this
+   * null. Read this for what is being held, that for what is worn.
+   */
+  mainhandItemId: string | null;
+  /** The held offhand: a weapon, a held offhand item, or a shield. */
+  offhandItemId: string | null;
+  /**
+   * The active weapon-skin cosmetic, or null.
+   *
+   * A skin id, not an item id: `ui.icon.item` does not resolve one, and the kit
+   * hides an icon slot whose image fails, so asking costs an icon.
+   */
+  weaponSkinId: string | null;
+  /**
+   * The mount being ridden, or empty when on foot.
+   *
+   * A mount key rather than an item id, so it names the mount and resolves to no
+   * art. It is also the one cosmetic here the game's own sim reads, for movement
+   * speed, so it is a reliable answer to "is that player mounted".
+   */
+  mountKey: string;
 
   // Yours alone: the server sends these on the SELF record and nowhere else, so
   // on any other entity they hold an inert default rather than a real value.

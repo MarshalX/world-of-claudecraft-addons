@@ -1,109 +1,17 @@
 import type { Unsubscribe } from './addon.js';
 import type { KnownSkillIcon, SkillIconClass } from './icons.generated.js';
+import type { KnownItemIcon } from './items.generated.js';
+import type {
+  Anchor3d,
+  Anchor3dOpts,
+  PointSource,
+  ScreenPoint,
+  UnitPoint,
+  WorldPoint,
+} from './ui-anchor.js';
 import type { FieldBuilders, MenuItem, Tabs, TabsOpts, TooltipInput } from './ui-controls.js';
+import type { Frame, FrameOpts } from './ui-frame.js';
 import type { Bar, BarOpts, Tile, TileOpts } from './ui-timers.js';
-
-export type FrameDensity = 'comfortable' | 'compact' | 'bare';
-
-/** Where a frame is, in page pixels. The loader owns it; see `FrameOpts.onMove`. */
-export interface FrameBox {
-  x: number;
-  y: number;
-  w: number;
-  h: number;
-}
-
-export interface FrameOpts {
-  /** Unique within your addon. It is the persistence key, so keep it stable. */
-  id: string;
-  title?: string;
-  /**
-   * Draw a close button in the title bar. Since apiMinor 2.
-   *
-   * `ui.window` always has one and ignores this. A `ui.frame` does not, because a
-   * frame is ordinarily a HUD readout that lives on screen and is toggled by a
-   * keybind, and a button on every cooldown strip would be chrome nobody asked
-   * for. Ask for one when your frame is a panel the player OPENS: a reference
-   * list, a ledger, anything they would expect to dismiss with the mouse.
-   *
-   * Ignored on `density: 'bare'`, which removes the title bar the button would
-   * live in. That is the same refusal `ui.window` makes about `bare`, and for the
-   * same reason: a promise with nowhere to keep it is worse than an ignored
-   * option. Dismiss a bare frame with its keybind or through the unlock mode.
-   */
-  closable?: boolean;
-  width?: number;
-  height?: number;
-  /**
-   * Whether the edges resize it. Defaults to true for `window` and false for
-   * `frame`: a frame is sized by its content, so an explicit height would leave
-   * it padded out or clipped as its text changes.
-   */
-  resizable?: boolean;
-  /** Persist position and visibility for this character. */
-  save?: boolean;
-  /** Whether it starts on screen. A restored `save` visibility wins over this. */
-  visible?: boolean;
-  /** Added to the frame element, so you can style your own. */
-  className?: string;
-  /**
-   * How tightly the loader's own chrome is drawn. Defaults to 'comfortable'.
-   *
-   * 'comfortable' is 16px labels on a 40px minimum, which is the tap-target
-   * floor the game itself holds to, and is right for anything a player OPERATES.
-   * 'compact' is for a dense readout they glance at, where that floor makes the
-   * title bar and close button the loudest things in the panel. Compact gives up
-   * the tap floor, which is why it is opt-in: pick it for a desktop readout, not
-   * for a form.
-   *
-   * 'bare' removes the chrome altogether: no panel behind your content, no
-   * padding, no title bar. It is for an overlay that IS its content, a row of
-   * timers floating on the HUD rather than a panel holding them. Two things
-   * follow from having no title bar, and both are deliberate:
-   *
-   *  - The frame is dragged by its own content instead. Buttons, inputs and
-   *    selects inside it stay clickable, so a bare frame full of controls is
-   *    still awkward to move: it suits a readout, not a form.
-   *  - `ui.window` IGNORES it and stays comfortable. A window's close button
-   *    lives in the title bar, and a panel the player cannot dismiss is worse
-   *    than one drawn more heavily than asked for.
-   *
-   * It also reaches your own controls: a `.woc-btn` or `.woc-tab` inside a
-   * compact frame is drawn compact too, so reusing those classes gets you the
-   * matching density for free.
-   */
-  density?: FrameDensity;
-  /**
-   * Where the frame ended up, after every move the loader made.
-   *
-   * The loader owns the box. It writes the position, and for a `resizable` frame
-   * the size, and it re-clamps both when the viewport changes and when a saved box
-   * is restored. Use this rather than measuring `frame.el`: a measurement forces a
-   * synchronous layout, and a display that scales with its frame would pay for one
-   * on every frame it draws.
-   *
-   * Fires on a drag, on a resize (at pointer rate, so keep it cheap), on the async
-   * restore of a saved box, and when the window is resized under it. NOT for the
-   * initial placement, which is the size you asked for and therefore already hold.
-   *
-   * A throw here is caught and written to your addon's log rather than breaking
-   * the gesture the player is in the middle of.
-   */
-  onMove?: (box: FrameBox) => void;
-}
-
-export interface Frame {
-  /** The frame element. Yours to fill; the loader only positions it. */
-  readonly el: HTMLElement;
-  /** Where your content goes. Everything above it is chrome. */
-  readonly body: HTMLElement;
-  readonly visible: boolean;
-  show: () => void;
-  hide: () => void;
-  toggle: () => void;
-  setTitle: (title: string) => void;
-  destroy: () => void;
-}
 
 export interface ToastOpts {
   /** Milliseconds on screen. Zero keeps it up until dismissed. */
@@ -168,6 +76,16 @@ export interface AlertOpts {
 export type AbilityIconId = KnownSkillIcon | (string & Record<never, never>);
 
 /**
+ * An item id that ships a painted icon file, or any other string.
+ *
+ * Open for the reason `AbilityIconId` is: the set is content, a game release commits
+ * art before these types catch up, and a published type must not be able to reject a
+ * working addon. The known half is generated from the LIVE manifest, so it
+ * autocompletes what most players' games actually have a file for.
+ */
+export type ItemIconId = KnownItemIcon | (string & Record<never, never>);
+
+/**
  * A class the game files skill art under, or any other string.
  *
  * Open because the value you pass is normally `world.player.templateId`, which is a
@@ -201,7 +119,35 @@ export interface IconUrls {
   ability: (abilityId: AbilityIconId, cls: IconClass) => string | null;
   /** A mob or npc portrait, by the `templateId` on its entity. */
   mob: (templateId: string) => string | null;
-  item: (itemId: string) => string | null;
+  /**
+   * An item's icon, or null when there is none to point at.
+   *
+   * The game serves a manifest of which item ids have a file, so this returns null
+   * once the loader KNOWS there is none. Until that has been read the answer is the
+   * URL and the image load decides, which is why `ui.bar` hides its own icon slot on
+   * error. See `preloadItems`.
+   *
+   * WEAPONS never have one. The game files weapon art under a MODEL name rather than
+   * an item id, through a table it does not serve, so a weapon has an icon in the
+   * game and none an addon can point at. That is 134 of the game's 797 items today.
+   * The rest of the gap is art the game has not commissioned yet.
+   */
+  item: (itemId: ItemIconId) => string | null;
+  /**
+   * The name the item's ART was filed under, or null.
+   *
+   * NOT the item's name, and the difference is not academic. This is provenance
+   * metadata for the icon file, gated by the game only on being non-empty, so it
+   * drifts whenever content is renamed and the art is not: measured against game
+   * 0.33.0, 281 of 303 agree with the game's own display name and 21 do not.
+   *
+   * Null for an item whose art came from a generated batch, since those carry no
+   * name at all, and null while the manifest has not been read.
+   *
+   * Use it as a labelled fallback, never as the item's name. Nothing on this API can
+   * give you that: the item table is bundled into the game's own chunk.
+   */
+  itemArtName: (itemId: ItemIconId) => string | null;
   /**
    * Read a class's art manifest, so `ability` is exact from its first call.
    *
@@ -210,48 +156,13 @@ export interface IconUrls {
    * blank slot on the first row you draw would be worse than a frame's delay.
    */
   preload: (cls: IconClass) => Promise<void>;
-}
-
-/** A point in the world: x east-west, y height, z north-south, in yards. */
-export interface WorldPoint {
-  x: number;
-  y: number;
-  z: number;
-}
-
-/**
- * A fixed point, or a function asked for one on every frame.
- *
- * The function form is what anything that MOVES needs: pass `() => entity.pos` and
- * the anchor follows it without your addon running a loop of its own. Returning
- * null hides the anchor, which is the honest answer for a unit that has gone.
- */
-export type PointSource = WorldPoint | (() => WorldPoint | null);
-
-export interface Anchor3dOpts {
-  /** Added to the element, so you can style your own. */
-  className?: string;
-  /** Shifts the element from the point, in screen pixels. Down is positive. */
-  offset?: { x?: number; y?: number };
   /**
-   * How far off screen the point may be before the anchor hides. Defaults to 64.
+   * Read the item art manifest, so `item` is exact from its first call.
    *
-   * Not zero, because your element is CENTRED on the point: one whose point has
-   * just left the edge is still half on screen, and hiding it there makes a
-   * nameplate blink out while the unit wearing it is still visible.
+   * Optional and never rejects, exactly like `preload`. One request covers every
+   * item in the game, so a bag grid that would rather not flash costs one await.
    */
-  margin?: number;
-}
-
-export interface Anchor3d {
-  /** The element. Fill it; the loader owns only where it sits. */
-  readonly el: HTMLElement;
-  /** Whether it is on screen right now, which is worth checking before drawing. */
-  readonly visible: boolean;
-  /** Point it somewhere else, at a fixed point or at a function. */
-  moveTo: (at: PointSource) => void;
-  /** Removes it. Also done for you when your addon is disabled. */
-  destroy: () => void;
+  preloadItems: () => Promise<void>;
 }
 
 export interface MicroButtonOpts {
@@ -350,17 +261,60 @@ export interface UiApi {
    * on the game's renderer and nothing else published here needs it.
    *
    * ```js
-   * const plate = woc.ui.anchor3d(() => woc.world.target?.pos ?? null, { offset: { y: -40 } });
+   * const plate = woc.ui.anchor3d({ unit: 'target' });
    * plate.el.textContent = woc.world.target.name;
    * ```
    *
-   * Every anchor shares ONE frame loop, and nothing is written unless the point
-   * moved on screen, so a camera nobody is turning costs nothing. It hides itself
-   * when the point is behind the camera, when it is off screen by more than
+   * A `{ unit }` point is the one to reach for over `() => entity.pos`, because
+   * 'head' puts the element above that unit's MODEL exactly as the game's own
+   * nameplate does, and no addon can work that height out: it comes off the
+   * renderer's view of the unit, not off the wire. Since apiMinor 2.
+   *
+   * Every anchor shares ONE frame loop with every `woc.onFrame` handler, and
+   * nothing is written unless the point moved on screen, so a camera nobody is
+   * turning costs nothing. It hides itself when the point cannot be trusted (see
+   * `ui.project` for what that covers), when it is off screen by more than
    * `margin`, and whenever the game cannot be asked at all, which includes every
    * moment before world entry.
    */
   anchor3d: (at: PointSource, opts?: Anchor3dOpts) => Anchor3d;
+  /**
+   * Where a world point or a unit is on screen right now, with no element.
+   *
+   * `ui.anchor3d` is the right tool when the loader should KEEP something over a
+   * point. This is for the decisions an addon makes ABOUT screen positions: a line
+   * drawn between two units, a list sorted by where things are, which of two
+   * overlapping pins to hide. Measuring a placed element instead forces a
+   * synchronous layout, which on a frame loop is the churn `FrameOpts.onMove`
+   * exists to avoid.
+   *
+   * **Null means do not draw**, and that is the whole safety of this call. It is
+   * null before world entry, null when the game cannot be asked, and null when the
+   * point has no trustworthy screen position: behind the camera, or CLOSER than
+   * the near plane. That last case is the one worth knowing about, because the raw
+   * projection reports finite coordinates for it that are off by any amount, and
+   * the game's own nameplates, chat bubbles and click picking all guard against
+   * exactly it. There is deliberately no `onScreen` flag, because a flag is a
+   * thing you can forget to read.
+   *
+   * It does NOT test the viewport rectangle: an off-screen point in front of the
+   * camera still projects, which is what an arrow pointing off the edge of the
+   * screen at an off-screen unit is built from. Compare `x` and `y` yourself, and
+   * allow a margin the way `ui.anchor3d` allows 64 pixels by default, because your
+   * element is centred on the point.
+   *
+   * ```js
+   * // How many pixels a 30 yard radius covers on screen right now.
+   * const centre = woc.ui.project(point);
+   * const edge = woc.ui.project({ ...point, x: point.x + 30 });
+   * const pixels = centre && edge ? Math.hypot(edge.x - centre.x, edge.y - centre.y) : null;
+   * ```
+   *
+   * Measure that along the axis you are drawing on: under perspective a ground
+   * radius covers a different number of pixels across than it does up the screen,
+   * which is why the loader publishes no single scale figure. Since apiMinor 2.
+   */
+  project: (at: WorldPoint | UnitPoint) => ScreenPoint | null;
   /**
    * Resolves with the id of the button pressed, or with the cancel button's id
    * when dismissed, or null when there was no cancel button.

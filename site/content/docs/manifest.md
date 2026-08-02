@@ -60,6 +60,35 @@ Both are hydrated before your first line runs, so `woc.settings['max-rows']` is 
 
 You can only bind an id you declared. That is what makes the editor able to list your keys before your addon has run.
 
+## Shipping a table beside your code
+
+An addon is one file, but an addon **directory** is not. `entry` names your code; `data` names JSON files next to it, and the loader fetches them at install and hands them back parsed.
+
+```json
+{
+  "data": ["items.json", "zones.json"],
+  "apiMinor": 2
+}
+```
+
+```js
+const items = await woc.data('items.json');
+```
+
+Up to eight files, each under half a megabyte, each ending in `.json` because `woc.data` parses what it reads. `pnpm validate` checks every declared file exists, parses, and fits, so a table that would fail a player's install fails CI instead.
+
+Declare `apiMinor: 2` when you use it. An older loader drops a manifest key it has never heard of, so without that line it would install you happily and then run you with a `woc.data` that rejects.
+
+## Naming an addon yours works better with
+
+```json
+{ "companions": ["lorebind"] }
+```
+
+Up to four bare addon ids. The manager draws each one under your description with what the player would do about it: installed and running, installed but switched off, available in Browse, or not offered by any source they have.
+
+It is a **note and nothing else**. It gates nothing, installs nothing, orders nothing, and stops nothing from starting. Bare ids rather than fully-qualified ones, because the same addon installed from a fork is still the companion you meant. Nothing on the `woc` surface changes, so do not raise `apiMinor` for it, and nothing checks the id exists: a companion may legitimately live on a marketplace this repository has never heard of.
+
 ## Checking it
 
 ```sh

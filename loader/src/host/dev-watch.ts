@@ -48,21 +48,38 @@ function isLocal(fqid: string): boolean {
 }
 
 /**
- * One addon: has its body moved since the last time it was read?
+ * One addon: has anything it loads moved since the last read?
+ *
+ * The entry body and every declared data file. A regenerated table is precisely
+ * the edit this watcher exists for, and an addon that reads it once at load has
+ * no other way to pick it up. Still not the INDEX: a new addon directory or an
+ * edited manifest is a thing the author just did on purpose and can refresh.
  *
  * The conditional GET is the whole mechanism. An unchanged file answers 304 with
- * no body, so the steady state of a running watch is a few empty responses a
- * second against localhost.
+ * no body, so the steady state is a handful of empty responses a second against
+ * localhost, capped by the schema at eight data files per addon.
  */
 async function checkOne(deps: DevWatchDeps, fqid: string): Promise<void> {
   const found = await deps.market.entry(fqid);
   if (found === null) {
     return;
   }
-  const { changed } = await deps.fetcher.get(
-    fileUrl(found.market, `${found.row.path}/${found.row.entry}`),
-  );
-  if (changed) {
+  const { market, row } = found;
+  const urls = [
+    fileUrl(market, `${row.path}/${row.entry}`),
+    ...(row.data ?? []).map((file) => fileUrl(market, `${row.path}/${file}`)),
+  ];
+  // A cell, ANNOTATED: noUnnecessaryConditions reads both a `let` and an
+  // inferred `{ moved: false }` as the literal type and calls the test below
+  // always-falsy, so the annotation is what makes the check mean anything.
+  const seen: { moved: boolean } = { moved: false };
+  // One request at a time, like the addons above it: the dev server is a single
+  // process on loopback and the point of the poll is to be cheap, not fast.
+  await inSeries(urls, async (url) => {
+    const { changed } = await deps.fetcher.get(url);
+    seen.moved = seen.moved || changed;
+  });
+  if (seen.moved) {
     deps.emit({ k: 'addon.reload', fqid });
   }
 }

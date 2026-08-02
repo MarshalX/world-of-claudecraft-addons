@@ -57,11 +57,19 @@ What you own, and where you are:
 
 ```js
 woc.world.equipment       // worn gear by slot: { mainhand: 'redbrook_blade', ... }
+woc.world.equipmentInstances // what is ON that gear: enchants, rolls, signers
 woc.world.bags            // the bag sockets, an item id or null each
 woc.world.bagCapacity     // total slots; used slots is inventory.length
 woc.world.copper          // money
 woc.world.zone            // the zone name the game is displaying
+woc.world.characterKey    // who is playing, as an opaque per-character key
 ```
+
+`world.equipmentInstances` is keyed the same way `equipment` is and is sparse: a plain piece has no key at all, so an absent slot means nothing is on it rather than nothing is worn. It is the untrimmed payload for your OWN gear. The same read off another player's entity, `entity.equippedInstances`, is the public projection the server sends about them: the signer, the enchant and the roll, and nothing else.
+
+Another player's gear is readable too, off the entity rather than off `world`: `equippedItems`, `equippedInstances`, `mainhandItemId`, `offhandItemId`, `weaponSkinId` and `mountKey`. All six are sent for a PLAYER only, so check `entity.kind === 'player'` before reading one: on a mob they exist and hold an inert default. `mainhandItemId` is not `equippedItems.mainhand`, and the difference is real: the server fills it only when the equipped mainhand is a weapon, so read one for what is held and the other for what is worn.
+
+`world.characterKey` is the same identity `woc.storage.character` files its keys under, published so two addons keeping their own per-character records cannot disagree about whose they are. It is OPAQUE: do not parse it. Watch it, because a character switch inside one page load is real.
 
 An item id does not resolve to a **name**, a quality, or any stats. That content ships inside the client bundle and is reachable from nothing the loader can see, so what an id gets you is its icon through `ui.icon.item`, and the ability to tell one item from another. Names arrive only where an event carries one.
 
@@ -84,7 +92,7 @@ Those are the same numbers the game's own coordinate readout floors for display.
 ```js
 woc.world.character       // xp, rested, honor, renown, title, deeds
 woc.world.talents         // your build and your saved loadouts
-woc.world.professions     // craft and gathering skill counters
+woc.world.professions     // skill counters, your crafting identity, your station
 ```
 
 All three ride your own self payload, so they exist for **you and nobody else**: there is no way to read another player's sheet, and that is the game's decision rather than an omission here.
@@ -95,7 +103,9 @@ A counter at 0 in `deedStats` genuinely means it never happened. That is worth s
 
 `talents` gives you the build itself: `rows` maps a row level to the option chosen on it, so counting its entries is how many points are spent.
 
-`professions` is deliberately just the two skill counter maps. The game's professions facet also carries a state view and a crafting identity block, both marked as stubs in its own source with work still in flight, so their shape is the least settled thing an addon could build on.
+`professions` carries the two skill counter maps, your crafting `identity`, and the `mobileStation` you have placed. **Read `identity.synced` before anything else on it.** The client seeds `craftSkills` and the whole identity with defaults and replaces them only when the server's first crafting value lands, so until that flag flips an all-zero reading is "nothing has arrived yet" rather than "this character has no craft skill", and the two are otherwise identical. `identity.knownRecipes` is what you LEARNED from a source, which is not the set you can craft: a recipe whose `acquisition` list is empty is grandfathered, known to everyone, and absent from that list for that reason.
+
+One member of the game's own professions facet is still left out. Its state view is marked as a stub in its own source with work still in flight, so its shape is the least settled thing an addon could build on.
 
 `level` is not here, and not because it was left out: the game writes it on the entity record rather than on the self payload, so it is `world.player.level`. That is worth more than a copy here would be, because it means every entity carries one and you can read a mob's level or another player's the same way.
 
@@ -136,6 +146,62 @@ woc.world.combat          // { active, source }: whether you are fighting
 ```
 
 `world.cooldowns` is keyed by real ability id, which makes it one of the few places an id is safe to assume. `world.hazards` and `world.markers` are what a positional addon reads.
+
+The ground, and what died on it:
+
+```js
+woc.world.deathZones      // lethal rings on a rift boss floor
+woc.world.corpses         // ReadonlyMap<entityId, CorpseView>, everything lootable near you
+woc.world.corpseLoot(id)  // one corpse, filtered to what YOU could take
+woc.world.nodeCooldowns   // gathering node id to seconds until you can harvest again
+woc.world.corpse          // where your own body lies while your spirit is a ghost
+```
+
+`world.deathZones` is deliberately not a `Hazard`. A hazard's geometry rides the snapshot and is complete for everything near you; a death zone is mirrored from a spawn event and counted down on your own client, so a zone placed before you came into range is missing and stays missing. The game's own rings have the same hole.
+
+`world.corpses` is what to watch for a corpse becoming lootable, because that is a field change on an entity that already existed and so is invisible to `world.on('entities')`. Use `world.corpseLoot(id)` rather than `entity.loot` for anything you draw: the wire carries a corpse's whole contents to every player in range, personal slots included, and the game's own loot window filters on read. The unfiltered list shows people things they cannot have.
+
+`world.nodeCooldowns` is per player rather than shared, so a node another player just took is still yours to take. A node with no entry is ready.
+
+Competitive play and the group finder:
+
+```js
+woc.world.match           // the bout you are in, discriminated on `format`
+woc.world.arena           // your standings, your queue, the live ladders
+woc.world.finder          // your dungeon finder state
+woc.world.finderBoard     // the realm's open premade listings
+```
+
+`world.match` is one union over every format, a duel included, so you ask what kind of bout this is rather than reading two unrelated members. Everything but a duel is UP TO TEN SECONDS OLD: the arena key is gated to 0.1 Hz on the server, which is the game's own cadence. A Fiesta ring drawn from it agrees with the ring the game draws; a Yumi health bar does not, and the type says which events carry the live figures.
+
+`world.arena` is present for every character whether or not they have ever played, so a non-null reading says nothing on its own. Only the two ranked brackets mean anything: the unranked three carry a copy of the 2v2 record and an empty ladder.
+
+`world.finder` and `world.finderBoard` are reads and nothing more. Neither can join a queue, answer a proposal, create a listing or accept an applicant.
+
+The counters you walk up to, and the two badges that outlive them:
+
+```js
+woc.world.market          // the Merchant's book, one browsed page
+woc.world.mail            // the Ravenpost mailbox
+woc.world.bank            // the deposit box
+woc.world.marketCollectPending  // gold or goods waiting at the Merchant
+woc.world.mailUnread      // delivered letters you have not read
+woc.world.buyback         // what you sold to a vendor and can still take back
+```
+
+The first three exist only while you are STANDING at the counter, so they answer a status rather than a value:
+
+```js
+const market = woc.world.market;
+if (market.status !== 'near') return;      // 'away', or 'unknown' before entry
+for (const row of market.info.listings) { /* ... */ }
+```
+
+That shape exists because the obvious alternative is a bug. On a nullable value the reading everyone writes is `world.market?.listings ?? []`, which answers the empty array BOTH when the filter matched nothing and when you are nowhere near a Merchant. Those are opposite facts, and an addon that confuses them reports an empty market to a player standing in a town. On the closed arms there is no `listings` to reach for, so the wrong reading cannot be written.
+
+`world.marketCollectPending` and `world.mailUnread` are deliberately not inside them: a badge exists for the moment you are NOT at the counter, so both stream everywhere. `world.mail` carries its own `unread` over the same letters, which is the mailbox pane's figure; do not derive either from the other. `world.buyback` is ungated too, most recent first, because standing at a vendor is what lets you use the ring rather than what lets you see it.
+
+There is no price history anywhere and there never was: the server keeps no record of a completed sale and offers no query for one. A price series is something your addon builds, by recording each page its player browses.
 
 `world.abilities` is how you get between an ability's id and its display name, which have diverged: skill art is filed under `arcane_shot`, while a combat event names it `Fell Shot`. Without this you can hold one and never reach the other.
 
@@ -180,9 +246,23 @@ woc.world.unit('party1');        // the first group member who is not you
 ```js
 const mine = woc.world.aurasOn('target', { mine: true, kind: 'dot' });
 const debuffs = woc.world.partyAuras(pid, { debuff: true });
+woc.world.harmful(aura);            // is this working against whoever carries it
+woc.world.dispellable(aura);        // can you remove it off an ally
+woc.world.dispellable(aura, true);  // ...or strip it off an enemy
 ```
 
 `mine` is the filter a dot tracker needs and the one most often forgotten. Two players can carry the same debuff on one target, and without it a display shows a full timer while your own effect quietly expires.
+
+`world.harmful` and `world.dispellable` are functions rather than fields on the aura, and that is worth knowing rather than working around: the loader hands you the game's own aura objects rather than copies, so a field could only exist by writing onto state the game's HUD reads from the same array, or by copying every aura on every read, which would break the object identity you use to track one effect across frames. `world.harmful` accepts a party row as well as a full aura. `world.dispellable` refuses a row, because a row carries neither a school nor the encounter-control flag and those are the two clauses whose absence costs a player a global cooldown.
+
+Crafting content, which is authored rather than live:
+
+```js
+woc.world.recipes         // the game's own recipe table, copied and frozen
+woc.world.stations        // the authored crafting stations
+```
+
+Both are copies, because the game renders its own crafting window from the originals. Neither is a watch key and neither will become one: content cannot change during a session, so a subscription would walk the whole table on every snapshot to report that nothing moved. What actually changes is on `world.professions`, including which of these recipes you have learned.
 
 `partyAuras` is separate because a party row's auras are a smaller shape than an entity's: an id, a kind, whole seconds, and a debuff flag, with no source. That is also why `PartyAuraQuery` has no `mine`, rather than one that silently matches nothing.
 
@@ -438,6 +518,26 @@ Three more things shape what you can build on it. You never receive your own mes
 
 A throw in your handler is logged against your addon and does not stop the message reaching anyone else. Everything you publish stays in this page and never reaches the network, but treat it as readable by every other installed addon.
 
+## data
+
+A JSON file shipped in your own addon directory, for a table that has no business being pasted into your source.
+
+```json
+{ "data": ["items.json"] }
+```
+
+```js
+const items = await woc.data('items.json');
+```
+
+Declare the file in `addon.json` and the loader fetches it when the player installs you, caches it beside your code, and hands you the parsed value here. Enabling your addon is never a network call, a marketplace that goes offline does not take your table with it, and a file you regenerate is a file in your diff rather than a region rewritten inside `main.js`.
+
+Up to eight files, each under half a megabyte, each a `.json` beside your `main.js`. It needs `apiMinor` 2, because an older loader drops the manifest field it has never heard of and would then run you with a `woc.data` that rejects.
+
+There is deliberately **no base URL**. Nothing in your addon performs the request, so there is nothing to point somewhere it should not go: the name you pass is checked against the list you declared, never joined onto a URL. A name you did not declare rejects, and the message names the ones you did.
+
+The value is `unknown`, for the same reason `storage.get` is: nothing validates the shape. The loader checks the file parses as JSON at install and nothing more. You get the **same object** on every call, so treat it as read-only.
+
 ## The rest of woc
 
 ```js
@@ -446,8 +546,12 @@ woc.onSettingsChange(rebuild);
 woc.onDispose(() => observer.disconnect());
 woc.addon                       // your own id, name and version
 woc.game                        // channel and version of the deployment
+woc.now()                       // monotonic ms, for measuring an interval
+woc.wallClock()                 // epoch ms, for anything you store
 ```
 
 `woc.addon` is how an addon reports its own version in its UI without repeating it from the manifest. `woc.game` tells you which deployment you are on, for the rare feature that differs between live and pbe.
+
+There are two clocks and picking the wrong one fails silently. `woc.now` is monotonic milliseconds, counted from this page load, and is right for a cast bar, a swing timer or a rate. `woc.wallClock` is epoch milliseconds, the same reading `Date.now` gives, and is right for the two things that cross a page load: a timestamp you are going to store, and a comparison against a stamp the server sent absolute, such as `GroupInfo.lockouts`. [Patterns](/docs/patterns) has the trap in full.
 
 `woc.setTimeout`, `woc.setInterval` and `woc.requestAnimationFrame` are the timer half, and their cancel functions pair with them as you would expect. Use them rather than the page's: [Patterns](/docs/patterns) covers why, and what `woc.onDispose` is for.

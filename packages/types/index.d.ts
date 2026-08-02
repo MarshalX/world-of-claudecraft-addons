@@ -22,9 +22,16 @@ declare global {
 
 export type { AbilityIndex, AbilityInfo } from './abilities.js';
 export type { AddonInfo, GameInfo, Unsubscribe } from './addon.js';
+export type {
+  ArenaFormat,
+  ArenaLadderRow,
+  ArenaStanding,
+  ArenaStandings,
+} from './arena.js';
 export type { BusApi, BusMessage } from './bus.js';
 export type {
   CharacterInfo,
+  CraftingIdentity,
   DeedStats,
   ProfessionInfo,
   SavedLoadout,
@@ -32,7 +39,23 @@ export type {
   TalentRole,
   TalentRowLevel,
 } from './character.js';
+export type { Recipe, Station } from './content.js';
 export type { KnownCue } from './cues.generated.js';
+export type {
+  Absent,
+  BankBonusSource,
+  BankInfo,
+  BankState,
+  MailInfo,
+  MailKind,
+  MailMessage,
+  MailState,
+  MarketInfo,
+  MarketListing,
+  MarketState,
+  Near,
+  ProximityState,
+} from './economy.js';
 export type {
   AbilityCharge,
   Aura,
@@ -40,11 +63,24 @@ export type {
   CoreStats,
   Entity,
   EntityKind,
+  EquipSlot,
+  ItemInstance,
+  PublicItemInstance,
   ResourceType,
   School,
   Vec3,
   WeaponInfo,
 } from './entity.js';
+export type {
+  FinderApplicant,
+  FinderInfo,
+  FinderListing,
+  FinderListingRow,
+  FinderProposal,
+  FinderQueue,
+  FinderRole,
+  RoleNeeds,
+} from './finder.js';
 export type {
   EncounterInfo,
   GroupInfo,
@@ -55,30 +91,48 @@ export type {
   ThreatTable,
 } from './group.js';
 export type { KnownSkillIcon, SkillIconClass } from './icons.generated.js';
+export type { KnownItemIcon } from './items.generated.js';
 export type { ConflictReport, KeysApi } from './keys.js';
+export type { BoutBase, DuelMatch, MatchCombatant, MatchInfo, RankedMatch } from './match.js';
+export type {
+  AugmentOffer,
+  FiestaMatch,
+  FiestaPowerup,
+  FiestaScore,
+  YumiCat,
+  YumiMatch,
+  YumiScore,
+} from './match-modes.js';
 export type { FrameType, NetApi, NetState, SubscribeOpts } from './net.js';
+export type {
+  PartyAuraQuery,
+  PartyInfo,
+  PartyMember,
+  PartyMemberAura,
+} from './party.js';
 export type { Cue, PlayOpts, SoundApi } from './sound.js';
 export type { CharacterStore, StorageApi } from './storage.js';
 export type {
   AbilityIconId,
   AlertOpts,
-  Anchor3d,
-  Anchor3dOpts,
   BannerKind,
   BannerOpts,
   BannerSize,
-  Frame,
-  FrameBox,
-  FrameDensity,
-  FrameOpts,
   IconClass,
   IconUrls,
+  ItemIconId,
   MicroButtonOpts,
-  PointSource,
   ToastOpts,
   UiApi,
-  WorldPoint,
 } from './ui.js';
+export type {
+  Anchor3d,
+  Anchor3dOpts,
+  PointSource,
+  ScreenPoint,
+  UnitPoint,
+  WorldPoint,
+} from './ui-anchor.js';
 export type {
   Field,
   FieldBuilders,
@@ -95,6 +149,7 @@ export type {
   TooltipLine,
   TooltipTone,
 } from './ui-controls.js';
+export type { Frame, FrameBox, FrameDensity, FrameOpts } from './ui-frame.js';
 export type {
   Bar,
   BarOpts,
@@ -112,14 +167,7 @@ export type {
   CombatSource,
   CombatState,
   EntityCast,
-  EquipSlot,
-  Hazard,
-  HazardKind,
   InvSlot,
-  PartyAuraQuery,
-  PartyInfo,
-  PartyMember,
-  PartyMemberAura,
   QuestProgress,
   UnitToken,
   WorldApi,
@@ -127,6 +175,14 @@ export type {
   WorldQuests,
   WorldValues,
 } from './world.js';
+export type {
+  CorpseLoot,
+  CorpseView,
+  DeathZone,
+  Hazard,
+  HazardKind,
+  LootSlot,
+} from './world-ground.js';
 
 export interface WocApi {
   readonly addon: AddonInfo;
@@ -155,6 +211,27 @@ export interface WocApi {
   /** Publish and subscribe between addons, in this page. */
   readonly bus: BusApi;
 
+  /**
+   * A JSON file shipped in your own addon directory.
+   *
+   * Declare it as `data` in `addon.json` and the loader fetches it at install,
+   * caches it beside your code, and hands you the parsed value here. That is what
+   * lets a table live in its own file instead of being pasted into your source,
+   * and it is why there is no base URL: nothing in your addon performs the
+   * request, so there is no URL for it to point anywhere else.
+   *
+   * `unknown` for the reason `storage.get` is: nothing validates the shape. The
+   * loader checks it parses as JSON at install and nothing more.
+   *
+   * The same object every call, so treat it as read-only. Rejects for a name you
+   * did not declare, naming the ones you did.
+   *
+   *     const items = await woc.data('items.json');
+   *
+   * Added in API minor 2.
+   */
+  data: (name: string) => Promise<unknown>;
+
   /** Settings declared in addon.json, hydrated before your code runs. */
   readonly settings: Readonly<Record<string, unknown>>;
   onSettingsChange: (handler: (settings: Readonly<Record<string, unknown>>) => void) => Unsubscribe;
@@ -163,8 +240,20 @@ export interface WocApi {
   warn: (...args: unknown[]) => void;
   error: (...args: unknown[]) => void;
 
-  /** Monotonic milliseconds. */
+  /** Monotonic milliseconds. Right for an interval, wrong for anything you store. */
   now: () => number;
+
+  /**
+   * Epoch milliseconds, as `Date.now` reads them.
+   *
+   * The clock for the two things that have to survive a page load: a timestamp
+   * you store, and a comparison against a stamp the server sent absolute, such as
+   * `GroupInfo.lockouts`. Storing a `now()` reading instead gives you a value that
+   * reads as being in the future on the next load, with nothing to indicate it.
+   *
+   * Added in API minor 2.
+   */
+  wallClock: () => number;
 
   /** Cleared on disable. Prefer these over the globals. */
   setTimeout: (handler: () => void, ms: number) => number;
@@ -176,4 +265,23 @@ export interface WocApi {
 
   /** Register a teardown for anything the API did not create. */
   onDispose: (handler: () => void) => void;
+
+  /**
+   * Run something on every animation frame, on the loop the loader already runs.
+   *
+   * Reach for this rather than `requestAnimationFrame` re-armed from inside its
+   * own handler. It is one browser callback for the whole loader instead of one
+   * per addon, it is dropped rather than queued while the loader is frozen, and
+   * it is unsubscribed when your addon is disabled without you writing that.
+   *
+   * `dt` is milliseconds since the previous frame, 0 on the first one, and
+   * clamped at 250 so a tab returning from the background does not hand you half
+   * a minute to multiply by. The loader positions every `ui.anchor3d` AFTER your
+   * handler has run, so a point you move here is followed in the same frame.
+   *
+   * Not the answer for everything: a panel whose figures move once a second
+   * wants `woc.setInterval`, not sixty rewrites a second of the same six
+   * strings. Added in API minor 2.
+   */
+  onFrame: (handler: (dt: number) => void) => Unsubscribe;
 }

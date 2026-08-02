@@ -80,6 +80,16 @@ describe('what may be served', () => {
   it('refuses a traversal that lands beside addons/', () => {
     expect(resolveFile('/addons/../addons-other/x.js')).toBeNull();
   });
+
+  // A declared data file needs NO new route, which is the answer this pins: the
+  // host fetches it down the same path it fetches the entry body, and a second
+  // tree to walk is exactly what this server must not grow.
+  it('resolves a sibling .json under addons/ and names it as JSON', () => {
+    expect(resolveFile('/addons/dev-harness/items.json')).toBe(
+      `${ROOT}addons/dev-harness/items.json`,
+    );
+    expect(contentType('/addons/dev-harness/items.json')).toBe('application/json; charset=utf-8');
+  });
 });
 
 // The second role on the same socket: a manager installs the loader from here,

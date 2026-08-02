@@ -47,6 +47,16 @@ export interface CharacterStore {
   keys: () => Promise<string[]>;
 }
 
+/**
+ * A note on the character these keys belong to.
+ *
+ * `woc.world.characterKey` is that identity, published as an opaque string. It
+ * is the SAME derivation this store files under, so an addon keeping a ledger
+ * across characters can hold one record in `woc.storage` keyed by it and be
+ * certain the two agree about whose data a row is. Do not parse it: the format
+ * is not part of the contract.
+ */
+
 export interface StorageApi {
   /**
    * Read one of your own keys.

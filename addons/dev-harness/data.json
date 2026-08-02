@@ -1,0 +1,5 @@
+{
+  "marker": "dev-harness data file",
+  "why": "Shipped beside main.js and declared as \"data\" in addon.json. The loader fetches it at install and woc.data('data.json') hands back this object, parsed.",
+  "rows": [{ "id": "one", "value": 1 }, { "id": "two", "value": 2 }, { "id": "three", "value": 3 }]
+}

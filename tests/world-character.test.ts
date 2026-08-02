@@ -162,7 +162,16 @@ describe('readProfessions', () => {
     expect(counter(skills.gathering, 'mining')).toBe(12);
   });
 
-  it('answers empty maps rather than undefined before either exists', () => {
-    expect(readProfessions({})).toEqual({ craftSkills: {}, gathering: {} });
+  // Empty maps rather than undefined, and an UNSYNCED identity rather than a
+  // synced-looking one: the whole point of the flag is that these zeroes are a
+  // client-side default and not a character with no craft skill. The identity's own
+  // fields are covered in world-crafting.test.ts.
+  it('answers empty maps and an unsynced identity before either exists', () => {
+    const professions = professionsOf({});
+
+    expect(professions.craftSkills).toEqual({});
+    expect(professions.gathering).toEqual({});
+    expect(professions.identity.synced).toBe(false);
+    expect(professions.mobileStation).toBeNull();
   });
 });

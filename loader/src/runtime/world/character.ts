@@ -5,14 +5,17 @@
 // field is published because it was found on the WIRE, never because it is
 // readable on the client object.
 //
-// Two members of the game's own professions facet are deliberately left out.
-// `professionsState` and `craftingIdentity` are marked as stubs in the game's
-// source and carry a trail of in-flight issue numbers, so their shape is the
-// least settled thing in reach; what is taken instead is the pair of plain
-// counter maps beside them, which are just skill values and are not going to
-// change shape underneath an addon.
+// One member of the game's own professions facet is deliberately left out.
+// `professionsState` is marked as a stub in the game's source and carries a
+// trail of in-flight issue numbers, so its shape is the least settled thing in
+// reach. `craftingIdentity` was left out for the same reason and no longer is:
+// the server sends it as one atomic value and every field on it is a scalar or a
+// sorted id array, and it carries the `synced` flag that says whether the craft
+// skill counters beside it are real zeroes or a client-side default nothing has
+// filled in yet. See `crafting.ts`.
 
 import { fieldArray, fieldNumber, fieldString, fieldValue } from '../net/frames.ts';
+import { type CraftingIdentity, readCraftingIdentity } from './crafting.ts';
 
 /** The rows a talent build fills in, which are levels rather than indexes. */
 type TalentRowLevel = 5 | 8 | 11 | 14 | 17 | 20;
@@ -65,10 +68,19 @@ interface CharacterInfo {
 }
 
 interface ProfessionInfo {
-  /** Craft id to skill. Independent, additive counters. */
+  /**
+   * Craft id to skill. Independent, additive counters.
+   *
+   * All-zero until `identity.synced`, which is why the flag is published: the
+   * client fills this from a default and the server's first `cprof` replaces it.
+   */
   craftSkills: Readonly<Record<string, number>>;
   /** Gathering profession id to proficiency, the same kind of counter. */
   gathering: Readonly<Record<string, number>>;
+  /** Archetype, pairs, and what has been learned. Read `identity.synced` first. */
+  identity: CraftingIdentity;
+  /** The active mobile station's craft id, or null when none is placed. */
+  mobileStation: string | null;
 }
 
 const NO_STATS: DeedStats = Object.freeze({
@@ -188,6 +200,8 @@ function readProfessions(world: unknown): ProfessionInfo | null {
   return {
     craftSkills: recordAt(world, 'craftSkills'),
     gathering: recordAt(world, 'gatheringProficiency'),
+    identity: readCraftingIdentity(world),
+    mobileStation: fieldString(world, 'activeMobileStationCraft'),
   };
 }
 

@@ -66,6 +66,17 @@ interface ManagerDeps {
    * has to be looking at the same object rather than at a copy of the state.
    */
   unlock: UnlockMode;
+  /**
+   * Bring the manager's window to the front. See ui/kit/stacking.ts.
+   *
+   * Here rather than around the routes that open it, which is where it was: the
+   * stacking listener sees a click INSIDE the root, and every way into the
+   * manager is outside it (two buttons in the game's own DOM, a userscript menu
+   * command, the host reporting an install). Wrapping one caller left the others
+   * opening the window behind whatever was already up, and a live session found
+   * exactly that. Showing is the event, so showing is what raises.
+   */
+  raise?: (el: HTMLElement) => void;
   logs: LogBuffer;
   /** Renders a wall-clock reading. Injected so the pure panes stay locale-free. */
   formatTime: (at: number) => string;
@@ -119,6 +130,19 @@ interface FrameView {
   freeze: FreezeControl;
   onClose: () => void;
 }
+
+/**
+ * The manager's own window, by a stable hook rather than by its classes.
+ *
+ * `.woc-window` matches every addon frame too, so there has to be something that
+ * says which one is the manager's. An attribute rather than another class,
+ * matching how a frame is found by `data-woc-frame`. It is the WINDOW that is
+ * raised rather than the container it renders into: the container is an
+ * unpositioned div, so a z-index on it would style an element the browser has no
+ * reason to consult, and the click listener in kit/stacking.ts already resolves
+ * to this element through `closest('.woc-window')`.
+ */
+const MANAGER_SELECTOR = '[data-woc-manager]';
 
 const NO_CONFLICTS: ConflictReading = { actions: [], addons: [], source: 'none' };
 
@@ -187,6 +211,34 @@ function followUnlock(deps: ManagerDeps, paint: () => void): () => void {
 }
 
 /**
+ * Bring the manager's window to the front, once a paint has rendered it.
+ *
+ * Found rather than held, because the window is unmounted when it closes: the
+ * element the last open rendered is not the one the next open produces. The
+ * top-level preact render is synchronous, so the paint ahead of this call has
+ * already put the element in the container.
+ */
+function raiseWindow(deps: ManagerDeps, container: HTMLElement): void {
+  const el = container.querySelector(MANAGER_SELECTOR);
+  if (el instanceof HTMLElement) {
+    deps.raise?.(el);
+  }
+}
+
+/**
+ * The element the window is rendered into, appended to the addon root.
+ *
+ * Unpositioned and unstyled: it is a mount point rather than a surface, which is
+ * why the z-index that decides window order goes on the window inside it.
+ */
+function createContainer(deps: ManagerDeps): HTMLElement {
+  const container = deps.doc.createElement('div');
+  container.className = 'woc-manager';
+  deps.root.appendChild(container);
+  return container;
+}
+
+/**
  * The window's own state: its container, its stores, and the open flag.
  *
  * Split out so mountManager stays a wiring function. The mutual reference
@@ -194,9 +246,7 @@ function followUnlock(deps: ManagerDeps, paint: () => void): () => void {
  * to each other.
  */
 function createFrame(deps: ManagerDeps): Frame {
-  const container = deps.doc.createElement('div');
-  container.className = 'woc-manager';
-  deps.root.appendChild(container);
+  const container = createContainer(deps);
 
   let open = false;
   let paint = (): void => undefined;
@@ -228,13 +278,17 @@ function createFrame(deps: ManagerDeps): Frame {
 
   // The loads commit synchronously and so paint already; the explicit paint
   // covers a future one that does not.
+  //
+  // Raised on every show, including one that found the window already open: a
+  // route asking for the manager while it sits behind an addon frame is asking
+  // to see it, and there is no click inside the root for the listener to read.
   const show = (): void => {
-    if (open) {
-      return;
+    if (!open) {
+      open = true;
+      loadPanes({ store, dev, catalog });
+      paint();
     }
-    open = true;
-    loadPanes({ store, dev, catalog });
-    paint();
+    raiseWindow(deps, container);
   };
 
   return {

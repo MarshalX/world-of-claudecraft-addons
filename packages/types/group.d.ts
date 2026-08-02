@@ -31,6 +31,42 @@ export interface LootRoll {
   remaining: number | null;
 }
 
+/** One candidate's live answer on an open roll. Never their number. */
+export interface LootRollVote {
+  pid: number;
+  /** 'Unknown' for a candidate the game no longer holds. */
+  name: string;
+  /**
+   * Null is UNDECIDED, never a pass.
+   *
+   * The distinction is the whole reason to draw a vote strip: a member who has
+   * not answered is what a group is waiting on, and one who passed is done.
+   */
+  choice: 'need' | 'greed' | 'pass' | null;
+}
+
+/**
+ * One open roll as the whole group sees it.
+ *
+ * The complement of `rolls`, which carries only what YOU were asked to answer.
+ * This carries every open roll your party is voting on, including ones you are
+ * not a candidate for, with each candidate's answer as it lands.
+ *
+ * `votes` covers the CANDIDATES rather than the party, so a member with no row
+ * was never eligible for the item. The roll NUMBER is not here and is not
+ * anywhere: it stays server-side until resolution, when it arrives as composed
+ * chat text.
+ */
+export interface LootRollGroupStatus {
+  rollId: number;
+  itemId: string;
+  itemName: string;
+  quality: string;
+  /** Seconds left, or null before the loader has the sim's clock. */
+  remaining: number | null;
+  votes: readonly LootRollVote[];
+}
+
 /** Who assigns threshold drops, and from which quality upward. */
 export interface MasterLoot {
   enabled: boolean;
@@ -42,6 +78,13 @@ export interface MasterLoot {
 export interface GroupInfo {
   /** Rolls YOU have been asked to answer, which is not every roll in the group. */
   rolls: readonly LootRoll[];
+  /**
+   * Every open roll in your party with each candidate's answer.
+   *
+   * `rolls` is what you were asked; this is what the group is doing about it,
+   * and the two overlap rather than nest. Empty when ungrouped.
+   */
+  rollStatus: readonly LootRollGroupStatus[];
   /** Null when the group is not using master loot, rather than a disabled record. */
   masterLoot: MasterLoot | null;
   /**

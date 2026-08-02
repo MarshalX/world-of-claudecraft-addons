@@ -5,7 +5,9 @@
 // hold woc.world from its first line and await woc.world.ready separately.
 
 import { diagError } from '../../shared/diag.ts';
-import { type BackendDeps, createGameBackend, type WorldBackend } from './backend.ts';
+import { createGameBackend, type WorldBackend } from './backend.ts';
+import type { BackendDeps } from './backend-deps.ts';
+import { checkWorldMembers } from './members.ts';
 import { checkEntityShape } from './shape.ts';
 import { createWorldWatcher, type WorldWatcher } from './watch.ts';
 
@@ -26,6 +28,16 @@ function reportShapeDrift(backend: WorldBackend): void {
   if (problems.length > 0) {
     diagError('the game entity no longer matches the world types addons are written against', {
       problems,
+    });
+  }
+  // Reported apart from the entity drift above, because it is a different
+  // failure with a different symptom: a renamed world member does not make a
+  // reading wrong, it makes one permanently empty, and a gated read answering
+  // "you are not standing there" looks right from every angle.
+  const missing = checkWorldMembers(backend.raw);
+  if (missing.length > 0) {
+    diagError('the game no longer carries every world member the loader reads', {
+      problems: missing,
     });
   }
 }
@@ -65,6 +77,7 @@ export function createWorldHub(deps: WorldHubDeps): WorldHub {
       now: deps.now,
       zoneName: deps.zoneName,
       simNow: deps.simNow,
+      realm: deps.realm,
     });
     if (backend === null) {
       throw new Error('__game has no world member, so the world API cannot be backed');

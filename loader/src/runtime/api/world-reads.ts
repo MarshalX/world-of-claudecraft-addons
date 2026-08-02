@@ -6,21 +6,31 @@
 // can hold `woc.world` from its first line without guarding every read.
 
 import { type AbilityIndex, emptyAbilities } from '../world/abilities.ts';
+import type { ArenaStandings } from '../world/arena.ts';
 import type { WorldBackend } from '../world/backend.ts';
+import type { BankState } from '../world/bank.ts';
 import type { CharacterInfo, ProfessionInfo, TalentInfo } from '../world/character.ts';
 import { type CombatState, OUT_OF_COMBAT } from '../world/combat.ts';
 import type { EntityCast, Hazard } from '../world/derived.ts';
 import type { EncounterInfo } from '../world/encounter.ts';
+import type { FinderInfo, FinderListingRow } from '../world/finder.ts';
 import type {
   Aura,
   Entity,
   EquipSlot,
   InvSlot,
   PartyInfo,
+  Vec3,
   WorldQuests,
 } from '../world/game-types.ts';
+import type { CorpseView, DeathZone } from '../world/ground.ts';
 import type { GroupInfo } from '../world/group.ts';
 import type { WorldHub } from '../world/hub.ts';
+import type { ItemInstance } from '../world/items.ts';
+import type { MailState } from '../world/mail.ts';
+import type { MarketState } from '../world/market.ts';
+import type { MatchInfo } from '../world/match.ts';
+import { UNKNOWN } from '../world/proximity.ts';
 import { readonlyMapView } from '../world/readonly-map.ts';
 
 /**
@@ -34,6 +44,11 @@ import { readonlyMapView } from '../world/readonly-map.ts';
  */
 function emptyCasts(): ReadonlyMap<number, EntityCast> {
   return new Map<number, EntityCast>();
+}
+
+/** No corpse in scope before the game exists. Built per read, like `emptyCasts`. */
+function emptyCorpses(): ReadonlyMap<number, CorpseView> {
+  return new Map<number, CorpseView>();
 }
 
 /**
@@ -112,6 +127,14 @@ export function selfReads(hub: WorldHub) {
       return fromBackend(hub, (backend) => backend.equipment);
     },
 
+    get equipmentInstances(): Partial<Record<EquipSlot, ItemInstance>> | null {
+      return fromBackend(hub, (backend) => backend.equipmentInstances);
+    },
+
+    get characterKey(): string | null {
+      return fromBackend(hub, (backend) => backend.characterKey);
+    },
+
     get bags(): readonly (string | null)[] | null {
       return fromBackend(hub, (backend) => backend.bags);
     },
@@ -165,14 +188,6 @@ export function derivedReads(hub: WorldHub) {
       return fromBackend(hub, (backend) => backend.targetAuras);
     },
 
-    get hazards(): readonly Hazard[] | null {
-      return fromBackend(hub, (backend) => backend.hazards);
-    },
-
-    get markers(): ReadonlyMap<number, number> | null {
-      return fromBackend(hub, (backend) => backend.markers);
-    },
-
     get abilities(): AbilityIndex {
       const backend = hub.backend();
       if (backend === null) {
@@ -187,6 +202,109 @@ export function derivedReads(hub: WorldHub) {
         return OUT_OF_COMBAT;
       }
       return backend.combat;
+    },
+  };
+}
+
+/** The ground around the player, mirroring the group of the same name in the backend. */
+export function groundReads(hub: WorldHub) {
+  return {
+    get hazards(): readonly Hazard[] | null {
+      return fromBackend(hub, (backend) => backend.hazards);
+    },
+
+    get markers(): ReadonlyMap<number, number> | null {
+      return fromBackend(hub, (backend) => backend.markers);
+    },
+
+    get deathZones(): readonly DeathZone[] | null {
+      return fromBackend(hub, (backend) => backend.deathZones);
+    },
+
+    get corpses(): ReadonlyMap<number, CorpseView> {
+      const backend = hub.backend();
+      if (backend === null) {
+        return emptyCorpses();
+      }
+      return backend.corpses;
+    },
+
+    get nodeCooldowns(): ReadonlyMap<string, number> | null {
+      return fromBackend(hub, (backend) => backend.nodeCooldowns);
+    },
+
+    get corpse(): Vec3 | null {
+      return fromBackend(hub, (backend) => backend.corpse);
+    },
+  };
+}
+
+/** What the player is currently IN. Its own group, mirroring `world/backend.ts`. */
+export function socialReads(hub: WorldHub) {
+  return {
+    get match(): MatchInfo | null {
+      return fromBackend(hub, (backend) => backend.match);
+    },
+
+    get arena(): ArenaStandings | null {
+      return fromBackend(hub, (backend) => backend.arena);
+    },
+
+    get finder(): FinderInfo | null {
+      return fromBackend(hub, (backend) => backend.finder);
+    },
+
+    get finderBoard(): readonly FinderListingRow[] | null {
+      return fromBackend(hub, (backend) => backend.finderBoard);
+    },
+  };
+}
+
+/**
+ * The counters the player walks up to, and the two badges that outlive them.
+ *
+ * Three of the six answer a STATUS rather than a value, because the server gates
+ * them on where the player is standing. Before the game exists all three answer
+ * `unknown` rather than null, which is the same choice `combat` and `abilities`
+ * make and for the same reason: they are never-null readings, so there is
+ * nothing for a null to mean.
+ */
+export function economyReads(hub: WorldHub) {
+  return {
+    get market(): MarketState {
+      const backend = hub.backend();
+      if (backend === null) {
+        return UNKNOWN;
+      }
+      return backend.market;
+    },
+
+    get marketCollectPending(): boolean | null {
+      return fromBackend(hub, (backend) => backend.marketCollectPending);
+    },
+
+    get mail(): MailState {
+      const backend = hub.backend();
+      if (backend === null) {
+        return UNKNOWN;
+      }
+      return backend.mail;
+    },
+
+    get mailUnread(): number | null {
+      return fromBackend(hub, (backend) => backend.mailUnread);
+    },
+
+    get bank(): BankState {
+      const backend = hub.backend();
+      if (backend === null) {
+        return UNKNOWN;
+      }
+      return backend.bank;
+    },
+
+    get buyback(): readonly InvSlot[] | null {
+      return fromBackend(hub, (backend) => backend.buyback);
     },
   };
 }
