@@ -80,6 +80,13 @@ interface MountInput {
    */
   project?: SharedOptions['project'];
   unitPoint?: SharedOptions['unitPoint'];
+  /**
+   * How the art manifests are read. Defaults to a promise that never settles.
+   *
+   * Forwarded rather than patched for the reason the camera is: both art readers
+   * capture their fetcher when they are built. See SharedOptions.
+   */
+  fetchJson?: SharedOptions['fetchJson'];
 }
 
 interface AddonHarness extends SharedHarness {
@@ -155,6 +162,9 @@ async function mountAddon(input: MountInput): Promise<AddonHarness> {
   }
   if (input.unitPoint !== undefined) {
     options.unitPoint = input.unitPoint;
+  }
+  if (input.fetchJson !== undefined) {
+    options.fetchJson = input.fetchJson;
   }
   const shared: SharedHarness = createSharedServices(document, storage, options);
   for (const [name, text] of Object.entries(input.data ?? {})) {

@@ -181,6 +181,20 @@ interface SharedOptions {
    */
   project?: SharedServices['kit']['project'];
   unitPoint?: SharedServices['kit']['unitPoint'];
+  /**
+   * How the skill and item art manifests are read.
+   *
+   * The default never settles, which is the state a row drawn before either
+   * manifest lands is in: `icon.ability` and `icon.item` stay optimistic and
+   * `icon.itemArtName` answers null. That is right for a suite, which wants an
+   * answer that cannot arrive half way through a case.
+   *
+   * `stage/` replaces it with a real fetch, and has to: the stage proxies `/ui/`
+   * to a deployed game, and an addon that LABELS a row from `icon.itemArtName`
+   * photographs as a column of raw item ids without it, which is a picture of the
+   * fake rather than of the addon.
+   */
+  fetchJson?: (url: string) => Promise<unknown>;
 }
 
 /**
@@ -219,13 +233,11 @@ function createSharedServices(
   const noTimers = { setTimer: () => 0, clearTimer: () => undefined };
   const toaster = createToaster({ doc, root: overlay, ...noTimers });
   const banner = createBanner({ doc, root: overlay, ...noTimers });
-  // Neither settles, so `icon.ability` and `icon.item` stay optimistic: the same
-  // state a row drawn before the art manifests land is in.
+  // Neither settles by default, so `icon.ability` and `icon.item` stay optimistic:
+  // the same state a row drawn before the art manifests land is in.
   const pendingManifest = (): Promise<unknown> => new Promise(() => undefined);
-  const icons = createIconUrls(
-    createSkillArt({ fetchJson: pendingManifest }),
-    createItemArt({ fetchJson: pendingManifest }),
-  );
+  const fetchJson = options.fetchJson ?? pendingManifest;
+  const icons = createIconUrls(createSkillArt({ fetchJson }), createItemArt({ fetchJson }));
   const tooltips = createTooltips({ doc, root, layer: overlay, viewport });
   const menus = createMenus({ doc, root: overlay, viewport });
   // The projector answers, so an addon's anchor lands somewhere; the frame clock
