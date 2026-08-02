@@ -58,6 +58,9 @@ const SCENARIO_FILE = 'stage.ts';
 const READY_MS = 15_000;
 const BYTES_PER_KB = 1024;
 
+/** The status at which a response is the server's fault rather than an answer. */
+const SERVER_ERROR = 500;
+
 /**
  * The window every capture is taken in.
  *
@@ -117,6 +120,28 @@ function capturable(only) {
   });
 }
 
+/**
+ * Collect the requests that failed for a reason the GAME did not choose.
+ *
+ * A 404 is deliberately not one of them: the game genuinely ships no art for some
+ * abilities, `kit/readout.ts` hides that slot on error, and a preview showing the
+ * gap is telling the truth. A transport failure or a 5xx is the opposite, and it
+ * produces a picture indistinguishable from the honest one, so it has to stop the
+ * run rather than be photographed.
+ */
+function watchForBrokenRequests(page) {
+  const broken = [];
+  page.on('requestfailed', (request) => {
+    broken.push(`${request.url()} (${request.failure()?.errorText ?? 'request failed'})`);
+  });
+  page.on('response', (response) => {
+    if (response.status() >= SERVER_ERROR) {
+      broken.push(`${response.url()} (${String(response.status())})`);
+    }
+  });
+  return broken;
+}
+
 /** Load one scenario and hand back where its frames landed, in CSS pixels. */
 async function openScenario(page, dir, scenario) {
   await page.goto(`${BASE}/?addon=${dir}&scenario=${scenario.id}&bare=1`, {
@@ -141,8 +166,15 @@ async function openScenario(page, dir, scenario) {
  */
 async function captureAt(job, scale) {
   const page = await job.browser.newPage({ viewport: VIEWPORT, deviceScaleFactor: scale });
+  const broken = watchForBrokenRequests(page);
   try {
     const crop = cropAround(await openScenario(page, job.dir, job.scenario));
+    // Checked after the page has settled and before anything is written. A failed
+    // icon leaves a COLLAPSED slot rather than a gap, so a preview missing three
+    // of its four icons does not read as broken, and it would be committed.
+    if (broken.length > 0) {
+      throw new Error(`could not load ${broken.join(', ')}`);
+    }
     const shot = await page.screenshot({ clip: crop, type: 'png' });
     const png = await sharp(shot).png({ compressionLevel: 9, effort: 10 }).toBuffer();
     return { png, scale, crop };

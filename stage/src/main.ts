@@ -139,6 +139,39 @@ async function swap(
   return await mountScenario({ id: choice.id, manifest, source, scenario });
 }
 
+/**
+ * Wait for what the addon has asked for but not yet been given.
+ *
+ * `run` resolving means the addon has been TOLD everything the scenario had to
+ * say. It does not mean the panel is painted: an ability icon is an `<img>` whose
+ * load starts when the row is built and finishes whenever the network gets round
+ * to it, and a web font is fetched by the browser on first use.
+ *
+ * Measured rather than assumed. At the moment `run` resolved, `cooldown-bars` had
+ * five icon elements and not one of them had loaded: every response arrived
+ * afterwards. A capture taken there wrote a preview with four of its five icons
+ * missing, and the slots had COLLAPSED, so it did not even read as a picture
+ * taken too early. Earlier runs that looked right were the same race landing the
+ * other way.
+ *
+ * `decode` rather than the `load` event, because it resolves when the image is
+ * ready to PAINT rather than merely received. A rejection is swallowed: an
+ * ability the game ships no art for legitimately 404s, and `kit/readout.ts` hides
+ * that slot on error, which is the picture we want.
+ *
+ * Only what is in the document NOW. An addon that adds an image later, off its
+ * own timer, is not waited for, and there is nothing sensible to wait for there:
+ * the alternative is a settling loop with no end condition.
+ */
+async function painted(doc: Document): Promise<void> {
+  await doc.fonts.ready;
+  const images = [...doc.querySelectorAll('#woc-addons img')];
+  const decoded = images.map((img) => (img as HTMLImageElement).decode());
+  // Every rejection swallowed: an ability the game ships no art for legitimately
+  // 404s, and a slot hidden on error is the picture this wants.
+  await Promise.all(decoded.map((one) => one.catch(() => undefined)));
+}
+
 /** What the page is holding: the addon on screen, and the swap still landing. */
 interface PageState {
   mounted: MountedStage | null;
@@ -164,9 +197,10 @@ function applySelection(state: PageState, choice: AddonChoice, selection: Select
   state.pending = state.pending
     .then(async () => {
       state.mounted = await swap(state.mounted, choice, selection.scenario);
-      // After the swap resolves rather than beside it: the scenario's own `run`
-      // is awaited inside `mountScenario`, so this is the first moment the panel
-      // on screen is the one the scenario describes.
+      // The scenario's own `run` is awaited inside `mountScenario`, so the panel
+      // now holds what it describes. `painted` is the second half of that claim:
+      // holding it and having drawn it are not the same moment.
+      await painted(doc);
       doc.documentElement.dataset[STAGE_STATE] = 'ready';
       return '';
     })
