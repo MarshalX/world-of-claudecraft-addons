@@ -353,6 +353,23 @@ function screenViewport(): { w: number; h: number } {
 }
 
 /**
+ * Read an art manifest for real, over the proxy `tools/stage-core.ts` runs.
+ *
+ * The suites hand both art readers a promise that never settles, which holds every
+ * icon at its optimistic URL and every art name at null. That is the right default
+ * for a case about a decision and the wrong one for a photograph: an addon that
+ * LABELS a row from `ui.icon.itemArtName` draws raw item ids until the manifest
+ * lands, so a stage without this photographs the fake rather than the addon.
+ */
+async function fetchJson(url: string): Promise<unknown> {
+  const response = await fetch(url);
+  if (!response.ok) {
+    throw new Error(`${url} answered ${String(response.status)}`);
+  }
+  return await response.json();
+}
+
+/**
  * Mount one addon, run its scenario, and hand back both halves.
  *
  * The scenario's own failure is left to the caller rather than swallowed: a
@@ -404,6 +421,7 @@ async function mountScenario(input: MountInput): Promise<MountedStage> {
     viewport: screenViewport,
     project: camera.project,
     unitPoint: camera.unitPoint,
+    fetchJson,
   });
 
   const stage = createControls({ draft, harness });
