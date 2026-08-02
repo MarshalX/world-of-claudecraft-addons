@@ -1,0 +1,465 @@
+// Ledgerline on the stage: a ledger somebody has been keeping for three days.
+//
+// THE STATE WORTH PHOTOGRAPHING CANNOT BE WALKED INTO, and that is the whole reason
+// this file is shaped the way it is. The server keeps no price history, so the only
+// history that exists is the one this addon wrote down while its player browsed, and a
+// panel with anything in it belongs to somebody who has stood at the Merchant on
+// several different days. A scenario states those days: three browses, with
+// `stage.elapse` putting the first two in the past.
+//
+// EVERY ITEM ID HERE SHIPS PAINTED ART, taken from the deployed `/ui/items/mapping.json`
+// rather than invented, so a missing icon in a shot is a real defect rather than a
+// fixture naming a file that never existed. `silverleaf_herb` is in the list on purpose:
+// its art is filed under "Sheenleaf Herb", which is one of the 21 ids in 303 where the
+// art name and the game's own display name disagree, and it is the case the label under
+// every row is hedging about.
+//
+// THE OTHERS SECTION IS SORTED THE WAY THE SERVER SORTS IT, by display name and then by
+// the stack's TOTAL price, and that is not decoration: the undercut check reads exactly
+// that ordering to find the cheapest competing listing without knowing what anything is
+// called. A fixture in any other order would be a page the server could not have sent,
+// and the verdicts drawn from it would be meaningless.
+//
+// THE THREE VERDICTS ARE ALL ON SCREEN AT ONCE, which is the point of the Yours panel.
+// The copper ore is undercut by both readings, total and per item, so the row is not
+// arguable; the pristine hide is the cheapest on the page; and nobody else is selling
+// goldleaf on the page that was read, which reads as "not on this page" rather than as
+// "you are the cheapest", because those are different facts and only one of them is
+// knowable.
+
+import { inSeries } from '../../loader/src/shared/sequence.ts';
+import type { Scenario, Stage, WorldDraft } from '../../stage/src/stage.ts';
+
+const SILVER = 100;
+const HOUR_MS = 60 * 60 * 1000;
+const DAY_MS = 24 * HOUR_MS;
+
+/**
+ * The Merchant's own terms, which are the game's real ones.
+ *
+ * The suite deliberately uses figures that are NOT these, so that an addon which wrote
+ * either down could not agree with its fixture by accident. A photograph wants the
+ * opposite: what a player actually reads at the counter.
+ */
+const CUT_PCT = 5;
+const MAX_LISTINGS = 12;
+
+/** Sale proceeds and returned goods waiting to be collected, which drive the badge. */
+const WAITING_COPPER = 62 * SILVER;
+const WAITING_ITEMS = [
+  { itemId: 'homespun_cloth', count: 4 },
+  { itemId: 'boar_hide', count: 1 },
+];
+
+/** One stack on the counter: how many, and what the seller wants over the going rate. */
+interface Stack {
+  count: number;
+  seller: string;
+  /** Copper per item above the day's rate, so one item's block is not two equal rows. */
+  over?: number;
+  /** The Merchant's own standing stock, which the ledger leaves out by default. */
+  house?: boolean;
+}
+
+/**
+ * One item as the market carried it, browse by browse.
+ *
+ * `units` is a price PER ITEM and the wire carries the stack total, which is the
+ * arithmetic this addon exists to get right: the rows below are built by multiplying,
+ * exactly as a seller does, and everything the panel draws divides back down again.
+ *
+ * A browse with no unit price is a browse where nobody had any: `goldleaf_herb` runs
+ * out before the last one, which is what leaves the player holding the only listing of
+ * it and is the case the "not on this page" verdict is for.
+ */
+interface Stall {
+  item: string;
+  /** The art name, which is what this fixture sorts by. See the header. */
+  name: string;
+  units: readonly number[];
+  stacks: readonly Stack[];
+}
+
+/**
+ * The book, in display-name order.
+ *
+ * Nine items over three days, chosen so the trend column has something to say: copper
+ * ore and spider silk are falling, iron ore and pristine hide are climbing, and the
+ * herbs are roughly where they were.
+ */
+const STALLS: readonly Stall[] = [
+  {
+    item: 'copper_ore',
+    name: 'Copper Ore',
+    units: [52, 48, 44],
+    stacks: [
+      { count: 20, seller: 'Bragg' },
+      { count: 20, seller: 'Sunna', over: 5 },
+    ],
+  },
+  {
+    item: 'ghostly_essence',
+    name: 'Ghostly Essence',
+    units: [820, 780, 800],
+    stacks: [
+      { count: 1, seller: 'Karrek' },
+      { count: 1, seller: 'Anserra', over: 40 },
+    ],
+  },
+  {
+    item: 'goldleaf_herb',
+    name: 'Goldleaf Herb',
+    units: [340, 330],
+    stacks: [
+      { count: 5, seller: 'Emberlash' },
+      { count: 5, seller: 'Vessken', over: 15 },
+    ],
+  },
+  {
+    item: 'healing_potion',
+    name: 'Healing Potion',
+    units: [260, 250, 245],
+    stacks: [
+      { count: 5, seller: 'Ilvane' },
+      // The Merchant's own shelf, which competes with the player for a buyer and is
+      // therefore in the undercut check, and is priced by a formula rather than by
+      // anybody's judgement, and is therefore out of the price series by default.
+      { count: 5, seller: 'Merchant', over: 60, house: true },
+    ],
+  },
+  {
+    item: 'iron_ore',
+    name: 'Iron Ore',
+    units: [105, 118, 132],
+    stacks: [
+      { count: 20, seller: 'Sunna' },
+      { count: 20, seller: 'Doradine', over: 6 },
+    ],
+  },
+  {
+    item: 'pristine_hide',
+    name: 'Pristine Hide',
+    units: [1400, 1480, 1520],
+    stacks: [
+      { count: 1, seller: 'Karrek' },
+      { count: 1, seller: 'Bragg', over: 90 },
+    ],
+  },
+  {
+    item: 'rough_hide',
+    name: 'Rough Hide',
+    units: [90, 84, 88],
+    stacks: [
+      { count: 10, seller: 'Anserra' },
+      { count: 10, seller: 'Emberlash', over: 3 },
+    ],
+  },
+  {
+    item: 'silverleaf_herb',
+    name: 'Sheenleaf Herb',
+    units: [110, 108, 112],
+    stacks: [
+      { count: 10, seller: 'Doradine' },
+      { count: 10, seller: 'Ilvane', over: 4 },
+    ],
+  },
+  {
+    item: 'spider_silk',
+    name: 'Spider Silk',
+    units: [70, 64, 58],
+    stacks: [
+      { count: 10, seller: 'Vessken' },
+      { count: 10, seller: 'Sunna', over: 6 },
+    ],
+  },
+];
+
+/**
+ * What this player is selling, posted six hours before the shot.
+ *
+ * All three verdicts at once, which is what makes the Yours panel worth photographing.
+ * The ore and the silk are beaten on the total AND on the price per item, so neither row
+ * is arguable; the two hides and the iron are under everybody; and the only other
+ * goldleaf seller ran out, so the page carries nothing at all to compare that one
+ * against, which is the verdict this addon is careful about.
+ */
+const MINE: readonly { id: number; item: string; count: number; price: number }[] = [
+  { id: 9001, item: 'copper_ore', count: 20, price: 20 * 45 },
+  { id: 9002, item: 'goldleaf_herb', count: 5, price: 5 * 340 },
+  { id: 9003, item: 'iron_ore', count: 20, price: 20 * 130 },
+  { id: 9004, item: 'pristine_hide', count: 1, price: 1500 },
+  { id: 9005, item: 'rough_hide', count: 10, price: 10 * 86 },
+  { id: 9006, item: 'spider_silk', count: 10, price: 10 * 62 },
+];
+
+/** The browse each page belongs to, and how long before the shot it happened. */
+const BROWSES = [3 * DAY_MS, 6 * HOUR_MS, 0];
+/** Which browse the player's own listings first appear in. They were posted then. */
+const LISTED_ON = 1;
+
+/** One row of the Merchant's book, under the game's own field names. */
+interface Listing {
+  id: number;
+  sellerName: string;
+  itemId: string;
+  count: number;
+  /** The TOTAL buyout for the whole stack, which is what the wire carries. */
+  price: number;
+  mine: boolean;
+  house: boolean;
+}
+
+function stackRows(stall: Stall, browse: number, base: number): Listing[] {
+  const unit = stall.units[browse];
+  if (unit === undefined) {
+    return [];
+  }
+  return stall.stacks.map((stack, at) => ({
+    id: base + at,
+    sellerName: stack.seller,
+    itemId: stall.item,
+    count: stack.count,
+    price: stack.count * (unit + (stack.over ?? 0)),
+    mine: false,
+    house: stack.house === true,
+  }));
+}
+
+/** The player's own rows, which the server puts first and keeps on every page. */
+function myRows(browse: number): Listing[] {
+  if (browse < LISTED_ON) {
+    return [];
+  }
+  return MINE.map((listing) => ({
+    id: listing.id,
+    sellerName: 'Marshal',
+    itemId: listing.item,
+    count: listing.count,
+    price: listing.price,
+    mine: true,
+    house: false,
+  }));
+}
+
+/**
+ * Everyone else's rows, in the order the server sends them.
+ *
+ * By display name and then by the stack's total, computed rather than typed, because
+ * the undercut check reads that ordering and a fixture that drifted out of it would
+ * quietly describe a page the server never sends.
+ */
+function otherRows(browse: number): Listing[] {
+  const rows: Listing[] = [];
+  for (const [at, stall] of STALLS.entries()) {
+    const block = stackRows(stall, browse, (browse + 1) * 1000 + at * 10);
+    block.sort((a, b) => a.price - b.price);
+    rows.push(...block);
+  }
+  return rows;
+}
+
+/** One page of the book, as the server echoes it back. */
+function pageFor(browse: number): Record<string, unknown> {
+  const listings = [...myRows(browse), ...otherRows(browse)];
+  return {
+    listings,
+    totalCount: listings.length,
+    filter: '',
+    itemType: '',
+    subtype: '',
+    armorClass: '',
+    primaryStat: '',
+    rarity: '',
+    page: 0,
+    pageCount: 1,
+    collectionCopper: WAITING_COPPER,
+    collectionItems: WAITING_ITEMS,
+    cutPct: CUT_PCT,
+    maxListings: MAX_LISTINGS,
+    myListingCount: listings.filter((row) => row.mine).length,
+  };
+}
+
+/** Stand at the Merchant, reading a page. The wire name, which is what the loader reads. */
+function atCounter(draft: WorldDraft, browse: number): void {
+  draft.set(draft.world, 'marketInfo', pageFor(browse));
+}
+
+/** Walk away, which is a null page and NOT an empty market. */
+function noCounter(draft: WorldDraft): void {
+  draft.set(draft.world, 'marketInfo', null);
+}
+
+/**
+ * The session as it stood before the addon ran a line: at the counter, three days ago.
+ *
+ * In `world` rather than in `run` because a player who logs in at the Merchant is
+ * reading a page before this addon has drawn anything, and the first thing it does with
+ * its stored ledger is fold that page into it.
+ */
+function atTheMerchant(draft: WorldDraft): void {
+  draft.set(draft.world, 'marketCollectPending', true);
+  atCounter(draft, 0);
+}
+
+const SETTLE_MS = 60;
+
+function pause(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
+}
+
+/**
+ * Let the addon's storage round trip and its queued repaint land.
+ *
+ * A real timer rather than a count of microtasks: the ledger is read back with one
+ * `storage.keys()` and then a `get` per item, so its start-up is several promise hops
+ * deep, and the repaint that follows rides a real animation frame here.
+ */
+async function drawn(stage: Stage): Promise<void> {
+  stage.poll();
+  await pause(SETTLE_MS);
+}
+
+/** How long to wait for the item art manifest, which every label on screen comes from. */
+const ART_MS = 5000;
+const ART_POLL_MS = 50;
+
+/**
+ * Hold the shot until the art manifest has landed.
+ *
+ * `ui.icon.item` is optimistic and `ui.icon.itemArtName` answers null until the manifest
+ * is read, so a picture taken before it lands is a panel of raw item ids: honest about
+ * what the addon does when nothing has published a name, and not what it looks like on
+ * a machine that has finished loading. Waited on the FACT rather than on a delay, and
+ * the first row is enough because one manifest answers for every row.
+ */
+function artLanded(): Promise<void> {
+  const wanted = (STALLS[0] as Stall).name;
+  return new Promise((resolve) => {
+    let waited = 0;
+    const look = (): void => {
+      const label = document.querySelector('[data-list="prices"] .woc-bar-label')?.textContent;
+      if (label === wanted || waited >= ART_MS) {
+        resolve();
+        return;
+      }
+      waited += ART_POLL_MS;
+      setTimeout(look, ART_POLL_MS);
+    };
+    look();
+  });
+}
+
+/**
+ * Three days of browsing, in the order they happened.
+ *
+ * The clock is moved between them, which is what puts the readings at different ages and
+ * gives the trend line something to draw: every stamp this addon keeps comes from
+ * `woc.wallClock()`, so a scenario about a ledger is a scenario about that clock.
+ */
+async function browsedForDays(stage: Stage): Promise<void> {
+  await drawn(stage);
+  await inSeries(BROWSES.slice(1).entries(), async ([step, ago]) => {
+    const at = step + 1;
+    stage.elapse((BROWSES[step] as number) - ago);
+    atCounter(stage, at);
+    await drawn(stage);
+  });
+  await artLanded();
+}
+
+/**
+ * Open one of the panel's tabs, the way a player does.
+ *
+ * Clicked at the DOM rather than reached for through the stage, for the reason the
+ * combat-meter scenarios give: the tab strip is the LOADER's `ui.tabs`, so a click is
+ * the same path a player takes and a stage helper would be a second way in that only
+ * scenarios use.
+ */
+function openTab(label: string): void {
+  const button = [...document.querySelectorAll('#woc-addons .woc-tab')].find(
+    (el) => el.textContent === label,
+  );
+  (button as HTMLButtonElement | undefined)?.click();
+}
+
+/**
+ * The panel as a player who has widened it holds it.
+ *
+ * The addon opens at 400 by 480, which spends nearly half its height on chrome that
+ * cannot scroll: the tab strip, the status strip, the sentence under it, the search
+ * field and the note. A shot at the opening size is four rows of ledger under all of
+ * that, which is a picture of the chrome. This is a size the frame is genuinely
+ * draggable to, and nothing here crosses a bound the addon declares.
+ */
+const WIDENED = { x: 80, y: 140, w: 440, h: 620 };
+
+const SCENARIOS: readonly Scenario[] = [
+  {
+    id: 'prices',
+    label: 'The ledger, three days in',
+    preview: true,
+    caption: 'The ledger',
+    alt: "the Prices tab of a panel headed Ledgerline (to collect), with a strip over the list reading at the Merchant, page 1 of 1, a 5 percent cut, 6 of 12 listing slots used and 62 silver and 2 items waiting to be collected. Under a search field, six item rows fenced off by a rule at each end, each carrying the game's own art, its price as coins (a disc per unit, gold, silver or copper, with the empty units left out) and a chart across the bottom of the row: Copper Ore, low 44 copper over a median of 48 and 3 visits; Ghostly Essence, low 7 silver 80; Healing Potion, low 2 silver 45; Iron Ore, low 1 silver 5; Pristine Hide, low 14 silver; and Rough Hide, low 84 copper, its chart cut off by the scrolling list. Every figure is one vote per visit to the counter rather than one per listing, and each chart has one point per visit: copper ore falls across the three days and iron ore and pristine hide climb. A footer reads 9 items recorded, keeping 30 days.",
+    frames: { ledger: { box: WIDENED, visible: true } },
+    world: atTheMerchant,
+    run: browsedForDays,
+  },
+  {
+    id: 'mine',
+    label: 'Your own listings',
+    preview: true,
+    caption: 'Your listings',
+    alt: "the Yours tab of the same panel, with the same strip over six listings of the player's own, each asking a price in the game's own coins. Copper Ore asking 9 silver and Spider Silk asking 6 silver 20 are washed red and read undercut, because a cheaper listing of each leads its block on the page that was read. Goldleaf Herb asking 17 silver reads not on this page, which is the panel refusing to call it uncontested: nobody else was selling any, and an item missing from a page is not an item nobody is selling. Iron Ore at 26 silver, Pristine Hide at 15 silver and Rough Hide at 8 silver 60 read cheapest on this page. Every row also gives the price per item, carries that item's own price chart across the bottom of it, and says the listing was first seen by you 6 hours ago, which is this addon's own record rather than an expiry, since no listing on the wire carries one. Under a rule, a footer reads that the verdicts are judged from the page you are reading now, which is not the whole market.",
+    frames: { ledger: { box: WIDENED, visible: true } },
+    world: atTheMerchant,
+    run: async (stage) => {
+      await browsedForDays(stage);
+      openTab('Yours');
+      await pause(SETTLE_MS);
+    },
+  },
+  {
+    // Away from the counter, holding the last page it read. The state most of a session
+    // is spent in, and the one the whole three-state read exists for: an empty market
+    // and a player standing in a town are different facts and the panel says which.
+    id: 'away',
+    label: 'Walked away from the Merchant',
+    frames: { ledger: { box: WIDENED, visible: true } },
+    world: atTheMerchant,
+    run: async (stage) => {
+      await browsedForDays(stage);
+      noCounter(stage);
+      await drawn(stage);
+    },
+  },
+  {
+    // Nothing recorded and nowhere near a Merchant, which is what a player meets on the
+    // day they install this and is the state nobody thinks to photograph.
+    id: 'empty',
+    label: 'Before the first page is read',
+    frames: { ledger: { box: WIDENED, visible: true } },
+    world: noCounter,
+    run: drawn,
+  },
+  {
+    // The reconnect blip: the client force-nulls its own market mirror for one snapshot
+    // after a reconnect, so a player standing AT the counter reads away. The panel holds
+    // the page and says it is resyncing. It lasts two seconds by design, so this
+    // scenario is worth LOOKING at rather than photographing.
+    id: 'resync',
+    label: 'The reconnect blip',
+    frames: { ledger: { box: WIDENED, visible: true } },
+    world: atTheMerchant,
+    run: async (stage) => {
+      await browsedForDays(stage);
+      stage.netState({ reconnects: 1 });
+      noCounter(stage);
+      await drawn(stage);
+    },
+  },
+];
+
+export { SCENARIOS };

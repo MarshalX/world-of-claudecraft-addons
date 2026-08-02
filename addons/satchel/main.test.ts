@@ -73,22 +73,20 @@ const FQID = 'official/satchel';
 /**
  * The key a record is filed under: the CHANNEL, then what the loader derives.
  *
- * `offline/` rather than a realm because the shared world hub in `tests/fakes` is
- * constructed with `realm: () => null`, and nothing an addon suite can reach moves it:
- * `netState({ realm })` patches the SOCKET's accessor, and the world backend was
- * handed its own at construction. So the realm half of the derivation is not
- * exercisable from here and is pinned where the derivation lives, in
- * `tests/world-backend.test.ts` and `tests/services-character.test.ts`. What this
- * suite proves is the half that is this addon's: one record per character per
- * deployment, and the loader's half of the key coming from the loader rather than from
- * a second derivation of its own.
+ * The realm is the one the shared `HELLO_FRAME` carries, which is what the world hub in
+ * `tests/fakes` now derives the character key from, exactly as `runtime/surfaces.ts`
+ * wires it in the loader. It read `offline/` here until that was fixed, because the
+ * fake was constructed with `realm: () => null` and nothing an addon suite could reach
+ * moved it. What this suite proves is the half that is this addon's: one record per
+ * character per deployment, and the loader's half of the key coming from the loader
+ * rather than from a second derivation of its own.
  *
  * `pbe/` because that is the channel the shared harness reports, and it is in the key
  * because the account-wide namespace is the one the loader adds nothing to. See
  * `records a character and its copy on another channel apart`.
  */
 const CHANNEL = 'pbe';
-const CHARACTER_KEY = `${CHANNEL}/offline/Marshal`;
+const CHARACTER_KEY = `${CHANNEL}/Claudemoon/Marshal`;
 /** The field on the player entity the loader's key derivation reads. */
 const PLAYER_NAME_FIELD = 'name';
 /** A fork's fqid on purpose: a consumer that named the official one would miss it. */
@@ -872,7 +870,7 @@ describe('what is written down', () => {
 
     expect(storedKeys(h)).toHaveLength(2);
     expect(storedKeys(h)).toContain(CHARACTER_KEY);
-    expect(storedKeys(h)).toContain(`${CHANNEL}/offline/Alt`);
+    expect(storedKeys(h)).toContain(`${CHANNEL}/Claudemoon/Alt`);
   });
 
   // A character and its PBE copy have the same realm and the same name, so
@@ -890,7 +888,7 @@ describe('what is written down', () => {
     // deployment. A PBE copy is how a player ends up holding both.
     seed(storage, {
       ...storedCharacter('Marshal'),
-      key: 'live/offline/Marshal',
+      key: 'live/Claudemoon/Marshal',
       copper: 999,
       sources: {
         bags: snapshot({ stacks: cells('gem', 1) }),
@@ -903,7 +901,7 @@ describe('what is written down', () => {
 
     expect(storedKeys(h)).toHaveLength(2);
     expect(storedKeys(h)).toContain(CHARACTER_KEY);
-    expect(storedKeys(h)).toContain('live/offline/Marshal');
+    expect(storedKeys(h)).toContain('live/Claudemoon/Marshal');
     // This session wrote its own row and left the other deployment's alone.
     expect(storedFor(h).copper).toBe(12);
     expect(storedFor(h).sources.bags.stacks).toHaveLength(5);
