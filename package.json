@@ -19,6 +19,8 @@
     "build": "node loader/build-runtime.mjs && vite build",
     "site": "node tools/site.mjs",
     "site:dev": "node tools/site-dev.mjs",
+    "stage": "node loader/build-stage.mjs && node tools/stage.mjs",
+    "build:stage": "node loader/build-stage.mjs",
     "build:runtime": "node loader/build-runtime.mjs",
     "build:runtime:debug": "node loader/build-runtime.mjs --sourcemap",
     "check": "pnpm run check:ts && pnpm run check:pkg && pnpm run lint && pnpm run test && pnpm run validate",
@@ -32,6 +34,7 @@
     "cues": "node tools/cues.mjs",
     "icons": "node tools/icons.mjs",
     "items": "node tools/items.mjs",
+    "theme": "node tools/theme.mjs",
     "aura-kinds": "node tools/aura-kinds.mjs",
     "changelog": "git-cliff --config cliff.toml --output CHANGELOG.md"
   },

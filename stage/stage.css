@@ -1,0 +1,82 @@
+/* The stage page's own chrome.
+ *
+ * Everything here is prefixed `stage-` and none of it is under `#woc-addons`, so
+ * this sheet and the loader's cannot reach each other's elements. That matters
+ * more than it looks: the whole purpose of the page is to photograph what the
+ * loader draws, and a stage rule that leaked into a frame would be a defect
+ * nobody could see, because it would be in every shot.
+ *
+ * The background is flat rather than a picture of the game. A backdrop makes a
+ * nicer screenshot and a worse tool: it hides exactly the low-contrast edges a
+ * preview is supposed to show, and it would have to be recaptured whenever the
+ * game's art moved.
+ */
+
+html {
+  /* One shade off the game's own darkest token, so a panel edge is visible
+     against it rather than melting into the same colour. */
+  background: var(--color-bg-dark, rgb(8 8 13));
+  color-scheme: dark;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  font-family: var(--font-ui, system-ui, sans-serif);
+}
+
+#stage-bar {
+  position: fixed;
+  inset: 0 0 auto;
+  /* One above the addon root, which sits at 100001 so it clears the game's own
+     ceiling of 100000. The strip has to stay clickable with a frame over it. */
+  z-index: 100002;
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  padding: 8px 12px;
+  background: rgb(11 11 18 / 93%);
+  border-bottom: 1px solid var(--color-border-default, rgb(58 58 74));
+  font-size: 13px;
+}
+
+.stage-field {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  color: var(--color-text-muted, rgb(154 146 124));
+}
+
+.stage-field select {
+  font: inherit;
+  padding: 4px 6px;
+  color: var(--color-text-light, rgb(240 235 216));
+  background: var(--color-bg-input, rgb(10 10 15));
+  border: 1px solid var(--color-border-default, rgb(58 58 74));
+  border-radius: var(--radius-sm, 3px);
+}
+
+.stage-btn {
+  font: inherit;
+  padding: 5px 10px;
+  color: var(--gold, rgb(255 209 0));
+  background: transparent;
+  border: 1px solid var(--color-border-default, rgb(58 58 74));
+  border-radius: var(--radius-sm, 3px);
+  cursor: pointer;
+}
+
+#stage-status {
+  color: var(--color-text-muted, rgb(154 146 124));
+}
+
+#stage-status.stage-failed {
+  color: var(--color-text-error, rgb(255 107 94));
+}
+
+/* Capture mode. The strip goes, and so does the reminder of how to bring it
+   back: a hint drawn over the page would be in the screenshot, which is the one
+   thing this mode exists to prevent. Press b again. */
+.stage-bare #stage-bar {
+  display: none;
+}

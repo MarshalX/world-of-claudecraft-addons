@@ -45,10 +45,24 @@
 
     "noEmit": true
   },
-  // An addon's own suite sits beside its source, so `addons` is included for its
-  // `.test.ts` files ALONE. The addon itself is plain JavaScript evaluated as a
-  // function body, and `allowJs` is off, so a `main.js` is never compiled here
-  // even though its directory is listed: the glob is what says so out loud.
-  "include": ["loader/src", "packages", "tools", "tests", "addons/**/*.test.ts"],
+  // An addon directory carries two TypeScript files and they are listed one by
+  // one: its own suite, and its stage scenario. The addon ITSELF is plain
+  // JavaScript evaluated as a function body, and `allowJs` is off, so a `main.js`
+  // is never compiled here even though its directory is listed. The globs are
+  // what say so out loud.
+  //
+  // `stage.ts` has to be here for the same reason `main.test.ts` did: it is only
+  // reached through an entry `loader/build-stage.mjs` generates at build time, so
+  // a scenario left out of this list would compile against nothing and nobody
+  // would notice until it was run.
+  "include": [
+    "loader/src",
+    "packages",
+    "tools",
+    "tests",
+    "stage/src",
+    "addons/**/*.test.ts",
+    "addons/*/stage.ts"
+  ],
   "exclude": ["node_modules", "loader/dist"]
 }

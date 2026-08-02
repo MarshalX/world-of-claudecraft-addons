@@ -87,7 +87,12 @@
       }
     },
     {
-      "includes": ["tools/**", "loader/build-runtime.mjs"],
+      "includes": [
+        "tools/**",
+        "loader/build-runtime.mjs",
+        "loader/build-stage.mjs",
+        "addons/*/generate.mjs"
+      ],
       "linter": {
         "rules": {
           "correctness": {
@@ -113,7 +118,7 @@
       }
     },
     {
-      "includes": ["tests/**", "addons/*/*.test.ts"],
+      "includes": ["tests/**", "addons/*/*.test.ts", "addons/*/stage.ts"],
       "linter": {
         "rules": {
           "style": {
@@ -152,6 +157,17 @@
         "rules": {
           "style": {
             "noExcessiveLinesPerFile": "off"
+          }
+        }
+      }
+    },
+    {
+      "includes": ["**/*.generated.css"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noExcessiveLinesPerFile": "off",
+            "noHexColors": "off"
           }
         }
       }
