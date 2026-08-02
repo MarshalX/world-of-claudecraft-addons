@@ -1,0 +1,60 @@
+{
+  "id": "purelight",
+  "name": "Purelight",
+  "version": "1.0.0",
+  "apiVersion": 1,
+  "apiMinor": 2,
+  "author": "MarshalX",
+  "description": "Every effect in front of you that can actually be removed, worst first: on you, your pet, your group and your target, each tile naming who carries it.",
+  "entry": "main.js",
+  "preview": {
+    "file": "preview.png",
+    "alt": "a strip of five square tiles, each with a countdown over the art and the name of whoever is carrying the effect under it. Bewitch on Bragg first at 15 seconds, a polymorph and the only control on the strip, which is what puts it ahead of everything else whatever is left on it. Then Blackrot on Marshal at 16 seconds and Hex of Anguish on Sunna at 10, both damage over time, both bordered in the shadow school and both carrying the art the game files under the ability that applied them. Then Temporal Exhaustion on Karrek at 10m, a green nature border around no picture at all, because its aura id is not an ability id and there is no file for it anywhere. Last, Frostveil on Emberlash, the enemy mage, at 41 seconds, which is on the strip for the opposite reason: it is a benefit on a hostile unit, so it can be stripped away rather than lifted off."
+  },
+  "homepage": "https://github.com/MarshalX/world-of-claudecraft-addons",
+  "tags": ["healing", "raid", "interface"],
+  "permissions": ["world.read", "ui", "sound", "keys"],
+  "keybinds": [
+    {
+      "id": "toggle",
+      "label": "Show or hide the strip",
+      "default": "Alt+KeyP"
+    }
+  ],
+  "settings": [
+    {
+      "id": "include-player",
+      "type": "boolean",
+      "label": "Include the effects on you and your pet",
+      "default": true
+    },
+    {
+      "id": "include-target",
+      "type": "boolean",
+      "label": "Include what you could strip off your target",
+      "default": true
+    },
+    {
+      "id": "cue",
+      "type": "boolean",
+      "label": "Play a cue when a new removable effect lands",
+      "default": true
+    },
+    {
+      "id": "max-tiles",
+      "type": "number",
+      "label": "Most tiles to show at once",
+      "default": 6,
+      "min": 1,
+      "max": 20
+    },
+    {
+      "id": "min-seconds",
+      "type": "number",
+      "label": "Least remaining seconds worth showing",
+      "default": 1,
+      "min": 0,
+      "max": 30
+    }
+  ]
+}
