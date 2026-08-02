@@ -222,3 +222,51 @@ figcaption {
   font-size: 12.5px;
   color: var(--muted);
 }
+
+/* The catalog's tag filter, injected by site/assets/site.js from the tags each
+ * card declares. A chip and a card's own tag are the same word said twice, so
+ * they are the same family: mono, hairline, small. The state is read from
+ * aria-pressed rather than from a class, because a class would be a second copy
+ * of the same fact and the two would be free to disagree. */
+.filter-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 28px;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: var(--tap);
+  padding: 0 14px;
+  background: transparent;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-sm);
+  color: var(--muted);
+  font-family: var(--mono);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.chip:hover {
+  border-color: var(--gold-dim);
+  color: var(--text);
+}
+
+.chip[aria-pressed="true"] {
+  border-color: var(--gold-dim);
+  color: var(--accent-ink);
+}
+
+.chip span {
+  opacity: 0.6;
+}
+
+.filter-status {
+  font-family: var(--mono);
+  font-size: 13px;
+  color: var(--muted);
+  margin: 12px 0 0;
+}

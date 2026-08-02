@@ -77,10 +77,10 @@ sort_commits = "oldest"
 tag_pattern = "v[0-9]*"
 
 commit_parsers = [
-    # Machine-written. `Regenerate marketplace index` is pushed by the
-    # marketplace workflow after an addon change, so the addon change is
-    # already in the changelog and this is its echo.
+    # Machine-written. These three titles are pushed by the generated-files
     { message = "^Regenerate marketplace index", skip = true },
+    { message = "^Regenerate the marketplace index and README catalog", skip = true },
+    { message = "^Regenerate the README addon section", skip = true },
     { message = "^Merge ", skip = true },
 
     { message = "(?i)^(add|implement|introduce|mount|scaffold|support|publish)", group = "<!-- 0 -->Added" },

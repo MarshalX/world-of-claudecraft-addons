@@ -16,7 +16,7 @@ Addons contributed here are under the repository's MIT licence.
 
 ## Running your own
 
-Copy `.github/workflows/marketplace.yml`. It regenerates the index from the `addon.json` files on every push, so the index and the manifests cannot drift.
+Copy `.github/workflows/marketplace.yml`. It regenerates the index from the `addon.json` files on every push, so the index and the manifests cannot drift. It also regenerates the addon list this repository prints in its own README, which is a no-op in a repository whose README does not carry the `<!-- addons:start -->` markers: copy the file as it is and only the index step does anything.
 
 Never hand-edit `marketplace.json`.
 

@@ -1,24 +1,42 @@
-name: Marketplace index
+name: Generated files
 
-# marketplace.json is GENERATED from addons/*/addon.json, never hand-edited.
-# Regenerating it here is what keeps the index from drifting from the folders.
+# Two files are DERIVED from addons/*/addon.json and are never hand-edited:
+# marketplace.json, which the loader fetches, and the addon section of README.md
+# between its `<!-- addons:start -->` markers. Regenerating both here is what
+# keeps either from drifting from the folders on disk.
+#
+# ONE job rather than one workflow each, and that is not tidiness. Both push to
+# main on the same event, so as two workflows they would check out the same commit
+# and the second push would be rejected as non-fast-forward: a failure that shows
+# up only when both files happen to change, which is exactly the day nobody wants
+# to debug a bot. One job, one commit, no race by construction.
+#
+# This is also the file site/content/docs/publishing.md tells a third-party
+# marketplace to copy. `pnpm readme` treats a README with no markers as nothing to
+# do, so the copy regenerates their index and leaves their README alone.
 on:
   push:
     branches: [main]
     paths:
       - 'addons/**'
+      - 'README.md'
       - 'loader/src/shared/schema.ts'
       - 'loader/src/shared/api-version.ts'
       - 'loader/src/shared/permissions.ts'
       - 'tools/manifests.ts'
+      - 'tools/catalog.ts'
+      - 'tools/featured.ts'
       - 'tools/index.mjs'
+      - 'tools/readme.mjs'
+      - 'tools/readme-core.ts'
       - 'tools/validate.mjs'
+      - '.github/workflows/marketplace.yml'
 
 permissions:
   contents: write
 
 jobs:
-  index:
+  generate:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -40,18 +58,28 @@ jobs:
         # byte-identical and never produces an empty diff commit.
         run: pnpm index -- --timestamp=$(git log -1 --pretty=%ct)
 
+      - name: Regenerate the README's addon section
+        run: pnpm readme
+
       - name: Commit if changed
         run: |
-          if git diff --quiet -- marketplace.json; then
-            echo "index unchanged"
+          index=$(git diff --name-only -- marketplace.json)
+          readme=$(git diff --name-only -- README.md)
+          if [ -z "$index" ] && [ -z "$readme" ]; then
+            echo "generated files unchanged"
             exit 0
           fi
 
+          title="Regenerate the marketplace index and README catalog"
+          [ -n "$readme" ] || title="Regenerate marketplace index"
+          [ -n "$index" ] || title="Regenerate the README addon section"
+
           git config user.name  "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add marketplace.json
-          git commit -m "Regenerate marketplace index
+          git add marketplace.json README.md
+          git commit -m "$title
 
-          Rebuilt marketplace.json from the addon manifests after an addons/
-          change, so the index cannot drift from the folders on disk."
+          Rebuilt what addons/*/addon.json derives, so neither the index the
+          loader fetches nor the catalog the README prints can drift from the
+          manifests on disk."
           git push

@@ -11,7 +11,15 @@
 //   - It listed `window.woc` as a surface the GAME exposes. The game exposes
 //     `window.__game`; `woc` is what the LOADER hands an addon. Backwards.
 //   - Addon versions were invented (1.2.0, 1.1.0). They come from the index now.
+//
+// The fourth is the one this file used to be: a heading, a body and a note
+// hand-written per featured addon, which described the first two addons long
+// after there were thirty. A featured block is now the addon's own name, tags,
+// version and description, and the only thing decided here is WHICH addons get
+// one, which lives in tools/featured.ts because the README shows the same set.
 
+import type { CatalogAddon } from '../../catalog.ts';
+import { FEATURED, spellOut } from '../../featured.ts';
 import type { Build } from '../build.ts';
 import { type Html, html, raw } from '../html.ts';
 import { figure, installButton, type Release } from '../markup.ts';
@@ -51,6 +59,13 @@ const SURFACES = [
   { name: 'audio pack', note: 'for addon sounds that match the game' },
 ] as const;
 
+/** The one block on this page about the loader rather than about an addon. */
+const INSTALL_BLOCK = {
+  eyebrow: 'The whole install',
+  heading: 'Press Escape. There is a new entry.',
+  body: 'No launcher, no account, nothing to keep running. The loader waits for the HUD to exist and adds one button to the menu you already use.',
+} as const;
+
 function hero(build: Build, release: Release | null): Html {
   return html`<section class="column section">
   <p class="eyebrow">Userscript · MIT · read-only</p>
@@ -74,25 +89,83 @@ function hero(build: Build, release: Release | null): Html {
 </section>`;
 }
 
-function feature(item: Feature): Html {
-  return html`<article class="feature ${item.flip && 'feature-flip'}">
+function feature(item: Feature, index: number): Html {
+  return html`<article class="feature ${index % 2 === 1 && 'feature-flip'}">
   <div>
     <p class="eyebrow">${item.eyebrow}</p>
     <h3>${item.heading}</h3>
     <p>${item.body}</p>
-    <p class="muted">${item.note}</p>
   </div>
   ${item.figure}
 </article>`;
 }
 
-function features(items: readonly Feature[]): Html {
+/**
+ * One featured addon, said in the addon's own words.
+ *
+ * The eyebrow carries the version and the tags rather than a slogan, because both
+ * are facts the manifest already states and a slogan is the thing this page kept
+ * getting wrong. The heading is the name a player sees in Browse, so the card on
+ * screen and the row in the game read the same.
+ */
+function featureOf(build: Build, addon: CatalogAddon): Feature {
+  return {
+    eyebrow: [addon.version, ...addon.tags].join(' · '),
+    heading: addon.name,
+    body: addon.description,
+    figure: figure(build.context.preview(addon.id)),
+  };
+}
+
+/**
+ * Every addon that is not featured above, as a link into its catalog card.
+ *
+ * Names only. The point of the strip is the SIZE of the catalog, which a visitor
+ * cannot get from a handful of cards, and thirty descriptions on a landing page is
+ * the catalog page with a different heading on it.
+ */
+function strip(rest: readonly CatalogAddon[]): Html {
+  return html`<p class="eyebrow addon-strip-head">The other ${rest.length}</p>
+<ul class="addon-strip">
+  ${rest.map((one) => html`<li><a href="/addons#${one.id}">${one.name}</a></li>`)}
+</ul>`;
+}
+
+/**
+ * The featured rows, or a failed build naming the id that is gone.
+ *
+ * Loud rather than skipped, for the reason `Context.preview` throws: a featured
+ * addon that has been renamed would otherwise take its block off the landing page
+ * and nothing would say so, which is a page that quietly shows three cards.
+ */
+function chosen(catalog: readonly CatalogAddon[]): CatalogAddon[] {
+  return FEATURED.map((id) => {
+    const found = catalog.find((one) => one.id === id);
+    if (!found) {
+      throw new Error(`featured addon \`${id}\` is not in the catalog; see tools/featured.ts`);
+    }
+    return found;
+  });
+}
+
+function features(build: Build, catalog: readonly CatalogAddon[]): Html {
+  const shown = chosen(catalog);
+  const items = [
+    ...shown.map((addon) => featureOf(build, addon)),
+    { ...INSTALL_BLOCK, figure: figure(build.context.shot('game-menu')) },
+  ];
+  const rest = catalog.filter((one) => !shown.includes(one));
   return html`<section class="column section">
   <div class="section-head">
     <h2>What ships with it</h2>
     <a class="link-more" href="/addons">The full catalog →</a>
   </div>
-  <div class="features">${items.map((item) => feature(item))}</div>
+  <p class="lead">
+    ${catalog.length} addons ship with the loader, reviewed and installed from inside the game.
+    ${spellOut(shown.length)} of them:
+  </p>
+  <div class="features">${items.map((item, index) => feature(item, index))}</div>
+  ${rest.length > 0 && strip(rest)}
 </section>`;
 }
 
@@ -144,6 +217,7 @@ function outside(build: Build): Html {
       <h2>Writing one is small</h2>
       <p>A folder, a JSON manifest, one plain JavaScript file. No bundler, no toolchain, no framework.</p>
       ${raw(example.html)}
+      <p class="muted">Dev Harness ships with the loader for this: it exercises every API surface and reports what it found, so a change can be checked in the game rather than only in a test.</p>
       <p><a class="link-more" href="/docs/">Read the authoring docs →</a></p>
     </div>
   </div>
@@ -154,50 +228,22 @@ interface Feature {
   readonly eyebrow: string;
   readonly heading: string;
   readonly body: string;
-  readonly note: string;
   readonly figure: Html;
-  readonly flip: boolean;
 }
 
 /** What the landing page needs that only the repository knows. */
 export interface LandingData {
   readonly release: Release | null;
-  /** `Name · version` per shipped addon, from marketplace.json. */
-  readonly features: readonly string[];
+  /** Every addon a player installs, in directory order. Author tools are not here. */
+  readonly catalog: readonly CatalogAddon[];
 }
 
 /** Build the landing page. */
 export function landing(build: Build, data: LandingData): Page {
-  const items: Feature[] = [
-    {
-      eyebrow: data.features[0] ?? 'Combat Meter',
-      heading: 'What your damage is actually made of',
-      body: 'A row per ability with crit rate, average and biggest hit, plus your real miss, dodge and parry rates and what is hitting you back.',
-      note: 'The game has its own meter. This answers what that one does not.',
-      figure: figure(build.context.preview('combat-meter')),
-      flip: false,
-    },
-    {
-      eyebrow: data.features[1] ?? 'Cooldown Bars',
-      heading: 'Everything on cooldown, soonest first',
-      body: 'A draining bar for every ability you have on cooldown, with an exact bar for anything regenerating a charge.',
-      note: 'Also the example addon: one file, no build step. It is what authors copy.',
-      figure: figure(build.context.preview('cooldown-bars')),
-      flip: true,
-    },
-    {
-      eyebrow: 'The whole install',
-      heading: 'Press Escape. There is a new entry.',
-      body: 'No launcher, no account, nothing to keep running. The loader waits for the HUD to exist and adds one button to the menu you already use.',
-      note: 'Dev Harness ships too: it exercises every API surface and reports what it found, so authors can check a change in the game rather than only in a test.',
-      figure: figure(build.context.shot('game-menu')),
-      flip: false,
-    },
-  ];
   return {
     path: '/',
     title: TITLE,
     description: DESCRIPTION,
-    body: html`${hero(build, data.release)}${features(items)}${trust(build)}${outside(build)}`,
+    body: html`${hero(build, data.release)}${features(build, data.catalog)}${trust(build)}${outside(build)}`,
   };
 }

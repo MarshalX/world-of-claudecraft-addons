@@ -32,6 +32,7 @@
     "test": "vitest run",
     "validate": "node tools/validate.mjs",
     "index": "node tools/index.mjs",
+    "readme": "node tools/readme.mjs",
     "cues": "node tools/cues.mjs",
     "icons": "node tools/icons.mjs",
     "items": "node tools/items.mjs",

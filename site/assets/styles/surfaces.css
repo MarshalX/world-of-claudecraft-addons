@@ -137,6 +137,13 @@
   padding: 18px;
 }
 
+/* The tag filter hides a card with the `hidden` attribute, whose user-agent rule
+ * is `display: none` at zero specificity: the grid above it wins, and without
+ * this the filter would set an attribute that changes nothing on screen. */
+.addon-card[hidden] {
+  display: none;
+}
+
 .addon-card h2,
 .addon-card h3 {
   font-size: 20px;

@@ -11,7 +11,7 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import process from 'node:process';
-import { addonDirs, readAddon } from './manifests.ts';
+import { isAuthorTool, readAddons } from './catalog.ts';
 import { copyAssets, prepare, SITE } from './site/build.ts';
 import { loadDocs } from './site/docs-source.ts';
 import { addons } from './site/pages/addons.ts';
@@ -93,25 +93,18 @@ async function main() {
   if (!offline) {
     release = await readRelease();
   }
-  const catalog = addonDirs()
-    .map((dir) => readAddon(dir))
-    .filter((entry) => entry.ok)
-    .map((entry) => ({
-      id: entry.manifest.id,
-      name: entry.manifest.name,
-      version: entry.manifest.version,
-      author: entry.manifest.author,
-      description: entry.manifest.description,
-      tags: entry.manifest.tags ?? [],
-      permissions: entry.manifest.permissions ?? [],
-    }));
-  const features = catalog.map((one) => `${one.name} · ${one.version}`);
+  // One reading of addons/, split the one way both pages care about. An author
+  // tool ships and is in the in-game Browse; the catalog page says so rather than
+  // shortening its count in silence. See tools/catalog.ts.
+  const all = readAddons();
+  const catalog = all.filter((one) => !isAuthorTool(one));
+  const tools = all.filter((one) => isAuthorTool(one));
 
   const docs = loadDocs(ROOT);
   const pages = [
-    landing(build, { release, features }),
+    landing(build, { release, catalog }),
     install(build, release),
-    addons(build, catalog),
+    addons(build, { catalog, tools }),
     changelog(build, readFileSync(join(ROOT, 'CHANGELOG.md'), 'utf8')),
     ...docs.map((_page, index) => docsPage(build, docs, index)),
     notFound(),
