@@ -2,7 +2,7 @@
   "schema": 1,
   "name": "Official Marketplace",
   "maintainer": "MarshalX",
-  "generated": "2026-08-02T19:27:49.000Z",
+  "generated": "2026-08-02T19:43:03.000Z",
   "addons": [
     {
       "id": "cadence",
@@ -364,6 +364,83 @@
         }
       ],
       "path": "addons/facemark"
+    },
+    {
+      "id": "longwatch",
+      "name": "Longwatch",
+      "version": "1.0.0",
+      "apiVersion": 1,
+      "apiMinor": 2,
+      "author": "MarshalX",
+      "description": "The rare spawns, where they live and when they are due back. Carries the roster the wire cannot answer for, counts each rare down from the kill that dropped it, and keeps the countdown across a logout. Pins the rares in your own zone into the world and calls out a sighting with a banner and a cue.",
+      "entry": "main.js",
+      "preview": {
+        "file": "preview.png",
+        "alt": "On the left, Rares list, a two-column list of the nineteen rare spawns Longwatch carries. Grix the Tunnelking is up and drawn loudest; Old Cragmaw is due back; ten more count down from 44 seconds to 5h 49m, each row a draining bar behind the name, the zone and the distance in yards, with the ones nobody has killed reading Unseen at the bottom. The list scrolls inside the panel. On the right, An alert, a banner across the middle of the view, set in the gold display serif the game uses for its own warnings, reading MOGGER IS UP over a quieter second line naming Eastbrook Vale. It is drawn over a soft dark scrim that fades out on every side, and there is nothing else on screen: the panel is shut, and the alert is what reaches you anyway."
+      },
+      "data": [
+        "rares.json"
+      ],
+      "homepage": "https://github.com/MarshalX/world-of-claudecraft-addons",
+      "tags": [
+        "world",
+        "interface"
+      ],
+      "permissions": [
+        "net.read",
+        "world.read",
+        "ui",
+        "sound",
+        "storage",
+        "keys"
+      ],
+      "keybinds": [
+        {
+          "id": "toggle",
+          "label": "Show or hide the rare list",
+          "default": "Alt+KeyL"
+        }
+      ],
+      "settings": [
+        {
+          "id": "zones",
+          "type": "select",
+          "label": "Which rares to list",
+          "default": "Every zone",
+          "options": [
+            "Every zone",
+            "The zone I am in",
+            "Eastbrook Vale",
+            "Mirefen Marsh",
+            "Thornpeak Heights",
+            "The Veiled Hollow"
+          ]
+        },
+        {
+          "id": "sort",
+          "type": "select",
+          "label": "How the list is ordered",
+          "default": "Soonest back",
+          "options": [
+            "Soonest back",
+            "Name",
+            "Distance"
+          ]
+        },
+        {
+          "id": "alert",
+          "type": "boolean",
+          "label": "Banner and a cue when a rare comes into range",
+          "default": true
+        },
+        {
+          "id": "keep-timers",
+          "type": "boolean",
+          "label": "Keep the countdowns across sessions",
+          "default": true
+        }
+      ],
+      "path": "addons/longwatch"
     },
     {
       "id": "purelight",
