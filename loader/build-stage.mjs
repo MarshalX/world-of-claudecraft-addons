@@ -55,11 +55,12 @@ function entryModule(dirs) {
   return `import { start } from './src/main.ts';
 ${imports}
 
+// start() reports its own failures into the page status line and never rejects.
+// A catch here that wrote into the body would REPLACE its children and delete
+// that line, which is exactly what it used to do.
 start(new Map([
 ${pairs}
-])).catch((err) => {
-  document.body.textContent = \`the stage failed to start: \${String(err)}\`;
-});
+]));
 `;
 }
 

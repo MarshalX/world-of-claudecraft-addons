@@ -148,14 +148,31 @@ interface Scenario {
    */
   frames?: Record<string, FrameState>;
   /**
-   * The one scenario `pnpm shots` photographs for this addon.
+   * This scenario is part of what `pnpm shots` photographs for this addon.
    *
-   * Exactly one must carry it, and the tool fails on none or two rather than
-   * choosing. Position would otherwise decide, which is invisible: reordering the
-   * array to read better would silently change what ships, and `idle` is first in
-   * more than one file.
+   * At least one must carry it, and the tool fails on none rather than choosing.
+   * Position would otherwise decide, which is invisible: reordering the array to
+   * read better would silently change what ships, and `idle` is first in more
+   * than one file.
+   *
+   * SEVERAL may carry it, and then the preview is a sheet of them side by side in
+   * array order. That is for an addon whose LAYOUT is a setting, where a picture
+   * of one configuration is a picture of half the addon: `cooldown-bars` draws
+   * either a column of bars or a strip of swept icons, and which one it shows on
+   * its Browse row should not be a coin toss. Each panel is its own iframe, so
+   * two panels of one addon are two separate loader instances rather than one
+   * addon mounted twice. Every panel of a multi-panel sheet needs a `caption`.
    */
   preview?: true;
+  /**
+   * The title drawn under this panel in a sheet.
+   *
+   * Separate from `label`, which is what the picker's dropdown says, because the
+   * two are read in different places: a dropdown wants "Five draining bars" and a
+   * picture wants "Bars". Left out on a single-panel preview, which has nothing
+   * to distinguish itself from and so nothing to title.
+   */
+  caption?: string;
   /**
    * What the picture shows, for someone who cannot see it.
    *

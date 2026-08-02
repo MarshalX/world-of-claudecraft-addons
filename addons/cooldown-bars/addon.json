@@ -9,7 +9,7 @@
   "entry": "main.js",
   "preview": {
     "file": "preview.png",
-    "alt": "The Cooldowns overlay, five draining bars ordered by time remaining: Rapid Fire 4.4s, Fell Shot 5.8s, Counter Shot 10.4s, Twinstrike 97.5s with one of two charges back, and Aimed Shot 155.5s. Each row carries the ability art the game files under its id, except Twinstrike, for which the game ships none."
+    "alt": "On the left, Bars, five draining bars ordered by time remaining, Rapid Fire 4.4s, Fell Shot 5.8s, Counter Shot 10.4s, Twinstrike 97.5s with one of two charges back, and Aimed Shot 155.5s, each row carrying the ability art the game files under its id except Twinstrike, for which the game ships none. On the right, Icon strip, the same five cooldowns as a row of square icons, each darkened by a sweep showing how much of its cooldown is left, with the seconds remaining over the art."
   },
   "homepage": "https://github.com/MarshalX/world-of-claudecraft-addons",
   "tags": ["combat", "interface"],

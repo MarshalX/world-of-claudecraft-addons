@@ -12,7 +12,8 @@
 // for working on an addon rather than only for photographing a finished one.
 
 import { LOADER_CSS } from '../../loader/src/runtime/ui/styles/index.ts';
-import { type AddonChoice, BARE_CLASS, createPicker, type Selection } from './picker.ts';
+import { type AddonChoice, BARE_CLASS, createPicker, type Selection, STATUS_ID } from './picker.ts';
+import { buildSheet } from './sheet.ts';
 import { type MountedStage, mountScenario, type ScenarioRegistry } from './stage.ts';
 
 /** What the dev server answers with the addon list. Matches serve-core's index. */
@@ -219,8 +220,54 @@ function applySelection(state: PageState, choice: AddonChoice, selection: Select
  * run the addon-select handler, which resets the scenario list to its first entry
  * and would quietly ignore the `scenario` the URL asked for.
  */
-async function start(registry: ScenarioRegistry): Promise<void> {
+/**
+ * Draw one addon's preview sheet and nothing else.
+ *
+ * A separate route rather than a mode of the picker, because it is a separate
+ * page: no chrome, no selection, no addon mounted in THIS document at all. Every
+ * panel is an iframe running the ordinary picker-less stage, so the loader code
+ * under the picture is the same code either way.
+ *
+ * The loader stylesheet is deliberately not injected here. Nothing in this
+ * document is a loader surface, and the captions take the game's faces from the
+ * theme the page already links.
+ */
+async function startSheet(doc: Document, registry: ScenarioRegistry, addon: string): Promise<void> {
+  const panels = (registry.get(addon) ?? []).filter((scenario) => scenario.preview === true);
+  if (panels.length === 0) {
+    throw new Error(`${addon} has no scenario marked \`preview: true\``);
+  }
+  await buildSheet({ doc, addon, panels });
+}
+
+/**
+ * Put a failure where a reader can find it, on either route.
+ *
+ * The picker builds a status line as part of its chrome and the sheet has no
+ * chrome at all, so before this the sheet had nowhere to say what went wrong.
+ * `pnpm shots` reads one selector whichever page it opened, and it used to wait
+ * on an element the sheet never creates: a failed sheet therefore reported a
+ * locator timeout rather than its own reason, and the reason was already known.
+ */
+function reportFailure(doc: Document, message: string): void {
+  const status = doc.getElementById(STATUS_ID) ?? doc.createElement('div');
+  status.id = STATUS_ID;
+  status.textContent = message;
+  if (!status.isConnected) {
+    doc.body.append(status);
+  }
+}
+
+async function run(registry: ScenarioRegistry): Promise<void> {
   const doc = globalThis.document;
+  const params = new URLSearchParams(globalThis.location.search);
+  if (params.get('sheet') === '1') {
+    // The same two states the picker route writes, so a capture waits on one
+    // contract whichever page it opened.
+    await startSheet(doc, registry, params.get('addon') ?? '');
+    doc.documentElement.dataset[STAGE_STATE] = 'ready';
+    return;
+  }
   injectLoaderCss(doc);
   const choices = choicesFrom(await readIndex(), registry);
   const state: PageState = { mounted: null, pending: Promise.resolve() };
@@ -246,12 +293,35 @@ async function start(registry: ScenarioRegistry): Promise<void> {
   // `?bare=1` is what a capture opens with. The key and the button are for a
   // person at the page; a headless run has neither, and navigating to a URL that
   // is already in the right state beats scripting a keystroke to get there.
-  if (new URLSearchParams(globalThis.location.search).get('bare') === '1') {
+  if (params.get('bare') === '1') {
     doc.documentElement.classList.add(BARE_CLASS);
   }
   const initial = readSelection(choices);
   picker.show(initial);
   showSelection(initial);
+}
+
+/**
+ * Bring the page up, and report a failure rather than throwing one away.
+ *
+ * The wrapper exists because the two halves of reporting used to fight. The
+ * generated entry caught what `start` threw and wrote it into `document.body`,
+ * which REPLACED the body's children and so deleted the status line the page had
+ * just written: a failed sheet said `no reason given` while holding the reason.
+ * Nothing outside this file needs a catch now, and there is one place that knows
+ * how to say what went wrong.
+ *
+ * It covers the whole of startup, not only the routes: `readIndex` throwing on
+ * the picker route is a failure before there is any chrome to report it in.
+ */
+async function start(registry: ScenarioRegistry): Promise<void> {
+  const doc = globalThis.document;
+  try {
+    await run(registry);
+  } catch (err) {
+    reportFailure(doc, reason(err));
+    doc.documentElement.dataset[STAGE_STATE] = 'failed';
+  }
 }
 
 export { start };

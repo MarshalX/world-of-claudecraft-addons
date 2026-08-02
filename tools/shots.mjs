@@ -43,6 +43,7 @@ import {
   cropAround,
   fillsSlot,
   largerScale,
+  previewAlt,
   renderManifest,
   scaleFor,
   smallerScale,
@@ -58,6 +59,12 @@ const SCENARIO_FILE = 'stage.ts';
 const READY_MS = 15_000;
 const BYTES_PER_KB = 1024;
 
+/** How long to look for a failed page's own reason before giving up on it. */
+const STATUS_MS = 2000;
+
+/** Where either stage route writes that reason. Matches stage/src/picker.ts. */
+const STATUS_ID = 'stage-status';
+
 /** The status at which a response is the server's fault rather than an answer. */
 const SERVER_ERROR = 500;
 
@@ -71,17 +78,20 @@ const SERVER_ERROR = 500;
 const VIEWPORT = { width: 1440, height: 1000 };
 
 /**
- * Where every frame the scenario drew sits, in CSS pixels.
+ * Where the whole sheet landed, in CSS pixels.
  *
  * A string rather than a function, because it runs in the PAGE and this file is
  * a Node module: written as a function it would put `document` in a scope that
- * has no DOM, which reads as a mistake to everything that lints this tree.
- * Zero-width frames are dropped, since a hidden frame is still in the document.
+ * has no DOM, which reads as a mistake to everything that lints this tree. Each
+ * PANE is cropped to its own frames inside the page, by `stage/src/sheet.ts`, so
+ * by the time this reads it there is nothing left to trim.
  */
-const FRAME_RECTS = `[...document.querySelectorAll('#woc-addons .woc-addon-frame')]
-  .map((el) => el.getBoundingClientRect())
-  .filter((rect) => rect.width > 0 && rect.height > 0)
-  .map((rect) => ({ x: rect.x, y: rect.y, width: rect.width, height: rect.height }))`;
+const SHEET_RECT = `(() => {
+  const el = document.getElementById('stage-sheet');
+  if (el === null) { throw new Error('the sheet did not render'); }
+  const rect = el.getBoundingClientRect();
+  return [{ x: rect.x, y: rect.y, width: rect.width, height: rect.height }];
+})()`;
 
 const BASE = `http://${STAGE_HOST}:${String(STAGE_PORT)}`;
 
@@ -94,20 +104,29 @@ function reason(err) {
   return String(err);
 }
 
-/** The scenario an addon is photographed from, or the reason there is not one. */
-async function previewScenario(dir) {
+/**
+ * The panels an addon is photographed as, left to right.
+ *
+ * One is the ordinary case. Several is an addon whose LAYOUT is a setting, where
+ * a picture of one configuration is a picture of half the addon, and then every
+ * panel needs a caption: a sheet of untitled panels does not say that they are
+ * two configurations of one thing rather than two things.
+ */
+async function previewPanels(dir) {
   const module = await import(join(ADDONS_DIR, dir, SCENARIO_FILE));
   const marked = (module.SCENARIOS ?? []).filter((one) => one.preview === true);
-  if (marked.length !== 1) {
-    throw new Error(
-      `has ${String(marked.length)} scenarios marked \`preview: true\`, needs exactly 1`,
-    );
+  if (marked.length === 0) {
+    throw new Error('has no scenario marked `preview: true`');
   }
-  const [scenario] = marked;
-  if (typeof scenario.alt !== 'string' || scenario.alt.trim().length === 0) {
-    throw new Error(`scenario "${scenario.id}" needs an \`alt\` sentence describing the shot`);
+  for (const panel of marked) {
+    if (typeof panel.alt !== 'string' || panel.alt.trim().length === 0) {
+      throw new Error(`scenario "${panel.id}" needs an \`alt\` sentence describing its panel`);
+    }
+    if (marked.length > 1 && typeof panel.caption !== 'string') {
+      throw new Error(`scenario "${panel.id}" needs a \`caption\`, since the preview has panels`);
+    }
   }
-  return scenario;
+  return marked;
 }
 
 /** Every addon with a scenario file, which is what can be captured at all. */
@@ -142,19 +161,32 @@ function watchForBrokenRequests(page) {
   return broken;
 }
 
-/** Load one scenario and hand back where its frames landed, in CSS pixels. */
-async function openScenario(page, dir, scenario) {
-  await page.goto(`${BASE}/?addon=${dir}&scenario=${scenario.id}&bare=1`, {
+/**
+ * Load one addon's preview sheet and hand back where it landed, in CSS pixels.
+ *
+ * Always the sheet, even for a single panel, so there is one page to reason about
+ * and one thing to crop to. A one-panel sheet is the panel plus the sheet's own
+ * padding, which is what every preview looked like before sheets existed.
+ */
+async function openSheet(page, dir) {
+  await page.goto(`${BASE}/?addon=${dir}&sheet=1&bare=1`, {
     waitUntil: 'domcontentloaded',
   });
   await page.waitForSelector('html[data-stage="ready"], html[data-stage="failed"]', {
     timeout: READY_MS,
   });
   if ((await page.getAttribute('html', 'data-stage')) === 'failed') {
-    // The page already holds the reason, in the line the picker writes.
-    throw new Error(`scenario failed: ${(await page.textContent('#stage-status')) ?? 'no reason'}`);
+    // Bounded, and defaulted. The page writes its own reason into the status line
+    // on either route, but a read that WAITED for it would turn a page that
+    // failed before writing one into a locator timeout, which is what this whole
+    // branch exists to avoid reporting.
+    const said = await page
+      .locator(`#${STATUS_ID}`)
+      .textContent({ timeout: STATUS_MS })
+      .catch(() => null);
+    throw new Error(`scenario failed: ${said ?? 'no reason given'}`);
   }
-  return await page.evaluate(FRAME_RECTS);
+  return await page.evaluate(SHEET_RECT);
 }
 
 /**
@@ -168,7 +200,9 @@ async function captureAt(job, scale) {
   const page = await job.browser.newPage({ viewport: VIEWPORT, deviceScaleFactor: scale });
   const broken = watchForBrokenRequests(page);
   try {
-    const crop = cropAround(await openScenario(page, job.dir, job.scenario));
+    // No margin: every pane already carries its own, applied when the sheet
+    // cropped it to its frames.
+    const crop = cropAround(await openSheet(page, job.dir), 0);
     // Checked after the page has settled and before anything is written. A failed
     // icon leaves a COLLAPSED slot rather than a gap, so a preview missing three
     // of its four icons does not read as broken, and it would be committed.
@@ -266,14 +300,14 @@ async function formatManifests(paths) {
 
 /** One addon, end to end. */
 async function capture(browser, dir) {
-  const job = { browser, dir, scenario: await previewScenario(dir) };
+  const job = { browser, dir, panels: await previewPanels(dir) };
   // A first pass at 1x only to measure: the scale a capture wants is chosen from
   // the frame's CSS width, and the width is not knowable until it has been drawn.
   const measured = await captureAt(job, 1);
   const taken = await captureWithin(job, await captureWide(job, scaleFor(measured.crop.width)));
 
   await writeFile(join(ADDONS_DIR, dir, PREVIEW_FILE), taken.png);
-  const manifest = await declarePreview(dir, job.scenario.alt);
+  const manifest = await declarePreview(dir, previewAlt(job.panels));
   const devicePx = String(Math.round(taken.crop.width * taken.scale));
   const kb = String(Math.round(taken.png.length / BYTES_PER_KB));
   console.log(`shots: ${dir}  ${devicePx}px wide at ${String(taken.scale)}x, ${kb} kB`);

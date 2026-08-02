@@ -40,6 +40,12 @@ interface Picker {
 }
 
 const BAR_ID = 'stage-bar';
+/**
+ * Where a failure is written, on EITHER route.
+ *
+ * Declared here because the picker builds one as part of its chrome, and shared
+ * because `pnpm shots` reads one selector whichever page it opened.
+ */
 const STATUS_ID = 'stage-status';
 /** On the document while the chrome is hidden, so a shot has only the addon in it. */
 const BARE_CLASS = 'stage-bare';
@@ -160,4 +166,4 @@ function createPicker(deps: PickerDeps): Picker {
 }
 
 export type { AddonChoice, Picker, Selection };
-export { BARE_CLASS, createPicker };
+export { BARE_CLASS, createPicker, STATUS_ID };

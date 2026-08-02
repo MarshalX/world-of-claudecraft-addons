@@ -45,6 +45,9 @@ const SCALES: readonly number[] = [SCALE_MIN, SCALE_MID, SCALE_MAX];
  */
 const CROP_MARGIN = 24;
 
+/** Two panels, the case an addon with a layout setting produces. */
+const PAIR = 2;
+
 /** The manifest field this writes, named so no call site carries a literal key. */
 const PREVIEW_KEY = 'preview';
 
@@ -121,14 +124,19 @@ function withinCap(bytes: number): boolean {
 }
 
 /**
- * The crop, in CSS pixels, around every frame on screen.
+ * The crop, in CSS pixels, around what was drawn.
  *
  * The union rather than the first, because an addon may legitimately put up more
  * than one: `cooldown-bars` has two frame ids and a future addon could show both
  * at once. Clamped at the origin so a frame pushed against the top left does not
  * ask for a negative crop, which a browser rejects rather than clamps.
+ *
+ * The margin is an argument because a SHEET has already had one applied. Each of
+ * its panes was cropped to its own frames, in the browser, with room left for the
+ * shadow; adding it again out here would put a second margin around the outside
+ * only, which is why the first sheet came out with the panels adrift in it.
  */
-function cropAround(rects: readonly Rect[]): Rect {
+function cropAround(rects: readonly Rect[], margin: number = CROP_MARGIN): Rect {
   if (rects.length === 0) {
     throw new Error('nothing to photograph: the scenario drew no frame');
   }
@@ -136,9 +144,81 @@ function cropAround(rects: readonly Rect[]): Rect {
   const top = Math.min(...rects.map((rect) => rect.y));
   const right = Math.max(...rects.map((rect) => rect.x + rect.width));
   const bottom = Math.max(...rects.map((rect) => rect.y + rect.height));
-  const x = Math.max(0, left - CROP_MARGIN);
-  const y = Math.max(0, top - CROP_MARGIN);
-  return { x, y, width: right - x + CROP_MARGIN, height: bottom - y + CROP_MARGIN };
+  const x = Math.max(0, left - margin);
+  const y = Math.max(0, top - margin);
+  return { x, y, width: right - x + margin, height: bottom - y + margin };
+}
+
+/**
+ * Where one panel sits, said the way a description should say it.
+ *
+ * Positional, because that is what the reader of an alt sentence needs from a
+ * composite: "on the left" locates a panel in a picture they cannot see, and
+ * "the first one" does not. Two is the case that has to read well, since an
+ * addon with a layout SETTING has two of them; past that the honest phrasing is
+ * a count, because nothing in English usefully names the third of four.
+ */
+function sideOf(index: number): string {
+  if (index === 0) {
+    return 'On the left';
+  }
+  return 'On the right';
+}
+
+function panelPlace(index: number, total: number): string {
+  if (total === 1) {
+    return '';
+  }
+  if (total === PAIR) {
+    return sideOf(index);
+  }
+  return `Panel ${String(index + 1)} of ${String(total)}`;
+}
+
+/** One panel of a preview, as its scenario declared it. */
+interface Panel {
+  caption?: string | undefined;
+  alt: string;
+}
+
+/**
+ * One sentence describing the whole picture, out of one per panel.
+ *
+ * A single panel keeps its own alt untouched, which is what every preview was
+ * before sheets existed. Several are joined with their position and their
+ * caption, so the description walks the image in the order somebody looking at
+ * it would.
+ *
+ * Composed rather than written once per sheet because the alt lives on the
+ * SCENARIO, beside the fixture that produces that panel, so the two are edited
+ * together. The cost is that each panel's sentence has to read as a clause
+ * rather than as a paragraph, which is why the shipped ones start lowercase.
+ */
+/**
+ * What comes before one panel's own sentence.
+ *
+ * The comma after the position is there whether or not a caption follows it: "On
+ * the left one." runs the position into the description and reads as a sentence
+ * that lost a word.
+ */
+function leadOf(place: string, caption: string | undefined): string {
+  if (caption === undefined) {
+    return `${place},`;
+  }
+  return `${place}, ${caption},`;
+}
+
+function previewAlt(panels: readonly Panel[]): string {
+  const [only] = panels;
+  if (panels.length === 1 && only !== undefined) {
+    return only.alt;
+  }
+  return panels
+    .map((panel, index) => {
+      const lead = leadOf(panelPlace(index, panels.length), panel.caption);
+      return `${lead} ${panel.alt}`.trim();
+    })
+    .join(' ');
 }
 
 /**
@@ -185,7 +265,7 @@ function renderManifest(manifest: Record<string, unknown>): string {
   return `${JSON.stringify(manifest, null, 2)}\n`;
 }
 
-export type { Rect };
+export type { Panel, Rect };
 export {
   CROP_MARGIN,
   cropAround,
@@ -193,6 +273,7 @@ export {
   largerScale,
   MAX_BYTES,
   MIN_DEVICE_WIDTH,
+  previewAlt,
   renderManifest,
   SCALES,
   scaleFor,

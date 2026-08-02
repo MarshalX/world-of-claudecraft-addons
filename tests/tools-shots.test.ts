@@ -18,6 +18,7 @@ import {
   largerScale,
   MAX_BYTES,
   MIN_DEVICE_WIDTH,
+  previewAlt,
   renderManifest,
   SCALES,
   scaleFor,
@@ -71,6 +72,13 @@ describe('cropping to what was drawn', () => {
     const crop = cropAround([rect(4, 2, 200, 100)]);
     expect(crop.x).toBe(0);
     expect(crop.y).toBe(0);
+  });
+
+  // A sheet has already had a margin applied per pane, inside the browser.
+  // Adding it again out here put a second one around the outside only, which is
+  // what left the first sheet with its panels adrift in the middle of the image.
+  it('adds no margin when asked for none', () => {
+    expect(cropAround([rect(100, 200, 340, 320)], 0)).toEqual(rect(100, 200, 340, 320));
   });
 
   // The alternative is a zero-byte PNG of nothing, committed, and a Browse row
@@ -127,6 +135,47 @@ describe('choosing a scale', () => {
 
   it('holds a capture at exactly the slot width', () => {
     expect(fillsSlot(MIN_DEVICE_WIDTH / 2, 2)).toBe(true);
+  });
+});
+
+describe('describing a sheet of panels', () => {
+  // One panel is every preview that existed before sheets, and its own sentence
+  // is already a whole description. Wrapping it would be adding words nobody
+  // needs to hear before the picture.
+  it('leaves a single panel to speak for itself', () => {
+    expect(previewAlt([{ alt: 'the Cooldowns overlay, five bars.' }])).toBe(
+      'the Cooldowns overlay, five bars.',
+    );
+  });
+
+  // Positional, because that is what a reader who cannot see the image needs:
+  // "on the left" locates a panel and "the first one" does not.
+  it('places two panels left and right, by caption', () => {
+    expect(
+      previewAlt([
+        { caption: 'Bars', alt: 'five draining bars.' },
+        { caption: 'Icon strip', alt: 'the same five as icons.' },
+      ]),
+    ).toBe(
+      'On the left, Bars, five draining bars. On the right, Icon strip, the same five as icons.',
+    );
+  });
+
+  // Past two, nothing in English usefully names the third of four, so it counts.
+  it('numbers panels past a pair', () => {
+    const alt = previewAlt([
+      { caption: 'A', alt: 'one.' },
+      { caption: 'B', alt: 'two.' },
+      { caption: 'C', alt: 'three.' },
+    ]);
+    expect(alt).toContain('Panel 1 of 3, A, one.');
+    expect(alt).toContain('Panel 3 of 3, C, three.');
+  });
+
+  it('leaves the title out of a panel that has no caption', () => {
+    expect(previewAlt([{ alt: 'one.' }, { alt: 'two.' }])).toBe(
+      'On the left, one. On the right, two.',
+    );
   });
 });
 

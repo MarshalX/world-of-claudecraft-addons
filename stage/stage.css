@@ -80,3 +80,62 @@ body {
 .stage-bare #stage-bar {
   display: none;
 }
+
+/* The preview sheet: one addon under several scenarios, side by side.
+ *
+ * Captions sit on a common baseline, which is what `align-items: end` buys: the
+ * panes are different heights (a column of bars against a one-row strip), and
+ * centring them would put the two titles at two different heights and read as a
+ * layout accident rather than a pair. */
+/* No padding of its own: every pane is cropped with room for its shadow already,
+   and the capture crops to this element exactly, so padding here would be a
+   third margin stacked on the two that are already right. */
+#stage-sheet {
+  display: inline-flex;
+  align-items: end;
+  gap: 16px;
+}
+
+/* Room under the caption, and ONLY when there is one.
+ *
+ * A pane already carries 24px around its own frame, from the margin it was
+ * cropped with, so a sheet of untitled panels is symmetric already and this would
+ * be a second bottom margin on it: that is exactly what it was, and a single
+ * untitled panel came out with twice the air below it as above. A caption sits
+ * outside that margin with nothing under it, so it needs its own. Conditional in
+ * the selector rather than in script, because the condition IS "does this picture
+ * have a title in it". Keep in step with PANE_MARGIN in stage/src/sheet.ts. */
+#stage-sheet:has(figcaption) {
+  padding-bottom: 24px;
+}
+
+.stage-pane {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 0;
+}
+
+/* The window one pane is cropped to. The iframe inside keeps its full layout
+   viewport and is pushed up and left, because the page inside is position:fixed
+   and so cannot be scrolled to the right place instead. */
+.stage-pane-view {
+  position: relative;
+  overflow: hidden;
+}
+
+.stage-pane-view iframe {
+  position: absolute;
+  border: 0;
+}
+
+/* The game's display face, but never its gold: a panel draws its OWN title in
+   gold Cinzel, and a caption in the same treatment would read as part of the
+   addon rather than as a label on the picture of it. */
+.stage-pane figcaption {
+  font-family: var(--title-font, Georgia, serif);
+  font-size: 15px;
+  letter-spacing: 0.5px;
+  text-align: center;
+  color: var(--color-text-muted, rgb(154 146 124));
+}
