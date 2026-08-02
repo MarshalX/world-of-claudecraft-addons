@@ -19,10 +19,30 @@
 // the assertions taken out, and neither can drift into describing a game the
 // other would not recognise.
 
+import type { FrameBox } from '../../loader/src/runtime/ui/frame/geometry.ts';
+import { perCharacterKey, uiNamespace } from '../../loader/src/shared/storage-keys.ts';
 import { mountAddon } from '../../tests/fakes/addon.ts';
 import { liveEntity } from '../../tests/fakes/entity.ts';
 import { PLAYER_ENTITY } from '../../tests/fakes/frames.ts';
 import type { SharedHarness } from '../../tests/fakes/shared-services.ts';
+import { createFakeStorage } from '../../tests/fakes/storage.ts';
+
+/**
+ * Who the stage is logged in as.
+ *
+ * The pair the shared fake answers `character()` with, repeated here because a
+ * seeded frame box is keyed on it and the two have to agree: a box stored against
+ * anyone else is one the loader looks for and does not find, which reads as the
+ * seeding silently doing nothing.
+ */
+const CHANNEL = 'pbe';
+const CHARACTER = 'Claudemoon/Marshal';
+
+/** One frame's saved state, in the shape `kit/frame-state.ts` stores. */
+interface FrameState {
+  box: FrameBox;
+  visible: boolean;
+}
 
 /**
  * A game object as a scenario writes one: fields by name, no declared shape.
@@ -113,6 +133,40 @@ interface Scenario {
   settings?: Record<string, unknown>;
   /** Data files as the host caches them: raw TEXT keyed by the declared path. */
   data?: Record<string, string>;
+  /**
+   * Frame boxes and visibility, seeded as the loader's own per-character state.
+   *
+   * For the case cropping cannot fix: an addon whose default box is the wrong
+   * SHAPE for a picture. `combat-meter` opens at a fixed 320px height whatever it
+   * is holding, so a shot of four rows is nearly half empty, and no crop can
+   * recover the space because the panel really is that tall. Keyed by the
+   * addon's own frame id, which is its persistence key.
+   *
+   * Seeded rather than set afterwards because a frame restores its box once, on
+   * the way up. Same namespace and key derivation the loader uses, so a scenario
+   * cannot describe a box the loader would not restore.
+   */
+  frames?: Record<string, FrameState>;
+  /**
+   * The one scenario `pnpm shots` photographs for this addon.
+   *
+   * Exactly one must carry it, and the tool fails on none or two rather than
+   * choosing. Position would otherwise decide, which is invisible: reordering the
+   * array to read better would silently change what ships, and `idle` is first in
+   * more than one file.
+   */
+  preview?: true;
+  /**
+   * What the picture shows, for someone who cannot see it.
+   *
+   * Required on the preview scenario, because `pnpm shots` writes it into
+   * `addon.json` and a preview with no description is one the manager and the
+   * site both render as an unlabelled image. It lives HERE rather than only in
+   * the manifest so the sentence and the fixture that produces it are edited
+   * together: an alt text describing rows a scenario no longer draws is the
+   * failure this placement is trying to avoid.
+   */
+  alt?: string;
   /** Shape the world the addon starts in. Runs before the body is evaluated. */
   world?: (draft: WorldDraft) => void;
   /** Drive it. Runs after the addon has mounted and drawn. */
@@ -123,6 +177,8 @@ interface Scenario {
 type ScenarioRegistry = ReadonlyMap<string, readonly Scenario[]>;
 
 interface MountInput {
+  /** The addon id, which is half of the fqid a seeded frame box is stored under. */
+  id: string;
   manifest: string;
   source: string;
   scenario: Scenario;
@@ -229,6 +285,25 @@ function screenViewport(): { w: number; h: number } {
  * scenario that throws half way leaves a partly drawn addon on screen, and a
  * picture of that is worse than an error message, so `main.ts` reports it.
  */
+/**
+ * Put a scenario's frame boxes where the loader will look for them.
+ *
+ * Before the addon runs, because a frame reads its stored box once as it comes
+ * up. `mountAddon` takes a storage hub, so this seeds the same one it is handed
+ * rather than reaching into it afterwards.
+ */
+async function seedFrames(
+  storage: ReturnType<typeof createFakeStorage>,
+  fqid: string,
+  frames: Record<string, FrameState>,
+): Promise<void> {
+  await Promise.all(
+    Object.entries(frames).map(([frameId, state]) =>
+      storage.set(uiNamespace(fqid), perCharacterKey(CHANNEL, CHARACTER, frameId), state),
+    ),
+  );
+}
+
 async function mountScenario(input: MountInput): Promise<MountedStage> {
   const player = createPlayer();
   const entities = new Map<number, Fake>([[PLAYER_ENTITY.id, player]]);
@@ -236,9 +311,15 @@ async function mountScenario(input: MountInput): Promise<MountedStage> {
   const { scenario } = input;
   scenario.world?.(draft);
 
+  const storage = createFakeStorage();
+  if (scenario.frames !== undefined) {
+    await seedFrames(storage, `official/${input.id}`, scenario.frames);
+  }
+
   const harness = await mountAddon({
     manifest: input.manifest,
     source: input.source,
+    storage,
     game: Promise.resolve({ world: draft.world }),
     settings: scenario.settings ?? {},
     data: scenario.data ?? {},
@@ -250,5 +331,5 @@ async function mountScenario(input: MountInput): Promise<MountedStage> {
   return { stage, harness, dispose: harness.dispose };
 }
 
-export type { Fake, MountedStage, Scenario, ScenarioRegistry, Stage, WorldDraft };
+export type { Fake, FrameState, MountedStage, Scenario, ScenarioRegistry, Stage, WorldDraft };
 export { mountScenario };

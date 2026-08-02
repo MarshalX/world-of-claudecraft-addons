@@ -12,12 +12,28 @@
 // for working on an addon rather than only for photographing a finished one.
 
 import { LOADER_CSS } from '../../loader/src/runtime/ui/styles/index.ts';
-import { type AddonChoice, createPicker, type Selection } from './picker.ts';
+import { type AddonChoice, BARE_CLASS, createPicker, type Selection } from './picker.ts';
 import { type MountedStage, mountScenario, type ScenarioRegistry } from './stage.ts';
 
 /** What the dev server answers with the addon list. Matches serve-core's index. */
 const INDEX_PATH = '/index.json';
 const STYLE_ID = 'woc-addons-style';
+
+/**
+ * The attribute `pnpm shots` waits on, written on the root element.
+ *
+ * A capture has to wait for a FACT rather than for a timeout. Scenarios are
+ * async and take genuinely different amounts of time: `combat-meter` waits out a
+ * real 500ms repaint interval, `cooldown-bars` is done in a microtask. A capture
+ * tool sleeping long enough for the slowest would still be guessing, and the way
+ * guessing fails here is a photograph of a half-drawn panel that looks plausible.
+ *
+ * `failed` is written as well as `ready`, and that half matters more: without it
+ * a scenario that threw would leave the attribute at `loading` forever and the
+ * tool would report a timeout, which sends someone looking at the browser rather
+ * than at the stack the page already has.
+ */
+const STAGE_STATE = 'stage';
 
 interface IndexRow {
   id: string;
@@ -120,7 +136,7 @@ async function swap(
   const manifest = await text(`${dir}/addon.json`);
   const { entry } = JSON.parse(manifest) as { entry: string };
   const source = await text(`${dir}/${entry}`);
-  return await mountScenario({ manifest, source, scenario });
+  return await mountScenario({ id: choice.id, manifest, source, scenario });
 }
 
 /** What the page is holding: the addon on screen, and the swap still landing. */
@@ -143,13 +159,20 @@ interface PageState {
  * disposing it twice on the next change.
  */
 function applySelection(state: PageState, choice: AddonChoice, selection: Selection): void {
+  const doc = globalThis.document;
+  doc.documentElement.dataset[STAGE_STATE] = 'loading';
   state.pending = state.pending
     .then(async () => {
       state.mounted = await swap(state.mounted, choice, selection.scenario);
+      // After the swap resolves rather than beside it: the scenario's own `run`
+      // is awaited inside `mountScenario`, so this is the first moment the panel
+      // on screen is the one the scenario describes.
+      doc.documentElement.dataset[STAGE_STATE] = 'ready';
       return '';
     })
     .catch((err: unknown) => {
       state.mounted = null;
+      doc.documentElement.dataset[STAGE_STATE] = 'failed';
       return reason(err);
     });
 }
@@ -186,6 +209,12 @@ async function start(registry: ScenarioRegistry): Promise<void> {
 
   const picker = createPicker({ doc, addons: choices, onChange: showSelection });
   doc.body.prepend(picker.el);
+  // `?bare=1` is what a capture opens with. The key and the button are for a
+  // person at the page; a headless run has neither, and navigating to a URL that
+  // is already in the right state beats scripting a keystroke to get there.
+  if (new URLSearchParams(globalThis.location.search).get('bare') === '1') {
+    doc.documentElement.classList.add(BARE_CLASS);
+  }
   const initial = readSelection(choices);
   picker.show(initial);
   showSelection(initial);

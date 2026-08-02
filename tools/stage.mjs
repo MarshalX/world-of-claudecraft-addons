@@ -123,8 +123,18 @@ async function handle(req, res, host) {
   await sendFile(res, addonFile, contentType(addonFile), `no such file: ${pathname}\n`);
 }
 
-function main() {
-  const host = gameHost();
+/**
+ * Start the server and resolve once it is accepting connections.
+ *
+ * Exported because `pnpm shots` runs it in-process rather than asking for a
+ * second terminal: that whole run is one command somebody types a few times a
+ * year, and "start the stage first" is a step whose failure arrives as a
+ * connection refused three layers down inside Playwright.
+ *
+ * It rejects rather than exiting, so a caller that owns a browser can still shut
+ * it down. `main` below is what turns a failure into an exit code.
+ */
+function serveStage(host = gameHost()) {
   const server = createServer((req, res) => {
     handle(req, res, host).catch((err) => {
       console.error('stage: request failed', err);
@@ -132,18 +142,29 @@ function main() {
     });
   });
 
-  server.listen(STAGE_PORT, STAGE_HOST, () => {
-    console.log(`stage: http://localhost:${String(STAGE_PORT)}/`);
-    console.log(`stage: ${PROXY_PREFIXES.join(' and ')} proxied to ${host} for art and cues`);
-    console.log('stage: press b on the page to hide the chrome before screenshotting');
+  return new Promise((resolve, reject) => {
+    server.once('error', (err) => {
+      reject(new Error(`could not listen on ${STAGE_HOST}:${String(STAGE_PORT)}: ${err.message}`));
+    });
+    server.listen(STAGE_PORT, STAGE_HOST, () => {
+      resolve(server);
+    });
   });
+}
 
-  server.on('error', (err) => {
-    console.error(`stage: could not listen on ${STAGE_HOST}:${String(STAGE_PORT)}`, err.message);
+async function main() {
+  const host = gameHost();
+  await serveStage(host);
+  console.log(`stage: http://localhost:${String(STAGE_PORT)}/`);
+  console.log(`stage: ${PROXY_PREFIXES.join(' and ')} proxied to ${host} for art and cues`);
+  console.log('stage: press b on the page to hide the chrome before screenshotting');
+}
+
+if (process.argv[1] === fileURLToPath(import.meta.url)) {
+  main().catch((err) => {
+    console.error(`stage: ${err.message}`);
     process.exit(1);
   });
 }
 
-if (process.argv[1] === fileURLToPath(import.meta.url)) {
-  main();
-}
+export { serveStage };
