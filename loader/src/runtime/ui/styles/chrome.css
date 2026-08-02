@@ -102,6 +102,16 @@
   /* A drag that selects the title text instead of moving the window reads as
      the drag having failed. */
   user-select: none;
+  /* The title bar is never what gives way when a frame is shorter than what is
+     in it. Only a window's body carries `flex: 1`, so on a frame with an
+     explicit height the default `flex-shrink: 1` distributes the overflow
+     across BOTH children by their basis, and the bar loses its share: the close
+     button holds its own 24px floor while the bar around it collapses, so the
+     glyph sits outside a header that is no longer tall enough for it. The body
+     is what has `overflow: auto` and `min-height: 0`, so it is what should
+     shrink, and shrinking it is what turns a fixed-height frame into a
+     scrolling one. */
+  flex: 0 0 auto;
 }
 
 #woc-addons .woc-title {

@@ -67,28 +67,71 @@ interface Rect {
 }
 
 /**
- * Where everything one pane drew sits, together.
- *
- * The union rather than the first frame: an addon may put up more than one frame,
- * and a pane around the first would cut the others out of their own preview.
+ * What a pane is cropped around.
  *
  * WORLD ANCHORS COUNT AS DRAWING, which is the whole picture for an addon that
  * puts nothing in a frame at all. Facemark is one: its plates are anchors over
  * units, so a crop that looked only for frames would report that a working addon
  * had drawn nothing. A hidden anchor is excluded for free, since the loader hides
- * one by `display: none` and a rect of no size is already filtered out below.
+ * one by `display: none` and a rect of no size is filtered out below.
+ *
+ * SO DOES A BANNER, and it is the one of the three that is not the addon's own
+ * element: `ui.banner` is a single loader-owned slot at a fixed place on screen,
+ * and an addon that puts a warning in it is drawing exactly as much as one that
+ * draws a row. Longwatch is the case that wanted it, and the alert is half of what
+ * that addon does.
+ */
+const DRAWN = '#woc-addons .woc-addon-frame, #woc-addons .woc-anchor3d';
+const BANNER = '#woc-addons .woc-banner-card';
+
+/**
+ * How far a banner's scrim reaches past its card, as a fraction of the card's box.
+ *
+ * `ui/styles/banner.css` paints it as a pseudo-element at `inset: -70% -20%`, and a
+ * pseudo-element is in no rect the DOM will hand back. Cropping to the card alone
+ * cuts that fade part way down, which photographs as a hard dark band across the
+ * picture rather than as a scrim, so the card's box is grown by what is behind it.
+ * There is nothing to read the number off at run time: if that inset moves, this
+ * moves with it.
+ */
+const SCRIM_REACH = { x: 0.2, y: 0.7 };
+
+function boxOf(rect: DOMRect): Rect {
+  return { x: rect.left, y: rect.top, w: rect.width, h: rect.height };
+}
+
+/** A banner card's box, grown to hold the scrim painted behind it. */
+function withScrim(rect: DOMRect): Rect {
+  return {
+    x: rect.left - rect.width * SCRIM_REACH.x,
+    y: rect.top - rect.height * SCRIM_REACH.y,
+    w: rect.width * (1 + SCRIM_REACH.x * 2),
+    h: rect.height * (1 + SCRIM_REACH.y * 2),
+  };
+}
+
+function boxesIn(doc: Document, selector: string, grow: (rect: DOMRect) => Rect): Rect[] {
+  return [...doc.querySelectorAll(selector)]
+    .map((el) => el.getBoundingClientRect())
+    .filter((rect) => rect.width > 0 && rect.height > 0)
+    .map(grow);
+}
+
+/**
+ * Where everything one pane drew sits, together.
+ *
+ * The union rather than the first frame: an addon may put up more than one frame,
+ * and a pane around the first would cut the others out of their own preview.
  */
 function drawnIn(doc: Document): Rect {
-  const rects = [...doc.querySelectorAll('#woc-addons .woc-addon-frame, #woc-addons .woc-anchor3d')]
-    .map((el) => el.getBoundingClientRect())
-    .filter((rect) => rect.width > 0 && rect.height > 0);
+  const rects = [...boxesIn(doc, DRAWN, boxOf), ...boxesIn(doc, BANNER, withScrim)];
   if (rects.length === 0) {
-    throw new Error('a sheet pane drew nothing: no frame and no anchor');
+    throw new Error('a sheet pane drew nothing: no frame, no anchor and no banner');
   }
-  const left = Math.min(...rects.map((rect) => rect.left));
-  const top = Math.min(...rects.map((rect) => rect.top));
-  const right = Math.max(...rects.map((rect) => rect.right));
-  const bottom = Math.max(...rects.map((rect) => rect.bottom));
+  const left = Math.min(...rects.map((rect) => rect.x));
+  const top = Math.min(...rects.map((rect) => rect.y));
+  const right = Math.max(...rects.map((rect) => rect.x + rect.w));
+  const bottom = Math.max(...rects.map((rect) => rect.y + rect.h));
   return {
     x: Math.max(0, left - PANE_MARGIN),
     y: Math.max(0, top - PANE_MARGIN),

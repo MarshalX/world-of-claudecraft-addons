@@ -9,7 +9,7 @@
 // `.css` import resolves to `''` under Vitest and happy-dom lays nothing out, so
 // the agreement between a class in `ui/kit/` and its rule in `ui/styles/` has only
 // ever been checkable by running the loader against a live game. That is also why
-// 25 of the 27 addons here ship with no `preview.png`: the states worth a picture
+// most addons here still ship with no `preview.png`: the states worth a picture
 // (a taunt holding a mob, a loot roll, one debuff school ticking) cannot be
 // summoned on demand by playing.
 //
@@ -19,12 +19,13 @@
 // the assertions taken out, and neither can drift into describing a game the
 // other would not recognise.
 
+import type { NetState } from '../../loader/src/runtime/net/state.ts';
 import type { FrameBox } from '../../loader/src/runtime/ui/frame/geometry.ts';
 import { perCharacterKey, uiNamespace } from '../../loader/src/shared/storage-keys.ts';
 import { mountAddon } from '../../tests/fakes/addon.ts';
 import { liveEntity } from '../../tests/fakes/entity.ts';
 import { PLAYER_ENTITY } from '../../tests/fakes/frames.ts';
-import type { SharedHarness } from '../../tests/fakes/shared-services.ts';
+import { type SharedHarness, WALL_CLOCK_MS } from '../../tests/fakes/shared-services.ts';
 import { createFakeStorage } from '../../tests/fakes/storage.ts';
 import { createStageCamera, type ModelSpec, type StageCamera } from './camera.ts';
 
@@ -113,8 +114,33 @@ interface Stage extends WorldDraft {
   frame: (count?: number) => void;
   /** Move the addon-visible clock, which is what `woc.now()` reads. */
   advance: (ms: number) => void;
+  /**
+   * Let this much WALL clock pass, which is what a stored stamp is read against.
+   *
+   * The pair of `advance` rather than a rename of it, because the two clocks come
+   * apart and an addon that survives a reload is written to the difference:
+   * `woc.now()` is monotonic and restarts from near zero on every page load, so
+   * anything counting a six hour respawn down stamps the kill with
+   * `woc.wallClock()` instead. A scenario about one of those has to be able to say
+   * that a kill happened twenty minutes ago, and this is the only way to say it.
+   *
+   * Forward only, and a delta rather than a stamp: a scenario knows how long ago
+   * something happened and has no business knowing what epoch the fake started at.
+   */
+  elapse: (ms: number) => void;
   /** Deliver one inbound socket frame, as the socket hook would. */
   inbound: (frame: unknown) => void;
+  /**
+   * Override part of what `net.state` answers.
+   *
+   * Here for the reason it is on the shared harness: `latencyMs` is the one field
+   * of it addons actually draw and it CANNOT be produced by driving this fake,
+   * since it is measured by pairing an outbound input frame's sequence number
+   * against a later snapshot's acknowledgement and only the inbound tap is wired.
+   * A scenario that wants `cadence`'s latency band therefore states a round trip,
+   * exactly as that addon's suite does.
+   */
+  netState: (patch: Partial<NetState>) => void;
   /** Press a combo in the manifest's own spelling, e.g. 'Alt+Shift+KeyD'. */
   press: (combo: string) => void;
   /** Let a pending frame restore land before the next step reads the DOM. */
@@ -295,6 +321,10 @@ interface ControlDeps {
 /** The controls, bound to a harness that is already up. */
 function createControls(deps: ControlDeps): Stage {
   const { harness } = deps;
+  // The harness takes a STAMP, so the running total lives here: a scenario says
+  // how long ago something happened, and where the fake's epoch started is not
+  // something it should have to know or repeat.
+  let wall = WALL_CLOCK_MS;
   return {
     ...deps.draft,
     poll: () => {
@@ -306,7 +336,12 @@ function createControls(deps: ControlDeps): Stage {
       }
     },
     advance: harness.advance,
+    elapse: (ms) => {
+      wall += ms;
+      harness.setWallClock(wall);
+    },
     inbound: harness.inbound,
+    netState: harness.netState,
     press: harness.press,
     settle: settleFrames,
   };
