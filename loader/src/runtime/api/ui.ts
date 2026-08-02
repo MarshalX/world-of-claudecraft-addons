@@ -166,7 +166,9 @@ function guarded(deps: UiDeps, opts: FrameOpts): FrameOpts {
 function addonFrame(deps: UiDeps, opts: FrameOpts, chrome: 'frame' | 'window'): AddonFrame {
   const frame = createAddonFrame({
     doc: deps.doc,
-    root: deps.kit.root,
+    // The hud band: an addon frame is HUD furniture and belongs under the game's
+    // own windows, which is the whole of why there are two bands. See ui/root.ts.
+    root: deps.kit.hud,
     fqid: deps.fqid,
     chrome,
     opts: guarded(deps, opts),
@@ -266,7 +268,7 @@ function createUi(deps: UiDeps): UiApi {
     project: (at) => projected(deps, at),
 
     alert: (opts) => {
-      const modal = openAlert({ doc: deps.doc, root: kit.root }, opts);
+      const modal = openAlert({ doc: deps.doc, root: kit.overlay }, opts);
       // The bag closes it if the addon is disabled mid-question, which resolves
       // the promise rather than leaving the addon's await hanging.
       const drop = bag.add(modal.close);

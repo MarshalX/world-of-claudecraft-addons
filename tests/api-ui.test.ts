@@ -25,6 +25,7 @@ import { createToaster } from '../loader/src/runtime/ui/kit/toast.ts';
 import { createTooltips } from '../loader/src/runtime/ui/kit/tooltip.ts';
 import { createUnlockMode } from '../loader/src/runtime/ui/kit/unlock.ts';
 import type { UiKit } from '../loader/src/runtime/ui/mount.ts';
+import { HUD_BAND_CLASS, OVERLAY_BAND_CLASS } from '../loader/src/runtime/ui/root.ts';
 import type { ScreenPoint } from '../loader/src/runtime/world/project.ts';
 import { inertFrameLoop } from './fakes/frame-loop.ts';
 import { enterWorld, mountStartScreen } from './fakes/game-dom.ts';
@@ -66,6 +67,13 @@ function open() {
   const root = document.createElement('div');
   root.id = 'woc-addons';
   document.body.appendChild(root);
+  // Real bands rather than the root aliased twice, so a surface mounted into the
+  // wrong one is something a case here could see. See loader ui/root.ts.
+  const hud = document.createElement('div');
+  hud.className = HUD_BAND_CLASS;
+  const overlay = document.createElement('div');
+  overlay.className = OVERLAY_BAND_CLASS;
+  root.append(hud, overlay);
 
   const injector = createGameInjector({ doc: document });
   teardown.push(injector.dispose);
@@ -82,17 +90,19 @@ function open() {
     project,
     unitPoint,
     root,
+    hud,
+    overlay,
     roster: createFrameRoster(),
     injector,
-    toaster: createToaster({ doc: document, root, ...timers }),
-    banner: createBanner({ doc: document, root, ...timers }),
-    tooltips: createTooltips({ doc: document, root, viewport: () => VIEW }),
-    menus: createMenus({ doc: document, root, viewport: () => VIEW }),
+    toaster: createToaster({ doc: document, root: overlay, ...timers }),
+    banner: createBanner({ doc: document, root: overlay, ...timers }),
+    tooltips: createTooltips({ doc: document, root, layer: overlay, viewport: () => VIEW }),
+    menus: createMenus({ doc: document, root: overlay, viewport: () => VIEW }),
     // A projector that answers, so an anchor an addon creates has somewhere to be,
     // and a loop that never runs, so nothing here needs stopping.
     anchors: createAnchors({
       doc: document,
-      root,
+      root: hud,
       project,
       unitPoint,
       viewport: () => VIEW,
@@ -131,6 +141,44 @@ describe('creating surfaces', () => {
     const frame = ui.frame({ id: 'meter', title: 'DPS' });
 
     expect(frame.el.closest('#woc-addons')).not.toBeNull();
+  });
+
+  // Which band, not merely which root. A frame is HUD furniture and belongs under
+  // the game's own windows, which is what stopped the ESC menu opening behind one;
+  // everything the player opened or the loader raised belongs over all of it. See
+  // loader ui/root.ts.
+  it('puts a frame in the hud band and everything raised in the overlay band', async () => {
+    const { ui, kit } = open();
+
+    const frame = ui.frame({ id: 'meter', title: 'DPS' });
+    ui.toast('Pull in 5');
+    ui.banner('Deathless Rage');
+    const answer = ui.alert({ message: 'Reset?', buttons: [{ id: 'yes', label: 'Yes' }] });
+
+    expect(frame.el.parentElement).toBe(kit.hud);
+    expect(kit.hud.querySelector('.woc-toast')).toBeNull();
+    expect(kit.overlay.querySelector('.woc-toast')).not.toBeNull();
+    expect(kit.overlay.querySelector('#woc-banner')).not.toBeNull();
+    expect(kit.overlay.querySelector('.woc-modal-backdrop')).not.toBeNull();
+
+    document.querySelector<HTMLButtonElement>('.woc-modal-buttons button')?.click();
+    await answer;
+  });
+
+  // The tooltip is drawn in the overlay band while its WATCHER covers the whole
+  // root, because the element it is describing is an addon's own row down in the
+  // hud band. A tooltip in the hud band would be behind the game's own windows.
+  it('draws the tooltip over every frame', () => {
+    const { ui, kit } = open();
+    const frame = ui.frame({ id: 'meter' });
+    const row = document.createElement('div');
+    frame.body.appendChild(row);
+
+    ui.tooltip(row, 'Aimed Shot');
+    row.dispatchEvent(new Event('pointerenter'));
+
+    expect(kit.overlay.querySelector('#woc-tooltip')).not.toBeNull();
+    expect(document.getElementById('woc-tooltip')?.textContent).toContain('Aimed Shot');
   });
 
   it('gives window a close button and frame none', () => {

@@ -208,6 +208,48 @@ describe('the bare density', () => {
   });
 });
 
+// Only the class, because a Vitest suite cannot read the sheet: every .css import
+// resolves to '' under vitest, so what the rule DOES is checked by running the
+// loader. The class is still worth pinning, since it is the whole of the contract
+// between frame-chrome.ts and styles/chrome.css and a rename breaks it silently.
+describe('the pointer policy', () => {
+  // The default that matters. The game binds world mousedown and wheel to its
+  // canvas, so a solid overlay takes targeting, camera look and zoom together, and
+  // a bare frame is over the world by definition.
+  it('makes a bare frame click-through where it drew nothing', () => {
+    expect(
+      open({ id: 'overlay', density: 'bare' }).el.classList.contains('woc-pointer-content'),
+    ).toBe(true);
+  });
+
+  // A panel is a surface the player operates, and one with holes in it is a
+  // surface that sometimes ignores them.
+  it('leaves every other density solid', () => {
+    expect(open({ id: 'a' }).el.classList.contains('woc-pointer-auto')).toBe(true);
+    expect(open({ id: 'b', density: 'compact' }).el.classList.contains('woc-pointer-auto')).toBe(
+      true,
+    );
+  });
+
+  it('honours what the addon asked for over the density default', () => {
+    const inert = open({ id: 'overlay', density: 'bare', pointer: 'none' });
+    const solid = open({ id: 'strip', density: 'bare', pointer: 'auto' });
+
+    expect(inert.el.classList.contains('woc-pointer-none')).toBe(true);
+    expect(solid.el.classList.contains('woc-pointer-auto')).toBe(true);
+  });
+
+  // The same shape as the density fallback, and for a stronger reason: a typo
+  // here would silently punch a hole in a panel the player has to click.
+  it('falls back to the density default for a value nobody offers', () => {
+    const odd = open({ id: 'a', pointer: 'ghost' as 'none' });
+    const oddBare = open({ id: 'b', density: 'bare', pointer: 'ghost' as 'none' });
+
+    expect(odd.el.classList.contains('woc-pointer-auto')).toBe(true);
+    expect(oddBare.el.classList.contains('woc-pointer-content')).toBe(true);
+  });
+});
+
 describe('sizing', () => {
   // A frame is content-sized. Writing a height would leave it padded out or
   // clipped as its text changes.

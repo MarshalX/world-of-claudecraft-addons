@@ -5,19 +5,56 @@
  * whole sheet is injected unlayered are all documented there.
  */
 
+/* The root generates NO BOX, which is what lets the two bands inside it sit at
+   different depths of the game. `position: fixed` always creates a stacking
+   context whatever its z-index, so a root that were a layer itself would trap both
+   bands in one and put addon frames back on top of the game's own menus. It still
+   carries the mode classes and the inherited type and colour, both of which reach
+   the bands through `display: contents` normally. See ui/root.ts. */
 #woc-addons {
-  position: fixed;
-  inset: 0;
-  /* Above every game surface. The game's own ceiling is 100000. */
-  z-index: 100001;
-  /* The root is a full-screen layer so a window can be centered in it, but it
-     must not eat clicks meant for the world: only the windows inside take them. */
-  pointer-events: none;
+  display: contents;
   font-family: var(--font-ui, system-ui, sans-serif);
   color: var(--color-text-light, rgb(240 235 216));
 }
 
-#woc-addons > * {
+#woc-addons .woc-hud-band,
+#woc-addons .woc-overlay-band {
+  position: fixed;
+  inset: 0;
+  /* A band is a full-screen layer so a window can be centered in it, but it must
+     not eat clicks meant for the world: only what an addon puts inside takes
+     them, and that is decided per frame by kit/frame-chrome.ts. */
+  pointer-events: none;
+}
+
+/* Under the game's HUD (`#ui` is 10, and 80 or 90 in its other layouts) and over
+   the world (`#game-canvas` is 0, `#nameplates` is 1). This is the whole of the
+   fix for a game window opening behind an addon frame: every one of them, the ESC
+   menu included, is a `.window` INSIDE `#ui`. */
+#woc-addons .woc-hud-band {
+  z-index: 5;
+}
+
+/* Above every game surface. The game's own ceiling is 100000. */
+#woc-addons .woc-overlay-band {
+  z-index: 100001;
+}
+
+/* `:where()` so this weighs exactly what the `#woc-addons > *` it replaced did,
+   (1,0,0). Two surfaces in kit.css turn the pointer back off at that same weight
+   and win on source order alone: the toast stack, which would otherwise put a dead
+   strip across the top of the world, and the tooltip, which would flicker by
+   leaving the element it was opened from. A band selector carrying its own class
+   would silently outrank both.
+
+   One rule per band rather than one `:where(a, b)`, because the build's scoping
+   guard splits a selector list on commas and would read the second half as an
+   unscoped rule. See loader/build-runtime.mjs. */
+#woc-addons :where(.woc-hud-band) > * {
+  pointer-events: auto;
+}
+
+#woc-addons :where(.woc-overlay-band) > * {
   pointer-events: auto;
 }
 
@@ -301,6 +338,36 @@
   cursor: auto;
 }
 
+/* Which parts of a frame take the pointer (ui.frame `pointer`, see
+ * ui/kit/frame-chrome.ts for what the three positions mean and why they exist).
+ *
+ * The whole of the mechanism, because `pointer-events` INHERITS: turning the
+ * frame off turns everything inside it off, and naming a descendant is only ever
+ * needed to turn one back ON. So `none` is one declaration, and `content` is that
+ * declaration plus the two things a frame draws that must stay live, its title bar
+ * and whatever the addon put in its body. A row's own children inherit the `auto`
+ * from the row, so an addon's tree is reached however deep it goes.
+ *
+ * `> *` rather than a descendant selector on purpose: the addon's rows are what is
+ * being turned back on, and turning every node under them on individually would
+ * override a `pointer-events: none` the addon set on a decoration inside one.
+ *
+ * What follows from this, and is the whole of what an author has to hold: with
+ * `content` you grab the frame by something it DREW. A drag or an edge resize
+ * starting over a row works, and one starting over the empty half of the box goes
+ * to the game, because there is nothing there. That is the same sentence as the
+ * feature, not a second rule, and the unlock mode below is the answer for a frame
+ * that is drawing nothing at all. */
+#woc-addons .woc-window.woc-pointer-content,
+#woc-addons .woc-window.woc-pointer-none {
+  pointer-events: none;
+}
+
+#woc-addons .woc-pointer-content .woc-titlebar,
+#woc-addons .woc-pointer-content .woc-frame-body > * {
+  pointer-events: auto;
+}
+
 /* The arrange-your-UI mode (ui/kit/unlock.ts).
  *
  * While the root carries this class every addon frame is outlined, washed and
@@ -337,6 +404,21 @@
      OPERATES, and an empty frame is a target before it is a frame. */
   min-height: 40px;
   cursor: move;
+}
+
+/* Arrange mode takes the pointer back, whatever the frame's `pointer` policy says.
+ *
+ * This is the half of the mode that makes it work at all for the frames that need
+ * it most: a `content` or `none` overlay is grabbable only where it drew
+ * something, and the case the mode exists for is the one that drew nothing. An
+ * outline the player can see and cannot grab is worse than no outline.
+ *
+ * The extra `.woc-window` is specificity rather than decoration. Both pointer
+ * rules above are (1,2,0) and so is the outline rule this sits under, so without
+ * a third class the winner would be whichever sheet was concatenated last, which
+ * is a question nobody should have to ask about arrange mode working. */
+#woc-addons.woc-unlocked .woc-window.woc-addon-frame {
+  pointer-events: auto;
 }
 
 /* The area, not just the edge. An empty bare frame outlined alone is a hairline

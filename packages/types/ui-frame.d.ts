@@ -6,6 +6,8 @@
 
 export type FrameDensity = 'comfortable' | 'compact' | 'bare';
 
+export type FramePointer = 'auto' | 'content' | 'none';
+
 /** Where a frame is, in page pixels. The loader owns it; see `FrameOpts.onMove`. */
 export interface FrameBox {
   x: number;
@@ -96,6 +98,38 @@ export interface FrameOpts {
    * matching density for free.
    */
   density?: FrameDensity;
+  /**
+   * Which parts of your frame take the pointer. Since apiMinor 2.
+   *
+   * Defaults to 'content' on a `bare` frame and 'auto' everywhere else, which is
+   * almost always what you want; set it when your overlay is bigger than what it
+   * draws, or when it is a readout the player should never have to click at all.
+   *
+   * This matters more here than it would on a web page, because the game binds
+   * the world's `mousedown` and `wheel` to its canvas. An element over the world
+   * does not just cover a click, it takes the whole gesture: selecting a target,
+   * holding right to turn the camera, and scrolling to zoom, all three, for as
+   * long as it is there. Nothing can hand them on afterwards. So the size of your
+   * frame is the size of the hole you have made in the player's controls, and
+   * these are the three ways to shrink it:
+   *
+   *  - 'auto' is the whole box, chrome, padding and empty space included. Right
+   *    for a panel the player operates, and for anything with a form in it.
+   *  - 'content' makes the box transparent and leaves what you DREW taking the
+   *    pointer. Gaps, padding and the dead width beside a short row fall through
+   *    to the world; your rows keep their hover, their tooltip and their clicks.
+   *  - 'none' is inert. No hover, no tooltip, no click, nothing to hit. For a
+   *    readout that is purely a readout.
+   *
+   * Two consequences worth holding on to. With 'content' you grab the frame by
+   * something it drew, so a drag or an edge resize works over a row and goes to
+   * the game over empty space; with 'none' there is nothing to grab at all. In
+   * both cases the unlock mode is the way in, which is what it is for, and it
+   * hands the whole frame back to the pointer for as long as it is on. And a
+   * tooltip needs hover, so 'none' is a choice to give tooltips up: the browser
+   * has no way to watch a pointer that is passing through.
+   */
+  pointer?: FramePointer;
   /**
    * Where the frame ended up, after every move the loader made.
    *

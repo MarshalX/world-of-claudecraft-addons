@@ -13,6 +13,15 @@
 #woc-addons .woc-tile {
   position: relative;
   flex: 0 0 auto;
+  /* The border is INSIDE the square, so the size an addon asks for is the size the
+     tile occupies. Under the default content-box a 40px tile measures 42px on
+     screen, which is wrong twice: the tap-target floor this default states is not
+     the floor it renders, and a strip sized to hold exactly one row of tiles clips
+     the bottom border off all of them. kit/tile.ts hands the size straight to a
+     custom property, so a caller has no way to know it should subtract two, and
+     `cooldown-bars` is the worked example: its strip frame IS the tile size, since
+     resizing the frame is how the player picks it. */
+  box-sizing: border-box;
   width: var(--woc-tile-size, 40px);
   height: var(--woc-tile-size, 40px);
   overflow: hidden;

@@ -32,6 +32,52 @@ type FrameDensity = 'comfortable' | 'compact' | 'bare';
 const DENSITIES: readonly FrameDensity[] = ['comfortable', 'compact', 'bare'];
 
 /**
+ * Which parts of a frame take the pointer, and therefore which parts of the world
+ * behind it the player cannot click.
+ *
+ * The game binds `mousedown` and `wheel` to the CANVAS, so an element covering it
+ * does not merely sit in front of a click, it consumes the whole gesture:
+ * targeting, right-drag camera look and zoom together. Nothing can be forwarded
+ * on afterwards, since the loader's root is not an ancestor of the canvas and a
+ * synthesised event is both untrusted and forbidden here. `pointer-events` is the
+ * only lever there is, which is why this is an option rather than a fix.
+ *
+ * It is also the game's own idiom: every read-only overlay it draws is
+ * `pointer-events: none` (`#nameplates`, `#perf-overlay`, `#aura-overlays`) and
+ * the aura overlay takes the pointer only under its `.placement` class, which is
+ * its arrange mode. This kit's arrange mode is the unlock switch, and it forces
+ * every frame back to `auto` for the same reason.
+ *
+ * `auto` is the whole box, chrome and empty space included. `content` makes the
+ * box transparent and leaves what the addon DREW taking the pointer, so padding,
+ * gaps and dead width fall through while rows keep their hover and their tooltip.
+ * `none` is inert: no hover, no tooltip, no click.
+ */
+type FramePointer = 'auto' | 'content' | 'none';
+
+const POINTERS: readonly FramePointer[] = ['auto', 'content', 'none'];
+
+/**
+ * A bare frame is `content` unless it says otherwise, and every other one is `auto`.
+ *
+ * The default is per density because the densities mean different things. A panel
+ * is a surface the player operates, and a surface with holes in it is a surface
+ * that sometimes ignores them. `bare` exists for an overlay that IS its content,
+ * drawn over a world the player is still playing, and the empty half of one is
+ * invisible: solid by default it is a rectangle that swallows clicks while showing
+ * nothing, which is what a resizable bare frame with nothing to draw already was.
+ */
+function pointerOf(opts: FrameOpts, density: FrameDensity): FramePointer {
+  if (opts.pointer !== undefined && POINTERS.includes(opts.pointer)) {
+    return opts.pointer;
+  }
+  if (density === 'bare') {
+    return 'content';
+  }
+  return 'auto';
+}
+
+/**
  * A window is never bare, and that is a refusal rather than an omission.
  *
  * A window is a panel the player opens and CLOSES, and its close button lives in
@@ -85,6 +131,8 @@ interface FrameOpts {
   className?: string;
   /** How tightly the loader's own chrome is drawn. Defaults to 'comfortable'. */
   density?: FrameDensity;
+  /** Which parts take the pointer. Defaults to 'content' when bare, else 'auto'. */
+  pointer?: FramePointer;
   /**
    * Where the frame ended up, after every move the loader made.
    *
@@ -126,12 +174,12 @@ interface ChromeDeps {
  * gone. An empty one then collapses to that border and reads as a stray dot on
  * the HUD, which is what this was found doing.
  */
-function frameClasses(chrome: FrameChrome, density: FrameDensity): string {
-  const own = `woc-window woc-addon-frame woc-chrome-${chrome} woc-density-${density}`;
+function frameClasses(chrome: FrameChrome, density: FrameDensity, pointer: FramePointer): string {
+  const variants = `woc-chrome-${chrome} woc-density-${density} woc-pointer-${pointer}`;
   if (density === 'bare') {
-    return own;
+    return `woc-window woc-addon-frame ${variants}`;
   }
-  return `woc-window panel woc-addon-frame woc-chrome-${chrome} woc-density-${density}`;
+  return `woc-window panel woc-addon-frame ${variants}`;
 }
 
 /** A window is a dialog the player opened; a frame is grouped HUD furniture. */
@@ -182,7 +230,7 @@ function buildChrome(deps: ChromeDeps): Chrome {
   const density = densityOf(opts, deps.chrome);
 
   const el = doc.createElement('section');
-  el.className = frameClasses(deps.chrome, density);
+  el.className = frameClasses(deps.chrome, density, pointerOf(opts, density));
   if (opts.className !== undefined) {
     el.classList.add(opts.className);
   }
@@ -223,5 +271,5 @@ function buildChrome(deps: ChromeDeps): Chrome {
   return { el, handle, title, body, close };
 }
 
-export type { Chrome, ChromeDeps, FrameChrome, FrameDensity, FrameOpts };
+export type { Chrome, ChromeDeps, FrameChrome, FrameDensity, FrameOpts, FramePointer };
 export { buildChrome };

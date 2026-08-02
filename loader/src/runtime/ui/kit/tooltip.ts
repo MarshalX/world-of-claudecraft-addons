@@ -41,8 +41,18 @@ const EDGE_MARGIN_PX = 8;
 
 interface TooltipDeps {
   doc: Document;
-  /** The #woc-addons root. */
+  /**
+   * The #woc-addons root, which is what the anchor watcher covers.
+   *
+   * The root rather than the band the tip is drawn in, because the anchor being
+   * watched is an addon's own row, and those are down in the hud band. Still
+   * scoped rather than the document: addon DOM is all under here and the game's
+   * HUD is not, and a body-level subtree observer would wake on every HUD change
+   * at snapshot rate to answer a question about our own elements.
+   */
   root: HTMLElement;
+  /** The band the tip element is drawn in, which has to be over every frame. */
+  layer: HTMLElement;
   viewport: () => { w: number; h: number };
 }
 
@@ -62,7 +72,7 @@ function ensureTip(deps: TooltipDeps): HTMLElement {
   tip.className = 'woc-tooltip panel';
   tip.setAttribute('role', 'tooltip');
   tip.hidden = true;
-  deps.root.appendChild(tip);
+  deps.layer.appendChild(tip);
   return tip;
 }
 

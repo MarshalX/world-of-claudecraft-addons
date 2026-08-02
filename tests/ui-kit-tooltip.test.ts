@@ -27,8 +27,13 @@ afterEach(() => {
 });
 
 describe('tooltips', () => {
+  // The watcher's scope and the band the tip is drawn in are the same element
+  // here. They differ in the loader (ui/root.ts), and nothing in this suite is
+  // about that difference: every case is about the hover, so one host keeps the
+  // cases readable rather than hiding a decision they could get wrong.
   function open() {
-    return createTooltips({ doc: document, root: root(), viewport: () => VIEW });
+    const host = root();
+    return createTooltips({ doc: document, root: host, layer: host, viewport: () => VIEW });
   }
 
   function anchor(): HTMLElement {
@@ -122,7 +127,7 @@ describe('an anchor that leaves the document', () => {
 
   function setup() {
     const host = root();
-    const tips = createTooltips({ doc: document, root: host, viewport: () => VIEW });
+    const tips = createTooltips({ doc: document, root: host, layer: host, viewport: () => VIEW });
     return { host, tips };
   }
 
@@ -264,7 +269,7 @@ describe('an anchor that leaves the document', () => {
 describe('what a tooltip says', () => {
   function open(content: Parameters<ReturnType<typeof createTooltips>['attach']>[1]) {
     const host = root();
-    const tips = createTooltips({ doc: document, root: host, viewport: () => VIEW });
+    const tips = createTooltips({ doc: document, root: host, layer: host, viewport: () => VIEW });
     const anchor = document.createElement('div');
     host.appendChild(anchor);
     tips.attach(anchor, content);
@@ -331,7 +336,7 @@ describe('what a tooltip says', () => {
   // the next one: a row with no title after a row with one would keep the title.
   it('replaces what the previous anchor put there', () => {
     const host = root();
-    const tips = createTooltips({ doc: document, root: host, viewport: () => VIEW });
+    const tips = createTooltips({ doc: document, root: host, layer: host, viewport: () => VIEW });
     const first = document.createElement('div');
     const second = document.createElement('div');
     host.append(first, second);
@@ -363,7 +368,7 @@ describe('an anchor the browser has stopped considering hovered', () => {
 
   function setup() {
     const host = root();
-    const tips = createTooltips({ doc: document, root: host, viewport: () => VIEW });
+    const tips = createTooltips({ doc: document, root: host, layer: host, viewport: () => VIEW });
     const list = document.createElement('div');
     const anchor = document.createElement('div');
     const elsewhere = document.createElement('div');

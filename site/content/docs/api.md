@@ -299,6 +299,28 @@ Keep the `title` even so. It is not drawn, but it is the frame's accessible name
 
 You get that for free: it is one mode on the loader's root, so any frame you create takes part without asking. It is also why you should not build your own idle placeholder before trying it.
 
+### What your frame takes away from the player
+
+Your frame is over a world the player is still playing, and the game binds the world's `mousedown` and `wheel` to its canvas. An element on top of that does not merely cover a click: it takes the whole gesture, so selecting a target, holding right to turn the camera and scrolling to zoom all stop working inside your frame's box, and nothing can hand them on afterwards. The size of your frame is the size of the hole you have made in the controls.
+
+`pointer` is how you shrink it, and it defaults to the right thing: `'content'` on a bare frame, `'auto'` everywhere else.
+
+```js
+const strip = woc.ui.frame({ id: 'timers', density: 'bare', pointer: 'content' });
+```
+
+- `'auto'` is the whole box, chrome, padding and empty space included. Right for a panel the player operates, and for anything with a form in it.
+- `'content'` makes the box transparent and leaves what you DREW taking the pointer. The gaps between your rows, the padding, and the dead width beside a short row all fall through to the world; your rows keep their hover, their tooltip and their clicks.
+- `'none'` is inert. Nothing in the frame can be hovered or clicked, which also means no tooltips: the browser has no way to watch a pointer that is passing through.
+
+The one thing to hold on to is how you then grab it. With `'content'` you grab the frame by something it drew, so a drag over a row moves it and a drag over empty space goes to the game; with `'none'` there is nothing to grab at all. The unlock mode is the way in for both, and hands the whole frame back to the pointer for as long as it is on, which is what it is for.
+
+### Where your frame sits
+
+Frames are drawn UNDER the game's own windows and over the world. Opening the game menu, the bags, the map or the spellbook covers your frame, and that is deliberate: a frame is HUD furniture, and a window the player just opened should be in front of it. The price is that the game's chat and action bars cover it too.
+
+What the loader draws ON TOP of everything is what the player opened or what it raised itself: the manager, a `ui.menu`, a `ui.toast`, a `ui.alert`, a `ui.banner`, and the tooltip on your own row. So a warning that has to be seen belongs in a banner or a toast rather than in a frame you hope is not covered.
+
 ### Laying out against your own frame
 
 `resizable: true` puts the box in the player's hands, and `onMove` tells you where it ended up. The loader owns that box: it writes the position, and the size of a resizable frame, and it re-clamps both when the viewport changes and when a saved box is restored, so this is the only account of it you can trust.

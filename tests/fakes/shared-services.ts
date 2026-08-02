@@ -27,6 +27,7 @@ import { createStacking } from '../../loader/src/runtime/ui/kit/stacking.ts';
 import { createToaster } from '../../loader/src/runtime/ui/kit/toast.ts';
 import { createTooltips } from '../../loader/src/runtime/ui/kit/tooltip.ts';
 import { createUnlockMode } from '../../loader/src/runtime/ui/kit/unlock.ts';
+import { HUD_BAND_CLASS, OVERLAY_BAND_CLASS } from '../../loader/src/runtime/ui/root.ts';
 import { createWorldHub } from '../../loader/src/runtime/world/hub.ts';
 import { createFrameClock, type FrameClock } from './frame-loop.ts';
 import { createFakeStorage, type FakeStorage } from './storage.ts';
@@ -147,6 +148,21 @@ interface SharedOptions {
    * before world entry and a suite that waited for this would hang, not fail.
    */
   game?: Promise<unknown>;
+  /**
+   * What the loader measures the screen as, for placing frames and popovers.
+   *
+   * An option rather than a constant because the two consumers want opposite
+   * things. A suite wants a viewport that cannot move under it, which is what the
+   * fixed default gives. `stage/` wants the one actually on screen: the addon
+   * root is `position: fixed; inset: 0`, so a frame centred in an 800px viewport
+   * that is really 1600px wide sits visibly off to the left.
+   *
+   * It has to be settable HERE rather than patched afterwards. `api/bind.ts`
+   * copies `shared.viewport` by reference when the addon's surface is assembled,
+   * and `kit/frame.ts` takes it from its deps the same way, so a function
+   * replaced after `loadAddon` is one nothing reads.
+   */
+  viewport?: () => { w: number; h: number };
 }
 
 /**
@@ -160,6 +176,19 @@ function createSharedServices(
   const root = doc.createElement('div');
   root.id = 'woc-addons';
   doc.body.appendChild(root);
+  // The two stacking bands, built as the loader builds them rather than aliased to
+  // the root. Aliasing would make every band a suite could get wrong the same
+  // element, so a frame mounted into the overlay would pass. See ui/root.ts.
+  const hud = doc.createElement('div');
+  hud.className = HUD_BAND_CLASS;
+  const overlay = doc.createElement('div');
+  overlay.className = OVERLAY_BAND_CLASS;
+  root.append(hud, overlay);
+
+  // One reader behind every surface that measures the screen. Two of them
+  // disagreeing would put a tooltip off the edge of the viewport its own frame
+  // was placed inside.
+  const viewport = options.viewport ?? ((): { w: number; h: number } => VIEWPORT);
 
   // One clock behind both the net hub and woc.now(), so a suite that advances
   // time moves what an addon measures with and what the bus timestamps by.
@@ -170,8 +199,8 @@ function createSharedServices(
 
   const injector = createGameInjector({ doc });
   const noTimers = { setTimer: () => 0, clearTimer: () => undefined };
-  const toaster = createToaster({ doc, root, ...noTimers });
-  const banner = createBanner({ doc, root, ...noTimers });
+  const toaster = createToaster({ doc, root: overlay, ...noTimers });
+  const banner = createBanner({ doc, root: overlay, ...noTimers });
   // Neither settles, so `icon.ability` and `icon.item` stay optimistic: the same
   // state a row drawn before the art manifests land is in.
   const pendingManifest = (): Promise<unknown> => new Promise(() => undefined);
@@ -179,8 +208,8 @@ function createSharedServices(
     createSkillArt({ fetchJson: pendingManifest }),
     createItemArt({ fetchJson: pendingManifest }),
   );
-  const tooltips = createTooltips({ doc, root, viewport: () => VIEWPORT });
-  const menus = createMenus({ doc, root, viewport: () => VIEWPORT });
+  const tooltips = createTooltips({ doc, root, layer: overlay, viewport });
+  const menus = createMenus({ doc, root: overlay, viewport });
   // The projector answers, so an addon's anchor lands somewhere; the frame clock
   // does not, so nothing here runs a loop a suite would have to stop.
   // The real loop over a clock the suite steps. Nothing runs until `frames.tick`,
@@ -196,10 +225,10 @@ function createSharedServices(
   const unitPoint = (): null => null;
   const anchors = createAnchors({
     doc,
-    root,
+    root: hud,
     project,
     unitPoint,
-    viewport: () => VIEWPORT,
+    viewport,
     frames: frames.loop,
   });
   const keyTarget = new EventTarget();
@@ -256,6 +285,8 @@ function createSharedServices(
     frames: frames.loop,
     kit: {
       root,
+      hud,
+      overlay,
       injector,
       toaster,
       banner,
@@ -284,7 +315,7 @@ function createSharedServices(
     },
     now,
     wallClock: () => wall,
-    viewport: () => VIEWPORT,
+    viewport,
     pick: () => 0,
   };
 

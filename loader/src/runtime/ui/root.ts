@@ -1,4 +1,4 @@
-// The #woc-addons root element and the loader stylesheet.
+// The #woc-addons root element, its two stacking bands, and the loader stylesheet.
 //
 // Addon DOM lives here rather than under the game's #ui, which the HUD rebuilds.
 // The root is a sibling of #ui and a direct child of body, so nothing the game
@@ -8,9 +8,40 @@
 // or @layer components, and an unlayered rule outranks any layered one whatever
 // the specificity, so addon styling survives a game update that adds another
 // layer or reorders the ones it has.
+//
+// THE ROOT DRAWS NOTHING AND IS NOT A LAYER. It used to be one, fixed and
+// inset:0 at a z-index above the game's own ceiling, and that single number was
+// the whole reason the game menu opened UNDERNEATH an addon frame: `#options-menu`
+// is a `.window` inside `#ui`, so one z-index above `#ui` is one z-index above
+// every window the game has. There is no slotting into `#ui` from outside it,
+// since it is one stacking context, so the answer is two bands and a root that is
+// neither. `display: contents` is what makes that possible: `position: fixed`
+// ALWAYS creates a stacking context whatever its z-index, so a root that had a box
+// would trap both bands inside one layer again.
 
 const ROOT_ID = 'woc-addons';
 const STYLE_ID = 'woc-addons-style';
+/**
+ * The two layers everything the loader draws goes into.
+ *
+ * Both are `position: fixed; inset: 0`, so each is its own stacking context in
+ * the document's, competing directly with `#game-canvas` (0), `#nameplates` (1)
+ * and `#ui` (10, and 80 or 90 in the game's other layouts).
+ *
+ * The split is the frame/window distinction the kit already draws, made visible:
+ * a frame is HUD FURNITURE and belongs among the game's own HUD, under any window
+ * the player deliberately opened, so the hud band sits below `#ui`. Everything the
+ * player opened or the loader raised (the manager, a menu, a toast, a modal, a
+ * tooltip, a banner) belongs above all of it, so the overlay band stays where the
+ * old single root was.
+ *
+ * What follows and is worth being deliberate about: an addon frame is now covered
+ * by the game's bags, spellbook, map and menu, and that is the point. It is also
+ * covered by the game's chat and action bars, which is the price, and the right
+ * one: those are controls the player needs and an addon overlay is not.
+ */
+const HUD_BAND_CLASS = 'woc-hud-band';
+const OVERLAY_BAND_CLASS = 'woc-overlay-band';
 /**
  * On the root while the game HUD is not in the document.
  *
@@ -42,8 +73,31 @@ interface RootDeps {
 }
 
 interface AddonRoot {
+  /**
+   * The `#woc-addons` element, which contains both bands and draws nothing.
+   *
+   * Still the handle for everything that is about ALL of the loader's DOM: the
+   * two mode classes, the window-order listener, and the tooltip's watcher, none
+   * of which care which band a node is in.
+   */
   el: HTMLElement;
+  /** Addon frames and world anchors. Below the game's HUD. */
+  hud: HTMLElement;
+  /** The manager, menus, toasts, modals, the banner, the tooltip. Above everything. */
+  overlay: HTMLElement;
   dispose: () => void;
+}
+
+/** One band, adopted if a previous run of the loader already made it. */
+function band(doc: Document, root: HTMLElement, className: string): HTMLElement {
+  const existing = root.querySelector(`:scope > .${className}`);
+  if (existing instanceof HTMLElement) {
+    return existing;
+  }
+  const el = doc.createElement('div');
+  el.className = className;
+  root.appendChild(el);
+  return el;
 }
 
 /**
@@ -79,8 +133,13 @@ function mountRoot(deps: RootDeps): AddonRoot {
     doc.body.appendChild(el);
   }
 
+  // Order matters only for the two bands that carry no z-index of their own in a
+  // browser that has not applied the sheet yet: hud first, so even then the
+  // manager is on top rather than behind the frames.
   return {
     el,
+    hud: band(doc, el, HUD_BAND_CLASS),
+    overlay: band(doc, el, OVERLAY_BAND_CLASS),
     dispose: () => {
       el.remove();
       style.remove();
@@ -89,4 +148,4 @@ function mountRoot(deps: RootDeps): AddonRoot {
 }
 
 export type { AddonRoot, RootDeps };
-export { FROZEN_CLASS, mountRoot, NO_HUD_CLASS, ROOT_ID };
+export { FROZEN_CLASS, HUD_BAND_CLASS, mountRoot, NO_HUD_CLASS, OVERLAY_BAND_CLASS, ROOT_ID };

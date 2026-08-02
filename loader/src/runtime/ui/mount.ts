@@ -28,23 +28,19 @@ import type { AddonStatus } from '../supervisor.ts';
 import type { UnitPointResolver } from '../world/anchor-point.ts';
 import type { Projector } from '../world/project.ts';
 import { ANCHORS, ANCHORS_REQUIRED_IN_GAME } from './anchors.ts';
-import { type Anchors, createAnchors } from './kit/anchor3d.ts';
-import { type Banner, createBanner } from './kit/banner.ts';
 import { createFrameRoster, type FrameRoster } from './kit/frame-roster.ts';
 import { createIconUrls, type IconUrls } from './kit/icons.ts';
 import { createGameInjector, type GameInjector } from './kit/injections.ts';
 import { createItemArt } from './kit/item-art.ts';
-import { createMenus, type Menus } from './kit/menu.ts';
 import { createSkillArt } from './kit/skill-art.ts';
 import { createStacking, type Stacking } from './kit/stacking.ts';
-import { createToaster, type Toaster } from './kit/toast.ts';
-import { createTooltips, type Tooltips } from './kit/tooltip.ts';
 import { createUnlockMode, type UnlockMode } from './kit/unlock.ts';
 import { type ConfigService, createConfigService } from './manager/config.ts';
 import type { GeometryStorage } from './manager/geometry-store.ts';
 import { type Manager, type ManagerRegistry, mountManager } from './manager/index.tsx';
-import { mountRoot, NO_HUD_CLASS } from './root.ts';
+import { type AddonRoot, mountRoot, NO_HUD_CLASS } from './root.ts';
 import { addLoaderRoutes } from './routes.ts';
+import { buildSurfaces, type Surfaces } from './surfaces.ts';
 
 /**
  * Report any anchor that should be there and is not.
@@ -81,8 +77,8 @@ interface ManagerPair {
  * together rather than one per surface.
  */
 interface UiParts {
-  /** The #woc-addons root. See runtime/ui/root.ts. */
-  root: HTMLElement;
+  /** The root and its two stacking bands. See runtime/ui/root.ts. */
+  root: AddonRoot;
   unlock: UnlockMode;
   stacking: Stacking;
 }
@@ -109,7 +105,7 @@ function mountManagerPair(deps: UiDeps, parts: UiParts): ManagerPair {
 
   const manager = mountManager({
     doc: deps.doc,
-    root: parts.root,
+    root: parts.root.overlay,
     unlock: parts.unlock,
     raise: parts.stacking.raise,
     registry: deps.registry,
@@ -150,7 +146,8 @@ function mountManagerPair(deps: UiDeps, parts: UiParts): ManagerPair {
  * the rail and of the game menu.
  */
 function buildKit(deps: UiDeps, parts: UiParts, manager: Manager): UiKit {
-  const { root, unlock, stacking } = parts;
+  const { unlock, stacking } = parts;
+  const { el: root, hud, overlay } = parts.root;
   const injector = createGameInjector({
     doc: deps.doc,
     onHud: () => {
@@ -165,22 +162,10 @@ function buildKit(deps: UiDeps, parts: UiParts, manager: Manager): UiKit {
     manager.toggle();
   };
 
-  const timers = { setTimer: deps.setTimer, clearTimer: deps.clearTimer };
-  const toaster = createToaster({ doc: deps.doc, root, ...timers });
-  const banner = createBanner({ doc: deps.doc, root, ...timers });
-  const tooltips = createTooltips({ doc: deps.doc, root, viewport: deps.viewport });
-  const menus = createMenus({ doc: deps.doc, root, viewport: deps.viewport });
-  const anchors = createAnchors({
-    doc: deps.doc,
-    root,
-    project: deps.project,
-    unitPoint: deps.unitPoint,
-    viewport: deps.viewport,
-    frames: deps.frames,
-  });
+  const surfaces = buildSurfaces(deps, parts.root);
   const roster = createFrameRoster();
 
-  addLoaderRoutes({ doc: deps.doc, injector, menus, roster, unlock, onOpen });
+  addLoaderRoutes({ doc: deps.doc, injector, menus: surfaces.menus, roster, unlock, onOpen });
   const icons = createIconUrls(
     createSkillArt({ fetchJson: deps.fetchJson }),
     createItemArt({ fetchJson: deps.fetchJson }),
@@ -188,11 +173,9 @@ function buildKit(deps: UiDeps, parts: UiParts, manager: Manager): UiKit {
 
   return {
     root,
-    toaster,
-    banner,
-    tooltips,
-    menus,
-    anchors,
+    hud,
+    overlay,
+    ...surfaces,
     injector,
     stacking,
     roster,
@@ -262,19 +245,18 @@ export interface UiDeps {
  * Per-addon state is the disposal bag wrapped around these, not a second copy of
  * them: see api/ui.ts.
  */
-export interface UiKit {
-  root: HTMLElement;
-  toaster: Toaster;
-  /** The one centre-screen warning slot. Shared for the reason toasts are. */
-  banner: Banner;
-  tooltips: Tooltips;
-  /** The one open context menu. Shared for the reason the banner slot is. */
-  menus: Menus;
+export interface UiKit extends Surfaces {
   /**
-   * Elements kept over world points. Shared because they share one frame loop:
-   * ten anchors are one callback, not ten.
+   * The #woc-addons element, which contains both bands and is not a layer itself.
+   *
+   * For anything that is about ALL of the loader's DOM. What goes ON screen picks
+   * a band instead, and the choice is the frame/window distinction: see ui/root.ts.
    */
-  anchors: Anchors;
+  root: HTMLElement;
+  /** Addon frames and world anchors go here. Below the game's own HUD. */
+  hud: HTMLElement;
+  /** The manager, menus, toasts, modals, the banner and the tooltip. Above it all. */
+  overlay: HTMLElement;
   injector: GameInjector;
   /** Which loader window is in front. Shared with the manager. */
   stacking: Stacking;
@@ -323,7 +305,7 @@ export function mountUi(deps: UiDeps): MountedUi {
   // Ahead of both halves, because both raise through it: the manager when it is
   // shown, and every addon frame when it is built or shown. It needs only the
   // root, so nothing about the order costs anything.
-  const parts: UiParts = { root: root.el, unlock, stacking: createStacking({ root: root.el }) };
+  const parts: UiParts = { root, unlock, stacking: createStacking({ root: root.el }) };
   const { manager, config } = mountManagerPair(deps, parts);
   const kit = buildKit(deps, parts, manager);
 

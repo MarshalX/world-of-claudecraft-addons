@@ -26,7 +26,7 @@ import { type LoadedAddon, loadAddon } from '../../loader/src/runtime/loader.ts'
 import type { InstalledAddon } from '../../loader/src/shared/protocol.ts';
 import { type AddonManifest, validateManifest } from '../../loader/src/shared/schema.ts';
 import { configNamespace, SETTINGS_KEY } from '../../loader/src/shared/storage-keys.ts';
-import { createSharedServices, type SharedHarness } from './shared-services.ts';
+import { createSharedServices, type SharedHarness, type SharedOptions } from './shared-services.ts';
 import { createFakeStorage, type FakeStorage } from './storage.ts';
 
 /** What the official marketplace is called, which is half of every fqid here. */
@@ -64,6 +64,13 @@ interface MountInput {
   /** Pass one in to seed other namespaces first, or to assert on it afterwards. */
   storage?: FakeStorage;
   marketplace?: string;
+  /**
+   * What the loader measures the screen as. Defaults to the fixed fake viewport.
+   *
+   * Forwarded rather than patched afterwards: `api/bind.ts` copies it by
+   * reference when the addon's surface is assembled. See SharedOptions.
+   */
+  viewport?: () => { w: number; h: number };
 }
 
 interface AddonHarness extends SharedHarness {
@@ -124,15 +131,17 @@ async function mountAddon(input: MountInput): Promise<AddonHarness> {
     await storage.set(configNamespace(row.fqid), SETTINGS_KEY, input.settings);
   }
 
-  // Two calls rather than one with a built options object: `exactOptionalPropertyTypes`
-  // refuses `{ game: undefined }` for an optional property, and the alternative is a
-  // ternary the linter is right to dislike.
-  let shared: SharedHarness;
-  if (input.game === undefined) {
-    shared = createSharedServices(document, storage);
-  } else {
-    shared = createSharedServices(document, storage, { game: input.game });
+  // Built up rather than passed as one literal: `exactOptionalPropertyTypes`
+  // refuses `{ game: undefined }` for an optional property, so every option is
+  // assigned only once it is known to be there.
+  const options: SharedOptions = {};
+  if (input.game !== undefined) {
+    options.game = input.game;
   }
+  if (input.viewport !== undefined) {
+    options.viewport = input.viewport;
+  }
+  const shared: SharedHarness = createSharedServices(document, storage, options);
   for (const [name, text] of Object.entries(input.data ?? {})) {
     shared.addonData(row.fqid, name, text);
   }
