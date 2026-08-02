@@ -156,6 +156,7 @@ export type {
   BarSchool,
   BarTone,
   BarUpdate,
+  MoneyValue,
   Tile,
   TileOpts,
   TileSchool,

@@ -347,6 +347,16 @@ Cooldown Bars uses the pair for its tile strip: the frame's height is the icon s
 
 A bar's fill can be tinted by damage school, which is a separate axis from `tone`. Tone is urgency; a school is what kind of damage a row is made of. Where both are set, tone wins.
 
+### Money
+
+Every amount the game sends is counted in copper. Give a bar's `value` an amount instead of a string and it is drawn the way the game draws money: a coin per unit, empty units left out, and the whole figure announced in words to a screen reader, which the discs alone would not be. `prefix` is for a figure that has to say what it is, since a bare amount at the end of a row reads as the price.
+
+```js
+row.update({ label: 'Copper Ore', value: { copper: 4400, prefix: 'low' } });
+```
+
+`woc.ui.money(copper)` is the same split as text, for a tooltip line or anywhere else that takes no markup: `7s 80c`, with the empty units left out. Use it rather than dividing by 100 twice in your own file, so that a price in your addon is spelled like a price in everyone else's.
+
 <!-- include: addons/combat-meter/main.js#school-tint -->
 
 ### What a hovered row says
