@@ -63,14 +63,20 @@ const WORLD_KEYS = [
   'party',
   'inventory',
   'equipment',
+  'equipmentInstances',
   'bags',
   'copper',
   'zone',
+  'characterKey',
   'character',
   'talents',
   'professions',
   'group',
   'encounter',
+  'match',
+  'arena',
+  'finder',
+  'finderBoard',
   'quests',
   'cooldowns',
   'auras',
@@ -78,15 +84,62 @@ const WORLD_KEYS = [
   'targetAuras',
   'hazards',
   'markers',
+  'deathZones',
+  'corpses',
+  'nodeCooldowns',
+  'corpse',
   'abilities',
   'combat',
+  'market',
+  'marketCollectPending',
+  'mail',
+  'mailUnread',
+  'bank',
+  'buyback',
 ];
 /** An arbitrary nested value, to show that storage is not flattened to strings. */
 const PROBE_VALUE = Object.freeze(['a', ['b'], { c: true }]);
 /** Matches --color-text-error, so a failed line reads the way the manager's do. */
 const FAIL_COLOR = 'rgb(255 143 133)';
 
-/** Wall-clock is unavailable to an addon on purpose; woc.now() is monotonic. */
+/**
+ * The sibling file this addon declares, and what it has to contain.
+ *
+ * `data.json` is deliberately inert. Its marker is asserted below, so anything
+ * meaningful in it would be a second thing to keep in step with this file for no
+ * gain: what is being demonstrated is the ROUTE, which is that a table can live
+ * in its own file instead of being pasted into `main.js`.
+ */
+const DATA_FILE = 'data.json';
+const DATA_MARKER = 'dev-harness data file';
+/** A name no manifest declares, which is the only reason it is refused. */
+const UNDECLARED_FILE = '../../secrets.json';
+
+/** The world reads gated on standing at something, which all share one shape. */
+const GATED_READS = ['market', 'mail', 'bank'];
+/** The three states one of those can be in, and there is no fourth. */
+const GATED_STATES = ['near', 'away', 'unknown'];
+
+/** Epoch milliseconds at the start of 2020, which any real wall clock is past. */
+const EPOCH_FLOOR_MS = 1_577_836_800_000;
+/** The ceiling `woc.onFrame` documents for its delta, however long a tab slept. */
+const MAX_FRAME_DT_MS = 250;
+
+/**
+ * When this addon loaded, on the clock that measures an interval.
+ *
+ * There are two, both published, and picking the wrong one is silent. `woc.now()`
+ * is monotonic milliseconds counted from this page load: it never jumps, so a
+ * difference between two readings is a duration. `woc.wallClock()` is epoch
+ * milliseconds, and it is the one for anything you STORE or compare against a
+ * stamp the server sent absolute, such as a lockout. Store a `woc.now()` reading
+ * and it reads as being in the future on the next page load, by however long the
+ * last session ran, with nothing to indicate it.
+ *
+ * Nothing is withheld here: `Date` is not one of the shadowed globals below and
+ * never was. `woc.wallClock()` exists so an addon has one clock to reach for
+ * rather than a rule that points at `woc` and an exception that does not.
+ */
 const started = woc.now();
 
 /** Frames counted since load, for the net check. */
@@ -95,7 +148,31 @@ woc.net.onRaw(() => {
   framesSeen += 1;
 });
 
-/** Whole seconds since this addon loaded. woc.now() is monotonic, not wall clock. */
+/** Ticks of the loader's own animation loop since load, and the last delta it gave. */
+let framesTicked = 0;
+let lastFrameDt = null;
+// Subscribed for the session, like the world keys at the bottom of this file and
+// at the same price: the watcher already samples once per animation frame, so the
+// loop this joins is running either way.
+woc.onFrame((dt) => {
+  framesTicked += 1;
+  lastFrameDt = dt;
+});
+
+/**
+ * Subscribed and dropped in the same breath, so anything it counts is the loader
+ * still calling a handler that was torn down.
+ *
+ * The teardown is the half worth checking. A handler that never fires at all is
+ * visible immediately; one the loader forgot to release keeps running against an
+ * addon that has been disabled, which is the leak `woc.onFrame` exists to prevent.
+ */
+let strayFrames = 0;
+woc.onFrame(() => {
+  strayFrames += 1;
+})();
+
+/** Whole seconds since this addon loaded, which is what the monotonic clock is for. */
 function uptimeSeconds() {
   return Math.round((woc.now() - started) / MS_PER_SECOND);
 }
@@ -187,6 +264,28 @@ async function checkStorage() {
 }
 
 /**
+ * The store refusing a write for a character the world CAN name. Null otherwise.
+ *
+ * `world.characterKey` and the key `woc.storage.character` files under are the
+ * same value by construction, and this is the only place both can be read in the
+ * same breath: two checks reading them separately would disagree whenever a login
+ * landed between them, which is nobody's fault.
+ *
+ * Only ONE direction of a disagreement is a failure. A store that refuses while
+ * the world names a character is an addon whose per-character data silently never
+ * persists. The other direction, a store answering before the world can name
+ * anybody, is what this addon's own suite arranges on purpose, so it is reported
+ * in the note below rather than failed.
+ */
+function refusedWhileKnown(accepted) {
+  const key = woc.world.characterKey;
+  if (accepted || key === null) {
+    return null;
+  }
+  return `a per-character write was refused while characterKey is "${key}"`;
+}
+
+/**
  * The per-character store.
  *
  * The FIRST write is what decides which half of this runs, rather than a reading
@@ -212,6 +311,10 @@ async function checkCharacterStorage() {
     .set(key, PROBE_VALUE)
     .then(() => null)
     .catch((err) => String(err));
+  const refused = refusedWhileKnown(refusal === null);
+  if (refused !== null) {
+    return result('character storage', false, refused);
+  }
   if (refusal !== null) {
     return result('character storage', true, 'no character yet, so a write was refused');
   }
@@ -240,7 +343,73 @@ async function checkCharacterStorage() {
   if (stillMine !== 'absent') {
     return result('character storage', false, 'an account-wide key was visible as this character');
   }
-  return result('character storage', true, `round trip over ${String(keys.length)} key(s)`);
+  // The key is named as well as counted, so a reader can see the pair the check
+  // above will not fail on: a store that answers for a character the world has
+  // not named yet reads here as a round trip against "null".
+  return result(
+    'character storage',
+    true,
+    `round trip over ${String(keys.length)} key(s), world names ${String(woc.world.characterKey)}`,
+  );
+}
+
+/**
+ * The declared file itself: parsed by the loader, and the same object every call.
+ *
+ * The read needs the HOST, because the file is fetched at install and answered
+ * from that cache rather than over the network at run time. A document with no
+ * marketplace behind it therefore has nothing to hand back, and that is reported
+ * in the loader's own words rather than failed, the way every other
+ * environment-shaped answer here is. In a real game a rejection means the addon
+ * was installed by a loader that did not know about `data` yet, and the message
+ * says so.
+ */
+async function readDataFile() {
+  const read = await woc
+    .data(DATA_FILE)
+    .then((file) => ({ file }))
+    .catch((err) => ({ failed: String(err) }));
+  if (read.failed !== undefined) {
+    return result('data', true, `undeclared names refused, nothing cached to read: ${read.failed}`);
+  }
+  const table = read.file;
+  const rows = table?.rows;
+  if (table?.marker !== DATA_MARKER || !Array.isArray(rows)) {
+    return result('data', false, `${DATA_FILE} came back as ${JSON.stringify(table)}`);
+  }
+  if ((await woc.data(DATA_FILE)) !== table) {
+    return result('data', false, 'a second read parsed the file again instead of sharing it');
+  }
+  return result('data', true, `${DATA_FILE}: ${String(rows.length)} rows, parsed once`);
+}
+
+/**
+ * A file shipped beside this one, and the name that was never declared.
+ *
+ * The second half is the one worth watching a person run. `woc.data` checks its
+ * argument for MEMBERSHIP in the manifest's `data` list, and nothing anywhere
+ * joins that argument onto a URL, so a traversing name is refused for being
+ * undeclared rather than for looking dangerous. That is a property of the design
+ * and not of a filter, which is exactly the kind of claim that deserves to be
+ * demonstrated rather than asserted in a comment.
+ */
+async function checkData() {
+  if (typeof woc.data !== 'function') {
+    return result('data', false, 'woc.data is not on the object an addon is handed');
+  }
+  const refusal = await woc
+    .data(UNDECLARED_FILE)
+    .then(() => null)
+    .catch((err) => String(err));
+  if (refusal === null) {
+    return result('data', false, `${UNDECLARED_FILE} resolved, so the declared list is not read`);
+  }
+  // The message has to name what IS declared, because the failure it reports is
+  // almost always a file added to the directory and not to the manifest.
+  if (!refusal.includes(DATA_FILE)) {
+    return result('data', false, `the refusal did not say what is declared: ${refusal}`);
+  }
+  return await readDataFile();
 }
 
 /**
@@ -554,31 +723,87 @@ function onScreenWord(visible) {
 }
 
 /**
+ * Where a world point lands on screen, which is the arithmetic behind an anchor.
+ *
+ * The null is the whole safety of this call and is why there is no `onScreen`
+ * flag to go with it: a point behind the camera has no place on screen, and a
+ * surface that answered with coordinates anyway would put a marker on the wrong
+ * side of the player. So an unresolvable unit has to be null, and a real answer
+ * has to be three finite numbers with a depth in front of the camera. Whether YOU
+ * are on screen is the camera's business, exactly as it is for `ui.anchor3d`.
+ */
+function checkProject() {
+  if (typeof woc.ui.project !== 'function') {
+    return result('project', false, 'ui.project is not callable');
+  }
+  if (woc.ui.project({ unit: 'nonsense' }) !== null) {
+    return result('project', false, 'an unresolvable unit projected to a position');
+  }
+  if (woc.world.player === null) {
+    return result('project', true, 'no player yet, so there is no point to project');
+  }
+  const at = woc.ui.project({ unit: 'player', over: 'head' });
+  if (at === null) {
+    return result('project', true, 'you are behind the camera, or not being drawn');
+  }
+  if (![at.x, at.y, at.depth].every((n) => Number.isFinite(n)) || at.depth < 0) {
+    return result('project', false, `projected to ${JSON.stringify(at)}`);
+  }
+  return result(
+    'project',
+    true,
+    `your head is at ${at.x.toFixed(0)}, ${at.y.toFixed(0)}, ${at.depth.toFixed(DECIMALS_YARDS)} yd out`,
+  );
+}
+
+/** The URL, or null once the loader knows the game ships no file for that id. */
+function builtOrWithheld(built, expected) {
+  return built === null || built === expected;
+}
+
+/** Which of the two answers came back, in the words the report needs. */
+function artWord(built) {
+  if (built === null) {
+    return 'withheld, the manifest says there is no file';
+  }
+  return 'built';
+}
+
+/**
  * The icon URL builders answer, and refuse an id they cannot build a name from.
  *
- * Whether any given URL RESOLVES is not checked and cannot be from here: only some
- * abilities ship painted art and the rest are drawn procedurally inside the game.
- * The bar demonstration below is where that shows, since the kit hides a slot whose
- * image fails.
+ * Two answers are correct for `ability` and `item` and only one is for `mob`, and
+ * the difference is a served manifest. Where the game publishes which ids ship a
+ * painted file, the loader withholds the URL for the rest rather than handing over
+ * one that 404s, so a blank slot means "no art exists" instead of "the loader
+ * built the wrong id", which a 404 cannot tell apart. The answer also MOVES: it is
+ * the optimistic URL until the manifest lands, so this accepts either and says
+ * which one it got. There is no manifest over mob portraits, so that one is exact.
  */
 function checkIcons() {
   const { icon } = woc.ui;
   const ability = icon.ability('fireball', 'mage');
-  if (ability !== '/ui/skills/mage/fireball.webp') {
+  if (!builtOrWithheld(ability, '/ui/skills/mage/fireball.webp')) {
     return result('icons', false, `ability() built ${String(ability)}`);
   }
   if (icon.mob('bog_bloat') !== '/ui/mobs/bog_bloat.webp') {
     return result('icons', false, `mob() built ${String(icon.mob('bog_bloat'))}`);
   }
-  if (icon.item('baked_bread') !== '/ui/items/baked_bread.webp') {
-    return result('icons', false, `item() built ${String(icon.item('baked_bread'))}`);
+  const item = icon.item('baked_bread');
+  if (!builtOrWithheld(item, '/ui/items/baked_bread.webp')) {
+    return result('icons', false, `item() built ${String(item)}`);
+  }
+  // Provenance for the FILE, never the item's name: nothing in the game keeps the
+  // two in step. A name at all means there is a file, so the pair cannot disagree.
+  if (icon.itemArtName('baked_bread') !== null && item === null) {
+    return result('icons', false, 'itemArtName named art for an item with no icon');
   }
   // A missing class is the case an addon hits before world entry, and a path with an
   // empty segment in it would be a request that cannot succeed rather than a null.
   if (icon.ability('fireball', '') !== null) {
     return result('icons', false, 'ability() built a path with no class in it');
   }
-  return result('icons', true, 'ability, mob and item paths built, empty ids refused');
+  return result('icons', true, `empty ids refused, baked_bread ${artWord(item)}`);
 }
 
 /**
@@ -598,17 +823,19 @@ async function checkSkillArt() {
   }
   await woc.ui.icon.preload(cls);
 
-  // Cooldown map KEYS are real ability ids, which makes them the one list of the
-  // player's own abilities an addon can get without deriving anything.
-  const ids = [...(woc.world.cooldowns?.keys() ?? [])];
+  // The player's whole kit, which `world.abilities.known` is exactly. This walked
+  // the KEYS of the cooldown map before that surface existed, on the grounds that
+  // they were the one list of real ability ids an addon could get without deriving
+  // anything; it was true, and it only ever saw the abilities already on cooldown.
+  const ids = (woc.world.abilities?.known ?? []).map((info) => info.id);
   if (ids.length === 0) {
-    return result('skill art', true, `manifest read for ${cls}, nothing on cooldown to check`);
+    return result('skill art', true, `manifest read for ${cls}, no spellbook to check it against`);
   }
   const withArt = ids.filter((id) => woc.ui.icon.ability(id, cls) !== null);
   return result(
     'skill art',
     true,
-    `${cls}: ${String(withArt.length)} of ${String(ids.length)} running cooldowns have a file`,
+    `${cls}: ${String(withArt.length)} of ${String(ids.length)} known abilities have a file`,
   );
 }
 
@@ -656,6 +883,71 @@ function checkTimers() {
       });
     }, 0);
   });
+}
+
+/**
+ * The two clocks, and the difference between them a stored stamp depends on.
+ *
+ * Not a matter of taste. `woc.now()` is measured from this page load, so it is
+ * always a small number and is meaningless in the next session; `woc.wallClock()`
+ * is epoch milliseconds and is the only one of the two that survives a reload.
+ * That is what is asserted here: a wall clock reading below 2020 is not an epoch
+ * stamp at all, and a monotonic reading at or above it means `now()` has been
+ * wired to the wrong source, which nothing else would ever notice.
+ */
+function checkClocks() {
+  const monotonic = woc.now();
+  const wall = woc.wallClock();
+  if (typeof wall !== 'number' || typeof monotonic !== 'number') {
+    return result('clocks', false, `now() is ${typeOf(monotonic)}, wallClock() is ${typeOf(wall)}`);
+  }
+  if (wall < EPOCH_FLOOR_MS) {
+    return result(
+      'clocks',
+      false,
+      `wallClock() reads ${String(wall)}, which is not an epoch stamp`,
+    );
+  }
+  if (monotonic >= wall) {
+    return result('clocks', false, 'now() is not counting from this page load');
+  }
+  return result(
+    'clocks',
+    true,
+    `up ${String(uptimeSeconds())}s, wall clock at ${new Date(wall).toISOString()}`,
+  );
+}
+
+/**
+ * The loader's shared frame loop, and the teardown half of it.
+ *
+ * A count of zero is not a failure: an addon's first pass runs before any frame
+ * has, and this document may have no animation loop running at all. What IS a
+ * failure is a delta outside the range the API documents, which would mean a
+ * handler doing arithmetic against a number nobody clamped, and a handler that
+ * keeps being called after its teardown ran, which is the leak the surface exists
+ * to prevent and is invisible until an addon has been disabled for a while.
+ *
+ * There is deliberately no "is it callable" arm here, unlike `checkData` and
+ * `checkProject`. Both subscriptions are made at load, so a missing `onFrame`
+ * takes the whole addon down before any check runs, and an arm that cannot be
+ * reached is a line that reads like a check and is not one.
+ */
+function checkFrames() {
+  if (strayFrames > 0) {
+    return result('frames', false, `a torn-down handler still ran ${String(strayFrames)} time(s)`);
+  }
+  if (framesTicked === 0) {
+    return result('frames', true, 'subscribed, no frame has run in this document yet');
+  }
+  if (!(lastFrameDt >= 0 && lastFrameDt <= MAX_FRAME_DT_MS)) {
+    return result('frames', false, `dt was ${String(lastFrameDt)}, outside 0 to 250 ms`);
+  }
+  return result(
+    'frames',
+    true,
+    `${String(framesTicked)} frames, last dt ${lastFrameDt.toFixed(1)} ms`,
+  );
 }
 
 /**
@@ -734,7 +1026,7 @@ function checkAbilities() {
   if (broken.length > 0) {
     return result('abilities', false, `did not round trip: ${broken.join(', ')}`);
   }
-  if (book.byName('  not an ability') !== null) {
+  if (book.byName('\0 not an ability') !== null) {
     return result('abilities', false, 'byName answered for a name nobody has');
   }
   // How many names a title-cased id would have got WRONG, which is what a display
@@ -766,10 +1058,16 @@ const LIVE_CHECKS = [
   checkMobTargeting,
   checkUnits,
   checkAuraQueries,
+  checkAuraPolarity,
   checkHoldings,
   checkCharacter,
+  checkCharacterKey,
+  checkContent,
+  checkCounters,
   checkGroup,
   checkCasts,
+  checkProject,
+  checkFrames,
 ];
 
 /** Everything else, which answers the same way all session and is run on demand. */
@@ -785,6 +1083,7 @@ const STATIC_CHECKS = [
   checkAnchor,
   checkBus,
   checkNet,
+  checkClocks,
   checkShadowedGlobals,
 ];
 
@@ -807,6 +1106,7 @@ const LIVE_KEYS = [
   'equipment',
   'inventory',
   'character',
+  'characterKey',
   'talents',
   'abilities',
   'casts',
@@ -825,6 +1125,7 @@ async function runSlowChecks() {
   return await Promise.all([
     checkStorage(),
     checkCharacterStorage(),
+    checkData(),
     checkSound(),
     checkTimers(),
     checkSkillArt(),
@@ -881,10 +1182,12 @@ function money(copper) {
 /**
  * The gear, bag and money reads, and the zone label behind the DOM.
  *
- * `bagCapacity` is checked against `inventory.length` rather than against a
- * number: it is derived on the client from the equipped bags, so a capacity
- * below what is already carried means the derivation broke, and that is the only
- * thing about it a check can know without the game's own bag table.
+ * `bagCapacity` is READ, not derived. The loader takes the game's own number
+ * straight through, and an addon cannot compute the same figure from anything
+ * published: a bag's cell count is item content nothing serves. So it is checked
+ * against `inventory.length` rather than against a figure of our own, because a
+ * capacity below what is already carried is the only thing wrong with it that a
+ * check can know from here.
  *
  * The zone is the interesting one. It is the single read whose source is the
  * game's DOM rather than its world object, so a game update that renames the
@@ -965,6 +1268,112 @@ function checkCharacter() {
     `${String(character.deeds.size)} deeds, renown ${String(character.renown)}, ` +
       `${String(Object.keys(talents.rows).length)} talent rows`,
   );
+}
+
+/**
+ * Who the loader thinks is playing.
+ *
+ * OPAQUE by contract, so nothing here parses it, and the interesting assertion is
+ * not about its contents anyway: it is that the store and the world agree, which
+ * `checkCharacterStorage` makes in the one place both can be read in the same
+ * breath. What is left for this line is the shape and the reading itself, since a
+ * key that came back empty would file every per-character record under nothing at
+ * all and would look exactly like a key that was never derived.
+ */
+function checkCharacterKey() {
+  const { characterKey } = woc.world;
+  if (characterKey === null) {
+    return result('character key', true, 'no character yet, so nothing to key on');
+  }
+  if (typeof characterKey !== 'string' || characterKey.length === 0) {
+    return result('character key', false, `it came back as ${typeOf(characterKey)}`);
+  }
+  return result('character key', true, `per-character state is filed under "${characterKey}"`);
+}
+
+/**
+ * The two static content tables.
+ *
+ * Never null even before world entry, which is why neither is a watch key: an
+ * empty table is the honest answer for a client that has not carried one, and
+ * authored content cannot change during a session. Both are copies the loader
+ * froze, so the write test is the same one `world.entities` gets and it is here
+ * for the same reason: an addon holding a table it can edit would be editing what
+ * every other addon reads.
+ */
+function checkContent() {
+  const { recipes, stations } = woc.world;
+  if (!(Array.isArray(recipes) && Array.isArray(stations))) {
+    return result(
+      'content',
+      false,
+      `recipes is ${typeOf(recipes)}, stations is ${typeOf(stations)}`,
+    );
+  }
+  if (!(refusesWrite(recipes) && refusesWrite(stations))) {
+    return result('content', false, 'a content table accepted a write');
+  }
+  if (recipes.length === 0) {
+    return result('content', true, 'no recipe table yet (login screen or loading)');
+  }
+  const shapeless = recipes.filter(
+    (recipe) => typeof recipe.id !== 'string' || !Array.isArray(recipe.reagents),
+  );
+  if (shapeless.length > 0) {
+    return result('content', false, `${String(shapeless.length)} recipes are not recipes`);
+  }
+  const gated = recipes.filter((recipe) => recipe.stationType !== null).length;
+  return result(
+    'content',
+    true,
+    `${String(recipes.length)} recipes (${String(gated)} need a station), ${String(stations.length)} stations`,
+  );
+}
+
+/**
+ * The counters a player has to be standing at, and the one shape they share.
+ *
+ * None of the three is ever null, which is the point of the shape: `unknown`
+ * already means the loader has no world, so a null beside it would be a second
+ * encoding of one fact. What is checked is that the payload and the status agree.
+ * An `away` carrying a reading is a pane drawn from wherever the player last
+ * stood, and a `near` carrying nothing is a pane that cannot draw at all; both
+ * look like working code from the outside. Being away from all three is the
+ * ordinary case and is reported rather than failed.
+ */
+function checkCounters() {
+  const wrong = [];
+  const open = [];
+  for (const key of GATED_READS) {
+    const read = woc.world[key];
+    if (!GATED_STATES.includes(read?.status)) {
+      wrong.push(`${key} is ${typeOf(read)}`);
+    } else if ((read.info !== null) !== (read.status === 'near')) {
+      wrong.push(`${key} is "${read.status}" and carries ${typeOf(read.info)}`);
+    } else if (read.status === 'near') {
+      open.push(key);
+    }
+  }
+  if (wrong.length > 0) {
+    return result('counters', false, wrong.join(', '));
+  }
+  if (open.length === 0) {
+    return result('counters', true, `${GATED_READS.join(', ')}: none of them in reach`);
+  }
+  return result('counters', true, `in reach: ${open.join(', ')}`);
+}
+
+/** Whether a published table is the frozen copy it claims to be. */
+function refusesWrite(table) {
+  try {
+    table.push(null);
+  } catch {
+    return true;
+  }
+  // Put it back. The tables are copies, so this is not the game's own state, but a
+  // check that leaves a null row behind would break the next addon to read it.
+  table.pop();
+  return false;
 }
 
 /** The player's own row straight off the entity, for comparing the projection against. */
@@ -1103,6 +1512,59 @@ function checkAuraQueries() {
     return result('aura queries', false, `mine kept ${mine.length}, expected ${expected}`);
   }
   return result('aura queries', true, `${all.length} on you, ${mine.length} your own`);
+}
+
+/** Whichever way round `dispellable` was asked, the polarity it implies. */
+function dispelsWrongWay(aura) {
+  const harmful = woc.world.harmful(aura);
+  return (
+    (woc.world.dispellable(aura) && !harmful) || (woc.world.dispellable(aura, true) && harmful)
+  );
+}
+
+/**
+ * The polarity predicates, against the query that has to agree with them.
+ *
+ * `harmful` is a function rather than a field on the aura because the loader hands
+ * over the game's OWN aura objects rather than copies, so there is nowhere to put
+ * a computed flag. That leaves two ways to ask the same question, the predicate
+ * and the `harmful` query filter, and they have to answer alike: a filter that
+ * drifted from the predicate would leave one addon highlighting an effect the next
+ * one calls a benefit.
+ *
+ * `dispellable` is checked as an implication rather than against a list of
+ * abilities. Whatever can be taken off an ally is harmful and whatever can be
+ * stripped off an enemy is a benefit, which holds for every effect in the game and
+ * needs no fight to check.
+ */
+function checkAuraPolarity() {
+  const { world } = woc;
+  if (typeof world.harmful !== 'function' || typeof world.dispellable !== 'function') {
+    return result('aura polarity', false, 'world.harmful or world.dispellable is not callable');
+  }
+  const all = world.aurasOn('player');
+  const harmful = all.filter((aura) => world.harmful(aura));
+  const queried = world.aurasOn('player', { harmful: true });
+  if (queried.length !== harmful.length) {
+    return result(
+      'aura polarity',
+      false,
+      `the query kept ${String(queried.length)} auras and the predicate ${String(harmful.length)}`,
+    );
+  }
+  const backwards = all.filter(dispelsWrongWay);
+  if (backwards.length > 0) {
+    return result('aura polarity', false, `${String(backwards.length)} dispel the wrong way round`);
+  }
+  if (all.length === 0) {
+    return result('aura polarity', true, 'agreeing, nothing on you to sort');
+  }
+  const removable = all.filter((aura) => world.dispellable(aura)).length;
+  return result(
+    'aura polarity',
+    true,
+    `${String(harmful.length)} of ${String(all.length)} on you are harmful, ${String(removable)} removable`,
+  );
 }
 
 function combatWord(active) {

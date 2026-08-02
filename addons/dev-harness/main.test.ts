@@ -25,6 +25,10 @@ import { mountAddon, parseManifest } from '../../tests/fakes/addon.ts';
 // what this suite checks; a typed JSON import would hand it a shape the compiler
 // had already vouched for.
 import MANIFEST_TEXT from './addon.json?raw';
+// The sibling file the manifest declares. Read as text for the same reason the
+// manifest is: this is what the host caches at install and hands back, and a typed
+// JSON import would be a shape the compiler had already vouched for.
+import DATA_TEXT from './data.json?raw';
 // biome-ignore lint/correctness/noUnresolvedImports: Vite's ?raw suffix is a loader directive a static resolver does not model, and an addon file is a function BODY with no exports at all. Same reason as the runtime bundle import in host/boot.ts.
 import SOURCE from './main.js?raw';
 
@@ -78,6 +82,13 @@ describe('its manifest', () => {
     const ids = (manifest().keybinds ?? []).map((bind) => bind.id).sort();
 
     expect(ids).toEqual(['run', 'toggle']);
+  });
+
+  // The declaration is what makes `woc.data` answerable at all: the host fetches
+  // exactly this list at install, and the surface checks its argument against it
+  // rather than joining anything onto a URL.
+  it('declares the data file it ships', () => {
+    expect(manifest().data).toEqual(['data.json']);
   });
 });
 
@@ -182,7 +193,7 @@ describe('what it reports without a game', () => {
   it('passes every check', async () => {
     await run();
 
-    expect(await report()).toContain('27 of 27 checks passed');
+    expect(await report()).toContain('35 of 35 checks passed');
   });
 
   it('names no check as failed', async () => {
@@ -197,6 +208,8 @@ describe('what it reports without a game', () => {
     'identity',
     'settings',
     'storage',
+    'character storage',
+    'data',
     'sound',
     'keys',
     'world keys',
@@ -205,13 +218,46 @@ describe('what it reports without a game', () => {
     'tile',
     'fields',
     'anchor',
+    'project',
     'skill art',
     'shadowed globals',
     'timers',
+    'clocks',
+    'frames',
+    'aura polarity',
+    'character key',
+    'content',
+    'counters',
   ])('passes the %s check', async (name) => {
     await run();
 
     expect(await report()).not.toContain(`FAIL  ${name}`);
+  });
+});
+
+// A declared data file is fetched by the HOST at install and answered out of that
+// cache, and there is no marketplace behind this document, so the harness reports
+// the read as unavailable rather than failing it. What CAN be checked with no host
+// is the refusal, which is page-realm and is the security-shaped half; seeding the
+// host's copy and running again covers the rest of the path, which is the manifest
+// declaration, the bridge read, the parse, and the memo behind a second read.
+describe('the data file it ships', () => {
+  it('refuses a name the manifest does not declare', async () => {
+    await run();
+
+    expect(await report()).toContain('undeclared names refused');
+  });
+
+  it('reads back what is on disk once the host has a copy', async () => {
+    const { harness } = await run();
+    await report();
+
+    harness.addonData(FQID, 'data.json', DATA_TEXT);
+    press('Run again');
+
+    await expect
+      .poll(() => document.body.textContent ?? '')
+      .toContain('data.json: 3 rows, parsed once');
   });
 });
 
