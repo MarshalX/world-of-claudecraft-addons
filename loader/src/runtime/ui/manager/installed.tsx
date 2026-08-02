@@ -5,10 +5,12 @@
 
 import type { InstalledAddon } from '../../../shared/protocol.ts';
 import type { AddonStatus } from '../../supervisor.ts';
+import type { AddonShot } from './catalog.ts';
 import type { CompanionContext } from './companions.ts';
 import { Companions } from './companions.tsx';
 import { EnableToggle } from './enable-toggle.tsx';
 import { ErrorNote } from './error-note.tsx';
+import { Preview } from './preview.tsx';
 import { statusView } from './status.ts';
 import type { InstalledState } from './store.ts';
 import { UI_TEXT } from './strings.ts';
@@ -16,6 +18,10 @@ import { UI_TEXT } from './strings.ts';
 interface RowProps {
   addon: InstalledAddon;
   statuses: readonly AddonStatus[];
+  /** This addon's screenshot, or null when the catalog cannot place it. */
+  shot: AddonShot | null;
+  /** Whether any row on this list has one, so the rows line up. */
+  shots: boolean;
   /** The installed set and what is on offer, for the companion note. */
   companions: Omit<CompanionContext, 'market'>;
   onToggle: (fqid: string, on: boolean) => void;
@@ -44,6 +50,7 @@ function AddonRow(props: RowProps) {
   const { addon } = props;
   return (
     <li className="woc-row">
+      <Preview shot={props.shot} size="thumb" placeholder={props.shots} />
       <div className="woc-row-main">
         <span className="woc-row-name">
           {addon.manifest.name} <StatusBadge statuses={props.statuses} fqid={addon.fqid} />
@@ -124,20 +131,41 @@ interface InstalledPaneProps {
    * while the catalog is still loading, which reads as `unknown` for one paint.
    */
   offered: ReadonlySet<string>;
+  /**
+   * Each offered addon's screenshot by fqid, for the row thumbnails.
+   *
+   * From the catalog for the reason `offered` is: the registry persists an
+   * addon's manifest but not its directory in the repository, so it cannot say
+   * where the picture is. Empty while the catalog is still loading, which is one
+   * paint of a column that then appears; the manager loads the catalog on open
+   * rather than on the Browse tab, so that paint is the only one.
+   */
+  shots: ReadonlyMap<string, AddonShot>;
   onToggle: (fqid: string, on: boolean) => void;
   onOpen: (fqid: string) => void;
   unlocked: boolean;
   onUnlock: (on: boolean) => void;
 }
 
-export function InstalledPane(props: InstalledPaneProps) {
-  const { state } = props;
-  // The enable flags come off these rows directly, which is the reading this
-  // pane holds and the catalog store has to be told.
-  const companions = {
-    installed: new Map(state.rows.map((row) => [row.fqid, row.enabled])),
+/**
+ * The enable flags this pane holds, which is the reading the companion note
+ * needs and the catalog store has to be told.
+ */
+function companionsOf(props: InstalledPaneProps): Omit<CompanionContext, 'market'> {
+  return {
+    installed: new Map(props.state.rows.map((row) => [row.fqid, row.enabled])),
     offered: props.offered,
   };
+}
+
+export function InstalledPane(props: InstalledPaneProps) {
+  const { state } = props;
+  const companions = companionsOf(props);
+  // Asked of the installed rows rather than of everything on offer, unlike
+  // Browse: this list is the addons a player has, and reserving a column here
+  // because some addon they have never installed has a picture would indent
+  // every row against nothing.
+  const shots = state.rows.some((row) => props.shots.has(row.fqid));
   const unlock = <UnlockRow unlocked={props.unlocked} onUnlock={props.onUnlock} />;
 
   if (state.status === 'idle' || state.status === 'loading') {
@@ -167,6 +195,8 @@ export function InstalledPane(props: InstalledPaneProps) {
             key={addon.fqid}
             addon={addon}
             statuses={props.statuses}
+            shot={props.shots.get(addon.fqid) ?? null}
+            shots={shots}
             companions={companions}
             onToggle={props.onToggle}
             onOpen={props.onOpen}

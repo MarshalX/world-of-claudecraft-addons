@@ -12,7 +12,7 @@
 // reads as a sandbox, and there is not one. The wording of each line is in
 // permissions.ts.
 
-import type { BrowseRow } from './catalog.ts';
+import { type BrowseRow, shotOf } from './catalog.ts';
 import { describePermissions } from './permissions.ts';
 import { Preview } from './preview.tsx';
 import { UI_TEXT } from './strings.ts';
@@ -53,7 +53,7 @@ export function InstallConfirm(props: InstallConfirmProps) {
       <p className="woc-note">
         {entry.version} {UI_TEXT.by} {entry.author}
       </p>
-      <Preview row={props.row} size="full" />
+      <Preview shot={shotOf(props.row)} size="full" />
       <p className="woc-row-desc">{entry.description}</p>
       <p className="woc-note">
         {UI_TEXT.confirmFrom} {market.name}

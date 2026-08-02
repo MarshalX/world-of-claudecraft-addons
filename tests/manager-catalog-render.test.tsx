@@ -640,3 +640,62 @@ describe('companion notes', () => {
     expect(text()).toContain(COMPANION_TEXT.disabled);
   });
 });
+
+// The Installed pane's thumbnails, here rather than in manager-render.test.tsx
+// because what they actually assert is about the CATALOG: the registry keeps an
+// addon's manifest and not its directory in the repository, so the picture on an
+// installed row can only come from the source list, and every case below is one
+// of the ways that lookup can miss.
+describe("the Installed pane's thumbnails", () => {
+  const shot = { file: 'preview.png', alt: 'The panel, mid-fight.' };
+
+  /** The pane the manager opens on, so there is no tab to click. */
+  async function installed(options: Options) {
+    const opened = open(options);
+    await until(() => {
+      expect(document.querySelector('.woc-row')).not.toBeNull();
+    });
+    return opened;
+  }
+
+  it("draws the picture the addon's own source places", async () => {
+    await installed({
+      markets: [marketState(OFFICIAL, [marketEntry({ preview: shot })])],
+      installed: [installedRow()],
+    });
+
+    await until(() => {
+      expect(document.querySelector('.woc-shot-thumb')).not.toBeNull();
+    });
+    const drawn = document.querySelector('.woc-shot-thumb');
+    expect(drawn?.getAttribute('src')).toContain('/addons/combat-meter/preview.png');
+    expect(drawn?.getAttribute('alt')).toBe(shot.alt);
+  });
+
+  // The column is asked of the installed rows rather than of everything on
+  // offer, unlike Browse: indenting a player's own list because some addon they
+  // have never installed has a picture would be reserving space against nothing.
+  it('draws no column when no installed addon has a picture', async () => {
+    await installed({
+      markets: [marketState(OFFICIAL, [marketEntry({ preview: shot })])],
+      installed: [installedRow('official/lorebind')],
+    });
+
+    expect(document.querySelector('.woc-shot')).toBeNull();
+    expect(document.querySelector('.woc-shot-slot')).toBeNull();
+  });
+
+  // An addon whose source no longer offers it keeps its row and loses its
+  // picture, because nothing the loader still holds says where that picture is.
+  it('reserves the slot for a row the catalog cannot place once another has one', async () => {
+    await installed({
+      markets: [marketState(OFFICIAL, [marketEntry({ preview: shot })])],
+      installed: [installedRow(), installedRow('official/lorebind')],
+    });
+
+    await until(() => {
+      expect(document.querySelectorAll('.woc-shot-thumb')).toHaveLength(1);
+    });
+    expect(document.querySelectorAll('.woc-shot-slot')).toHaveLength(1);
+  });
+});

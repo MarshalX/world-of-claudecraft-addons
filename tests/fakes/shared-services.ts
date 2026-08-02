@@ -271,18 +271,20 @@ function createSharedServices(
   // file name and reading one another's would be the bug worth catching.
   const dataFiles = new Map<string, string>();
 
+  const net = createNetHub({
+    now,
+    install: (taps) => {
+      deliver = taps.onMessage;
+      return () => {
+        deliver = null;
+      };
+    },
+  });
+
   const shared: SharedServices = {
     doc,
     window: globalThis as unknown as SharedServices['window'],
-    net: createNetHub({
-      now,
-      install: (taps) => {
-        deliver = taps.onMessage;
-        return () => {
-          deliver = null;
-        };
-      },
-    }),
+    net,
     world: createWorldHub({
       game: options.game ?? new Promise(() => undefined),
       schedule: () => 0,
@@ -293,7 +295,11 @@ function createSharedServices(
       now: () => 0,
       zoneName: () => null,
       simNow: () => null,
-      realm: () => null,
+      // Off the hello frame, exactly as `runtime/surfaces.ts` wires it. Hardwired to
+      // null before, which made `world.characterKey` read `offline/<name>` in every
+      // suite however the hello frame was spelled: an addon keyed on the realm loaded
+      // one market and wrote to another, and the fake was the only thing saying so.
+      realm: net.realm,
     }),
     storage: hub,
     bus: createBusHub(),

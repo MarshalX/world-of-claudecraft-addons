@@ -20,6 +20,7 @@ import {
   catalogHasPreviews,
   catalogTags,
   offeredIds,
+  shotOf,
 } from './catalog.ts';
 import type { CatalogState, CatalogStore } from './catalog-store.ts';
 import type { CompanionContext } from './companions.ts';
@@ -69,7 +70,7 @@ function Row(props: RowProps) {
 
   return (
     <li className="woc-row">
-      <Preview row={row} size="thumb" placeholder={props.shots} />
+      <Preview shot={shotOf(row)} size="thumb" placeholder={props.shots} />
       <div className="woc-row-main">
         <span className="woc-row-name">
           {entry.name} <span className="woc-badge woc-badge-muted">{row.market.name}</span>

@@ -6,7 +6,7 @@
 // identity is the fqid and never the id, and an addon is "installed" against
 // the source it came from rather than against its name.
 
-import { type MarketplaceRef, fqid as makeFqid } from '../../../shared/marketplace.ts';
+import { fileUrl, type MarketplaceRef, fqid as makeFqid } from '../../../shared/marketplace.ts';
 import type { MarketplaceEntry, MarketplaceState, UpdateRow } from '../../../shared/protocol.ts';
 
 interface BrowseRow {
@@ -93,6 +93,61 @@ function catalogHasPreviews(markets: readonly MarketplaceState[]): boolean {
 }
 
 /**
+ * An addon's screenshot as a page can load it.
+ *
+ * Resolved in the RUNTIME rather than carried over the bridge, which is the
+ * opposite of what an update row does and is not an inconsistency: an update row
+ * is computed in the host because comparing versions needs semver, and a
+ * marketplace URL needs nothing the runtime may not import.
+ */
+interface AddonShot {
+  url: string;
+  alt: string;
+}
+
+/** Null for the ordinary case of an addon nobody has taken a picture of. */
+function shotFor(market: MarketplaceRef, entry: MarketplaceEntry): AddonShot | null {
+  const { preview } = entry;
+  if (preview === undefined) {
+    return null;
+  }
+  return { url: fileUrl(market, `${entry.path}/${preview.file}`), alt: preview.alt };
+}
+
+/** The screenshot a browse row declares, resolved against the source it came from. */
+function shotOf(row: BrowseRow): AddonShot | null {
+  return shotFor(row.market, row.entry);
+}
+
+/**
+ * Every offered addon's screenshot, by fqid.
+ *
+ * What the Installed pane draws from, because the registry cannot answer this on
+ * its own: it persists the manifest but not the addon's directory in the
+ * repository, and without that directory there is no URL to build. So an
+ * installed addon whose source has been removed, or which its source no longer
+ * offers, draws no thumbnail. That is the honest answer rather than a gap:
+ * nothing the loader still holds says where that picture is.
+ *
+ * The declaration taken is the INDEX's rather than the installed manifest's, and
+ * they can differ by a version. A marketplace serves one version per ref, so the
+ * bytes at that URL are the index's either way, and taking the alt text from the
+ * same place keeps the sentence matched to the picture it describes.
+ */
+function catalogShots(markets: readonly MarketplaceState[]): Map<string, AddonShot> {
+  const shots = new Map<string, AddonShot>();
+  for (const market of markets) {
+    for (const entry of market.addons) {
+      const shot = shotFor(market.ref, entry);
+      if (shot !== null) {
+        shots.set(makeFqid(market.ref.id, entry.id), shot);
+      }
+    }
+  }
+  return shots;
+}
+
+/**
  * Every offered addon, in source order, filtered.
  *
  * Source order rather than sorted by name: the official marketplace is first in
@@ -167,13 +222,15 @@ function offeredIds(markets: readonly MarketplaceState[]): Set<string> {
   return ids;
 }
 
-export type { BrowseEmptiness, BrowseFilter, BrowseRow };
+export type { AddonShot, BrowseEmptiness, BrowseFilter, BrowseRow };
 export {
   browseEmptiness,
   browseRows,
   catalogHasPreviews,
+  catalogShots,
   catalogTags,
   NO_FILTER,
   offeredIds,
   pendingUpdates,
+  shotOf,
 };

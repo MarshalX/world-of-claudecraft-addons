@@ -18,7 +18,7 @@ import type { AddonStatus } from '../../supervisor.ts';
 import type { FrameBox } from '../frame/geometry.ts';
 import { CLOSE_PATH, CLOSE_SIZE, CLOSE_STROKE_WIDTH, CLOSE_VIEWBOX } from '../kit/close-glyph.ts';
 import { BrowsePane } from './browse.tsx';
-import { offeredIds } from './catalog.ts';
+import { catalogShots, offeredIds } from './catalog.ts';
 import type { CatalogStore } from './catalog-store.ts';
 import type { AddonConfig, ConflictReading } from './config.ts';
 import { DetailPane } from './detail.tsx';
@@ -122,13 +122,17 @@ function InstalledTab(props: { app: ManagerAppProps }) {
       />
     );
   }
+  const catalog = app.catalogStore.state();
   return (
     <InstalledPane
       state={app.installed}
       statuses={app.statuses}
       // Off the catalog rather than off the installed rows: "is this companion
       // available at all" is a question only the source list can answer.
-      offered={offeredIds(app.catalogStore.state().markets)}
+      offered={offeredIds(catalog.markets)}
+      // Off the catalog for a different reason: the registry keeps an addon's
+      // manifest and not its directory, so it cannot say where the picture is.
+      shots={catalogShots(catalog.markets)}
       onToggle={app.onToggle}
       onOpen={app.onOpenAddon}
       unlocked={app.unlocked}

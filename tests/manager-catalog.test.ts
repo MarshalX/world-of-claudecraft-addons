@@ -11,6 +11,7 @@ import {
   browseEmptiness,
   browseRows,
   catalogHasPreviews,
+  catalogShots,
   catalogTags,
   pendingUpdates,
 } from '../loader/src/runtime/ui/manager/catalog.ts';
@@ -239,5 +240,52 @@ describe('catalogHasPreviews', () => {
   // what stops the column appearing and disappearing as a player types.
   it('is false for a list with no sources at all', () => {
     expect(catalogHasPreviews([])).toBe(false);
+  });
+});
+
+// What the Installed pane draws from, because the registry keeps an addon's
+// manifest and not its directory in the repository, so it cannot build the URL
+// itself. The fqid is the key for the reason it is a browse row's identity: two
+// sources may publish the same addon id, and one's picture must not be shown
+// against the other's row.
+describe('catalogShots', () => {
+  const shot = { file: 'preview.png', alt: 'The panel, mid-fight.' };
+
+  it("resolves the file against the addon's own directory in its source", () => {
+    const markets = [marketState(OFFICIAL, [marketEntry({ preview: shot })])];
+
+    expect(catalogShots(markets).get('official/combat-meter')?.url).toContain(
+      '/addons/combat-meter/preview.png',
+    );
+  });
+
+  it('carries the alt text the manifest declared', () => {
+    const markets = [marketState(OFFICIAL, [marketEntry({ preview: shot })])];
+
+    expect(catalogShots(markets).get('official/combat-meter')?.alt).toBe(shot.alt);
+  });
+
+  it('leaves out an addon that declares no screenshot', () => {
+    expect(catalogShots([marketState(OFFICIAL, [marketEntry()])]).size).toBe(0);
+  });
+
+  it('keeps two sources publishing one addon id apart', () => {
+    const markets = [
+      marketState(OFFICIAL, [marketEntry({ preview: shot })]),
+      marketState(THIRD_PARTY, [marketEntry({ preview: { file: 'shot.png', alt: 'Theirs.' } })], {
+        builtin: false,
+      }),
+    ];
+
+    const shots = catalogShots(markets);
+    expect(shots.get('official/combat-meter')?.alt).toBe(shot.alt);
+    expect(shots.get('gh:someone/their-addons/combat-meter')?.alt).toBe('Theirs.');
+  });
+
+  // An addon installed from a source since removed, or one its source no longer
+  // offers, has nothing left that says where its picture is. The Installed row
+  // then draws none, which is the honest answer rather than a gap.
+  it('has no answer for an addon no source offers', () => {
+    expect(catalogShots([]).get('official/combat-meter')).toBeUndefined();
   });
 });

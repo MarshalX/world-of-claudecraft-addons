@@ -1,12 +1,10 @@
 // An addon's screenshot, in the two sizes the manager shows it at.
 //
-// The URL is built HERE rather than carried over the bridge, which is the
-// opposite of what update rows do and is not an inconsistency. An update row is
-// computed in the host because comparing versions needs semver, which the
-// runtime may not import; a marketplace URL needs nothing banned, and this
-// component already holds both halves of it: `shared/marketplace.ts` is a
-// runtime import already (catalog.ts takes `fqid` from it), and a browse row
-// already carries its source and its entry.
+// It takes a resolved shot rather than the row it came from, because the three
+// places a preview appears do not agree on what they are holding: Browse and the
+// install confirmation have the marketplace row, and an Installed row has an
+// fqid and has to look the picture up. Resolution lives in catalog.ts with the
+// rest of the pure derivation; this file is the drawing.
 //
 // It is an ordinary cross-origin <img> from the page, not a fetch through the
 // host. That works because the game sets no Content-Security-Policy, which its
@@ -18,20 +16,7 @@
 // already in the userscript's connect list, and hand the bytes over as a blob.
 
 import { useState } from 'preact/hooks';
-import { fileUrl } from '../../../shared/marketplace.ts';
-import type { BrowseRow } from './catalog.ts';
-
-/** The screenshot a row declares, resolved against the source it came from. */
-function shotOf(row: BrowseRow): { url: string; alt: string } | null {
-  const { preview } = row.entry;
-  if (preview === undefined) {
-    return null;
-  }
-  return {
-    url: fileUrl(row.market, `${row.entry.path}/${preview.file}`),
-    alt: preview.alt,
-  };
-}
+import type { AddonShot } from './catalog.ts';
 
 /**
  * The box each size reserves, in CSS pixels.
@@ -48,7 +33,8 @@ const BOX = {
 } as const;
 
 interface PreviewProps {
-  row: BrowseRow;
+  /** Null for an addon with no screenshot, and for one whose source is gone. */
+  shot: AddonShot | null;
   /**
    * `thumb` sits in a browse row; `full` sits on the install confirmation.
    *
@@ -74,7 +60,7 @@ interface PreviewProps {
  */
 export function Preview(props: PreviewProps) {
   const [failed, setFailed] = useState(false);
-  const shot = shotOf(props.row);
+  const { shot } = props;
   if (shot === null || failed) {
     if (props.size === 'thumb' && props.placeholder === true) {
       return <div className="woc-shot-slot" />;
