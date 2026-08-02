@@ -1,9 +1,12 @@
 // `pnpm readme`: regenerate the addon section of README.md from the manifests.
 //
-// `--check` reports drift and writes nothing, which is what CI wants. The same
-// comparison runs as a Vitest case (tests/tools-readme.test.ts) so `pnpm check`
-// catches an addon added without regenerating, rather than leaving it to whoever
-// reads the file next.
+// `--check` reports drift and writes nothing, for a person who wants to know
+// before running it. Nothing in CI uses it: the section is regenerated on main by
+// .github/workflows/marketplace.yml in the same commit as the marketplace index,
+// and, like the index, a contributor is never asked to run this before pushing.
+// A test comparing the committed file against a fresh render used to exist and
+// was removed, because it made a bot-owned file fail the build for the very
+// change the bot exists to handle.
 //
 // A README with NO markers is "nothing to generate here" rather than an error,
 // and that is about somebody else's repository rather than this one. The workflow
