@@ -18,7 +18,7 @@
 // loader reads the manifest from the host the player is on and this union is open
 // where it is used.
 //
-// Ids with a file: 562
+// Ids with a file: 563
 
 export type KnownItemIcon =
   | 'acolyte_chain_grips'
@@ -405,6 +405,7 @@ export type KnownItemIcon =
   | 'reins_shadowjump_toad'
   | 'reins_stalkglider_snail'
   | 'reins_stormfeather_griffin'
+  | 'reins_terrorspark_groundshaker'
   | 'reins_thunderstrut_gobbler'
   | 'reins_valorsteed'
   | 'reliquary_cloth_chest'

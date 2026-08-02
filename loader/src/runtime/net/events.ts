@@ -100,6 +100,8 @@ interface SpellFxAtEvent extends PersonalEvent {
   z: number;
   school: School;
   fx: string;
+  /** An ID, on the ground casts that have authored art of their own. */
+  ability?: string;
   radius?: number;
 }
 

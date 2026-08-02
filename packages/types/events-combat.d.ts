@@ -143,6 +143,15 @@ export interface SpellFxAtEvent extends PersonalEvent {
   z: number;
   school: School;
   fx: string;
+  /**
+   * An ability ID, carried only where the ground cast has authored art of its
+   * own. Absent leaves you the school and nothing else.
+   *
+   * An ID, not the display name a `damage` or `heal2` record carries, so this is
+   * the field to build an icon URL from and never the one to match a meter row
+   * against.
+   */
+  ability?: string;
   /** Blast radius in yards, when the effect has one. */
   radius?: number;
 }
