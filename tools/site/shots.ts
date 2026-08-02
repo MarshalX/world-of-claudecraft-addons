@@ -13,6 +13,16 @@ import { z } from 'zod';
 /** Two device pixels per CSS pixel, which is what every target display is. */
 const RETINA = 2;
 
+const PNG_SUFFIX = /\.png$/;
+
+/**
+ * The CSS width a preview must be able to fill before it gets its own row.
+ *
+ * Half the content column plus a margin, which is where a picture stops being
+ * something that fits beside a paragraph. See `fillsOwnRow`.
+ */
+const OWN_ROW_MIN_WIDTH = 700;
+
 /**
  * How tall a portrait screenshot may stand in a two-column row, in CSS pixels.
  *
@@ -42,6 +52,26 @@ function wantedWidth(slot: number, natural: Dimensions, portrait: boolean): numb
     return slot;
   }
   return Math.min(slot, (PORTRAIT_MAX_HEIGHT * natural.width) / natural.height);
+}
+
+/**
+ * Whether a picture has earned a row of its own rather than a column beside the
+ * text.
+ *
+ * The question is what the FILE can supply, not what the layout would like. A
+ * two-panel sheet like Satchel or Ledgerline carries 1900 device pixels of
+ * captured detail, and none of it can be read in the 500 CSS px half of a
+ * two-column row; a single HUD panel like Combat Meter is 776 device pixels
+ * wide, so a full-width row would draw it at 388 in the middle of 1072 and leave
+ * it looking lost. Both are the same mistake, which is picking a placement
+ * without asking how big the thing being placed is.
+ *
+ * The threshold is where a preview stops fitting in the side column at its own
+ * resolution and starts being shrunk below it. Measured across the catalog it is
+ * not a close call: every preview is either under 530 CSS px or over 950.
+ */
+export function fillsOwnRow(natural: Dimensions): boolean {
+  return natural.width / RETINA >= OWN_ROW_MIN_WIDTH;
 }
 
 /**
@@ -75,6 +105,7 @@ export function parseShots(source: string, at: string): Map<string, Shot> {
  * and never fatal.
  */
 export function measure(shot: Shot, natural: Dimensions): Measured {
+  const stem = shot.stem ?? shot.file.replace(PNG_SUFFIX, '');
   const portrait = natural.height > natural.width;
   // What the layout WANTS, in CSS pixels, computed without reference to how big
   // the file happens to be. A landscape shot wants the column it sits in. A
@@ -87,6 +118,7 @@ export function measure(shot: Shot, natural: Dimensions): Measured {
   const needed = Math.ceil(wanted * RETINA);
   return {
     ...shot,
+    stem,
     width: natural.width,
     height: natural.height,
     portrait,
@@ -127,6 +159,18 @@ export function undersizeReport(measured: readonly Measured[]): string[] {
 export interface Shot {
   readonly id: string;
   readonly file: string;
+  /**
+   * What the AVIF and WebP beside the PNG are named, when that is not the PNG's
+   * own stem.
+   *
+   * One picture is encoded at more than one width: an addon's preview is shown
+   * in a catalog cell and again, much larger, on that addon's own page, and a
+   * file sized for the cell is a blur on the page while a file sized for the
+   * page is four times the bytes the cell needed. The two variants share the PNG
+   * of record, which is both the fallback and what the README links, and differ
+   * only in what the derivatives are called.
+   */
+  readonly stem?: string;
   readonly minWidth: number;
   readonly caption: string | null;
   readonly alt: string;
@@ -140,6 +184,8 @@ export interface Dimensions {
 
 /** A shot plus what its file turned out to be. */
 export interface Measured extends Shot, Dimensions {
+  /** Resolved: the declared stem, or the PNG's own. Never re-derived downstream. */
+  readonly stem: string;
   /** Device pixels the derivatives are rendered at: min(natural, minWidth). */
   readonly served: number;
   /** Taller than it is wide, so it is capped by height rather than by column. */

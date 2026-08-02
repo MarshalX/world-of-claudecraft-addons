@@ -24,6 +24,7 @@ import type { Build } from '../build.ts';
 import { type Html, html, raw } from '../html.ts';
 import { figure, installButton, type Release } from '../markup.ts';
 import type { Page } from '../shell.ts';
+import { addonPath } from './addon.ts';
 
 const TITLE = 'Addons for World of ClaudeCraft';
 
@@ -127,7 +128,7 @@ function featureOf(build: Build, addon: CatalogAddon): Feature {
 function strip(rest: readonly CatalogAddon[]): Html {
   return html`<p class="eyebrow addon-strip-head">The other ${rest.length}</p>
 <ul class="addon-strip">
-  ${rest.map((one) => html`<li><a href="/addons#${one.id}">${one.name}</a></li>`)}
+  ${rest.map((one) => html`<li><a href="${addonPath(one.id)}">${one.name}</a></li>`)}
 </ul>`;
 }
 

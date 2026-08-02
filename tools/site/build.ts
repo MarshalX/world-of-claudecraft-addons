@@ -28,6 +28,7 @@ const STYLE_ORDER = [
   'surfaces.css',
   'navigation.css',
   'pages.css',
+  'addon.css',
 ];
 
 /** Both themes as custom properties, so switching costs no client JavaScript. */
@@ -35,7 +36,6 @@ const THEMES = { light: 'github-light', dark: 'github-dark' } as const;
 
 const LANGS = ['javascript', 'typescript', 'json', 'css', 'html', 'yaml', 'bash', 'text'];
 
-const PNG_SUFFIX = /\.png$/;
 const LEADING_SLASH = /^\//;
 
 /** Quality settings, picked so a screenshot's text stays crisp rather than by size. */
@@ -106,6 +106,23 @@ async function shots(out: string): Promise<Map<string, Measured>> {
  */
 const PREVIEW_MIN_WIDTH = 700;
 
+/**
+ * The same preview on the addon's OWN page, in device pixels.
+ *
+ * The content column at 1120px less its 24px gutters, times two. That page has
+ * one addon on it and the picture is the point of it, so the figure runs the
+ * width of the column rather than sitting in a card slot: a two-panel sheet like
+ * Satchel or Ledgerline is 1900px of captured detail, and at the 350 CSS px a
+ * catalog cell allows, none of it can be read.
+ *
+ * A second encode rather than one file for both, because the two slots differ by
+ * a factor of three: serving the page's file to the catalog would triple what
+ * that grid of thirteen pictures costs to load, and serving the catalog's file
+ * to the page is the blur this number exists to prevent. Both variants share the
+ * PNG of record, so the second width costs derivatives and nothing else.
+ */
+const PREVIEW_PAGE_WIDTH = 2144;
+
 /** Where the site's own shots of record live. An addon's preview does not. */
 const SHOTS_DIR = join(ROOT, 'screenshots');
 
@@ -121,22 +138,27 @@ interface Source {
  * The served name is prefixed rather than reusing `preview.png`, since every
  * addon names its file the same thing and they all land in one directory.
  */
-function previewShot(dir: string): { shot: Shot; source: Source } | null {
+function previewShot(dir: string, wide: boolean): { shot: Shot; source: Source } | null {
   const result = readAddon(dir);
   if (!result.ok || result.manifest.preview === undefined) {
     return null;
   }
   const { preview } = result.manifest;
-  return {
-    shot: {
-      id: dir,
-      file: `addon-${dir}.png`,
-      minWidth: PREVIEW_MIN_WIDTH,
-      caption: null,
-      alt: preview.alt,
-    },
-    source: { dir: join(ADDONS_DIR, dir), file: preview.file },
+  const base = {
+    id: dir,
+    file: `addon-${dir}.png`,
+    caption: null,
+    alt: preview.alt,
   };
+  const sized = { minWidth: PREVIEW_MIN_WIDTH };
+  const source = { dir: join(ADDONS_DIR, dir), file: preview.file };
+  if (wide) {
+    return {
+      shot: { ...base, minWidth: PREVIEW_PAGE_WIDTH, stem: `addon-${dir}-wide` },
+      source,
+    };
+  }
+  return { shot: { ...base, ...sized }, source };
 }
 
 /**
@@ -148,9 +170,9 @@ function previewShot(dir: string): { shot: Shot; source: Source } | null {
  * second place for the alt text to go stale, and the whole point of the catalog
  * page is that nothing about an addon is written twice.
  */
-async function previews(out: string): Promise<Map<string, Measured>> {
+async function previews(out: string, wide: boolean): Promise<Map<string, Measured>> {
   const declared = addonDirs()
-    .map((dir) => previewShot(dir))
+    .map((dir) => previewShot(dir, wide))
     .filter((one) => one !== null);
   return new Map(await Promise.all(declared.map((one) => encode(out, one.shot, one.source))));
 }
@@ -173,7 +195,11 @@ async function encode(out: string, shot: Shot, source: Source): Promise<[string,
   // never sent wider than its slot needs. The figure caps at half of that, so what
   // arrives is exactly the 2x asset and a second density would be a third copy of
   // a file nothing asks for.
-  const stem = shot.file.replace(PNG_SUFFIX, '');
+  // `measure` resolved which stem this variant writes under, so the two widths of
+  // one preview cannot land on the same file: deriving it from the PNG here again
+  // is exactly that bug, and it is silent, since the second encode simply
+  // overwrites the first and every page then loads whichever ran last.
+  const { stem } = sized;
   const fit = image.resize({ width: sized.served, withoutEnlargement: true });
   write(out, `shots/${stem}.avif`, await fit.clone().avif({ quality: AVIF_Q }).toBuffer());
   write(out, `shots/${stem}.webp`, await fit.webp({ quality: WEBP_Q }).toBuffer());
@@ -254,6 +280,14 @@ export interface Build {
    * make an addon's screenshot load-bearing for a docs page.
    */
   readonly previews: ReadonlyMap<string, Measured>;
+  /**
+   * The same previews, encoded for a slot three times as wide.
+   *
+   * The catalog grid reads `previews`; an addon's own page and the landing
+   * page's feature rows read this one, because both show ONE addon at a time
+   * with room to show it properly. See PREVIEW_PAGE_WIDTH.
+   */
+  readonly previewsWide: ReadonlyMap<string, Measured>;
   readonly markdown: Renderer;
   readonly context: Context;
   readonly emit: (page: Page) => void;
@@ -274,15 +308,17 @@ export async function prepare(outDir: string): Promise<Build> {
   rmSync(out, { recursive: true, force: true });
   const sheet = styles();
   const measured = await shots(out);
-  const shown = await previews(out);
+  const shown = await previews(out, false);
+  const large = await previews(out, true);
   const warnings = undersizeReport([...measured.values()]);
   const build: Build = {
     site: SITE,
     styles: sheet,
     shots: measured,
     previews: shown,
+    previewsWide: large,
     markdown: await renderer(),
-    context: context(measured, shown),
+    context: context(measured, large),
     emit(page) {
       write(out, outputPath(page.path), render(shell(page, SITE, sheet)));
     },

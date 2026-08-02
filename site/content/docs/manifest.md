@@ -60,6 +60,8 @@ Both are hydrated before your first line runs, so `woc.settings['max-rows']` is 
 
 You can only bind an id you declared. That is what makes the editor able to list your keys before your addon has run.
 
+A `label` is read in two places, not one. The manager puts it beside the control, and an addon published through the official marketplace gets [its own page](/addons) on this site where every setting and every default binding is printed from this same declaration. So a label is player-facing text rather than a note to yourself: write it as the sentence a checkbox deserves, and the page and the pane cannot disagree about what the setting does.
+
 ## Shipping a table beside your code
 
 An addon is one file, but an addon **directory** is not. `entry` names your code; `data` names JSON files next to it, and the loader fetches them at install and hands them back parsed.

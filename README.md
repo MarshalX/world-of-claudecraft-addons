@@ -99,6 +99,7 @@ pnpm serve      # the addon dev server on its own
 pnpm site       # build the site into site/dist
 pnpm site:dev   # build the site, serve it on :5181, rebuild on change
 pnpm index      # regenerate marketplace.json from the addon.json files
+pnpm readme     # regenerate the addon section of this file from the manifests
 pnpm changelog  # regenerate CHANGELOG.md from commit titles
 pnpm cues       # regenerate the sound-cue union from a deployed game's pack
 pnpm icons      # regenerate the skill-icon union from its per-class art manifests

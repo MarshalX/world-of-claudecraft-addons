@@ -6,6 +6,7 @@ import type { Measured } from '../tools/site/shots.ts';
 const SHOT: Measured = {
   id: 'combat-meter',
   file: 'combat-meter.png',
+  stem: 'combat-meter',
   minWidth: 1000,
   caption: 'Bars tinted by damage school',
   alt: 'Combat Meter panel showing 17,602 damage in 11 seconds.',

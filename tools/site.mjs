@@ -14,6 +14,7 @@ import process from 'node:process';
 import { isAuthorTool, readAddons } from './catalog.ts';
 import { copyAssets, prepare, SITE } from './site/build.ts';
 import { loadDocs } from './site/docs-source.ts';
+import { addonPage } from './site/pages/addon.ts';
 import { addons } from './site/pages/addons.ts';
 import { changelog } from './site/pages/changelog.ts';
 import { docsPage } from './site/pages/docs.ts';
@@ -105,6 +106,10 @@ async function main() {
     landing(build, { release, catalog }),
     install(build, release),
     addons(build, { catalog, tools }),
+    // One page per addon a player installs. Author tools get none, for the reason
+    // they get no card: the catalog is what a player reads, and dev-harness is
+    // named there and pointed at the docs.
+    ...catalog.map((addon) => addonPage(build, addon, catalog)),
     changelog(build, readFileSync(join(ROOT, 'CHANGELOG.md'), 'utf8')),
     ...docs.map((_page, index) => docsPage(build, docs, index)),
     notFound(),

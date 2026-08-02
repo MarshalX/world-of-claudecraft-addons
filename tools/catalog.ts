@@ -11,7 +11,7 @@
 // were three independent readings of the same directory, and the moment they
 // disagree about which addons ship is the moment one of them is wrong.
 
-import type { AddonManifest } from '../loader/src/shared/schema.ts';
+import type { AddonManifest, KeybindDecl, SettingDecl } from '../loader/src/shared/schema.ts';
 import { addonDirs, readAddon } from './manifests.ts';
 
 /**
@@ -49,6 +49,9 @@ function row(manifest: AddonManifest): CatalogAddon {
     tags: manifest.tags ?? [],
     permissions: manifest.permissions ?? [],
     preview: previewOf(manifest),
+    settings: manifest.settings ?? [],
+    keybinds: manifest.keybinds ?? [],
+    companions: manifest.companions ?? [],
   };
 }
 
@@ -108,6 +111,20 @@ interface CatalogAddon {
   readonly permissions: readonly string[];
   /** Absent is ordinary: publishing an addon is not gated on taking a picture. */
   readonly preview: CatalogPreview | null;
+  /**
+   * What the addon lets a player change, and what it binds, exactly as the
+   * manifest declares them.
+   *
+   * Carried rather than summarised here, because the loader reads these same
+   * declarations to BUILD the settings pane and the keybind rows: the site is
+   * printing the control a player will actually meet, not a description of one.
+   * An addon that adds a setting therefore documents it on the site by shipping,
+   * and one that renames a label cannot leave a stale copy behind on the page.
+   */
+  readonly settings: readonly SettingDecl[];
+  readonly keybinds: readonly KeybindDecl[];
+  /** Addon ids this one works better with. A note, never a dependency. */
+  readonly companions: readonly string[];
 }
 
 export type { CatalogAddon, CatalogPreview };

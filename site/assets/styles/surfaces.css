@@ -220,3 +220,25 @@
 .code pre::-webkit-scrollbar-track {
   background: transparent;
 }
+
+/* A card's heading is now a link to that addon's own page. It carries no
+ * underline because the whole heading is the target and a Cinzel line under a
+ * display face reads as a rule rather than as a link; the hover colour is what
+ * says it is one. */
+.addon-card h2 a {
+  text-decoration: none;
+  color: inherit;
+}
+
+.addon-card h2 a:hover {
+  color: var(--accent-ink);
+}
+
+/* What the card says about configuration: a count, with the settings themselves
+ * on the addon's page. See tools/site/pages/addons.ts. */
+.addon-config {
+  font-family: var(--mono);
+  font-size: 12.5px;
+  color: var(--muted);
+  margin: 0;
+}

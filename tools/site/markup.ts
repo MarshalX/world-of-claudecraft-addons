@@ -8,8 +8,6 @@ import type { Measured } from './shots.ts';
 /** Where the site serves derivatives from. The PNG of record stays in screenshots/. */
 const BASE = '/shots';
 
-const PNG_SUFFIX = /\.png$/;
-
 /**
  * A screenshot, on its near-black plate, with its caption under it.
  *
@@ -33,7 +31,7 @@ const PNG_SUFFIX = /\.png$/;
  * already named it.
  */
 export function figure(shot: Measured): Html {
-  const stem = shot.file.replace(PNG_SUFFIX, '');
+  const { stem } = shot;
   return html`<figure class="${shot.portrait && 'shot-portrait'}">
   <div class="figure-plate" style="max-width:${shot.maxWidth}px">
     <picture>

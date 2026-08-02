@@ -30,6 +30,12 @@ const WATCHED = [
   'site/content',
   'site/static',
   'tools/site',
+  // The generator's own entry point, the catalog every page is built from, and
+  // which addons get a picture. All three change what a page renders, and none
+  // of them is under tools/site.
+  'tools/site.mjs',
+  'tools/catalog.ts',
+  'tools/featured.ts',
   'screenshots',
   'addons',
 ];

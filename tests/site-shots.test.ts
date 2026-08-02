@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import committed from '../site/content/shots.json' with { type: 'json' };
-import { measure, parseShots, undersizeReport } from '../tools/site/shots.ts';
+import { fillsOwnRow, measure, parseShots, undersizeReport } from '../tools/site/shots.ts';
 
 const AT = 'site/content/shots.json';
 
@@ -145,5 +145,36 @@ describe('the committed manifest', () => {
       expect(shot.alt).not.toBe(shot.caption);
       expect(shot.alt.length).toBeGreaterThan(shot.caption?.length ?? 0);
     }
+  });
+});
+
+// Where a preview is placed on an addon's page, decided from the FILE rather
+// than from a list of ids: beside the description when it fits there at its own
+// resolution, on a row of its own when it does not. Both mistakes this prevents
+// look the same to a reader, which is a page whose picture is the wrong size for
+// the space it was given.
+describe('a preview big enough for a row of its own', () => {
+  it('keeps a single HUD panel beside the description', () => {
+    // Combat Meter and Facemark as shipped: 776 and 782 device pixels, which is
+    // roughly 390 CSS px, and half a content column is 500.
+    expect(fillsOwnRow({ width: 776, height: 736 })).toBe(false);
+    expect(fillsOwnRow({ width: 782, height: 412 })).toBe(false);
+  });
+
+  it('gives a two-panel sheet the whole row', () => {
+    // Satchel, Longwatch, Ledgerline and Emberwatch: 1900 to 2350 device pixels
+    // of captured detail, none of which can be read at half a column.
+    expect(fillsOwnRow({ width: 1904, height: 1086 })).toBe(true);
+    expect(fillsOwnRow({ width: 2136, height: 806 })).toBe(true);
+    expect(fillsOwnRow({ width: 1984, height: 1446 })).toBe(true);
+    expect(fillsOwnRow({ width: 2348, height: 1430 })).toBe(true);
+  });
+
+  it('reads the width rather than the shape', () => {
+    // A tall narrow capture is not a sheet however many pixels it is high, and a
+    // wide short strip is not one either until it is actually wide. Both would be
+    // misplaced by an aspect-ratio test, which is the obvious wrong rule here.
+    expect(fillsOwnRow({ width: 736, height: 2000 })).toBe(false);
+    expect(fillsOwnRow({ width: 1044, height: 306 })).toBe(false);
   });
 });

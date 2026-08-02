@@ -29,7 +29,9 @@ import type { CatalogAddon } from '../../catalog.ts';
 import type { Build } from '../build.ts';
 import { type Html, html, join } from '../html.ts';
 import { figure } from '../markup.ts';
+import { countOf } from '../settings.ts';
 import type { Page } from '../shell.ts';
+import { addonPath } from './addon.ts';
 
 const TITLE = 'Addons';
 
@@ -37,14 +39,33 @@ const DESCRIPTION =
   'The official addon catalog for World of ClaudeCraft: what each one does that the ' +
   'game does not, what it declares, and where it comes from.';
 
+/**
+ * What a card says about configuration, which is a COUNT and a link.
+ *
+ * The settings themselves are on the addon's own page. 143 of them across the
+ * catalog, up to nine on one addon, is a grid where one cell is three times the
+ * height of the ones beside it, and a card is a name, a picture and a sentence.
+ */
+function configurable(addon: CatalogAddon): Html | false {
+  const parts = [countOf(addon.settings.length, 'setting')];
+  if (addon.keybinds.length > 0) {
+    parts.push(countOf(addon.keybinds.length, 'key'));
+  }
+  if (addon.settings.length === 0 && addon.keybinds.length === 0) {
+    return false;
+  }
+  return html`<p class="addon-config">${parts.join(' · ')}</p>`;
+}
+
 function card(build: Build, addon: CatalogAddon): Html {
   const shot = build.previews.get(addon.id);
   return html`<article class="addon-card" id="${addon.id}" data-tags="${addon.tags.join(' ')}">
   <p class="addon-meta">${addon.version} · ${addon.author}</p>
-  <h2>${addon.name}</h2>
+  <h2><a href="${addonPath(addon.id)}">${addon.name}</a></h2>
   ${shot && figure(shot)}
   <p>${addon.description}</p>
   ${addon.tags.length > 0 && html`<ul class="tags">${addon.tags.map((tag) => html`<li>${tag}</li>`)}</ul>`}
+  ${configurable(addon)}
   ${
     addon.permissions.length > 0 &&
     html`<p class="addon-declares">Declares ${join(
@@ -52,7 +73,7 @@ function card(build: Build, addon: CatalogAddon): Html {
       ', ',
     )}</p>`
   }
-  <p><a class="link-more" href="${build.site.repo}/tree/main/addons/${addon.id}">Read the source →</a></p>
+  <p><a class="link-more" href="${addonPath(addon.id)}">Settings, keys and what it declares →</a></p>
 </article>`;
 }
 
