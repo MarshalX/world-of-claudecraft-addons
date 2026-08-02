@@ -1,0 +1,5722 @@
+{
+  "gameVersion": "0.33.1",
+  "source": "src/sim/data.ts, src/sim/quest_targets.ts, src/sim/types.ts, src/sim/content/*.ts",
+  "zones": [
+    {
+      "id": "eastbrook_vale",
+      "name": "Eastbrook Vale",
+      "xMin": -180,
+      "xMax": 180,
+      "zMin": -180,
+      "zMax": 180
+    },
+    {
+      "id": "mirefen_marsh",
+      "name": "Mirefen Marsh",
+      "xMin": -180,
+      "xMax": 180,
+      "zMin": 180,
+      "zMax": 540
+    },
+    {
+      "id": "thornpeak_heights",
+      "name": "Thornpeak Heights",
+      "xMin": -180,
+      "xMax": 180,
+      "zMin": 540,
+      "zMax": 900
+    },
+    {
+      "id": "veiled_hollow",
+      "name": "The Veiled Hollow",
+      "xMin": -180,
+      "xMax": 180,
+      "zMin": 900,
+      "zMax": 1440
+    },
+    {
+      "id": "drakelands",
+      "name": "The Drakelands",
+      "xMin": 180,
+      "xMax": 540,
+      "zMin": 1820,
+      "zMax": 2420
+    },
+    {
+      "id": "frostveil",
+      "name": "The Frostveil Reach",
+      "xMin": -180,
+      "xMax": 180,
+      "zMin": 1440,
+      "zMax": 1960
+    },
+    {
+      "id": "amberfall",
+      "name": "The Amberfall",
+      "xMin": -540,
+      "xMax": -180,
+      "zMin": 1820,
+      "zMax": 2380
+    },
+    {
+      "id": "willowfen",
+      "name": "The Willowfen",
+      "xMin": -540,
+      "xMax": -180,
+      "zMin": 180,
+      "zMax": 700
+    },
+    {
+      "id": "nightbloom",
+      "name": "The Nightbloom",
+      "xMin": -540,
+      "xMax": -180,
+      "zMin": 1260,
+      "zMax": 1820
+    },
+    {
+      "id": "wraithwood",
+      "name": "The Wraithwood",
+      "xMin": 180,
+      "xMax": 540,
+      "zMin": 1260,
+      "zMax": 1820
+    },
+    {
+      "id": "palmreach",
+      "name": "The Palmreach",
+      "xMin": -540,
+      "xMax": -180,
+      "zMin": 700,
+      "zMax": 1260
+    },
+    {
+      "id": "evergarden",
+      "name": "The Evergarden",
+      "xMin": 180,
+      "xMax": 540,
+      "zMin": 700,
+      "zMax": 1260
+    },
+    {
+      "id": "galecrest",
+      "name": "The Galecrest",
+      "xMin": 180,
+      "xMax": 540,
+      "zMin": 180,
+      "zMax": 700
+    },
+    {
+      "id": "farshore_isle",
+      "name": "The Farshore",
+      "xMin": 180,
+      "xMax": 540,
+      "zMin": -180,
+      "zMax": 180
+    }
+  ],
+  "quests": [
+    {
+      "id": "q_prof_intro",
+      "name": "A Trade for Every Hand",
+      "giver": "foreman_odell",
+      "turnIn": ["foreman_odell"],
+      "objectives": [
+        {
+          "type": "gather",
+          "count": 5,
+          "label": "Ore vein harvested",
+          "nodeType": "ore"
+        }
+      ]
+    },
+    {
+      "id": "q_wolves",
+      "name": "Wolves at the Door",
+      "giver": "marshal_redbrook",
+      "turnIn": ["marshal_redbrook"],
+      "objectives": [
+        {
+          "type": "kill",
+          "count": 8,
+          "label": "Forest Wolf slain",
+          "mob": "forest_wolf"
+        }
+      ]
+    },
+    {
+      "id": "q_greyjaw",
+      "name": "The Old Wolf",
+      "giver": "marshal_redbrook",
+      "turnIn": ["marshal_redbrook"],
+      "objectives": [
+        {
+          "type": "collect",
+          "count": 1,
+          "label": "Old Greyjaw's Fang",
+          "item": "greyjaw_fang"
+        }
+      ]
+    },
+    {
+      "id": "q_boars",
+      "name": "Bristly Boar Hides",
+      "giver": "trader_wilkes",
+      "turnIn": ["trader_wilkes"],
+      "objectives": [
+        {
+          "type": "collect",
+          "count": 5,
+          "label": "Bristly Boar Hide",
+          "item": "boar_hide"
+        }
+      ]
+    },
+    {
+      "id": "q_spiders",
+      "name": "Sableweb Menace",
+      "giver": "apothecary_lin",
+      "turnIn": ["apothecary_lin"],
+      "objectives": [
+        {
+          "type": "kill",
+          "count": 6,
+          "label": "Sableweb Lurker slain",
+          "mob": "webwood_spider"
+        },
+        {
+          "type": "collect",
+          "count": 4,
+          "label": "Sableweb Silk Gland",
+          "item": "webwood_silk"
+        }
+      ]
+    },
+    {
+      "id": "q_murlocs",
+      "name": "Trouble at the Lake",
+      "giver": "fisherman_brandt",
+      "turnIn": ["fisherman_brandt"],
+      "objectives": [
+        {
+          "type": "kill",
+          "count": 8,
+          "label": "Mudfin Skulker slain",
+          "mob": "mudfin_murloc"
+        }
+      ]
+    },
+    {
+      "id": "q_mine",
+      "name": "Rats in the Mine",
+      "giver": "foreman_odell",
+      "turnIn": ["foreman_odell"],
+      "objectives": [
+        {
+          "type": "kill",
+          "count": 10,
+          "label": "Deeprock Digger slain",
+          "mob": "tunnel_rat"
+        }
+      ]
+    },
+    {
+      "id": "q_bones",
+      "name": "The Restless Dead",
+      "giver": "brother_aldric",
+      "turnIn": ["brother_aldric"],
+      "objectives": [
+        {
+          "type": "kill",
+          "count": 8,
+          "label": "Restless Bones laid to rest",
+          "mob": "restless_bones"
+        }
+      ]
+    },
+    {
+      "id": "q_supplies",
+      "name": "Stolen Supplies",
+      "giver": "trader_wilkes",
+      "turnIn": ["trader_wilkes"],
+      "objectives": [
+        {
+          "type": "collect",
+          "count": 4,
+          "label": "Stolen Supply Crate",
+          "item": "supply_crate"
+        }
+      ]
+    },
+    {
+      "id": "q_whispers",
+      "name": "Whispers Below",
+      "giver": "brother_aldric",
+      "turnIn": ["brother_aldric"],
+      "objectives": [
+        {
+          "type": "collect",
+          "count": 1,
+          "label": "Gravecaller's Sigil",
+          "item": "gravecaller_sigil"
+        }
+      ]
+    },
+    {
+      "id": "q_names_of_the_dead",
+      "name": "The Names of the Dead",
+      "giver": "brother_aldric",
+      "turnIn": ["brother_aldric"],
+      "objectives": [
+        {
+          "type": "collect",
+          "count": 3,
+          "label": "Weathered Ledger Page",
+          "item": "weathered_ledger_page"
+        }
+      ]
+    },
+    {
+      "id": "q_silence_the_call",
+      "name": "Silence the Call",
+      "giver": "brother_aldric",
+      "turnIn": ["brother_aldric"],
+      "objectives": [
+        {
+          "type": "kill",
+          "count": 12,
+          "label": "Restless Bones silenced",
+          "mob": "restless_bones"
+        }
+      ]
+    },
+    {
+      "id": "q_rite",
+      "name": "The Binding Rite",
+      "giver": "brother_aldric",
+      "turnIn": ["brother_aldric"],
+      "objectives": [
+        {
+          "type": "collect",
+          "count": 4,
+          "label": "Blessed Tallow",
+          "item": "blessed_wax"
+        },
+        {
+          "type": "collect",
+          "count": 6,
+          "label": "Ghostly Essence",
+          "item": "ghostly_essence"
+        }
+      ]
+    },
+    {
+      "id": "q_hollow",
+      "name": "Into the Hollow",
+      "giver": "brother_aldric",
+      "turnIn": ["brother_aldric"],
+      "objectives": [
+        {
+          "type": "kill",
+          "count": 1,
+          "label": "Morthen the Gravecaller slain",
+          "mob": "morthen"
+        }
+      ]
+    },
+    {
+      "id": "q_sexton",
+      "name": "The Sexton's Bell",
+      "giver": "brother_aldric",
+      "turnIn": ["brother_aldric"],
+      "objectives": [
+        {
+          "type": "kill",
+          "count": 1,
+          "label": "Sexton Marrow laid to rest",
+          "mob": "sexton_marrow"
+        }
+      ]
+    },
+    {
+      "id": "q_gravecallers_trail",
+      "name": "The Gravecaller's Trail",
+      "giver": "brother_aldric",
+      "turnIn": ["brother_aldric"],
+      "objectives": [
+        {
+          "type": "collect",
+          "count": 1,
+          "label": "Morthen's Grimoire",
+          "item": "morthen_grimoire"
+        }
+      ]
+    },
+    {
+      "id": "q_bandits",
+      "name": "Bandits of the Vale",
+      "giver": "marshal_redbrook",
+      "turnIn": ["marshal_redbrook"],
+      "objectives": [
+        {
+          "type": "kill",
+          "count": 10,
+          "label": "Vale Bandit slain",
+          "mob": "vale_bandit"
+        }
+      ]
+    },
+    {
+      "id": "q_ringleader",
+      "name": "The Ringleader",
+      "giver": "marshal_redbrook",
+      "turnIn": ["marshal_redbrook"],
+      "objectives": [
+        {
+          "type": "kill",
+          "count": 1,
+          "label": "Gorrak the Ruthless slain",
+          "mob": "gorrak"
+        }
+      ]
+    },
+    {
+      "id": "q_mogger",
+      "name": "Mogger Must Fall",
+      "giver": "marshal_redbrook",
+      "turnIn": ["marshal_redbrook"],
+      "objectives": [
+        {
+          "type": "kill",
+          "count": 1,
+          "label": "Mogger slain",
+          "mob": "mogger"
+        }
+      ]
+    },
+    {
+      "id": "q_prof_attune_smith",
+      "name": "The Smith's Promise",
+      "giver": "forgemistress_darva",
+      "turnIn": ["forgemistress_darva"],
+      "objectives": [
+        {
+          "type": "gather",
+          "count": 3,
+          "label": "Ore vein harvested",
+          "nodeType": "ore"
+        }
+      ]
+    },
+    {
+      "id": "q_prof_attune_outfitter",
+      "name": "The Outfitter's Measure",
+      "giver": "weaver_ottilie",
+      "turnIn": ["weaver_ottilie"],
+      "objectives": [
+        {
+          "type": "kill",
+          "count": 4,
+          "label": "Webwood Spider culled",
+          "mob": "webwood_spider"
+        }
+      ]
+    },
+    {
+      "id": "q_prof_attune_apothecary",
+      "name": "A Recipe Worth Keeping",
+      "giver": "cook_marlow",
+      "turnIn": ["cook_marlow"],
+      "objectives": [
+        {
+          "type": "kill",
+          "count": 4,
+          "label": "Wild Boar hunted",
+          "mob": "wild_boar"
+        }
+      ]
+    },
+    {
+      "id": "q_prof_attune_bombardier",
+      "name": "A Volatile Arrangement",
+      "giver": "tinker_gizzel",
+      "turnIn": ["tinker_gizzel"],
+      "objectives": [
+        {
+          "type": "gather",
+          "count": 3,
+          "label": "Herb patch harvested",
+          "nodeType": "herb"
+        }
+      ]
+    },
+    {
+      "id": "q_prof_amends_smith",
+      "name": "Back to the Forge",
+      "giver": "forgemistress_darva",
+      "turnIn": ["forgemistress_darva"],
+      "objectives": [
+        {
+          "type": "kill",
+          "count": 5,
+          "label": "Forest Wolf slain",
+          "mob": "forest_wolf"
+        }
+      ],
+      "resolved": "archetypeAmends"
+    },
+    {
+      "id": "q_prof_amends_outfitter",
+      "name": "Threads Rejoined",
+      "giver": "weaver_ottilie",
+      "turnIn": ["weaver_ottilie"],
+      "objectives": [
+        {
+          "type": "kill",
+          "count": 5,
+          "label": "Webwood Spider culled",
+          "mob": "webwood_spider"
+        }
+      ],
+      "resolved": "archetypeAmends"
+    },
+    {
+      "id": "q_prof_amends_apothecary",
+      "name": "Back on the Stove",
+      "giver": "cook_marlow",
+      "turnIn": ["cook_marlow"],
+      "objectives": [
+        {
+          "type": "kill",
+          "count": 5,
+          "label": "Wild Boar hunted",
+          "mob": "wild_boar"
+        }
+      ],
+      "resolved": "archetypeAmends"
+    },
+    {
+      "id": "q_prof_amends_bombardier",
+      "name": "The Ledger Grows",
+      "giver": "tinker_gizzel",
+      "turnIn": ["tinker_gizzel"],
+      "objectives": [
+        {
+          "type": "kill",
+          "count": 5,
+          "label": "Tunnel Rat exterminated",
+          "mob": "tunnel_rat"
+        }
+      ],
+      "resolved": "archetypeAmends"
+    },
+    {
+      "id": "q_prof_workorder_forge",
+      "name": "Forge Work Order",
+      "giver": "forgemistress_darva",
+      "turnIn": ["forgemistress_darva"],
+      "objectives": [
+        {
+          "type": "collect",
+          "count": 8,
+          "label": "Copper Ore delivered",
+          "item": "copper_ore"
+        }
+      ]
+    },
+    {
+      "id": "q_prof_workorder_kitchens",
+      "name": "Kitchens Work Order",
+      "giver": "cook_marlow",
+      "turnIn": ["cook_marlow"],
+      "objectives": [
+        {
+          "type": "collect",
+          "count": 8,
+          "label": "Game Meat delivered",
+          "item": "game_meat"
+        }
+      ]
+    },
+    {
+      "id": "q_prof_workorder_loom",
+      "name": "Loom Work Order",
+      "giver": "weaver_ottilie",
+      "turnIn": ["weaver_ottilie"],
+      "objectives": [
+        {
+          "type": "collect",
+          "count": 6,
+          "label": "Spider Silk delivered",
+          "item": "spider_silk"
+        }
+      ]
+    },
+    {
+      "id": "q_prof_workorder_toolworks",
+      "name": "Toolworks Work Order",
+      "giver": "tinker_gizzel",
+      "turnIn": ["tinker_gizzel"],
+      "objectives": [
+        {
+          "type": "collect",
+          "count": 8,
+          "label": "Ironbark Log delivered",
+          "item": "ironbark_log"
+        }
+      ]
+    },
+    {
+      "id": "q_prof_hobby_switch",
+      "name": "A Different Pastime",
+      "giver": "smith_haldren",
+      "turnIn": ["smith_haldren"],
+      "objectives": [
+        {
+          "type": "gather",
+          "count": 3,
+          "label": "Herb patch harvested",
+          "nodeType": "herb"
+        }
+      ]
+    },
+    {
+      "id": "q_fenbridge_muster",
+      "name": "Muster at Fenbridge",
+      "giver": "brother_aldric",
+      "turnIn": ["warden_fenwick"],
+      "objectives": [
+        {
+          "type": "collect",
+          "count": 1,
+          "label": "Fenbridge Muster Order",
+          "item": "fen_muster_order"
+        }
+      ]
+    },
+    {
+      "id": "q_prowlers",
+      "name": "Teeth of the Fen",
+      "giver": "warden_fenwick",
+      "turnIn": ["warden_fenwick"],
+      "objectives": [
+        {
+          "type": "kill",
+          "count": 12,
+          "label": "Mire Prowler slain",
+          "mob": "mire_prowler"
+        }
+      ]
+    },
+    {
+      "id": "q_prowler_pelts",
+      "name": "Pelts for the Causeway",
+      "giver": "provisioner_hale",
+      "turnIn": ["provisioner_hale"],
+      "objectives": [
+        {
+          "type": "collect",
+          "count": 8,
+          "label": "Mire Prowler Pelt",
+          "item": "mire_prowler_pelt"
+        }
+      ]
+    },
+    {
+      "id": "q_fen_supplies",
+      "name": "The Lost Caravan",
+      "giver": "provisioner_hale",
+      "turnIn": ["provisioner_hale"],
+      "objectives": [
+        {
+          "type": "collect",
+          "count": 5,
+          "label": "Lost Caravan Goods",
+          "item": "lost_caravan_goods"
+        }
+      ]
+    },
+    {
+      "id": "q_the_codfather",
+      "name": "The Codfather",
+      "giver": "provisioner_hale",
+      "turnIn": ["provisioner_hale"],
+      "objectives": [
+        {
+          "type": "collect",
+          "count": 1,
+          "label": "The Codfather",
+          "item": "the_codfather"
+        }
+      ]
+    },
+    {
+      "id": "q_deepfen",
+      "name": "The Deepfen Stirs",
+      "giver": "warden_fenwick",
+      "turnIn": ["warden_fenwick"],
+      "objectives": [
+        {
+          "type": "kill",
+          "count": 12,
+          "label": "Deepfen Snapper slain",
+          "mob": "deepfen_murloc"
+        }
+      ]
+    },
+    {
+      "id": "q_idols",
+      "name": "Idols of the Deep",
+      "giver": "brother_aldric_fen",
+      "turnIn": ["brother_aldric_fen"],
+      "objectives": [
+        {
+          "type": "collect",
+          "count": 5,
+          "label": "Waterlogged Idol",
+          "item": "waterlogged_idol"
+        }
+      ]
+    },
+    {
+      "id": "q_aldrics_fallen_star",
+      "name": "Aldric's Fallen Star",
+      "giver": "brother_aldric_fen",
+      "turnIn": ["brother_aldric_fen"],
+      "objectives": [
+        {
+          "type": "collect",
+          "count": 1,
+          "label": "Unknown Alien Weaponry",
+          "item": "unknown_alien_weaponry"
+        }
+      ]
+    },
+    {
+      "id": "q_deepfen_purge",
+      "name": "Back to the Shallows",
+      "giver": "warden_fenwick",
+      "turnIn": ["warden_fenwick"],
+      "objectives": [
+        {
+          "type": "kill",
+          "count": 14,
+          "label": "Deepfen Snapper slain",
+          "mob": "deepfen_murloc"
+        }
+      ]
+    },
+    {
+      "id": "q_widows",
+      "name": "Silk and Venom",
+      "giver": "herbalist_yara",
+      "turnIn": ["herbalist_yara"],
+      "objectives": [
+        {
+          "type": "kill",
+          "count": 10,
+          "label": "Mirefen Widow slain",
+          "mob": "mire_widow"
+        },
+        {
+          "type": "collect",
+          "count": 6,
+          "label": "Widow Venom Sac",
+          "item": "widow_venom_sac"
+        }
+      ]
+    },
+    {
+      "id": "q_broodmother",
+      "name": "The Broodmother",
+      "giver": "herbalist_yara",
+      "turnIn": ["herbalist_yara"],
+      "objectives": [
+        {
+          "type": "kill",
+          "count": 8,
+          "label": "Mirefen Widow slain",
+          "mob": "mire_widow"
+        },
+        {
+          "type": "kill",
+          "count": 1,
+          "label": "The Broodmother slain",
+          "mob": "mirefen_broodmother"
+        }
+      ]
+    },
+    {
+      "id": "q_drowned",
+      "name": "The Drowned Dead",
+      "giver": "brother_aldric_fen",
+      "turnIn": ["brother_aldric_fen"],
+      "objectives": [
+        {
+          "type": "kill",
+          "count": 12,
+          "label": "Drowned Dead laid to rest",
+          "mob": "drowned_dead"
+        }
+      ]
+    },
+    {
+      "id": "q_drowned_censers",
+      "name": "Censers from the Deep",
+      "giver": "brother_aldric_fen",
+      "turnIn": ["brother_aldric_fen"],
+      "objectives": [
+        {
+          "type": "collect",
+          "count": 4,
+          "label": "Rusted Censer",
+          "item": "rusted_censer"
+        }
+      ]
+    },
+    {
+      "id": "q_no_rest",
+      "name": "No Rest in the Reeds",
+      "giver": "brother_aldric_fen",
+      "turnIn": ["brother_aldric_fen"],
+      "objectives": [
+        {
+          "type": "kill",
+          "count": 14,
+          "label": "Drowned Dead laid to rest",
+          "mob": "drowned_dead"
+        }
+      ]
+    },
+    {
+      "id": "q_trolls",
+      "name": "Mounds of the Mirefen",
+      "giver": "warden_fenwick",
+      "turnIn": ["warden_fenwick"],
+      "objectives": [
+        {
+          "type": "kill",
+          "count": 12,
+          "label": "Mirefen Troll slain",
+          "mob": "fen_troll"
+        }
+      ]
+    },
+    {
+      "id": "q_troll_fetishes",
+      "name": "Fetish and Bone",
+      "giver": "scout_maren",
+      "turnIn": ["scout_maren"],
+      "objectives": [
+        {
+          "type": "collect",
+          "count": 8,
+          "label": "Mirefen Troll Fetish",
+          "item": "troll_fetish"
+        }
+      ]
+    },
+    {
+      "id": "q_grubjaw",
+      "name": "The Glutton",
+      "giver": "provisioner_hale",
+      "turnIn": ["provisioner_hale"],
+      "objectives": [
+        {
+          "type": "collect",
+          "count": 1,
+          "label": "Grubjaw's Tusk",
+          "item": "grubjaw_tusk"
+        }
+      ]
+    },
+    {
+      "id": "q_cult_camp",
+      "name": "Robes in the Reeds",
+      "giver": "scout_maren",
+      "turnIn": ["scout_maren"],
+      "objectives": [
+        {
+          "type": "kill",
+          "count": 12,
+          "label": "Gravecaller Cultist slain",
+          "mob": "gravecaller_cultist"
+        }
+      ]
+    },
+    {
+      "id": "q_summoners",
+      "name": "Stopping the Summoning",
+      "giver": "brother_aldric_fen",
+      "turnIn": ["brother_aldric_fen"],
+      "objectives": [
+        {
+          "type": "kill",
+          "count": 8,
+          "label": "Gravecaller Summoner slain",
+          "mob": "gravecaller_summoner"
+        },
+        {
+          "type": "collect",
+          "count": 4,
+          "label": "Gravecaller Cipher",
+          "item": "cult_cipher"
+        }
+      ]
+    },
+    {
+      "id": "q_deacon",
+      "name": "The Deacon of the Mire",
+      "giver": "warden_fenwick",
+      "turnIn": ["warden_fenwick"],
+      "objectives": [
+        {
+          "type": "kill",
+          "count": 1,
+          "label": "Deacon Voss slain",
+          "mob": "deacon_voss"
+        }
+      ]
+    },
+    {
+      "id": "q_bastion_door",
+      "name": "The Sunken Bastion",
+      "giver": "brother_aldric_fen",
+      "turnIn": ["brother_aldric_fen"],
+      "objectives": [
+        {
+          "type": "collect",
+          "count": 1,
+          "label": "Bastion Ward Stone",
+          "item": "bastion_ward_stone"
+        }
+      ]
+    },
+    {
+      "id": "q_olen",
+      "name": "The Knight-Commander's Shame",
+      "giver": "scout_maren",
+      "turnIn": ["scout_maren"],
+      "objectives": [
+        {
+          "type": "kill",
+          "count": 1,
+          "label": "Knight-Commander Olen laid to rest",
+          "mob": "knight_commander_olen"
+        }
+      ]
+    },
+    {
+      "id": "q_mistcaller",
+      "name": "The Fogbinder",
+      "giver": "brother_aldric_fen",
+      "turnIn": ["brother_aldric_fen"],
+      "objectives": [
+        {
+          "type": "kill",
+          "count": 1,
+          "label": "Vael the Fogbinder slain",
+          "mob": "vael_the_mistcaller"
+        }
+      ]
+    },
+    {
+      "id": "q_prof_workorder_tannery",
+      "name": "Tannery Work Order",
+      "giver": "tanner_hesk",
+      "turnIn": ["tanner_hesk"],
+      "objectives": [
+        {
+          "type": "collect",
+          "count": 8,
+          "label": "Rough Hide delivered",
+          "item": "rough_hide"
+        }
+      ]
+    },
+    {
+      "id": "q_highwatch_summons",
+      "name": "The Watch on the Peaks",
+      "giver": "brother_aldric_fen",
+      "turnIn": ["captain_thessaly"],
+      "objectives": [
+        {
+          "type": "collect",
+          "count": 1,
+          "label": "Highwatch Summons",
+          "item": "highwatch_summons"
+        }
+      ]
+    },
+    {
+      "id": "q_stalkers",
+      "name": "Stalkers on the Ridge",
+      "giver": "captain_thessaly",
+      "turnIn": ["captain_thessaly"],
+      "objectives": [
+        {
+          "type": "kill",
+          "count": 12,
+          "label": "Ridge Stalker slain",
+          "mob": "ridge_stalker"
+        }
+      ]
+    },
+    {
+      "id": "q_stalker_pelts",
+      "name": "First Frost at Highwatch",
+      "giver": "quartermaster_bree",
+      "turnIn": ["quartermaster_bree"],
+      "objectives": [
+        {
+          "type": "collect",
+          "count": 8,
+          "label": "Ridge Stalker Pelt",
+          "item": "ridge_stalker_pelt"
+        }
+      ]
+    },
+    {
+      "id": "q_stalkers_return",
+      "name": "The Stalkers Return",
+      "giver": "captain_thessaly",
+      "turnIn": ["captain_thessaly"],
+      "objectives": [
+        {
+          "type": "kill",
+          "count": 14,
+          "label": "Ridge Stalker slain",
+          "mob": "ridge_stalker"
+        }
+      ]
+    },
+    {
+      "id": "q_stalker_cloaks",
+      "name": "Cloaks for the Watch",
+      "giver": "quartermaster_bree",
+      "turnIn": ["quartermaster_bree"],
+      "objectives": [
+        {
+          "type": "collect",
+          "count": 10,
+          "label": "Ridge Stalker Pelt",
+          "item": "ridge_stalker_pelt"
+        }
+      ]
+    },
+    {
+      "id": "q_old_cragmaw",
+      "name": "Old Cragmaw",
+      "giver": "captain_thessaly",
+      "turnIn": ["captain_thessaly"],
+      "objectives": [
+        {
+          "type": "kill",
+          "count": 1,
+          "label": "Old Cragmaw slain",
+          "mob": "old_cragmaw"
+        }
+      ]
+    },
+    {
+      "id": "q_kobold_tunnels",
+      "name": "Deeprock Trouble",
+      "giver": "loremaster_caddis",
+      "turnIn": ["loremaster_caddis"],
+      "objectives": [
+        {
+          "type": "kill",
+          "count": 12,
+          "label": "Deeprock Tunneler slain",
+          "mob": "deeprock_kobold"
+        }
+      ]
+    },
+    {
+      "id": "q_glowing_wax",
+      "name": "Strange Wax",
+      "giver": "quartermaster_bree",
+      "turnIn": ["quartermaster_bree"],
+      "objectives": [
+        {
+          "type": "collect",
+          "count": 6,
+          "label": "Glowing Wax",
+          "item": "glowing_wax"
+        }
+      ]
+    },
+    {
+      "id": "q_ogre_edges",
+      "name": "Ogres at the Foothills",
+      "giver": "scout_maren_highwatch",
+      "turnIn": ["scout_maren_highwatch"],
+      "objectives": [
+        {
+          "type": "kill",
+          "count": 12,
+          "label": "Thornpeak Ogre slain",
+          "mob": "thornpeak_ogre"
+        }
+      ]
+    },
+    {
+      "id": "q_ogre_totems",
+      "name": "Totems of War",
+      "giver": "scout_maren_highwatch",
+      "turnIn": ["scout_maren_highwatch"],
+      "objectives": [
+        {
+          "type": "collect",
+          "count": 6,
+          "label": "Ogre War Totem",
+          "item": "ogre_war_totem"
+        }
+      ]
+    },
+    {
+      "id": "q_ogre_bounty",
+      "name": "The Captain's Bounty",
+      "giver": "captain_thessaly",
+      "turnIn": ["captain_thessaly"],
+      "objectives": [
+        {
+          "type": "kill",
+          "count": 14,
+          "label": "Thornpeak Ogre slain",
+          "mob": "thornpeak_ogre"
+        }
+      ]
+    },
+    {
+      "id": "q_crushers",
+      "name": "Break the War-Camp",
+      "giver": "captain_thessaly",
+      "turnIn": ["captain_thessaly"],
+      "objectives": [
+        {
+          "type": "kill",
+          "count": 10,
+          "label": "Thornpeak Crusher slain",
+          "mob": "ogre_crusher"
+        }
+      ]
+    },
+    {
+      "id": "q_drogmar",
+      "name": "Warlord Drogmar",
+      "giver": "captain_thessaly",
+      "turnIn": ["captain_thessaly"],
+      "objectives": [
+        {
+          "type": "kill",
+          "count": 1,
+          "label": "Warlord Drogmar slain",
+          "mob": "warlord_drogmar"
+        }
+      ]
+    },
+    {
+      "id": "q_elementals",
+      "name": "The Mountain Wakes",
+      "giver": "loremaster_caddis",
+      "turnIn": ["loremaster_caddis"],
+      "objectives": [
+        {
+          "type": "kill",
+          "count": 12,
+          "label": "Stormcrag Elemental slain",
+          "mob": "stormcrag_elemental"
+        }
+      ]
+    },
+    {
+      "id": "q_shard_cores",
+      "name": "Cores of the Storm",
+      "giver": "loremaster_caddis",
+      "turnIn": ["loremaster_caddis"],
+      "objectives": [
+        {
+          "type": "collect",
+          "count": 6,
+          "label": "Storm Core",
+          "item": "storm_core"
+        }
+      ]
+    },
+    {
+      "id": "q_kazzix",
+      "name": "The Shardlord",
+      "giver": "loremaster_caddis",
+      "turnIn": ["loremaster_caddis"],
+      "objectives": [
+        {
+          "type": "collect",
+          "count": 1,
+          "label": "Kazzix's Heartshard",
+          "item": "kazzix_heartshard"
+        }
+      ]
+    },
+    {
+      "id": "q_zealots",
+      "name": "Chants on the Wind",
+      "giver": "brother_aldric_highwatch",
+      "turnIn": ["brother_aldric_highwatch"],
+      "objectives": [
+        {
+          "type": "kill",
+          "count": 12,
+          "label": "Wyrmcult Zealot slain",
+          "mob": "wyrmcult_zealot"
+        }
+      ]
+    },
+    {
+      "id": "q_cult_orders",
+      "name": "Orders from Below",
+      "giver": "brother_aldric_highwatch",
+      "turnIn": ["brother_aldric_highwatch"],
+      "objectives": [
+        {
+          "type": "kill",
+          "count": 8,
+          "label": "Wyrmcult Zealot slain",
+          "mob": "wyrmcult_zealot"
+        },
+        {
+          "type": "collect",
+          "count": 4,
+          "label": "Wyrmcult Orders",
+          "item": "wyrmcult_orders"
+        }
+      ]
+    },
+    {
+      "id": "q_necromancers",
+      "name": "The Phylactery Ring",
+      "giver": "brother_aldric_highwatch",
+      "turnIn": ["brother_aldric_highwatch"],
+      "objectives": [
+        {
+          "type": "kill",
+          "count": 8,
+          "label": "Wyrmcult Necromancer slain",
+          "mob": "wyrmcult_necromancer"
+        },
+        {
+          "type": "collect",
+          "count": 3,
+          "label": "Ritual Phylactery",
+          "item": "ritual_phylactery"
+        }
+      ]
+    },
+    {
+      "id": "q_revenants",
+      "name": "The Revenant Fields",
+      "giver": "captain_thessaly",
+      "turnIn": ["captain_thessaly"],
+      "objectives": [
+        {
+          "type": "kill",
+          "count": 12,
+          "label": "Boneclad Revenant slain",
+          "mob": "boneclad_revenant"
+        }
+      ]
+    },
+    {
+      "id": "q_revenant_vanguard",
+      "name": "Bones of the Vanguard",
+      "giver": "captain_thessaly",
+      "turnIn": ["captain_thessaly"],
+      "objectives": [
+        {
+          "type": "kill",
+          "count": 14,
+          "label": "Boneclad Revenant slain",
+          "mob": "boneclad_revenant"
+        }
+      ]
+    },
+    {
+      "id": "q_wyrm_sigils",
+      "name": "Sigils of the Wyrm",
+      "giver": "brother_aldric_highwatch",
+      "turnIn": ["brother_aldric_highwatch"],
+      "objectives": [
+        {
+          "type": "collect",
+          "count": 3,
+          "label": "Gravewyrm Sigil",
+          "item": "gravewyrm_sigil"
+        }
+      ]
+    },
+    {
+      "id": "q_breaking_the_seal",
+      "name": "Breaking the Seal",
+      "giver": "brother_aldric_highwatch",
+      "turnIn": ["brother_aldric_highwatch"],
+      "objectives": [
+        {
+          "type": "collect",
+          "count": 5,
+          "label": "Blessed Embers",
+          "item": "blessed_embers"
+        }
+      ]
+    },
+    {
+      "id": "q_voice_below",
+      "name": "The Voice Below",
+      "giver": "brother_aldric_highwatch",
+      "turnIn": ["brother_aldric_highwatch"],
+      "objectives": [
+        {
+          "type": "kill",
+          "count": 10,
+          "label": "Wyrmcult Zealot slain",
+          "mob": "wyrmcult_zealot"
+        },
+        {
+          "type": "kill",
+          "count": 6,
+          "label": "Wyrmcult Necromancer slain",
+          "mob": "wyrmcult_necromancer"
+        }
+      ]
+    },
+    {
+      "id": "q_sanctum_gate",
+      "name": "The Sanctum Gate",
+      "giver": "brother_aldric_highwatch",
+      "turnIn": ["brother_aldric_highwatch"],
+      "objectives": [
+        {
+          "type": "collect",
+          "count": 3,
+          "label": "Sanctum Key Shard",
+          "item": "sanctum_key_shard"
+        }
+      ]
+    },
+    {
+      "id": "q_korgath",
+      "name": "The Bound Guardian",
+      "giver": "scout_maren_highwatch",
+      "turnIn": ["scout_maren_highwatch"],
+      "objectives": [
+        {
+          "type": "kill",
+          "count": 1,
+          "label": "Korgath the Bound slain",
+          "mob": "korgath_the_bound"
+        }
+      ]
+    },
+    {
+      "id": "q_velkhar",
+      "name": "The Grand Necromancer",
+      "giver": "brother_aldric_highwatch",
+      "turnIn": ["brother_aldric_highwatch"],
+      "objectives": [
+        {
+          "type": "kill",
+          "count": 1,
+          "label": "Grand Necromancer Velkhar slain",
+          "mob": "grand_necromancer_velkhar"
+        }
+      ]
+    },
+    {
+      "id": "q_gravewyrm",
+      "name": "Korzul the Gravewyrm",
+      "giver": "brother_aldric_highwatch",
+      "turnIn": ["brother_aldric_highwatch"],
+      "objectives": [
+        {
+          "type": "kill",
+          "count": 1,
+          "label": "Korzul the Gravewyrm slain",
+          "mob": "korzul_the_gravewyrm"
+        }
+      ]
+    },
+    {
+      "id": "q_nythraxis_restless_dead",
+      "name": "Unrest in the Bonefields",
+      "giver": "brother_aldric_highwatch",
+      "turnIn": ["brother_aldric_highwatch"],
+      "objectives": [
+        {
+          "type": "collect",
+          "count": 10,
+          "label": "Runed Bone Shard",
+          "item": "runed_bone_shard"
+        }
+      ]
+    },
+    {
+      "id": "q_nythraxis_graves",
+      "name": "Graves of the Forgotten",
+      "giver": "brother_aldric_highwatch",
+      "turnIn": ["brother_aldric_highwatch"],
+      "objectives": [
+        {
+          "type": "interact",
+          "count": 1,
+          "label": "Vision at the Grave of Captain Aldren",
+          "object": "grave_sir_aldren"
+        },
+        {
+          "type": "interact",
+          "count": 1,
+          "label": "Vision at the Grave of High Priest Malric",
+          "object": "grave_high_priest_malric"
+        },
+        {
+          "type": "interact",
+          "count": 1,
+          "label": "Vision at the Grave of Royal Assassin Voss",
+          "object": "grave_captain_voss"
+        }
+      ]
+    },
+    {
+      "id": "q_nythraxis_sealed_crypt",
+      "name": "The Abandoned Crypt",
+      "giver": "brother_aldric_highwatch",
+      "turnIn": ["brother_aldric_highwatch"],
+      "objectives": [
+        {
+          "type": "collect",
+          "count": 1,
+          "label": "Crypt Keystone Upper",
+          "item": "captains_crest"
+        },
+        {
+          "type": "collect",
+          "count": 1,
+          "label": "Crypt Keystone Lower",
+          "item": "priests_sigil"
+        },
+        {
+          "type": "collect",
+          "count": 1,
+          "label": "Ancient Diary",
+          "item": "royal_seal"
+        }
+      ]
+    },
+    {
+      "id": "q_nythraxis_bound_guardian",
+      "name": "The Bound Guardian",
+      "giver": "brother_aldric_highwatch",
+      "turnIn": ["brother_aldric_highwatch"],
+      "objectives": [
+        {
+          "type": "interact",
+          "count": 1,
+          "label": "Crypt Keystone used at the ritual circle",
+          "object": "crypt_ritual_circle"
+        },
+        {
+          "type": "kill",
+          "count": 1,
+          "label": "The Bound Guardian defeated",
+          "mob": "bound_guardian"
+        },
+        {
+          "type": "collect",
+          "count": 1,
+          "label": "King's Signet",
+          "item": "kings_signet"
+        }
+      ]
+    },
+    {
+      "id": "q_nythraxis_scourges_end",
+      "name": "Scourge's End",
+      "giver": "brother_aldric_highwatch",
+      "turnIn": ["brother_aldric_highwatch", "brother_aldric_raid"],
+      "objectives": [
+        {
+          "type": "kill",
+          "count": 1,
+          "label": "Nythraxis slain",
+          "mob": "nythraxis_scourge_of_thornpeak"
+        }
+      ]
+    },
+    {
+      "id": "q_prof_workorder_apothecary",
+      "name": "Apothecary Work Order",
+      "giver": "alchemist_verane",
+      "turnIn": ["alchemist_verane"],
+      "objectives": [
+        {
+          "type": "collect",
+          "count": 6,
+          "label": "Goldleaf Herb delivered",
+          "item": "goldleaf_herb"
+        }
+      ]
+    },
+    {
+      "id": "q_riding_lessons",
+      "name": "Riding Lessons",
+      "giver": "stablemaster_marla",
+      "turnIn": ["stablemaster_marla"],
+      "objectives": [
+        {
+          "type": "interact",
+          "count": 1,
+          "label": "Tame the Valorsteed",
+          "object": "train_valorsteed"
+        }
+      ]
+    },
+    {
+      "id": "q_glimmermere_light",
+      "name": "Light on the Water",
+      "giver": "tidewatcher_ondrel",
+      "turnIn": ["tidewatcher_ondrel"],
+      "objectives": [
+        {
+          "type": "collect",
+          "count": 1,
+          "label": "Warding Rubbing taken",
+          "item": "moongate_rubbing"
+        }
+      ]
+    },
+    {
+      "id": "q_tarn_waders",
+      "name": "What the Tarn Gives Up",
+      "giver": "tidewatcher_ondrel",
+      "turnIn": ["tidewatcher_ondrel"],
+      "objectives": [
+        {
+          "type": "kill",
+          "count": 10,
+          "label": "Glimmermere Wader slain",
+          "mob": "glimmermere_wader"
+        }
+      ]
+    },
+    {
+      "id": "q_drowned_choir",
+      "name": "The Drowned Choir",
+      "giver": "tidewatcher_ondrel",
+      "turnIn": ["tidewatcher_ondrel"],
+      "objectives": [
+        {
+          "type": "kill",
+          "count": 8,
+          "label": "Drowned Votary silenced",
+          "mob": "drowned_votary"
+        },
+        {
+          "type": "collect",
+          "count": 6,
+          "label": "Drowned Offering",
+          "item": "drowned_offering"
+        }
+      ]
+    },
+    {
+      "id": "q_palecoil",
+      "name": "Sethrael the Palecoil",
+      "giver": "tidewatcher_ondrel",
+      "turnIn": ["tidewatcher_ondrel"],
+      "objectives": [
+        {
+          "type": "collect",
+          "count": 1,
+          "label": "Sethrael's Heartscale",
+          "item": "palecoil_heartscale"
+        }
+      ]
+    },
+    {
+      "id": "q_silence_the_choir",
+      "name": "Silence the Choir",
+      "giver": "tidewatcher_ondrel",
+      "turnIn": ["tidewatcher_ondrel"],
+      "objectives": [
+        {
+          "type": "kill",
+          "count": 1,
+          "label": "Choirmother Selthe slain",
+          "mob": "choirmother_selthe"
+        }
+      ]
+    },
+    {
+      "id": "q_drowned_moon",
+      "name": "The Drowned Moon",
+      "giver": "tidewatcher_ondrel",
+      "turnIn": ["tidewatcher_ondrel"],
+      "objectives": [
+        {
+          "type": "kill",
+          "count": 1,
+          "label": "Ysolei, Avatar of the Drowned Moon, slain",
+          "mob": "ysolei"
+        }
+      ]
+    },
+    {
+      "id": "q_veil_thinned",
+      "name": "The Thinned Veil",
+      "giver": "keeper_saelwyn",
+      "turnIn": ["keeper_saelwyn"],
+      "objectives": [
+        {
+          "type": "collect",
+          "count": 8,
+          "label": "Duskwisp Essence",
+          "item": "duskwisp_essence"
+        }
+      ]
+    },
+    {
+      "id": "q_calming_the_deep",
+      "name": "Calming the Deep",
+      "giver": "keeper_saelwyn",
+      "turnIn": ["keeper_saelwyn"],
+      "objectives": [
+        {
+          "type": "kill",
+          "count": 10,
+          "label": "Corrupted Sporeling laid to rest",
+          "mob": "corrupted_sporeling"
+        }
+      ]
+    },
+    {
+      "id": "q_spore_hearts",
+      "name": "Hearts of the Ring",
+      "giver": "loremother_bryn",
+      "turnIn": ["loremother_bryn"],
+      "objectives": [
+        {
+          "type": "collect",
+          "count": 4,
+          "label": "Spore Heart",
+          "item": "spore_heart"
+        }
+      ]
+    },
+    {
+      "id": "q_sunken_court",
+      "name": "The Sunken Court",
+      "giver": "keeper_saelwyn",
+      "turnIn": ["keeper_saelwyn"],
+      "objectives": [
+        {
+          "type": "kill",
+          "count": 8,
+          "label": "Ancient Guardian stilled",
+          "mob": "ancient_guardian"
+        }
+      ]
+    },
+    {
+      "id": "q_waking_warden",
+      "name": "The Waking Warden",
+      "giver": "keeper_saelwyn",
+      "turnIn": ["keeper_saelwyn"],
+      "objectives": [
+        {
+          "type": "kill",
+          "count": 1,
+          "label": "The Waking Warden defeated",
+          "mob": "waking_warden"
+        }
+      ]
+    },
+    {
+      "id": "q_seal_restored",
+      "name": "The Seal Restored",
+      "giver": "keeper_saelwyn",
+      "turnIn": ["keeper_saelwyn"],
+      "objectives": [
+        {
+          "type": "interact",
+          "count": 1,
+          "label": "The seal set back in the sealstone",
+          "object": "hollow_sealstone"
+        }
+      ]
+    },
+    {
+      "id": "q_gleaming_antlers",
+      "name": "Gleaming Antlers",
+      "giver": "provisioner_fenna",
+      "turnIn": ["provisioner_fenna"],
+      "objectives": [
+        {
+          "type": "collect",
+          "count": 5,
+          "label": "Gleaming Antler",
+          "item": "gleaming_antler"
+        }
+      ]
+    },
+    {
+      "id": "q_wisp_lights",
+      "name": "Lights of the Shallows",
+      "giver": "loremother_bryn",
+      "turnIn": ["loremother_bryn"],
+      "objectives": [
+        {
+          "type": "collect",
+          "count": 6,
+          "label": "Wisp Mote",
+          "item": "wisp_mote"
+        }
+      ]
+    },
+    {
+      "id": "q_treant_accord",
+      "name": "The Treant Accord",
+      "giver": "loremother_bryn",
+      "turnIn": ["loremother_bryn"],
+      "objectives": [
+        {
+          "type": "collect",
+          "count": 4,
+          "label": "Elder Bark",
+          "item": "elder_bark"
+        }
+      ]
+    },
+    {
+      "id": "q_monument_tour",
+      "name": "What the Stones Remember",
+      "giver": "archivist_tullo",
+      "turnIn": ["archivist_tullo"],
+      "objectives": [
+        {
+          "type": "interact",
+          "count": 1,
+          "label": "The Overlook monument read",
+          "object": "monument_overlook"
+        },
+        {
+          "type": "interact",
+          "count": 1,
+          "label": "The Court monument read",
+          "object": "monument_court"
+        },
+        {
+          "type": "interact",
+          "count": 1,
+          "label": "The forgotten monument read",
+          "object": "monument_north"
+        }
+      ]
+    },
+    {
+      "id": "q_grove_menace",
+      "name": "Menace in the Glade",
+      "giver": "provisioner_fenna",
+      "turnIn": ["provisioner_fenna"],
+      "objectives": [
+        {
+          "type": "kill",
+          "count": 10,
+          "label": "Duskwisp dispersed",
+          "mob": "duskwisp"
+        }
+      ]
+    },
+    {
+      "id": "q_shards_of_starfall",
+      "name": "Shards of Starfall",
+      "giver": "archivist_tullo",
+      "turnIn": ["archivist_tullo"],
+      "objectives": [
+        {
+          "type": "collect",
+          "count": 6,
+          "label": "Starfall Shard",
+          "item": "starfall_shard"
+        }
+      ]
+    },
+    {
+      "id": "q_spore_tide",
+      "name": "Against the Spore Tide",
+      "giver": "loremother_bryn",
+      "turnIn": ["loremother_bryn"],
+      "objectives": [
+        {
+          "type": "kill",
+          "count": 12,
+          "label": "Corrupted Sporeling laid to rest",
+          "mob": "corrupted_sporeling"
+        }
+      ]
+    },
+    {
+      "id": "q_wardens_echoes",
+      "name": "Echoes of the Warden",
+      "giver": "archivist_tullo",
+      "turnIn": ["archivist_tullo"],
+      "objectives": [
+        {
+          "type": "kill",
+          "count": 10,
+          "label": "Ancient Guardian stilled",
+          "mob": "ancient_guardian"
+        }
+      ]
+    },
+    {
+      "id": "q_hollow_the_huntsman",
+      "name": "The Warden of the Herds",
+      "giver": "provisioner_fenna",
+      "turnIn": ["huntsman_deral"],
+      "objectives": [
+        {
+          "type": "interact",
+          "count": 1,
+          "label": "Find Huntsman Deral",
+          "npc": "huntsman_deral"
+        }
+      ]
+    },
+    {
+      "id": "q_hollow_old_marrowshell",
+      "name": "The Old Shell of the Shallows",
+      "giver": "huntsman_deral",
+      "turnIn": ["huntsman_deral"],
+      "objectives": [
+        {
+          "type": "kill",
+          "count": 1,
+          "label": "Old Marrowshell slain",
+          "mob": "old_marrowshell"
+        }
+      ]
+    },
+    {
+      "id": "q_hollow_first_of_the_herd",
+      "name": "First of the Herd",
+      "giver": "huntsman_deral",
+      "turnIn": ["huntsman_deral"],
+      "objectives": [
+        {
+          "type": "kill",
+          "count": 1,
+          "label": "Aurelhorn given peace",
+          "mob": "aurelhorn"
+        }
+      ]
+    },
+    {
+      "id": "q_dk_ash_on_the_wind",
+      "name": "Ash on the Wind",
+      "giver": "gatecaptain_brannoc",
+      "turnIn": ["gatecaptain_brannoc"],
+      "objectives": [
+        {
+          "type": "kill",
+          "count": 10,
+          "label": "Ashbone Raider slain",
+          "mob": "ashbone_raider"
+        }
+      ]
+    },
+    {
+      "id": "q_dk_trolls_on_the_road",
+      "name": "Trolls on the Road",
+      "giver": "quartermaster_sela",
+      "turnIn": ["quartermaster_sela"],
+      "objectives": [
+        {
+          "type": "kill",
+          "count": 8,
+          "label": "Dune Troll slain",
+          "mob": "dune_troll"
+        }
+      ]
+    },
+    {
+      "id": "q_dk_scorched_stores",
+      "name": "Scorched Stores",
+      "giver": "quartermaster_sela",
+      "turnIn": ["quartermaster_sela"],
+      "objectives": [
+        {
+          "type": "interact",
+          "count": 4,
+          "label": "Scorched supply crate recovered",
+          "object": "scorched_supply_crate"
+        }
+      ]
+    },
+    {
+      "id": "q_dk_banners_over_the_dunes",
+      "name": "Banners over the Dunes",
+      "giver": "gatecaptain_brannoc",
+      "turnIn": ["gatecaptain_brannoc"],
+      "objectives": [
+        {
+          "type": "kill",
+          "count": 5,
+          "label": "Ashbone Warcaller slain",
+          "mob": "ashbone_warcaller"
+        },
+        {
+          "type": "interact",
+          "count": 3,
+          "label": "Warning banner planted",
+          "object": "wyrmwatch_warning_banner"
+        }
+      ]
+    },
+    {
+      "id": "q_dk_watcher_at_the_wargate",
+      "name": "The Watcher at the Wargate",
+      "giver": "gatecaptain_brannoc",
+      "turnIn": ["scout_yerrin"],
+      "objectives": [
+        {
+          "type": "interact",
+          "count": 1,
+          "label": "Find Scout Yerrin",
+          "npc": "scout_yerrin"
+        }
+      ]
+    },
+    {
+      "id": "q_dk_marrow_and_ash",
+      "name": "Marrow and Ash",
+      "giver": "scout_yerrin",
+      "turnIn": ["scout_yerrin"],
+      "objectives": [
+        {
+          "type": "collect",
+          "count": 6,
+          "label": "Ashbone War-Brand",
+          "item": "ashbone_war_brand"
+        }
+      ]
+    },
+    {
+      "id": "q_dk_scales_of_the_maw",
+      "name": "Scales of the Maw",
+      "giver": "scout_yerrin",
+      "turnIn": ["scout_yerrin"],
+      "objectives": [
+        {
+          "type": "collect",
+          "count": 3,
+          "label": "Emberwing Scale",
+          "item": "emberwing_scale"
+        }
+      ]
+    },
+    {
+      "id": "q_dk_matriarch_of_the_maw",
+      "name": "Matriarch of the Maw",
+      "giver": "scout_yerrin",
+      "turnIn": ["gatecaptain_brannoc"],
+      "objectives": [
+        {
+          "type": "kill",
+          "count": 1,
+          "label": "Cindraleth the Maw Matriarch slain",
+          "mob": "cindraleth_maw_matriarch"
+        }
+      ]
+    },
+    {
+      "id": "q_fv_snowline_report",
+      "name": "Word from the Snowline",
+      "giver": "scout_einna",
+      "turnIn": ["warden_kaldra"],
+      "objectives": [
+        {
+          "type": "interact",
+          "count": 1,
+          "label": "Report to Warden Kaldra",
+          "npc": "warden_kaldra"
+        }
+      ]
+    },
+    {
+      "id": "q_fv_wolves_at_the_door",
+      "name": "Wolves at the Door",
+      "giver": "warden_kaldra",
+      "turnIn": ["warden_kaldra"],
+      "objectives": [
+        {
+          "type": "kill",
+          "count": 10,
+          "label": "Snowdrift Wolf slain",
+          "mob": "snowdrift_wolf"
+        }
+      ]
+    },
+    {
+      "id": "q_fv_winter_pelts",
+      "name": "Pelts for the Lodge",
+      "giver": "hearthkeeper_maeve",
+      "turnIn": ["hearthkeeper_maeve"],
+      "objectives": [
+        {
+          "type": "collect",
+          "count": 6,
+          "label": "Thick Winter Pelt",
+          "item": "thick_winter_pelt"
+        }
+      ]
+    },
+    {
+      "id": "q_fv_ember_caches",
+      "name": "Embers on the Tarn Road",
+      "giver": "hearthkeeper_maeve",
+      "turnIn": ["hearthkeeper_maeve"],
+      "objectives": [
+        {
+          "type": "interact",
+          "count": 3,
+          "label": "Ember Cache recovered",
+          "object": "hearth_ember_cache"
+        }
+      ]
+    },
+    {
+      "id": "q_fv_lights_over_steps",
+      "name": "Lights over the Steps",
+      "giver": "warden_kaldra",
+      "turnIn": ["aurorist_veyla"],
+      "objectives": [
+        {
+          "type": "interact",
+          "count": 1,
+          "label": "Find Aurorist Veyla",
+          "npc": "aurorist_veyla"
+        }
+      ]
+    },
+    {
+      "id": "q_fv_aurora_motes",
+      "name": "Motes of the Aurora",
+      "giver": "aurorist_veyla",
+      "turnIn": ["aurorist_veyla"],
+      "objectives": [
+        {
+          "type": "collect",
+          "count": 6,
+          "label": "Aurora Mote",
+          "item": "aurora_mote"
+        }
+      ]
+    },
+    {
+      "id": "q_fv_rime_unbound",
+      "name": "Rime Unbound",
+      "giver": "aurorist_veyla",
+      "turnIn": ["aurorist_veyla"],
+      "objectives": [
+        {
+          "type": "kill",
+          "count": 8,
+          "label": "Rime Elemental slain",
+          "mob": "rime_elemental"
+        }
+      ]
+    },
+    {
+      "id": "q_fv_silent_trapline",
+      "name": "The Silent Trapline",
+      "giver": "hearthkeeper_maeve",
+      "turnIn": ["trapper_brosk"],
+      "objectives": [
+        {
+          "type": "interact",
+          "count": 1,
+          "label": "Find Trapper Brosk",
+          "npc": "trapper_brosk"
+        }
+      ]
+    },
+    {
+      "id": "q_fv_sprung_traps",
+      "name": "Sprites in the Traps",
+      "giver": "trapper_brosk",
+      "turnIn": ["trapper_brosk"],
+      "objectives": [
+        {
+          "type": "kill",
+          "count": 8,
+          "label": "Fen Sprite driven off",
+          "mob": "fen_sprite"
+        },
+        {
+          "type": "interact",
+          "count": 4,
+          "label": "Trap recovered",
+          "object": "sprung_trap"
+        }
+      ]
+    },
+    {
+      "id": "q_fv_seeing_wren_home",
+      "name": "Seeing Wren Home",
+      "giver": "trapper_brosk",
+      "turnIn": ["aurorist_veyla"],
+      "objectives": [
+        {
+          "type": "escort",
+          "count": 1,
+          "label": "Apprentice Wren seen safely to the Aurora Steps",
+          "escort": "esc_fv_wren"
+        }
+      ]
+    },
+    {
+      "id": "q_fv_howl_above",
+      "name": "The Howl on the Terraces",
+      "giver": "warden_kaldra",
+      "turnIn": ["warden_kaldra"],
+      "objectives": [
+        {
+          "type": "kill",
+          "count": 8,
+          "label": "Terrace Howler slain",
+          "mob": "terrace_howler"
+        }
+      ]
+    },
+    {
+      "id": "q_fv_frostmane_tyrant",
+      "name": "The Frostmane Tyrant",
+      "giver": "warden_kaldra",
+      "turnIn": ["warden_kaldra"],
+      "objectives": [
+        {
+          "type": "kill",
+          "count": 1,
+          "label": "The Frostmane slain",
+          "mob": "frostmane_yeti"
+        }
+      ]
+    },
+    {
+      "id": "q_af_goldmelt_road",
+      "name": "The Gold Road Down",
+      "giver": "waywatcher_sorrel",
+      "turnIn": ["reeve_ottoline"],
+      "objectives": [
+        {
+          "type": "interact",
+          "count": 1,
+          "label": "Report to Reeve Ottoline",
+          "npc": "reeve_ottoline"
+        }
+      ]
+    },
+    {
+      "id": "q_af_foxes_in_the_lamplight",
+      "name": "Foxes in the Lamplight",
+      "giver": "reeve_ottoline",
+      "turnIn": ["reeve_ottoline"],
+      "objectives": [
+        {
+          "type": "kill",
+          "count": 10,
+          "label": "Gloam Fox slain",
+          "mob": "gloam_fox"
+        }
+      ]
+    },
+    {
+      "id": "q_af_orchard_call",
+      "name": "A Cart for the Orchard",
+      "giver": "reeve_ottoline",
+      "turnIn": ["orchardist_pomeline"],
+      "objectives": [
+        {
+          "type": "interact",
+          "count": 1,
+          "label": "Find Orchardist Pomeline",
+          "npc": "orchardist_pomeline"
+        }
+      ]
+    },
+    {
+      "id": "q_af_sprites_and_spigots",
+      "name": "Sprites and Spigots",
+      "giver": "orchardist_pomeline",
+      "turnIn": ["orchardist_pomeline"],
+      "objectives": [
+        {
+          "type": "kill",
+          "count": 8,
+          "label": "Harvest Sprite driven off",
+          "mob": "harvest_sprite"
+        },
+        {
+          "type": "interact",
+          "count": 4,
+          "label": "Sap-Tap Bucket recovered",
+          "object": "amberfall_sap_bucket"
+        }
+      ]
+    },
+    {
+      "id": "q_af_amber_from_the_herd",
+      "name": "Amber off the Herd",
+      "giver": "orchardist_pomeline",
+      "turnIn": ["orchardist_pomeline"],
+      "objectives": [
+        {
+          "type": "collect",
+          "count": 6,
+          "label": "Gilded Sap Clot",
+          "item": "gilded_sap_clot"
+        }
+      ]
+    },
+    {
+      "id": "q_af_lanterns_on_the_water",
+      "name": "Lanterns on the Water",
+      "giver": "ferrymaster_caddow",
+      "turnIn": ["ferrymaster_caddow"],
+      "objectives": [
+        {
+          "type": "interact",
+          "count": 3,
+          "label": "Ferry Lantern recovered",
+          "object": "mere_ferry_lantern"
+        }
+      ]
+    },
+    {
+      "id": "q_af_what_took_the_moorings",
+      "name": "What Took the Moorings",
+      "giver": "ferrymaster_caddow",
+      "turnIn": ["ferrymaster_caddow"],
+      "objectives": [
+        {
+          "type": "kill",
+          "count": 8,
+          "label": "Mere Lurker slain",
+          "mob": "mere_lurker"
+        }
+      ]
+    },
+    {
+      "id": "q_af_the_meredark",
+      "name": "The Meredark",
+      "giver": "ferrymaster_caddow",
+      "turnIn": ["ferrymaster_caddow"],
+      "objectives": [
+        {
+          "type": "kill",
+          "count": 1,
+          "label": "The Meredark slain",
+          "mob": "the_meredark"
+        }
+      ]
+    },
+    {
+      "id": "q_wf_across_the_fenway",
+      "name": "Across the Fenway",
+      "giver": "waykeeper_pell",
+      "turnIn": ["bridgewright_alden"],
+      "objectives": [
+        {
+          "type": "interact",
+          "count": 1,
+          "label": "Report to Bridgewright Alden",
+          "npc": "bridgewright_alden"
+        }
+      ]
+    },
+    {
+      "id": "q_wf_rope_chewers",
+      "name": "The Rope-Chewers",
+      "giver": "bridgewright_alden",
+      "turnIn": ["bridgewright_alden"],
+      "objectives": [
+        {
+          "type": "kill",
+          "count": 10,
+          "label": "Bogtoad slain",
+          "mob": "bogtoad"
+        }
+      ]
+    },
+    {
+      "id": "q_wf_mind_the_moorings",
+      "name": "Mind the Moorings",
+      "giver": "bridgewright_alden",
+      "turnIn": ["bridgewright_alden"],
+      "objectives": [
+        {
+          "type": "interact",
+          "count": 4,
+          "label": "Cut Mooring Line recovered",
+          "object": "fenway_mooring_line"
+        }
+      ]
+    },
+    {
+      "id": "q_wf_eels_for_the_smokehouse",
+      "name": "Eels for the Smokehouse",
+      "giver": "netter_maris",
+      "turnIn": ["netter_maris"],
+      "objectives": [
+        {
+          "type": "collect",
+          "count": 6,
+          "label": "Plump Fen Eel",
+          "item": "plump_fen_eel"
+        }
+      ]
+    },
+    {
+      "id": "q_wf_toll_and_tangle",
+      "name": "Toll and Tangle",
+      "giver": "netter_maris",
+      "turnIn": ["netter_maris"],
+      "objectives": [
+        {
+          "type": "kill",
+          "count": 8,
+          "label": "Willow Sprite driven off",
+          "mob": "willow_sprite"
+        },
+        {
+          "type": "interact",
+          "count": 3,
+          "label": "Toll-Chest recovered",
+          "object": "bridgemere_toll_chest"
+        }
+      ]
+    },
+    {
+      "id": "q_wf_witch_of_willowweep",
+      "name": "The Witch of Willowweep",
+      "giver": "bridgewright_alden",
+      "turnIn": ["mother_sedge"],
+      "objectives": [
+        {
+          "type": "interact",
+          "count": 1,
+          "label": "Find Mother Sedge",
+          "npc": "mother_sedge"
+        }
+      ]
+    },
+    {
+      "id": "q_wf_wisplight_charms",
+      "name": "Wisplight Charms",
+      "giver": "mother_sedge",
+      "turnIn": ["mother_sedge"],
+      "objectives": [
+        {
+          "type": "collect",
+          "count": 6,
+          "label": "Wisplight Globe",
+          "item": "wisplight_globe"
+        }
+      ]
+    },
+    {
+      "id": "q_wf_croakers_hush",
+      "name": "The Croaker's Hush",
+      "giver": "mother_sedge",
+      "turnIn": ["mother_sedge"],
+      "objectives": [
+        {
+          "type": "kill",
+          "count": 1,
+          "label": "The Drowsy Croaker slain",
+          "mob": "drowsy_croaker"
+        }
+      ]
+    },
+    {
+      "id": "q_nb_road_of_lanterns",
+      "name": "The Road of Lanterns",
+      "giver": "lamplighter_sorrel",
+      "turnIn": ["lira_dewsong"],
+      "objectives": [
+        {
+          "type": "interact",
+          "count": 1,
+          "label": "Find Lira Dewsong in Moonrest",
+          "npc": "lira_dewsong"
+        }
+      ]
+    },
+    {
+      "id": "q_nb_striders_in_the_dark",
+      "name": "Striders in the Dark",
+      "giver": "lira_dewsong",
+      "turnIn": ["lira_dewsong"],
+      "objectives": [
+        {
+          "type": "kill",
+          "count": 10,
+          "label": "Gloam Strider slain",
+          "mob": "gloam_strider"
+        }
+      ]
+    },
+    {
+      "id": "q_nb_wool_by_moonlight",
+      "name": "Wool by Moonlight",
+      "giver": "weaver_amelle",
+      "turnIn": ["weaver_amelle"],
+      "objectives": [
+        {
+          "type": "collect",
+          "count": 6,
+          "label": "Moonfleece Tuft",
+          "item": "moonfleece_tuft"
+        }
+      ]
+    },
+    {
+      "id": "q_nb_night_gardens",
+      "name": "The Night Gardens",
+      "giver": "lira_dewsong",
+      "turnIn": ["lira_dewsong"],
+      "objectives": [
+        {
+          "type": "interact",
+          "count": 4,
+          "label": "Nightbloom Blossom gathered",
+          "object": "gloamfield_nightbloom"
+        }
+      ]
+    },
+    {
+      "id": "q_nb_eyes_on_the_vigil",
+      "name": "Eyes on the Vigil",
+      "giver": "lira_dewsong",
+      "turnIn": ["astronomer_cassian"],
+      "objectives": [
+        {
+          "type": "interact",
+          "count": 1,
+          "label": "Find Astronomer Cassian at the Standing Vigil",
+          "npc": "astronomer_cassian"
+        }
+      ]
+    },
+    {
+      "id": "q_nb_charts_of_the_stones",
+      "name": "The Charts in the Stones",
+      "giver": "astronomer_cassian",
+      "turnIn": ["astronomer_cassian"],
+      "objectives": [
+        {
+          "type": "interact",
+          "count": 3,
+          "label": "Star chart read",
+          "object": "vigil_star_chart"
+        }
+      ]
+    },
+    {
+      "id": "q_nb_restless_mounds",
+      "name": "The Restless Mounds",
+      "giver": "astronomer_cassian",
+      "turnIn": ["astronomer_cassian"],
+      "objectives": [
+        {
+          "type": "kill",
+          "count": 8,
+          "label": "Barrow Wight slain",
+          "mob": "barrow_wight"
+        },
+        {
+          "type": "interact",
+          "count": 4,
+          "label": "Grave offering recovered",
+          "object": "barrow_grave_offering"
+        }
+      ]
+    },
+    {
+      "id": "q_nb_the_barrow_king",
+      "name": "The Barrow King Wakes",
+      "giver": "astronomer_cassian",
+      "turnIn": ["astronomer_cassian"],
+      "objectives": [
+        {
+          "type": "kill",
+          "count": 1,
+          "label": "The Barrow King put to rest",
+          "mob": "barrow_king"
+        }
+      ]
+    },
+    {
+      "id": "q_ww_bells_of_gallowmere",
+      "name": "The Bells of Gallowmere",
+      "giver": "lampman_cobb",
+      "turnIn": ["sexton_marrow"],
+      "objectives": [
+        {
+          "type": "interact",
+          "count": 1,
+          "label": "Report to Sexton Marrow",
+          "npc": "sexton_marrow"
+        }
+      ]
+    },
+    {
+      "id": "q_ww_silk_in_the_eaves",
+      "name": "Silk in the Eaves",
+      "giver": "sexton_marrow",
+      "turnIn": ["sexton_marrow"],
+      "objectives": [
+        {
+          "type": "kill",
+          "count": 10,
+          "label": "Widowsilk Spinner slain",
+          "mob": "widowsilk_spinner"
+        }
+      ]
+    },
+    {
+      "id": "q_ww_widows_skeins",
+      "name": "The Widow's Skeins",
+      "giver": "widow_tansy",
+      "turnIn": ["widow_tansy"],
+      "objectives": [
+        {
+          "type": "collect",
+          "count": 6,
+          "label": "Widowsilk Skein",
+          "item": "widowsilk_skein"
+        }
+      ]
+    },
+    {
+      "id": "q_ww_candles_at_the_bounds",
+      "name": "Candles at the Bounds",
+      "giver": "widow_tansy",
+      "turnIn": ["widow_tansy"],
+      "objectives": [
+        {
+          "type": "interact",
+          "count": 4,
+          "label": "Grave-candle relit",
+          "object": "gallowmere_grave_candle"
+        }
+      ]
+    },
+    {
+      "id": "q_ww_the_last_vicar",
+      "name": "The Last Vicar",
+      "giver": "sexton_marrow",
+      "turnIn": ["vicar_creel"],
+      "objectives": [
+        {
+          "type": "interact",
+          "count": 1,
+          "label": "Find Vicar Creel",
+          "npc": "vicar_creel"
+        }
+      ]
+    },
+    {
+      "id": "q_ww_wraiths_of_the_tarn",
+      "name": "Wraiths of the Tarn",
+      "giver": "vicar_creel",
+      "turnIn": ["vicar_creel"],
+      "objectives": [
+        {
+          "type": "kill",
+          "count": 8,
+          "label": "Wood Wraith slain",
+          "mob": "wood_wraith"
+        }
+      ]
+    },
+    {
+      "id": "q_ww_what_the_bark_holds",
+      "name": "What the Bark Holds",
+      "giver": "vicar_creel",
+      "turnIn": ["vicar_creel"],
+      "objectives": [
+        {
+          "type": "kill",
+          "count": 5,
+          "label": "Gravenbark Shambler felled",
+          "mob": "gravenbark_shambler"
+        },
+        {
+          "type": "interact",
+          "count": 3,
+          "label": "Silkbound remains cut down",
+          "object": "silkbound_remains"
+        }
+      ]
+    },
+    {
+      "id": "q_ww_walking_mosley_home",
+      "name": "Walking Mosley Home",
+      "giver": "sexton_marrow",
+      "turnIn": ["sexton_marrow"],
+      "objectives": [
+        {
+          "type": "escort",
+          "count": 1,
+          "label": "Gravedigger Mosley walked safely back to Gallowmere",
+          "escort": "esc_ww_mosley"
+        }
+      ]
+    },
+    {
+      "id": "q_ww_horn_of_the_huntsman",
+      "name": "The Horn of the Huntsman",
+      "giver": "vicar_creel",
+      "turnIn": ["vicar_creel"],
+      "objectives": [
+        {
+          "type": "kill",
+          "count": 1,
+          "label": "The Pale Huntsman unhorsed",
+          "mob": "pale_huntsman"
+        }
+      ]
+    },
+    {
+      "id": "q_pr_down_to_drifthaven",
+      "name": "Down to Drifthaven",
+      "giver": "strandwatcher_pell",
+      "turnIn": ["salvage_boss_ryna"],
+      "objectives": [
+        {
+          "type": "interact",
+          "count": 1,
+          "label": "Report to Salvage-Boss Ryna",
+          "npc": "salvage_boss_ryna"
+        }
+      ]
+    },
+    {
+      "id": "q_pr_wreck_line_cargo",
+      "name": "The Wreck Line",
+      "giver": "salvage_boss_ryna",
+      "turnIn": ["salvage_boss_ryna"],
+      "objectives": [
+        {
+          "type": "interact",
+          "count": 3,
+          "label": "Pearlwake Cargo recovered",
+          "object": "pearlwake_cargo_crate"
+        }
+      ]
+    },
+    {
+      "id": "q_pr_scuttler_cull",
+      "name": "Shellbacked Thieves",
+      "giver": "salvage_boss_ryna",
+      "turnIn": ["salvage_boss_ryna"],
+      "objectives": [
+        {
+          "type": "kill",
+          "count": 10,
+          "label": "Tide Scuttler cracked",
+          "mob": "tide_scuttler"
+        }
+      ]
+    },
+    {
+      "id": "q_pr_the_lost_navigator",
+      "name": "The Lost Navigator",
+      "giver": "salvage_boss_ryna",
+      "turnIn": ["salvage_boss_ryna"],
+      "objectives": [
+        {
+          "type": "escort",
+          "count": 1,
+          "label": "Navigator Suli seen safely to Drifthaven",
+          "escort": "esc_pr_navigator"
+        }
+      ]
+    },
+    {
+      "id": "q_pr_boars_in_the_gardens",
+      "name": "Boars in the Gardens",
+      "giver": "pearlmother_isha",
+      "turnIn": ["pearlmother_isha"],
+      "objectives": [
+        {
+          "type": "kill",
+          "count": 10,
+          "label": "Thicket Boar driven off",
+          "mob": "thicket_boar"
+        }
+      ]
+    },
+    {
+      "id": "q_pr_the_man_who_went_in",
+      "name": "The Man Who Went In",
+      "giver": "pearlmother_isha",
+      "turnIn": ["hermit_okku"],
+      "objectives": [
+        {
+          "type": "interact",
+          "count": 1,
+          "label": "Find Okku at the Vinefall",
+          "npc": "hermit_okku"
+        }
+      ]
+    },
+    {
+      "id": "q_pr_canopy_silk",
+      "name": "Silk from the Canopy",
+      "giver": "hermit_okku",
+      "turnIn": ["hermit_okku"],
+      "objectives": [
+        {
+          "type": "collect",
+          "count": 6,
+          "label": "Canopy Silk Hank",
+          "item": "canopy_silk_hank"
+        }
+      ]
+    },
+    {
+      "id": "q_pr_what_the_drums_guard",
+      "name": "What the Drums Guard",
+      "giver": "hermit_okku",
+      "turnIn": ["hermit_okku"],
+      "objectives": [
+        {
+          "type": "kill",
+          "count": 8,
+          "label": "Canopy Weaver cut down",
+          "mob": "canopy_weaver"
+        },
+        {
+          "type": "interact",
+          "count": 3,
+          "label": "Refilled Offering Bowl gathered",
+          "object": "sunken_offering_bowl"
+        }
+      ]
+    },
+    {
+      "id": "q_pr_idol_guardian",
+      "name": "The Idol Guardian",
+      "giver": "hermit_okku",
+      "turnIn": ["hermit_okku"],
+      "objectives": [
+        {
+          "type": "kill",
+          "count": 1,
+          "label": "The Idol Guardian broken",
+          "mob": "idol_guardian"
+        }
+      ]
+    },
+    {
+      "id": "q_eg_gate_report",
+      "name": "Word Through the Gate",
+      "giver": "gatewarden_pell",
+      "turnIn": ["head_gardener_amaranth"],
+      "objectives": [
+        {
+          "type": "interact",
+          "count": 1,
+          "label": "Report to Head Gardener Amaranth",
+          "npc": "head_gardener_amaranth"
+        }
+      ]
+    },
+    {
+      "id": "q_eg_hungry_shapes",
+      "name": "Pruned into Hunger",
+      "giver": "head_gardener_amaranth",
+      "turnIn": ["head_gardener_amaranth"],
+      "objectives": [
+        {
+          "type": "kill",
+          "count": 10,
+          "label": "Topiary Wolf slain",
+          "mob": "topiary_wolf"
+        }
+      ]
+    },
+    {
+      "id": "q_eg_stolen_shears",
+      "name": "The Stolen Shears",
+      "giver": "wickmother_sorrel",
+      "turnIn": ["wickmother_sorrel"],
+      "objectives": [
+        {
+          "type": "collect",
+          "count": 6,
+          "label": "Stolen Hedgewick Shears",
+          "item": "hedgewick_shears"
+        }
+      ]
+    },
+    {
+      "id": "q_eg_gnomes_in_the_green",
+      "name": "The Groundskeepers Grudge",
+      "giver": "wickmother_sorrel",
+      "turnIn": ["wickmother_sorrel"],
+      "objectives": [
+        {
+          "type": "kill",
+          "count": 8,
+          "label": "Hedge Gnome driven off",
+          "mob": "hedge_gnome"
+        },
+        {
+          "type": "interact",
+          "count": 3,
+          "label": "Tool cart recovered",
+          "object": "hedgewick_tool_cart"
+        }
+      ]
+    },
+    {
+      "id": "q_eg_who_trims_the_hedges",
+      "name": "Who Trims the Hedges",
+      "giver": "head_gardener_amaranth",
+      "turnIn": ["gardener_yew"],
+      "objectives": [
+        {
+          "type": "interact",
+          "count": 1,
+          "label": "Find the gardener by the Lily Basin",
+          "npc": "gardener_yew"
+        }
+      ]
+    },
+    {
+      "id": "q_eg_bloom_clippings",
+      "name": "Clippings from the Living Green",
+      "giver": "gardener_yew",
+      "turnIn": ["gardener_yew"],
+      "objectives": [
+        {
+          "type": "collect",
+          "count": 6,
+          "label": "Pruned Bloom Clipping",
+          "item": "evergarden_bloom_clipping"
+        }
+      ]
+    },
+    {
+      "id": "q_eg_four_statues",
+      "name": "The Four Quiet Sisters",
+      "giver": "gardener_yew",
+      "turnIn": ["gardener_yew"],
+      "objectives": [
+        {
+          "type": "interact",
+          "count": 4,
+          "label": "Garden statue visited",
+          "object": "evergarden_statue_rubbing"
+        }
+      ]
+    },
+    {
+      "id": "q_eg_bull_of_the_court",
+      "name": "The Bull of the Fountain Court",
+      "giver": "gardener_yew",
+      "turnIn": ["gardener_yew"],
+      "objectives": [
+        {
+          "type": "kill",
+          "count": 1,
+          "label": "The Topiary Bull unmade",
+          "mob": "the_topiary_bull"
+        }
+      ]
+    },
+    {
+      "id": "q_gc_down_the_windway",
+      "name": "Down the Windway",
+      "giver": "watcher_maren",
+      "turnIn": ["harbormaster_odile"],
+      "objectives": [
+        {
+          "type": "interact",
+          "count": 1,
+          "label": "Report to Harbormaster Odile",
+          "npc": "harbormaster_odile"
+        }
+      ]
+    },
+    {
+      "id": "q_gc_wool_off_the_downs",
+      "name": "Wool off the Downs",
+      "giver": "harbormaster_odile",
+      "turnIn": ["harbormaster_odile"],
+      "objectives": [
+        {
+          "type": "collect",
+          "count": 6,
+          "label": "Greasy Ram Wool",
+          "item": "galecrest_ram_wool"
+        }
+      ]
+    },
+    {
+      "id": "q_gc_scuttlers_in_the_pots",
+      "name": "Scuttlers in the Pots",
+      "giver": "harbormaster_odile",
+      "turnIn": ["harbormaster_odile"],
+      "objectives": [
+        {
+          "type": "kill",
+          "count": 10,
+          "label": "Shoal Scuttler slain",
+          "mob": "shoal_scuttler"
+        }
+      ]
+    },
+    {
+      "id": "q_gc_keeper_of_the_flame",
+      "name": "The Keeper of the Flame",
+      "giver": "harbormaster_odile",
+      "turnIn": ["keeper_bram"],
+      "objectives": [
+        {
+          "type": "interact",
+          "count": 1,
+          "label": "Find Keeper Bram",
+          "npc": "keeper_bram"
+        }
+      ]
+    },
+    {
+      "id": "q_gc_lanterns_on_the_shear",
+      "name": "Lanterns on the Shear",
+      "giver": "keeper_bram",
+      "turnIn": ["keeper_bram"],
+      "objectives": [
+        {
+          "type": "interact",
+          "count": 4,
+          "label": "Storm-lantern relit",
+          "object": "shear_storm_lantern"
+        }
+      ]
+    },
+    {
+      "id": "q_gc_wind_against_the_wick",
+      "name": "Wind Against the Wick",
+      "giver": "keeper_bram",
+      "turnIn": ["keeper_bram"],
+      "objectives": [
+        {
+          "type": "kill",
+          "count": 8,
+          "label": "Gale Wisp scattered",
+          "mob": "gale_wisp"
+        }
+      ]
+    },
+    {
+      "id": "q_gc_the_far_shore",
+      "name": "The Far Shore",
+      "giver": "keeper_bram",
+      "turnIn": ["salvager_edda"],
+      "objectives": [
+        {
+          "type": "interact",
+          "count": 1,
+          "label": "Find Salvager Edda",
+          "npc": "salvager_edda"
+        }
+      ]
+    },
+    {
+      "id": "q_gc_dead_mens_cargo",
+      "name": "Dead Men's Cargo",
+      "giver": "salvager_edda",
+      "turnIn": ["salvager_edda"],
+      "objectives": [
+        {
+          "type": "kill",
+          "count": 6,
+          "label": "Drowned Deckhand laid to rest",
+          "mob": "drowned_deckhand"
+        },
+        {
+          "type": "interact",
+          "count": 3,
+          "label": "Flotsam Crate salvaged",
+          "object": "wreckfield_flotsam_crate"
+        }
+      ]
+    },
+    {
+      "id": "q_gc_the_wreck_warden",
+      "name": "The Wreck Warden",
+      "giver": "salvager_edda",
+      "turnIn": ["salvager_edda"],
+      "objectives": [
+        {
+          "type": "kill",
+          "count": 1,
+          "label": "The Wreck Warden felled",
+          "mob": "the_wreck_warden"
+        }
+      ]
+    },
+    {
+      "id": "q_fs_bell_at_the_landing",
+      "name": "The Bell at the Landing",
+      "giver": "bellkeeper_tam",
+      "turnIn": ["warden_coalfast"],
+      "objectives": [
+        {
+          "type": "interact",
+          "count": 1,
+          "label": "Report to Warden Coalfast",
+          "npc": "warden_coalfast"
+        }
+      ]
+    },
+    {
+      "id": "q_fs_hold_the_riftfields",
+      "name": "Hold the Riftfields",
+      "giver": "warden_coalfast",
+      "turnIn": ["warden_coalfast"],
+      "objectives": [
+        {
+          "type": "kill",
+          "count": 10,
+          "label": "Breach Wretch slain",
+          "mob": "breach_wretch"
+        }
+      ]
+    },
+    {
+      "id": "q_fs_steel_for_the_redoubt",
+      "name": "Steel for the Redoubt",
+      "giver": "quartermaster_edda",
+      "turnIn": ["quartermaster_edda"],
+      "objectives": [
+        {
+          "type": "collect",
+          "count": 6,
+          "label": "Break-Scarred Steel",
+          "item": "breakscarred_steel"
+        }
+      ]
+    },
+    {
+      "id": "q_fs_the_three_bells",
+      "name": "The Three Bells",
+      "giver": "bellkeeper_tam",
+      "turnIn": ["bellkeeper_tam"],
+      "objectives": [
+        {
+          "type": "interact",
+          "count": 3,
+          "label": "Watchbell rung",
+          "object": "gullhaven_watchbell"
+        }
+      ]
+    },
+    {
+      "id": "q_fs_song_before_the_break",
+      "name": "The Song Before the Break",
+      "giver": "warden_coalfast",
+      "turnIn": ["riftwatch_ollun"],
+      "objectives": [
+        {
+          "type": "interact",
+          "count": 1,
+          "label": "Find Riftwatch Ollun",
+          "npc": "riftwatch_ollun"
+        }
+      ]
+    },
+    {
+      "id": "q_fs_moss_and_mending",
+      "name": "Moss and Mending",
+      "giver": "mender_saul",
+      "turnIn": ["mender_saul"],
+      "objectives": [
+        {
+          "type": "kill",
+          "count": 6,
+          "label": "Riftspawn slain",
+          "mob": "riftspawn"
+        },
+        {
+          "type": "collect",
+          "count": 4,
+          "label": "Farshore Salt Moss",
+          "item": "farshore_salt_moss"
+        }
+      ]
+    },
+    {
+      "id": "q_fs_bram_come_home",
+      "name": "Bram Come Home",
+      "giver": "fisher_nell",
+      "turnIn": ["fisher_nell"],
+      "objectives": [
+        {
+          "type": "escort",
+          "count": 1,
+          "label": "Fisher Bram seen safely home to Gullhaven",
+          "escort": "esc_fs_bram"
+        }
+      ]
+    },
+    {
+      "id": "q_fs_stalkers_off_the_light",
+      "name": "Stalkers off the Light",
+      "giver": "riftwatch_ollun",
+      "turnIn": ["riftwatch_ollun"],
+      "objectives": [
+        {
+          "type": "kill",
+          "count": 8,
+          "label": "Void Stalker slain",
+          "mob": "void_stalker"
+        }
+      ]
+    },
+    {
+      "id": "q_fs_the_great_break",
+      "name": "The Great Break",
+      "giver": "riftwatch_ollun",
+      "turnIn": ["warden_coalfast"],
+      "objectives": [
+        {
+          "type": "kill",
+          "count": 1,
+          "label": "The Sundered Horror slain",
+          "mob": "sundered_horror"
+        }
+      ]
+    }
+  ],
+  "camps": [
+    {
+      "mob": "forest_wolf",
+      "x": -27,
+      "z": 71,
+      "radius": 28.5
+    },
+    {
+      "mob": "forest_wolf",
+      "x": 24,
+      "z": 70,
+      "radius": 26
+    },
+    {
+      "mob": "old_greyjaw",
+      "x": 0,
+      "z": 100,
+      "radius": 8
+    },
+    {
+      "mob": "wild_boar",
+      "x": 63,
+      "z": 16,
+      "radius": 26
+    },
+    {
+      "mob": "wild_boar",
+      "x": 84,
+      "z": -27,
+      "radius": 23.5
+    },
+    {
+      "mob": "mogger",
+      "x": 118,
+      "z": -26,
+      "radius": 5
+    },
+    {
+      "mob": "webwood_spider",
+      "x": -68,
+      "z": 2,
+      "radius": 28.5
+    },
+    {
+      "mob": "mudfin_murloc",
+      "x": -75,
+      "z": 57,
+      "radius": 15
+    },
+    {
+      "mob": "tunnel_rat",
+      "x": -82,
+      "z": -62,
+      "radius": 33
+    },
+    {
+      "mob": "vale_bandit",
+      "x": 50,
+      "z": -72,
+      "radius": 28.5
+    },
+    {
+      "mob": "vale_bandit",
+      "x": 90,
+      "z": -90,
+      "radius": 16
+    },
+    {
+      "mob": "gorrak",
+      "x": 92,
+      "z": -92,
+      "radius": 2
+    },
+    {
+      "mob": "restless_bones",
+      "x": 82,
+      "z": 78,
+      "radius": 28.5
+    },
+    {
+      "mob": "captain_verlan",
+      "x": 92,
+      "z": 90,
+      "radius": 4
+    },
+    {
+      "mob": "mire_prowler",
+      "x": -40,
+      "z": 230,
+      "radius": 22
+    },
+    {
+      "mob": "mire_prowler",
+      "x": 35,
+      "z": 225,
+      "radius": 20
+    },
+    {
+      "mob": "deepfen_murloc",
+      "x": -82,
+      "z": 273,
+      "radius": 15
+    },
+    {
+      "mob": "deepfen_murloc",
+      "x": -120,
+      "z": 350,
+      "radius": 13
+    },
+    {
+      "mob": "mirejaw_the_ravenous",
+      "x": -132,
+      "z": 333,
+      "radius": 5
+    },
+    {
+      "mob": "mire_widow",
+      "x": 70,
+      "z": 300,
+      "radius": 20
+    },
+    {
+      "mob": "mire_widow",
+      "x": 95,
+      "z": 340,
+      "radius": 16
+    },
+    {
+      "mob": "mirefen_broodmother",
+      "x": 98,
+      "z": 348,
+      "radius": 3
+    },
+    {
+      "mob": "drowned_dead",
+      "x": 90,
+      "z": 420,
+      "radius": 20
+    },
+    {
+      "mob": "drowned_dead",
+      "x": 115,
+      "z": 450,
+      "radius": 16
+    },
+    {
+      "mob": "sloomtooth_the_drowned",
+      "x": 118,
+      "z": 455,
+      "radius": 5
+    },
+    {
+      "mob": "fen_troll",
+      "x": -80,
+      "z": 420,
+      "radius": 22
+    },
+    {
+      "mob": "fen_troll",
+      "x": -105,
+      "z": 455,
+      "radius": 18
+    },
+    {
+      "mob": "grubjaw",
+      "x": -120,
+      "z": 480,
+      "radius": 8
+    },
+    {
+      "mob": "gravecaller_cultist",
+      "x": 15,
+      "z": 470,
+      "radius": 20
+    },
+    {
+      "mob": "gravecaller_cultist",
+      "x": -25,
+      "z": 490,
+      "radius": 16
+    },
+    {
+      "mob": "gravecaller_summoner",
+      "x": -5,
+      "z": 500,
+      "radius": 12
+    },
+    {
+      "mob": "gravecaller_mender",
+      "x": 18,
+      "z": 472,
+      "radius": 8
+    },
+    {
+      "mob": "sister_nhalia",
+      "x": 24,
+      "z": 492,
+      "radius": 5
+    },
+    {
+      "mob": "deacon_voss",
+      "x": 0,
+      "z": 510,
+      "radius": 2
+    },
+    {
+      "mob": "bog_bloat",
+      "x": 72,
+      "z": 428,
+      "radius": 11
+    },
+    {
+      "mob": "bog_bloat",
+      "x": 110,
+      "z": 440,
+      "radius": 11
+    },
+    {
+      "mob": "training_dummy",
+      "x": -40,
+      "z": 648,
+      "radius": 0
+    },
+    {
+      "mob": "ridge_stalker",
+      "x": -50,
+      "z": 590,
+      "radius": 22
+    },
+    {
+      "mob": "ridge_stalker",
+      "x": 45,
+      "z": 600,
+      "radius": 20
+    },
+    {
+      "mob": "old_cragmaw",
+      "x": -82,
+      "z": 575,
+      "radius": 5
+    },
+    {
+      "mob": "deeprock_kobold",
+      "x": 75,
+      "z": 625,
+      "radius": 18
+    },
+    {
+      "mob": "deeprock_kobold",
+      "x": 105,
+      "z": 600,
+      "radius": 14
+    },
+    {
+      "mob": "ironvein_foreman",
+      "x": 100,
+      "z": 617,
+      "radius": 5
+    },
+    {
+      "mob": "thornpeak_ogre",
+      "x": -90,
+      "z": 700,
+      "radius": 22
+    },
+    {
+      "mob": "thornpeak_ogre",
+      "x": -60,
+      "z": 730,
+      "radius": 18
+    },
+    {
+      "mob": "ogre_crusher",
+      "x": -125,
+      "z": 740,
+      "radius": 18
+    },
+    {
+      "mob": "warlord_drogmar",
+      "x": -132,
+      "z": 748,
+      "radius": 2
+    },
+    {
+      "mob": "brutok_skullsmasher",
+      "x": -45,
+      "z": 768,
+      "radius": 4
+    },
+    {
+      "mob": "stormcrag_elemental",
+      "x": 110,
+      "z": 760,
+      "radius": 20
+    },
+    {
+      "mob": "stormcrag_elemental",
+      "x": 135,
+      "z": 795,
+      "radius": 16
+    },
+    {
+      "mob": "shardlord_kazzix",
+      "x": 145,
+      "z": 815,
+      "radius": 8
+    },
+    {
+      "mob": "wyrmcult_zealot",
+      "x": 55,
+      "z": 820,
+      "radius": 20
+    },
+    {
+      "mob": "wyrmcult_zealot",
+      "x": 34,
+      "z": 845,
+      "radius": 16
+    },
+    {
+      "mob": "wyrmcult_necromancer",
+      "x": 40,
+      "z": 855,
+      "radius": 14
+    },
+    {
+      "mob": "boneclad_revenant",
+      "x": -40,
+      "z": 830,
+      "radius": 20
+    },
+    {
+      "mob": "boneclad_revenant",
+      "x": -40,
+      "z": 838,
+      "radius": 16
+    },
+    {
+      "mob": "marrowlord_varkas",
+      "x": -34,
+      "z": 842,
+      "radius": 5
+    },
+    {
+      "mob": "voskar_emberwing",
+      "x": 80,
+      "z": 845,
+      "radius": 4
+    },
+    {
+      "mob": "wyrmcult_zealot",
+      "x": 80,
+      "z": 845,
+      "radius": 7
+    },
+    {
+      "mob": "stable_horse",
+      "x": 390,
+      "z": 594,
+      "radius": 0
+    },
+    {
+      "mob": "stable_horse",
+      "x": 404,
+      "z": 598,
+      "radius": 0
+    },
+    {
+      "mob": "stable_horse",
+      "x": 418,
+      "z": 602,
+      "radius": 0
+    },
+    {
+      "mob": "glimmermere_wader",
+      "x": -78,
+      "z": 778,
+      "radius": 16
+    },
+    {
+      "mob": "glimmermere_wader",
+      "x": -56,
+      "z": 800,
+      "radius": 14
+    },
+    {
+      "mob": "drowned_votary",
+      "x": -90,
+      "z": 802,
+      "radius": 16
+    },
+    {
+      "mob": "drowned_votary",
+      "x": -64,
+      "z": 814,
+      "radius": 12
+    },
+    {
+      "mob": "sethrael_palecoil",
+      "x": -96,
+      "z": 814,
+      "radius": 3
+    },
+    {
+      "mob": "restless_bones",
+      "x": 88,
+      "z": 90,
+      "radius": 6
+    },
+    {
+      "mob": "wraithbinder_maldrec",
+      "x": 88,
+      "z": 92,
+      "radius": 3
+    },
+    {
+      "mob": "grix_the_tunnelking",
+      "x": -95,
+      "z": -78,
+      "radius": 4
+    },
+    {
+      "mob": "glimmerwisp",
+      "x": 76,
+      "z": 1014,
+      "radius": 12
+    },
+    {
+      "mob": "glimmerwisp",
+      "x": 60,
+      "z": 1150,
+      "radius": 14
+    },
+    {
+      "mob": "duskwisp",
+      "x": 126,
+      "z": 1120,
+      "radius": 12
+    },
+    {
+      "mob": "duskwisp",
+      "x": -30,
+      "z": 1200,
+      "radius": 14
+    },
+    {
+      "mob": "veiled_stag",
+      "x": 12,
+      "z": 1118,
+      "radius": 16
+    },
+    {
+      "mob": "veiled_doe",
+      "x": 8,
+      "z": 1124,
+      "radius": 12
+    },
+    {
+      "mob": "veiled_doe",
+      "x": 18,
+      "z": 1112,
+      "radius": 10
+    },
+    {
+      "mob": "sporeling_gatherer",
+      "x": -95,
+      "z": 1180,
+      "radius": 14
+    },
+    {
+      "mob": "corrupted_sporeling",
+      "x": -25,
+      "z": 1218,
+      "radius": 14
+    },
+    {
+      "mob": "corrupted_sporeling",
+      "x": -60,
+      "z": 1226,
+      "radius": 12
+    },
+    {
+      "mob": "treant_elder",
+      "x": 25,
+      "z": 948,
+      "radius": 14
+    },
+    {
+      "mob": "ancient_guardian",
+      "x": 125,
+      "z": 1085,
+      "radius": 16
+    },
+    {
+      "mob": "ancient_guardian",
+      "x": 138,
+      "z": 1070,
+      "radius": 10
+    },
+    {
+      "mob": "waking_warden",
+      "x": 125,
+      "z": 1085,
+      "radius": 3
+    },
+    {
+      "mob": "gleamstag",
+      "x": -145,
+      "z": 1100,
+      "radius": 4
+    },
+    {
+      "mob": "old_marrowshell",
+      "x": 103,
+      "z": 1144,
+      "radius": 5
+    },
+    {
+      "mob": "aurelhorn",
+      "x": 22,
+      "z": 1110,
+      "radius": 6
+    },
+    {
+      "mob": "mushroom_pixie",
+      "x": -95,
+      "z": 1186,
+      "radius": 16
+    },
+    {
+      "mob": "dune_troll",
+      "x": 460,
+      "z": 2140,
+      "radius": 10
+    },
+    {
+      "mob": "dune_troll",
+      "x": 476,
+      "z": 2124,
+      "radius": 8
+    },
+    {
+      "mob": "ashbone_raider",
+      "x": 356,
+      "z": 2086,
+      "radius": 10
+    },
+    {
+      "mob": "ashbone_raider",
+      "x": 296,
+      "z": 2184,
+      "radius": 10
+    },
+    {
+      "mob": "ashbone_warcaller",
+      "x": 448,
+      "z": 2106,
+      "radius": 8
+    },
+    {
+      "mob": "emberwing_drake",
+      "x": 419,
+      "z": 2266,
+      "radius": 8
+    },
+    {
+      "mob": "emberwing_drake",
+      "x": 302,
+      "z": 2258,
+      "radius": 8
+    },
+    {
+      "mob": "snowdrift_wolf",
+      "x": 20,
+      "z": 1610,
+      "radius": 10
+    },
+    {
+      "mob": "snowdrift_wolf",
+      "x": -60,
+      "z": 1690,
+      "radius": 10
+    },
+    {
+      "mob": "ice_wisp",
+      "x": 30,
+      "z": 1745,
+      "radius": 12
+    },
+    {
+      "mob": "rime_elemental",
+      "x": 66,
+      "z": 1622,
+      "radius": 9
+    },
+    {
+      "mob": "rime_elemental",
+      "x": 10,
+      "z": 1800,
+      "radius": 10
+    },
+    {
+      "mob": "fen_sprite",
+      "x": -84,
+      "z": 1738,
+      "radius": 11
+    },
+    {
+      "mob": "frostmane_yeti",
+      "x": 96,
+      "z": 1816,
+      "radius": 6
+    },
+    {
+      "mob": "gilded_stag",
+      "x": -300,
+      "z": 1976,
+      "radius": 12
+    },
+    {
+      "mob": "gilded_stag",
+      "x": -420,
+      "z": 2020,
+      "radius": 11
+    },
+    {
+      "mob": "gloam_fox",
+      "x": -330,
+      "z": 2030,
+      "radius": 10
+    },
+    {
+      "mob": "harvest_sprite",
+      "x": -436,
+      "z": 1984,
+      "radius": 10
+    },
+    {
+      "mob": "orchard_treant",
+      "x": -426,
+      "z": 2202,
+      "radius": 9
+    },
+    {
+      "mob": "mere_lurker",
+      "x": -312,
+      "z": 2158,
+      "radius": 8
+    },
+    {
+      "mob": "mere_lurker",
+      "x": -282,
+      "z": 2226,
+      "radius": 8
+    },
+    {
+      "mob": "bogtoad",
+      "x": -430,
+      "z": 270,
+      "radius": 10
+    },
+    {
+      "mob": "bogtoad",
+      "x": -284,
+      "z": 316,
+      "radius": 10
+    },
+    {
+      "mob": "lily_wisp",
+      "x": -426,
+      "z": 440,
+      "radius": 12
+    },
+    {
+      "mob": "willow_sprite",
+      "x": -396,
+      "z": 376,
+      "radius": 10
+    },
+    {
+      "mob": "willow_sprite",
+      "x": -316,
+      "z": 380,
+      "radius": 10
+    },
+    {
+      "mob": "drowsy_croaker",
+      "x": -322,
+      "z": 496,
+      "radius": 5
+    },
+    {
+      "mob": "moonfleece_grazer",
+      "x": -436,
+      "z": 1466,
+      "radius": 12
+    },
+    {
+      "mob": "moonfleece_grazer",
+      "x": -320,
+      "z": 1446,
+      "radius": 10
+    },
+    {
+      "mob": "gloam_strider",
+      "x": -410,
+      "z": 1522,
+      "radius": 10
+    },
+    {
+      "mob": "gloam_strider",
+      "x": -240,
+      "z": 1402,
+      "radius": 10
+    },
+    {
+      "mob": "nightkin_stargazer",
+      "x": -272,
+      "z": 1538,
+      "radius": 8
+    },
+    {
+      "mob": "barrow_king",
+      "x": -360,
+      "z": 1650,
+      "radius": 5
+    },
+    {
+      "mob": "widowsilk_spinner",
+      "x": 282,
+      "z": 1478,
+      "radius": 10
+    },
+    {
+      "mob": "widowsilk_spinner",
+      "x": 468,
+      "z": 1464,
+      "radius": 10
+    },
+    {
+      "mob": "wood_wraith",
+      "x": 306,
+      "z": 1616,
+      "radius": 9
+    },
+    {
+      "mob": "wood_wraith",
+      "x": 418,
+      "z": 1568,
+      "radius": 10
+    },
+    {
+      "mob": "gravenbark_shambler",
+      "x": 444,
+      "z": 1526,
+      "radius": 10
+    },
+    {
+      "mob": "pale_huntsman",
+      "x": 380,
+      "z": 1680,
+      "radius": 5
+    },
+    {
+      "mob": "tide_scuttler",
+      "x": -456,
+      "z": 878,
+      "radius": 10
+    },
+    {
+      "mob": "tide_scuttler",
+      "x": -252,
+      "z": 840,
+      "radius": 10
+    },
+    {
+      "mob": "thicket_boar",
+      "x": -368,
+      "z": 940,
+      "radius": 10
+    },
+    {
+      "mob": "thicket_boar",
+      "x": -410,
+      "z": 960,
+      "radius": 10
+    },
+    {
+      "mob": "canopy_weaver",
+      "x": -326,
+      "z": 1060,
+      "radius": 10
+    },
+    {
+      "mob": "canopy_weaver",
+      "x": -426,
+      "z": 1120,
+      "radius": 10
+    },
+    {
+      "mob": "idol_guardian",
+      "x": -256,
+      "z": 1090,
+      "radius": 5
+    },
+    {
+      "mob": "topiary_stag",
+      "x": 364,
+      "z": 898,
+      "radius": 10
+    },
+    {
+      "mob": "topiary_stag",
+      "x": 326,
+      "z": 1146,
+      "radius": 10
+    },
+    {
+      "mob": "topiary_wolf",
+      "x": 294,
+      "z": 906,
+      "radius": 10
+    },
+    {
+      "mob": "topiary_wolf",
+      "x": 418,
+      "z": 1124,
+      "radius": 10
+    },
+    {
+      "mob": "hedge_gnome",
+      "x": 268,
+      "z": 1002,
+      "radius": 10
+    },
+    {
+      "mob": "hedge_gnome",
+      "x": 456,
+      "z": 942,
+      "radius": 10
+    },
+    {
+      "mob": "the_topiary_bull",
+      "x": 360,
+      "z": 1016,
+      "radius": 5
+    },
+    {
+      "mob": "moor_ram",
+      "x": 292,
+      "z": 312,
+      "radius": 11
+    },
+    {
+      "mob": "moor_ram",
+      "x": 262,
+      "z": 360,
+      "radius": 10
+    },
+    {
+      "mob": "topiary_wolf",
+      "x": 302,
+      "z": 522,
+      "radius": 11
+    },
+    {
+      "mob": "topiary_wolf",
+      "x": 250,
+      "z": 505,
+      "radius": 8
+    },
+    {
+      "mob": "wreck_thief",
+      "x": 444,
+      "z": 438,
+      "radius": 10
+    },
+    {
+      "mob": "moor_ram",
+      "x": 386,
+      "z": 622,
+      "radius": 9
+    },
+    {
+      "mob": "the_wreck_warden",
+      "x": 330,
+      "z": 638,
+      "radius": 5
+    },
+    {
+      "mob": "downs_bandit",
+      "x": 252,
+      "z": 250,
+      "radius": 4
+    },
+    {
+      "mob": "downs_bandit",
+      "x": 210,
+      "z": 410,
+      "radius": 4
+    },
+    {
+      "mob": "wreck_thief",
+      "x": 354,
+      "z": 664,
+      "radius": 4
+    },
+    {
+      "mob": "breach_wretch",
+      "x": 430,
+      "z": 44,
+      "radius": 12
+    },
+    {
+      "mob": "breach_wretch",
+      "x": 400,
+      "z": 96,
+      "radius": 11
+    },
+    {
+      "mob": "riftspawn",
+      "x": 452,
+      "z": 66,
+      "radius": 11
+    },
+    {
+      "mob": "riftspawn",
+      "x": 388,
+      "z": -44,
+      "radius": 11
+    },
+    {
+      "mob": "void_stalker",
+      "x": 418,
+      "z": -30,
+      "radius": 12
+    },
+    {
+      "mob": "void_stalker",
+      "x": 462,
+      "z": 20,
+      "radius": 11
+    },
+    {
+      "mob": "sundered_horror",
+      "x": 402,
+      "z": -78,
+      "radius": 6
+    },
+    {
+      "mob": "ashbone_warcaller",
+      "x": 302,
+      "z": 2180,
+      "radius": 8
+    },
+    {
+      "mob": "emberwing_drake",
+      "x": 322,
+      "z": 2252,
+      "radius": 8
+    },
+    {
+      "mob": "cindraleth_maw_matriarch",
+      "x": 436,
+      "z": 2348,
+      "radius": 6
+    },
+    {
+      "mob": "terrace_howler",
+      "x": 112,
+      "z": 1800,
+      "radius": 10
+    },
+    {
+      "mob": "terrace_howler",
+      "x": 84,
+      "z": 1830,
+      "radius": 9
+    },
+    {
+      "mob": "the_meredark",
+      "x": -358,
+      "z": 2186,
+      "radius": 6
+    },
+    {
+      "mob": "bogtoad",
+      "x": -334,
+      "z": 436,
+      "radius": 10
+    },
+    {
+      "mob": "bogtoad",
+      "x": -406,
+      "z": 288,
+      "radius": 10
+    },
+    {
+      "mob": "barrow_wight",
+      "x": -326,
+      "z": 1660,
+      "radius": 9
+    },
+    {
+      "mob": "barrow_wight",
+      "x": -382,
+      "z": 1636,
+      "radius": 9
+    },
+    {
+      "mob": "drowned_deckhand",
+      "x": 352,
+      "z": 662,
+      "radius": 10
+    },
+    {
+      "mob": "drowned_deckhand",
+      "x": 306,
+      "z": 618,
+      "radius": 9
+    },
+    {
+      "mob": "hedge_knight",
+      "x": 276,
+      "z": 886,
+      "radius": 8
+    },
+    {
+      "mob": "hedge_knight",
+      "x": 410,
+      "z": 1118,
+      "radius": 8
+    },
+    {
+      "mob": "hedge_knight",
+      "x": 414,
+      "z": 1079.5,
+      "radius": 3
+    },
+    {
+      "mob": "hedge_knight",
+      "x": 324,
+      "z": 1007.5,
+      "radius": 3
+    },
+    {
+      "mob": "hedge_knight",
+      "x": 396,
+      "z": 971.5,
+      "radius": 3
+    }
+  ],
+  "objects": [
+    {
+      "item": "supply_crate",
+      "positions": [[58, -58], [73, -70], [86, -82], [95, -97], [64, -76], [81, -94]]
+    },
+    {
+      "item": "gravecaller_sigil",
+      "positions": [[84, 88], [76, 92]]
+    },
+    {
+      "item": "weathered_ledger_page",
+      "positions": [[78, 84], [83, 88], [86, 92]]
+    },
+    {
+      "item": "morthen_grimoire",
+      "positions": [[78, 86]]
+    },
+    {
+      "item": "fen_muster_order",
+      "positions": [[1, 294], [-2, 297]]
+    },
+    {
+      "item": "lost_caravan_goods",
+      "positions": [[1, 192], [-3, 206], [-6, 221], [-8, 237], [-7, 252], [-3, 268], [2, 283]]
+    },
+    {
+      "item": "rusted_censer",
+      "positions": [[96, 429], [103, 430], [99, 434], [106, 437], [97, 440], [104, 441]]
+    },
+    {
+      "item": "bastion_ward_stone",
+      "positions": [[43, 512], [48, 517]]
+    },
+    {
+      "item": "unknown_alien_weaponry",
+      "positions": [[151.8, 294.2]]
+    },
+    {
+      "item": "highwatch_summons",
+      "positions": [[1, 654], [-2, 657]]
+    },
+    {
+      "item": "ogre_war_totem",
+      "positions": [
+        [-116, 726],
+        [-122, 733],
+        [-129, 727],
+        [-136, 738],
+        [-140, 747],
+        [-133, 753],
+        [-124, 750]
+      ]
+    },
+    {
+      "item": "gravewyrm_sigil",
+      "positions": [[-8, 852], [-3, 857], [3, 861], [8, 866]]
+    },
+    {
+      "item": "sanctum_key_shard",
+      "positions": [[-6, 872], [-2, 876], [2, 873], [6, 878]]
+    },
+    {
+      "item": "grave_sir_aldren",
+      "positions": [[138, 838]]
+    },
+    {
+      "item": "grave_high_priest_malric",
+      "positions": [[141, 712]]
+    },
+    {
+      "item": "grave_captain_voss",
+      "positions": [[-139, 787]]
+    },
+    {
+      "item": "crypt_ritual_circle",
+      "positions": [[68, 800]]
+    },
+    {
+      "item": "moongate_rubbing",
+      "positions": [[-74, 786], [-68, 783], [-76, 796], [-64, 794]]
+    },
+    {
+      "item": "hollow_sealstone",
+      "positions": [[125, 1085]]
+    },
+    {
+      "item": "monument_overlook",
+      "positions": [[-118, 990]]
+    },
+    {
+      "item": "monument_court",
+      "positions": [[112, 1096]]
+    },
+    {
+      "item": "monument_north",
+      "positions": [[160, 1228]]
+    },
+    {
+      "item": "scorched_supply_crate",
+      "positions": [[372, 1968], [360, 2014], [348, 2046], [332, 2094]]
+    },
+    {
+      "item": "wyrmwatch_warning_banner",
+      "positions": [[350, 2090], [302, 2180], [450, 2110]]
+    },
+    {
+      "item": "hearth_ember_cache",
+      "positions": [[8, 1598], [24, 1613], [38, 1623]]
+    },
+    {
+      "item": "sprung_trap",
+      "positions": [[-92, 1750], [-98, 1764], [-80, 1770], [-72, 1756]]
+    },
+    {
+      "item": "amberfall_sap_bucket",
+      "positions": [[-424, 2000], [-438, 1986], [-450, 2014], [-414, 2014]]
+    },
+    {
+      "item": "mere_ferry_lantern",
+      "positions": [[-338, 2102], [-320, 2124], [-300, 2148]]
+    },
+    {
+      "item": "fenway_mooring_line",
+      "positions": [[-348, 344], [-338, 340], [-372, 336], [-384, 346]]
+    },
+    {
+      "item": "bridgemere_toll_chest",
+      "positions": [[-324, 360], [-320, 398], [-326, 428]]
+    },
+    {
+      "item": "gloamfield_nightbloom",
+      "positions": [[-436, 1486], [-448, 1502], [-428, 1508], [-456, 1478]]
+    },
+    {
+      "item": "vigil_star_chart",
+      "positions": [[-262, 1534], [-282, 1546], [-266, 1548]]
+    },
+    {
+      "item": "barrow_grave_offering",
+      "positions": [[-346, 1662], [-378, 1664], [-352, 1674], [-368, 1668]]
+    },
+    {
+      "item": "gallowmere_grave_candle",
+      "positions": [[370, 1384], [324, 1452], [394, 1466], [340, 1498]]
+    },
+    {
+      "item": "silkbound_remains",
+      "positions": [[432, 1516], [446, 1536], [438, 1544]]
+    },
+    {
+      "item": "pearlwake_cargo_crate",
+      "positions": [[-352, 866], [-396, 876], [-434, 888]]
+    },
+    {
+      "item": "sunken_offering_bowl",
+      "positions": [[-244, 1036], [-252, 1056], [-266, 1072]]
+    },
+    {
+      "item": "evergarden_statue_rubbing",
+      "positions": [[280, 922], [452, 930], [274, 1012], [426, 1118]]
+    },
+    {
+      "item": "hedgewick_tool_cart",
+      "positions": [[262, 996], [276, 1008], [460, 948]]
+    },
+    {
+      "item": "shear_storm_lantern",
+      "positions": [[434, 452], [430, 488], [432, 532], [428, 566]]
+    },
+    {
+      "item": "wreckfield_flotsam_crate",
+      "positions": [[358, 650], [370, 664], [388, 684]]
+    },
+    {
+      "item": "gullhaven_watchbell",
+      "positions": [[256, 0], [318, 94], [442, 64]]
+    }
+  ],
+  "npcs": [
+    {
+      "id": "the_merchant",
+      "name": "The Merchant",
+      "x": -4.376409317062264,
+      "z": 7.967830304040863
+    },
+    {
+      "id": "marshal_redbrook",
+      "name": "Marshal Redbrook",
+      "x": 4.5,
+      "z": 5.5
+    },
+    {
+      "id": "trader_wilkes",
+      "name": "Trader Wilkes",
+      "x": -7.125851435200138,
+      "z": 0.812357418766734
+    },
+    {
+      "id": "apothecary_lin",
+      "name": "Apothecary Lin",
+      "x": 2.8431593444121797,
+      "z": 9.717148252611294
+    },
+    {
+      "id": "brother_aldric",
+      "name": "Brother Aldric",
+      "x": -16.59147045515334,
+      "z": -1.3973000209293893
+    },
+    {
+      "id": "smith_haldren",
+      "name": "Smith Haldren",
+      "x": 5.617914034868791,
+      "z": 15.074687401746273
+    },
+    {
+      "id": "fisherman_brandt",
+      "name": "Fisherman Brandt",
+      "x": -22,
+      "z": 4
+    },
+    {
+      "id": "foreman_odell",
+      "name": "Foreman Odell",
+      "x": -8,
+      "z": -9.5
+    },
+    {
+      "id": "bursar_fernando",
+      "name": "Bursar Fernando",
+      "x": 14.156943251329539,
+      "z": 8.685223202016726
+    },
+    {
+      "id": "card_master",
+      "name": "Card Master",
+      "x": 10.5,
+      "z": 1
+    },
+    {
+      "id": "chronicler_saul",
+      "name": "Saul the Chronicler",
+      "x": 0,
+      "z": -14.5
+    },
+    {
+      "id": "forgemistress_darva",
+      "name": "Forgemistress Darva",
+      "x": 1.7573530626642033,
+      "z": 16.121620532318982
+    },
+    {
+      "id": "cook_marlow",
+      "name": "Cook Marlow",
+      "x": -12.780764037489869,
+      "z": 10.316661779002187
+    },
+    {
+      "id": "weaver_ottilie",
+      "name": "Weaver Ottilie",
+      "x": -4.171032337012701,
+      "z": -18.01874944082567
+    },
+    {
+      "id": "tinker_gizzel",
+      "name": "Tinker Gizzel",
+      "x": 6.999944260671105,
+      "z": -13.825962484617639
+    },
+    {
+      "id": "warden_fenwick",
+      "name": "Warden Fenwick",
+      "x": 3,
+      "z": 304
+    },
+    {
+      "id": "brother_aldric_fen",
+      "name": "Brother Aldric",
+      "x": -8,
+      "z": 296
+    },
+    {
+      "id": "provisioner_hale",
+      "name": "Provisioner Hale",
+      "x": -4,
+      "z": 308
+    },
+    {
+      "id": "herbalist_yara",
+      "name": "Herbalist Yara",
+      "x": 10,
+      "z": 295
+    },
+    {
+      "id": "scout_maren",
+      "name": "Scout Maren",
+      "x": 6,
+      "z": 312
+    },
+    {
+      "id": "bursar_petra_vell",
+      "name": "Bursar Petra Vell",
+      "x": 9,
+      "z": 303
+    },
+    {
+      "id": "chronicler_osric_fenn",
+      "name": "Chronicler Osric Fenn",
+      "x": -14,
+      "z": 303
+    },
+    {
+      "id": "tanner_hesk",
+      "name": "Tanner Hesk",
+      "x": -11,
+      "z": 315.5
+    },
+    {
+      "id": "captain_thessaly",
+      "name": "Captain Thessaly",
+      "x": 4,
+      "z": 664
+    },
+    {
+      "id": "brother_aldric_highwatch",
+      "name": "Brother Aldric",
+      "x": -10,
+      "z": 656
+    },
+    {
+      "id": "scout_maren_highwatch",
+      "name": "Scout Maren",
+      "x": 7,
+      "z": 670
+    },
+    {
+      "id": "quartermaster_bree",
+      "name": "Quartermaster Bree",
+      "x": -5,
+      "z": 668
+    },
+    {
+      "id": "armorer_hode",
+      "name": "Armorer Hode",
+      "x": -2,
+      "z": 672
+    },
+    {
+      "id": "heroic_quartermaster",
+      "name": "Quartermaster Vex",
+      "x": -8,
+      "z": 665
+    },
+    {
+      "id": "loremaster_caddis",
+      "name": "Loremaster Caddis",
+      "x": 12,
+      "z": 655
+    },
+    {
+      "id": "auctioneer_voss",
+      "name": "Auctioneer Voss",
+      "x": 16,
+      "z": 666
+    },
+    {
+      "id": "bursar_aldous_crane",
+      "name": "Bursar Aldous Crane",
+      "x": -12,
+      "z": 663
+    },
+    {
+      "id": "stablemaster_marla",
+      "name": "Marla Hitchen",
+      "x": 367,
+      "z": 608
+    },
+    {
+      "id": "chronicler_edda_hartwell",
+      "name": "Chronicler Zenzie",
+      "x": 2,
+      "z": 643
+    },
+    {
+      "id": "alchemist_verane",
+      "name": "Alchemist Verane",
+      "x": 8.5,
+      "z": 658
+    },
+    {
+      "id": "tidewatcher_ondrel",
+      "name": "Ondrel Vane",
+      "x": -66,
+      "z": 786
+    },
+    {
+      "id": "brother_halven",
+      "name": "Brother Halven",
+      "x": -5,
+      "z": -52
+    },
+    {
+      "id": "brother_halven_marsh",
+      "name": "Brother Halven",
+      "x": -95,
+      "z": 505
+    },
+    {
+      "id": "keeper_saelwyn",
+      "name": "Keeper Saelwyn",
+      "x": -43,
+      "z": 1016
+    },
+    {
+      "id": "loremother_bryn",
+      "name": "Loremother Bryn",
+      "x": -20,
+      "z": 1015
+    },
+    {
+      "id": "provisioner_fenna",
+      "name": "Provisioner Fenna",
+      "x": -46,
+      "z": 1031
+    },
+    {
+      "id": "wardsmith_orun",
+      "name": "Wardsmith Orun",
+      "x": -34,
+      "z": 1031
+    },
+    {
+      "id": "archivist_tullo",
+      "name": "Archivist Tullo",
+      "x": -31,
+      "z": 1021
+    },
+    {
+      "id": "huntsman_deral",
+      "name": "Huntsman Deral",
+      "x": 18,
+      "z": 1104
+    },
+    {
+      "id": "gatecaptain_brannoc",
+      "name": "Gatecaptain Brannoc",
+      "x": 407,
+      "z": 1895
+    },
+    {
+      "id": "quartermaster_sela",
+      "name": "Quartermaster Sela",
+      "x": 398,
+      "z": 1908
+    },
+    {
+      "id": "scout_yerrin",
+      "name": "Scout Yerrin",
+      "x": 494,
+      "z": 2100
+    },
+    {
+      "id": "warden_kaldra",
+      "name": "Warden Kaldra",
+      "x": -27,
+      "z": 1557
+    },
+    {
+      "id": "hearthkeeper_maeve",
+      "name": "Hearthkeeper Maeve",
+      "x": -40,
+      "z": 1557
+    },
+    {
+      "id": "scout_einna",
+      "name": "Scout Einna",
+      "x": -12,
+      "z": 1502
+    },
+    {
+      "id": "aurorist_veyla",
+      "name": "Aurorist Veyla",
+      "x": 32,
+      "z": 1744
+    },
+    {
+      "id": "trapper_brosk",
+      "name": "Trapper Brosk",
+      "x": -82,
+      "z": 1744
+    },
+    {
+      "id": "reeve_ottoline",
+      "name": "Reeve Ottoline",
+      "x": -358,
+      "z": 2070
+    },
+    {
+      "id": "waywatcher_sorrel",
+      "name": "Waywatcher Sorrel",
+      "x": -351,
+      "z": 1846
+    },
+    {
+      "id": "ferrymaster_caddow",
+      "name": "Ferrymaster Caddow",
+      "x": -356,
+      "z": 2098
+    },
+    {
+      "id": "orchardist_pomeline",
+      "name": "Orchardist Pomeline",
+      "x": -428,
+      "z": 1996
+    },
+    {
+      "id": "waykeeper_pell",
+      "name": "Waykeeper Pell",
+      "x": -377,
+      "z": 214
+    },
+    {
+      "id": "bridgewright_alden",
+      "name": "Bridgewright Alden",
+      "x": -359,
+      "z": 354
+    },
+    {
+      "id": "netter_maris",
+      "name": "Netter Maris",
+      "x": -354,
+      "z": 364
+    },
+    {
+      "id": "mother_sedge",
+      "name": "Mother Sedge",
+      "x": -414,
+      "z": 446
+    },
+    {
+      "id": "lamplighter_sorrel",
+      "name": "Lamplighter Sorrel",
+      "x": -388,
+      "z": 1284
+    },
+    {
+      "id": "lira_dewsong",
+      "name": "Lira Dewsong",
+      "x": -372,
+      "z": 1417
+    },
+    {
+      "id": "weaver_amelle",
+      "name": "Weaver Amelle",
+      "x": -366,
+      "z": 1423
+    },
+    {
+      "id": "astronomer_cassian",
+      "name": "Astronomer Cassian",
+      "x": -278,
+      "z": 1548
+    },
+    {
+      "id": "lampman_cobb",
+      "name": "Lampman Cobb",
+      "x": 387,
+      "z": 1283
+    },
+    {
+      "id": "sexton_marrow",
+      "name": "Sexton Marrow",
+      "x": 363,
+      "z": 1436
+    },
+    {
+      "id": "widow_tansy",
+      "name": "Widow Tansy",
+      "x": 357,
+      "z": 1424
+    },
+    {
+      "id": "vicar_creel",
+      "name": "Vicar Creel",
+      "x": 296,
+      "z": 1614
+    },
+    {
+      "id": "strandwatcher_pell",
+      "name": "Strandwatcher Pell",
+      "x": -416,
+      "z": 722
+    },
+    {
+      "id": "salvage_boss_ryna",
+      "name": "Salvage-Boss Ryna",
+      "x": -296,
+      "z": 816
+    },
+    {
+      "id": "pearlmother_isha",
+      "name": "Pearl-Mother Isha",
+      "x": -293,
+      "z": 810
+    },
+    {
+      "id": "hermit_okku",
+      "name": "Okku",
+      "x": -397,
+      "z": 1068
+    },
+    {
+      "id": "gatewarden_pell",
+      "name": "Gatewarden Pell",
+      "x": 390,
+      "z": 714
+    },
+    {
+      "id": "head_gardener_amaranth",
+      "name": "Head Gardener Amaranth",
+      "x": 323,
+      "z": 808
+    },
+    {
+      "id": "wickmother_sorrel",
+      "name": "Wickmother Sorrel",
+      "x": 317,
+      "z": 814
+    },
+    {
+      "id": "gardener_yew",
+      "name": "Gardener Yew",
+      "x": 348,
+      "z": 1160
+    },
+    {
+      "id": "watcher_maren",
+      "name": "Watcher Maren",
+      "x": 194,
+      "z": 436
+    },
+    {
+      "id": "harbormaster_odile",
+      "name": "Harbormaster Odile",
+      "x": 424,
+      "z": 364
+    },
+    {
+      "id": "keeper_bram",
+      "name": "Keeper Bram",
+      "x": 503,
+      "z": 309
+    },
+    {
+      "id": "salvager_edda",
+      "name": "Salvager Edda",
+      "x": 360,
+      "z": 630
+    },
+    {
+      "id": "warden_coalfast",
+      "name": "Warden Coalfast",
+      "x": 305,
+      "z": 66
+    },
+    {
+      "id": "riftwatch_ollun",
+      "name": "Riftwatch Ollun",
+      "x": 372,
+      "z": 2
+    },
+    {
+      "id": "quartermaster_edda",
+      "name": "Quartermaster Edda",
+      "x": 298,
+      "z": 74
+    },
+    {
+      "id": "mender_saul",
+      "name": "Mender Saul",
+      "x": 312,
+      "z": 78
+    },
+    {
+      "id": "bellkeeper_tam",
+      "name": "Bellkeeper Tam",
+      "x": 252,
+      "z": 18
+    },
+    {
+      "id": "fisher_nell",
+      "name": "Frightened Nell",
+      "x": 296,
+      "z": 80
+    }
+  ],
+  "nodes": [
+    {
+      "type": "ore",
+      "item": "copper_ore",
+      "x": -70,
+      "z": -53
+    },
+    {
+      "type": "ore",
+      "item": "copper_ore",
+      "x": -73,
+      "z": -49
+    },
+    {
+      "type": "ore",
+      "item": "copper_ore",
+      "x": -67,
+      "z": -57
+    },
+    {
+      "type": "wood",
+      "item": "ironbark_log",
+      "x": -62,
+      "z": 8
+    },
+    {
+      "type": "wood",
+      "item": "ironbark_log",
+      "x": -57,
+      "z": -6
+    },
+    {
+      "type": "wood",
+      "item": "ironbark_log",
+      "x": -68,
+      "z": 18
+    },
+    {
+      "type": "herb",
+      "item": "silverleaf_herb",
+      "x": -86,
+      "z": 90
+    },
+    {
+      "type": "herb",
+      "item": "silverleaf_herb",
+      "x": -92,
+      "z": 80
+    },
+    {
+      "type": "herb",
+      "item": "silverleaf_herb",
+      "x": -80,
+      "z": 95
+    },
+    {
+      "type": "ore",
+      "item": "iron_ore",
+      "x": 40,
+      "z": 340
+    },
+    {
+      "type": "ore",
+      "item": "iron_ore",
+      "x": -30,
+      "z": 360
+    },
+    {
+      "type": "ore",
+      "item": "iron_ore",
+      "x": 35,
+      "z": 345
+    },
+    {
+      "type": "wood",
+      "item": "ashwood_log",
+      "x": 10,
+      "z": 330
+    },
+    {
+      "type": "wood",
+      "item": "ashwood_log",
+      "x": -15,
+      "z": 355
+    },
+    {
+      "type": "wood",
+      "item": "ashwood_log",
+      "x": -20,
+      "z": 315
+    },
+    {
+      "type": "herb",
+      "item": "goldleaf_herb",
+      "x": 60,
+      "z": 385
+    },
+    {
+      "type": "herb",
+      "item": "goldleaf_herb",
+      "x": -45,
+      "z": 452
+    },
+    {
+      "type": "herb",
+      "item": "goldleaf_herb",
+      "x": 30,
+      "z": 355
+    },
+    {
+      "type": "ore",
+      "item": "thorium_ore",
+      "x": 90,
+      "z": 608
+    },
+    {
+      "type": "ore",
+      "item": "thorium_ore",
+      "x": 78,
+      "z": 630
+    },
+    {
+      "type": "wood",
+      "item": "elderwood_log",
+      "x": -55,
+      "z": 765
+    },
+    {
+      "type": "wood",
+      "item": "elderwood_log",
+      "x": -82,
+      "z": 782
+    },
+    {
+      "type": "herb",
+      "item": "sunpetal_herb",
+      "x": 18,
+      "z": 648
+    },
+    {
+      "type": "herb",
+      "item": "sunpetal_herb",
+      "x": -18,
+      "z": 678
+    },
+    {
+      "type": "ore",
+      "item": "iron_ore",
+      "x": 48,
+      "z": 352
+    },
+    {
+      "type": "wood",
+      "item": "ashwood_log",
+      "x": 2,
+      "z": 342
+    },
+    {
+      "type": "herb",
+      "item": "goldleaf_herb",
+      "x": 52,
+      "z": 396
+    },
+    {
+      "type": "ore",
+      "item": "thorium_ore",
+      "x": 102,
+      "z": 615
+    },
+    {
+      "type": "ore",
+      "item": "thorium_ore",
+      "x": 70,
+      "z": 640
+    },
+    {
+      "type": "wood",
+      "item": "elderwood_log",
+      "x": -45,
+      "z": 776
+    },
+    {
+      "type": "wood",
+      "item": "elderwood_log",
+      "x": -92,
+      "z": 793
+    },
+    {
+      "type": "herb",
+      "item": "sunpetal_herb",
+      "x": 28,
+      "z": 658
+    },
+    {
+      "type": "herb",
+      "item": "sunpetal_herb",
+      "x": -28,
+      "z": 690
+    },
+    {
+      "type": "ore",
+      "item": "thorium_ore",
+      "x": -2,
+      "z": 1004
+    },
+    {
+      "type": "ore",
+      "item": "thorium_ore",
+      "x": 6,
+      "z": 1044
+    },
+    {
+      "type": "wood",
+      "item": "elderwood_log",
+      "x": -82,
+      "z": 1052
+    },
+    {
+      "type": "wood",
+      "item": "elderwood_log",
+      "x": -70,
+      "z": 992
+    },
+    {
+      "type": "herb",
+      "item": "sunpetal_herb",
+      "x": -22,
+      "z": 1074
+    },
+    {
+      "type": "herb",
+      "item": "sunpetal_herb",
+      "x": -54,
+      "z": 1082
+    },
+    {
+      "type": "ore",
+      "item": "thorium_ore",
+      "x": 442,
+      "z": 1874
+    },
+    {
+      "type": "ore",
+      "item": "thorium_ore",
+      "x": 450,
+      "z": 1914
+    },
+    {
+      "type": "wood",
+      "item": "elderwood_log",
+      "x": 362,
+      "z": 1922
+    },
+    {
+      "type": "wood",
+      "item": "elderwood_log",
+      "x": 374,
+      "z": 1862
+    },
+    {
+      "type": "herb",
+      "item": "sunpetal_herb",
+      "x": 422,
+      "z": 1944
+    },
+    {
+      "type": "herb",
+      "item": "sunpetal_herb",
+      "x": 390,
+      "z": 1952
+    },
+    {
+      "type": "ore",
+      "item": "thorium_ore",
+      "x": 8,
+      "z": 1534
+    },
+    {
+      "type": "ore",
+      "item": "thorium_ore",
+      "x": 16,
+      "z": 1574
+    },
+    {
+      "type": "wood",
+      "item": "elderwood_log",
+      "x": -72,
+      "z": 1582
+    },
+    {
+      "type": "wood",
+      "item": "elderwood_log",
+      "x": -60,
+      "z": 1522
+    },
+    {
+      "type": "herb",
+      "item": "sunpetal_herb",
+      "x": -12,
+      "z": 1604
+    },
+    {
+      "type": "herb",
+      "item": "sunpetal_herb",
+      "x": -44,
+      "z": 1612
+    },
+    {
+      "type": "ore",
+      "item": "thorium_ore",
+      "x": -322,
+      "z": 2046
+    },
+    {
+      "type": "ore",
+      "item": "thorium_ore",
+      "x": -314,
+      "z": 2086
+    },
+    {
+      "type": "wood",
+      "item": "elderwood_log",
+      "x": -402,
+      "z": 2094
+    },
+    {
+      "type": "wood",
+      "item": "elderwood_log",
+      "x": -390,
+      "z": 2034
+    },
+    {
+      "type": "herb",
+      "item": "sunpetal_herb",
+      "x": -342,
+      "z": 2116
+    },
+    {
+      "type": "herb",
+      "item": "sunpetal_herb",
+      "x": -374,
+      "z": 2124
+    },
+    {
+      "type": "ore",
+      "item": "thorium_ore",
+      "x": -322,
+      "z": 336
+    },
+    {
+      "type": "ore",
+      "item": "thorium_ore",
+      "x": -314,
+      "z": 376
+    },
+    {
+      "type": "wood",
+      "item": "elderwood_log",
+      "x": -402,
+      "z": 384
+    },
+    {
+      "type": "wood",
+      "item": "elderwood_log",
+      "x": -390,
+      "z": 324
+    },
+    {
+      "type": "herb",
+      "item": "sunpetal_herb",
+      "x": -342,
+      "z": 406
+    },
+    {
+      "type": "herb",
+      "item": "sunpetal_herb",
+      "x": -374,
+      "z": 414
+    },
+    {
+      "type": "ore",
+      "item": "thorium_ore",
+      "x": -332,
+      "z": 1394
+    },
+    {
+      "type": "ore",
+      "item": "thorium_ore",
+      "x": -324,
+      "z": 1434
+    },
+    {
+      "type": "wood",
+      "item": "elderwood_log",
+      "x": -412,
+      "z": 1442
+    },
+    {
+      "type": "wood",
+      "item": "elderwood_log",
+      "x": -400,
+      "z": 1382
+    },
+    {
+      "type": "herb",
+      "item": "sunpetal_herb",
+      "x": -352,
+      "z": 1464
+    },
+    {
+      "type": "herb",
+      "item": "sunpetal_herb",
+      "x": -384,
+      "z": 1472
+    },
+    {
+      "type": "ore",
+      "item": "thorium_ore",
+      "x": 398,
+      "z": 1404
+    },
+    {
+      "type": "ore",
+      "item": "thorium_ore",
+      "x": 406,
+      "z": 1444
+    },
+    {
+      "type": "wood",
+      "item": "elderwood_log",
+      "x": 318,
+      "z": 1452
+    },
+    {
+      "type": "wood",
+      "item": "elderwood_log",
+      "x": 330,
+      "z": 1392
+    },
+    {
+      "type": "herb",
+      "item": "sunpetal_herb",
+      "x": 378,
+      "z": 1474
+    },
+    {
+      "type": "herb",
+      "item": "sunpetal_herb",
+      "x": 346,
+      "z": 1482
+    },
+    {
+      "type": "ore",
+      "item": "thorium_ore",
+      "x": 458,
+      "z": 334
+    },
+    {
+      "type": "ore",
+      "item": "thorium_ore",
+      "x": 466,
+      "z": 374
+    },
+    {
+      "type": "wood",
+      "item": "elderwood_log",
+      "x": 378,
+      "z": 382
+    },
+    {
+      "type": "wood",
+      "item": "elderwood_log",
+      "x": 390,
+      "z": 322
+    },
+    {
+      "type": "herb",
+      "item": "sunpetal_herb",
+      "x": 438,
+      "z": 404
+    },
+    {
+      "type": "herb",
+      "item": "sunpetal_herb",
+      "x": 406,
+      "z": 412
+    },
+    {
+      "type": "ore",
+      "item": "thorium_ore",
+      "x": -262,
+      "z": 794
+    },
+    {
+      "type": "ore",
+      "item": "thorium_ore",
+      "x": -254,
+      "z": 834
+    },
+    {
+      "type": "wood",
+      "item": "elderwood_log",
+      "x": -342,
+      "z": 842
+    },
+    {
+      "type": "wood",
+      "item": "elderwood_log",
+      "x": -330,
+      "z": 782
+    },
+    {
+      "type": "herb",
+      "item": "sunpetal_herb",
+      "x": -282,
+      "z": 864
+    },
+    {
+      "type": "herb",
+      "item": "sunpetal_herb",
+      "x": -314,
+      "z": 872
+    },
+    {
+      "type": "ore",
+      "item": "thorium_ore",
+      "x": 358,
+      "z": 784
+    },
+    {
+      "type": "ore",
+      "item": "thorium_ore",
+      "x": 366,
+      "z": 824
+    },
+    {
+      "type": "wood",
+      "item": "elderwood_log",
+      "x": 278,
+      "z": 832
+    },
+    {
+      "type": "wood",
+      "item": "elderwood_log",
+      "x": 290,
+      "z": 772
+    },
+    {
+      "type": "herb",
+      "item": "sunpetal_herb",
+      "x": 338,
+      "z": 854
+    },
+    {
+      "type": "herb",
+      "item": "sunpetal_herb",
+      "x": 306,
+      "z": 862
+    },
+    {
+      "type": "ore",
+      "item": "iron_ore",
+      "x": 343,
+      "z": 44
+    },
+    {
+      "type": "ore",
+      "item": "iron_ore",
+      "x": 351,
+      "z": 84
+    },
+    {
+      "type": "wood",
+      "item": "ashwood_log",
+      "x": 263,
+      "z": 92
+    },
+    {
+      "type": "wood",
+      "item": "ashwood_log",
+      "x": 275,
+      "z": 32
+    },
+    {
+      "type": "herb",
+      "item": "goldleaf_herb",
+      "x": 323,
+      "z": 114
+    },
+    {
+      "type": "herb",
+      "item": "goldleaf_herb",
+      "x": 291,
+      "z": 122
+    }
+  ],
+  "escorts": [
+    {
+      "id": "esc_fv_wren",
+      "x": -42,
+      "z": 1798
+    },
+    {
+      "id": "esc_ww_mosley",
+      "x": 310,
+      "z": 1596
+    },
+    {
+      "id": "esc_pr_navigator",
+      "x": -456,
+      "z": 892
+    },
+    {
+      "id": "esc_fs_bram",
+      "x": 252,
+      "z": -8
+    }
+  ],
+  "drops": [
+    {
+      "quest": "q_greyjaw",
+      "item": "greyjaw_fang",
+      "mobs": ["old_greyjaw"]
+    },
+    {
+      "quest": "q_boars",
+      "item": "boar_hide",
+      "mobs": ["wild_boar"]
+    },
+    {
+      "quest": "q_spiders",
+      "item": "webwood_silk",
+      "mobs": ["webwood_spider"]
+    },
+    {
+      "quest": "q_rite",
+      "item": "blessed_wax",
+      "mobs": ["tunnel_rat"]
+    },
+    {
+      "quest": "q_rite",
+      "item": "ghostly_essence",
+      "mobs": ["restless_bones"]
+    },
+    {
+      "quest": "q_prowler_pelts",
+      "item": "mire_prowler_pelt",
+      "mobs": ["mire_prowler"]
+    },
+    {
+      "quest": "q_idols",
+      "item": "waterlogged_idol",
+      "mobs": ["deepfen_murloc"]
+    },
+    {
+      "quest": "q_widows",
+      "item": "widow_venom_sac",
+      "mobs": ["mire_widow"]
+    },
+    {
+      "quest": "q_troll_fetishes",
+      "item": "troll_fetish",
+      "mobs": ["fen_troll"]
+    },
+    {
+      "quest": "q_grubjaw",
+      "item": "grubjaw_tusk",
+      "mobs": ["grubjaw"]
+    },
+    {
+      "quest": "q_summoners",
+      "item": "cult_cipher",
+      "mobs": ["gravecaller_summoner", "gravecaller_mender"]
+    },
+    {
+      "quest": "q_stalker_pelts",
+      "item": "ridge_stalker_pelt",
+      "mobs": ["ridge_stalker"]
+    },
+    {
+      "quest": "q_stalker_cloaks",
+      "item": "ridge_stalker_pelt",
+      "mobs": ["ridge_stalker"]
+    },
+    {
+      "quest": "q_glowing_wax",
+      "item": "glowing_wax",
+      "mobs": ["deeprock_kobold"]
+    },
+    {
+      "quest": "q_shard_cores",
+      "item": "storm_core",
+      "mobs": ["stormcrag_elemental"]
+    },
+    {
+      "quest": "q_breaking_the_seal",
+      "item": "blessed_embers",
+      "mobs": ["stormcrag_elemental"]
+    },
+    {
+      "quest": "q_kazzix",
+      "item": "kazzix_heartshard",
+      "mobs": ["shardlord_kazzix"]
+    },
+    {
+      "quest": "q_cult_orders",
+      "item": "wyrmcult_orders",
+      "mobs": ["wyrmcult_zealot"]
+    },
+    {
+      "quest": "q_necromancers",
+      "item": "ritual_phylactery",
+      "mobs": ["wyrmcult_necromancer"]
+    },
+    {
+      "quest": "q_nythraxis_restless_dead",
+      "item": "runed_bone_shard",
+      "mobs": ["boneclad_revenant"]
+    },
+    {
+      "quest": "q_nythraxis_sealed_crypt",
+      "item": "captains_crest",
+      "mobs": ["fallen_captain_aldren"]
+    },
+    {
+      "quest": "q_nythraxis_sealed_crypt",
+      "item": "priests_sigil",
+      "mobs": ["corrupted_priest_malric"]
+    },
+    {
+      "quest": "q_nythraxis_sealed_crypt",
+      "item": "royal_seal",
+      "mobs": ["deathstalker_voss"]
+    },
+    {
+      "quest": "q_nythraxis_bound_guardian",
+      "item": "kings_signet",
+      "mobs": ["bound_guardian"]
+    },
+    {
+      "quest": "q_drowned_choir",
+      "item": "drowned_offering",
+      "mobs": ["drowned_votary"]
+    },
+    {
+      "quest": "q_palecoil",
+      "item": "palecoil_heartscale",
+      "mobs": ["sethrael_palecoil"]
+    },
+    {
+      "quest": "q_wisp_lights",
+      "item": "wisp_mote",
+      "mobs": ["glimmerwisp"]
+    },
+    {
+      "quest": "q_veil_thinned",
+      "item": "duskwisp_essence",
+      "mobs": ["duskwisp"]
+    },
+    {
+      "quest": "q_shards_of_starfall",
+      "item": "starfall_shard",
+      "mobs": ["duskwisp"]
+    },
+    {
+      "quest": "q_gleaming_antlers",
+      "item": "gleaming_antler",
+      "mobs": ["veiled_stag"]
+    },
+    {
+      "quest": "q_spore_hearts",
+      "item": "spore_heart",
+      "mobs": ["corrupted_sporeling"]
+    },
+    {
+      "quest": "q_treant_accord",
+      "item": "elder_bark",
+      "mobs": ["treant_elder"]
+    },
+    {
+      "quest": "q_waking_warden",
+      "item": "wardens_seal",
+      "mobs": ["waking_warden"]
+    },
+    {
+      "quest": "q_dk_scales_of_the_maw",
+      "item": "emberwing_scale",
+      "mobs": ["emberwing_drake"]
+    },
+    {
+      "quest": "q_dk_marrow_and_ash",
+      "item": "ashbone_war_brand",
+      "mobs": ["ashbone_raider", "ashbone_warcaller"]
+    },
+    {
+      "quest": "q_fv_winter_pelts",
+      "item": "thick_winter_pelt",
+      "mobs": ["snowdrift_wolf"]
+    },
+    {
+      "quest": "q_fv_aurora_motes",
+      "item": "aurora_mote",
+      "mobs": ["ice_wisp"]
+    },
+    {
+      "quest": "q_af_amber_from_the_herd",
+      "item": "gilded_sap_clot",
+      "mobs": ["gilded_stag"]
+    },
+    {
+      "quest": "q_wf_eels_for_the_smokehouse",
+      "item": "plump_fen_eel",
+      "mobs": ["bogtoad"]
+    },
+    {
+      "quest": "q_wf_wisplight_charms",
+      "item": "wisplight_globe",
+      "mobs": ["lily_wisp"]
+    },
+    {
+      "quest": "q_nb_wool_by_moonlight",
+      "item": "moonfleece_tuft",
+      "mobs": ["moonfleece_grazer"]
+    },
+    {
+      "quest": "q_ww_widows_skeins",
+      "item": "widowsilk_skein",
+      "mobs": ["widowsilk_spinner"]
+    },
+    {
+      "quest": "q_pr_canopy_silk",
+      "item": "canopy_silk_hank",
+      "mobs": ["canopy_weaver"]
+    },
+    {
+      "quest": "q_eg_bloom_clippings",
+      "item": "evergarden_bloom_clipping",
+      "mobs": ["topiary_stag"]
+    },
+    {
+      "quest": "q_eg_stolen_shears",
+      "item": "hedgewick_shears",
+      "mobs": ["hedge_gnome"]
+    },
+    {
+      "quest": "q_gc_wool_off_the_downs",
+      "item": "galecrest_ram_wool",
+      "mobs": ["moor_ram"]
+    },
+    {
+      "quest": "q_fs_moss_and_mending",
+      "item": "farshore_salt_moss",
+      "mobs": ["riftspawn"]
+    },
+    {
+      "quest": "q_fs_steel_for_the_redoubt",
+      "item": "breakscarred_steel",
+      "mobs": ["breach_wretch"]
+    }
+  ]
+}
