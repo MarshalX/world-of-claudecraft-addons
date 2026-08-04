@@ -1,5 +1,5 @@
 {
-  "gameVersion": "0.33.1",
+  "gameVersion": "0.34.0",
   "source": "src/sim/data.ts, src/sim/quest_targets.ts, src/sim/types.ts, src/sim/content/*.ts",
   "zones": [
     {
@@ -227,10 +227,10 @@
       "turnIn": ["brother_aldric"],
       "objectives": [
         {
-          "type": "kill",
+          "type": "collect",
           "count": 8,
-          "label": "Restless Bones laid to rest",
-          "mob": "restless_bones"
+          "label": "Restless Skulls recovered",
+          "item": "restless_skull"
         }
       ]
     },
@@ -699,10 +699,10 @@
       "turnIn": ["warden_fenwick"],
       "objectives": [
         {
-          "type": "kill",
-          "count": 14,
-          "label": "Deepfen Snapper slain",
-          "mob": "deepfen_murloc"
+          "type": "interact",
+          "count": 5,
+          "label": "Mudfin huts burned",
+          "object": "murloc_hut"
         }
       ]
     },
@@ -735,8 +735,8 @@
         {
           "type": "kill",
           "count": 8,
-          "label": "Mirefen Widow slain",
-          "mob": "mire_widow"
+          "label": "Broodmother eggs destroyed",
+          "mob": "spider_egg"
         },
         {
           "type": "kill",
@@ -782,9 +782,9 @@
       "objectives": [
         {
           "type": "kill",
-          "count": 14,
-          "label": "Drowned Dead laid to rest",
-          "mob": "drowned_dead"
+          "count": 1,
+          "label": "The Drowned Warlord slain",
+          "mob": "drowned_warlord"
         }
       ]
     },
@@ -1082,9 +1082,9 @@
       "objectives": [
         {
           "type": "kill",
-          "count": 14,
-          "label": "Thornpeak Ogre slain",
-          "mob": "thornpeak_ogre"
+          "count": 1,
+          "label": "Brakka the Wallbreaker slain",
+          "mob": "brakka_wallbreaker"
         }
       ]
     },
@@ -1179,15 +1179,9 @@
       "turnIn": ["brother_aldric_highwatch"],
       "objectives": [
         {
-          "type": "kill",
-          "count": 8,
-          "label": "Wyrmcult Zealot slain",
-          "mob": "wyrmcult_zealot"
-        },
-        {
           "type": "collect",
-          "count": 4,
-          "label": "Wyrmcult Orders",
+          "count": 1,
+          "label": "Orders from Below",
           "item": "wyrmcult_orders"
         }
       ]
@@ -1199,14 +1193,8 @@
       "turnIn": ["brother_aldric_highwatch"],
       "objectives": [
         {
-          "type": "kill",
-          "count": 8,
-          "label": "Wyrmcult Necromancer slain",
-          "mob": "wyrmcult_necromancer"
-        },
-        {
           "type": "collect",
-          "count": 3,
+          "count": 5,
           "label": "Ritual Phylactery",
           "item": "ritual_phylactery"
         }
@@ -1233,10 +1221,10 @@
       "turnIn": ["captain_thessaly"],
       "objectives": [
         {
-          "type": "kill",
-          "count": 14,
-          "label": "Boneclad Revenant slain",
-          "mob": "boneclad_revenant"
+          "type": "collect",
+          "count": 10,
+          "label": "Vanguard Bone recovered",
+          "item": "vanguard_bone"
         }
       ]
     },
@@ -1276,9 +1264,9 @@
       "objectives": [
         {
           "type": "kill",
-          "count": 10,
-          "label": "Wyrmcult Zealot slain",
-          "mob": "wyrmcult_zealot"
+          "count": 1,
+          "label": "Threnos the First Voice silenced",
+          "mob": "threnos_first_voice"
         },
         {
           "type": "kill",
@@ -3245,6 +3233,18 @@
       "radius": 3
     },
     {
+      "mob": "spider_egg",
+      "x": 70,
+      "z": 300,
+      "radius": 20
+    },
+    {
+      "mob": "spider_egg",
+      "x": 95,
+      "z": 340,
+      "radius": 16
+    },
+    {
       "mob": "drowned_dead",
       "x": 90,
       "z": 420,
@@ -3261,6 +3261,12 @@
       "x": 118,
       "z": 455,
       "radius": 5
+    },
+    {
+      "mob": "drowned_warlord",
+      "x": 98,
+      "z": 432,
+      "radius": 3
     },
     {
       "mob": "fen_troll",
@@ -3383,6 +3389,12 @@
       "radius": 18
     },
     {
+      "mob": "brakka_wallbreaker",
+      "x": -78,
+      "z": 716,
+      "radius": 3
+    },
+    {
       "mob": "ogre_crusher",
       "x": -125,
       "z": 740,
@@ -3435,6 +3447,12 @@
       "x": 40,
       "z": 855,
       "radius": 14
+    },
+    {
+      "mob": "threnos_first_voice",
+      "x": 44,
+      "z": 848,
+      "radius": 3
     },
     {
       "mob": "boneclad_revenant",
@@ -3671,15 +3689,15 @@
       "radius": 8
     },
     {
-      "mob": "emberwing_drake",
+      "mob": "drakemaw_broodlord",
       "x": 419,
       "z": 2266,
       "radius": 8
     },
     {
-      "mob": "emberwing_drake",
-      "x": 302,
-      "z": 2258,
+      "mob": "drakemaw_broodlord",
+      "x": 288,
+      "z": 2278,
       "radius": 8
     },
     {
@@ -4067,9 +4085,9 @@
       "radius": 8
     },
     {
-      "mob": "emberwing_drake",
-      "x": 322,
-      "z": 2252,
+      "mob": "drakemaw_broodlord",
+      "x": 352,
+      "z": 2352,
       "radius": 8
     },
     {
@@ -4161,6 +4179,144 @@
       "x": 396,
       "z": 971.5,
       "radius": 3
+    },
+    {
+      "mob": "drakemaw_broodlord",
+      "x": 458,
+      "z": 2302,
+      "radius": 8
+    },
+    {
+      "mob": "dragonkin_egg",
+      "x": 419,
+      "z": 2266,
+      "radius": 9
+    },
+    {
+      "mob": "dragonkin_egg",
+      "x": 288,
+      "z": 2278,
+      "radius": 9
+    },
+    {
+      "mob": "dragonkin_egg",
+      "x": 352,
+      "z": 2352,
+      "radius": 9
+    },
+    {
+      "mob": "dragonkin_egg",
+      "x": 458,
+      "z": 2302,
+      "radius": 9
+    },
+    {
+      "mob": "dragonkin_egg",
+      "x": 436,
+      "z": 2348,
+      "radius": 10
+    },
+    {
+      "mob": "dragonkin_egg",
+      "x": 404,
+      "z": 2318,
+      "radius": 10
+    },
+    {
+      "mob": "dragonkin_egg",
+      "x": 330,
+      "z": 2300,
+      "radius": 12
+    },
+    {
+      "mob": "dragonkin_egg",
+      "x": 430,
+      "z": 2380,
+      "radius": 12
+    },
+    {
+      "mob": "dragonkin_broodguard",
+      "x": 378,
+      "z": 2242,
+      "radius": 9
+    },
+    {
+      "mob": "dragonkin_broodguard",
+      "x": 392,
+      "z": 2296,
+      "radius": 9
+    },
+    {
+      "mob": "dragonkin_broodguard",
+      "x": 352,
+      "z": 2282,
+      "radius": 8
+    },
+    {
+      "mob": "dragonkin_broodguard",
+      "x": 418,
+      "z": 2338,
+      "radius": 8
+    },
+    {
+      "mob": "dragonkin_broodguard",
+      "x": 302,
+      "z": 2302,
+      "radius": 9
+    },
+    {
+      "mob": "dragonkin_broodguard",
+      "x": 268,
+      "z": 2252,
+      "radius": 8
+    },
+    {
+      "mob": "dragonkin_broodguard",
+      "x": 438,
+      "z": 2384,
+      "radius": 8
+    },
+    {
+      "mob": "dragonkin_egg",
+      "x": 372,
+      "z": 2242,
+      "radius": 7
+    },
+    {
+      "mob": "dragonkin_egg",
+      "x": 401,
+      "z": 2303,
+      "radius": 7
+    },
+    {
+      "mob": "dragonkin_egg",
+      "x": 344,
+      "z": 2286,
+      "radius": 6
+    },
+    {
+      "mob": "dragonkin_egg",
+      "x": 421,
+      "z": 2334,
+      "radius": 7
+    },
+    {
+      "mob": "dragonkin_egg",
+      "x": 306,
+      "z": 2308,
+      "radius": 7
+    },
+    {
+      "mob": "dragonkin_egg",
+      "x": 264,
+      "z": 2258,
+      "radius": 7
+    },
+    {
+      "mob": "dragonkin_egg",
+      "x": 441,
+      "z": 2380,
+      "radius": 7
     }
   ],
   "objects": [
@@ -4181,8 +4337,12 @@
       "positions": [[78, 86]]
     },
     {
+      "item": "murloc_hut",
+      "positions": [[-78, 269], [-83, 266], [-74, 275], [-117, 346], [-123, 354]]
+    },
+    {
       "item": "fen_muster_order",
-      "positions": [[1, 294], [-2, 297]]
+      "positions": [[-3.75, 274.8], [3.75, 274.8]]
     },
     {
       "item": "lost_caravan_goods",
@@ -4435,50 +4595,50 @@
     {
       "id": "warden_fenwick",
       "name": "Warden Fenwick",
-      "x": 3,
-      "z": 304
+      "x": 4.824455435060822,
+      "z": 285.6503188335003
     },
     {
       "id": "brother_aldric_fen",
       "name": "Brother Aldric",
-      "x": -8,
-      "z": 296
+      "x": -14.960203077497741,
+      "z": 296.09529088730875
     },
     {
       "id": "provisioner_hale",
       "name": "Provisioner Hale",
-      "x": -4,
-      "z": 308
+      "x": -12.424844495021249,
+      "z": 314.94714794895896
     },
     {
       "id": "herbalist_yara",
       "name": "Herbalist Yara",
-      "x": 10,
-      "z": 295
+      "x": 14.020226082985031,
+      "z": 293.9419887666108
     },
     {
       "id": "scout_maren",
       "name": "Scout Maren",
-      "x": 6,
-      "z": 312
+      "x": -12.942629598286846,
+      "z": 320.2950179409249
     },
     {
       "id": "bursar_petra_vell",
       "name": "Bursar Petra Vell",
-      "x": 9,
-      "z": 303
+      "x": 15.101663970557492,
+      "z": 306.79285357068125
     },
     {
       "id": "chronicler_osric_fenn",
       "name": "Chronicler Osric Fenn",
-      "x": -14,
-      "z": 303
+      "x": -15.965942703405933,
+      "z": 298.27439341010984
     },
     {
       "id": "tanner_hesk",
       "name": "Tanner Hesk",
-      "x": -11,
-      "z": 315.5
+      "x": 3.053383957289929,
+      "z": 315.5600325924389
     },
     {
       "id": "captain_thessaly",
@@ -4879,6 +5039,24 @@
       "z": -57
     },
     {
+      "type": "ore",
+      "item": "copper_ore",
+      "x": -92,
+      "z": -48
+    },
+    {
+      "type": "ore",
+      "item": "copper_ore",
+      "x": -87,
+      "z": -45
+    },
+    {
+      "type": "ore",
+      "item": "copper_ore",
+      "x": -65,
+      "z": -69
+    },
+    {
       "type": "wood",
       "item": "ironbark_log",
       "x": -62,
@@ -4897,22 +5075,58 @@
       "z": 18
     },
     {
-      "type": "herb",
-      "item": "silverleaf_herb",
-      "x": -86,
-      "z": 90
+      "type": "wood",
+      "item": "ironbark_log",
+      "x": 25,
+      "z": 101
+    },
+    {
+      "type": "wood",
+      "item": "ironbark_log",
+      "x": 7,
+      "z": 140
+    },
+    {
+      "type": "wood",
+      "item": "ironbark_log",
+      "x": 85,
+      "z": 140
     },
     {
       "type": "herb",
       "item": "silverleaf_herb",
-      "x": -92,
-      "z": 80
+      "x": -59,
+      "z": 91
     },
     {
       "type": "herb",
       "item": "silverleaf_herb",
-      "x": -80,
-      "z": 95
+      "x": -57,
+      "z": 82
+    },
+    {
+      "type": "herb",
+      "item": "silverleaf_herb",
+      "x": -58,
+      "z": 99
+    },
+    {
+      "type": "herb",
+      "item": "silverleaf_herb",
+      "x": 23,
+      "z": -99
+    },
+    {
+      "type": "herb",
+      "item": "silverleaf_herb",
+      "x": 89,
+      "z": -27
+    },
+    {
+      "type": "herb",
+      "item": "silverleaf_herb",
+      "x": 99,
+      "z": 57
     },
     {
       "type": "ore",
@@ -4933,10 +5147,16 @@
       "z": 345
     },
     {
+      "type": "ore",
+      "item": "iron_ore",
+      "x": 111,
+      "z": 431
+    },
+    {
       "type": "wood",
       "item": "ashwood_log",
-      "x": 10,
-      "z": 330
+      "x": 20,
+      "z": 375
     },
     {
       "type": "wood",
@@ -4947,26 +5167,38 @@
     {
       "type": "wood",
       "item": "ashwood_log",
-      "x": -20,
-      "z": 315
+      "x": -42,
+      "z": 355
+    },
+    {
+      "type": "wood",
+      "item": "ashwood_log",
+      "x": -15,
+      "z": 237
     },
     {
       "type": "herb",
       "item": "goldleaf_herb",
-      "x": 60,
-      "z": 385
+      "x": 29,
+      "z": 395
     },
     {
       "type": "herb",
       "item": "goldleaf_herb",
-      "x": -45,
-      "z": 452
+      "x": -66,
+      "z": 458
     },
     {
       "type": "herb",
       "item": "goldleaf_herb",
       "x": 30,
       "z": 355
+    },
+    {
+      "type": "herb",
+      "item": "goldleaf_herb",
+      "x": -88,
+      "z": 272
     },
     {
       "type": "ore",
@@ -4983,8 +5215,8 @@
     {
       "type": "wood",
       "item": "elderwood_log",
-      "x": -55,
-      "z": 765
+      "x": -63,
+      "z": 771
     },
     {
       "type": "wood",
@@ -5007,20 +5239,38 @@
     {
       "type": "ore",
       "item": "iron_ore",
-      "x": 48,
-      "z": 352
+      "x": 36,
+      "z": 350
+    },
+    {
+      "type": "ore",
+      "item": "iron_ore",
+      "x": 45,
+      "z": 491
     },
     {
       "type": "wood",
       "item": "ashwood_log",
-      "x": 2,
-      "z": 342
+      "x": -10,
+      "z": 340
+    },
+    {
+      "type": "wood",
+      "item": "ashwood_log",
+      "x": 102,
+      "z": 292
     },
     {
       "type": "herb",
       "item": "goldleaf_herb",
-      "x": 52,
-      "z": 396
+      "x": 34,
+      "z": 406
+    },
+    {
+      "type": "herb",
+      "item": "goldleaf_herb",
+      "x": -114,
+      "z": 412
     },
     {
       "type": "ore",
@@ -5031,8 +5281,20 @@
     {
       "type": "ore",
       "item": "thorium_ore",
+      "x": -54,
+      "z": 602
+    },
+    {
+      "type": "ore",
+      "item": "thorium_ore",
       "x": 70,
       "z": 640
+    },
+    {
+      "type": "ore",
+      "item": "thorium_ore",
+      "x": 110,
+      "z": 780
     },
     {
       "type": "wood",
@@ -5043,8 +5305,20 @@
     {
       "type": "wood",
       "item": "elderwood_log",
+      "x": -130,
+      "z": 716
+    },
+    {
+      "type": "wood",
+      "item": "elderwood_log",
       "x": -92,
       "z": 793
+    },
+    {
+      "type": "wood",
+      "item": "elderwood_log",
+      "x": -34,
+      "z": 850
     },
     {
       "type": "herb",
@@ -5055,8 +5329,20 @@
     {
       "type": "herb",
       "item": "sunpetal_herb",
+      "x": -106,
+      "z": 694
+    },
+    {
+      "type": "herb",
+      "item": "sunpetal_herb",
       "x": -28,
       "z": 690
+    },
+    {
+      "type": "herb",
+      "item": "sunpetal_herb",
+      "x": 51,
+      "z": 834
     },
     {
       "type": "ore",
@@ -5151,8 +5437,8 @@
     {
       "type": "wood",
       "item": "elderwood_log",
-      "x": -60,
-      "z": 1522
+      "x": -54,
+      "z": 1518
     },
     {
       "type": "herb",
@@ -5194,18 +5480,18 @@
       "type": "herb",
       "item": "sunpetal_herb",
       "x": -342,
-      "z": 2116
+      "z": 2110
     },
     {
       "type": "herb",
       "item": "sunpetal_herb",
-      "x": -374,
-      "z": 2124
+      "x": -388,
+      "z": 2110
     },
     {
       "type": "ore",
       "item": "thorium_ore",
-      "x": -322,
+      "x": -318,
       "z": 336
     },
     {
@@ -5223,8 +5509,8 @@
     {
       "type": "wood",
       "item": "elderwood_log",
-      "x": -390,
-      "z": 324
+      "x": -392,
+      "z": 322
     },
     {
       "type": "herb",
@@ -5237,6 +5523,78 @@
       "item": "sunpetal_herb",
       "x": -374,
       "z": 414
+    },
+    {
+      "type": "ore",
+      "item": "thorium_ore",
+      "x": -470,
+      "z": 330
+    },
+    {
+      "type": "ore",
+      "item": "thorium_ore",
+      "x": -251,
+      "z": 268
+    },
+    {
+      "type": "ore",
+      "item": "thorium_ore",
+      "x": -384,
+      "z": 512
+    },
+    {
+      "type": "ore",
+      "item": "thorium_ore",
+      "x": -358,
+      "z": 604
+    },
+    {
+      "type": "wood",
+      "item": "elderwood_log",
+      "x": -458,
+      "z": 264
+    },
+    {
+      "type": "wood",
+      "item": "elderwood_log",
+      "x": -232,
+      "z": 420
+    },
+    {
+      "type": "wood",
+      "item": "elderwood_log",
+      "x": -251,
+      "z": 504
+    },
+    {
+      "type": "wood",
+      "item": "elderwood_log",
+      "x": -417,
+      "z": 580
+    },
+    {
+      "type": "herb",
+      "item": "sunpetal_herb",
+      "x": -296,
+      "z": 332
+    },
+    {
+      "type": "herb",
+      "item": "sunpetal_herb",
+      "x": -452,
+      "z": 438
+    },
+    {
+      "type": "herb",
+      "item": "sunpetal_herb",
+      "x": -322,
+      "z": 588
+    },
+    {
+      "type": "herb",
+      "item": "sunpetal_herb",
+      "x": -330,
+      "z": 240
     },
     {
       "type": "ore",
@@ -5337,14 +5695,86 @@
     {
       "type": "herb",
       "item": "sunpetal_herb",
-      "x": 438,
-      "z": 404
+      "x": 448,
+      "z": 400
     },
     {
       "type": "herb",
       "item": "sunpetal_herb",
       "x": 406,
       "z": 412
+    },
+    {
+      "type": "ore",
+      "item": "thorium_ore",
+      "x": 474,
+      "z": 298
+    },
+    {
+      "type": "ore",
+      "item": "thorium_ore",
+      "x": 420,
+      "z": 470
+    },
+    {
+      "type": "ore",
+      "item": "thorium_ore",
+      "x": 330,
+      "z": 600
+    },
+    {
+      "type": "ore",
+      "item": "thorium_ore",
+      "x": 232,
+      "z": 300
+    },
+    {
+      "type": "wood",
+      "item": "elderwood_log",
+      "x": 250,
+      "z": 432
+    },
+    {
+      "type": "wood",
+      "item": "elderwood_log",
+      "x": 350,
+      "z": 480
+    },
+    {
+      "type": "wood",
+      "item": "elderwood_log",
+      "x": 250,
+      "z": 648
+    },
+    {
+      "type": "wood",
+      "item": "elderwood_log",
+      "x": 452,
+      "z": 600
+    },
+    {
+      "type": "herb",
+      "item": "sunpetal_herb",
+      "x": 326,
+      "z": 566
+    },
+    {
+      "type": "herb",
+      "item": "sunpetal_herb",
+      "x": 240,
+      "z": 352
+    },
+    {
+      "type": "herb",
+      "item": "sunpetal_herb",
+      "x": 420,
+      "z": 650
+    },
+    {
+      "type": "herb",
+      "item": "sunpetal_herb",
+      "x": 484,
+      "z": 330
     },
     {
       "type": "ore",
@@ -5385,8 +5815,8 @@
     {
       "type": "ore",
       "item": "thorium_ore",
-      "x": 358,
-      "z": 784
+      "x": 354,
+      "z": 780
     },
     {
       "type": "ore",
@@ -5415,8 +5845,8 @@
     {
       "type": "herb",
       "item": "sunpetal_herb",
-      "x": 306,
-      "z": 862
+      "x": 302,
+      "z": 866
     },
     {
       "type": "ore",
@@ -5433,8 +5863,8 @@
     {
       "type": "wood",
       "item": "ashwood_log",
-      "x": 263,
-      "z": 92
+      "x": 259,
+      "z": 96
     },
     {
       "type": "wood",
@@ -5453,6 +5883,78 @@
       "item": "goldleaf_herb",
       "x": 291,
       "z": 122
+    },
+    {
+      "type": "ore",
+      "item": "iron_ore",
+      "x": 232,
+      "z": 30
+    },
+    {
+      "type": "ore",
+      "item": "iron_ore",
+      "x": 352,
+      "z": -48
+    },
+    {
+      "type": "ore",
+      "item": "iron_ore",
+      "x": 430,
+      "z": -90
+    },
+    {
+      "type": "ore",
+      "item": "iron_ore",
+      "x": 450,
+      "z": 93
+    },
+    {
+      "type": "wood",
+      "item": "ashwood_log",
+      "x": 279,
+      "z": -44
+    },
+    {
+      "type": "wood",
+      "item": "ashwood_log",
+      "x": 330,
+      "z": -70
+    },
+    {
+      "type": "wood",
+      "item": "ashwood_log",
+      "x": 386,
+      "z": 120
+    },
+    {
+      "type": "wood",
+      "item": "ashwood_log",
+      "x": 210,
+      "z": -24
+    },
+    {
+      "type": "herb",
+      "item": "goldleaf_herb",
+      "x": 245,
+      "z": 55
+    },
+    {
+      "type": "herb",
+      "item": "goldleaf_herb",
+      "x": 358,
+      "z": 138
+    },
+    {
+      "type": "herb",
+      "item": "goldleaf_herb",
+      "x": 295,
+      "z": -55
+    },
+    {
+      "type": "herb",
+      "item": "goldleaf_herb",
+      "x": 430,
+      "z": 8
     }
   ],
   "escorts": [
@@ -5501,6 +6003,11 @@
     {
       "quest": "q_rite",
       "item": "ghostly_essence",
+      "mobs": ["restless_bones"]
+    },
+    {
+      "quest": "q_bones",
+      "item": "restless_skull",
       "mobs": ["restless_bones"]
     },
     {
@@ -5579,6 +6086,11 @@
       "mobs": ["boneclad_revenant"]
     },
     {
+      "quest": "q_revenant_vanguard",
+      "item": "vanguard_bone",
+      "mobs": ["boneclad_revenant"]
+    },
+    {
       "quest": "q_nythraxis_sealed_crypt",
       "item": "captains_crest",
       "mobs": ["fallen_captain_aldren"]
@@ -5646,7 +6158,7 @@
     {
       "quest": "q_dk_scales_of_the_maw",
       "item": "emberwing_scale",
-      "mobs": ["emberwing_drake"]
+      "mobs": ["emberwing_drake", "dragonkin_broodguard", "drakemaw_broodlord"]
     },
     {
       "quest": "q_dk_marrow_and_ash",

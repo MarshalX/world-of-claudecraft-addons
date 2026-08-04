@@ -123,8 +123,33 @@ export interface ChatEvent extends PersonalEvent {
   classId?: string;
 }
 
+/**
+ * You died, carrying the recap the game builds its death screen from.
+ *
+ * The two fields are independent, and a recap has to handle each missing on its
+ * own. Fall damage has no killer entity to name and still arrives with
+ * `killerAbility` set, and a cause the sim could not resolve at all leaves both
+ * absent, which is the case that needs a line of its own.
+ */
 export interface PlayerDeathEvent extends PersonalEvent {
   type: 'playerDeath';
+  /**
+   * The entity that landed the kill, BY ID rather than by name.
+   *
+   * Resolve it like any other event's entity, through `world.unit` or
+   * `world.entities`, which also means it can name one that has already left your
+   * interest scope by the time you read this. Absent for an untracked source.
+   */
+  killerId?: number;
+  /**
+   * What killed you, as raw English, and a CAUSE rather than only an ability:
+   * environmental damage arrives here as 'Falling'.
+   *
+   * A display label like `DamageEvent.ability` and not an id, so the same
+   * divergence applies to it and `world.abilities.byName` is the only route back
+   * to an id, for an ability you happen to know.
+   */
+  killerAbility?: string;
 }
 
 export interface RespawnEvent extends PersonalEvent {
@@ -159,6 +184,15 @@ export interface GatherResultEvent extends PersonalEvent {
   qty: number;
   /** Null rather than absent when the harvest triggered nothing special. */
   rareEvent: string | null;
+  /**
+   * This harvest spent the LAST charge of the slotted tool effect.
+   *
+   * Present, and only ever true, on that one harvest and on no other, so an addon
+   * can say the effect expired rather than leaving the player to work out why it
+   * stopped helping. Absent on every other harvest, the ones that spent the
+   * earlier charges included.
+   */
+  effectDepleted?: true;
 }
 
 /** Asks the client to open a window. Carries nothing else. */

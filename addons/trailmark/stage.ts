@@ -22,7 +22,7 @@
 //
 // THE PIN REACH IS 160 YARDS FOR THE SAME REASON, and it is what decides which of the
 // four quests is the one with pins. Both boar camps are inside it at 105 and 147; the
-// Mirefen rows at 180 and the turn-in at 203 are outside, so they are listed with a
+// Mirefen rows at 180 and the turn-in at 213 are outside, so they are listed with a
 // zone and a distance and nothing is drawn over the world for them. The default 400
 // would also reach the wolf camps west of here, which land off the side of the view.
 //
@@ -33,10 +33,19 @@
 // drawn as the lower bound it is, 2/6+ and warm. A quest with two objectives is the
 // only place those two readings sit next to each other under one name.
 //
-// THE FORGE WORK ORDER IS THE ROW THAT ADMITS DEFEAT. Copper ore is a gathering
-// material, so nothing drops it tagged for that quest and no crate of it is placed:
-// the game's own map draws nothing for it either. The row says so in words rather
-// than pinning somewhere plausible, which is the whole of what this addon refuses.
+// THE CODFATHER IS THE ROW THAT ADMITS DEFEAT. It is a FISH, and fishing has no world
+// node anywhere in the game, so no mob drops it, no crate holds it and no gathering
+// node yields it: the game's own map draws nothing for it either. The row says so in
+// words rather than pinning somewhere plausible, which is the whole of what this addon
+// refuses.
+//
+// It used to be the Forge Work Order, and that row stopped refusing. Game 0.34.0 added
+// the node-yield arm to the collect branch of `questObjectiveAreas`, so a work order
+// asking for copper ore now resolves to the veins and this addon follows it. A
+// scenario demonstrating honest refusal has to name something the game cannot answer
+// EITHER, and a fishing catch is that for a structural reason rather than a temporary
+// one: the refusal cannot be fixed out from under the picture by a later content pass
+// the way the work order's was.
 
 import type { Scenario, Stage, WorldDraft } from '../../stage/src/stage.ts';
 import { eventsFrame } from '../../tests/fakes/frames.ts';
@@ -48,7 +57,7 @@ const TABLE_FILE = 'quests.json';
 const PELTS = 'q_prowler_pelts';
 const BOARS = 'q_boars';
 const WIDOWS = 'q_widows';
-const WORK_ORDER = 'q_prof_workorder_forge';
+const CODFATHER = 'q_the_codfather';
 
 /**
  * Where this is photographed from: level with the boar camps, north of both.
@@ -112,7 +121,7 @@ function aWorkedLog(draft: WorldDraft): void {
       progress(PELTS, [8], 'ready'),
       progress(BOARS, [3]),
       progress(WIDOWS, [4, 2]),
-      progress(WORK_ORDER, [3]),
+      progress(CODFATHER, [0]),
     ]),
   );
   draft.set(draft.world, 'questsDone', new Set<string>());
@@ -143,14 +152,14 @@ async function halfWorkedThrough(stage: Stage): Promise<void> {
   await stage.settle();
   learn(stage, BOARS, 0, 5);
   learn(stage, WIDOWS, 0, 10);
-  learn(stage, WORK_ORDER, 0, 8);
+  learn(stage, CODFATHER, 0, 1);
   stage.poll();
   await stage.settle();
   stage.frame();
 }
 
 const LOG_ALT =
-  'a panel headed Trailmark listing five outstanding quest objectives as filling bars, with two pins hanging over the world below it. Every row carries a zone, a distance in yards and an arrow for the way to turn to reach it. The first row is a quest with nothing left to do, Pelts for the Causeway, its bar full and reading Ready, with Hand in to Provisioner Hale as its heading and Mirefen Marsh, 203 yd behind you underneath; it carries no picture, because the game ships no portrait for that NPC. Then Bristly Boar Hide at 3 of 5, in Eastbrook Vale 105 yards straight ahead; Mirefen Widow slain at 4 of 10 and Widow Venom Sac at 2 of 6, both 180 yards back the other way in Mirefen Marsh, a zone this character has never entered and where nothing at all is in scope. The venom sac row is drawn in a warm amber and its figure carries a plus, which is this addon saying the count is the shipped definition and therefore a lower bound, until the server says otherwise. The last row, Copper Ore delivered at 3 of 8 for the Forge Work Order, reads Nowhere on the map where the others name a zone, a distance and a direction: copper ore is a gathering material, nothing drops it tagged for that quest and no crate of it is placed, so the honest answer is that there is nowhere to point at. Below the panel, two square pins carrying the boar hide art stand over the two camps that drop it, the nearer one hanging lower in the view than the one another forty yards beyond it.';
+  "a panel headed Trailmark listing five outstanding quest objectives as filling bars, with two pins hanging over the world below it. Every row carries a zone, a distance in yards and an arrow for the way to turn to reach it. The first row is a quest with nothing left to do, Pelts for the Causeway, its bar full and reading Ready, with Hand in to Provisioner Hale as its heading and Mirefen Marsh, 213 yd down and to the left underneath; it carries no picture, because the game ships no portrait for that NPC and the empty slot is closed up rather than left blank. Then Bristly Boar Hide at 3 of 5, in Eastbrook Vale 105 yards straight ahead, carrying the game art for the hide; Mirefen Widow slain at 4 of 10 behind that widow's own portrait, and Widow Venom Sac at 2 of 6, both 180 yards straight back in Mirefen Marsh, a zone this character has never entered and where nothing at all is in scope. The venom sac row is drawn in a warm amber and its figure carries a plus, which is this addon saying the count is the shipped definition and therefore a lower bound, until the server says otherwise. The last row, The Codfather at 0 of 1, reads Nowhere on the map where the others name a zone, a distance and a direction: the Codfather is a fish, and fishing has no world node anywhere in the game to point at, so no mob drops it, no crate holds it and the honest answer is that there is nowhere to send you. The row still carries the fish's own art, which is the shape of the whole limit: the game knows exactly what the thing looks like and cannot say where it is. Below the panel, two square pins carrying the boar hide art stand over the two camps that drop it, the nearer one hanging lower in the view than the one another forty yards beyond it.";
 
 const SCENARIOS: readonly Scenario[] = [
   {

@@ -21,11 +21,13 @@ import type { SoundApi } from '../loader/src/runtime/api/sound.ts';
 import type { AddonStorageApi } from '../loader/src/runtime/api/storage.ts';
 import type { UiApi } from '../loader/src/runtime/api/ui.ts';
 import type { WorldApi } from '../loader/src/runtime/api/world.ts';
+import type { EventPayloads } from '../loader/src/runtime/net/events.ts';
 import type { Entity } from '../loader/src/runtime/world/game-types.ts';
 import type { WorldKey } from '../loader/src/runtime/world/signature.ts';
 import type { WorldValues } from '../loader/src/runtime/world/values.ts';
 import type { GameInfo } from '../packages/types/addon.js';
 import type { Entity as PublicEntity } from '../packages/types/entity.js';
+import type { EventPayloads as PublicEventPayloads } from '../packages/types/events.js';
 import type { WocApi as PublicWocApi } from '../packages/types/index.js';
 import type { KeysApi as PublicKeysApi } from '../packages/types/keys.js';
 import type { NetApi as PublicNetApi } from '../packages/types/net.js';
@@ -47,6 +49,29 @@ import type {
  */
 type Assignable<From, To> = [From] extends [To] ? true : false;
 
+/**
+ * Which field NAMES a record carries, which assignability alone cannot compare.
+ *
+ * Two-way `Assignable` is blind to an OPTIONAL field present on one side only: the
+ * extra field leaves the record assignable in both directions, so a field added to
+ * one catalogue and forgotten in the other typechecks clean. Measured rather than
+ * assumed, on the 0.34.0 pass that added these fields: deleting `effectDepleted`
+ * from the published `gatherResult`, and `abilityId` from the published `damage`,
+ * each left `tsc --noEmit` green while the loader still declared them. Comparing
+ * key sets is what sees it, and it matters because every field the game has added
+ * to an existing event so far has arrived optional.
+ */
+type SameFields<A, B> = [keyof A, keyof B] extends [keyof B, keyof A] ? true : false;
+
+/** The kinds whose two declarations disagree about which fields exist. */
+type EventFieldDrift = {
+  [K in keyof EventPayloads]: K extends keyof PublicEventPayloads
+    ? SameFields<EventPayloads[K], PublicEventPayloads[K]> extends true
+      ? never
+      : K
+    : K;
+}[keyof EventPayloads];
+
 /** Each of these is a compile error the moment the two shapes disagree. */
 const uiIsPublished: Assignable<UiApi, PublicUiApi> = true;
 const publishedIsUi: Assignable<PublicUiApi, UiApi> = true;
@@ -59,6 +84,19 @@ const publishedIsUi: Assignable<PublicUiApi, UiApi> = true;
  */
 const netIsPublished: Assignable<NetApi, PublicNetApi> = true;
 const publishedIsNet: Assignable<PublicNetApi, NetApi> = true;
+
+/**
+ * The event catalogues field by field, which the two checks above do not reach.
+ *
+ * They compare the catalogues only through `onEvent`, which is enough for a kind
+ * appearing on one side and for a field whose TYPE moved (dropping `'evade'` from
+ * the published `DamageKind` fails `netIsPublished`), and is not enough for a
+ * field being added to one side alone. Both halves are pinned here: the kind sets
+ * against each other, then every record's fields.
+ */
+const kindsArePublished: Assignable<keyof EventPayloads, keyof PublicEventPayloads> = true;
+const publishedAreKinds: Assignable<keyof PublicEventPayloads, keyof EventPayloads> = true;
+const noEventFieldDrift: Assignable<EventFieldDrift, never> = true;
 
 const soundIsPublished: Assignable<SoundApi, PublicSoundApi> = true;
 const publishedIsSound: Assignable<PublicSoundApi, SoundApi> = true;
@@ -164,6 +202,10 @@ describe('the published types', () => {
       worldIsPublished,
       publishedIsWorld,
     ]).not.toContain(false);
+  });
+
+  it('describe the same event kinds, carrying the same fields', () => {
+    expect([kindsArePublished, publishedAreKinds, noEventFieldDrift]).not.toContain(false);
   });
 
   it('describe the world shapes and the keys that watch them', () => {

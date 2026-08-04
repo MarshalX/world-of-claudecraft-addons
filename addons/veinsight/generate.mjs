@@ -16,7 +16,9 @@
 //                                         the order the three types are listed in
 //   src/sim/content/items.ts              every item whose `use` is a gatherTool
 //   src/sim/professions/gathering.ts      NODE_TYPE_BY_PROFESSION, which is what
-//                                         files a tool under the node type it opens
+//                                         files a tool under the node type it opens,
+//                                         and NODE_HARVEST_TABLE for the respawn
+//                                         length of each type
 //   src/sim/data.ts                       the ZONES array, for the canonical order
 //   src/sim/content/*.ts                  every `ZoneDef` export, for id and name
 //
@@ -67,7 +69,7 @@ const CONTENT_DIR = 'src/sim/content';
 
 /** Every count the shipped table is expected to carry, asserted after the parse. */
 const EXPECTED_TYPES = 3;
-const EXPECTED_NODES = 99;
+const EXPECTED_NODES = 156;
 const EXPECTED_ZONES = 14;
 const EXPECTED_TOOLS = 15;
 
@@ -93,6 +95,8 @@ const TOOL_USE_RE = /use:\s*\{\s*type:\s*'gatherTool',\s*professionId:\s*'(\w+)'
 const ITEM_ID_RE = /id:\s*'([\w]+)'/g;
 /** One `mining: 'ore'` line of NODE_TYPE_BY_PROFESSION. */
 const PROFESSION_TYPE_RE = /^\s*(\w+):\s*'(\w+)',/gm;
+/** One `ore: { professionId: 'mining', respawnSeconds: N }` row of NODE_HARVEST_TABLE. */
+const RESPAWN_RE = /(\w+):\s*\{[^{}]*respawnSeconds:\s*(\d+)\s*\}/g;
 /** A bare identifier on its own line, which is how the ZONES array is written. */
 const ZONE_MEMBER_RE = /^\s*([A-Z][A-Z0-9_]*),\s*$/gm;
 /** A zone's own declaration, wherever in `src/sim/content` it happens to live. */
@@ -281,6 +285,36 @@ function readTypeByProfession(source) {
   return map;
 }
 
+/**
+ * Seconds each node type takes to come back, out of the game's own NODE_HARVEST_TABLE.
+ *
+ * Read rather than written down for the reason the tool tiers are: it is a TUNING
+ * figure, so it moves on a content pass with nothing to announce it. Game 0.34.0
+ * doubled it from 120 to 240 alongside the density pass, and while the addon carried
+ * its own 120 every node with over two minutes left drew a bar pinned at full.
+ *
+ * Emitted per type even though all three currently agree, because the game's table is
+ * keyed per type: collapsing them to one number here would be this file deciding they
+ * are the same question, and the next tune that splits them would go unnoticed.
+ */
+function readRespawnSeconds(source, types) {
+  const literal = objectAfter(source, 'export const NODE_HARVEST_TABLE', GATHERING_FILE);
+  const found = new Map();
+  RESPAWN_RE.lastIndex = NONE;
+  for (const row of literal.matchAll(RESPAWN_RE)) {
+    found.set(row[ONE], Number(row[2]));
+  }
+  const byType = {};
+  for (const type of types) {
+    const seconds = found.get(type);
+    if (seconds === undefined || Number.isNaN(seconds)) {
+      fail(`${GATHERING_FILE}: NODE_HARVEST_TABLE carries no respawnSeconds for ${type}`);
+    }
+    byType[type] = seconds;
+  }
+  return byType;
+}
+
 /** The item id nearest above `before`, which is the item a `use` belongs to. */
 function itemIdBefore(source, before) {
   let found = null;
@@ -396,12 +430,12 @@ function build(root) {
   const gameVersion = checkoutVersion(root);
   const nodeSource = readOrFail(join(root, NODES_FILE), 'the node table');
   const types = readTypes(nodeSource);
-  const typeByProfession = readTypeByProfession(
-    readOrFail(join(root, GATHERING_FILE), 'the profession map'),
-  );
+  const gatheringSource = readOrFail(join(root, GATHERING_FILE), 'the profession map');
+  const typeByProfession = readTypeByProfession(gatheringSource);
   const tools = readTools(readOrFail(join(root, ITEMS_FILE), 'the item table'), typeByProfession);
   const table = {
     gameVersion,
+    respawnSeconds: readRespawnSeconds(gatheringSource, types),
     zones: readZones(root, readOrFail(join(root, DATA_FILE), 'the zone list')),
     tools: sortTools(tools, types),
     nodes: readNodes(nodeSource),

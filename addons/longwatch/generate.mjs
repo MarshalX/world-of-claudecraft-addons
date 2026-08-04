@@ -25,12 +25,31 @@
 // modules and the respawn resolution is a function with a precedence order, not a
 // literal. Running that function is the only way to be right about it.
 //
-// WHICH RARES SHIP, and it is a MECHANICAL test rather than a curated list. A rare
-// with no camp has nowhere to be waited for, so a countdown for it would be a number
-// with nothing behind it. Today that is exactly four of the game's twenty-three:
-// three summoned by the Nythraxis crypt encounter and one miniboss inside a dungeon
-// instance. Nothing here names them, because `CAMPS` already says which those are and
-// a hand-kept exclusion list would go stale the day one gains a camp.
+// WHICH RARES SHIP, and it is a MECHANICAL test rather than a curated list. Two
+// things leave a rare out, and the second is not a smaller version of the first.
+//
+// NO CAMP means nowhere to be waited for, so a countdown would be a number with
+// nothing behind it. That is four of the game's twenty-four: three summoned by the
+// Nythraxis crypt encounter and one miniboss inside a dungeon instance.
+//
+// NO COVERED ZONE means the rare stands outside the four zones `main.js` resolves a
+// position against, so its row could never pass that filter whatever shape it had.
+// That is one, `drakemaw_broodlord`, added in game 0.34.0. It is SKIPPED AND NAMED on
+// stdout rather than failing the run, because leaving it out is a decision somebody
+// made rather than a defect, and a generator that refused every release would be run
+// once. Nineteen ship.
+//
+// Nothing here names any of the five. `CAMPS` says which rares have a home and
+// `ZONES` says which of those this addon can place, so the day one of the four gains
+// a camp, or the day this addon gains a fifth zone, the roster follows with no edit.
+//
+// SCOPE IS JUDGED BEFORE ROSTER SHAPE, and the order is load-bearing rather than
+// tidy. `drakemaw_broodlord` trips the one-camp guard below AND the zone filter, and
+// judging shape first stopped the whole run to report a roster problem about a rare
+// this addon was never going to carry: the message named four camps when the fact
+// that mattered was a fifth zone. Scope first means every shape guard below speaks
+// only about rares that would otherwise have shipped, which is the only thing that
+// keeps those guards worth reading.
 //
 // THE NAME IS CROSS-CHECKED RATHER THAN CHOSEN. `MOBS[id].name` and the catalogue's
 // `entities.mobs[id].name` both exist, and today all 221 agree. That is not a given:
@@ -42,13 +61,14 @@
 //
 // WHAT A GAME RELEASE COULD INVALIDATE, each of which fails loudly:
 //
-//  - A rare gains a SECOND camp. The shipped shape is one point and one countdown per
-//    rare, and two camps means two spawns the addon would time as one. It refuses
-//    rather than taking the first, which would pin the wrong clearing.
-//  - A rare appears in a zone this addon cannot express. `main.js` resolves a zone
-//    from a POSITION against four rectangles it carries, and `addon.json` lists the
-//    same four as the `zones` setting's options; a fifth needs both of those edited,
-//    so it stops here rather than shipping a row that could never pass the filter.
+//  - A rare THIS ADDON CARRIES gains a SECOND camp. The shipped shape is one point
+//    and one countdown per rare, and two camps means two spawns the addon would time
+//    as one. It refuses rather than taking the first, which would pin the wrong
+//    clearing. Scoped to a rare inside the four zones, per the ordering above; a rare
+//    outside them is left out before its shape is ever judged.
+//  - A rare STRADDLES a covered zone and an uncovered one. Unlike a wholly uncovered
+//    rare, that is not a scope decision anybody made: nothing here can say which of
+//    its clearings to time, so it stops rather than timing the covered ones alone.
 //  - The two name sources diverge, as above.
 //  - The counts move. A warning, since content growing is the ordinary case, except
 //    an empty table, which is a read that stopped working.
@@ -82,9 +102,10 @@ const SOURCE_NOTE =
  * The zones this addon can express, which is `ZONES` in `main.js` and the `zones`
  * setting's options in `addon.json`.
  *
- * Stated here so a rare in a fifth zone stops the generator rather than shipping a
+ * Stated here so a rare standing outside them is left out HERE rather than shipping a
  * row that `readRare` would drop at run time, in front of a player, with a warning
- * only they would see. All three lists move together or none of them do.
+ * only they would see. All three lists move together or none of them do, so gaining a
+ * zone is one edit in each of the three and the roster follows on the next run.
  */
 const KNOWN_ZONES = new Set([
   'eastbrook_vale',
@@ -93,8 +114,8 @@ const KNOWN_ZONES = new Set([
   'veiled_hollow',
 ]);
 
-/** Roughly what the tables carried at game 0.33.1, so a thin read cannot pass. */
-const EXPECTED_RARES = 23;
+/** Roughly what the tables carried at game 0.34.0, so a thin read cannot pass. */
+const EXPECTED_RARES = 24;
 const EXPECTED_CAMPED = 19;
 
 const GAME_ARG = '--game=';
@@ -226,6 +247,35 @@ function agreedName(id, template, mobs) {
   return shown;
 }
 
+/** Whether one camp stands in a zone this addon can place a rare in. */
+function inCoveredZone(camp, data) {
+  const zone = data.zoneContaining(camp.center.x, camp.center.z);
+  return zone !== null && zone !== undefined && KNOWN_ZONES.has(zone.id);
+}
+
+/**
+ * Which bucket a rare falls in, judged SCOPE FIRST: see the ordering note at the top.
+ *
+ * `covered` carries the camps back rather than a flag, so the caller works from the
+ * filtered list and cannot accidentally re-admit a camp this decided to leave out.
+ */
+function placeRare(id, camps, deps) {
+  if (camps.length === NONE) {
+    return { kind: 'campless' };
+  }
+  const covered = camps.filter((camp) => inCoveredZone(camp, deps.data));
+  if (covered.length === NONE) {
+    return { kind: 'offMap' };
+  }
+  if (covered.length !== camps.length) {
+    return fail(
+      `${id} has camps both inside and outside the zones this addon carries: ` +
+        'nothing here can say which of its clearings to time',
+    );
+  }
+  return { kind: 'covered', camps: covered };
+}
+
 /** One roster row, in the shape `readRare` in main.js checks. */
 function rareRow(id, template, camps, deps) {
   if (camps.length > ONE) {
@@ -257,28 +307,35 @@ function rareRow(id, template, camps, deps) {
 }
 
 /**
- * Every rare with somewhere to be waited for, sorted by id.
+ * Every rare this addon can place, sorted by id, plus a count of each kind left out.
  *
- * A rare with NO camp is left out rather than emitted without a position, which is
- * the one editorial-looking decision here and is not one: `CAMPS` is what says a mob
- * has a home, and a rare summoned by an encounter or standing in a dungeon instance
- * is on no respawn cycle at all.
+ * Neither exclusion is an editorial decision, which is why neither is a list of names:
+ * `CAMPS` is what says a mob has a home, and `KNOWN_ZONES` is what says this addon can
+ * place it. A rare summoned by an encounter or standing in a dungeon instance is on no
+ * respawn cycle at all; a rare in a zone `main.js` does not resolve could not be shown
+ * even with a countdown behind it.
  */
 function rareRows(deps) {
   const byMob = campsByMob(deps.data);
   const rares = Object.entries(deps.data.MOBS).filter(([, template]) => template.rare === true);
   const rows = [];
+  const offMap = [];
   let campless = NONE;
   for (const [id, template] of rares) {
-    const camps = byMob.get(id) ?? [];
-    if (camps.length === NONE) {
+    const placed = placeRare(id, byMob.get(id) ?? [], deps);
+    if (placed.kind === 'campless') {
       campless += ONE;
-    } else {
-      rows.push(rareRow(id, template, camps, deps));
+    }
+    if (placed.kind === 'offMap') {
+      offMap.push(id);
+    }
+    if (placed.kind === 'covered') {
+      rows.push(rareRow(id, template, placed.camps, deps));
     }
   }
   rows.sort((a, b) => byCodePoint(a.id, b.id));
-  return { rows, campless };
+  offMap.sort(byCodePoint);
+  return { rows, campless, offMap };
 }
 
 /**
@@ -288,11 +345,11 @@ function rareRows(deps) {
  * generator that refused every release would be run once. An EMPTY table is a
  * failure: that is a read that stopped working rather than content that moved.
  */
-function checkCounts(rows, campless) {
+function checkCounts(rows, campless, offMap) {
   if (rows.length === NONE) {
     fail('read no rare with a camp at all, which is a read that stopped working');
   }
-  const rares = rows.length + campless;
+  const rares = rows.length + campless + offMap.length;
   if (rares !== EXPECTED_RARES) {
     console.warn(
       `generate: read ${String(rares)} rare templates, expected ${String(EXPECTED_RARES)}`,
@@ -324,17 +381,24 @@ async function main() {
   // reported as a resolution failure reads as the game having moved something.
   const gameVersion = checkoutVersion(root);
   const { data, respawn, catalogue } = await loadModules(root);
-  const { rows, campless } = rareRows({ data, respawn, mobs: mobCatalogue(catalogue) });
-  checkCounts(rows, campless);
+  const { rows, campless, offMap } = rareRows({ data, respawn, mobs: mobCatalogue(catalogue) });
+  checkCounts(rows, campless, offMap);
   // Beside this script rather than anywhere an argument could name, so the only file
   // this can write is the one it exists to write.
   const out = join(import.meta.dirname, OUT_FILE);
   writeFileSync(out, render({ gameVersion, source: SOURCE_NOTE, rares: rows }));
   console.log(`generate: wrote ${out} from ${GAME_PACKAGE_NAME} ${gameVersion}`);
   console.log(
-    `generate: ${String(rows.length)} rares with a camp, ` +
-      `${String(campless)} left out for having none`,
+    `generate: ${String(rows.length)} rares placed, ` +
+      `${String(campless)} left out for having no camp, ` +
+      `${String(offMap.length)} for standing outside the zones this addon carries`,
   );
+  // NAMED rather than counted, because this is the exclusion a reader would otherwise
+  // have to take on trust: a rare left out for its zone is one a fifth zone would let
+  // in, so the answer to "which" has to be on screen for anybody deciding that.
+  if (offMap.length > NONE) {
+    console.log(`generate: outside them: ${offMap.join(', ')}`);
+  }
 }
 
 await main();

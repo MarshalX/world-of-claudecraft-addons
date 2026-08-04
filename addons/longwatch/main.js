@@ -25,14 +25,27 @@
 // does and a table nothing validated is a table that is right only until somebody
 // edits it.
 //
-// FOUR of the game's 23 rare templates are absent from that file, because they have
-// no camp and so nowhere to be waited for. `fallen_captain_aldren`,
+// FIVE of the game's 24 rare templates are absent from that file, for TWO reasons,
+// and the second is not a smaller version of the first.
+//
+// FOUR have NO CAMP, and so nowhere to be waited for. `fallen_captain_aldren`,
 // `corrupted_priest_malric` and `deathstalker_voss` are summoned by the Nythraxis
 // crypt encounter, and `wildheart_beastmaster` is a miniboss inside a dungeon
 // instance. None of the four is on a camp respawn cycle at all, so a countdown for
 // one would be a number with nothing behind it, which is worse than saying nothing.
-// Nothing NAMES them anywhere: the generator ships a rare only if the game's own
-// `CAMPS` gives it a home, so the day one gains a camp it appears with no edit here.
+//
+// ONE stands OUTSIDE THE FOUR ZONES below. `drakemaw_broodlord`, added in game
+// 0.34.0, holds four separate camps in The Drakelands, and BOTH of those facts would
+// have to be answered for it to ship here: one rare with four points is a roster
+// shape this addon does not have, and The Drakelands is x-bounded where every zone in
+// `ZONES` spans the strip. It is left out deliberately rather than pending, and a
+// player standing in it resolves to no zone at all, which is the honest answer to
+// "which of the zones holding a rare am I in" rather than a gap.
+//
+// Nothing NAMES any of the five anywhere: `CAMPS` says which rares have a home and
+// `ZONES` says which of those this addon can place, so the day one of the four gains
+// a camp, or the day this addon gains a fifth zone, the roster follows with no edit
+// here. `generate.mjs` prints what it left out and why on every run.
 //
 // THE ZONE MATCH IS DONE FROM POSITION, NEVER FROM `world.zone`. That read is
 // localized DISPLAY TEXT and is deliberately not an id, so comparing it against a

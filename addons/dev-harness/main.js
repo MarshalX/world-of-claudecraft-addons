@@ -33,6 +33,8 @@ const PLATE_LIFT = 48;
 /** How often the anchor demo rewrites its labels. Its POSITION is the loader's job. */
 const ANCHOR_TICK_MS = 200;
 const DECIMALS_YARDS = 1;
+/** How many distinct wire contradictions to name before the note gets unreadable. */
+const MAX_CONTRADICTIONS = 3;
 
 /**
  * The three squares the tile demonstration drains: label, ability, class, school.
@@ -97,6 +99,17 @@ const WORLD_KEYS = [
   'bank',
   'buyback',
 ];
+/**
+ * Every way the published types say an attack can land.
+ *
+ * A second independent copy, for the same reason `WORLD_KEYS` is one: a kind the
+ * wire sends and the types do not list reaches an addon as an ordinary string and
+ * is silently wrong there rather than loudly. `evade` was exactly that for two
+ * releases, and the damage meter counted it into the denominator of its attack
+ * table while never printing a line for it, so every other percentage on that
+ * readout quietly shrank and nothing on screen said why.
+ */
+const DAMAGE_KINDS = ['hit', 'miss', 'dodge', 'parry', 'block', 'resist', 'evade'];
 /** An arbitrary nested value, to show that storage is not flattened to strings. */
 const PROBE_VALUE = Object.freeze(['a', ['b'], { c: true }]);
 /** Matches --color-text-error, so a failed line reads the way the manager's do. */
@@ -171,6 +184,85 @@ let strayFrames = 0;
 woc.onFrame(() => {
   strayFrames += 1;
 })();
+
+/**
+ * What the combat records have actually been seen carrying.
+ *
+ * Everything else in this file asks whether a surface reached the object an addon
+ * is handed. This asks the other question the harness exists for, and the one only
+ * a live session can answer: whether the GAME still matches what the published
+ * types claim about it. These records pass through the loader untouched, so no
+ * unit suite can be wrong about them and no fake can catch it; the fixtures would
+ * simply agree with whatever they were written to say.
+ *
+ * The three claims watched here are the ones that fail SILENTLY in an addon that
+ * believed them. `evade` always lands at 0, so a meter can count it as an outcome
+ * and never as damage. `absorbed` is absent rather than 0, which is the whole of
+ * what separates a heal a shield devoured from a heal that overhealed. And
+ * `abilityId` is a string whenever it is anything, because an addon builds an
+ * icon URL out of it.
+ *
+ * Deliberately NOT watched: whether a non-null `abilityId` only ever rides a
+ * player's own hit. Its source can have left interest scope by the time this runs,
+ * so the check would report a failure of the roster as a failure of the wire.
+ */
+const records = { damage: 0, heals: 0, withAbilityId: 0, resolved: 0 };
+/** The distinct contradictions seen, named. A count alone does not say what broke. */
+const contradictions = [];
+
+function contradiction(note) {
+  if (contradictions.length < MAX_CONTRADICTIONS && !contradictions.includes(note)) {
+    contradictions.push(note);
+  }
+}
+
+/**
+ * The id a damage record carries, and whether the spellbook knows it.
+ *
+ * A null is the ordinary answer rather than a fault, and by a wide margin the
+ * common one: the game fills this only on a player's primary direct hit, so every
+ * mob swing, every damage-over-time tick, every auto-attack and every echoed copy
+ * arrives carrying an explicit null. What is worth counting is how many of the
+ * non-null ones the spellbook resolves, because that is the live measurement
+ * behind whether reaching for this field buys a display anything a name lookup
+ * would not already have given it.
+ */
+function noteAbilityId(id) {
+  if (id === null || id === undefined) {
+    return;
+  }
+  if (typeof id !== 'string' || id.length === 0) {
+    contradiction(`abilityId arrived as ${typeOf(id)}`);
+    return;
+  }
+  records.withAbilityId += 1;
+  if ((woc.world.abilities?.byId(id) ?? null) !== null) {
+    records.resolved += 1;
+  }
+}
+
+woc.net.onEvent('damage', (event) => {
+  records.damage += 1;
+  if (!DAMAGE_KINDS.includes(event.kind)) {
+    contradiction(`the wire sent kind "${String(event.kind)}", which the types do not list`);
+  }
+  if (event.kind === 'evade' && event.amount !== 0) {
+    contradiction(`an evade carried ${String(event.amount)} damage, and evades land at 0`);
+  }
+  if (event.absorbed === 0) {
+    contradiction('a damage record carried absorbed 0, which the types say is absent instead');
+  }
+  noteAbilityId(event.abilityId);
+});
+
+woc.net.onEvent('heal2', (event) => {
+  records.heals += 1;
+  // Absent, never 0 and never null, is what lets an addon tell a heal a shield ate
+  // from a heal that overhealed. Both land at `amount: 0` and nothing else parts them.
+  if (event.absorbed === 0 || event.absorbed === null) {
+    contradiction(`a heal carried absorbed ${String(event.absorbed)}, which is meant to be absent`);
+  }
+});
 
 /** Whole seconds since this addon loaded, which is what the monotonic clock is for. */
 function uptimeSeconds() {
@@ -1055,6 +1147,7 @@ const LIVE_CHECKS = [
   checkWorld,
   checkAbilities,
   checkCombat,
+  checkCombatRecords,
   checkMobTargeting,
   checkUnits,
   checkAuraQueries,
@@ -1604,6 +1697,30 @@ function checkCombat() {
     return result('combat', false, `inactive but sourced to '${state.source}'`);
   }
   return result('combat', true, `${combatWord(state.active)} via ${state.source}`);
+}
+
+/**
+ * The combat records against what the published types say they carry.
+ *
+ * Vacuous until something lands, and that is the honest state rather than a
+ * weakness: it becomes a real check on the first swing of the first fight, the
+ * way `checkUnits` does the moment a target is picked. Reporting it as passing
+ * with nothing seen would be the dishonest version, so the note says which it is.
+ */
+function checkCombatRecords() {
+  if (contradictions.length > 0) {
+    return result('combat records', false, contradictions.join('; '));
+  }
+  if (records.damage === 0 && records.heals === 0) {
+    return result('combat records', true, 'nothing has landed yet, so there is nothing to check');
+  }
+  const seen = `${String(records.damage)} damage and ${String(records.heals)} heal records`;
+  const ids = `${String(records.withAbilityId)} carried an abilityId`;
+  return result(
+    'combat records',
+    true,
+    `${seen} match the types, ${ids} (${String(records.resolved)} of them in your spellbook)`,
+  );
 }
 
 /**

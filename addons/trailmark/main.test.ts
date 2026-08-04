@@ -76,6 +76,16 @@ const HOLLOW = 'q_hollow';
 const AMENDS = 'q_prof_amends_smith';
 /** The escort that starts on Farshore, which shares Eastbrook Vale's z band. */
 const FARSHORE = 'q_fs_bram_come_home';
+/**
+ * The three work orders, one per gathering profession.
+ *
+ * Each is a COLLECT objective naming a material that only a gathering node yields,
+ * which is the shape the classic collect lookups cannot answer: nothing drops it
+ * tagged for the quest and no crate of it is placed.
+ */
+const FORGE_ORDER = 'q_prof_workorder_forge';
+const TOOLWORKS_ORDER = 'q_prof_workorder_toolworks';
+const APOTHECARY_ORDER = 'q_prof_workorder_apothecary';
 
 /** The first objective of each, which is the only one any of them has. */
 const WOLVES_KEY = `${WOLVES}#0`;
@@ -87,6 +97,9 @@ const ESCORT_KEY = `${ESCORT}#0`;
 const HOLLOW_KEY = `${HOLLOW}#0`;
 const AMENDS_KEY = `${AMENDS}#0`;
 const FARSHORE_KEY = `${FARSHORE}#0`;
+const FORGE_ORDER_KEY = `${FORGE_ORDER}#0`;
+const TOOLWORKS_ORDER_KEY = `${TOOLWORKS_ORDER}#0`;
+const APOTHECARY_ORDER_KEY = `${APOTHECARY_ORDER}#0`;
 /** A turn-in row's key, which is the quest and no objective index. */
 const TURN_IN_KEY = `${BOARS}!`;
 
@@ -96,13 +109,18 @@ const WOLF_CAMPS = 2;
  * How many ore nodes the table carries, and how many are inside the pin reach.
  *
  * A gather objective resolves to every node of its type, which is the game's own
- * answer. Two of the thirty-three sit more than two thousand yards from the origin
+ * answer. Two of the fifty-two sit more than two thousand yards from the origin
  * the player starts at here, and two thousand is the manifest's own maximum for the
  * distance setting: the LOADER clamps a larger value to it, so the case below asks
  * for five thousand and gets the ceiling, which is the reading a player would get.
+ *
+ * Thirty-three until game 0.34.0's density pass, which took the six tuned-strip
+ * zones to six nodes of every type. The figure is content and moves with a release;
+ * what the case is actually about is that the answer is EVERY node rather than the
+ * near ones, and that the pin budget is what keeps that off the screen.
  */
-const ORE_NODES = 33;
-const ORE_IN_RANGE = 31;
+const ORE_NODES = 52;
+const ORE_IN_RANGE = 50;
 /** The addon's own ceiling on pins in the world at once. */
 const PIN_BUDGET = 12;
 
@@ -502,6 +520,24 @@ describe('resolving an objective to a place', () => {
     expect(h.detailOf(HOLLOW_KEY)).toBe('Nowhere on the map');
     expect(pinsOf(h, HOLLOW_KEY)).toBe(0);
   });
+
+  // A work order asks for a GATHERED material: no mob drops it tagged for the
+  // quest and no crate of it is placed, so the two classic collect lookups both
+  // come back empty and this read "Nowhere on the map" until now. Game 0.34.0
+  // added the arm that answers it (`nodeYieldClusters`, reached from the collect
+  // branch of `questObjectiveAreas`), so the game's own map now circles the veins
+  // and the honest answer is no longer "nowhere". All three shipped work orders
+  // are this shape, one per gathering profession.
+  it.each([
+    [FORGE_ORDER, FORGE_ORDER_KEY],
+    [TOOLWORKS_ORDER, TOOLWORKS_ORDER_KEY],
+    [APOTHECARY_ORDER, APOTHECARY_ORDER_KEY],
+  ])('sends a collect objective for a gathered material to the nodes (%s)', async (quest, key) => {
+    const h = await run({ 'pin-distance': 5000 }, undefined, [{ questId: quest, counts: [0] }]);
+
+    expect(h.detailOf(key)).not.toBe('Nowhere on the map');
+    expect(pinsOf(h, key)).toBeGreaterThan(0);
+  });
 });
 
 // THE SECOND CLAIM. The required count is learned from the event, because the
@@ -726,7 +762,7 @@ describe('a quest waiting to be handed in', () => {
   });
 
   // An NPC the sim walks in mid-encounter rather than placing has no position at
-  // all. No shipped quest reaches this at 0.33.1, because the one that names a
+  // all. No shipped quest reaches this at 0.34.0, because the one that names a
   // spawned-on-demand turn-in names a placed NPC beside it, so it is driven
   // through a doctored table: the branch is kept because the table is game
   // content and the next release owes this addon nothing.
@@ -1059,7 +1095,7 @@ describe('a quest going ready', () => {
   });
 
   // An NPC the sim walks in mid-encounter rather than placing carries no position
-  // at all. No shipped quest reaches this at 0.33.1, because the one that names a
+  // at all. No shipped quest reaches this at 0.34.0, because the one that names a
   // spawned-on-demand turn-in names a placed NPC beside it, so the case is driven
   // through a doctored table: the branch is kept because the table is game content
   // and the next release owes this addon nothing.

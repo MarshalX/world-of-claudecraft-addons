@@ -58,8 +58,16 @@ const PLAYER_ID = PLAYER_ENTITY.id;
 const TICK_MS = 1000;
 /** How many microtask turns the table read, the frame restore and the reads want. */
 const SETTLE_TURNS = 14;
-/** Seconds a node takes to come back, which is the denominator of every fill. */
-const RESPAWN_SECONDS = 120;
+/**
+ * Seconds a node takes to come back, which is the denominator of every fill.
+ *
+ * Read out of the SHIPPED TABLE rather than written here, because a number written
+ * here would be the addon's own constant spelled a second time: every fill assertion
+ * would then agree with the addon whatever the game does, which is the one thing
+ * these cases exist to catch. The table's figure comes off `NODE_HARVEST_TABLE`.
+ */
+const RESPAWN_SECONDS = (JSON.parse(TABLE_TEXT) as { respawnSeconds: { ore: number } })
+  .respawnSeconds.ore;
 
 /**
  * Rows out of the shipped table, by hand, so a case names a coordinate a reader can
@@ -68,24 +76,33 @@ const RESPAWN_SECONDS = 120;
 const ORE_1 = { id: 'ore_eastbrook_1', x: -70, z: -53 };
 const ORE_2 = { id: 'ore_eastbrook_2', x: -73, z: -49 };
 const ORE_3 = { id: 'ore_eastbrook_3', x: -67, z: -57 };
+const ORE_6 = { id: 'ore_eastbrook_6', x: -65, z: -69 };
 const WOOD_2 = { id: 'wood_eastbrook_2', x: -57, z: -6 };
-const HERB_1 = { id: 'herb_eastbrook_1', x: -86, z: 90 };
+const HERB_1 = { id: 'herb_eastbrook_1', x: -59, z: 91 };
 /** Somebody else in the world, for the records the game broadcasts rather than sends. */
 const OTHER_PLAYER = 777;
 /** The nearest tier-2 node in the game, and the only kind a tier-1 tool refuses. */
-const ORE_T2 = { id: 'ore_mirefen_t2', x: 48, z: 352 };
+const ORE_T2 = { id: 'ore_mirefen_t2', x: 36, z: 350 };
 
-/** Every eastbrook node, nearest first from ORE_1, which is the default standpoint. */
+/**
+ * Every eastbrook node WITHIN THE DEFAULT 150 YARD DRAW DISTANCE, nearest first from
+ * ORE_1, which is the default standpoint. Twelve of the zone's eighteen: the density
+ * pass at game 0.34.0 took every tuned-strip zone to six nodes of each type, and the
+ * six it left out here are 152 to 248 yards off rather than absent.
+ */
 const NEAR_ORE_1 = [
   'ore_eastbrook_1',
   'ore_eastbrook_2',
   'ore_eastbrook_3',
+  'ore_eastbrook_6',
+  'ore_eastbrook_5',
+  'ore_eastbrook_4',
   'wood_eastbrook_2',
   'wood_eastbrook_1',
   'wood_eastbrook_3',
+  'herb_eastbrook_4',
   'herb_eastbrook_2',
   'herb_eastbrook_1',
-  'herb_eastbrook_3',
 ];
 
 /** The tool ids the shipped table files under each type, at the tiers they cover. */
@@ -94,7 +111,7 @@ const IRON_PICK = 'iron_mining_pick';
 const SICKLE = 'gathering_sickle';
 const HANDAXE = 'handaxe';
 
-/** A full gathering kit at tier 1, which is what opens 90 of the game's 99 nodes. */
+/** A full gathering kit at tier 1, which is what opens 138 of the game's 156 nodes. */
 const TIER_1_KIT = [
   { itemId: COPPER_PICK, count: 1 },
   { itemId: HANDAXE, count: 1 },
@@ -530,7 +547,7 @@ describe('the join between the table and the world', () => {
   it('follows the draw distance rather than a zone boundary', async () => {
     const h = await run({ 'list-length': 20, 'draw-distance': 20 }, undefined, { at: ORE_1 });
 
-    expect(h.drawn()).toEqual([ORE_1.id, ORE_2.id, ORE_3.id]);
+    expect(h.drawn()).toEqual([ORE_1.id, ORE_2.id, ORE_3.id, ORE_6.id, 'ore_eastbrook_5']);
   });
 });
 
@@ -553,6 +570,38 @@ describe('the respawn timers', () => {
 
     expect(h.figureOf(ORE_1.id)).toBe('1m 30s');
     expect(h.fillOf(ORE_1.id)).toBeCloseTo((90 / RESPAWN_SECONDS) * 100, 1);
+  });
+
+  // The respawn length is the game's number, not this addon's, and the whole point of
+  // taking it off the shipped table is that a tune to it cannot leave a constant here
+  // behind. It was 120 seconds until game 0.34.0 doubled it, and while the addon still
+  // held 120 every node with more than two minutes left drew a FULL bar that did not
+  // move for the whole first half of the wait: a reading that is not merely wrong but
+  // wrong in the direction that says "nothing is happening yet".
+  it('takes the respawn length from the table rather than a constant of its own', async () => {
+    expect(RESPAWN_SECONDS).toBe(240);
+
+    const h = await run({}, undefined, {
+      at: ORE_1,
+      bags: TIER_1_KIT,
+      cooling: { [ORE_1.id]: 180 },
+    });
+
+    expect(h.figureOf(ORE_1.id)).toBe('3m 0s');
+    expect(h.fillOf(ORE_1.id)).toBeCloseTo(75, 1);
+  });
+
+  // A tune the other way is the case a clamp hides: with the addon reading a LONGER
+  // respawn than the game uses, every bar would simply start part-full and nothing
+  // would look broken. So the fill is pinned at the top of the range too.
+  it('draws a freshly harvested node as a full bar', async () => {
+    const h = await run({}, undefined, {
+      at: ORE_1,
+      bags: TIER_1_KIT,
+      cooling: { [ORE_1.id]: RESPAWN_SECONDS },
+    });
+
+    expect(h.fillOf(ORE_1.id)).toBeCloseTo(100, 1);
   });
 
   it('goes warm as a node comes back', async () => {
@@ -829,7 +878,7 @@ describe('what it says about itself', () => {
     const h = await run({ 'list-length': 3 }, undefined, { at: ORE_1 });
 
     expect(h.drawn()).toHaveLength(3);
-    expect(h.note()).toContain('6 more in range');
+    expect(h.note()).toContain('9 more in range');
   });
 
   it('says every type is off rather than reading as nothing being there', async () => {
@@ -941,7 +990,7 @@ describe('the route line', () => {
       bags: TIER_1_KIT,
     });
 
-    expect(h.route()).toEqual([ORE_1.id, ORE_2.id, ORE_3.id, WOOD_2.id]);
+    expect(h.route()).toEqual([ORE_1.id, ORE_2.id, ORE_3.id, ORE_6.id]);
   });
 
   it('walks past a node that is still cooling for you', async () => {

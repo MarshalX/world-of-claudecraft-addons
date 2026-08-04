@@ -1,5 +1,5 @@
 {
-  "gameVersion": "0.33.1",
+  "gameVersion": "0.34.0",
   "source": "src/sim/data.ts, src/sim/respawn_policy.ts, src/ui/i18n.resolved.generated/en.ts",
   "rares": [
     {

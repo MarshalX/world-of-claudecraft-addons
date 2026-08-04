@@ -15,6 +15,7 @@ const INBOUND_TYPES = [
   'challenge',
   'spectate',
   'commandOutcome',
+  'gbanklog',
 ] as const;
 
 /**

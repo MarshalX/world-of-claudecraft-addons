@@ -27,13 +27,25 @@
 // drawn: it does not matter whether the cooldown started while you were watching or
 // was already half spent when the addon loaded.
 //
-// That covers your kit and nothing else. An item cooldown, or an ability granted by
-// something other than your class, is not in the spellbook and has no published
-// length anywhere, so those rows fall back to the only figure there is: whatever
-// they had left the moment they appeared. That is exact for one that starts while
-// you are watching and a floor for one that was already running, and the tooltip
-// says which of the two you are looking at rather than letting a full bar imply the
-// addon knows more than it does.
+// That covers your kit and nothing else. An item cooldown, an ability granted by
+// something other than your class, or something that is not an ability at all (the
+// game's own anti-relog timer rides this same map as `system_unstuck`) is not in the
+// spellbook and has no published length anywhere, so those rows fall back to the only
+// figure there is: whatever they had left the moment they appeared. That is exact for
+// one that starts while you are watching and a floor for one that was already
+// running, and the tooltip says which of the two you are looking at rather than
+// letting a full bar imply the addon knows more than it does.
+//
+// SUCH A ROW'S NAME IS MARKED WITH A QUESTION MARK, because the same gap costs it a
+// name too: with no spellbook entry there is nothing to read but the id, and a
+// title-cased id is wrong wherever the two have diverged. `arcane_shot` is displayed
+// as "Fell Shot" and `counter_shot` as "Hushing Shot", so the guess is not a near
+// miss, it is a name nothing in the game uses. Wrong-but-readable still beats a blank
+// row, which is why the guess is drawn at all; the mark is what stops it reading as
+// the game's own answer, and it goes on the LABEL so that it survives a tile, where
+// the art is the label and there is no second line to put a caveat on. The mark is
+// `foretell`'s, to the character: the two addons hedge the same fact, and a player
+// should not have to learn it twice. The row's tooltip carries the long version.
 //
 // A cooldown only ever counts DOWN, so a remaining that goes UP can only mean the
 // ability was re-armed, and a MEASURED row re-learns its length there. The game does
@@ -51,14 +63,20 @@
 // reaches zero. Nothing on the wire distinguishes those two, so the addon does not
 // pretend to. An ability in your spellbook is immune to the whole problem.
 //
-// CHARGES are the other exact bar, and the one the spellbook cannot supply. An
-// ability with a charge pool (Twinstrike, Double Charge, frost's second Ice Block)
-// carries a real recharge LENGTH alongside its remaining, which is a different number
-// from the ability's cooldown, so those rows measure against that instead. They are
-// read from `world.player.abilityCharges` in the frame loop rather than from a
-// subscription, because a charge regenerating while the pool still holds a use
+// CHARGES are the other exact bar. An ability with a charge pool (Fell Shot under
+// Twin Fletching, frost's second Ice Block) carries a real recharge LENGTH alongside
+// its remaining, so those rows measure against that instead. It is the SAME number as
+// the ability's resolved cooldown, which is worth saying because it once read here as
+// a different one: the game arms each charge's timer from that cooldown. What makes
+// it worth reading anyway is that it is in hand and it does not need the spellbook, so
+// a pool on something outside your kit is still measured exactly.
+//
+// They are read from `world.player.abilityCharges` in the frame loop rather than from
+// a subscription, because a charge regenerating while the pool still holds a use
 // changes no cooldown id: the set stays exactly as it was and the subscription never
-// fires. Walking that record per frame is cheap in a way walking the cooldown map is
+// fires. It is stronger than that, in fact, since the game DELETES the cooldown entry
+// while any charge is left, so the ordinary wire says nothing at all until the pool
+// empties. Walking that record per frame is cheap in a way walking the cooldown map is
 // not, since only a handful of abilities have charges at all.
 //
 // The POOL SIZE is not on that record. `abilityCharges[id].maxCharges` is present,
@@ -107,6 +125,8 @@ const GCD_SECONDS = 1.5;
 const NEARLY_READY = 0.25;
 /** Over this, a tile's countdown is drawn in minutes: 40 pixels does not fit "119". */
 const SECONDS_PER_MINUTE = 60;
+/** What a worked-out ability name is marked with. Foretell's mark, deliberately. */
+const GUESS_MARK = '?';
 /**
  * The tile strip's starting height, which is also its floor and its icon size.
  *
@@ -146,15 +166,7 @@ function settingFlag(id, fallback) {
   return fallback;
 }
 
-/**
- * 'aimed_shot' reads as 'Aimed Shot'. The FALLBACK, not the label.
- *
- * A guess from the id, and it is wrong wherever the two have diverged: `arcane_shot`
- * is displayed as "Fell Shot", so this returns a name nothing else in the game calls
- * that ability. It is only reached for an id the spellbook does not carry, which is
- * something you did not learn: an item cooldown, or an ability granted by something
- * other than your class kit. Wrong-but-readable beats blank for those.
- */
+/** 'system_unstuck' reads as 'System Unstuck'. Unmarked: `describe` adds the hedge. */
 function readable(abilityId) {
   return abilityId
     .split('_')
@@ -163,15 +175,28 @@ function readable(abilityId) {
 }
 
 /**
- * What the game actually calls this ability.
+ * What to call this ability, and whether that was worked out rather than read.
  *
  * A cooldown map is keyed by ability ID, and the id and the display name have
  * diverged, so for a long time these rows showed a title-cased id and there was no
- * way to do better. `world.abilities` is that way: it carries both for everything in
- * your own kit, and everything else falls through to the guess above.
+ * way to do better. `world.abilities` is that way, and it covers YOUR kit: an id it
+ * does not carry is something you did not learn, or is not an ability at all (the
+ * game's own anti-relog timer rides this same map), and those fall back to the guess
+ * above.
+ *
+ * A GUESS IS MARKED, and the mark is `foretell`'s: both addons hedge the same fact,
+ * so a player who has learned what `?` means on one must not have to learn it again
+ * on the other. Wrong-but-readable still beats blank, which is why the fallback
+ * stays; the mark is what stops the guess reading as the game's own answer. It is on
+ * the LABEL rather than in a footnote because it has to survive a tile, where the art
+ * is the label and there is nothing else on the square to carry it.
  */
-function abilityName(abilityId) {
-  return woc.world.abilities.byId(abilityId)?.name ?? readable(abilityId);
+function describe(abilityId) {
+  const known = woc.world.abilities.byId(abilityId) ?? null;
+  if (known === null) {
+    return { label: `${readable(abilityId)}${GUESS_MARK}`, guessed: true };
+  }
+  return { label: known.name, guessed: false };
 }
 
 /**
@@ -330,9 +355,9 @@ applyLayout();
  */
 // #region bar
 function createBar(abilityId) {
-  const name = abilityName(abilityId);
+  const { label } = describe(abilityId);
   const bar = woc.ui.bar({
-    label: name,
+    label,
     icon: woc.ui.icon.ability(abilityId, playerClass()),
     className: 'woc-cd-bar',
   });
@@ -353,9 +378,9 @@ function createBar(abilityId) {
  */
 // #region tile
 function createTile(abilityId) {
-  const name = abilityName(abilityId);
+  const { label } = describe(abilityId);
   const tile = woc.ui.tile({
-    label: name,
+    label,
     icon: woc.ui.icon.ability(abilityId, playerClass()),
     className: 'woc-cd-tile',
     // Whatever the strip is at now, so a tile that appears mid-fight matches the
@@ -390,30 +415,51 @@ function chargeLine(charges, pool) {
   return `${String(charges)} of ${String(pool)} charges ready`;
 }
 
+/**
+ * The long version of the mark, for the player who hovers it to find out.
+ *
+ * Foretell's sentence, word for word, and the id it guessed FROM. A row is the only
+ * place that id can appear at all: the label is the guess and the tooltip is where
+ * the working is shown. Nothing for a name the game supplied, which is why the label
+ * carries no mark there either.
+ */
+function guessLine(abilityId) {
+  return {
+    text: `Worked out from the ability id \`${abilityId}\`. The game publishes an ability's own name only for your own spellbook, so this is a guess and is wrong wherever the two have diverged.`,
+    tone: 'muted',
+  };
+}
+
 // #region tooltip
 /**
  * What the row is, and how much of that is measured rather than known.
  *
- * The last line is read off the ROW rather than off the reading, because it is a
- * statement about the denominator this particular bar is drawn against, and that was
- * decided when the row was built. A row raised before the spellbook arrived stays
- * measured for its whole life, and saying so is the point of the line.
+ * The two hedges are INDEPENDENT and both are read off the ROW rather than off the
+ * reading. A worked-out name and a measured length usually travel together, since an
+ * id the spellbook cannot name is one it cannot give a length to either, but a charge
+ * pool separates them: its length rides the wire, so such a row is exact and still
+ * unnamed. The length line is a statement about the denominator this particular bar
+ * was built against, so a row raised before the spellbook arrived stays measured for
+ * its whole life, and saying so is the point of it.
  */
 function timerTooltip(abilityId) {
-  const name = abilityName(abilityId);
+  const { label, guessed } = describe(abilityId);
   const entry = timers().find((timer) => timer.abilityId === abilityId);
   const row = rows.get(abilityId);
   if (entry === undefined || row === undefined) {
-    return name;
+    return label;
   }
   const lines = [`${entry.remaining.toFixed(DECIMALS)}s left`];
   if (typeof entry.charges === 'number' && entry.charges > 0) {
     lines.push({ text: chargeLine(entry.charges, row.pool), tone: 'good' });
   }
+  if (guessed) {
+    lines.push(guessLine(abilityId));
+  }
   if (!row.exact) {
     lines.push({ text: 'length unknown, measured from when it was first seen', tone: 'muted' });
   }
-  return { title: name, icon: woc.ui.icon.ability(abilityId, playerClass()), lines };
+  return { title: label, icon: woc.ui.icon.ability(abilityId, playerClass()), lines };
 }
 // #endregion
 

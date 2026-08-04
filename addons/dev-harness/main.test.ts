@@ -16,6 +16,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { WORLD_KEYS } from '../../loader/src/runtime/world/signature.ts';
 import { validateManifest } from '../../loader/src/shared/schema.ts';
 import { mountAddon, parseManifest } from '../../tests/fakes/addon.ts';
+import { eventsFrame } from '../../tests/fakes/frames.ts';
 // The addon's own two files, read the way the loader reads text it ships: the
 // raw suffix rather than node:fs, so this suite needs no filesystem types and
 // runs under happy-dom, whose URL rejects the file scheme.
@@ -193,7 +194,7 @@ describe('what it reports without a game', () => {
   it('passes every check', async () => {
     await run();
 
-    expect(await report()).toContain('35 of 35 checks passed');
+    expect(await report()).toContain('36 of 36 checks passed');
   });
 
   it('names no check as failed', async () => {
@@ -225,6 +226,7 @@ describe('what it reports without a game', () => {
     'clocks',
     'frames',
     'aura polarity',
+    'combat records',
     'character key',
     'content',
     'counters',
@@ -232,6 +234,88 @@ describe('what it reports without a game', () => {
     await run();
 
     expect(await report()).not.toContain(`FAIL  ${name}`);
+  });
+});
+
+// The one check here whose subject is the GAME rather than the loader.
+//
+// `damage` and `heal2` pass through the loader untouched, so there is nothing in a
+// unit suite that could be wrong about them: a fixture only ever agrees with what it
+// was written to say, and the published claims about these records are true of the
+// wire or they are not. That is why the harness watches them in a live session, and
+// it is also why this suite can only check ONE thing about that watch, which is that
+// it has teeth. Each case below puts a record on the socket that contradicts
+// `packages/types/events-combat.d.ts` and requires the harness to name it.
+describe('watching the combat records', () => {
+  /** Land some records, then press the button that re-runs everything. */
+  async function afterRecords(list: readonly unknown[]): Promise<void> {
+    const { harness } = await run();
+    await report();
+    harness.inbound(eventsFrame(list));
+    press('Run again');
+  }
+
+  function damage(over: Record<string, unknown>): Record<string, unknown> {
+    return {
+      type: 'damage',
+      sourceId: 1,
+      targetId: 2,
+      amount: 100,
+      ability: 'Aimed Shot',
+      abilityId: null,
+      kind: 'hit',
+      crit: false,
+      school: 'physical',
+      ...over,
+    };
+  }
+
+  // Nothing is wrong with these, so the check has to stay green AND start counting.
+  // A watch that only ever reports failures would look identical to one wired to
+  // nothing at all, for as long as the game kept behaving.
+  it('counts ordinary records rather than only reporting faults', async () => {
+    await afterRecords([damage({}), { type: 'heal2', sourceId: 1, targetId: 1, amount: 50 }]);
+
+    await expect
+      .poll(() => document.body.textContent ?? '')
+      .toContain('1 damage and 1 heal records match the types');
+  });
+
+  // The exact defect this was written after: a kind the types do not list reaches an
+  // addon as an ordinary string, and a display that groups by kind is silently wrong
+  // rather than loudly. `evade` was one for two releases.
+  it('names a damage kind the published union does not carry', async () => {
+    await afterRecords([damage({ kind: 'absorbed_entirely' })]);
+
+    await expect
+      .poll(() => document.body.textContent ?? '')
+      .toContain('FAIL  combat recordsthe wire sent kind "absorbed_entirely"');
+  });
+
+  it('names an evade that carried damage, since an evade lands at zero', async () => {
+    await afterRecords([damage({ kind: 'evade', amount: 40 })]);
+
+    await expect
+      .poll(() => document.body.textContent ?? '')
+      .toContain('an evade carried 40 damage');
+  });
+
+  // Absent rather than 0 is the whole of what tells a heal a shield devoured from a
+  // heal that overhealed: both land at `amount: 0` and nothing else parts them.
+  it('names a heal whose absorbed arrived as a zero instead of being absent', async () => {
+    await afterRecords([{ type: 'heal2', sourceId: 1, targetId: 1, amount: 0, absorbed: 0 }]);
+
+    await expect.poll(() => document.body.textContent ?? '').toContain('a heal carried absorbed 0');
+  });
+
+  // An addon builds an icon URL out of this field, so a non-string in it is a
+  // request that cannot succeed rather than a missing picture.
+  it('names an abilityId that arrived as something other than a string', async () => {
+    await afterRecords([damage({ abilityId: 7 })]);
+
+    await expect
+      .poll(() => document.body.textContent ?? '')
+      .toContain('abilityId arrived as number');
   });
 });
 

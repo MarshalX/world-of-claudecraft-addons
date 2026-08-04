@@ -74,6 +74,7 @@ interface Heal {
   at?: number;
   crit?: boolean;
   cueOnly?: boolean;
+  absorbed?: number;
 }
 
 interface MeterHarness extends SharedHarness {
@@ -112,6 +113,12 @@ function byName(a: string, b: string): number {
 
 function rowFor(label: string): Element | null {
   return document.querySelector(`[data-ability="${label}"]`);
+}
+
+/** The width the kit wrote on a row's fill, which is the share made visible. */
+function fillWidthOf(label: string): string {
+  const fill = rowFor(label)?.querySelector('.woc-bar-fill');
+  return (fill as HTMLElement | null)?.style.width ?? '';
 }
 
 /**
@@ -205,6 +212,7 @@ async function run(opts: RunOpts = {}): Promise<MeterHarness> {
         ability: heal.ability ?? 'Mend Wounds',
         crit: heal.crit ?? false,
         cueOnly: heal.cueOnly,
+        absorbed: heal.absorbed,
       };
       harness.inbound(eventsFrame([event]));
     },
@@ -538,6 +546,34 @@ describe('the ability breakdown', () => {
 
     expect(h.detailOf('Aimed Shot')).toContain('40 absorbed');
   });
+
+  // A hit a shield ate whole is a `hit` landing at 0, and `kind` is what tells it
+  // apart from a swing that never connected. It is a thing that happened, so it
+  // reaches the table carrying the figure that says where the damage went, rather
+  // than being dropped for having no amount.
+  it('records a hit a shield ate whole', async () => {
+    const h = await run();
+
+    h.hit({ amount: 0, absorbed: 400 });
+    h.tick();
+
+    expect(h.labels()).toEqual(['Aimed Shot']);
+    expect(h.detailOf('Aimed Shot')).toContain('400 absorbed');
+  });
+
+  // The half of that rule the kit is responsible for, pinned here because a row
+  // reading 0 of 0 is the one shape this change newly makes reachable: the share
+  // has no denominator at all when everything in the table was absorbed. It has to
+  // draw as an EMPTY bar, never as a full one and never as a dropped declaration.
+  it('draws a fully absorbed row as an empty bar rather than a full one', async () => {
+    const h = await run();
+
+    h.hit({ amount: 0, absorbed: 400 });
+    h.tick();
+
+    expect(h.figureOf('Aimed Shot')).toBe('0  0%  0.0');
+    expect(fillWidthOf('Aimed Shot')).toBe('0.00%');
+  });
 });
 
 describe('the outcome line', () => {
@@ -561,6 +597,34 @@ describe('the outcome line', () => {
     const h = await run();
 
     expect(h.outcomes()).toBe('');
+  });
+
+  // `evade` is a wild mob that broke leash walking home immune, and it is a real
+  // outcome of a real swing you took, so it belongs on the attack table with the
+  // rest. What it must not be is counted and unnamed: the total this line divides
+  // by is every outcome recorded, so an outcome missing from the printed list
+  // silently shrinks every percentage beside it to make room for a share nothing
+  // draws, and the shares stop adding up with nothing on screen to say why.
+  it('names an evade rather than only deflating the rest', async () => {
+    const h = await run();
+
+    h.hit({ amount: 100 });
+    h.hit({ amount: 0, kind: 'evade' });
+    h.tick();
+
+    expect(h.outcomes()).toBe('hit 50%, evade 50%');
+  });
+
+  // The other half: an evade always lands at 0, so it counts as an outcome and
+  // must never open a damage row or move the total, exactly as a miss does not.
+  it('opens no damage row for an evade', async () => {
+    const h = await run();
+
+    h.hit({ amount: 0, kind: 'evade', ability: 'Aimed Shot' });
+    h.tick();
+
+    expect(h.labels()).toEqual([]);
+    expect(h.fight()).toContain('0 damage');
   });
 
   // Damage taken must not pollute YOUR attack table: it is the mob's outcome,
@@ -600,6 +664,21 @@ describe('the taken table', () => {
     h.openTab('Taken');
 
     expect(h.labels()).toEqual(['Cleave']);
+  });
+
+  // The same rule from the other side, and the reading a tank most wants: a hit
+  // your own shield ate whole landed nothing on you and is still the thing that
+  // happened. Dropping it would make an absorb look like a swing that missed.
+  it('records a hit on you that a shield ate whole', async () => {
+    const h = await run();
+
+    h.hit({ by: OTHER_ID, at: PLAYER_ID, amount: 0, absorbed: 400, ability: 'Cleave' });
+    h.tick();
+
+    h.openTab('Taken');
+
+    expect(h.labels()).toEqual(['Cleave']);
+    expect(h.detailOf('Cleave')).toContain('400 absorbed');
   });
 
   // One direction per tab, not both on one line. Reporting both put a "0 taken"
@@ -653,6 +732,67 @@ describe('the healing table', () => {
     const h = await run();
 
     h.heal({ amount: 0, cueOnly: true, ability: 'Renewal' });
+    h.tick();
+    h.openTab('Healing');
+
+    expect(h.labels()).toEqual([]);
+    expect(h.fight()).toContain('0 healing');
+  });
+
+  // A heal-absorb shield eats part of a heal before it lands, and the same field
+  // reports it on `heal2` as on `damage`. The row's total stays what LANDED, since
+  // that is what the healing table measures; the absorbed figure rides the detail
+  // line, where it says why the landed number is lower than the cast was worth.
+  it('adds absorbed healing to the row a shield ate part of', async () => {
+    const h = await run();
+
+    h.heal({ amount: 300, absorbed: 200 });
+    h.tick();
+    h.openTab('Healing');
+
+    expect(h.figureOf('Mend Wounds')).toContain('300');
+    expect(h.detailOf('Mend Wounds')).toContain('200 absorbed');
+  });
+
+  // The case the `amount > 0` gate used to swallow, and the reason it matters: a
+  // heal a shield devoured and a heal that overhealed BOTH land at `amount: 0`, and
+  // `absorbed` is the only thing that parts them. They deserve opposite reactions,
+  // since one is a cast wasted on somebody already full and the other is a target
+  // still at low health whose healing is being eaten off them.
+  it('records a heal a shield ate whole, which lands at zero', async () => {
+    const h = await run();
+
+    h.heal({ amount: 0, absorbed: 500 });
+    h.tick();
+    h.openTab('Healing');
+
+    expect(h.labels()).toEqual(['Mend Wounds']);
+    expect(h.detailOf('Mend Wounds')).toContain('500 absorbed');
+  });
+
+  // The other half of that same `amount: 0`, which has to stay OUT. Nothing was
+  // absorbed, so the cast landed on somebody already at full health and there is no
+  // healing in it to report. This is what stops the ungating from going too far.
+  it('records nothing for a heal that only overhealed', async () => {
+    const h = await run();
+
+    h.heal({ amount: 0 });
+    h.tick();
+    h.openTab('Healing');
+
+    expect(h.labels()).toEqual([]);
+  });
+
+  // `cueOnly` and a fully absorbed heal now look alike from the outside, since both
+  // are `amount: 0`, and only one of them is a real cast. The FLAG is what parts
+  // them and it has to keep being read first. The pairing below is not something the
+  // wire sends, a cue record carries no healing and no absorb: it is built to be
+  // adversarial, because what is being pinned is the ORDER of the two guards, and
+  // an absorb test that ran ahead of the flag would put a sound in the table.
+  it('still skips a cue-only record even though a zero heal can now count', async () => {
+    const h = await run();
+
+    h.heal({ amount: 0, cueOnly: true, absorbed: 500, ability: 'Renewal' });
     h.tick();
     h.openTab('Healing');
 

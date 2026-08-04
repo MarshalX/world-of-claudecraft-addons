@@ -33,12 +33,16 @@
 // WHAT IT EXTRACTS. Trailmark reproduces `questObjectiveAreas` from the game's own
 // `src/sim/quest_targets.ts`: a kill objective resolves to every camp with that mob
 // id, a collect objective to the camps of mobs whose loot is TAGGED with that quest
-// id plus any ground-object cluster for the item, an interact objective to the object
-// cluster or the NPC's point, a gather objective to the matching nodes, and an escort
-// objective to the escortee's start. That leaf function is the thing most likely to
-// move underneath this table: if it grows an arm, or changes what an arm resolves to,
-// this file and `areasFor` in main.js both have to follow it. Everything emitted here
-// exists to feed it, plus the zone rectangles the addon resolves a point against.
+// id plus any ground-object cluster for the item plus the nodes whose harvest yields
+// it, an interact objective to the object cluster or the NPC's point, a gather
+// objective to the matching nodes, and an escort objective to the escortee's start.
+// That leaf function is the thing most likely to move underneath this table: if it
+// grows an arm, or changes what an arm resolves to, this file and `areasFor` in
+// main.js both have to follow it. It HAS moved once already, which is why that
+// sentence is here rather than hypothetical: 0.34.0 added the node-yield arm to
+// collect, and nothing about the emitted table had to change to feed it, because the
+// node rows already carried the item each one yields. Everything emitted here exists
+// to feed that function, plus the zone rectangles the addon resolves a point against.
 //
 // The quest-tagged loot join is precomputed into `drops` rather than shipping a loot
 // table, because the addon only ever asks the one question `mobsDroppingQuestItem`
@@ -84,16 +88,16 @@ const SOURCE_NOTE =
 /** The objective types `questObjectiveAreas` knows how to place, plus `craft`. */
 const KNOWN_OBJECTIVE_TYPES = new Set(['kill', 'collect', 'interact', 'craft', 'gather', 'escort']);
 
-/** Roughly what the tables carried at game 0.33.1, so a thin parse cannot pass quietly. */
+/** Roughly what the tables carried at game 0.34.0, so a thin parse cannot pass quietly. */
 const EXPECTED = Object.freeze({
   zones: 14,
   quests: 202,
-  camps: 175,
-  objects: 42,
+  camps: 203,
+  objects: 43,
   npcs: 86,
-  nodes: 99,
+  nodes: 156,
   escorts: 4,
-  drops: 48,
+  drops: 50,
 });
 
 const GAME_ARG = '--game=';

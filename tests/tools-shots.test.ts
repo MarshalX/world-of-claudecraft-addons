@@ -14,10 +14,13 @@ import { describe, expect, it } from 'vitest';
 import {
   CROP_MARGIN,
   cropAround,
+  DEFAULT_HOST,
   fillsSlot,
+  hostFor,
   largerScale,
   MAX_BYTES,
   MIN_DEVICE_WIDTH,
+  onlyFor,
   previewAlt,
   renderManifest,
   SCALES,
@@ -176,6 +179,47 @@ describe('describing a sheet of panels', () => {
     expect(previewAlt([{ alt: 'one.' }, { alt: 'two.' }])).toBe(
       'On the left, one. On the right, two.',
     );
+  });
+});
+
+describe('which game a capture is a picture of', () => {
+  // The default is LIVE and not the stage's pbe, and this pins the difference
+  // rather than the value: a preview is a committed artifact of what a player
+  // reads in Browse, and the player is on live. Pbe is normally AHEAD, which is
+  // why `pnpm stage` points there, but at game 0.34.0 the two swapped and pbe
+  // served a release BEHIND live. Inheriting the stage's default that week would
+  // have recaptured `cooldown-bars` without art it already had.
+  it('defaults to live rather than to the stage host', () => {
+    expect(hostFor(['node', 'shots.mjs'])).toBe(DEFAULT_HOST);
+    expect(DEFAULT_HOST).not.toContain('pbe');
+  });
+
+  it('takes an explicit host and drops a trailing slash', () => {
+    const argv = ['node', 'shots.mjs', '--host', 'https://pbe.worldofclaudecraft.com/'];
+    expect(hostFor(argv)).toBe('https://pbe.worldofclaudecraft.com');
+  });
+
+  it('refuses a --host with nothing after it', () => {
+    expect(() => hostFor(['node', 'shots.mjs', '--host'])).toThrow(/needs a value/);
+  });
+
+  // The value is a bare word sitting where an addon id would be. Left in, it
+  // narrows the run to a directory that cannot exist, and the run then fails
+  // saying no addon has a stage.ts, which is true about the wrong problem.
+  it('keeps the host value out of the addon ids', () => {
+    const argv = ['node', 'shots.mjs', '--host', 'https://example.com', 'cadence'];
+    expect(onlyFor(argv)).toEqual(['cadence']);
+  });
+
+  it('reads the flag after the ids as well as before them', () => {
+    const argv = ['node', 'shots.mjs', 'cadence', '--host', 'https://example.com'];
+    expect(hostFor(argv)).toBe('https://example.com');
+    expect(onlyFor(argv)).toEqual(['cadence']);
+  });
+
+  it('captures every addon when no id is named', () => {
+    expect(onlyFor(['node', 'shots.mjs'])).toEqual([]);
+    expect(onlyFor(['node', 'shots.mjs', '--host', 'https://example.com'])).toEqual([]);
   });
 });
 

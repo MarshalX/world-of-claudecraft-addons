@@ -10,7 +10,8 @@
 // is the readout that tells you whether you are hit capped.
 //
 // All of it is already on the socket: damage events carry `ability`, `school`, `crit`,
-// `kind` and `absorbed`, and `heal2` carries `ability` and `crit`. So this aggregates
+// `kind` and `absorbed`, and `heal2` carries `ability`, `crit` and an `absorbed` of its
+// own, for the heal-absorb shields that eat a heal before it lands. So this aggregates
 // what the player is already being sent, and never sends anything.
 //
 // A fight ends when nothing has landed for a while, rather than when the game says
@@ -43,7 +44,10 @@
 // YOU is delivered, since you are the target, and lands in the Taken table.
 //
 // There is no overhealing column, because no overheal figure rides the wire at all; the
-// healing here is what landed.
+// healing here is what LANDED. The one thing the wire does report about a heal that
+// landed nothing is a shield eating it, and that shows as a row totalling zero with its
+// absorbed figure beside it. Reading differently from an overheal is the whole point:
+// the target is still at low health and the healing is being taken off them.
 
 const MS_PER_SECOND = 1000;
 const REPAINT_MS = 500;
@@ -57,8 +61,16 @@ const FRAME_HEIGHT = 320;
 /** Auto-attacks arrive with no ability at all, and they are usually a real share. */
 const MELEE_LABEL = 'Melee';
 
-/** Attack-table outcomes, in the order they are worth reading. */
-const OUTCOMES = ['hit', 'miss', 'dodge', 'parry', 'block', 'resist'];
+/**
+ * Attack-table outcomes, in the order they are worth reading.
+ *
+ * This list has to hold EVERY kind the wire can send, not only the ones worth
+ * reading about: the line divides by every outcome recorded, so a kind missing
+ * from here still takes its share of the denominator and shrinks every printed
+ * percentage to make room for a row that is never drawn. `evade` was exactly
+ * that, a leashing wild mob refusing the hit, and it read as a mystery miss rate.
+ */
+const OUTCOMES = ['hit', 'miss', 'dodge', 'parry', 'block', 'resist', 'evade'];
 
 /** The three tables, in the order the game's own meter puts its tabs. */
 const TABLES = [
@@ -141,6 +153,26 @@ function absorbedOf(event) {
     return event.absorbed;
   }
   return 0;
+}
+
+/**
+ * Whether a record is a thing that happened, which is what earns it a row.
+ *
+ * The gate is the PAIR, never the amount alone, and one rule covers all three
+ * tables because all three meet the same record. A shield that ate a heal or a hit
+ * whole leaves `amount: 0` with a real `absorbed`, and dropping that loses the only
+ * fact separating two events that deserve opposite reactions: on Healing, a cast
+ * wasted on somebody already at full health versus a target still at low health
+ * whose healing is being eaten off them; on Taken, a swing that missed versus one
+ * your own shield stopped. Both arrive at 0 and `absorbed` is all that parts them.
+ *
+ * What this must NOT let in is the genuinely empty record. A miss, a dodge, an
+ * evade and an overheal all land at 0 carrying no absorb, and none of them belongs
+ * in a table of what your total is made of. `cueOnly` is not decided here at all:
+ * it is refused earlier, on its own flag, because it is not an event.
+ */
+function landed(event) {
+  return event.amount > 0 || absorbedOf(event) > 0;
 }
 
 function num(value) {
@@ -242,11 +274,11 @@ woc.net.onEvent('damage', (event) => {
     // attacker's attack table and not yours.
     const kind = String(event.kind);
     fight.outcomes.set(kind, (fight.outcomes.get(kind) ?? 0) + 1);
-    if (event.amount > 0) {
+    if (landed(event)) {
       record('dealt', labelOf(event), event);
     }
   }
-  if (atMe && event.amount > 0) {
+  if (atMe && landed(event)) {
     record('taken', labelOf(event), event);
   }
 });
@@ -266,7 +298,7 @@ woc.net.onEvent('heal2', (event) => {
     return;
   }
   noteActivity();
-  if (event.amount > 0) {
+  if (landed(event)) {
     record('healed', labelOf(event), event);
   }
 });

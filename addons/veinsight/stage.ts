@@ -21,8 +21,11 @@
 // the picture.
 //
 // That is also what caps the list at seven rows here. Nine put the crop past the
-// portrait threshold, which narrows the whole picture to 0.85x to fit the height
-// cap; seven keeps every type and every state on screen and stays under it.
+// portrait threshold, which narrows the whole picture to 0.85x to fit the height cap;
+// seven stays under it. Four rows are what actually get drawn now, because the reach
+// that keeps the pins legible no longer holds seven nodes: `list-length` stays at
+// seven so the cap is still the one that was measured, and the reach is the number
+// that moved. See CIRCUIT.
 //
 // THE THREE PILLARS ARE THE POINT OF THE PINS, and each is produced by its own cause
 // rather than asserted:
@@ -47,9 +50,21 @@
 // disc at one height would hide.
 //
 // NO SICKLE IN THE BAGS, deliberately. A gatherer who mines and logs and does not
-// pick herbs is ordinary, and it is the only way this zone can show the tool gate:
-// every node in Eastbrook Vale is tier 1, so a full kit opens all nine and the
-// three herb rows would say nothing a timer does not already say.
+// pick herbs is ordinary, and it used to be the only way this zone could show the
+// tool gate: every node in Eastbrook Vale is tier 1, so a full kit opens all of them
+// and a herb row would say nothing a timer does not already say.
+//
+// THE TOOL GATE HAS ITS OWN PANE, and the reason is worth keeping. It used to ride in
+// the circuit picture, and 0.34.0's density pass evicted it: the nearest nine nodes to
+// that standpoint are all ore and wood inside forty-five yards and the nearest herb
+// patch is 107 out, so no reach holds a herb row without drawing nine or more pins and
+// no row cap reaches one without the crop going wide. Since the manifest's own
+// description ends by promising the gate, a headline feature had silently dropped out
+// of the only picture a player sees in Browse. So the preview is a SHEET of two panes:
+// the circuit, and `gate` below, standing over the Goldleaf run where the same bags
+// cannot open anything. Same character, same bags, same zone, and the second
+// standpoint is chosen to reproduce the first's pin geometry so both crops are one
+// shape.
 
 import type { Scenario, Stage, WorldDraft } from '../../stage/src/stage.ts';
 import { eventsFrame } from '../../tests/fakes/frames.ts';
@@ -100,19 +115,27 @@ const PROSPECTOR_POS = { x: -71, y: 6.2, z: -51.5 };
 
 /**
  * What was already on this character's own timers when the addon woke up, in
- * seconds: the stand cut a minute ago is halfway back, and the one cut before that
+ * seconds: the stand cut a minute ago is halfway back, and the vein cut before that
  * is nearly ready and goes warm for it.
  *
  * The third timer is not here on purpose. It belongs to the vein mined during the
  * scenario, and a harvest is what starts one.
+ *
+ * The nearly-ready one is a VEIN rather than the second wood stand it used to be,
+ * and only because of where the two sit. Game 0.34.0's density pass put nine nodes
+ * inside forty-five yards of this standpoint where there were six, so the reach that
+ * keeps the pins legible (see CIRCUIT) now stops at thirty-three yards and
+ * `wood_eastbrook_1` falls three hundredths of a yard outside it. Hanging the warm
+ * row on `ore_eastbrook_3` keeps the state in the picture; nothing about the pillar
+ * it stands on changes, since a cooldown is not a height.
  */
 const COOLING: ReadonlyArray<readonly [string, number]> = [
   ['wood_eastbrook_2', 61],
-  ['wood_eastbrook_1', 9],
+  ['ore_eastbrook_3', 9],
 ];
 
 /**
- * What is left on the vein just taken, out of the game's own 120.
+ * What is left on the vein just taken, out of the game's own 240 (0.34.0 doubled it).
  *
  * Not a round number and not the full length, because both are readings a player
  * only ever catches for one tick: a picture of either is a picture of the moment
@@ -145,15 +168,64 @@ const BAGS = [
 const PANEL = { box: { x: 199, y: 84, w: 320, h: 340 }, visible: true };
 
 /**
- * Seven nodes in range and room for seven, which is a pair rather than two numbers.
+ * Everything in range fits in the list, which is a pair rather than two numbers.
  *
  * The note says what the panel is holding BACK, so a list shorter than the range
- * reads "2 more in range" and the sentence that explains the whole addon, that a
- * gathering timer is yours and nobody can take a node off you, never gets drawn.
- * 115 yards reaches the first herb patch at 110 and stops short of the other two at
- * 118 and 122, which is what makes the two numbers agree.
+ * spends that line on "4 more in range" and the sentence that explains the whole
+ * addon, that a gathering timer is yours and nobody can take a node off you, never
+ * gets drawn. The reach is what has to give, because the row cap is set by the crop.
+ *
+ * THIRTY-THREE YARDS IS A CLIFF AND NOT A ROUND NUMBER. A pin is drawn for every node
+ * in reach, so the reach is what sets the crop WIDTH, and a pinned point's screen
+ * offset is its x distance from the player over its depth. Measured across this
+ * table, the offsets of everything in reach span 0.32 at thirty-three yards and 1.13
+ * at thirty-four, because `ore_eastbrook_5` comes in well off the camera axis. That
+ * one yard is three and a half times the crop, and the whole picture is then scaled
+ * down to fit the card.
+ *
+ * This was 115 yards and seven rows until game 0.34.0. The density pass took the zone
+ * from nine nodes to eighteen and put nine of them inside forty-five yards, so the
+ * old reach drew ELEVEN pins where it had drawn three, and the seven nearest rows no
+ * longer reached a herb patch at all. What the tighter reach costs is the tool gate,
+ * which is the one thing this picture used to show that it now does not: see the
+ * sickle note at the top.
  */
-const CIRCUIT = { 'draw-distance': 115, 'list-length': 7 };
+const CIRCUIT = { 'draw-distance': 33, 'list-length': 7 };
+
+/**
+ * Where the SECOND pane is photographed from: north of the Goldleaf herb run.
+ *
+ * The three patches this looks at are the only place in the starting zone the tool
+ * gate can be photographed at all, because every node in Eastbrook Vale is tier 1 and
+ * a gate needs something the bags cannot open. This character carries a pick and an
+ * axe and no sickle, so ore and wood answer with a time and herbs answer with a word.
+ *
+ * The position is CHOSEN to reproduce the first pane's pin geometry rather than
+ * picked, so one panel box serves both and the two crops are the same shape. A pinned
+ * point's screen offset is its x distance over its depth (see the header): the first
+ * pane's three veins sit at -0.542, -0.357 and -0.219, centred on -0.380 and spanning
+ * 0.323, and from here the three patches centre on -0.378 and span 0.244. The centre
+ * is what the panel's x has to agree with and it agrees to three thousandths; the
+ * span is NARROWER, which only ever crops tighter and reads larger in the card.
+ *
+ * What does not match is depth, and it cannot: the patches are authored 8 and 9 yards
+ * apart in z where the veins are 4, so no standpoint holds all three inside the
+ * veins' 24 to 32 band. At 22, 30 and 39 the far tile rides a little higher and
+ * smaller than its opposite number in the first pane, which is the one respect in
+ * which these two pictures are not the same picture.
+ */
+const HERB_RUN = { x: -47, y: 5, z: 121 };
+
+/**
+ * Far enough to hold the wood stand that is NOT gated, and no further.
+ *
+ * The stand is the whole point of the number. Three rows all reading Tool photograph
+ * as a panel that says Tool, not as a gate; one row answering with a time beside them
+ * is what makes the other three mean something. It sits 57 yards off and BEHIND the
+ * camera, so it is in the list and draws no pin, which is exactly the shape wanted:
+ * the contrast lands in the rows and the world keeps the three tiles the pane is for.
+ */
+const HERB_REACH = { 'draw-distance': 60, 'list-length': 7 };
 
 /** Nowhere near anything, at the tightest draw distance the addon offers. */
 const NOWHERE = { x: 0, y: 5, z: 0 };
@@ -178,6 +250,20 @@ function atTheVeins(draft: WorldDraft): void {
     level: 5,
     pos: { ...PROSPECTOR_POS },
   });
+}
+
+/**
+ * Standing over the herb run, which is the same character on the same circuit.
+ *
+ * The bags come from `aGatherer` rather than being restated, and that sharing is the
+ * point rather than a saving: two panes of one sheet are one player, and a second pane
+ * that quietly carried a sickle would be a different character answering a different
+ * question. The gate here is the gate the first pane's character also has.
+ */
+function amongTheHerbs(draft: WorldDraft): void {
+  aGatherer(draft);
+  draft.set(draft.player, 'pos', { ...HERB_RUN });
+  draft.set(draft.player, 'facing', FACING);
 }
 
 /** Out on the circuit with nothing in reach, which is most of a gathering session. */
@@ -259,17 +345,50 @@ async function halfWayRound(stage: Stage): Promise<void> {
   await show(stage);
 }
 
+/**
+ * The herb pane: read the table, then draw. Nothing is harvested here.
+ *
+ * No harvest and no bystander, so all three pins stand at the player's own height and
+ * every pillar is dotted. That is the honest picture for a run this character has
+ * never worked and cannot work: a measured height is something a harvest leaves
+ * behind, and there is no harvest to leave one.
+ */
+async function atTheHerbRun(stage: Stage): Promise<void> {
+  await tableRead(stage);
+  await show(stage);
+}
+
 const SCENARIOS: readonly Scenario[] = [
   {
     id: 'circuit',
     label: 'Half way round a circuit',
     preview: true,
-    alt: "a panel headed Veinsight, with three pins standing out in the world below it. The panel lists the seven gathering nodes in range in Eastbrook Vale, nearest first, under a note reading Timers are yours alone, nobody else can take a node off you. Each row is a draining bar carrying what the node is, the zone, the distance in yards and an arrow for the way to turn to reach it: a wood stand 19 yards off at 1m 1s, an ore vein at 27 yards at 1m 23s, two more ore veins at 30 and 33 reading Yours, a wood stand at 33 with 9 seconds left and drawn warm because it is nearly back, another at 44 reading Yours, and a herb patch 110 yards out reading Tool rather than a time, because there is no sickle in these bags and no waiting will open it. Below the panel, one pin over each of the three ore veins: a square tile on a thin pillar in the game's own grey for ore, each standing at its own height. The left one is dimmed and reads 83s, since it is the vein just harvested and still coming back, and the other two read Yours. The pillars are drawn three different ways to say how the ground under each pin was arrived at: solid where this character's own harvest measured it, dashed where somebody standing beside it gave it away, and dotted where nothing better was known and the pin sits at the player's own height.",
+    caption: 'The circuit',
+    alt: "a panel headed Veinsight, with three pins standing out in the world below it. The panel lists the four gathering nodes in range in Eastbrook Vale, nearest first, under a note reading Timers are yours alone, nobody else can take a node off you, which is the line the panel is free to draw because nothing is being held back: everything in reach is on screen. Each row is a draining bar carrying what the node is, the zone, the distance in yards and an arrow for the way to turn to reach it: a wood stand 19 yards behind at 1m 1s, an ore vein 27 yards off to the upper left at 1m 23s, another ore vein 30 yards straight ahead reading Yours rather than a time, and a third at 33 yards with 9 seconds left, drawn in a warm amber because it is nearly back. Below the panel, one pin over each of the three ore veins: a square tile on a thin pillar in the game's own grey for ore, each standing at its own height on the slope. The left one is dimmed and reads 83s, since it is the vein just harvested and still coming back; the middle reads Yours; the right is dimmed and reads 9s. The pillars are drawn three different ways to say how the ground under each pin was arrived at, which is the one thing on screen that is never a fact: solid where this character's own harvest measured it, dashed where somebody standing beside it gave it away, and dotted where nothing better was known and the pin sits at the player's own height.",
     settings: CIRCUIT,
     data: { [TABLE_FILE]: JSON.stringify(TABLE) },
     frames: { nodes: PANEL },
     world: atTheVeins,
     run: halfWayRound,
+  },
+  {
+    // The SECOND pane of the sheet, and it exists to put the tool gate back on a
+    // Browse row. The manifest's own description ends "Says which ones no tool in
+    // your bags can open", and game 0.34.0's density pass pushed the nearest herb
+    // patch out of the circuit pane's reach, so the one picture a player sees stopped
+    // covering a headline feature. Nothing here is a new claim: it is the same
+    // character, the same bags and the same zone, standing somewhere the gate is
+    // visible.
+    id: 'gate',
+    label: 'What no tool of yours opens',
+    preview: true,
+    caption: 'The tool gate',
+    alt: "a panel headed Veinsight, with three pins standing out in the world below it. The panel lists the four gathering nodes in range in Eastbrook Vale, nearest first, under a note reading Timers are yours alone, nobody else can take a node off you. Three of the four rows are herb patches, at 25, 32 and 40 yards, and where a countdown would be each one reads Tool: this character carries a pick and an axe and no sickle, so no amount of waiting will open any of them, and the panel says which of the two reasons a node is unavailable for rather than leaving an empty timer to be read as a bug. The fourth row is a wood stand 57 yards off to the right reading Yours, meaning it is standing there now and the axe in these bags opens it, which is what makes the other three mean something rather than reading as a panel that simply says Tool. Below the panel, one pin over each of the three herb patches, a square tile on a thin pillar in the game's own green for herbs. Every pillar here is dotted, unlike the circuit picture beside it, because a dotted pillar means the ground under the pin was never measured and the tile is hanging at the player's own height: nobody has harvested this run and nobody is standing on it, and a height is something a harvest leaves behind.",
+    settings: HERB_REACH,
+    data: { [TABLE_FILE]: JSON.stringify(TABLE) },
+    frames: { nodes: PANEL },
+    world: amongTheHerbs,
+    run: atTheHerbRun,
   },
   {
     // The route is off by default and is the one thing here on the frame loop, since

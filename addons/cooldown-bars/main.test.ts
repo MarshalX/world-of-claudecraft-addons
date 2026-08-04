@@ -40,17 +40,24 @@ const MANIFEST_JSON: unknown = JSON.parse(MANIFEST_TEXT);
 const PLAYER_ID = PLAYER_ENTITY.id;
 /**
  * Long enough to clear the addon's global-cooldown floor, and also the published
- * length of `aimed_shot` below.
+ * length of `bestial_wrath` below, which is the game's own 120.
  *
  * Those being the same number is what keeps most of this suite reading the way it did
  * before the spellbook became the denominator: a cooldown pressed at its full length
  * fills the same bar whether the total was published or observed. The cases where the
  * two answers DIFFER are the ones that use a different ability on purpose.
  */
-const LONG = 30;
-/** `arcane_shot`'s published length: the talent-resolved 5.4, not the base 6. */
-const RESOLVED = 5.4;
-/** The size of `twinstrike`'s charge pool, as the spellbook resolves it. */
+const LONG = 120;
+/** `arcane_shot`'s published length, which is the game's own 6. */
+const FELL_SHOT = 6;
+/**
+ * The size of `arcane_shot`'s charge pool, as the spellbook resolves it.
+ *
+ * Two because of a talent, and it is the hunter's one resolved-after-talents fact:
+ * the content table gives Fell Shot no `maxCharges` at all, and the Twin Fletching
+ * row ("Fell Shot stores 2 uses") is what turns that into a pool of two on the
+ * spellbook. So a reading taken from the content table would find no pool here.
+ */
 const POOL = 2;
 
 const teardown: Array<() => void> = [];
@@ -140,36 +147,35 @@ async function start(
   // The spellbook in the game's own shape, and the source of BOTH things the addon
   // cannot get off the wire: an ability's display name and its resolved length.
   //
-  // `arcane_shot` is displayed as "Fell Shot", which is the divergence a label read
-  // from the id alone gets wrong. `twinstrike` carries a pool of two, which is the
-  // maximum `abilityCharges.maxCharges` zero-fills and never reports.
+  // EVERY ID AND NAME HERE IS THE GAME'S OWN. Both of these hunter abilities are
+  // shown under a name an id cannot be turned into: `arcane_shot` is "Fell Shot" and
+  // `bestial_wrath` is "Howling Rage", which is the divergence a label read from the
+  // id alone gets wrong. Fell Shot also carries the pool of two the Twin Fletching
+  // talent resolves, and that pool size is what `abilityCharges.maxCharges` zero-fills
+  // and never reports.
   //
-  // Every OTHER id this suite uses is deliberately absent, `rapid_fire` first among
-  // them, and together they stand for the whole residue: an item cooldown, or an
-  // ability granted from outside the class kit. They are what keeps the fallback
-  // name, the measured denominator and the re-baselining covered.
+  // Every OTHER id this suite uses is deliberately absent, `system_unstuck` first among
+  // them, and together they stand for the whole residue. That one is not a stand-in:
+  // it is a real key of the game's own cooldown map (the anti-relog timer, set by
+  // `unstuck.ts`, shipped in the `cds` payload unfiltered) and it is provably not an
+  // ability, since the game special-cases it against its own ABILITIES table. So it is
+  // exactly the case the spellbook can never answer, and it keeps the fallback name,
+  // the measured denominator and the re-baselining covered.
   const known = [
     {
       def: { id: 'arcane_shot', name: 'Fell Shot', school: 'arcane', requiresTarget: true },
       rank: 3,
       cost: 55,
       castTime: 0,
-      cooldown: RESOLVED,
+      cooldown: FELL_SHOT,
+      charges: POOL,
     },
     {
-      def: { id: 'aimed_shot', name: 'Aimed Shot', school: 'physical', requiresTarget: true },
-      rank: 2,
-      cost: 75,
-      castTime: 2,
-      cooldown: LONG,
-    },
-    {
-      def: { id: 'twinstrike', name: 'Twinstrike', school: 'physical', requiresTarget: true },
+      def: { id: 'bestial_wrath', name: 'Howling Rage', school: 'physical', requiresTarget: true },
       rank: 1,
       cost: 30,
       castTime: 0,
-      cooldown: 12,
-      charges: POOL,
+      cooldown: LONG,
     },
   ];
   const world = { entities: new Map([[PLAYER_ID, player]]), player, known };
@@ -254,18 +260,18 @@ describe('which bars are up', () => {
   it('raises a bar when a cooldown starts', async () => {
     const h = await run();
 
-    h.cooldown('aimed_shot', LONG);
+    h.cooldown('bestial_wrath', LONG);
     h.poll();
 
-    expect(h.drawn()).toEqual(['aimed_shot']);
+    expect(h.drawn()).toEqual(['bestial_wrath']);
   });
 
   it('drops the bar when the cooldown finishes', async () => {
     const h = await run();
-    h.cooldown('aimed_shot', LONG);
+    h.cooldown('bestial_wrath', LONG);
     h.poll();
 
-    h.cooldown('aimed_shot', 0);
+    h.cooldown('bestial_wrath', 0);
     h.poll();
 
     expect(h.drawn()).toEqual([]);
@@ -286,12 +292,12 @@ describe('which bars are up', () => {
   it('draws the soonest ready at the top', async () => {
     const h = await run();
 
-    h.cooldown('rapid_fire', 180);
-    h.cooldown('aimed_shot', LONG);
+    h.cooldown('system_unstuck', 180);
+    h.cooldown('bestial_wrath', LONG);
     h.cooldown('multi_shot', 10);
     h.poll();
 
-    expect(h.drawn()).toEqual(['multi_shot', 'aimed_shot', 'rapid_fire']);
+    expect(h.drawn()).toEqual(['multi_shot', 'bestial_wrath', 'system_unstuck']);
   });
 
   // The label the game itself uses, which a cooldown map cannot supply on its own:
@@ -308,16 +314,53 @@ describe('which bars are up', () => {
     expect(barFor('arcane_shot')?.textContent).not.toContain('Arcane Shot');
   });
 
-  // An id the spellbook does not carry is something the player did not learn: an
-  // item cooldown, or an ability granted from outside the class kit. A guess from
-  // the id beats a blank row for those.
-  it('falls back to the id for an ability outside the spellbook', async () => {
+  // An id the spellbook does not carry is not always an ability at all: the game's
+  // own anti-relog timer rides the same cooldown map under `system_unstuck`. A guess
+  // from the id beats a blank row for those, and the marker beside it is what says
+  // the guess is a guess.
+  // The mark, which is the whole of what a row says about its own name. It is
+  // foretell's exactly, because the two addons hedge the same fact and a player who
+  // has learned the mark on one must not have to learn it again on the other.
+  it('marks a name it worked out from the id', async () => {
     const h = await run();
 
-    h.cooldown('rapid_fire', LONG);
+    h.cooldown('system_unstuck', LONG);
     h.poll();
 
-    expect(barFor('rapid_fire')?.textContent).toContain('Rapid Fire');
+    expect(barFor('system_unstuck')?.textContent).toContain('System Unstuck?');
+  });
+
+  // And never on a name the game itself supplied, or the mark would say nothing:
+  // a hedge that is on every row is a hedge nobody reads.
+  it('leaves a name off the spellbook unmarked', async () => {
+    const h = await run();
+
+    h.cooldown('arcane_shot', LONG);
+    h.poll();
+
+    expect(barFor('arcane_shot')?.textContent).toContain('Fell Shot');
+    expect(barFor('arcane_shot')?.textContent).not.toContain('Fell Shot?');
+  });
+
+  // A tile has no room for a label, so the mark has to reach the accessible name:
+  // that string is the only thing naming the ability for a screen reader, and an
+  // unmarked one there would be the guess presented as fact.
+  it('marks the name on a tile too', async () => {
+    const h = await run({ layout: 'tiles' });
+
+    h.cooldown('system_unstuck', LONG);
+    h.poll();
+
+    expect(barFor('system_unstuck')?.getAttribute('aria-label')).toContain('System Unstuck?');
+  });
+
+  it('falls back to the id for a cooldown outside the spellbook', async () => {
+    const h = await run();
+
+    h.cooldown('system_unstuck', LONG);
+    h.poll();
+
+    expect(barFor('system_unstuck')?.textContent).toContain('System Unstuck');
   });
 });
 
@@ -325,10 +368,10 @@ describe('the drain', () => {
   it('starts full', async () => {
     const h = await run();
 
-    h.cooldown('aimed_shot', LONG);
+    h.cooldown('bestial_wrath', LONG);
     h.poll();
 
-    expect(h.fillOf('aimed_shot')).toBe('100.00%');
+    expect(h.fillOf('bestial_wrath')).toBe('100.00%');
   });
 
   // The claim the whole example is built to demonstrate: the subscription is
@@ -336,14 +379,14 @@ describe('the drain', () => {
   // only a frame passes, and the bar has to follow the world on its own.
   it('follows the cooldown down without another set change', async () => {
     const h = await run();
-    h.cooldown('aimed_shot', LONG);
+    h.cooldown('bestial_wrath', LONG);
     h.poll();
 
-    h.cooldown('aimed_shot', LONG / 2);
+    h.cooldown('bestial_wrath', LONG / 2);
     h.frame();
 
-    expect(h.fillOf('aimed_shot')).toBe('50.00%');
-    expect(h.leftOf('aimed_shot')).toBe('15.0s');
+    expect(h.fillOf('bestial_wrath')).toBe('50.00%');
+    expect(h.leftOf('bestial_wrath')).toBe('60.0s');
   });
 
   // The whole point of reading the spellbook. Found half spent, drawn half full, on
@@ -352,23 +395,25 @@ describe('the drain', () => {
   it('fills an ability you know against its published length', async () => {
     const h = await run();
 
-    h.cooldown('arcane_shot', RESOLVED / 2);
+    h.cooldown('arcane_shot', FELL_SHOT / 2);
     h.poll();
 
     expect(h.fillOf('arcane_shot')).toBe('50.00%');
   });
 
-  // The published figure is the RESOLVED one, after talents. `arcane_shot`'s content
-  // table says 6 and this hunter has spent the point that makes it 5.4, so a bar
-  // dividing by the base would sit at 90 percent the instant it was pressed.
-  it('divides by the talent-resolved length, not by the base', async () => {
+  // The pair to the pool cases below, and the distinction a lookup is most likely to
+  // lose: a pool size is per ABILITY, off that ability's own spellbook entry, and
+  // "known but with no pool" is a different answer from "not known at all". Howling
+  // Rage is in this hunter's spellbook and carries no `charges`, so a reading that
+  // took the pool from the spellbook as a whole, or that let Fell Shot's two stand
+  // for anything the player knows, would draw "1/2" on this row instead of "1".
+  it('draws a bare count for a known ability whose entry carries no pool', async () => {
     const h = await run();
 
-    h.cooldown('arcane_shot', RESOLVED);
-    h.poll();
+    h.charges('bestial_wrath', { charges: 1, recharge: 6, length: LONG });
+    h.frame();
 
-    expect(h.fillOf('arcane_shot')).toBe('100.00%');
-    expect(h.leftOf('arcane_shot')).toBe('5.4s');
+    expect(h.leftOf('bestial_wrath')).toBe('6.0s (1)');
   });
 
   // The residue, and the reason `rebaseline` survives. An item cooldown is in no
@@ -377,34 +422,34 @@ describe('the drain', () => {
   it('treats what it first saw as full for an ability outside your spellbook', async () => {
     const h = await run();
 
-    h.cooldown('rapid_fire', 60);
+    h.cooldown('system_unstuck', 60);
     h.poll();
-    h.cooldown('rapid_fire', 30);
+    h.cooldown('system_unstuck', 30);
     h.frame();
 
-    expect(h.fillOf('rapid_fire')).toBe('50.00%');
+    expect(h.fillOf('system_unstuck')).toBe('50.00%');
   });
 
   // A rebuild must not restart the fill: the bar keeps the total it was created
   // with, or every unrelated cooldown starting would reset every other bar.
   it('keeps its fill when an unrelated cooldown starts', async () => {
     const h = await run();
-    h.cooldown('aimed_shot', LONG);
+    h.cooldown('bestial_wrath', LONG);
     h.poll();
-    h.cooldown('aimed_shot', LONG / 2);
+    h.cooldown('bestial_wrath', LONG / 2);
     h.frame();
 
-    h.cooldown('rapid_fire', 180);
+    h.cooldown('system_unstuck', 180);
     h.poll();
 
-    expect(h.fillOf('aimed_shot')).toBe('50.00%');
+    expect(h.fillOf('bestial_wrath')).toBe('50.00%');
   });
 });
 
 describe('disabling it', () => {
   it('leaves no frame, no keybind, and no frame loop behind', async () => {
     const h = await run();
-    h.cooldown('aimed_shot', LONG);
+    h.cooldown('bestial_wrath', LONG);
     h.poll();
 
     for (const stop of teardown.splice(0)) {
@@ -434,11 +479,11 @@ describe('disabling it', () => {
 describe('a cooldown that is reset or re-armed', () => {
   it('drops the bar when another ability clears the cooldown outright', async () => {
     const h = await run();
-    h.cooldown('rapid_fire', 180);
+    h.cooldown('system_unstuck', 180);
     h.poll();
 
     // What `clearCooldowns` does: the entry is deleted, not set to zero.
-    h.cooldown('rapid_fire', 0);
+    h.cooldown('system_unstuck', 0);
     h.poll();
 
     expect(h.drawn()).toEqual([]);
@@ -491,45 +536,45 @@ describe('a cooldown that is reset or re-armed', () => {
   // and would have driven a guess into the addon to satisfy it.
   it('reads a shorter re-press as a drain, which is all it can do', async () => {
     const h = await run();
-    h.cooldown('rapid_fire', 30);
+    h.cooldown('system_unstuck', 30);
     h.poll();
-    h.cooldown('rapid_fire', 15);
+    h.cooldown('system_unstuck', 15);
     h.frame();
 
-    h.cooldown('rapid_fire', 10);
+    h.cooldown('system_unstuck', 10);
     h.frame();
 
-    expect(h.fillOf('rapid_fire')).toBe('33.33%');
+    expect(h.fillOf('system_unstuck')).toBe('33.33%');
   });
 
   // And when a frame does catch the gap, the rebuild is what gets it right.
   it('rebuilds from the new length when a frame catches the reset', async () => {
     const h = await run();
-    h.cooldown('rapid_fire', 30);
+    h.cooldown('system_unstuck', 30);
     h.poll();
 
-    h.cooldown('rapid_fire', 0);
+    h.cooldown('system_unstuck', 0);
     h.poll();
-    h.cooldown('rapid_fire', 10);
+    h.cooldown('system_unstuck', 10);
     h.poll();
 
-    expect(h.fillOf('rapid_fire')).toBe('100.00%');
+    expect(h.fillOf('system_unstuck')).toBe('100.00%');
   });
 
   // The same sequence on an ability you DO know needs none of that reasoning: the
-  // denominator never moved, so 10 of a published 30 is simply 10 of 30. This is the
+  // denominator never moved, so 40 of a published 120 is simply 40 of 120. This is the
   // pair to the case above and the reason the residue is worth keeping separate.
   it('reads a shorter re-press correctly for an ability you know', async () => {
     const h = await run();
-    h.cooldown('aimed_shot', LONG);
+    h.cooldown('bestial_wrath', LONG);
     h.poll();
-    h.cooldown('aimed_shot', 15);
+    h.cooldown('bestial_wrath', 60);
     h.frame();
 
-    h.cooldown('aimed_shot', 10);
+    h.cooldown('bestial_wrath', 40);
     h.frame();
 
-    expect(h.fillOf('aimed_shot')).toBe('33.33%');
+    expect(h.fillOf('bestial_wrath')).toBe('33.33%');
   });
 });
 
@@ -550,20 +595,20 @@ describe('an ability regenerating a charge', () => {
   it('raises a bar from the frame loop, with no cooldown set change', async () => {
     const h = await run();
 
-    h.charges('twinstrike', { charges: 1, recharge: 6, length: 12 });
+    h.charges('arcane_shot', { charges: 1, recharge: 6, length: 12 });
     h.frame();
 
-    expect(h.drawn()).toEqual(['twinstrike']);
+    expect(h.drawn()).toEqual(['arcane_shot']);
   });
 
   // The whole point: half of a published twelve, right the first time it is drawn.
   it('fills against the published length rather than against what it first saw', async () => {
     const h = await run();
 
-    h.charges('twinstrike', { charges: 1, recharge: 6, length: 12 });
+    h.charges('arcane_shot', { charges: 1, recharge: 6, length: 12 });
     h.frame();
 
-    expect(h.fillOf('twinstrike')).toBe('50.00%');
+    expect(h.fillOf('arcane_shot')).toBe('50.00%');
   });
 
   // "1/2", not "1". The wire's maximum is the zero the client filled in, and the
@@ -573,10 +618,10 @@ describe('an ability regenerating a charge', () => {
   it('shows how many uses are left out of how many there are', async () => {
     const h = await run();
 
-    h.charges('twinstrike', { charges: 1, recharge: 6, length: 12 });
+    h.charges('arcane_shot', { charges: 1, recharge: 6, length: 12 });
     h.frame();
 
-    expect(h.leftOf('twinstrike')).toBe(`6.0s (1/${String(POOL)})`);
+    expect(h.leftOf('arcane_shot')).toBe(`6.0s (1/${String(POOL)})`);
   });
 
   // A pool on an ability outside your kit has a size nowhere at all, and the bare
@@ -593,10 +638,10 @@ describe('an ability regenerating a charge', () => {
 
   it('drops the row once the pool is full again', async () => {
     const h = await run();
-    h.charges('twinstrike', { charges: 1, recharge: 6, length: 12 });
+    h.charges('arcane_shot', { charges: 1, recharge: 6, length: 12 });
     h.frame();
 
-    h.charges('twinstrike', { charges: 2, recharge: 0, length: 12 });
+    h.charges('arcane_shot', { charges: 2, recharge: 0, length: 12 });
     h.frame();
 
     expect(h.drawn()).toEqual([]);
@@ -608,27 +653,27 @@ describe('an ability regenerating a charge', () => {
   it('does not draw the same ability twice when the pool is empty', async () => {
     const h = await run();
 
-    h.charges('twinstrike', { charges: 0, recharge: 9, length: 12 });
-    h.cooldown('twinstrike', 9);
+    h.charges('arcane_shot', { charges: 0, recharge: 9, length: 12 });
+    h.cooldown('arcane_shot', 9);
     h.poll();
 
-    expect(h.drawn()).toEqual(['twinstrike']);
-    expect(h.fillOf('twinstrike')).toBe('75.00%');
+    expect(h.drawn()).toEqual(['arcane_shot']);
+    expect(h.fillOf('arcane_shot')).toBe('75.00%');
   });
 
   // A fresh recharge starting is not a re-arm to learn from: the length is already
   // known, so a remaining that goes back up must not become the new denominator.
   it('does not re-baseline off a published length', async () => {
     const h = await run();
-    h.charges('twinstrike', { charges: 1, recharge: 3, length: 12 });
+    h.charges('arcane_shot', { charges: 1, recharge: 3, length: 12 });
     h.frame();
 
-    h.charges('twinstrike', { charges: 0, recharge: 12, length: 12 });
+    h.charges('arcane_shot', { charges: 0, recharge: 12, length: 12 });
     h.frame();
-    h.charges('twinstrike', { charges: 0, recharge: 6, length: 12 });
+    h.charges('arcane_shot', { charges: 0, recharge: 6, length: 12 });
     h.frame();
 
-    expect(h.fillOf('twinstrike')).toBe('50.00%');
+    expect(h.fillOf('arcane_shot')).toBe('50.00%');
   });
 
   // An addon that walked the pools every frame when there are none would be paying
@@ -665,10 +710,10 @@ describe('the tile layout', () => {
   it('draws squares rather than rows when it is picked', async () => {
     const h = await run({ layout: 'tiles' });
 
-    h.cooldown('aimed_shot', LONG);
+    h.cooldown('bestial_wrath', LONG);
     h.poll();
 
-    expect(tileFor('aimed_shot')).not.toBeNull();
+    expect(tileFor('bestial_wrath')).not.toBeNull();
     expect(document.querySelector('.woc-bar')).toBeNull();
   });
 
@@ -687,13 +732,13 @@ describe('the tile layout', () => {
   // inverted one: both ends look right under either.
   it('sweeps the square as the cooldown runs down', async () => {
     const h = await run({ layout: 'tiles' });
-    h.cooldown('aimed_shot', LONG);
+    h.cooldown('bestial_wrath', LONG);
     h.poll();
 
-    h.cooldown('aimed_shot', LONG / 2);
+    h.cooldown('bestial_wrath', LONG / 2);
     h.frame();
 
-    expect(sweepOf('aimed_shot')).toBe('50.00%');
+    expect(sweepOf('bestial_wrath')).toBe('50.00%');
   });
 
   // 40 pixels of art has no room for "119.4s", so the seconds lose their decimal
@@ -705,10 +750,10 @@ describe('the tile layout', () => {
   ])('reads %ss left as "%s"', async (remaining, shown) => {
     const h = await run({ layout: 'tiles' });
 
-    h.cooldown('aimed_shot', remaining);
+    h.cooldown('bestial_wrath', remaining);
     h.poll();
 
-    expect(tileFor('aimed_shot')?.querySelector('.woc-tile-value')?.textContent).toBe(shown);
+    expect(tileFor('bestial_wrath')?.querySelector('.woc-tile-value')?.textContent).toBe(shown);
   });
 
   // A bar carries its charge count in the same figure as the time; a tile has a
@@ -718,11 +763,11 @@ describe('the tile layout', () => {
   it('puts a charge count in the corner instead of in the countdown', async () => {
     const h = await run({ layout: 'tiles' });
 
-    h.charges('twinstrike', { charges: 1, recharge: 6, length: 12 });
+    h.charges('arcane_shot', { charges: 1, recharge: 6, length: 12 });
     h.frame();
 
-    expect(tileFor('twinstrike')?.querySelector('.woc-tile-count')?.textContent).toBe('1');
-    expect(tileFor('twinstrike')?.querySelector('.woc-tile-value')?.textContent).toBe('6');
+    expect(tileFor('arcane_shot')?.querySelector('.woc-tile-count')?.textContent).toBe('1');
+    expect(tileFor('arcane_shot')?.querySelector('.woc-tile-value')?.textContent).toBe('6');
   });
 
   // The shared half: ordering is not part of either builder, so it has to survive
@@ -730,11 +775,11 @@ describe('the tile layout', () => {
   it('keeps the soonest ready first', async () => {
     const h = await run({ layout: 'tiles' });
 
-    h.cooldown('rapid_fire', 180);
-    h.cooldown('aimed_shot', LONG);
+    h.cooldown('system_unstuck', 180);
+    h.cooldown('bestial_wrath', LONG);
     h.poll();
 
-    expect(h.drawn()).toEqual(['aimed_shot', 'rapid_fire']);
+    expect(h.drawn()).toEqual(['bestial_wrath', 'system_unstuck']);
   });
 
   // The ability's name is nowhere on a tile: the art is the label. So the name has
@@ -752,27 +797,27 @@ describe('the tile layout', () => {
   // is a different surface and the storage change is what reaches a running addon.
   it('swaps every row when the setting changes under it', async () => {
     const h = await run();
-    h.cooldown('aimed_shot', LONG);
+    h.cooldown('bestial_wrath', LONG);
     h.poll();
     expect(document.querySelectorAll('.woc-bar')).toHaveLength(1);
 
     h.hub.remote(`config:${FQID}`, 'values', { layout: 'tiles' });
 
     expect(document.querySelectorAll('.woc-bar')).toHaveLength(0);
-    expect(tileFor('aimed_shot')).not.toBeNull();
+    expect(tileFor('bestial_wrath')).not.toBeNull();
   });
 
   // A rebuild destroys rows, and a destroyed row must not be left in the map: the
   // next frame would append an element belonging to nothing back into the strip.
   it('leaves no orphan behind when it swaps', async () => {
     const h = await run();
-    h.cooldown('aimed_shot', LONG);
+    h.cooldown('bestial_wrath', LONG);
     h.poll();
 
     h.hub.remote(`config:${FQID}`, 'values', { layout: 'tiles' });
     h.frame();
 
-    expect(h.drawn()).toEqual(['aimed_shot']);
+    expect(h.drawn()).toEqual(['bestial_wrath']);
   });
 });
 
@@ -799,10 +844,10 @@ describe('the size of the strip', () => {
   it('starts at the tap-target floor the game holds its controls to', async () => {
     const h = await run({ layout: 'tiles' });
 
-    h.cooldown('aimed_shot', LONG);
+    h.cooldown('bestial_wrath', LONG);
     h.poll();
 
-    expect(sizeOf('aimed_shot')).toBe('40px');
+    expect(sizeOf('bestial_wrath')).toBe('40px');
   });
 
   // The tile is drawn BEFORE the restore lands, which is the live path: a tile
@@ -816,12 +861,12 @@ describe('the size of the strip', () => {
       { layout: 'tiles' },
       { tiles: { box: { x: 20, y: 20, w: 300, h: 64 }, visible: true } },
     );
-    h.cooldown('aimed_shot', LONG);
+    h.cooldown('bestial_wrath', LONG);
     h.poll();
-    expect(sizeOf('aimed_shot')).toBe('40px');
+    expect(sizeOf('bestial_wrath')).toBe('40px');
 
     await vi.waitFor(() => {
-      expect(sizeOf('aimed_shot')).toBe('64px');
+      expect(sizeOf('bestial_wrath')).toBe('64px');
     });
   });
 
@@ -834,11 +879,11 @@ describe('the size of the strip', () => {
       { bars: { box: { x: 20, y: 20, w: 220, h: 260 }, visible: true } },
     );
 
-    h.cooldown('aimed_shot', LONG);
+    h.cooldown('bestial_wrath', LONG);
     h.poll();
     await settleFrames();
 
-    expect(sizeOf('aimed_shot')).toBe('40px');
+    expect(sizeOf('bestial_wrath')).toBe('40px');
   });
 
   // The column is sized by its content: a fixed height would either pad it out or
@@ -864,11 +909,11 @@ describe('the size of the strip', () => {
   it('holds the strip at one square when a saved box is shorter', async () => {
     const h = await run({ layout: 'tiles' }, { tiles: { box: CRAMPED, visible: true } });
 
-    h.cooldown('aimed_shot', LONG);
+    h.cooldown('bestial_wrath', LONG);
     h.poll();
 
     expect(stripEl()?.style.height).toBe(`${TILE_FLOOR}px`);
-    expect(sizeOf('aimed_shot')).toBe(`${TILE_FLOOR}px`);
+    expect(sizeOf('bestial_wrath')).toBe(`${TILE_FLOOR}px`);
   });
 
   // The width is only room to grow into, so its floor is one square rather than the
@@ -907,14 +952,14 @@ describe('the tooltip on a timer', () => {
 
   it('answers with what is left now, not with what was left when it started', async () => {
     const h = await run();
-    h.cooldown('aimed_shot', LONG);
+    h.cooldown('bestial_wrath', LONG);
     h.poll();
-    expect(hover('aimed_shot')).toContain('30.0s left');
+    expect(hover('bestial_wrath')).toContain('120.0s left');
 
-    h.cooldown('aimed_shot', LONG / 2);
+    h.cooldown('bestial_wrath', LONG / 2);
     h.frame();
 
-    expect(hover('aimed_shot')).toContain('15.0s left');
+    expect(hover('bestial_wrath')).toContain('60.0s left');
   });
 
   // The honest half, and it is now the exception rather than the rule. A cooldown
@@ -924,10 +969,10 @@ describe('the tooltip on a timer', () => {
   it('admits when it does not know the full length', async () => {
     const h = await run();
 
-    h.cooldown('rapid_fire', LONG);
+    h.cooldown('system_unstuck', LONG);
     h.poll();
 
-    expect(hover('rapid_fire')).toContain('length unknown');
+    expect(hover('system_unstuck')).toContain('length unknown');
   });
 
   // And it must not say it about a row it DOES know the length of, which is the half
@@ -936,10 +981,35 @@ describe('the tooltip on a timer', () => {
   it('says nothing about an unknown length for an ability you know', async () => {
     const h = await run();
 
-    h.cooldown('arcane_shot', RESOLVED);
+    h.cooldown('arcane_shot', FELL_SHOT);
     h.poll();
 
     expect(hover('arcane_shot')).not.toContain('length unknown');
+  });
+
+  // The long version of the mark, for the player who hovers it to find out. The
+  // marked label alone says a name is a guess; this says why, and it is the only
+  // place the addon can name the id it guessed FROM.
+  it('explains the mark on a worked-out name', async () => {
+    const h = await run();
+
+    h.cooldown('system_unstuck', LONG);
+    h.poll();
+
+    const said = hover('system_unstuck');
+    expect(said).toContain('Worked out from the ability id');
+    expect(said).toContain('system_unstuck');
+  });
+
+  // Nothing at all for a name the game supplied, for the same reason the label
+  // carries no mark: that one is the game's own name and needs no defending.
+  it('explains nothing about the name of an ability you know', async () => {
+    const h = await run();
+
+    h.cooldown('arcane_shot', FELL_SHOT);
+    h.poll();
+
+    expect(hover('arcane_shot')).not.toContain('Worked out from');
   });
 
   // A charge pool publishes a real length, so its bar is measured against the
@@ -948,10 +1018,10 @@ describe('the tooltip on a timer', () => {
   it('says nothing about an unknown length for a charge pool', async () => {
     const h = await run();
 
-    h.charges('twinstrike', { charges: 1, recharge: 6, length: 12 });
+    h.charges('arcane_shot', { charges: 1, recharge: 6, length: 12 });
     h.frame();
 
-    const said = hover('twinstrike');
+    const said = hover('arcane_shot');
     expect(said).not.toContain('length unknown');
     expect(said).toContain(`1 of ${String(POOL)} charges ready`);
   });
@@ -999,10 +1069,10 @@ describe('the tooltip on a timer', () => {
 describe('how rows are placed', () => {
   it('leaves a row alone when its position has not changed', async () => {
     const h = await run();
-    h.cooldown('aimed_shot', LONG);
-    h.cooldown('rapid_fire', 180);
+    h.cooldown('bestial_wrath', LONG);
+    h.cooldown('system_unstuck', 180);
     h.poll();
-    const first = document.querySelector('[data-ability="aimed_shot"]');
+    const first = document.querySelector('[data-ability="bestial_wrath"]');
     const observer = new MutationObserver(() => undefined);
     const list = document.querySelector('.woc-cd-list') as HTMLElement;
     observer.observe(list, { childList: true });
@@ -1012,21 +1082,21 @@ describe('how rows are placed', () => {
 
     // Nothing was inserted or removed, so nothing was moved.
     expect(observer.takeRecords()).toEqual([]);
-    expect(document.querySelector('[data-ability="aimed_shot"]')).toBe(first);
+    expect(document.querySelector('[data-ability="bestial_wrath"]')).toBe(first);
     observer.disconnect();
   });
 
   it('still reorders when the order actually changes', async () => {
     const h = await run();
-    h.cooldown('aimed_shot', 20);
-    h.cooldown('rapid_fire', 10);
+    h.cooldown('bestial_wrath', 20);
+    h.cooldown('system_unstuck', 10);
     h.poll();
-    expect(h.drawn()).toEqual(['rapid_fire', 'aimed_shot']);
+    expect(h.drawn()).toEqual(['system_unstuck', 'bestial_wrath']);
 
-    h.cooldown('rapid_fire', 30);
+    h.cooldown('system_unstuck', 30);
     h.frame();
 
-    expect(h.drawn()).toEqual(['aimed_shot', 'rapid_fire']);
+    expect(h.drawn()).toEqual(['bestial_wrath', 'system_unstuck']);
   });
 });
 
@@ -1037,10 +1107,10 @@ describe('the skill icon', () => {
   it('points at the art for the ability, filed under the player"s class', async () => {
     const h = await run();
 
-    h.cooldown('aimed_shot', LONG);
+    h.cooldown('bestial_wrath', LONG);
     h.poll();
 
-    expect(h.iconOf('aimed_shot')).toBe('/ui/skills/hunter/aimed_shot.webp');
+    expect(h.iconOf('bestial_wrath')).toBe('/ui/skills/hunter/bestial_wrath.webp');
   });
 
   // Not every ability ships painted art. The kit hides the slot when the image

@@ -9,7 +9,7 @@ import type { School } from './entity.js';
 import type { PersonalEvent } from './events.js';
 
 /** How an attack landed. */
-export type DamageKind = 'hit' | 'miss' | 'dodge' | 'parry' | 'block' | 'resist';
+export type DamageKind = 'hit' | 'miss' | 'dodge' | 'parry' | 'block' | 'resist' | 'evade';
 
 export interface DamageEvent extends PersonalEvent {
   type: 'damage';
@@ -27,8 +27,19 @@ export interface DamageEvent extends PersonalEvent {
    * a mob's ability is not in your spellbook and resolves to null there.
    */
   ability: string | null;
+  /**
+   * The ability's stable content ID, on a PLAYER's primary direct hit only.
+   */
+  abilityId?: string | null;
   kind: DamageKind;
-  /** Absorbed by a shield. Absent when nothing absorbed any of it. */
+  /**
+   * Absorbed by a shield. Absent when nothing absorbed any of it, and never 0.
+   *
+   * The damage side needs none of the disambiguation `Heal2Event.absorbed`
+   * carries, because `kind` already draws the distinction: a fully absorbed hit
+   * is a `hit` landing at `amount: 0`, where a swing that never connected says
+   * `miss`, `dodge`, `parry`, `resist` or `evade` instead.
+   */
   absorbed?: number;
   /** Set when a ranged shot's animation already began at projectile launch. */
   attackAnimationStarted?: boolean;
@@ -49,6 +60,31 @@ export interface Heal2Event extends PersonalEvent {
   crit: boolean;
   /** A DISPLAY NAME, like `DamageEvent.ability`. Use `abilityId` for the id. */
   ability: string;
+  /**
+   * How much of this heal a heal-absorb shield ate before it could land.
+   * Absent when nothing absorbed any of it, and never 0.
+   *
+   * This is the other half of the `cueOnly` warning below, and the two are one
+   * story rather than two rules. `amount: 0` on a heal is ambiguous on its own:
+   * it means EITHER the target was already at full health OR a shield devoured
+   * the whole thing, and those deserve opposite feedback, since the first is a
+   * wasted cast and the second is a target sitting at low health who is not
+   * being healed at all. This field is what separates them. An `amount: 0`
+   * carrying `absorbed` was eaten; an `amount: 0` with no `absorbed` was
+   * overhealing.
+   *
+   * Absent does NOT mean nothing was absorbed anywhere, only that this record is
+   * not reporting any. The direct heal path is the one that fills it: a heal over
+   * time's periodic tick bypasses absorb shields entirely, and one redirect path
+   * (Chronomancy's Temporal Echo) consumes the shield without reporting it and
+   * emits no record at all when the shield eats the whole heal.
+   *
+   * Genuinely ABSENT rather than null, which is worth saying because the adjacent
+   * `DamageEvent.abilityId` is the opposite: that one rides every record and is
+   * null when it has nothing to say, while this key is simply not written. Test
+   * it against undefined, never against null.
+   */
+  absorbed?: number;
   /** Set on a periodic tick of a heal over time, never on the cast itself. */
   hot?: boolean;
   /** The applying aura's ability id, on both the tick and the application. */

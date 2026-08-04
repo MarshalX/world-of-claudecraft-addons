@@ -347,16 +347,52 @@ describe('the swing timer', () => {
     expect(h.fillOf('swing')).toBe('50.00%');
   });
 
-  // The seed is off by the player's melee haste and by NOTHING ELSE. The terms
-  // that stretch a swing are ordinary published auras carrying plain multipliers,
-  // so a slowed player's first bar is measured against the slowed period rather
-  // than against the weapon's own speed, which would be short by the slow.
+  // The seed is off by the melee haste STAT and by nothing else. Every other term
+  // of the game's own swing period is an ordinary published aura carrying a plain
+  // multiplier, so a slowed player's first bar is measured against the slowed
+  // period rather than against the weapon's own speed, which would be short by the
+  // slow.
   it('seeds a slowed swing from the aura as well as the weapon', async () => {
     const h = await run();
 
     h.self({
       auras: [{ id: 'thunder_clap', kind: 'attackspeed', value: 1.5, remaining: 10 }],
       swingTimer: SWING_SPEED * 1.5 * 0.5,
+    });
+    h.frame();
+
+    expect(h.fillOf('swing')).toBe('50.00%');
+  });
+
+  // The other half of the same rule, and the one the header used to give away: a
+  // haste AURA is on the wire exactly as a slow is, so it belongs in the seed for
+  // the same reason. Only the melee haste stat is unreadable. Without this the
+  // first bar of a hasted swing is measured against the bare weapon speed and tops
+  // out at two thirds.
+  it('seeds a hastened swing from the aura as well as the weapon', async () => {
+    const h = await run();
+
+    h.self({
+      auras: [{ id: 'pack_frenzy', kind: 'buff_haste', value: 1.5, remaining: 10 }],
+      swingTimer: (SWING_SPEED / 1.5) * 0.5,
+    });
+    h.frame();
+
+    expect(h.fillOf('swing')).toBe('50.00%');
+  });
+
+  // A slow and a haste at once, which is the game's own arithmetic rather than two
+  // independent adjustments: the slows MULTIPLY the period and the hastes divide
+  // the result through one additive bucket.
+  it('seeds a swing that is slowed and hastened at once', async () => {
+    const h = await run();
+
+    h.self({
+      auras: [
+        { id: 'thunder_clap', kind: 'attackspeed', value: 1.5, remaining: 10 },
+        { id: 'pack_frenzy', kind: 'buff_haste', value: 1.25, remaining: 10 },
+      ],
+      swingTimer: ((SWING_SPEED * 1.5) / 1.25) * 0.5,
     });
     h.frame();
 
@@ -592,16 +628,35 @@ describe('the resource and the combo points', () => {
     expect(h.valueOf('power')).toBe('45');
   });
 
-  // The game's own unit frame draws four resource kinds, and a hunter's is focus.
-  // A file that writes out the three obvious ones labels every hunter's bar
-  // "Power", which is the fallback for a kind the game has not shipped yet.
-  it('names the fourth kind the game sends', async () => {
+  // The game's `ResourceType` is exactly these three. A hunter is on mana rather
+  // than on a bar of its own, which is the case worth pinning: it is the class a
+  // file writing this table from memory is most likely to give a fourth kind to.
+  it('names each of the three kinds the game sends', async () => {
+    const h = await run();
+
+    for (const [kind, label] of [
+      ['mana', 'Mana'],
+      ['rage', 'Rage'],
+      ['energy', 'Energy'],
+    ]) {
+      h.self({ templateId: 'hunter', resourceType: kind, resource: 60, maxResource: 100 });
+      h.frame();
+
+      expect(h.labelOf('power')).toBe(label);
+    }
+  });
+
+  // `focus` in particular, because this addon shipped a label for it and the game
+  // has never had one: no class is on focus, a hunter included, and the union has
+  // no such member. So it is not a kind waiting to be labelled, it is the exact
+  // shape of the mistake, and pinning it here is what fails if the entry returns.
+  it('falls back for a kind the game does not send', async () => {
     const h = await run();
 
     h.self({ templateId: 'hunter', resourceType: 'focus', resource: 60, maxResource: 100 });
     h.frame();
 
-    expect(h.labelOf('power')).toBe('Focus');
+    expect(h.labelOf('power')).toBe('Power');
   });
 
   it('draws a pip per combo point', async () => {

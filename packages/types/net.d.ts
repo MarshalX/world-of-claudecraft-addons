@@ -11,7 +11,8 @@ export type FrameType =
   | 'error'
   | 'challenge'
   | 'spectate'
-  | 'commandOutcome';
+  | 'commandOutcome'
+  | 'gbanklog';
 
 export interface SubscribeOpts {
   /**

@@ -265,14 +265,64 @@ function renderManifest(manifest: Record<string, unknown>): string {
   return `${JSON.stringify(manifest, null, 2)}\n`;
 }
 
+/**
+ * The game a preview is a picture OF, which is LIVE and not the stage's default.
+ *
+ * `pnpm stage` proxies to pbe, where drift shows up first, and that is right for
+ * a person watching an addon react to a game that has not shipped yet. A preview
+ * is the opposite kind of artifact: it is committed, it is what a player reads in
+ * Browse, and the player is on live. So this joins `pnpm cues`, `pnpm icons`,
+ * `pnpm items` and `pnpm theme` at live rather than inheriting the stage's pbe.
+ *
+ * It is not a hypothetical difference. pbe is normally AHEAD of live, and the
+ * `cooldown-bars` preview was captured while it was, which is the only reason it
+ * shows art live had not shipped yet. At game 0.34.0 the two SWAPPED: live
+ * carried 0.34.0 while pbe still served 0.33.0, so inheriting pbe would have
+ * recaptured that preview WITHOUT art it already had, and the alt text describing
+ * it would have become false in the same run.
+ */
+const DEFAULT_HOST = 'https://worldofclaudecraft.com';
+
+/** A trailing slash on --host, so the proxied URL never doubles it. */
+const TRAILING_SLASH = /\/$/;
+
+/** Which game the stage proxies to for a capture, from the whole argv. */
+function hostFor(argv: readonly string[]): string {
+  const at = argv.indexOf('--host');
+  if (at === -1) {
+    return DEFAULT_HOST;
+  }
+  const given = argv[at + 1];
+  if (given === undefined) {
+    throw new Error('--host needs a value, e.g. --host https://pbe.worldofclaudecraft.com');
+  }
+  return given.replace(TRAILING_SLASH, '');
+}
+
+/**
+ * The addon ids to narrow to, with the `--host` VALUE removed.
+ *
+ * The flag itself is dropped by its leading dash. Its value is a bare word that
+ * would otherwise read as an addon id, and a URL matches no directory, so
+ * `pnpm shots --host <url>` alone would narrow to nothing and then fail claiming
+ * no addon has a `stage.ts`, which is a true sentence about the wrong problem.
+ */
+function onlyFor(argv: readonly string[]): string[] {
+  const valueAt = argv.indexOf('--host') + 1;
+  return argv.slice(2).filter((arg, index) => !arg.startsWith('-') && index + 2 !== valueAt);
+}
+
 export type { Panel, Rect };
 export {
   CROP_MARGIN,
   cropAround,
+  DEFAULT_HOST,
   fillsSlot,
+  hostFor,
   largerScale,
   MAX_BYTES,
   MIN_DEVICE_WIDTH,
+  onlyFor,
   previewAlt,
   renderManifest,
   SCALES,

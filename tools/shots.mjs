@@ -42,7 +42,9 @@ import { ADDONS_DIR, addonDirs, ROOT, readAddon } from './manifests.ts';
 import {
   cropAround,
   fillsSlot,
+  hostFor,
   largerScale,
+  onlyFor,
   previewAlt,
   renderManifest,
   scaleFor,
@@ -315,8 +317,7 @@ async function capture(browser, dir) {
 }
 
 async function main() {
-  const only = process.argv.slice(2).filter((arg) => !arg.startsWith('-'));
-  const dirs = capturable(only);
+  const dirs = capturable(onlyFor(process.argv));
   if (dirs.length === 0) {
     throw new Error('no addon has a stage.ts to photograph');
   }
@@ -324,7 +325,7 @@ async function main() {
   // Its own server rather than a second terminal. The whole run is one command
   // somebody types a few times a year, and "start the stage first" is a step that
   // fails as a connection refused three layers down inside Playwright.
-  const server = await serveStage();
+  const server = await serveStage(hostFor(process.argv));
   const browser = await chromium.launch();
   const failures = [];
   const written = [];

@@ -16,7 +16,8 @@ interface PersonalEvent {
   pid?: number;
 }
 
-type DamageKind = 'hit' | 'miss' | 'dodge' | 'parry' | 'block' | 'resist';
+/** `evade` is a leashing wild mob refusing the hit, and always lands at amount 0. */
+type DamageKind = 'hit' | 'miss' | 'dodge' | 'parry' | 'block' | 'resist' | 'evade';
 
 interface DamageEvent extends PersonalEvent {
   type: 'damage';
@@ -27,6 +28,8 @@ interface DamageEvent extends PersonalEvent {
   school: School;
   /** A display NAME, or null for an auto-attack. Never an ability id. */
   ability: string | null;
+  /** A PLAYER ability's id, on the primary direct hit. Null on a mob, tick or echo. */
+  abilityId?: string | null;
   kind: DamageKind;
   /** Not present on any of 205 records in the session this was written from. */
   absorbed?: number;
@@ -41,6 +44,8 @@ interface Heal2Event extends PersonalEvent {
   crit: boolean;
   /** A display NAME. `abilityId` is the id. */
   ability: string;
+  /** What a heal-absorb shield ate. Direct heals only, and absent rather than 0. */
+  absorbed?: number;
   hot?: boolean;
   abilityId?: string;
   /** Carries no healing. Consumers skip on this flag, never on the amount. */
@@ -171,6 +176,10 @@ interface ChatEvent extends PersonalEvent {
 
 interface PlayerDeathEvent extends PersonalEvent {
   type: 'playerDeath';
+  /** Absent for an untracked source, so a recap cannot assume it has one. */
+  killerId?: number;
+  /** Raw English, and a CAUSE rather than only an ability: 'Falling' rides here. */
+  killerAbility?: string;
 }
 
 interface RespawnEvent extends PersonalEvent {
@@ -201,6 +210,8 @@ interface GatherResultEvent extends PersonalEvent {
   qty: number;
   /** Null rather than absent when nothing special happened. */
   rareEvent: string | null;
+  /** Only on the harvest that spent the slotted tool effect's LAST charge. */
+  effectDepleted?: true;
 }
 
 interface OpenWindowEvent extends PersonalEvent {

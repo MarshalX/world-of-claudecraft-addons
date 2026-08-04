@@ -10,15 +10,28 @@
 // and runs the game's OWN derivation over them.
 //
 // THE DERIVATION IS COPIED, NOT INVENTED. `src/sim/quest_targets.ts` at game
-// 0.33.1 is a pure leaf with no DOM, no rng and no Sim state, and
+// 0.34.0 is a pure leaf with no DOM, no rng and no Sim state, and
 // `questObjectiveAreas` is the whole of it: a KILL objective resolves to every
 // camp with that mob id, a COLLECT objective to the camps of mobs whose loot is
-// tagged with that quest id plus any ground-object cluster for the item, an
-// INTERACT objective to the object cluster or the NPC's point, a GATHER objective
-// to the matching nodes, and an ESCORT objective to where the escortee stands
-// idle. The padding figures are the game's too: 4 yards around a camp's spawn
-// radius and a 6 yard circle around a lone point. `areasFor` below is that
-// function with the tables handed to it instead of imported.
+// tagged with that quest id, plus any ground-object cluster for the item, plus
+// the gathering nodes whose harvest YIELDS it, an INTERACT objective to the
+// object cluster or the NPC's point, a GATHER objective to the matching nodes,
+// and an ESCORT objective to where the escortee stands idle. The padding figures
+// are the game's too: 4 yards around a camp's spawn radius and a 6 yard circle
+// around a lone point. `areasFor` below is that function with the tables handed
+// to it instead of imported.
+//
+// THAT LEAF MOVES, AND FOLLOWING IT IS THE MAINTENANCE. 0.34.0 grew the collect
+// arm above: before it, a collect objective naming a gathered material resolved
+// to nothing, and all three shipped work orders are that shape. It also started
+// CLUSTERING the nodes an area is drawn around, one circle per group of nodes
+// within 30 yards of each other rather than one per node. That second change is
+// deliberately NOT copied: it exists because the game's world map composites
+// overlapping translucent fills into a smear, and this addon draws a pin per area
+// with a budget and a count instead, which has no such problem and is more
+// precise about where to walk. So the AREAS here are the game's; how many marks
+// they turn into is this addon's own answer, and the list says how many it left
+// out.
 //
 // So an objective in a zone the player has NEVER ENTERED still points the right
 // way. Nothing here reads `world.entities`, which is interest-radius limited: a
@@ -76,16 +89,22 @@
 // be written to disk and outlive the session that produced it.
 //
 // WHAT IT REFUSES TO GUESS. An objective the derivation resolves to nowhere gets a
-// row saying so rather than a pin somewhere plausible: a collect objective whose
-// item is a gathering material or a fishing catch has no tagged drop and no ground
-// object, and a kill objective on a dungeon boss has no camp, and in both cases the
-// game's own map draws nothing either. A quest whose turn-in NPC is spawned on
-// demand rather than placed has no point in the table at all, and the ready line
-// says the turn-in is not on the map instead of pointing somewhere plausible. At
-// 0.33.1 no shipped quest actually reaches that branch: the one quest naming a
-// spawned-on-demand turn-in, Scourge's End, names a placed Brother Aldric beside
-// the raid one, so the placed answer wins. The branch is kept because the table is
-// game content and the next release owes this addon nothing.
+// row saying so rather than a pin somewhere plausible, and the game's own map draws
+// nothing for those same objectives. At 0.34.0 that is four collect objectives and a
+// dungeon boss: `the_codfather` is a FISHING catch, and fishing has no world node to
+// point at; `game_meat`, `spider_silk` and `rough_hide` come off ordinary loot tables
+// rather than a drop TAGGED with the quest, which is the only join either derivation
+// makes; and a boss has no camp. It used to be five, because the three work orders
+// asking for a gathered material were in this list until 0.34.0 taught the collect
+// arm to reach the nodes.
+//
+// A quest whose turn-in NPC is spawned on demand rather than placed has no point in
+// the table at all, and the ready line says the turn-in is not on the map instead of
+// pointing somewhere plausible. At 0.34.0 no shipped quest reaches that branch: every
+// quest with a turn-in names at least one PLACED npc, and the one naming a
+// spawned-on-demand turn-in, Scourge's End, names a placed Brother Aldric beside the
+// raid one, so the placed answer wins. The branch is kept because the table is game
+// content and the next release owes this addon nothing.
 
 const DATA_FILE = 'quests.json';
 /** The one per-character key: the learned denominators and the focused quest. */
@@ -546,11 +565,29 @@ function pushNodes(found, seen, listed) {
 }
 
 /** A collect objective: the camps of tagged droppers, plus any object cluster. */
+/**
+ * A collect objective: the mobs that drop it FOR THIS QUEST, any crate of it, and
+ * the gathering nodes whose harvest yields it.
+ *
+ * The third lookup is the game's own `nodeYieldClusters` arm, added at 0.34.0. Before
+ * it, a collect objective naming a gathered material resolved to nothing at all in
+ * the game and here alike, because no mob drops one tagged and no ground object
+ * carries one. All three shipped work orders are that shape, one per gathering
+ * profession, so this is the difference between the panel pointing at the veins and
+ * the panel saying "Nowhere on the map" about a quest the game does answer.
+ *
+ * It matches on the BASE yield only. The game's arm also matches a material's `fine_`
+ * grade at a node whose tier can mint one, and that half is deliberately not copied:
+ * it would need the grade ladder in the data file, and no shipped quest asks for a
+ * fine material. A quest that did would read as nowhere, which is the failure this
+ * addon already has a word for rather than a wrong pin.
+ */
 function pushCollect(found, seen, questId, objective) {
   for (const mob of dropMobs.get(`${questId} ${String(objective.item)}`) ?? []) {
     pushCamps(found, seen, mob);
   }
   pushCluster(found, seen, objective.item);
+  pushNodes(found, seen, nodesByItem.get(objective.item) ?? []);
 }
 
 /** An interact objective: the object cluster, the NPC's point, or both. */

@@ -8,10 +8,9 @@
 // TWO PANELS, AND THE GAME DECIDES IT RATHER THAN A SETTING. The strip's two
 // distinctive rows are a cast with a latency band across its last stretch and a
 // resource with combo points as pips, and no single character can be photographed
-// showing both. The game draws its own combo row for `resourceType === 'energy'`
-// and for nothing else; the one class on energy is the rogue, and the one class on
-// focus is the hunter. So a picture of either alone is a picture of half the
-// addon, which is the same reason `cooldown-bars` ships a sheet.
+// showing both: the points belong to the rogue and the rogue on this panel is not
+// casting. So a picture of either alone is a picture of half the addon, which is
+// the same reason `cooldown-bars` ships a sheet.
 //
 // EVERY NAME, RESOURCE AND WEAPON SPEED HERE IS THE GAME'S OWN, read off the class
 // and item tables the deployed client ships rather than invented. `aimed_shot` is
@@ -19,9 +18,11 @@
 // `world.abilities` exists to close: a label worked out from the id would read
 // "Aimed Shot", which is a name the game does not use anywhere.
 //
-// The hunter being on FOCUS is not decoration either. It is the one resource kind
-// of the four that a file writing out the obvious three misses, and this panel is
-// the picture in which such a file says "Power" over a hunter's bar.
+// THE HUNTER IS ON MANA, and that is worth stating because this scenario used to
+// put it on `focus`. There is no such resource: the game's `ResourceType` is
+// exactly `rage | mana | energy` and a hunter is on mana like every class without
+// a bar of its own. The addon carried a matching "Focus" label, this picture
+// showed it, and nothing in either was reachable from a running game.
 //
 // THE ROGUE'S CAST ROW IS EMPTY ON PURPOSE. A row with nothing to say keeps its
 // place rather than being removed, because the strip is read by muscle memory at a
@@ -31,16 +32,24 @@
 
 import type { Scenario, Stage, WorldDraft } from '../../stage/src/stage.ts';
 
-/** The hunter's, which is the only `focus` in the game's class table. */
-const FOCUS = 'focus';
+/** The hunter's, and every class the game gives no bar of its own. */
+const MANA = 'mana';
 /** The rogue's, which is the only one the game draws a combo row for. */
 const ENERGY = 'energy';
 
 const HUNTER = 'hunter';
 const ROGUE = 'rogue';
 
-/** Fogbinder's Edge, in the shape the self record carries a mainhand. */
-const HUNTER_WEAPON = { min: 14, max: 23, speed: 2.3 };
+/**
+ * Zealotsbane Blade, in the shape the self record carries a mainhand.
+ *
+ * A weapon the hunter can actually hold, which the one before it was not:
+ * `mistcallers_edge` ("Fogbinder's Edge") is `requiredClass: WAR`, so the panel
+ * pictured a hunter swinging a warrior's sword at the right speed. This one lists
+ * hunter among its classes and happens to carry the same 2.3, so the swing row is
+ * measured against the same period it always was.
+ */
+const HUNTER_WEAPON = { min: 18, max: 29, speed: 2.3 };
 /** Duskfang Dirk. The speed is what seeds the swing row until it sees a reset. */
 const ROGUE_WEAPON = { min: 13, max: 21, speed: 1.7, dagger: true };
 
@@ -84,10 +93,10 @@ const HUNTER_KNOWN = Object.freeze([
   },
 ]);
 
-/** A hunter at the level cap, mid-pull: focus, a melee swing, and a spellbook. */
+/** A hunter at the level cap, mid-pull: mana, a melee swing, and a spellbook. */
 function aHunter(draft: WorldDraft): void {
   draft.set(draft.player, 'templateId', HUNTER);
-  draft.set(draft.player, 'resourceType', FOCUS);
+  draft.set(draft.player, 'resourceType', MANA);
   draft.set(draft.player, 'resource', 62);
   draft.set(draft.player, 'maxResource', 100);
   draft.set(draft.player, 'weapon', HUNTER_WEAPON);
@@ -158,7 +167,7 @@ async function comboPoints(stage: Stage): Promise<void> {
 }
 
 const CAST_ALT =
-  'four thin rows. Swing at 1.4s of the 2.3 second weapon it learned from, GCD at 0.9s, a cast row named Long Draw with 0.8s left, and a Focus bar at 62 of 100. A pale band lies across the last stretch of the cast, covering the 180ms round trip the loader measured, and it is a measurement rather than a promise that a press inside it queues. There are no pips: a hunter has no combo points.';
+  'four thin rows. Swing at 1.4s of the 2.3 second weapon it learned from, GCD at 0.9s, a cast row named Long Draw with 0.8s left, and a Mana bar at 62 of 100. A pale band lies across the last stretch of the cast, covering the 180ms round trip the loader measured, and it is a measurement rather than a promise that a press inside it queues. There are no pips: a hunter has no combo points.';
 
 const COMBO_ALT =
   'the same four rows on a rogue. Swing at 0.6s of a 1.7 second dagger, GCD at 0.4s against the one second base the game gives this class alone, an empty Cast row keeping its place rather than appearing when a cast starts, and an Energy bar at 45 of 100. Under it a strip of five pips with three lit, five being the most points this session has shown rather than a maximum anything on the wire states.';

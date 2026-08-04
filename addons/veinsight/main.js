@@ -3,7 +3,7 @@
 // Veinsight: every gathering node in the world, pinned where it actually is.
 //
 // A gathering node is never an entity. The server spawns nothing for one and the
-// snapshot carries nothing about one: the game's own renderer draws all 99 straight
+// snapshot carries nothing about one: the game's own renderer draws all 156 straight
 // out of an authored table (`src/sim/content/gather_nodes.ts`), and the only thing
 // that ever reaches the wire is YOUR OWN respawn timers. So the table is the addon's
 // to carry and the timers are the game's to answer, and this file is the join.
@@ -13,10 +13,14 @@
 // checkout by `generate.mjs` beside it, stamped with the version it was read from,
 // and nothing in it is inferred:
 //
-//  - `nodes` is `GATHER_NODES` from `src/sim/content/gather_nodes.ts`, all 99 rows,
-//    33 of each type, 90 at tier 1, 6 at tier 2 and 3 at tier 3. Unlike a mob camp a
+//  - `nodes` is `GATHER_NODES` from `src/sim/content/gather_nodes.ts`, all 156 rows,
+//    52 of each type, 138 at tier 1, 12 at tier 2 and 6 at tier 3. Unlike a mob camp a
 //    node is NOT scattered by a world seed: the authored `pos` is where it is drawn,
-//    so a copy of the table is exact rather than approximate.
+//    so a copy of the table is exact rather than approximate. The count is not stable
+//    across releases and nothing here assumes it is: game 0.34.0's density pass took
+//    the six tuned-strip zones to six nodes of every type against a doubled 240 second
+//    respawn, adding 57 rows and nudging 20 that were already there, and the eight
+//    expansion zones still carry their two-per-type starter kits until their own pass.
 //  - `tools` is every `use: { type: 'gatherTool' }` item in `src/sim/content/items.ts`,
 //    filed under the node type its profession opens rather than under the profession,
 //    because the type is what a node row carries. Fishing rods are left out: fishing
@@ -24,6 +28,11 @@
 //  - `zones` is each zone's own `name` from its content file under `src/sim/content/`.
 //    They are THIS ADDON'S labels for THIS ADDON'S table and are never compared
 //    against `world.zone`, which is localized display text rather than an id.
+//  - `respawnSeconds` is `NODE_HARVEST_TABLE`'s own figure per node type, which is the
+//    denominator of every bar here. It is in the FILE rather than in this source
+//    because it is a tuning number that moves on a content pass: 0.34.0 doubled it to
+//    240 alongside the density pass, and a constant here would have gone on dividing
+//    by 120 and drawing a bar pinned at full for the whole first half of every wait.
 //
 // WHAT IS A FACT HERE, AND WHAT IS AN INFERENCE. This is the important half.
 //
@@ -79,15 +88,22 @@
 // camera turns. The pins position themselves, because `ui.anchor3d` rides the
 // loader's own loop already.
 
-/** Seconds a harvested node takes to come back, from `NODE_HARVEST_TABLE`. */
-const RESPAWN_SECONDS = 120;
 /** Yards the game lets you harvest from, `INTERACT_RANGE` in `src/sim/types.ts`. */
 const REACH_YARDS = 5;
 /** How close an entity has to be to a node's point to stand in for its height. */
 const SAMPLE_YARDS = 6;
 const MS_PER_SECOND = 1000;
 const SECONDS_PER_MINUTE = 60;
-/** Under this much left, a row goes warm: the node is nearly yours again. */
+/**
+ * Under this many SECONDS left, a row goes warm: the node is nearly yours again.
+ *
+ * ABSOLUTE, and deliberately NOT a share of the respawn. It is how much warning the
+ * player gets to start walking, and how far away they are has nothing to do with how
+ * long the node sleeps, so it does not track `respawnByType` and must not be rewritten
+ * to. Spelled out because the ratio moved on its own: it was an eighth of the old 120
+ * second respawn and is a sixteenth of 0.34.0's 240, which is exactly the shape of
+ * number a later reader assumes was proportional and "corrects".
+ */
 const NEARLY_READY = 15;
 
 const FRAME_WIDTH = 300;
@@ -197,6 +213,24 @@ let byId = new Map();
 let zoneNames = new Map();
 /** Node type to the tools that open it, each with the tier it covers. */
 let toolsByType = new Map();
+/**
+ * Node type to the seconds a harvested node of it takes to come back, off the game's
+ * own `NODE_HARVEST_TABLE`.
+ *
+ * It comes out of the data file rather than being written down here, because it is a
+ * TUNING number: it moves on a content pass with nothing on the wire to announce it,
+ * and game 0.34.0 doubled it from 120 to 240. A constant here is wrong the moment
+ * that happens and wrong SILENTLY, because the fill is clamped: dividing by 120 while
+ * the server counts down from 240 draws a bar pinned at full for the whole first two
+ * minutes, which reads as a node that has not started coming back rather than as a
+ * display that is lying.
+ *
+ * Per type because the game's table is keyed per type; all three agree today. Empty
+ * until the data file lands, and nothing draws against it before then: `readTable`
+ * refuses a file that does not carry a positive figure for every type, so by the time
+ * there is a node to draw, its own type has one.
+ */
+let respawnByType = new Map();
 /** Node type to the best tier you own, recomputed once per draw rather than per node. */
 let tierByType = new Map();
 
@@ -265,7 +299,31 @@ function readTool(value) {
   return null;
 }
 
-/** The file's three arrays, or null when it is not the shape it claims to be. */
+/**
+ * The respawn map, or null unless every type carries a positive number of seconds.
+ *
+ * Refused outright rather than defaulted, which is the opposite of how a bad NODE row
+ * is treated, and deliberately: a node that does not check out is one row left out of
+ * a list, while a missing respawn length is the denominator of every bar in the panel.
+ * There is no honest number to fall back to, and the last one this addon happened to
+ * know is exactly the stale constant reading it from the file is here to remove.
+ */
+function readRespawn(value) {
+  if (typeof value !== 'object' || value === null) {
+    return null;
+  }
+  const byType = new Map();
+  for (const type of TYPES) {
+    const seconds = value[type];
+    if (typeof seconds !== 'number' || !Number.isFinite(seconds) || seconds <= NONE) {
+      return null;
+    }
+    byType.set(type, seconds);
+  }
+  return byType;
+}
+
+/** The file's three arrays and its respawn map, or null when it is not that shape. */
 function readTable(file) {
   if (typeof file !== 'object' || file === null) {
     return null;
@@ -274,7 +332,11 @@ function readTable(file) {
   if (!(Array.isArray(listed) && Array.isArray(zones) && Array.isArray(tools))) {
     return null;
   }
-  return { listed, zones, tools };
+  const respawn = readRespawn(file.respawnSeconds);
+  if (respawn === null) {
+    return null;
+  }
+  return { listed, zones, tools, respawn };
 }
 
 /** Keep what checked out and name what did not, rather than throwing the file away. */
@@ -301,6 +363,7 @@ function indexTools(kept) {
 }
 
 function adopt(table) {
+  respawnByType = table.respawn;
   const zones = keep(table.zones, readZone, 'zone');
   zoneNames = new Map(zones.map((zone) => [zone.id, zone.name]));
   toolsByType = indexTools(keep(table.tools, readTool, 'tool'));
@@ -596,13 +659,19 @@ function countdown(seconds) {
  *
  * Seconds all the way up rather than minutes above a minute, which is what every
  * other countdown in a tile does. The range is what makes the difference: an aura
- * runs to ten minutes and needs the shorter unit, while a node comes back in
- * `RESPAWN_SECONDS`, so the longest figure there can ever be is `120s` and it
- * already fits. Rounding a whole quarter of that range away to draw `2m` would cost
- * the one thing the figure is for, which is whether it is worth waiting.
+ * runs to ten minutes and needs the shorter unit, while a node comes back inside one
+ * respawn, which at game 0.34.0 is 240 seconds, so the longest figure is `240s` and
+ * four characters still fit. Rounding that range to whole minutes would leave four
+ * distinct readings across the entire wait, which costs the one thing the figure is
+ * for, namely whether it is worth standing here.
  */
 function pinCountdown(seconds) {
   return `${String(Math.ceil(seconds))}s`;
+}
+
+/** The respawn length for a node's type, which every fill in the panel divides by. */
+function respawnFor(type) {
+  return respawnByType.get(type);
 }
 
 /** Whether a node is ready AND you carry something that opens it. */
@@ -650,7 +719,7 @@ function fillFor(node) {
   if (left === EMPTY) {
     return EMPTY;
   }
-  return Math.min(FULL, left / RESPAWN_SECONDS);
+  return Math.min(FULL, left / respawnFor(node.type));
 }
 
 function toneFor(node) {
@@ -692,7 +761,7 @@ function rowTooltip(node) {
   const lines = [
     `${zoneName(node.zone)}, level ${String(node.level)} ground, at ${String(node.x)}, ${String(node.z)}`,
     toolLine(node),
-    { text: `Comes back ${String(RESPAWN_SECONDS)}s after YOU harvest it`, tone: 'muted' },
+    { text: `Comes back ${String(respawnFor(node.type))}s after YOU harvest it`, tone: 'muted' },
     { text: `Its pin ${HEIGHT_WORDS[provenance(node)]}`, tone: 'muted' },
   ];
   return { title: labelFor(node), lines };
@@ -1198,7 +1267,7 @@ function askForZone() {
 }
 
 // Once a second, because every figure on this panel moves at most that often: a
-// countdown is written in whole seconds and a 120 second sweep moves a third of a
+// countdown is written in whole seconds and a 240 second sweep moves a sixth of a
 // degree a tick. The route is the exception and rides the frame loop below.
 woc.setInterval(redraw, MS_PER_SECOND);
 
@@ -1234,7 +1303,9 @@ woc.onSettingsChange(() => {
 async function boot() {
   const table = readTable(await woc.data(DATA_FILE));
   if (table === null) {
-    throw new Error(`${DATA_FILE} carries no "nodes", "zones" and "tools" arrays`);
+    throw new Error(
+      `${DATA_FILE} carries no "nodes", "zones" and "tools" arrays and "respawnSeconds" map`,
+    );
   }
   adopt(table);
   load();

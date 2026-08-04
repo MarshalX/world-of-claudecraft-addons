@@ -70,6 +70,14 @@ const MIN_GCD_SECONDS = 0.75;
 const HASTE_AURA_KINDS = ['buff_spellhaste'];
 /** The two aura kinds that stretch a swing, each a multiplier on the period. */
 const SWING_SLOW_KINDS = ['attackspeed', 'sanguine'];
+/**
+ * The aura kind that SHORTENS a swing, which is the slows' opposite number.
+ *
+ * Published as a multiplier like a slow and folded like the spell haste above,
+ * because that is what the game does with it: a slow multiplies the period and a
+ * haste joins one additive bucket the period is then divided through.
+ */
+const SWING_HASTE_KINDS = ['buff_haste'];
 const DEFAULT_HEIGHT = 14;
 const MIN_HEIGHT = 8;
 const MAX_HEIGHT = 32;
@@ -114,17 +122,18 @@ const ROW_SPECS = [
 ];
 
 /**
- * The four resource ids the game sends, and what to call each on the row.
+ * Every resource id the game sends, and what to call each on the row.
  *
- * Four rather than the three that are obvious: a hunter's is `focus`, and it is
- * the only class with one, so writing out mana, rage and energy labels every
- * hunter's bar with the fallback below. The list is the game's own unit frame's.
+ * Three, and three is the WHOLE set rather than the obvious part of a longer one:
+ * the game's `ResourceType` is exactly `rage | mana | energy`, and a class without
+ * a bar of its own is on mana (a hunter is, which is the one worth saying because
+ * it is the class most likely to be assumed to have a fourth). The fallback below
+ * is therefore reached only by a kind a future game release adds.
  */
 const RESOURCE_LABELS = [
   ['mana', 'Mana'],
   ['rage', 'Rage'],
   ['energy', 'Energy'],
-  ['focus', 'Focus'],
 ];
 
 /** What the swing counts down FROM, which is the one length nothing publishes. */
@@ -607,18 +616,31 @@ function added(total, value) {
   return total + value;
 }
 
+/** A haste multiplier's share of the additive bucket, which is its excess over 1. */
+function hastened(total, value) {
+  if (value > 0) {
+    return total + value - 1;
+  }
+  return total;
+}
+
 /**
  * What the first swing of a session is measured against.
  *
- * `weapon.speed` is the unhasted period, and the two aura kinds that STRETCH one
- * are published as plain multipliers over it, so a slowed player's seed costs
- * four lines and is strictly better than the bare weapon speed. What is left over
- * is melee haste, which is not on the wire and which the published `spellHaste`
- * cannot stand in for, so the seed comes out LONG and the row tops out short
- * until the first observed reset replaces it.
+ * `weapon.speed` is the unhasted period and every aura term of the game's own
+ * period is published, so the seed reproduces its arithmetic: the kinds that
+ * STRETCH a swing multiply it, and the kind that shortens one joins an additive
+ * bucket the result is divided through.
+ *
+ * What is left over is the melee haste STAT, which is not on the wire and which
+ * the published `spellHaste` cannot stand in for. That term alone, so the seed is
+ * long only for a player carrying melee haste from gear or a passive, and the
+ * first observed reset replaces it either way.
  */
 function swingSeed(me) {
-  return foldAuras(me, SWING_SLOW_KINDS, numberOf(me.weapon?.speed), stretched);
+  const period = foldAuras(me, SWING_SLOW_KINDS, numberOf(me.weapon?.speed), stretched);
+  const haste = foldAuras(me, SWING_HASTE_KINDS, 0, hastened);
+  return period / (1 + Math.max(0, haste));
 }
 
 /**
@@ -727,7 +749,7 @@ function castChannelLabel(cast, me) {
   return cast.label;
 }
 
-/** One of the four, or the neutral word for a kind a game release adds later. */
+/** One of the three, or the neutral word for a kind a game release adds later. */
 function resourceLabel(me) {
   const found = RESOURCE_LABELS.find(([id]) => id === me.resourceType);
   if (found === undefined) {

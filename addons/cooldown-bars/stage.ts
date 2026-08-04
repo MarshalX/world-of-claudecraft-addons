@@ -6,7 +6,15 @@
 // invented its own would be a second one, drifting, with a screenshot as the only
 // place the difference showed.
 //
-// Three things in it are load-bearing and none of them are cosmetic.
+// EVERY ID, NAME AND LENGTH HERE IS THE GAME'S OWN, read off the class table the
+// deployed client ships rather than invented. That is a correction rather than a
+// boast: this scenario used to draw `twinstrike` on a hunter, and there is no such
+// ability id anywhere in the game. The ability the game DISPLAYS as "Twinstrike" is
+// `raging_gale`, it belongs to the warrior, so the picture was of a hunter casting a
+// warrior's spell under an id nothing answers to. `aimed_shot` was labelled "Aimed
+// Shot" in the same fixture, where the game calls it "Long Draw".
+//
+// Four things in it are load-bearing and none of them are cosmetic.
 //
 // `templateId: 'hunter'` on the player is the CLASS, which is the directory the
 // game files skill art under. Without it there is nothing to build an icon URL
@@ -14,35 +22,48 @@
 // this addon does not have.
 //
 // The spellbook is the source of BOTH things this addon cannot read off the wire:
-// an ability's display name and the real length of its cooldown. `arcane_shot` is
-// shown as "Fell Shot" everywhere in the game, which is exactly the divergence a
-// label derived from the id gets wrong, so it is in the shot on purpose.
+// an ability's display name and the real length of its cooldown. Both entries are
+// shown under a name an id cannot be turned into, `arcane_shot` as "Fell Shot" and
+// `bestial_wrath` as "Howling Rage", which is exactly the divergence a label
+// derived from the id gets wrong, so both are in the shot on purpose.
 //
-// `rapid_fire` is deliberately NOT in the spellbook. It stands for the whole
-// residue an addon cannot resolve: an item cooldown, or an ability granted from
-// outside the class kit. It draws with a title-cased id and a measured
-// denominator, and a preview that showed only resolvable rows would be claiming
-// a completeness this addon does not have.
+// FELL SHOT'S POOL OF TWO IS A TALENT'S DOING, and it is the hunter's one
+// resolved-after-talents fact. The content table gives that ability no `maxCharges`
+// at all; the Twin Fletching row ("Fell Shot stores 2 uses") is what turns it into a
+// pool of two on the spellbook, which is where the "1/2" on that row comes from.
+// `maxCharges` on the wire is the zero the client fills in, reproduced as one here so
+// that a reading which trusted it would draw "1 of 0" in the picture. The ability is
+// deliberately NOT also in the cooldown map: the game deletes that entry while any
+// charge is left, so a pool with a use in it is visible on the charge wire alone.
+//
+// `system_unstuck` is deliberately NOT in the spellbook, and it is not a stand-in for
+// the residue, it IS the residue. A real key of the game's own cooldown map, the
+// five-minute anti-relog timer, shipped in the `cds` payload unfiltered and provably
+// not an ability, since the game has to special-case it against its own ability table
+// to restore it. So it draws a title-cased id with the question mark that says the
+// name was worked out, a measured denominator, and no icon, because nothing files art
+// for something that is not an ability. A preview showing only resolvable rows would
+// claim a completeness this addon does not have, and the marker is how a row says
+// which kind it is without a legend under the list to explain it.
 
 import type { Scenario, Stage, WorldDraft } from '../../stage/src/stage.ts';
 
 /** Seconds remaining, longest last, which is the order the panel sorts into. */
 const REMAINING_PAIRS = Object.freeze([
-  ['rapid_fire', 4.4],
-  ['arcane_shot', 5.8],
   ['counter_shot', 10.4],
-  ['twinstrike', 97.5],
-  ['aimed_shot', 155.5],
+  ['rapid_fire', 41.2],
+  ['bestial_wrath', 97.5],
+  ['system_unstuck', 155.5],
 ] as const);
 
 /** Resolved lengths, from the spellbook, which is what a bar measures against. */
-const ARCANE_SHOT_LENGTH = 8;
-const AIMED_SHOT_LENGTH = 180;
-const TWINSTRIKE_LENGTH = 120;
+const FELL_SHOT_LENGTH = 6;
+const HOWLING_RAGE_LENGTH = 120;
 
-/** A charge pool of two, one spent. `maxCharges` is zero-filled on the wire. */
+/** Fell Shot's pool under Twin Fletching: two uses, one spent and coming back. */
+const POOL_SIZE = 2;
 const POOL_CHARGES = 1;
-const POOL_RECHARGE = 97.5;
+const POOL_RECHARGE = 4.4;
 
 /** The class whose art directory the icons come from. */
 const CLASS_ID = 'hunter';
@@ -53,6 +74,19 @@ const CLASS_ID = 'hunter';
  * `cooldown` here is the RESOLVED length at the rank the player has learned,
  * which is the number the game itself works from and the only honest denominator
  * for a draining bar.
+ *
+ * Two entries rather than four, because the two ids left out are what make the
+ * picture say something. `counter_shot` and `rapid_fire` are real hunter abilities
+ * this hunter has not learned, so they take the measured path and the marker,
+ * alongside `system_unstuck`, which nobody can ever learn.
+ *
+ * EVERY ABILITY DRAWN HERE SHIPS ART ON BOTH CHANNELS, and that is a requirement
+ * rather than luck. A preview is one committed file, so a row whose icon depends on
+ * which game the capture proxied to makes the picture true on one channel and false
+ * on the other, with nothing in the file to say which it was. `wyvern_sting` held
+ * this slot for exactly that reason and was measured live-only: live serves it,
+ * pbe 404s it. Checked against both mappings, live and pbe share 17 hunter ids and
+ * disagree about 23, so this is the normal case rather than a one-off.
  */
 const KNOWN = Object.freeze([
   {
@@ -60,22 +94,15 @@ const KNOWN = Object.freeze([
     rank: 3,
     cost: 55,
     castTime: 0,
-    cooldown: ARCANE_SHOT_LENGTH,
+    cooldown: FELL_SHOT_LENGTH,
+    charges: POOL_SIZE,
   },
   {
-    def: { id: 'aimed_shot', name: 'Aimed Shot', school: 'physical', requiresTarget: true },
-    rank: 2,
-    cost: 75,
-    castTime: 2,
-    cooldown: AIMED_SHOT_LENGTH,
-  },
-  {
-    def: { id: 'twinstrike', name: 'Twinstrike', school: 'physical', requiresTarget: true },
+    def: { id: 'bestial_wrath', name: 'Howling Rage', school: 'physical', requiresTarget: true },
     rank: 1,
     cost: 30,
     castTime: 0,
-    cooldown: TWINSTRIKE_LENGTH,
-    charges: 2,
+    cooldown: HOWLING_RAGE_LENGTH,
   },
 ]);
 
@@ -92,21 +119,34 @@ function aHunter(draft: WorldDraft): void {
   draft.set(draft.world, 'known', KNOWN);
 }
 
+/**
+ * The charge wire, keyed by ability id.
+ *
+ * An entry pair rather than an object literal because the key is a name the GAME
+ * owns rather than one this file chose, which is the same reason the cooldown map
+ * above is built from pairs.
+ *
+ * `maxCharges` is zero on the wire and permanently so: the server keeps the maximum
+ * to itself. Reproduced rather than filled in, because an addon reading it as a real
+ * maximum is the trap this field is famous for.
+ */
+const CHARGE_POOLS = Object.fromEntries([
+  [
+    'arcane_shot',
+    {
+      charges: POOL_CHARGES,
+      maxCharges: 0,
+      recharge: POOL_RECHARGE,
+      rechargeLength: FELL_SHOT_LENGTH,
+    },
+  ],
+]);
+
 /** The world every scenario here shares: a hunter mid-fight with five timers up. */
 function onCooldown(stage: Stage): void {
   const { player } = stage;
   stage.set(player, 'cooldowns', new Map<string, number>(REMAINING_PAIRS));
-  stage.set(player, 'abilityCharges', {
-    twinstrike: {
-      charges: POOL_CHARGES,
-      // Zero on the wire and permanently so: the server keeps the maximum to
-      // itself. Reproduced rather than filled in, because an addon reading it as
-      // a real maximum is the trap this field is famous for.
-      maxCharges: 0,
-      recharge: POOL_RECHARGE,
-      rechargeLength: TWINSTRIKE_LENGTH,
-    },
-  });
+  stage.set(player, 'abilityCharges', CHARGE_POOLS);
   stage.poll();
   stage.frame();
 }
@@ -117,7 +157,7 @@ const SCENARIOS: readonly Scenario[] = [
     label: 'Five draining bars',
     preview: true,
     caption: 'Bars',
-    alt: 'five draining bars ordered by time remaining, Rapid Fire 4.4s, Fell Shot 5.8s, Counter Shot 10.4s, Twinstrike 97.5s with one of two charges back, and Aimed Shot 155.5s, each row carrying the ability art the game files under its id except Twinstrike, for which the game ships none.',
+    alt: 'five draining bars ordered by time remaining. Fell Shot at 4.4s carrying one of its two charges, Counter Shot? at 10.4s, Rapid Fire? at 41.2s, Howling Rage at 97.5s, and System Unstuck? at 155.5s. A question mark follows every name worked out from an ability id rather than read off the spellbook, and both marked abilities show why it is needed: the game calls them Hushing Shot and Fevered Draw, so both worked-out names are wrong and both say so. The four abilities carry the art the game files under their ids; System Unstuck draws no icon at all, being the anti-relog timer the game itself runs rather than an ability.',
     settings: { layout: 'bars' },
     world: aHunter,
     run: onCooldown,
@@ -127,7 +167,7 @@ const SCENARIOS: readonly Scenario[] = [
     label: 'Swept icon strip',
     preview: true,
     caption: 'Icon strip',
-    alt: 'the same five cooldowns as a row of square icons, each darkened by a sweep showing how much of its cooldown is left, with the seconds remaining over the art.',
+    alt: 'the same five cooldowns as a row of square icons, each darkened by a sweep showing how much of its cooldown is left. What is left is drawn over the art, in whole seconds up to a minute and in minutes above it, so the last two squares read 2m and 3m; Fell Shot carries its charge count in the corner instead of a name. The last square holds its sweep and its countdown and nothing else, because System Unstuck is not an ability and the game files no art for it.',
     settings: { layout: 'tiles' },
     world: aHunter,
     run: onCooldown,
