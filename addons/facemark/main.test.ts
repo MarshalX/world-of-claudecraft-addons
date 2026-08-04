@@ -2,28 +2,25 @@
 
 // Facemark, run through the real loader.
 //
-// The claims this suite exists to hold are the DECISIONS a nameplate display is made
-// of, not the pixels. Which units get a plate, which of them survives the cap, what a
-// name is called when nothing published it, which effects reach the strip, and who
-// owns whether the plates are drawn at all. Where a plate ENDED UP is a live question
-// and is not pretended to be one of these: no anchor here is ever painted on a real
-// screen.
+// The claims this suite holds are the decisions a nameplate display is made of rather than the
+// pixels: which units get a plate, which of them survives the cap, what a name is called when
+// nothing published it, which effects reach the strip, and who owns whether the plates are
+// drawn at all. Where a plate ended up is a live question, since no anchor here is ever
+// painted on a real screen.
 //
 // Two things about the way the world is driven are load-bearing.
 //
-// NOTHING HERE DELIVERS AN EVENT. A cast is written onto the entity, which is where
-// the game puts it; an effect is pushed onto the entity's own aura array; a mark is
-// written into the world's marker record; threat is written into the mob's own hate
-// table. That is the wire this addon reads, and a display built on events would pass
-// none of it.
+// Nothing here delivers an event. A cast is written onto the entity, which is where the game
+// puts it; an effect is pushed onto the entity's own aura array; a mark is written into the
+// world's marker record; threat is written into the mob's own hate table. A display built on
+// events would pass none of it.
 //
-// THE CAMERA IS INSTALLED, because `tests/fakes/shared-services.ts` resolves no unit
-// at all and answers one constant screen point for every world point, which is a
-// camera nothing can be measured against. `unitPoint` and `project` are ordinary
-// fields on the kit that `ui.project` reads per call, so a suite that needs real
-// positions says what they are. The default one here answers for every entity in the
-// fake world and puts depth at the unit's distance from the origin, which is what the
-// fade cases move; `blind()` takes it away again, which is the "do not draw" case.
+// The camera is installed, because `tests/fakes/shared-services.ts` resolves no unit at all
+// and answers one constant screen point for every world point. `unitPoint` and `project` are
+// ordinary fields on the kit that `ui.project` reads per call, so a suite that needs real
+// positions says what they are. The default here answers for every entity in the fake world
+// and puts depth at the unit's distance from the origin, which is what the fade cases move;
+// `blind()` takes it away again, which is the "do not draw" case.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { validateManifest } from '../../loader/src/shared/schema.ts';
@@ -234,12 +231,10 @@ async function settleFrames(): Promise<void> {
 }
 
 /**
- * Start the addon over a world holding you and nothing else.
- *
- * The spellbook is the game's own shape and holds one ability, because the whole of
- * what `world.abilities` can name is your own kit: `arcane_shot` is displayed as "Fell
- * Shot", which is the divergence that makes a worked-out name a guess rather than a
- * near miss.
+ * Start the addon over a world holding you and nothing else. The spellbook is the game's own
+ * shape and holds one ability, because the whole of what `world.abilities` can name is your own
+ * kit: `arcane_shot` is displayed as "Fell Shot", which is the divergence that makes a
+ * worked-out name a guess rather than a near miss.
  */
 async function start(
   settings: Record<string, unknown> = {},
@@ -256,8 +251,8 @@ async function start(
       castTime: 2,
       cooldown: 5.4,
     },
-    // A real hunter ability whose own id ends in what AURA_SUFFIXES would otherwise
-    // take for a tail. It is here so the "leave a named ability alone" case has one.
+    // A real hunter ability whose own id ends in what `AURA_SUFFIXES` would otherwise take for
+    // a tail, so the "leave a named ability alone" case has one.
     {
       def: { id: 'dismiss_pet', name: 'Release Companion', school: 'physical' },
       rank: 1,
@@ -363,11 +358,9 @@ async function start(
 }
 
 /**
- * `start`, plus the wait for the stored on-and-off answer to land.
- *
- * The plates draw from the first pass and are corrected a microtask later, so a case
- * about what is on screen wants the correction to have happened: without the wait, a
- * seeded "off" would be read after the assertion rather than before it.
+ * `start`, plus the wait for the stored on-and-off answer to land. The plates draw from the
+ * first pass and are corrected a microtask later, so without the wait a seeded "off" would be
+ * read after the assertion rather than before it.
  */
 async function run(
   settings: Record<string, unknown> = {},
@@ -391,16 +384,14 @@ describe('its manifest', () => {
     expect(manifest().permissions).toEqual(['world.read', 'ui', 'keys']);
   });
 
-  // `ui.anchor3d`'s unit point, `over: 'head'`, `ui.project`, `woc.onFrame` and
-  // `world.harmful` are all minor 2, and the addon is a guessed offset without the
-  // first two.
+  // `ui.anchor3d`'s unit point, `over: 'head'`, `ui.project`, `woc.onFrame` and `world.harmful`
+  // are all minor 2, and the addon is a guessed offset without the first two.
   it('declares the minor the surface it reads was added in', () => {
     expect(manifest().apiMinor).toBe(2);
   });
 
-  // The setting an earlier plan for this addon would have shipped and that `over:
-  // 'head'` answers outright. Its correct value is always zero, so offering it would
-  // be a control that can only be got wrong.
+  // `over: 'head'` answers the offset outright. Its correct value is always zero, so offering
+  // a setting for it would be a control that can only be got wrong.
   it('offers no plate offset, because the head point resolves the model height', () => {
     const ids = (manifest().settings ?? []).map((setting) => setting.id);
     expect(ids).not.toContain('offset');
@@ -408,8 +399,7 @@ describe('its manifest', () => {
   });
 });
 
-// The placement, which is the reason this addon was blocked until the head anchor
-// landed. Nothing else can answer it: a model's height, a mount's lift and the scale
+// The placement. Nothing else can answer it: a model's height, a mount's lift and the scale
 // the renderer applied are all off the renderer and none of them is on the wire.
 describe('where a plate is put', () => {
   it('anchors over the head rather than at the unit position', async () => {
@@ -422,10 +412,9 @@ describe('where a plate is put', () => {
     expect(h.overs()).not.toContain('body');
   });
 
-  // The head point resolves to nothing for a unit the game is drawing no model for,
-  // which is where the game draws no nameplate either. A raw projection would report
-  // finite nonsense for a point behind or inside the near plane, so the null is the
-  // whole safety of the call.
+  // The head point resolves to nothing for a unit the game is drawing no model for, which is
+  // where the game draws no nameplate either. A raw projection would report finite nonsense for
+  // a point behind or inside the near plane, so the null is the whole safety of the call.
   it('draws nothing at all for a point the camera cannot answer for', async () => {
     const h = await run();
     h.unit(BOSS);
@@ -453,9 +442,9 @@ describe('where a plate is put', () => {
 // Which units have a plate at all. The set, which is what the cap and every filter
 // argue about.
 describe('which units get a plate', () => {
-  // Asked for EVERYTHING, because that is the only setting under which the self check
-  // is the thing doing the work: on the default the player is filtered out for being
-  // friendly, so a suite that only tested there would pass with the guard removed.
+  // Asked for everything, because that is the only setting under which the self check does the
+  // work: on the default the player is filtered out for being friendly, so a suite that only
+  // tested there would pass with the guard removed.
   it('never plates you, even when asked for everything', async () => {
     const h = await run({ show: 'everything' });
 
@@ -545,9 +534,9 @@ describe('which units get a plate', () => {
   });
 });
 
-// The cap, and the sort behind it. Nearest to the PLAYER rather than nearest to the
-// camera, so that turning the camera through a crowd changes nothing about which
-// twelve of forty units are drawn.
+// The cap, and the sort behind it: nearest to the player rather than nearest to the camera, so
+// that turning the camera through a crowd changes nothing about which twelve of forty units
+// are drawn.
 describe('the cap', () => {
   it('keeps the nearest and drops the rest', async () => {
     const h = await run({ 'max-plates': 2 });
@@ -639,9 +628,9 @@ describe('what a plate says about a cast', () => {
     expect(h.castLabelOf(BOSS)).toBe('Flame Pillar?');
   });
 
-  // The name came out of your own spellbook, so it is the game's own and carries no
-  // mark. `arcane_shot` is displayed as "Fell Shot", which is why a worked-out name
-  // cannot be trusted: this one would have read as "Arcane Shot".
+  // The name came out of your own spellbook, so it is the game's own and carries no mark.
+  // `arcane_shot` is displayed as "Fell Shot", so a worked-out name would have read as "Arcane
+  // Shot".
   it('uses the real name for something in your spellbook and marks nothing', async () => {
     const h = await run();
     const duelist = h.unit(DUELIST, { kind: 'player', hostile: true, templateId: 'hunter' });
@@ -653,9 +642,9 @@ describe('what a plate says about a cast', () => {
     expect(h.castLabelOf(DUELIST)).toBe('Fell Shot');
   });
 
-  // A cast carries no school anywhere on the wire, and the only place one could be
-  // recovered is your own spellbook. Tinting the handful of casts that happen to be in
-  // it would make the colour mean "you know this one" rather than "this is fire".
+  // A cast carries no school anywhere on the wire, and the only place one could be recovered is
+  // your own spellbook. Tinting the handful of casts that happen to be in it would make the
+  // colour mean "you know this one" rather than "this is fire".
   it('never tints a cast bar, including one it could have tinted', async () => {
     const h = await run();
     const duelist = h.unit(DUELIST, { kind: 'player', hostile: true, templateId: 'hunter' });
@@ -717,8 +706,8 @@ describe('the effects on a unit', () => {
     expect(h.tilesOf(BOSS)).toHaveLength(0);
   });
 
-  // The recoverable half of L21. An aura's id IS the applying ability's id, and a
-  // PLAYER carries their class on the entity, so this one resolves real art.
+  // The recoverable half: an aura's id is the applying ability's id, and a player carries their
+  // class on the entity, so this one resolves real art.
   it('resolves art for an effect a player applied', async () => {
     const h = await run();
     h.unit(DUELIST, { kind: 'player', hostile: true, templateId: 'hunter' });
@@ -731,10 +720,9 @@ describe('the effects on a unit', () => {
     expect(art?.getAttribute('src')).toContain('arcane_shot');
   });
 
-  // The unrecoverable half, and the reason it is stated on the card. Every aura icon
-  // in the game is painted on a canvas from a bundled recipe and no aura art is
-  // served, so a mob's effect gets its school colour and its countdown instead of a
-  // picture, which is what that tile MEANS rather than one that failed to load.
+  // The unrecoverable half. Every aura icon in the game is painted on a canvas from a bundled
+  // recipe and no aura art is served, so a mob's effect gets its school colour and its
+  // countdown instead of a picture, which is what that tile means rather than one that failed.
   it('gives a mob effect colour and a countdown rather than an icon', async () => {
     const h = await run();
     const boss = h.unit(BOSS);
@@ -761,10 +749,9 @@ describe('the effects on a unit', () => {
     expect(h.tilesOf(BOSS)[0]?.querySelector('.woc-tile-value')?.textContent).toBe('12');
   });
 
-  // A control aura is not the ability's own id: the game builds it as
-  // `${ability.id}_slow` and fifteen more like it, so the whole id is art that can
-  // never exist and the ability under it is art that does. A slow, a stun and a root
-  // are most of what a player actually lands on a nameplate.
+  // A control aura is not the ability's own id: the game builds it as `${ability.id}_slow` and
+  // fifteen more like it, so the whole id is art that can never exist and the ability under it
+  // is art that does. A slow, a stun and a root are most of what a player lands on a nameplate.
   it('resolves art through the ability under a control aura', async () => {
     const h = await run();
     h.unit(DUELIST, { kind: 'player', hostile: true, templateId: 'hunter' });
@@ -821,9 +808,8 @@ describe('the effects on a unit', () => {
     expect(shown.join(' ')).not.toContain('Dot 0');
   });
 
-  // Nothing reports an effect landing on a unit that was already nearby, which is L34.
-  // The sampler is what covers it, and a strip that waited for a watch key would never
-  // move at all.
+  // Nothing reports an effect landing on a unit that was already nearby. The sampler is what
+  // covers it, and a strip that waited for a watch key would never move at all.
   it('picks up an effect that landed with no set change anywhere', async () => {
     const h = await run();
     const boss = h.unit(BOSS);
@@ -980,10 +966,9 @@ describe('the toggle', () => {
     expect(h.drawn()).toEqual([BOSS]);
   });
 
-  // Turning a world overlay off leaves a screen indistinguishable from an addon that
-  // has stopped working, and there is no panel left to find the way back from. So the
-  // off message names the chord, in the spelling a keyboard uses rather than the
-  // manifest's.
+  // Turning a world overlay off leaves a screen indistinguishable from an addon that has
+  // stopped working, and there is no panel left to find the way back from. So the off message
+  // names the chord, in the spelling a keyboard uses rather than the manifest's.
   it('names the key that brings the plates back', async () => {
     const h = await run();
 

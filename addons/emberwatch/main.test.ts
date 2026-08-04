@@ -2,27 +2,23 @@
 
 // Emberwatch, run through the real loader.
 //
-// The subject is ONE DECISION: given a rule and what is actually on a unit, does
-// this fire? Everything about tiles, captions and sweeps is downstream of that, so
-// the cases below are about the decision and read the screen only as the cheapest
-// place to observe the answer.
+// The subject is one decision: given a rule and what is actually on a unit, does this fire?
+// Everything about tiles, captions and sweeps is downstream of that, so the cases below read
+// the screen only as the cheapest place to observe the answer.
 //
-// Four of them carry most of the weight, and each one is a case a plausible
-// implementation gets wrong while looking entirely correct on the others.
+// Four cases carry most of the weight, and each is one a plausible implementation gets wrong
+// while looking entirely correct on the others:
 //
-//  - THE SAME DEBUFF FROM TWO CASTERS. Two players can carry the same dot on one
-//    target, and a rule with `mine: true` is about YOUR copy. An engine that drops
-//    `mine` from the query sees the other player's full timer and stays quiet while
-//    the player's own dot expires, which is exactly what the addon exists to catch.
-//  - A ROOT, whose magnitude is 0, against a dot, whose magnitude is a POSITIVE
-//    figure per tick. Both are harmful by KIND, so a polarity filter built on a sign
-//    drops both and looks fine on every stat debuff.
-//  - AN ENCOUNTER-OWNED STUN beside an ordinary one. A `removable` rule that skips
+//  - The same debuff from two casters. Two players can carry the same dot on one target, and a
+//    rule with `mine: true` is about your copy. An engine that drops `mine` from the query
+//    sees the other player's full timer and stays quiet while the player's own dot expires.
+//  - A root, whose magnitude is 0, against a dot, whose magnitude is a positive figure per
+//    tick. Both are harmful by kind, so a polarity filter built on a sign drops both.
+//  - An encounter-owned stun beside an ordinary one. A `removable` rule that skips
 //    `unbreakableControl` fires on control nothing the player does will shift.
-//  - A PARTY ROW, which cannot answer `mine`, cannot answer stacks and cannot answer
-//    removability. Each of those has to be REFUSED rather than guessed, and the
-//    fixture carries a member with a row and no entity so a version that starts
-//    answering from rows fails here.
+//  - A party row, which cannot answer `mine`, stacks or removability. Each has to be refused
+//    rather than guessed, and the fixture carries a member with a row and no entity so a
+//    version that starts answering from rows fails here.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { validateManifest } from '../../loader/src/shared/schema.ts';
@@ -153,13 +149,10 @@ const TRANCE: Effect = {
 };
 
 /**
- * A rule as a case writes one.
- *
- * Every optional carries `| undefined` explicitly, because `exactOptionalPropertyTypes`
- * otherwise refuses `{ ...RULE, mine: undefined }`, and spreading a base rule with one
- * clause knocked back out is exactly how the cases below vary one field at a time.
- * `JSON.stringify` drops an undefined member, so the file the addon reads carries the
- * absence rather than a null.
+ * A rule as a case writes one. Every optional carries `| undefined` explicitly, because
+ * `exactOptionalPropertyTypes` otherwise refuses `{ ...RULE, mine: undefined }`, and spreading
+ * a base rule with one clause knocked out is how the cases below vary one field at a time.
+ * `JSON.stringify` drops an undefined member, so the file the addon reads carries the absence.
  */
 interface RuleSpec {
   id: string;
@@ -323,11 +316,9 @@ function textIn(cellKey: string, selector: string): string {
 }
 
 /**
- * Let the async frame restore and the data read land before reading what they did.
- *
- * Written out rather than looped, for the reason `noAwaitInLoops` exists: each line
- * is one microtask turn, and the point is the COUNT of turns rather than a sequence
- * of independent awaits that `Promise.all` would collapse into one.
+ * Let the async frame restore and the data read land before reading what they did. Written out
+ * rather than looped, for the reason `noAwaitInLoops` exists: each line is one microtask turn,
+ * and the point is the count of turns.
  */
 async function settle(): Promise<void> {
   await Promise.resolve();
@@ -359,8 +350,8 @@ function buildWorld(cls: string, bout: boolean) {
     partyInfo: { leader: ME, raid: false, members },
   };
   if (bout) {
-    // Assigned rather than written as a key: the linter wants dot access on a record
-    // and the compiler forbids it on an index signature, and this settles both.
+    // Assigned rather than written as a key: the linter wants dot access on a record and the
+    // compiler forbids it on an index signature.
     Object.assign(world, { duelInfo: { state: 'active', otherPid: FOE, otherName: 'Grimjaw' } });
   }
   return { live, members, selection: player as unknown as Selection, world };
@@ -488,20 +479,17 @@ async function start(opts: StartOpts = {}): Promise<Harness> {
 }
 
 /**
- * `start`, plus the wait for the overlay to come up and the rules file to land, plus
- * the one frame that PRIMES the engine.
+ * `start`, plus the wait for the overlay to come up and the rules file to land, plus the one
+ * frame that primes the engine.
  *
- * A saved frame starts hidden and is shown once its stored state arrives, keyed per
- * character, so it takes a sample to find the character and a storage read to come
- * back. The addon skips the DRAWING while the frame is hidden, so every case about
- * what the strip shows wants both to have happened.
+ * A saved frame starts hidden and is shown once its stored state arrives, keyed per character,
+ * so it takes a sample to find the character and a storage read to come back. The addon skips
+ * the drawing while the frame is hidden.
  *
- * The priming frame is the third thing and is the one worth explaining. The first
- * reading of a live world is everything already up, which is not news, so the addon
- * makes no sound during it. In play that frame happens at world entry and every
- * effect a player then takes lands long after it. A case that wants to hear a cue
- * therefore has to start from the same place, which is what this frame is; the case
- * about starting mid-fight uses `start` and drives the priming frame itself.
+ * The priming frame is the third thing. The first reading of a live world is everything
+ * already up, which is not news, so the addon makes no sound during it. A case that wants to
+ * hear a cue has to start from the same place; the case about starting mid-fight uses `start`
+ * and drives the priming frame itself.
  */
 async function run(opts: StartOpts = {}): Promise<Harness> {
   const harness = await start(opts);
@@ -522,9 +510,9 @@ describe('its manifest', () => {
     expect(manifest().permissions).toEqual(['world.read', 'ui', 'sound', 'keys', 'storage']);
   });
 
-  // `woc.data`, `woc.onFrame`, `world.harmful`, `world.dispellable`, `world.match`
-  // and the unit form of `ui.anchor3d` are all minor 2. A manifest claiming less
-  // than it calls loads against a loader that has none of them and throws.
+  // `woc.data`, `woc.onFrame`, `world.harmful`, `world.dispellable`, `world.match` and the unit
+  // form of `ui.anchor3d` are all minor 2. A manifest claiming less than it calls loads against
+  // a loader that has none of them and throws.
   it('declares the minor its reads arrived in', () => {
     expect(manifest().apiMinor).toBe(2);
   });
@@ -534,9 +522,8 @@ describe('its manifest', () => {
   });
 });
 
-// The shipped table, checked as a table rather than through the engine: a starter
-// rule that no longer parses is silently one fewer alert, which is a green run with
-// less in it rather than a red one.
+// The shipped table, checked as a table rather than through the engine: a starter rule that no
+// longer parses is silently one fewer alert, which is a green run with less in it.
 describe('the shipped starter rules', () => {
   function shipped(): RuleSpec[] {
     return (SHIPPED as { rules: RuleSpec[] }).rules;
@@ -641,11 +628,9 @@ describe('whether a rule fires', () => {
   });
 });
 
-// The "Done when" case, and the one field a dot tracker cannot skip.
-//
-// Two players carrying the same debuff on one target is the case the published
-// `AuraQuery.mine` documentation calls out. Without it a display shows the other
-// player's full timer while the player's own copy quietly expires.
+// The one field a dot tracker cannot skip. Two players carrying the same debuff on one target
+// is the case the published `AuraQuery.mine` documentation calls out: without it a display
+// shows the other player's full timer while the player's own copy quietly expires.
 describe('your own copy of an effect two people applied', () => {
   const MineExpiring: RuleSpec = {
     id: 'dot',
@@ -673,9 +658,8 @@ describe('your own copy of an effect two people applied', () => {
     expect(h.valueOf(key('dot', 'target', 'corruption', ME))).toBe('3');
   });
 
-  // The clause itself, on the condition that cannot hide it. Both copies are up, so
-  // an engine that drops `mine` from the query draws the other player's as well and
-  // the player ends up watching somebody else's dot beside their own.
+  // The clause itself, on the condition that cannot hide it. Both copies are up, so an engine
+  // that drops `mine` from the query draws the other player's as well.
   it('watches only your copy when the rule asks for yours', async () => {
     const h = await twoCasters({ ...MineExpiring, on: 'gained', threshold: undefined });
 
@@ -742,9 +726,9 @@ describe('a rule that watches for an effect running out', () => {
   });
 });
 
-// A stack landing is a refresh of the aura already there, so nothing arrives and
-// nothing leaves. It is invisible to the entity set and, on your own auras, to
-// `world.on('auras')` as well, which is why the engine reads on the frame tick.
+// A stack landing is a refresh of the aura already there, so nothing arrives and nothing
+// leaves. It is invisible to the entity set and, on your own auras, to `world.on('auras')` as
+// well, which is why the engine reads on the frame tick.
 describe('a rule that watches a stack count', () => {
   const Ramping: RuleSpec = {
     id: 'ramp',
@@ -769,10 +753,9 @@ describe('a rule that watches a stack count', () => {
   });
 });
 
-// Polarity is the loader's predicate, never arithmetic here. A root's magnitude is
-// 0 and a dot's is a POSITIVE figure per tick, so both look identical to a heal over
-// time by sign; and a mob sapping attack power reuses the ordinary buff kind with a
-// negative magnitude, so nothing about its KIND says it is harmful either.
+// Polarity is the loader's predicate, never arithmetic here. A root's magnitude is 0 and a
+// dot's is a positive figure per tick, so both look identical to a heal over time by sign; and
+// a mob sapping attack power reuses the ordinary buff kind with a negative magnitude.
 describe('a rule that filters on polarity', () => {
   const Harmful: RuleSpec = {
     id: 'bad',
@@ -820,9 +803,9 @@ describe('a rule that filters on polarity', () => {
   });
 });
 
-// `unbreakableControl` is absent on almost every aura in the game, so an engine
-// that never reads it looks correct on every ordinary effect and is wrong on exactly
-// the ones a player would be reaching for a cooldown during.
+// `unbreakableControl` is absent on almost every aura in the game, so an engine that never
+// reads it looks correct on every ordinary effect and is wrong on exactly the ones a player
+// would be reaching for a cooldown during.
 describe('a rule that filters on removability', () => {
   const Removable: RuleSpec = {
     id: 'dispel',
@@ -876,9 +859,9 @@ describe('a rule that filters on removability', () => {
   });
 });
 
-// A party row reaches a member on the far side of the map where an entity does not,
-// and it pays for that reach by carrying almost nothing. Each refusal below is a
-// clause that would otherwise be answered from a field the row does not have.
+// A party row reaches a member on the far side of the map where an entity does not, and it
+// pays for that reach by carrying almost nothing. Each refusal below is a clause that would
+// otherwise be answered from a field the row does not have.
 describe('a rule over the party rows', () => {
   const OverParty: RuleSpec = {
     id: 'group',
@@ -923,10 +906,9 @@ describe('a rule over the party rows', () => {
     expect(h.drawn()).toEqual([]);
   });
 
-  // A threshold of ONE, because that is the only threshold that tells a refusal from
-  // an assumed single stack: at two or more, "the row says nothing" and "the row says
-  // one" give the same answer, so a version that quietly defaults a missing count to 1
-  // passes every other stack case in this file.
+  // A threshold of one, because that is the only threshold that tells a refusal from an assumed
+  // single stack: at two or more, "the row says nothing" and "the row says one" give the same
+  // answer.
   it('refuses a stacks rule, because a row carries no stack count', async () => {
     const h = await run({
       rules: rulesFile([{ ...OverParty, on: 'stacks', threshold: 1, harmful: true }]),
@@ -950,9 +932,9 @@ describe('a rule over the party rows', () => {
     expect(h.hover(far('corruption'))).toContain('Read off a party row');
   });
 
-  // A row carries no name either, so the label is derived from the id and the
-  // tooltip says it was. `world.abilities` is deliberately not consulted: it would
-  // answer for the handful in your own kit and leave the rest guessed.
+  // A row carries no name either, so the label is derived from the id and the tooltip says it
+  // was. `world.abilities` is deliberately not consulted: it would answer for the handful in
+  // your own kit and leave the rest guessed.
   it('labels a row from its id and marks the label as derived', async () => {
     const h = await run({ rules: rulesFile([OverParty]) });
 
@@ -1070,9 +1052,8 @@ describe('the cue and the banner', () => {
     expect(h.banner()).toBe('Stunned');
   });
 
-  // The first reading of a live world is everything already on the player, which is
-  // not something that just happened. Without the priming pass, an addon enabled
-  // mid-fight opens with a chime and a banner per effect already up.
+  // The first reading of a live world is everything already on the player. Without the priming
+  // pass, an addon enabled mid-fight opens with a chime and a banner per effect already up.
   it('says nothing about what was already up when it started', async () => {
     const h = await start({ rules: rulesFile([Loud]) });
     h.afflict(ME, GRAVEBIND);

@@ -2,47 +2,41 @@
 
 // Ledgerline, run through the real loader.
 //
-// THE RECORDING CASES COME FIRST, because the addon is a ledger before it is a panel
-// and the screen can be right while nothing was saved. Every write path here is
-// asserted on the STORE: a pane redrawn from memory looks identical whether or not the
-// write behind it happened at all.
+// The recording cases come first, because the addon is a ledger before it is a panel and the
+// screen can be right while nothing was saved. Every write path here is asserted on the store:
+// a pane redrawn from memory looks identical whether or not the write behind it happened.
 //
-// THE THREE-STATE READ IS THE FIRST SUBJECT. `world.market` answers `near`, `away` or
-// `unknown`, and only the first carries a page. Recording on `away` would erase the
-// ledger the moment the player walked three paces from the Merchant, and drawing `away`
-// as an empty market would tell a player standing in a town that nobody is selling
-// anything. Both are pinned.
+// `world.market` answers `near`, `away` or `unknown`, and only the first carries a page.
+// Recording on `away` would erase the ledger the moment the player walked three paces from the
+// Merchant, and drawing `away` as an empty market would tell a player standing in a town that
+// nobody is selling anything. Both are pinned.
 //
-// THE RECONNECT BLIP IS THE CASE THAT CANNOT BE SEEN FROM THE STATE. The online client
-// force-nulls its own market mirror on reconnect, so one snapshot of `away` arrives
-// while the player is still standing at the Merchant. The guard is
-// `woc.net.state.reconnects`, and the suite drives it from both sides: a bumped count
-// holds the page, and an unbumped one is believed at once. The third case is the one
-// that decides the SHAPE of the guard. A watch key fires on a change, so a player who
-// stays away sends no second reading, and a guard that waited for one to end the grace
-// would leave the panel saying "resyncing" for the rest of the session. Only a timer
-// satisfies all three, and all three are here so that it stays one.
+// The reconnect blip cannot be seen from the state. The online client force-nulls its own
+// market mirror on reconnect, so one snapshot of `away` arrives while the player is still
+// standing at the Merchant. The guard is `woc.net.state.reconnects`, driven here from both
+// sides: a bumped count holds the page, and an unbumped one is believed at once. The third
+// case decides the shape of the guard: a watch key fires on a change, so a player who stays
+// away sends no second reading, and a guard that waited for one would leave the panel saying
+// "resyncing" for the rest of the session. Only a timer satisfies all three.
 //
-// THE UNIT PRICE IS THE ARITHMETIC WORTH PINNING. `price` is the total buyout for the
-// whole stack, so a series that compares totals is comparing stack sizes. The fixtures
-// deliberately mix a stack of 20 against a single at the same total, which is the pair
-// that reads identically to a total-based series and ten times apart to a correct one.
+// The unit price is the arithmetic worth pinning. `price` is the total buyout for the whole
+// stack, so a series that compares totals is comparing stack sizes. The fixtures mix a stack
+// of 20 against a single at the same total, which reads identically to a total-based series and
+// ten times apart to a correct one.
 //
-// THE UNDERCUT CHECK IS PINNED ON WHAT IT REFUSES TO SAY. The server sorts the others
-// section by display name and then by price, so a block is contiguous and ascending and
-// its first row is the cheapest competitor. Two answers are therefore NOT available and
-// the cases are about those: an item with no block on the page reads as "not on this
-// page" rather than as being uncontested, and a block that begins at the very first row
-// of a page after the first may have started on the page before, which reads as
-// uncertain rather than as cheapest.
+// The undercut check is pinned on what it refuses to say. The server sorts the others section
+// by display name and then by price, so a block is contiguous and ascending and its first row
+// is the cheapest competitor. Two answers are therefore not available: an item with no block on
+// the page reads as "not on this page" rather than as uncontested, and a block that begins at
+// the very first row of a page after the first may have started on the page before.
 //
-// THE CUT AND THE CAP ARE READ, so the fixtures use figures that are NOT the game's own
-// 5 percent and 12 listings: an addon that hardcoded either would pass against a
-// fixture that agreed with it and fail here.
+// The cut and the cap are read, so the fixtures use figures that are not the game's own 5
+// percent and 12 listings: an addon that hardcoded either would pass against a fixture that
+// agreed with it and fail here.
 //
-// THE BUS CONTRACT. A publisher that is not installed is an ordinary state, a fork's
-// fqid answers as readily as the official one, and the ask goes out after the
-// subscription so that a synchronous answer reaches a handler that already exists.
+// The bus contract: a publisher that is not installed is an ordinary state, a fork's fqid
+// answers as readily as the official one, and the ask goes out after the subscription so that a
+// synchronous answer reaches a handler that already exists.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ANY_SENDER } from '../../loader/src/runtime/bus/hub.ts';
@@ -74,12 +68,10 @@ const NAMESPACE = addonNamespace(FQID);
 const CHARACTER_NAMESPACE = characterNamespace(FQID);
 
 /**
- * The ledger's key, which is the answer to what a price history is OF.
- *
- * Account-wide, so every character shares it, and scoped to the market: the realm off
- * the hello frame and the deployment the shared fake reports. Written out rather than
- * imported from the addon, because the addon is a function body with no exports and
- * because a key derivation both sides computed the same way would prove nothing.
+ * The ledger's key, which is the answer to what a price history is of. Account-wide, so every
+ * character shares it, and scoped to the market: the realm off the hello frame and the
+ * deployment the shared fake reports. Written out rather than imported, because the addon is a
+ * function body with no exports and a key both sides computed the same way would prove nothing.
  */
 const LEDGER_KEY = 'ledger/pbe/Claudemoon';
 
@@ -97,11 +89,9 @@ const HOUR_MS = 60 * 60 * 1000;
 const DAY_MS = 24 * HOUR_MS;
 
 /**
- * The Merchant's terms, deliberately NOT the game's own 5 and 12.
- *
- * Both ride the payload, so an addon that wrote either down would agree with a fixture
- * that used the real ones and could never be caught. These cannot be agreed with by
- * accident.
+ * The Merchant's terms, deliberately not the game's own 5 and 12. Both ride the payload, so an
+ * addon that wrote either down would agree with a fixture that used the real ones and could
+ * never be caught.
  */
 const CUT_PCT = 7;
 const MAX_LISTINGS = 9;
@@ -160,11 +150,10 @@ interface MarketState {
 }
 
 /**
- * One recorded visit, as it lands in storage: when, cheapest, dearest, query.
- *
- * An array rather than an object because the ledger is ONE value holding every item a
- * player has browsed, and field names repeated per visit would be most of the file. The
- * time is in seconds for the same reason, nothing on screen being finer than a minute.
+ * One recorded visit, as it lands in storage: when, cheapest, dearest, query. An array rather
+ * than an object because the ledger is one value holding every item a player has browsed, and
+ * field names repeated per visit would be most of the file. The time is in seconds for the same
+ * reason.
  */
 type StoredVisit = [number, number, number, string];
 
@@ -264,11 +253,9 @@ function typeSearch(value: string): void {
 }
 
 /**
- * Let every queued microtask run, without an await inside a loop.
- *
- * The addon reads its stored ledger through `storage.keys()` and then one `get` per
- * item, so its start-up is several promise hops deep and a fixed pair of flushes would
- * settle it only by luck.
+ * Let every queued microtask run, without an await inside a loop. The addon reads its stored
+ * ledger through `storage.keys()` and then one `get` per item, so its start-up is several
+ * promise hops deep and a fixed pair of flushes would settle it only by luck.
  */
 function flush(times: number): Promise<void> {
   let chain: Promise<void> = Promise.resolve();
@@ -299,12 +286,10 @@ function labelOf(list: string, key: string): string {
 }
 
 /**
- * The figure at the end of a row, as it is ANNOUNCED.
- *
- * A price is drawn as coins now: discs carrying the units and bare numbers beside
- * them, so the text content of that slot is `low44` and says nothing about what unit
- * anything is in. The kit puts the whole figure in an `aria-label` in words, which is
- * both what a screen reader gets and the only readable assertion to make here.
+ * The figure at the end of a row, as it is announced. A price is drawn as coins: discs carrying
+ * the units and bare numbers beside them, so the text content of that slot is `low44` and says
+ * nothing about units. The kit puts the whole figure in an `aria-label` in words, which is both
+ * what a screen reader gets and the only readable assertion to make here.
  */
 function figureOf(list: string, key: string): string {
   const value = rowIn(list, key)?.querySelector('.woc-bar-value');
@@ -316,11 +301,10 @@ function detailOf(list: string, key: string): string {
 }
 
 /**
- * The trend line's points, as pairs, or none where the line is not drawn.
- *
- * Read off the polyline rather than off a count on screen, because the line is the only
- * place the addon says what its series looks like over time and a hidden one is a real
- * answer: two readings is the fewest that can be a line.
+ * The trend line's points, as pairs, or none where the line is not drawn. Read off the polyline
+ * rather than off a count on screen, because the line is the only place the addon says what its
+ * series looks like over time and a hidden one is a real answer: two readings is the fewest that
+ * can be a line.
  */
 function sparkPoints(list: string, key: string): string[] {
   const spark = rowIn(list, key)?.querySelector('.woc-ledgerline-spark polyline');
@@ -355,11 +339,9 @@ function frameTitle(): string {
 }
 
 /**
- * The game's own world object, with the market as a GETTER.
- *
- * A getter rather than a value because that is what the loader reads through: the suite
- * changes what the Merchant is sending and the read moves with it, exactly as it does
- * when a player walks up to the counter.
+ * The game's own world object, with the market as a getter, because that is what the loader
+ * reads through: the suite changes what the Merchant is sending and the read moves with it,
+ * exactly as it does when a player walks up to the counter.
  */
 function fakeWorld(state: MarketState, player: unknown, empty: boolean): Record<string, unknown> {
   const entities = new Map<number, unknown>();
@@ -424,11 +406,8 @@ async function start(options: StartOptions = {}): Promise<LedgerHarness> {
 }
 
 /**
- * Let a held write land.
- *
- * The ledger is one value, so writes are coalesced behind a timer rather than made per
- * page: a player flipping through a book would otherwise rewrite the whole thing on
- * every flip. Every assertion on the STORE goes through this, and one that forgot would
+ * Let a held write land. The ledger is one value, so writes are coalesced behind a timer rather
+ * than made per page. Every assertion on the store goes through this, and one that forgot would
  * read the state before the page it just delivered.
  */
 async function saved(): Promise<void> {
@@ -521,10 +500,10 @@ describe('what is written down', () => {
     expect(visitsFor(h, 'cloth')).toEqual([visit(WALL_CLOCK_MS, 200)]);
   });
 
-  // A namespace is a PREFIX on one flat store shared by every addon, so a key per item
-  // cost a scan of everything the loader holds, a bridge round trip per item on the way
-  // in, and a cross-tab watcher left behind for each. This is the guard on the whole
-  // storage model: however much a player browses, it is one key.
+  // A namespace is a prefix on one flat store shared by every addon, so a key per item costs a
+  // scan of everything the loader holds, a bridge round trip per item on the way in, and a
+  // cross-tab watcher left behind for each. This is the guard on the whole storage model:
+  // however much a player browses, it is one key.
   it('keeps the whole ledger in one key however many items are on the page', async () => {
     const h = await start();
     const rows = Array.from({ length: 40 }, (_unused, at) =>
@@ -566,9 +545,9 @@ describe('what is written down', () => {
     expect(visitsFor(h, 'ore')).toHaveLength(2);
   });
 
-  // The rule this whole feature turns on. The server sends nothing for a counter the
-  // player is not standing at, and recording that as an empty market would erase the
-  // ledger the moment they walked away from it.
+  // The rule this feature turns on. The server sends nothing for a counter the player is not
+  // standing at, and recording that as an empty market would erase the ledger the moment they
+  // walked away from it.
   it('records nothing at all while the player is away', async () => {
     const h = await start();
     h.send({ market: null });
@@ -616,9 +595,9 @@ describe('what is written down', () => {
     expect(visitsFor(h, 'ore')).toHaveLength(1);
   });
 
-  // The stamp is a WALL clock reading, pinned against the monotonic one: the two are far
-  // apart here on purpose, because a row stored in one session and read in the next is
-  // exactly the case a monotonic stamp gets silently wrong.
+  // The stamp is a wall clock reading, pinned against the monotonic one: the two are far apart
+  // here on purpose, because a row stored in one session and read in the next is exactly the
+  // case a monotonic stamp gets silently wrong.
   it('stamps a recording with the wall clock rather than the monotonic one', async () => {
     const h = await start();
     h.setWallClock(WALL_CLOCK_MS + DAY_MS);
@@ -629,9 +608,9 @@ describe('what is written down', () => {
     expect(visitsFor(h, 'ore')[0]?.[0]).toBe((WALL_CLOCK_MS + DAY_MS) / 1000);
   });
 
-  // The echo is the only thing that can see a fresh join reset the server-side query
-  // while the window's own controls survive, so a series that dropped it would mix a
-  // filtered reading with an unfiltered one and never be able to say which was which.
+  // The echo is the only thing that can see a fresh join reset the server-side query while the
+  // window's own controls survive, so a series that dropped it would mix a filtered reading with
+  // an unfiltered one and never be able to say which was which.
   it('records which query produced a reading', async () => {
     const h = await start();
     h.send({
@@ -668,10 +647,9 @@ describe('what is written down', () => {
     expect(figureOf('prices', 'ore')).toContain('5 silver');
   });
 
-  // The question this key exists to answer. A market belongs to a REALM, so two of them
-  // in one ledger would be two economies averaged into a low that is true of neither,
-  // and the player has no way to tell afterwards. Every character on one realm shares
-  // the history; a character on another shares none of it.
+  // The question this key exists to answer. A market belongs to a realm, so two of them in one
+  // ledger would be two economies averaged into a low that is true of neither. Every character
+  // on one realm shares the history; a character on another shares none of it.
   it('keeps another realm apart, and reads it back for the character in play', async () => {
     const h = await start();
     h.send({ market: page([listing({ id: 1, itemId: 'ore', price: 500 })]) });
@@ -727,11 +705,10 @@ describe('when a listing was first seen', () => {
     expect(storedStamps(h)[0]?.seen).toBe(WALL_CLOCK_MS);
   });
 
-  // The id is reused across a server restart, so a stamp kept on the id alone would hand
-  // a brand new listing the age of whatever held that number before. The second page
-  // carries a second row as well, because the loader's own market signature is an id
-  // list: a page whose only difference is a price under a stable id is a page the world
-  // watcher correctly reports as unchanged, since a live listing cannot be edited.
+  // The id is reused across a server restart, so a stamp kept on the id alone would hand a brand
+  // new listing the age of whatever held that number before. The second page carries a second
+  // row as well, because the loader's own market signature is an id list: a page whose only
+  // difference is a price under a stable id is correctly reported as unchanged.
   it('takes a fresh stamp when a reused id carries a different price', async () => {
     const h = await start();
     h.send({ market: page([listing({ id: 4, itemId: 'ore', price: 500, mine: true })]) });
@@ -760,9 +737,9 @@ describe('when a listing was first seen', () => {
   });
 });
 
-// One snapshot of `away` after a reconnect is the client clearing its own mirror, not
-// the player walking off. Both sides of the guard are pinned, because a guard that
-// granted grace forever would pass the first case and fail the second.
+// One snapshot of `away` after a reconnect is the client clearing its own mirror rather than
+// the player walking off. Both sides of the guard are pinned, because a guard that granted grace
+// forever would pass the first case and fail the second.
 describe('the reconnect blip', () => {
   it('keeps the page on screen for one away snapshot after a reconnect', async () => {
     const h = await start();
@@ -778,11 +755,9 @@ describe('the reconnect blip', () => {
     expect(lineFor('status-line')).toContain('not being thrown away');
   });
 
-  // The grace has to END on a timer rather than on the next reading, because a watch key
-  // fires on a CHANGE: a player who is still away sends no second reading, so a guard
-  // that waited for one would leave the panel saying "resyncing" for the rest of the
-  // session. This is the case that catches that, and only the timer satisfies both it
-  // and the one above.
+  // The grace has to end on a timer rather than on the next reading, because a watch key fires
+  // on a change: a player who is still away sends no second reading, so a guard that waited for
+  // one would leave the panel saying "resyncing" for the rest of the session.
   it('gives up on the resync once the client has had time to refill', async () => {
     const h = await start();
     h.send({ market: page([listing({ id: 4, itemId: 'ore', price: 500, mine: true })]) });
@@ -825,9 +800,8 @@ describe('the reconnect blip', () => {
   });
 });
 
-// `away` and `unknown` both carry null and differ only in why, and neither is an empty
-// market. A pane that drew either as one would tell a player standing in a town that
-// nobody is selling anything.
+// `away` and `unknown` both carry null and differ only in why, and neither is an empty market. A
+// pane that drew either as one would tell a player standing in a town that nobody is selling.
 describe('what it says when there is no page', () => {
   it('says nothing has decoded yet before the world is up', async () => {
     const h = await start({ world: false });
@@ -876,9 +850,9 @@ describe('what it says when there is no page', () => {
     expect(lineFor('status-line')).toContain('1 hour ago');
   });
 
-  // The sentence is drawn only where the figures above it could be misread. Standing at
-  // the counter with no search applied it says that nothing unusual is going on, which
-  // is a line of a HUD panel spent on nothing, and the list is what the room is for.
+  // The sentence is drawn only where the figures above it could be misread. Standing at the
+  // counter with no search applied it would say that nothing unusual is going on, which is a
+  // line of a HUD panel spent on nothing.
   it('says nothing at all while a whole unfiltered page is being read', async () => {
     const h = await start();
     h.send({ market: page([listing({ id: 1, itemId: 'ore' })]) });
@@ -923,9 +897,8 @@ describe('the unit price', () => {
     expect(tipOn('prices', 'ore')).toContain('divides by the count');
   });
 
-  // Copper as the game writes it. The version that printed every unit turned an ore at
-  // forty-four copper into `0g 0s 44c`, which is three leading zeroes per row of a
-  // ledger whose whole content is small prices.
+  // Copper as the game writes it. Printing every unit turns an ore at forty-four copper into
+  // `0g 0s 44c`, which is three leading zeroes per row of a ledger whose content is small prices.
   it('drops a unit of money that is empty', async () => {
     const h = await start();
     h.send({
@@ -940,9 +913,9 @@ describe('the unit price', () => {
     expect(tipOn('prices', 'ore')).toContain('high 1g');
   });
 
-  // ONE VOTE PER VISIT. A median over every listing is weighted by how many people
-  // happened to be selling, so the trip that found three asks would outvote the two
-  // that found one, and the typical price would really be the price on the busiest day.
+  // One vote per visit. A median over every listing is weighted by how many people happened to
+  // be selling, so the trip that found three asks would outvote the two that found one, and the
+  // typical price would really be the price on the busiest day.
   it('reports the median over the visits rather than over the listings', async () => {
     const h = await start();
     // Three trips on three days. The first found two asks, which are one vote between
@@ -966,10 +939,9 @@ describe('the unit price', () => {
   });
 });
 
-// A page carries several asks for one item and they all land with the same stamp, so a
-// line drawn per LISTING zigzags between the cheapest and the dearest ask of a single
-// visit at whatever amplitude the sellers happened to disagree by. Nothing changed
-// between those two readings: they are the same moment.
+// A page carries several asks for one item and they all land with the same stamp, so a line
+// drawn per listing zigzags between the cheapest and the dearest ask of a single visit at
+// whatever amplitude the sellers happened to disagree by. Those two readings are the same moment.
 describe('the trend line', () => {
   it('draws nothing from a single visit, however many asks were on the counter', async () => {
     const h = await start();
@@ -1012,8 +984,8 @@ describe('the trend line', () => {
 });
 
 // The server sorts the others section by display name and then by price, so a block is
-// contiguous and ascending and its first row is the cheapest competitor. No name table
-// is involved anywhere in this.
+// contiguous and ascending and its first row is the cheapest competitor. No name table is
+// involved anywhere in this.
 describe('the undercut check', () => {
   it('says a listing is undercut when a cheaper one leads its block', async () => {
     const h = await start();
@@ -1208,11 +1180,10 @@ describe('the bus', () => {
     expect(labelOf('prices', 'ore')).toBe('ore');
   });
 
-  // Delivery is synchronous, so a publisher answering the ask does so INSIDE the emit
-  // call. An addon that asked before subscribing would therefore miss its own answer,
-  // and nothing about that failure is visible from the outside: it looks exactly like a
-  // publisher that was not installed. The only way to see it is to stand in for the
-  // publisher and answer the ask, which needs the bus wired up before the addon is
+  // Delivery is synchronous, so a publisher answering the ask does so inside the emit call. An
+  // addon that asked before subscribing would miss its own answer, and that failure looks
+  // exactly like a publisher that was not installed. The only way to see it is to stand in for
+  // the publisher and answer the ask, which needs the bus wired up before the addon is
   // evaluated, so this case builds the services itself rather than using `start`.
   it('asks for a catch-up after subscribing, so a synchronous answer reaches it', async () => {
     const player = liveEntity({ set: { name: PLAYER_ENTITY.name, templateId: 'hunter' } });

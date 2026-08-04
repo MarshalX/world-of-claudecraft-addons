@@ -17,18 +17,16 @@ import { WORLD_KEYS } from '../../loader/src/runtime/world/signature.ts';
 import { validateManifest } from '../../loader/src/shared/schema.ts';
 import { mountAddon, parseManifest } from '../../tests/fakes/addon.ts';
 import { eventsFrame } from '../../tests/fakes/frames.ts';
-// The addon's own two files, read the way the loader reads text it ships: the
-// raw suffix rather than node:fs, so this suite needs no filesystem types and
-// runs under happy-dom, whose URL rejects the file scheme.
+// The addon's own two files, read the way the loader reads text it ships: the raw suffix
+// rather than node:fs, so this suite needs no filesystem types and runs under happy-dom, whose
+// URL rejects the file scheme.
 //
-// The manifest arrives as TEXT and is parsed here rather than imported as JSON.
-// It is untrusted input everywhere else in the loader, and validateManifest is
-// what this suite checks; a typed JSON import would hand it a shape the compiler
-// had already vouched for.
+// The manifest arrives as text and is parsed here rather than imported as JSON. It is
+// untrusted input everywhere else in the loader, and `validateManifest` is what this suite
+// checks; a typed JSON import would hand it a shape the compiler had already vouched for.
 import MANIFEST_TEXT from './addon.json?raw';
-// The sibling file the manifest declares. Read as text for the same reason the
-// manifest is: this is what the host caches at install and hands back, and a typed
-// JSON import would be a shape the compiler had already vouched for.
+// The sibling file the manifest declares, read as text for the same reason: this is what the
+// host caches at install and hands back.
 import DATA_TEXT from './data.json?raw';
 // biome-ignore lint/correctness/noUnresolvedImports: Vite's ?raw suffix is a loader directive a static resolver does not model, and an addon file is a function BODY with no exports at all. Same reason as the runtime bundle import in host/boot.ts.
 import SOURCE from './main.js?raw';
@@ -154,10 +152,10 @@ function press(label: string): void {
     ?.click();
 }
 
-// The demonstrations are manual by definition: a suite cannot see whether a
-// nameplate sits over the right shoulder. What it CAN hold them to is that a
-// button pressed with no game behind it creates nothing, since every one of these
-// runs on the login screen as readily as in the world.
+// The demonstrations are manual by definition: a suite cannot see whether a nameplate sits
+// over the right shoulder. What it can hold them to is that a button pressed with no game
+// behind it creates nothing, since every one of these runs on the login screen as readily as
+// in the world.
 describe('the anchor demonstration', () => {
   it('creates nothing when there is no world to anchor to', async () => {
     await run();
@@ -182,14 +180,9 @@ async function report(): Promise<string> {
   return document.body.textContent ?? '';
 }
 
-// Every check has to pass here. There is no game in this environment and the
-// harness knows it: each check that reads the game reports the no-game case as a
-// pass with a note rather than as a failure, so anything red here is the
-// loader's fault rather than the environment's.
-//
-// The `world.entities accepted a write` failure this suite produced when it was
-// first written was exactly that, and it was real: before world entry the roster
-// was a bare Map, shared by every addon. See tests/world-api.test.ts.
+// Every check has to pass here. There is no game in this environment and the harness knows it:
+// each check that reads the game reports the no-game case as a pass with a note rather than as
+// a failure, so anything red here is the loader's fault rather than the environment's.
 describe('what it reports without a game', () => {
   it('passes every check', async () => {
     await run();
@@ -237,14 +230,12 @@ describe('what it reports without a game', () => {
   });
 });
 
-// The one check here whose subject is the GAME rather than the loader.
+// The one check here whose subject is the game rather than the loader.
 //
-// `damage` and `heal2` pass through the loader untouched, so there is nothing in a
-// unit suite that could be wrong about them: a fixture only ever agrees with what it
-// was written to say, and the published claims about these records are true of the
-// wire or they are not. That is why the harness watches them in a live session, and
-// it is also why this suite can only check ONE thing about that watch, which is that
-// it has teeth. Each case below puts a record on the socket that contradicts
+// `damage` and `heal2` pass through the loader untouched, so nothing in a unit suite could be
+// wrong about them: a fixture only ever agrees with what it was written to say. That is why
+// the harness watches them in a live session, and it is why this suite can only check that the
+// watch has teeth. Each case below puts a record on the socket that contradicts
 // `packages/types/events-combat.d.ts` and requires the harness to name it.
 describe('watching the combat records', () => {
   /** Land some records, then press the button that re-runs everything. */
@@ -270,9 +261,9 @@ describe('watching the combat records', () => {
     };
   }
 
-  // Nothing is wrong with these, so the check has to stay green AND start counting.
-  // A watch that only ever reports failures would look identical to one wired to
-  // nothing at all, for as long as the game kept behaving.
+  // Nothing is wrong with these, so the check has to stay green and start counting. A watch
+  // that only ever reported failures would look identical to one wired to nothing at all, for
+  // as long as the game kept behaving.
   it('counts ordinary records rather than only reporting faults', async () => {
     await afterRecords([damage({}), { type: 'heal2', sourceId: 1, targetId: 1, amount: 50 }]);
 
@@ -281,9 +272,8 @@ describe('watching the combat records', () => {
       .toContain('1 damage and 1 heal records match the types');
   });
 
-  // The exact defect this was written after: a kind the types do not list reaches an
-  // addon as an ordinary string, and a display that groups by kind is silently wrong
-  // rather than loudly. `evade` was one for two releases.
+  // A kind the types do not list reaches an addon as an ordinary string, so a display that
+  // groups by kind is silently wrong rather than loudly.
   it('names a damage kind the published union does not carry', async () => {
     await afterRecords([damage({ kind: 'absorbed_entirely' })]);
 
@@ -319,12 +309,11 @@ describe('watching the combat records', () => {
   });
 });
 
-// A declared data file is fetched by the HOST at install and answered out of that
-// cache, and there is no marketplace behind this document, so the harness reports
-// the read as unavailable rather than failing it. What CAN be checked with no host
-// is the refusal, which is page-realm and is the security-shaped half; seeding the
-// host's copy and running again covers the rest of the path, which is the manifest
-// declaration, the bridge read, the parse, and the memo behind a second read.
+// A declared data file is fetched by the host at install and answered out of that cache, and
+// there is no marketplace behind this document, so the harness reports the read as unavailable
+// rather than failing it. What can be checked with no host is the refusal, which is
+// page-realm; seeding the host's copy and running again covers the manifest declaration, the
+// bridge read, the parse, and the memo behind a second read.
 describe('the data file it ships', () => {
   it('refuses a name the manifest does not declare', async () => {
     await run();
@@ -345,12 +334,11 @@ describe('the data file it ships', () => {
   });
 });
 
-// The harness carries its OWN copy of the world key list, and that is deliberate: it
-// stands in for the published types rather than reading the loader's array, so a key
-// that reached one and not the other throws from `world.on` in a live session instead
-// of passing everywhere. The copy still has to be kept up to date, which is what this
-// pins: a key added to the loader and not to the harness is not checked at all, and
-// nothing else would ever say so.
+// The harness carries its own copy of the world key list, standing in for the published types
+// rather than reading the loader's array, so a key that reached one and not the other throws
+// from `world.on` in a live session instead of passing everywhere. The copy still has to be
+// kept up to date, which is what this pins: a key added to the loader and not to the harness is
+// not checked at all.
 describe('the key list it carries', () => {
   /** Any total order will do: the sort exists only to make the comparison stable. */
   const byName = (a: string, b: string): number => a.localeCompare(b);

@@ -2,50 +2,41 @@
 
 // Satchel, run through the real loader.
 //
-// THE STORAGE CASES COME FIRST because the addon is a record before it is a panel,
-// and the one that matters most is `keeps a recorded bank when the player walks away`.
-// The server sends nothing for a counter the player is not standing at, so an addon
-// that recorded `away` as an empty bank would erase a character's deposit box every
-// time they took three steps, and the resulting display is correct half the time and
-// cannot be told from the half where it is not. Every write path here is asserted on
-// the STORE rather than on the screen, because a pane redrawn from memory looks
-// identical whether or not the write behind it was right.
+// The storage cases come first because the addon is a record before it is a panel, and the one
+// that matters most is `keeps a recorded bank when the player walks away`. The server sends
+// nothing for a counter the player is not standing at, so an addon that recorded `away` as an
+// empty bank would erase a character's deposit box every time they took three steps. Every
+// write path here is asserted on the store rather than on the screen, because a pane redrawn
+// from memory looks identical whether or not the write behind it was right.
 //
-// THE CROSS-CHARACTER CASES ARE THE PRODUCT. The game's own bag window aggregates
-// your bags, so a panel that draws them earns nothing; what the client cannot do is
-// show another character's inventory, show a bank you are not standing at, or say
-// where your copy of something is. Those three are what `reading another character`,
-// `the bank pane` and `the index across every character` pin, and they are asserted
-// with the addon logged in as somebody the stored rows are not about, which is the
-// only arrangement in which they mean anything.
+// The cross-character cases are the product. The game's own bag window aggregates your bags, so
+// a panel that draws them earns nothing; what the client cannot do is show another character's
+// inventory, show a bank you are not standing at, or say where your copy of something is.
+// Those three are asserted with the addon logged in as somebody the stored rows are not about.
 //
-// AGE IS PART OF THE ANSWER, not decoration. A bank from three days ago is useful and
-// must never be presented as current, so every stored reading carries a stamp and
-// every pane says how old it is. The stamp is a WALL clock reading and the suite pins
-// that against the monotonic one: the two are far apart here on purpose, because a
-// row stored in one session and read in the next is exactly the case a monotonic
-// stamp gets silently wrong.
+// Age is part of the answer. A bank from three days ago is useful and must never be presented
+// as current, so every stored reading carries a stamp and every pane says how old it is. The
+// stamp is a wall clock reading and the suite pins that against the monotonic one: the two are
+// far apart here on purpose, because a row stored in one session and read in the next is
+// exactly the case a monotonic stamp gets silently wrong.
 //
-// THE GRID. It is how one character's store is read, and every claim it makes is
-// checkable without an item ever being named: one square per pooled cell, art
-// requested per square from `ui.icon.item`, the player's own placement honoured where
-// the game recorded one, the stack count in the corner, and the marks (an id in more
-// than one cell, an id also being worn, a banked id also carried) derived from ids
-// alone. The art case that matters is the failing one: not every item ships a painted
-// file, so a square whose icon 404s has to stay a readable occupied cell.
+// The grid is how one character's store is read, and every claim it makes is checkable without
+// an item ever being named: one square per pooled cell, art requested per square from
+// `ui.icon.item`, the player's own placement honoured where the game recorded one, the stack
+// count in the corner, and the marks derived from ids alone. The art case that matters is the
+// failing one: not every item ships a painted file, so a square whose icon 404s has to stay a
+// readable occupied cell.
 //
-// THE BUS CONTRACT. This addon is the first consumer in the catalogue, so what it
-// does with a publisher that is not there is the contract every consumer after it
-// copies. The cases pin all three rules: it draws with nobody publishing, it takes an
-// answer from a fork's fqid rather than only from the official one, and its ask goes
-// out AFTER its subscriptions, which is what makes an answer given inside the ask
-// reach it at all. They also pin the ORDER: a publisher outranks the art name,
-// because the art name is provenance for a picture and not the item's name.
+// This addon is the first bus consumer in the catalogue, so what it does with a publisher that
+// is not there is the contract every consumer after it copies. The cases pin all three rules:
+// it draws with nobody publishing, it takes an answer from a fork's fqid rather than only from
+// the official one, and its ask goes out after its subscriptions. They also pin the order: a
+// publisher outranks the art name, because the art name is provenance for a picture.
 //
-// THE ACCESSIBLE NAME OF AN EMPTY SQUARE. Asserted on the ATTRIBUTE, never on its
-// value. A tile put back to unnamed has no `aria-label` at all, and one named the
-// empty string has an empty one; both read as `''` through a `?? ''`, so a helper
-// written that way passes whichever the addon does, which is the entire distinction.
+// The accessible name of an empty square is asserted on the attribute, never on its value. A
+// tile put back to unnamed has no `aria-label` at all, and one named the empty string has an
+// empty one; both read as `''` through a `?? ''`, so a helper written that way passes whichever
+// the addon does.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ANY_SENDER } from '../../loader/src/runtime/bus/hub.ts';
@@ -71,19 +62,16 @@ const MANIFEST_JSON: unknown = JSON.parse(MANIFEST_TEXT);
 const PLAYER_ID = PLAYER_ENTITY.id;
 const FQID = 'official/satchel';
 /**
- * The key a record is filed under: the CHANNEL, then what the loader derives.
+ * The key a record is filed under: the channel, then what the loader derives.
  *
  * The realm is the one the shared `HELLO_FRAME` carries, which is what the world hub in
- * `tests/fakes` now derives the character key from, exactly as `runtime/surfaces.ts`
- * wires it in the loader. It read `offline/` here until that was fixed, because the
- * fake was constructed with `realm: () => null` and nothing an addon suite could reach
- * moved it. What this suite proves is the half that is this addon's: one record per
- * character per deployment, and the loader's half of the key coming from the loader
- * rather than from a second derivation of its own.
+ * `tests/fakes` derives the character key from, exactly as `runtime/surfaces.ts` wires it in
+ * the loader. What this suite proves is the half that is this addon's: one record per character
+ * per deployment, and the loader's half of the key coming from the loader rather than from a
+ * second derivation of its own.
  *
- * `pbe/` because that is the channel the shared harness reports, and it is in the key
- * because the account-wide namespace is the one the loader adds nothing to. See
- * `records a character and its copy on another channel apart`.
+ * `pbe/` because that is the channel the shared harness reports, and it is in the key because
+ * the account-wide namespace is the one the loader adds nothing to.
  */
 const CHANNEL = 'pbe';
 const CHARACTER_KEY = `${CHANNEL}/Claudemoon/Marshal`;
@@ -100,14 +88,11 @@ const DAY_MS = 24 * HOUR_MS;
 /** The backpack every character has, before a single bag is equipped. */
 const BACKPACK_SLOTS = 16;
 /**
- * What each bag in the fixture adds.
+ * What each bag in the fixture adds. The game's table, not the loader's: how many cells a bag
+ * holds is item content, so nothing on the API can be asked and the fake carries its own copy.
+ * That is why `world.bagCapacity` is read rather than derived by the addon.
  *
- * The GAME's table, not the loader's: how many cells a bag holds is item content, so
- * nothing on the API can be asked and the fake has to carry its own copy. That is
- * exactly why `world.bagCapacity` is read rather than derived by the addon.
- *
- * A Map from entry pairs because every key here is an ITEM ID, which is a name the
- * game owns rather than an identifier this project chose.
+ * A Map from entry pairs because every key here is an item id, a name the game owns.
  */
 const BAG_SLOTS = new Map<string, number>([
   ['bag_16', 16],
@@ -172,11 +157,8 @@ interface CarryState {
   equipment: Record<string, string>;
   copper: number;
   /**
-   * The two gated reads, where null is what the SERVER sends.
-   *
-   * Not "an empty bank" and not "no bank": the payload is simply absent for a player
-   * who is not standing at the counter, which is the state the addon must never
-   * record as an empty store.
+   * The two gated reads, where null is what the server sends: not "an empty bank" and not "no
+   * bank", but a payload that is simply absent for a player who is not standing at the counter.
    */
   bank: BankPayload | null;
   mail: MailPayload | null;
@@ -306,12 +288,10 @@ function snapshot(patch: Partial<StoredSnapshot> = {}): StoredSnapshot {
 }
 
 /**
- * A character stored by a previous session, under the loader's own key shape.
- *
- * On a realm rather than `offline/`, because the point of every case that uses one is
- * that it is somebody the suite is NOT logged in as. The bank and the mailbox default
- * to `at: 0`, which is the ordinary state: a character's bags are recorded every time
- * they log in and a counter is recorded only if they walked up to one.
+ * A character stored by a previous session, under the loader's own key shape. On a realm rather
+ * than `offline/`, because the point of every case that uses one is that it is somebody the
+ * suite is not logged in as. The bank and the mailbox default to `at: 0`, which is the ordinary
+ * state: bags are recorded every login and a counter only if the character walked up to one.
  */
 function storedCharacter(name: string, patch: Partial<StoredRecord> = {}): StoredRecord {
   return {
@@ -348,20 +328,16 @@ interface SatchelHarness extends SharedHarness {
   /** Another tab writing a setting, which is how one actually changes. */
   settingsChanged: (values: Record<string, unknown>) => void;
   /**
-   * Somebody else is playing now, without a page load.
-   *
-   * A real state: the game clones and removes its HUD rather than reloading, so an
-   * addon holding a per-character view stays running across the switch.
+   * Somebody else is playing now, without a page load. A real state: the game clones and removes
+   * its HUD rather than reloading, so an addon holding a per-character view stays running.
    */
   switchCharacter: (name: string) => void;
 }
 
 /**
- * Let every queued microtask run, without an await inside a loop.
- *
- * The addon reads its stored characters through `storage.keys()` and then one `get`
- * per character, so its start-up is several promise hops deep and a fixed pair of
- * flushes would settle it only by luck.
+ * Let every queued microtask run, without an await inside a loop. The addon reads its stored
+ * characters through `storage.keys()` and then one `get` per character, so its start-up is
+ * several promise hops deep and a fixed pair of flushes would settle it only by luck.
  */
 function flush(times: number): Promise<void> {
   let chain: Promise<void> = Promise.resolve();
@@ -396,11 +372,9 @@ function figureOf(list: string, key: string): string {
 }
 
 /**
- * An amount as the kit ANNOUNCES it, which is the only readable form of a drawn one.
- *
- * A `{ copper }` value is coin discs and bare digits, so its `textContent` is the
- * figures run together with nothing to say which unit each belongs to. The accessible
- * name is the same amount in words, and it is what the row actually claims.
+ * An amount as the kit announces it, which is the only readable form of a drawn one. A
+ * `{ copper }` value is coin discs and bare digits, so its `textContent` is the figures run
+ * together with nothing to say which unit each belongs to.
  */
 function coinsOf(el: Element | null): string {
   return el?.querySelector('.woc-bar-value')?.getAttribute('aria-label') ?? '';
@@ -424,12 +398,9 @@ function lineFor(role: string): string {
 }
 
 /**
- * One figure off a status strip, without the label beside it.
- *
- * Separate from `lineFor` because a chip is a label and a figure in one element, so its
- * `textContent` is the two run together: the label is chrome and the figure is the
- * claim, and only the second is worth pinning. What the chip's full sentence says is
- * pinned through its tooltip instead, which is where that sentence now lives.
+ * One figure off a status strip, without the label beside it. Separate from `lineFor` because a
+ * chip is a label and a figure in one element: the label is chrome and the figure is the claim.
+ * What the chip's full sentence says is pinned through its tooltip instead.
  */
 function statFor(role: string): string {
   const chip = document.querySelector(`[data-role="${role}"]`);
@@ -437,11 +408,9 @@ function statFor(role: string): string {
 }
 
 /**
- * Every square in one grid, in the order it is drawn.
- *
- * Scoped by grid, because there are two of them: the bags and the bank are the same
- * widget over different stores, and an unscoped `[data-cell]` would answer about
- * whichever happened to be in the document first.
+ * Every square in one grid, in the order it is drawn. Scoped by grid, because there are two of
+ * them: the bags and the bank are the same widget over different stores, and an unscoped
+ * `[data-cell]` would answer about whichever happened to be in the document first.
  */
 function cellsIn(grid: string): HTMLElement[] {
   return [...document.querySelectorAll<HTMLElement>(`[data-grid="${grid}"] [data-cell]`)];
@@ -491,13 +460,10 @@ function nameAt(at: number): string {
 }
 
 /**
- * Whether the square has an accessible name AT ALL.
- *
- * Separate from `nameAt` on purpose, and the reason is the whole point of the two
- * helpers existing. A tile put back to unnamed carries no `aria-label` and is
- * `aria-hidden`; a tile named the empty string carries an empty `aria-label` and stays
- * in the accessibility tree announcing nothing. `getAttribute(...) ?? ''` answers `''`
- * for both, so a suite written only that way passes whichever the addon does.
+ * Whether the square has an accessible name at all. Separate from `nameAt` on purpose: a tile
+ * put back to unnamed carries no `aria-label` and is `aria-hidden`, while a tile named the empty
+ * string carries an empty `aria-label` and stays in the accessibility tree announcing nothing.
+ * `getAttribute(...) ?? ''` answers `''` for both.
  */
 function namedAt(at: number): boolean {
   return cellAt(at)?.hasAttribute('aria-label') ?? false;
@@ -549,10 +515,9 @@ function bankDetail(): string {
 }
 
 /**
- * Where the unread badge lives, because a tab strip is built once and cannot move.
- *
- * The `aria-label` rather than the drawn title, since `setTitle` writes both and the
- * accessible name is the one that survives a bare density having no title bar.
+ * Where the unread badge lives, because a tab strip is built once and cannot move. The
+ * `aria-label` rather than the drawn title, since `setTitle` writes both and the accessible name
+ * is the one that survives a bare density having no title bar.
  */
 function frameTitle(): string {
   return document.querySelector('[data-woc-frame="bags"]')?.getAttribute('aria-label') ?? '';
@@ -600,12 +565,10 @@ function typeSearch(value: string): void {
 }
 
 /**
- * Make the item art manifest answer, which the shared fake's never does.
- *
- * `tests/fakes` hands the icon builders a fetch that never settles, so `itemArtName`
- * is permanently null there: the same state the loader is in before the manifest
- * lands. A Map from entry pairs because every key in it is an ITEM ID, a name the game
- * owns rather than one this suite chose.
+ * Make the item art manifest answer, which the shared fake's never does. `tests/fakes` hands the
+ * icon builders a fetch that never settles, so `itemArtName` is permanently null there: the same
+ * state the loader is in before the manifest lands. A Map from entry pairs because every key in
+ * it is an item id.
  */
 function artNames(harness: SharedHarness, table: ReadonlyMap<string, string>): void {
   vi.spyOn(harness.shared.kit.icons, 'itemArtName').mockImplementation(
@@ -624,11 +587,9 @@ function installedRow(): InstalledAddon {
 }
 
 /**
- * The game's own world object, with the pooled capacity as a GETTER.
- *
- * A getter rather than a number because that is what the loader reads through: the
- * suite changes the bags and the capacity moves with them, exactly as it does when a
- * player equips one.
+ * The game's own world object, with the pooled capacity as a getter, because that is what the
+ * loader reads through: the suite changes the bags and the capacity moves with them, exactly as
+ * it does when a player equips one.
  */
 function fakeWorld(state: CarryState, player: unknown): Record<string, unknown> {
   return {
@@ -680,10 +641,9 @@ async function start(options: StartOptions = {}): Promise<SatchelHarness> {
   }
   const harness = await mountAddon(input);
   teardown.push(harness.dispose);
-  // What a real session sends first. The addon reads nothing off it: a record is keyed
-  // on `world.characterKey`, which the loader derives from the realm and the player's
-  // name, so that a second addon keeping its own per-character record cannot disagree
-  // about whose it is. See `CHARACTER_KEY`.
+  // What a real session sends first. The addon reads nothing off it: a record is keyed on
+  // `world.characterKey`, which the loader derives from the realm and the player's name, so that
+  // a second addon keeping its own per-character record cannot disagree about whose it is.
   harness.inbound(HELLO_FRAME);
 
   const settle = async (): Promise<void> => {
@@ -715,11 +675,9 @@ async function start(options: StartOptions = {}): Promise<SatchelHarness> {
 }
 
 /**
- * One character's record as it landed in the store.
- *
- * Typed as present rather than optional, and the cases that are about ABSENCE go
- * through `storedKeys` instead: a suite that reached for `?.` on every field would
- * pass a case that wrote nothing at all, which is the failure most worth catching.
+ * One character's record as it landed in the store. Typed as present rather than optional, and
+ * the cases that are about absence go through `storedKeys` instead: a suite that reached for `?.`
+ * on every field would pass a case that wrote nothing at all.
  */
 function storedFor(h: SatchelHarness, key = CHARACTER_KEY): StoredRecord {
   return h.hub.dump()[`${NAMESPACE}/${CHARACTER_PREFIX}${key}`] as StoredRecord;
@@ -782,9 +740,9 @@ describe('what is written down', () => {
     expect(storedFor(h).sources.bank).toMatchObject({ used: 2, total: 30, bought: 6 });
   });
 
-  // THE CASE THIS FEATURE LIVES OR DIES ON. The server sends nothing for a counter
-  // the player is not standing at, so `away` is not an empty bank: recording it as one
-  // would wipe a character's deposit box every time they took three steps.
+  // The case this feature lives or dies on. The server sends nothing for a counter the player is
+  // not standing at, so `away` is not an empty bank: recording it as one would wipe a
+  // character's deposit box every time they took three steps.
   it('keeps a recorded bank when the player walks away from the banker', async () => {
     const h = await start({ carry: { bank: bankPayload({ slots: cells('ore', 20, 3) }) } });
     await h.settle();
@@ -839,10 +797,9 @@ describe('what is written down', () => {
     ]);
   });
 
-  // A WALL clock stamp, not a monotonic one, and the two are far apart in this suite
-  // on purpose: `woc.now()` reads 1234 here and the wall clock reads a real epoch. A
-  // record is stored in one session and read back in the next, where a monotonic
-  // reading restored into a fresh page renders as a moment in 1970.
+  // A wall clock stamp, not a monotonic one, and the two are far apart in this suite on purpose:
+  // `woc.now()` reads 1234 here and the wall clock reads a real epoch. A record is stored in one
+  // session and read back in the next, where a monotonic reading renders as a moment in 1970.
   it('stamps every store with the wall clock, so a later session can date it', async () => {
     const h = await start({ carry: { bank: bankPayload({ slots: cells('ore', 20) }) } });
     await h.settle();
@@ -873,15 +830,14 @@ describe('what is written down', () => {
     expect(storedKeys(h)).toContain(`${CHANNEL}/Claudemoon/Alt`);
   });
 
-  // A character and its PBE copy have the same realm and the same name, so
-  // `world.characterKey` cannot tell them apart: that string is what the loader puts
-  // INSIDE `perCharacterKey(channel, ...)` for the two namespaces it owns, and this
-  // addon files under the account-wide one, which the loader adds nothing to. Without
-  // the channel here the two share a record, whichever was played last overwrites the
-  // other, and every pane goes on stamping it with the time it was read.
+  // A character and its PBE copy have the same realm and the same name, so `world.characterKey`
+  // cannot tell them apart: that string is what the loader puts inside
+  // `perCharacterKey(channel, ...)` for the two namespaces it owns, and this addon files under
+  // the account-wide one. Without the channel here the two share a record, whichever was played
+  // last overwrites the other, and every pane goes on stamping it with the time it was read.
   //
-  // The stored row is what this asserts on, not the screen: a pane redrawn from one
-  // merged record looks exactly like a pane redrawn from the right one.
+  // The stored row is what this asserts on, not the screen: a pane redrawn from one merged
+  // record looks exactly like a pane redrawn from the right one.
   it('records a character and its copy on another channel apart', async () => {
     const storage = createFakeStorage();
     // The same realm and the same name as the character in play, on the other
@@ -1384,11 +1340,10 @@ describe('the roster', () => {
   });
 });
 
-// Every pane used to end in three or four plain sentences stacked one per line. The
-// figures in them are chips now, and NOTHING WAS DROPPED ON THE WAY: each case here
-// pins the sentence a chip replaced, at the hover it moved to. The two that stayed
-// sentences on screen are the panel's honesty rather than its arithmetic, and they are
-// pinned where they always were, in the age and note cases above.
+// The figures in each pane are chips, and nothing was dropped on the way: each case here pins
+// the sentence a chip replaced, at the hover it moved to. The two that stayed sentences on
+// screen are the panel's honesty rather than its arithmetic, and they are pinned in the age and
+// note cases above.
 describe('the status strip', () => {
   it('spells the marks out under the pointer, and says it cannot act on them', async () => {
     const h = await start({
@@ -1460,9 +1415,9 @@ describe('the free-slot count', () => {
     expect(capacityDetail()).toBe('13 free');
   });
 
-  // The trap. One entry is one cell whatever the stack holds, so three stacks of
-  // twenty is three cells and not sixty: summing the counts would report a 16 cell
-  // backpack as 44 slots overdrawn while the player has 13 free.
+  // One entry is one cell whatever the stack holds, so three stacks of twenty is three cells and
+  // not sixty: summing the counts would report a 16 cell backpack as 44 slots overdrawn while
+  // the player has 13 free.
   it('counts a stack as one cell however much is in it', async () => {
     const h = await start({ carry: { inventory: cells('ore', 20, 3) } });
     await h.settle();
@@ -1591,14 +1546,13 @@ describe('the bag grid', () => {
     expect(gridCells()).toHaveLength(16);
   });
 
-  // A tile's accessible name is otherwise only ever written, so a square reused from
-  // an occupied one would go on announcing what USED to be in it.
+  // A tile's accessible name is otherwise only ever written, so a square reused from an occupied
+  // one would go on announcing what used to be in it.
   //
-  // Asserted on the ATTRIBUTE and not on its value, which is the whole point.
-  // `label: null` puts the tile back to unnamed: no `aria-label` at all, and
-  // `aria-hidden` back on. `label: ''` reaches the same place by a different road and
-  // says "this is called the empty string". Both read as `''` through
-  // `getAttribute(...) ?? ''`, so a case written that way would pin neither.
+  // Asserted on the attribute and not on its value. `label: null` puts the tile back to unnamed:
+  // no `aria-label` at all, and `aria-hidden` back on. `label: ''` reaches the same place by a
+  // different road and says "this is called the empty string". Both read as `''` through
+  // `getAttribute(...) ?? ''`.
   it('takes the name off a square a stack has left rather than blanking it', async () => {
     const h = await start({ carry: { inventory: cells('ore', 20, 2) } });
     await h.settle();
@@ -1633,10 +1587,9 @@ describe('the bag grid', () => {
 // INLINE styles the addon writes, never on a stylesheet rule: a `.css` import resolves
 // to the empty string under vitest, so a suite cannot read a selector at all.
 describe('its layout', () => {
-  // THE BUG THIS SUITE EXISTS FOR. `setShown` wrote `display: flex` whenever it showed
-  // anything, and the bag grid went through it, so 72 squares laid out in ONE ROW and
-  // the content-sized frame stretched to about 1800 pixels. Reported from a live
-  // session as the grid being completely broken.
+  // `setShown` must not write `display: flex` whenever it shows anything: the bag grid goes
+  // through it, so a helper written that way lays 72 squares out in one row and stretches the
+  // content-sized frame to about 1800 pixels.
   it('leaves the bag grid a grid when the pane shows it', async () => {
     const h = await start({ carry: { inventory: cells('ore', 20, 3) } });
     await h.settle();
@@ -1717,11 +1670,10 @@ describe('its layout', () => {
     expect(document.querySelector<HTMLElement>('.woc-frame-body')?.style.flex).toBe('1 1 auto');
   });
 
-  // `setShown` restores what an element was BUILT as rather than writing one display
-  // for everything it is pointed at. The capacity bar is the case that caught it: a kit
-  // bar shown as a flex line puts its own detail beside its figure instead of under it,
-  // and nothing raises. A bar is the kit's, so the right assertion is that this addon
-  // has written no display onto it at all.
+  // `setShown` restores what an element was built as rather than writing one display for
+  // everything it is pointed at. The capacity bar is the case that catches it: a kit bar shown as
+  // a flex line puts its own detail beside its figure instead of under it, and nothing raises. A
+  // bar is the kit's, so the right assertion is that this addon has written no display onto it.
   it('gives an element it did not lay out back its own display', async () => {
     const h = await start({ carry: { inventory: cells('ore', 20) } });
     await h.settle();
@@ -1780,9 +1732,9 @@ describe('what the grid marks', () => {
     expect(statFor('marks')).toBe('1 split, 1 to free');
   });
 
-  // Two full stacks cannot be merged into one, and nothing published says how big a
-  // full stack is: the answer measured from what has been seen is zero, which is the
-  // safe direction to be wrong in. W11 has no fix and this wording is the honest one.
+  // Two full stacks cannot be merged into one, and nothing published says how big a full stack
+  // is: the answer measured from what has been seen is zero, which is the safe direction to be
+  // wrong in.
   it('claims no reclaim when no stack is bigger than one already seen', async () => {
     const h = await start({ carry: { inventory: cells('ore', 20, 2) } });
     await h.settle();
@@ -2017,19 +1969,18 @@ describe('the name on a square', () => {
     expect(said).not.toContain('Named from its art file');
   });
 
-  // Both art answers are provisional until the manifest lands: the icon is a hopeful
-  // URL and the art name is null. So the addon asks for it and repaints, rather than
-  // living with the reading its first frame happened to get. Built from the shared
-  // services directly, because the spy has to exist before the addon's first line.
+  // Both art answers are provisional until the manifest lands: the icon is a hopeful URL and the
+  // art name is null. So the addon asks for it and repaints rather than living with the reading
+  // its first frame happened to get. Built from the shared services directly, because the spy
+  // has to exist before the addon's first line.
   it('reads the art manifest once, then repaints with what it learned', async () => {
     const player = liveEntity({ set: { name: PLAYER_ENTITY.name, templateId: 'hunter' } });
     const state: CarryState = { ...emptyCarry(), inventory: cells('ore', 20) };
     const shared = createSharedServices(document, createFakeStorage(), {
       game: Promise.resolve({ world: fakeWorld(state, player) }),
     });
-    // Annotated, or `noUnnecessaryConditions` reads the initializer as the literal
-    // type `false` and reports every later test of it as a condition that cannot vary.
-    // Same rule the addon's own `cell()` factory exists for.
+    // Annotated, or `noUnnecessaryConditions` reads the initializer as the literal type `false`
+    // and reports every later test of it as a condition that cannot vary.
     const read: { on: boolean } = { on: false };
     const preload = vi.spyOn(shared.shared.kit.icons, 'preloadItems').mockImplementation(() => {
       read.on = true;

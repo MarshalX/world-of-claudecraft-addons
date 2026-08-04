@@ -1,84 +1,63 @@
 /// <reference types="@woc-addons/types" />
 
-// Emberwatch: say which effect on which unit is worth knowing about, and get a
-// tile, a cue and a banner when it happens.
+// Emberwatch: say which effect on which unit is worth knowing about, and get a tile, a
+// cue and a banner when it happens.
 //
-// THE MODEL IS THE AURA LIST AND NEVER THE AURA EVENT. The `aura` event carries a
-// display NAME, a gained flag and a target, and no id at all, so an engine built on
-// it would silently confuse two abilities that share a name and could not express
-// "the one I applied" at all. Everything here reads `world.aurasOn(unit, query)` and
-// `world.partyAuras(pid, query)`, which carry ids, sources, stacks and durations.
-// Nothing in this file subscribes to an event.
+// The model is the aura list and never the aura event. The `aura` event carries a display
+// name, a gained flag and a target and no id at all, so an engine built on it would
+// confuse two abilities that share a name and could not express "the one I applied".
+// Everything here reads `world.aurasOn(unit, query)` and `world.partyAuras(pid, query)`,
+// which carry ids, sources, stacks and durations. Nothing subscribes to an event.
 //
-// THE CLOCK IS `woc.onFrame` AND THE TWO AURA WATCH KEYS ARE DELIBERATELY NOT
-// SUBSCRIBED, which is worth stating because "subscribe for the set, animate from
-// the read" would otherwise point the other way. Three of the four conditions this
-// engine tests are invisible to those keys:
+// The clock is `woc.onFrame`, and the two aura watch keys are deliberately not
+// subscribed, because three of the four conditions this engine tests are invisible to
+// them: `world.on('auras')` signs your auras by id and caster and not by stack count, so
+// a debuff ramping on you fires nothing; neither key fires as a remaining ticks down, and
+// "running out" is a threshold on that remaining; and a party row has no watch key at
+// all. What is subscribed is `characterKey`, since the rule set and the stored rows
+// belong to one character and the game swaps characters inside one page load.
 //
-//   - `world.on('auras')` signs YOUR auras by id and caster and NOT by stack count,
-//     so a debuff ramping on you fires nothing there.
-//   - Neither key fires as a remaining ticks down, and "running out" is a threshold
-//     crossing on that remaining.
-//   - A PARTY ROW has no watch key at all. `world.on('party')` signs a row's strip
-//     by aura ids only, so a rule over the group would miss every stack and every
-//     expiry even if it were subscribed.
+// A party row is a smaller shape and the display says so. A row carries an id, a kind, a
+// whole-second remaining and nothing else: no source, so `mine` cannot be asked and a
+// rule naming it has that clause dropped rather than silently ignored; no duration, so a
+// tile from a row gets no sweep; no stacks; no school and no `unbreakableControl`, so
+// `world.dispellable` refuses it. All of that is said in the rules pane and in the tile's
+// tooltip. The reason to read rows at all is that one exists for a member on the far side
+// of the map where an entity does not.
 //
-// So the frame tick is the honest clock. What IS subscribed is `characterKey`, since
-// the rule set and the stored rows belong to one character and the game swaps
-// characters inside one page load.
+// Polarity is the loader's predicate rather than this file's arithmetic. `world.harmful`
+// takes either shape and puts both of the game's clauses together: a kind in the harmful
+// set, or a `buff_*` kind whose magnitude went negative, which is a drain reusing the
+// buff kind. A party row's `neg` flag is a sign test on that magnitude and nothing else,
+// so a dot, a root, a stun and a silence all arrive without it.
 //
-// A PARTY ROW IS A SMALLER SHAPE AND THE DISPLAY SAYS SO. A row carries an id, a
-// kind, a whole-second remaining and nothing else: no source, so `mine` cannot be
-// asked and a rule that names it has that clause DROPPED rather than silently
-// ignored; no duration, so a tile drawn from a row gets no sweep; no stacks, so a
-// stacks rule cannot be answered; no school and no `unbreakableControl`, so
-// `world.dispellable` refuses it. Every one of those is said in the rules pane and
-// in the tile's own tooltip rather than being left for a player to work out from an
-// alert that never arrives. The reason to read rows at all is that a row exists for
-// a member on the far side of the map where an entity does not.
+// What cannot be built, and is said on screen as well as here: "your crowd control is
+// about to break, and how much damage it will take". The soak and the per-hit break
+// chance never leave the server, and what rides the wire is a bare presence marker saying
+// a soak exists. The marker survives into a field the published `Aura` does not declare,
+// and an undeclared field is one nothing has promised, so nothing here touches it. The
+// rules pane says the limit in words, because an engine that alerts on control and stays
+// quiet about this is read as denying it.
 //
-// POLARITY IS THE LOADER'S PREDICATE, never this file's arithmetic. `world.harmful`
-// takes either shape and puts both of the game's clauses together: a kind in the
-// harmful set, or a `buff_*` kind whose magnitude went negative, which is a drain
-// reusing the buff kind. A party row's `neg` flag is a SIGN test on that magnitude
-// and nothing else, so a dot, a root, a stun and a silence all arrive without it,
-// and any rule filtering on it would drop most of what it was written for.
+// An effect a mob applied has no icon anywhere. The game composites aura art on a canvas
+// from a bundled table, so the only art an addon can point at is the applying ability's,
+// which is filed per player class. An interrupt's lockout aura carries an `_lockout`
+// suffix that no ability answers to and will 404 whatever the caster was. The kit hides a
+// failed slot, so the cost is a blank square.
 //
-// WHAT CANNOT BE BUILT, AND IT IS ON SCREEN RATHER THAN ONLY HERE: "your crowd
-// control is about to break, and how much damage it will take". The soak and the
-// per-hit break chance never leave the server, and what does ride the wire is a bare
-// presence marker saying a soak exists rather than what it is, because the live value
-// would churn the game's own aura cache. So the amount is unanswerable by anything.
-// The marker itself survives into a field the published `Aura` does not declare, and
-// an undeclared field is one nothing has promised: a loader that later copied auras
-// rather than passing the game's own through would take it away with no error
-// anywhere. So nothing here touches it. The rules pane says the limit in words,
-// because an engine that alerts on control and stays quiet about this is read as
-// denying it.
-//
-// AN EFFECT A MOB APPLIED HAS NO ICON ANYWHERE. The game composites aura art on a
-// canvas from a bundled table, so the only art an addon can point at is the applying
-// ability's, which is filed per PLAYER class. A player-applied effect therefore
-// resolves and everything a mob casts does not, and an interrupt's lockout aura
-// carries an `_lockout` suffix that no ability answers to and will 404 whatever the
-// caster was. The kit hides a failed slot, so the cost is a blank square rather than
-// a broken row.
-//
-// `world.abilities` is deliberately NOT consulted for a name. An entity's aura
-// carries `name` on the wire, which is the right answer for every aura including a
-// mob's; a party row carries none, and a spellbook lookup would answer for the
-// handful in your own kit and leave the rest guessed, which is a label that is
-// authoritative one row and a guess the next with nothing to tell them apart. A row
-// is labelled from its id, title-cased, and the tooltip says the label was derived.
+// `world.abilities` is deliberately not consulted for a name. An entity's aura carries
+// `name` on the wire, which is right for every aura including a mob's; a party row
+// carries none, and a spellbook lookup would answer for the handful in your own kit and
+// leave the rest guessed, which is a label that is authoritative one row and a guess the
+// next. A row is labelled from its id, title-cased, and the tooltip says so.
 //
 // There is no sending here and there could not be. This says what landed; the player
 // decides what to spend.
 //
-// THE STARTER TABLE IS GAME CONTENT and lives in `rules.json` rather than in this
-// file, read through `woc.data`. It is generated: `generate.mjs` beside this file is
-// the source of it and says which half of a row is read out of a game checkout and
-// which half is editorial. `woc.data` hands back `unknown`, so every row is checked
-// in `readRule` below before it is allowed to fire anything.
+// The starter table is game content and lives in `rules.json`, read through `woc.data`.
+// It is generated: `generate.mjs` beside this file says which half of a row is read out
+// of a game checkout and which half is editorial. `woc.data` hands back `unknown`, so
+// every row is checked in `readRule` before it is allowed to fire anything.
 
 const RULES_FILE = 'rules.json';
 /** Where a player's own rows and their disabled ids are filed, per character. */
@@ -89,11 +68,8 @@ const DECIMALS = 1;
 /** How long a `faded` alert stays up. It has no aura left to count down. */
 const FADED_LINGER_MS = 4000;
 /**
- * The strip's starting square, which is also its floor.
- *
- * Larger than the kit's own 40, because this is a centre-screen alert read at a
- * glance in the middle of a fight rather than a strip studied at rest. It is the
- * floor as well as the start so a drag cannot take it under the tap-target square.
+ * The strip's starting square, which is also its floor. Larger than the kit's own 40,
+ * because this is a centre-screen alert read at a glance in the middle of a fight.
  */
 const TILE_FLOOR = 48;
 /** The caption band under a square, stated so a drag can solve back for the square. */
@@ -143,11 +119,9 @@ const cells = new Map();
 const anchors = new Map();
 
 /**
- * Whether a reading has any news in it yet.
- *
- * The first reading of a live world is everything already up, which is not something
- * that just happened. Without this, an addon enabled mid-fight or a page reloaded
- * during one opens with a cue and a banner per effect already on the player.
+ * Whether a reading has any news in it yet. The first reading of a live world is
+ * everything already up, so without this an addon enabled mid-fight opens with a cue and
+ * a banner per effect already on the player.
  */
 let primed = false;
 
@@ -178,14 +152,13 @@ function settingText(id, fallback) {
 /**
  * One rule, or null for anything that is not one.
  *
- * `woc.data` hands back `unknown` for the reason `storage.get` does: the loader
- * checks the file parses as JSON at install and nothing else, so the shape is a
- * claim and this is where the claim is checked. The same function checks a row the
- * player captured, because a stored row is a claim of exactly the same kind: it was
- * written by a previous version of this addon and read back by this one.
+ * `woc.data` hands back `unknown`: the loader checks the file parses as JSON at install
+ * and nothing else, so the shape is a claim and this is where it is checked. The same
+ * function checks a row the player captured, since a stored row is a claim of the same
+ * kind, written by a previous version of this addon.
  *
- * A rule has to be able to MATCH something, so a row naming neither an aura id nor a
- * kind nor a polarity is refused: it would fire on every effect on its unit.
+ * A rule has to be able to match something, so a row naming neither an aura id nor a kind
+ * nor a polarity is refused: it would fire on every effect on its unit.
  */
 function readRule(value) {
   if (typeof value !== 'object' || value === null) {
@@ -242,11 +215,8 @@ function numberOr(value) {
 }
 
 /**
- * Take a list of rules on, dropping any row that did not check out.
- *
- * A bad row is skipped with a warning naming its position rather than the whole list
- * being thrown away: thirty rules and one named gap is a better answer to a hand
- * edit than an engine that fires nothing, and the warning is the record it happened.
+ * Take a list of rules on, dropping any row that did not check out. A bad row is skipped
+ * with a warning naming its position rather than the whole list being thrown away.
  */
 function adopt(listed, source) {
   const kept = [];
@@ -282,12 +252,9 @@ function playerClass() {
 }
 
 /**
- * The rules in force for whoever is playing.
- *
- * Rebuilt when the class changes and never per frame: a starter row names a class,
- * the player's own rows apply to whoever captured them, and a disabled id switches
- * either off. Before world entry there is no class, so only the rows that apply to
- * every class are in force, which is the honest answer rather than an empty engine.
+ * The rules in force for whoever is playing. Rebuilt when the class changes and never per
+ * frame. Before world entry there is no class, so only the rows that apply to every class
+ * are in force, which is the honest answer rather than an empty engine.
  */
 function assemble() {
   const cls = playerClass();
@@ -321,11 +288,9 @@ function readable(id) {
 }
 
 /**
- * The applying ability's art, or null when there is no file to point at.
- *
- * Only a player-applied effect resolves: art is filed per player class and a mob has
- * no class directory to look under. A lockout aura never resolves either, whoever
- * cast it, because its id carries a suffix no file is named for.
+ * The applying ability's art, or null when there is no file to point at. Only a
+ * player-applied effect resolves, since art is filed per player class. A lockout aura
+ * never resolves either, because its id carries a suffix no file is named for.
  */
 function artOf(auraId, sourceId) {
   const caster = woc.world.entities.get(sourceId);
@@ -345,13 +310,10 @@ function queryFor(rule) {
 }
 
 /**
- * The same for a party row, which carries no source and so cannot answer `mine`.
- *
- * A clause the rule does not carry is LEFT OUT rather than passed as null. Both
- * query filters test the field against `undefined` to decide whether they were
- * asked at all, so a null reads as "match only auras whose kind is null", which is
- * none of them: the rule matches nothing and looks exactly like a rule whose effect
- * is not up.
+ * The same for a party row, which carries no source and so cannot answer `mine`. A clause
+ * the rule does not carry is left out rather than passed as null: both query filters test
+ * the field against `undefined` to decide whether they were asked at all, so a null reads
+ * as "match only auras whose kind is null", which is none of them.
  */
 function rowQueryFor(rule) {
   const query = {};
@@ -407,10 +369,9 @@ function fromAura(rule, unit, unitKey, aura) {
 }
 
 /**
- * One match off a party ROW.
- *
- * Everything a row does not carry is null rather than a default, because the display
- * has to be able to tell "no stacks on this effect" from "a row cannot say".
+ * One match off a party row. Everything a row does not carry is null rather than a
+ * default, because the display has to tell "no stacks on this effect" from "a row cannot
+ * say".
  */
 function fromRow(rule, member, row) {
   const unitKey = `party:${String(member.pid)}`;
@@ -493,12 +454,10 @@ function stackThreshold(rule) {
 }
 
 /**
- * Whether a match is currently worth an alert.
- *
- * `gained` holds for as long as the effect is there, which is what makes the tile a
- * readout rather than a flash. `stacks` and `expiring` are thresholds on fields a
- * party row does not carry, so a row answers false rather than guessing: a stacks
- * rule over the group would otherwise fire on every single application.
+ * Whether a match is currently worth an alert. `gained` holds for as long as the effect
+ * is there, which is what makes the tile a readout rather than a flash. `stacks` and
+ * `expiring` are thresholds on fields a party row does not carry, so a row answers false
+ * rather than guessing.
  */
 function holds(found) {
   const { rule } = found;
@@ -569,10 +528,8 @@ function bannerFor(found) {
 }
 
 /**
- * The noise an alert makes on the frame it arrives, and only then.
- *
- * Nothing sounds while the engine is priming, which is the first reading of a live
- * world: everything already up would otherwise arrive at once as news.
+ * The noise an alert makes on the frame it arrives, and only then. Nothing sounds while
+ * the engine is priming, or everything already up would arrive at once as news.
  */
 function sound(found) {
   if (!primed) {
@@ -626,11 +583,9 @@ function collect() {
 }
 
 /**
- * A rule watching for an effect to GO cannot see it in the reading that follows.
- *
- * So the fade is the previous reading minus this one, which is the whole reason the
- * previous one is kept. A match that comes back clears the lingering alert rather
- * than leaving it up beside the effect it was announcing the loss of.
+ * A rule watching for an effect to go cannot see it in the reading that follows, so the
+ * fade is the previous reading minus this one. A match that comes back clears the
+ * lingering alert rather than leaving it up beside the effect it announced the loss of.
  */
 function fades(current, now) {
   for (const [key, found] of previous) {
@@ -651,11 +606,9 @@ function states(current, now) {
 }
 
 /**
- * An alert whose match has gone entirely.
- *
- * `states` only walks what matched THIS time, so an effect that fell off between
- * two readings is in neither loop and would otherwise sit on the strip for the rest
- * of the session. A momentary alert is the one thing that legitimately outlives its
+ * An alert whose match has gone entirely. `states` only walks what matched this time, so
+ * an effect that fell off between two readings is in neither loop and would otherwise sit
+ * on the strip for the rest of the session. A momentary alert legitimately outlives its
  * match, which is what `until` marks it as.
  */
 function orphans(current) {
@@ -686,7 +639,6 @@ function evaluate(now) {
   primed = woc.world.player !== null;
 }
 
-/** The row of squares, which is everything inside the frame. */
 const list = document.createElement('div');
 list.className = 'woc-ew-list';
 list.style.display = 'flex';
@@ -708,25 +660,22 @@ function stripHeight(size) {
 let tileSize = TILE_FLOOR;
 
 /**
- * The overlay. Bare, because the tiles ARE the display.
- *
- * The title is kept even though nothing draws it: it is the frame's accessible name
- * and the label the loader shows while frames are unlocked, which is how a strip
- * that draws nothing at rest gets positioned and sized at all.
+ * The overlay. Bare, because the tiles are the display. The title is kept as the frame's
+ * accessible name and the label the loader shows while frames are unlocked, which is how
+ * a strip that draws nothing at rest gets positioned at all.
  */
 const frame = woc.ui.frame({
   id: 'alerts',
   title: 'Emberwatch',
   width: STRIP_WIDTH,
-  // Stated, because a frame with no height opens at the kit's own fallback, which
-  // for a row of squares is several times what it draws and leaves the difference as
-  // an invisible drag area over the game. It is also what makes the frame draggable
-  // at all: a content-sized frame is never given a box.
+  // Stated, because a frame with no height opens at the kit's own fallback, which for a
+  // row of squares leaves an invisible drag area over the game. It is also what makes the
+  // frame draggable at all: a content-sized frame is never given a box.
   height: stripHeight(TILE_FLOOR),
   density: 'bare',
   save: true,
   resizable: true,
-  // Both bounds are constants and both floor at ONE square, never at whatever is on
+  // Both bounds are constants and both floor at one square, never at whatever is on
   // screen: a floor taken from the current alert count traps the player who sized it
   // during a pull and then has one tile.
   minWidth: TILE_FLOOR,
@@ -739,12 +688,10 @@ frame.body.appendChild(list);
 list.appendChild(overflow);
 
 /**
- * Follow the strip's height, which is one square and the caption under it.
- *
- * Called at pointer rate while a resize is in progress, so it does nothing when the
- * square has not moved. The floor is applied here as well as declared on the frame,
- * because this arithmetic has to hold for a box from anywhere: a restore, a viewport
- * clamp, or a height some future bound lets through.
+ * Follow the strip's height, which is one square and the caption under it. Called at
+ * pointer rate, so it does nothing when the square has not moved. The floor is applied
+ * here as well as declared on the frame, since the arithmetic has to hold for a box from
+ * anywhere: a restore, a viewport clamp, or a height a future bound lets through.
  */
 function resize(height) {
   const next = Math.max(Math.round(height - CAPTION_HEIGHT), TILE_FLOOR);
@@ -813,12 +760,9 @@ function extraLines(found) {
 }
 
 /**
- * What one tile says under the pointer.
- *
- * A function, so it answers with what is left NOW rather than with what was left
- * when the tile was built, and so it can say why the tile is there at all: the rule
- * is the product here, and a display that shows its working is one a player can
- * learn the rule from.
+ * What one tile says under the pointer. A function, so it answers with what is left now
+ * rather than with what was left when the tile was built, and so it can say which rule
+ * put it there.
  */
 function tooltipFor(key) {
   const record = alerts.get(key);
@@ -847,8 +791,8 @@ function createCell(found) {
   el.style.display = 'flex';
   el.style.flexDirection = 'column';
   el.style.alignItems = 'center';
-  // A flex item shrinks by default, so a strip narrowed under its content would
-  // squash the squares out of true rather than simply running past the edge.
+  // A flex item shrinks by default, so a strip narrowed under its content would squash
+  // the squares out of true rather than running past the edge.
   el.style.flexShrink = '0';
   const caption = document.createElement('span');
   caption.className = 'woc-ew-caption';
@@ -857,9 +801,8 @@ function createCell(found) {
   caption.style.whiteSpace = 'nowrap';
   caption.style.maxWidth = '100%';
   caption.style.fontSize = `${String(CAPTION_FONT)}px`;
-  // Stated in both directions, because the strip's height is a square plus exactly
-  // this and the drag solves back for the square. A line that measured itself would
-  // make that arithmetic wrong by however much the font decided.
+  // Stated in both directions, because the strip's height is a square plus exactly this
+  // and the drag solves back for the square.
   caption.style.height = `${String(CAPTION_HEIGHT)}px`;
   caption.style.lineHeight = `${String(CAPTION_HEIGHT)}px`;
   el.append(tile.el, caption);
@@ -870,21 +813,17 @@ function createCell(found) {
 }
 
 /**
- * How a tile is announced.
- *
- * A tile is all art, so everything it says has to be in here as well: which rule
- * fired, on whom, and about what.
+ * How a tile is announced. A tile is all art, so everything it says has to be in here as
+ * well: which rule fired, on whom, and about what.
  */
 function labelFor(found) {
   return `${found.rule.label}: ${found.name} on ${found.who}`;
 }
 
 /**
- * A tile with no denominator gets a FULL square rather than an empty one.
- *
- * A party row publishes no duration, so there is nothing to sweep against, and an
- * empty square reads as an effect that has already expired. Fullness plus the "no
- * remaining time on this reading" line is the honest pair.
+ * A tile with no denominator gets a full square rather than an empty one. A party row
+ * publishes no duration, so there is nothing to sweep against, and an empty square reads
+ * as an effect that has already expired.
  */
 function sweepOf(found) {
   return fractionOf(found) ?? 1;
@@ -911,11 +850,9 @@ function place(parent, el, at) {
 }
 
 /**
- * Alerts newest first, so the thing that just happened is the leftmost square.
- *
- * Ranked by arrival rather than by remaining, because an alert is news: an effect
- * that has been up for thirty seconds moving ahead of one that just landed would
- * reorder the strip at exactly the moment the player is looking at it.
+ * Alerts newest first, so the thing that just happened is the leftmost square. Ranked by
+ * arrival rather than by remaining: an effect up for thirty seconds moving ahead of one
+ * that just landed would reorder the strip while the player is looking at it.
  */
 function newestFirst(a, b) {
   return b.at - a.at;
@@ -936,12 +873,10 @@ function anchoredKey(key, found) {
 }
 
 /**
- * The element a cell belongs in.
- *
- * A party row has no entity, so a rule over the group cannot be anchored over
- * anybody and stays on the strip whatever the setting says. That is a limit of the
- * reading rather than a choice: an anchor follows a unit the renderer is drawing,
- * and a member on the far side of the map has no model to follow.
+ * The element a cell belongs in. A party row has no entity, so a rule over the group
+ * cannot be anchored over anybody and stays on the strip whatever the setting says: an
+ * anchor follows a unit the renderer is drawing, and a member on the far side of the map
+ * has no model to follow.
  */
 function anchorFor(key, found) {
   const existing = anchors.get(key);
@@ -1019,11 +954,9 @@ function draw() {
 }
 
 /**
- * Nothing is on screen, so nothing has to be laid out. Anchors still come down.
- *
- * `sync` with nothing shown rather than its own teardown, because a world anchor is
- * not inside the frame: hiding the strip has to take those away too, and a second
- * copy of that walk is a second place to forget one.
+ * Nothing is on screen, so nothing has to be laid out. Anchors still come down: `sync`
+ * with nothing shown rather than its own teardown, because a world anchor is not inside
+ * the frame and a second copy of that walk is a second place to forget one.
  */
 function blank() {
   if (cells.size === 0 && overflow.textContent === '') {
@@ -1036,11 +969,10 @@ function blank() {
 /**
  * The rules pane: what is being watched, and what this addon cannot answer.
  *
- * A frame rather than a window, because everything in this catalogue that a player
- * toggles is a frame; it takes a close button instead, since this one is opened to
- * be read and dismissed with the mouse. Resizable, because the content is a list
- * that reflows with the box, and both bounds are stated so the floor is ONE row
- * rather than however many rules happened to be in force when it first opened.
+ * A frame rather than a window, with a close button, since this one is opened to be read
+ * and dismissed with the mouse. Resizable, because the content is a list that reflows with
+ * the box, and both bounds are stated so the floor is one row rather than however many
+ * rules happened to be in force when it first opened.
  */
 const paneBody = document.createElement('div');
 paneBody.className = 'woc-ew-rules';
@@ -1159,13 +1091,11 @@ function paneRules() {
 }
 
 /**
- * Why the pane is empty, in words.
- *
- * An empty list reads as "nothing is being watched", which is three very different
- * facts: the table may not have arrived yet, the player may be on the login screen
- * where there is no class to pick a starter set by, or this class may genuinely have
- * nothing in the shipped set. `tableRead` is what separates the first from the third,
- * since a table that arrived empty and one that has not arrived look identical.
+ * Why the pane is empty, in words. An empty list would otherwise read as "nothing is
+ * being watched", which is three different facts: the table may not have arrived, the
+ * player may be on the login screen where there is no class to pick a starter set by, or
+ * this class may have nothing in the shipped set. `tableRead` separates the first from
+ * the third, since a table that arrived empty and one that has not arrived look alike.
  */
 function emptyReason() {
   if (!tableRead) {
@@ -1197,12 +1127,9 @@ function fillPane() {
 }
 
 /**
- * The effect on your target most worth a rule, or null.
- *
- * Harmful before helpful, because a debuff you are keeping up is what a rule is
- * usually for; then the one you applied, since that is the copy you can do anything
- * about; then longest remaining, which under two equal effects picks the one that
- * will still be there when the rule is saved.
+ * The effect on your target most worth a rule, or null. Harmful before helpful, because a
+ * debuff you are keeping up is what a rule is usually for; then the one you applied, since
+ * that is the copy you can do anything about; then longest remaining.
  */
 function priority(aura, playerId) {
   const harm = woc.world.harmful(aura);
@@ -1233,11 +1160,9 @@ function bestOnTarget() {
 }
 
 /**
- * Turn what is on the target into a rule of the player's own.
- *
- * `mine` is stamped from whether the player actually applied the effect, which is
- * the difference between "watch my dot" and "watch this debuff whoever put it
- * there", and is the one clause a captured rule cannot be asked for afterwards.
+ * Turn what is on the target into a rule of the player's own. `mine` is stamped from
+ * whether the player actually applied the effect, which is the difference between "watch
+ * my dot" and "watch this debuff whoever put it there".
  */
 function ruleFromAura(aura, playerId) {
   return {
@@ -1271,13 +1196,10 @@ function capture() {
 }
 
 /**
- * Write one per-character key down, once the character it belongs to is known.
- *
- * A per-character WRITE rejects before world entry, because its value was decided
- * when it was called: held instead, it would store something computed before anyone
- * knew whose it was against whichever character the player then picked. Nothing here
- * can produce a row before world entry anyway, since both callers are gestures, so
- * the await is a guard rather than a delay.
+ * Write one per-character key down, once the character it belongs to is known. A
+ * per-character write rejects before world entry, because its value was decided when it
+ * was called. Nothing here can produce a row before world entry anyway, since both
+ * callers are gestures, so the await is a guard rather than a delay.
  */
 async function write(key, value) {
   await woc.world.ready;
@@ -1307,13 +1229,10 @@ function readStoredOff(stored) {
 }
 
 /**
- * Take this character's own rows back.
- *
- * A per-character READ waits for the character, so this settles at world entry with
- * the rows of whoever actually logged in, whichever character that turns out to be.
- * It is also why it runs again on `characterKey`: the game clones and removes its
- * HUD rather than reloading, so a character switch happens inside one page load and
- * the rows on screen would otherwise be somebody else's.
+ * Take this character's own rows back. A per-character read waits for the character, so
+ * this settles at world entry with the rows of whoever logged in. It runs again on
+ * `characterKey` because the game clones and removes its HUD rather than reloading, so a
+ * character switch happens inside one page load.
  */
 async function restore() {
   const [rows, off] = await Promise.all([
@@ -1343,10 +1262,9 @@ async function boot() {
   fillPane();
 }
 
-// The engine runs on the loader's own loop and deliberately keeps running while the
-// strip is hidden: the cue and the banner are the half of this addon that works when
-// nobody is looking at the overlay, and both are driven by the same reading the tiles
-// are. Only the DRAWING is skipped, since that is the part a hidden frame throws away.
+// The engine keeps running while the strip is hidden: the cue and the banner are the
+// half of this addon that works when nobody is looking at the overlay. Only the drawing
+// is skipped.
 woc.onFrame(() => {
   evaluate(woc.now());
   if (frame.visible) {
@@ -1366,8 +1284,7 @@ woc.keys.bind('toggle', () => {
 
 woc.keys.bind('capture', capture);
 
-// The pane's own way in. The keybinds are spent on the two things done mid-fight, and
-// a settings list is not one of them.
+// The pane's own way in. The keybinds are spent on the two things done mid-fight.
 woc.ui.menuEntry({
   id: 'rules',
   label: 'Emberwatch rules',
@@ -1376,9 +1293,9 @@ woc.ui.menuEntry({
   },
 });
 
-// Every setting is read while the next frame is being built, so a change is on screen
-// a frame later with nothing torn down. The pane is the exception: its rows are built
-// from the rule set rather than from a setting, so it is refilled where that changes.
+// Every setting is read while the next frame is being built, so a change is on screen a
+// frame later with nothing torn down. The pane is the exception: its rows are built from
+// the rule set rather than from a setting.
 fillPane();
 
 boot().catch((err) => {

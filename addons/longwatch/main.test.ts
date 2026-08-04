@@ -2,29 +2,27 @@
 
 // Longwatch, run through the real loader.
 //
-// The claim the addon exists for is that the wire cannot say what is rare: an entity
-// carries a kind, a template id, a name and a level, and nothing else. So every case
-// below drives the world with ORDINARY mob entities that carry no flag of any kind,
-// and the addon is only ever allowed to recognise one by its `templateId`.
+// The claim the addon exists for is that the wire cannot say what is rare: an entity carries a
+// kind, a template id, a name and a level, and nothing else. So every case below drives the
+// world with ordinary mob entities that carry no flag of any kind, and the addon is only ever
+// allowed to recognise one by its `templateId`.
 //
-// The case that matters most is the last section. A rare killed, logged out on, and
-// come back to has to show what is actually left rather than starting again, and the
-// only way to test that honestly is to run two addons over one storage with the clock
-// moved between them. Everything about the per-character write exists for that case:
-// the stamps are wall clock because `woc.now()` restarts on a reload, and they are
-// written through `storage.character` behind `world.ready` because a write made
-// before world entry would land on whichever character the player then picked.
+// The case that matters most is the last section. A rare killed, logged out on, and come back
+// to has to show what is actually left rather than starting again, and the only honest way to
+// test that is to run two addons over one storage with the clock moved between them.
+// Everything about the per-character write exists for that case: the stamps are wall clock
+// because `woc.now()` restarts on a reload, and they are written through `storage.character`
+// behind `world.ready` because a write made before world entry would land on whichever
+// character the player then picked.
 //
-// The two clocks here are driven separately, and that is what makes a four hour
-// countdown cheap to test. `setWallClock` moves what `woc.wallClock()` answers, which
-// is every stamp and every countdown this addon computes; advancing the fake timers by
-// one second runs the once-a-second redraw. Neither moves the other, so a case jumps
-// four hours and then redraws exactly once, at exactly the moment it asked for, rather
-// than running four hours of timers to move one number.
+// The two clocks are driven separately, which is what makes a four hour countdown cheap to
+// test. `setWallClock` moves what `woc.wallClock()` answers; advancing the fake timers by one
+// second runs the once-a-second redraw. Neither moves the other, so a case jumps four hours and
+// then redraws exactly once.
 //
-// The roster is a FILE. `rares.json` is seeded into the harness the way the host's
-// install-time cache holds it, raw text keyed by the declared path, because the addon
-// reads it with `woc.data` on its first line.
+// The roster is a file. `rares.json` is seeded into the harness the way the host's install-time
+// cache holds it, raw text keyed by the declared path, because the addon reads it with
+// `woc.data` on its first line.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { validateManifest } from '../../loader/src/shared/schema.ts';
@@ -100,11 +98,9 @@ function manifest() {
 }
 
 /**
- * Write a field on a live entity.
- *
- * A computed access, because the fixture is a `Record<string, unknown>`: the linter
- * wants dot access on a literal key and the compiler forbids it on an index
- * signature, and a helper is what settles the two.
+ * Write a field on a live entity. A computed access, because the fixture is a
+ * `Record<string, unknown>`: the linter wants dot access on a literal key and the compiler
+ * forbids it on an index signature.
  */
 function setField(entity: Fake, field: string, value: unknown): void {
   entity[field] = value;
@@ -159,12 +155,10 @@ interface LongwatchHarness extends SharedHarness {
 }
 
 /**
- * Let the roster read, the async frame restore and the per-character reads all land.
- *
- * A microtask chain rather than a timer, because everything being waited for is a
- * promise the loader already holds. It is longer than it used to be by the length of
- * the roster read: `woc.data` resolves through the host stub and then a parse before
- * the stored stamps are even asked for.
+ * Let the roster read, the async frame restore and the per-character reads all land. A
+ * microtask chain rather than a timer, because everything being waited for is a promise the
+ * loader already holds: `woc.data` resolves through the host stub and then a parse before the
+ * stored stamps are even asked for.
  */
 function settle(): Promise<void> {
   let done = Promise.resolve();
@@ -175,12 +169,10 @@ function settle(): Promise<void> {
 }
 
 /**
- * One row of the roster file, as this suite has to reach into it.
- *
- * `id` is named and the rest is an index signature, which is what settles the two rules
- * that would otherwise disagree about `rare.id`: `useLiteralKeys` refuses the bracket
- * form, and `noPropertyAccessFromIndexSignature` refuses the dot form for anything
- * reached THROUGH the signature rather than declared beside it.
+ * One row of the roster file, as this suite has to reach into it. `id` is named and the rest is
+ * an index signature, which settles the two rules that would otherwise disagree about `rare.id`:
+ * `useLiteralKeys` refuses the bracket form, and `noPropertyAccessFromIndexSignature` refuses
+ * the dot form for anything reached through the signature.
  */
 interface RosterRow {
   id: string;
@@ -188,11 +180,9 @@ interface RosterRow {
 }
 
 /**
- * The shipped roster with one row broken, as a hand edit or an older version leaves it.
- *
- * Built from the real file rather than from a hand-written stub, so a case about a bad
- * row is a case about THIS roster with one field wrong rather than about a fixture
- * that stopped resembling it.
+ * The shipped roster with one row broken, as a hand edit or an older version leaves it. Built
+ * from the real file rather than a hand-written stub, so a case about a bad row is a case about
+ * this roster with one field wrong.
  */
 function doctored(id: string, patch: Record<string, unknown>): string {
   const file = JSON.parse(ROSTER_TEXT) as { rares: RosterRow[] };
@@ -212,14 +202,12 @@ interface Standing {
 }
 
 /**
- * Start the addon over a world holding nothing but the player.
+ * Start the addon over a world holding nothing but the player. The storage is a parameter rather
+ * than a local, because the cross-session cases run a second addon over what the first one
+ * wrote.
  *
- * The storage is a parameter rather than a local, because the whole point of the
- * cross-session cases is running a second addon over what the first one wrote.
- *
- * `standing` is what is already in interest scope when the addon starts, which is a
- * different moment from anything spawning afterwards and is the one case where a
- * sighting is deliberately not called out.
+ * `standing` is what is already in interest scope when the addon starts, which is the one case
+ * where a sighting is deliberately not called out.
  */
 async function start(
   settings: Record<string, unknown> = {},
@@ -255,8 +243,8 @@ async function start(
     ...harness,
     storage,
     spawn: (id, templateId, name = templateId) => {
-      // Note what is NOT here: no rare flag, no elite flag, nothing. The template id
-      // is the only thing distinguishing this from any other wolf in the zone.
+      // No rare flag, no elite flag, nothing: the template id is the only thing distinguishing
+      // this from any other wolf in the zone.
       const entity = mob(id, templateId, name);
       entities.set(id, entity);
       return entity;
@@ -305,13 +293,11 @@ async function start(
 }
 
 /**
- * `start`, plus the wait for the panel to come up and one frame to draw in it.
- *
- * A frame that saves its state starts hidden and is shown once that state arrives,
- * keyed per character, and this addon draws nothing at all while it is hidden. The
- * extra tick is because the panel comes up asynchronously, after the addon's own first
- * draw has already declined to run. It moves no clock, so every case still starts at
- * `NOW`.
+ * `start`, plus the wait for the panel to come up and one frame to draw in it. A frame that
+ * saves its state starts hidden and is shown once that state arrives, keyed per character, and
+ * this addon draws nothing while it is hidden. The extra tick is because the panel comes up
+ * asynchronously, after the addon's own first draw has already declined to run; it moves no
+ * clock, so every case still starts at `NOW`.
  */
 async function run(
   settings: Record<string, unknown> = {},
@@ -345,10 +331,10 @@ describe('its manifest', () => {
     ]);
   });
 
-  // `data` is what puts the roster in its own file, and `apiMinor` 2 is what the
-  // surface reading it needs. An older loader strips an unknown manifest key rather
-  // than refusing it, so without the minor this addon would install on a loader with
-  // no `woc.data`, start, and find that its only content file does not exist.
+  // `data` is what puts the roster in its own file, and `apiMinor` 2 is what the surface reading
+  // it needs. An older loader strips an unknown manifest key rather than refusing it, so without
+  // the minor this addon would install on a loader with no `woc.data`, start, and find that its
+  // only content file does not exist.
   it('declares the roster file and the minor that reads it', () => {
     expect(manifest().data).toEqual([ROSTER_FILE]);
     expect(manifest().apiMinor).toBe(NEEDS_MINOR);
@@ -359,10 +345,9 @@ describe('its manifest', () => {
   });
 });
 
-// Where the roster COMES FROM, which is `rares.json` rather than a literal in the
-// middle of main.js. The loader guarantees a data file is JSON at install and nothing
-// past that, so the shape is a claim this addon checks rather than one it can lean on,
-// and both halves of the checking are asserted here.
+// Where the roster comes from, which is `rares.json` rather than a literal in the middle of
+// main.js. The loader guarantees a data file is JSON at install and nothing past that, so the
+// shape is a claim this addon checks rather than one it can lean on.
 describe('the roster it reads', () => {
   // Fails the moment anybody pastes the table back into the source, which is the only
   // way this addon quietly stops being a file plus a reader again.
@@ -371,10 +356,10 @@ describe('the roster it reads', () => {
     expect(SOURCE).not.toContain(VOSKAR);
   });
 
-  // One named gap beats a blank panel: eighteen rares still answer the question the
-  // player opened this for, and the warning is the record that the file is wrong. A
-  // respawn of zero is the row worth using for it, because it divides the fill by
-  // nothing and reads as due the instant the rare dies, which looks like an answer.
+  // One named gap beats a blank panel: eighteen rares still answer the question the player
+  // opened this for, and the warning is the record that the file is wrong. A respawn of zero is
+  // the row worth using for it, because it divides the fill by nothing and reads as due the
+  // instant the rare dies.
   it('leaves out a row the file got wrong and keeps the rest', async () => {
     const h = await run({}, undefined, [], doctored(GREYJAW, { respawn: 0 }));
 
@@ -398,10 +383,9 @@ describe('the roster it reads', () => {
   });
 });
 
-// The roster is the addon's whole reason to exist, so what it carries is asserted
-// rather than assumed. Nineteen of the game's twenty-three rare templates: the four
-// left out are the three the Nythraxis crypt summons and the Wildheart dungeon
-// miniboss, none of which has a camp to be waited at.
+// The roster is the addon's whole reason to exist, so what it carries is asserted rather than
+// assumed. Nineteen of the game's twenty-three rare templates: the four left out are the three
+// the Nythraxis crypt summons and the Wildheart dungeon miniboss, none of which has a camp.
 describe('the roster it carries', () => {
   it('lists a row per rare it knows about', async () => {
     const h = await run();
@@ -497,9 +481,8 @@ describe('the countdown after a kill', () => {
     expect(h.fillOf(GREYJAW)).toBeCloseTo(100, 0);
   });
 
-  // Six hours, for the rare that actually has one. A display that assumed one
-  // respawn length for every rare would be five hours and fifty-eight minutes wrong
-  // about this row and exactly right about the one above it.
+  // Six hours, for the rare that actually has one. A display that assumed one respawn length for
+  // every rare would be five hours and fifty-eight minutes wrong about this row.
   it('uses each rare"s own length rather than one for all of them', async () => {
     const h = await run();
     h.spawn(VOSKAR_ID, VOSKAR);
@@ -585,26 +568,20 @@ describe('the countdown after a kill', () => {
   });
 });
 
-// THE DONE WHEN, AND THE CASE THE TWO CLOCKS EXIST FOR.
+// A rare killed, logged out on, and returned to shows what is actually left rather than
+// starting again. Two addons over one storage is the only honest shape for it: a stamp that
+// survives has to survive an addon being torn down and rebuilt, which is what a page reload is.
 //
-// A rare killed, logged out on, and returned to shows what is actually left rather
-// than starting again. Two addons over one storage is the only honest shape for it: a
-// stamp that survives has to survive an addon being torn down and rebuilt, which is
-// what a page reload is.
+// A reload is the two clocks coming apart, and that is what these cases drive. `advance` moves
+// the monotonic clock, which a page load throws away: the second mount gets a fresh one
+// starting near zero. `setWallClock` moves the wall clock, which a page load does not touch. So
+// the first session is given real monotonic time to run for and the second is not.
 //
-// A RELOAD IS THE TWO CLOCKS COMING APART, and that is what these cases drive rather
-// than one clock ticking forward. `advance` moves the monotonic clock, which a page
-// load throws away: the second mount below gets a fresh one starting near zero.
-// `setWallClock`, which `clockTo` calls, moves the wall clock, which a page load does
-// not touch. So the first session is given real monotonic time to run for and the
-// second is not, which is exactly the state a returning player is in.
-//
-// That split is what makes these two the regression against an author reaching for
-// `woc.now()` for a stored stamp. With `now()` the stamp is written against a clock
-// that goes BACKWARDS across the reload, so the arithmetic reads the kill as having
-// happened in the future and the countdown comes back at its full length, silently and
-// with nothing to indicate it. With `woc.wallClock()` it is right. Both assertions
-// below are exact for that reason: `6h 0m` is what the wrong clock produces.
+// That split is what makes these two the regression against an author reaching for `woc.now()`
+// for a stored stamp. With `now()` the stamp is written against a clock that goes backwards
+// across the reload, so the arithmetic reads the kill as having happened in the future and the
+// countdown comes back at its full length. Both assertions below are exact for that reason:
+// `6h 0m` is what the wrong clock produces.
 describe('a countdown across a logout', () => {
   it('resumes rather than restarting', async () => {
     const storage = createFakeStorage();
@@ -653,9 +630,9 @@ describe('a countdown across a logout', () => {
     expect(second.figureOf(GREYJAW)).toBe('Due');
   });
 
-  // The stamps have to be per CHARACTER: the alt that has never been to Thornpeak
-  // must not inherit the tank's timers. That is a key derivation rather than a
-  // behaviour, so it is asserted on the key.
+  // The stamps have to be per character: the alt that has never been to Thornpeak must not
+  // inherit the tank's timers. That is a key derivation rather than a behaviour, so it is
+  // asserted on the key.
   it('writes the stamps under this character"s own key', async () => {
     const h = await run();
     h.spawn(GREYJAW_ID, GREYJAW);
@@ -711,11 +688,9 @@ describe('a countdown across a logout', () => {
   });
 });
 
-// The zone match, which is done from POSITION and never from `world.zone`.
-//
-// That read is localized display text, so an addon comparing it against a string
-// would work in English and silently match nothing anywhere else. The game resolves
-// a zone from a point against half-open rectangles, and so does this.
+// The zone match is done from position and never from `world.zone`, which is localized display
+// text: an addon comparing it against a string would work in English and silently match nothing
+// anywhere else. The game resolves a zone from a point against half-open rectangles.
 describe('which zone the player is in', () => {
   it('lists only the current zone when asked to', async () => {
     const h = await run({ zones: 'The zone I am in' });
@@ -724,9 +699,9 @@ describe('which zone the player is in', () => {
     expect(h.drawn()).not.toContain(VOSKAR);
   });
 
-  // The rectangle is half-open on BOTH axes and the x bounds are the world strip's
-  // default. Farshore Isle shares Eastbrook's z band at x 180 to 540, so a match on
-  // z alone would put a player standing on Farshore in Eastbrook Vale.
+  // The rectangle is half-open on both axes and the x bounds are the world strip's default.
+  // Farshore Isle shares Eastbrook's z band at x 180 to 540, so a match on z alone would put a
+  // player standing on Farshore in Eastbrook Vale.
   it('does not put a player outside the strip in the zone sharing its band', async () => {
     const h = await run({ zones: 'The zone I am in' });
 
@@ -748,9 +723,8 @@ describe('which zone the player is in', () => {
     expect(h.drawn()).not.toContain(GREYJAW);
   });
 
-  // WHICH rares, not in what order: every one of these is unseen, so they tie on
-  // the default sort and fall back to the order the roster file is written in,
-  // which is the generator's business rather than this addon's.
+  // Which rares, not in what order: every one of these is unseen, so they tie on the default
+  // sort and fall back to the order the roster file is written in.
   it('lists one named zone when the player picks one', async () => {
     const h = await run({ zones: 'The Veiled Hollow' });
 
@@ -784,12 +758,10 @@ describe('the world pins', () => {
     expect(h.pinned()).not.toContain(GREYJAW);
   });
 
-  // The pins are anchors the loader holds over the world, not children of the panel,
-  // so hiding the panel does not hide them and nothing else would.
-  //
-  // No tick between the keypress and the assertion, deliberately. The panel redraws on
-  // a once-a-second timer, and leaving the pins to that would hang nineteen of them
-  // over the world for up to a second after the player hid the thing they belong to.
+  // The pins are anchors the loader holds over the world rather than children of the panel, so
+  // hiding the panel does not hide them and nothing else would. No tick between the keypress and
+  // the assertion, deliberately: leaving the pins to the once-a-second redraw would hang
+  // nineteen of them over the world for up to a second after the player hid the panel.
   it('takes the pins out of the world the moment the panel is hidden', async () => {
     const h = await run();
     expect(h.pinned().length).toBeGreaterThan(0);
@@ -817,11 +789,9 @@ describe('calling out a sighting', () => {
     expect(played).toEqual(['ui_gather_rare']);
   });
 
-  // The first walk of a populated roster is world entry, or the moment the player
-  // enabled the addon, and everything already in range arrives in that one walk.
-  // Announcing those means a banner on every login and every reload for something
-  // the player did not walk up to. Standing there BEFORE the addon evaluates its
-  // first line is the difference between that and a genuine sighting.
+  // The first walk of a populated roster is world entry, or the moment the player enabled the
+  // addon, and everything already in range arrives in that one walk. Announcing those means a
+  // banner on every login for something the player did not walk up to.
   it('says nothing about what was already standing there when it started', async () => {
     const h = await run({}, undefined, [{ id: GREYJAW_ID, templateId: GREYJAW }]);
 
@@ -885,11 +855,9 @@ describe('the order of the list', () => {
 
   it('re-sorts a settings change without a reload', async () => {
     const h = await run();
-    // One kill, so "Soonest back" has something to rank and the two orders differ
-    // for a reason this case states. Without it every row is unseen, every rank is
-    // the same, and which id comes out on top is whatever order the roster file
-    // happens to be written in: a generated file re-sorted itself and this case
-    // failed, having asserted on the fixture rather than on the sort.
+    // One kill, so "Soonest back" has something to rank and the two orders differ for a stated
+    // reason. Without it every row is unseen, every rank is the same, and which id comes out on
+    // top is whatever order the roster file happens to be written in.
     h.spawn(VOSKAR_ID, VOSKAR);
     h.kill(VOSKAR_ID, VOSKAR);
     h.tick();
@@ -912,9 +880,9 @@ describe('the toggle', () => {
   });
 });
 
-// A character switch inside ONE page load, which is real: the game clones and removes
-// its HUD rather than reloading, so nothing forces an addon to start again. Everything
-// this addon holds in memory belongs to whoever was playing a moment ago.
+// A character switch inside one page load, which is real: the game clones and removes its HUD
+// rather than reloading, so nothing forces an addon to start again. Everything this addon holds
+// in memory belongs to whoever was playing a moment ago.
 describe('the player becoming somebody else', () => {
   // Run with the countdowns switched OFF, so nothing is written and nothing is read
   // back: what is left on screen afterwards is then only what memory still holds,
@@ -951,9 +919,9 @@ describe('the player becoming somebody else', () => {
   });
 });
 
-// An addon's first line runs at document-start, on the landing page, where there is
-// no world and no character. Nothing here may throw, nothing may be written, and
-// nothing may be put into a world that is not there.
+// An addon's first line runs at document-start, on the landing page, where there is no world
+// and no character. Nothing here may throw, nothing may be written, and nothing may be put into
+// a world that is not there.
 describe('before world entry', () => {
   it('starts without a world at all', async () => {
     const storage = createFakeStorage();
@@ -970,11 +938,10 @@ describe('before world entry', () => {
     teardown.push(harness.dispose);
     await settle();
 
-    // Not asserted: that no ROW was built. An addon runs before world entry by design
-    // and the loader is what keeps its frames off the landing page, so a built panel
-    // is a panel that is ready rather than a panel on screen. What must not happen is
-    // a per-character write, because there is nobody yet to file one under, and a
-    // world anchor, because there is no world to hang it in.
+    // Not asserted: that no row was built. An addon runs before world entry by design and the
+    // loader is what keeps its frames off the landing page, so a built panel is a panel that is
+    // ready rather than one on screen. What must not happen is a per-character write, because
+    // there is nobody yet to file one under, and a world anchor, because there is no world.
     expect(document.querySelectorAll('.woc-lw-anchor')).toHaveLength(0);
     expect(storedSightings(storage)).toBeUndefined();
   });

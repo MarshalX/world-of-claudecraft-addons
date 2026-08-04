@@ -1,62 +1,40 @@
 /// <reference types="@woc-addons/types" />
 
-// Cadence: the four timings a rotation is actually played against, on one strip.
+// Cadence: the four timings a rotation is played against, on one strip.
 //
-// Almost every line below is animation, and that is the shape the world API asks
-// for. `world.on` reports a SET changing and deliberately never reports a number
-// counting down, so nothing here can be driven by a subscription: a swing timer,
-// a global cooldown and a cast bar are all one number moving between two events
-// nobody is told about. The display is therefore `woc.onFrame` reading
-// `world.player`, and the ONE world subscription in the file is `combat`, which is
-// a state rather than a countdown.
+// Almost every line here is animation. `world.on` reports a set changing and never a
+// number counting down, so the display is `woc.onFrame` reading `world.player`, and the
+// one world subscription in the file is `combat`, which is a state.
 //
-// Everything it reads rides the SELF record. `swingTimer`, `gcdRemaining`,
-// `autoAttack` and `comboPoints` are sent on your own entity and nowhere else, so
-// on every other entity they are present, correctly typed, and permanently zero.
-// That is why this reads `world.player` and never takes a unit token: pointed at a
-// target the same code would draw a swing that never swings and a rotation that is
-// always ready, and nothing would raise.
+// Everything it reads rides the self record. `swingTimer`, `gcdRemaining`, `autoAttack`
+// and `comboPoints` are sent on your own entity and nowhere else, so on any other
+// entity they are present, correctly typed and permanently zero. Pointed at a target,
+// the same code would draw a swing that never swings and raise nothing.
 //
-// NEITHER THE SWING NOR THE GLOBAL COOLDOWN PUBLISHES ITS LENGTH, and they are not
-// the same problem. The global cooldown's is ARITHMETIC and every term of it is
-// published, so that row is exact from the first frame of a session: see
-// `gcdLength`. The swing's is not, so that row learns its denominator from the
-// RESET, which for a swing is the instant it lands: see `relearn` and `swingSeed`.
+// Neither the swing nor the global cooldown publishes its length, and they are not the
+// same problem. The global cooldown's is arithmetic with every term published, so that
+// row is exact from the first frame of a session (see `gcdLength`). The swing's is not,
+// so that row learns its denominator from the reset, which for a swing is the instant
+// it lands (see `relearn` and `swingSeed`). Nothing subscribes to `damage` for that
+// reset: the reset rides the self record of the snapshot that resolved the swing while
+// the event lands afterwards, so a bar reset on the event would sit at zero for a round
+// trip and then jump.
 //
-// That is also why nothing here subscribes to a `damage` event, and the reason is
-// worth stating rather than leaving as an absence. The swing reset and the damage
-// it dealt do not arrive together: the reset is on the self record of the snapshot
-// that resolved the swing, and the event describing the hit lands afterwards. A
-// bar reset on the event would run down to zero, sit there for a round trip, and
-// then jump, which reads as the display being behind the game. Reading the reset
-// is both earlier and simpler.
+// The latency band is a measurement of a round trip rather than a promise about a press
+// that lands inside it: see `latencyLine`.
 //
-// The latency band is the one thing here the game's own cast bar does not draw,
-// and it is a MEASUREMENT of a round trip rather than a promise about a press that
-// lands inside it: see `latencyLine`.
+// Every row drains, since `fraction` means what is left everywhere in the kit and these
+// are four thin bars read together at a glance. Rows are built once and hidden rather
+// than removed, so nothing moves under the player's eye at the moment a cast starts.
 //
-// EVERY ROW DRAINS. `fraction` means what is LEFT everywhere in the kit, and this
-// is four thin bars read together at a glance: a strip where one row empties as
-// its event approaches and another fills would make the same shape mean two
-// opposite things in the same eyeful.
-//
-// Rows are built once and HIDDEN rather than removed when they have nothing to
-// say. A timing strip is read by muscle memory at a fixed spot, and a cast row
-// that appears when a cast starts would move the swing and the global cooldown
-// under the player's eye at the exact moment they are watching them. It also means
-// nothing is ever re-placed, so no row loses what the browser was tracking on it.
-//
-// Combo points are pips, and the strip is as wide as the most points seen this
-// SESSION rather than a maximum written down here. There is no maximum on the
-// wire, exactly as there is none for a charge pool, so a five-slot strip would be
-// this file claiming something about every class the game has and being wrong the
-// day one of them differs. The resource beside them is a bar and not pips: pips
-// for a pool of a hundred mana is a hundred squares.
+// Combo points are pips over as many slots as the most points seen this session. There
+// is no maximum on the wire, so a five-slot strip would be a claim about every class the
+// game has. The resource beside them is a bar: pips for a hundred mana is a hundred
+// squares.
 
 const FRAME_WIDTH = 190;
 const DECIMALS = 1;
 const PERCENT = 100;
-/** Widths, at the precision the kit writes its own fill at. */
 const WIDTH_DECIMALS = 2;
 const MS_PER_SECOND = 1000;
 /** The unhasted global cooldown, for every class but the one below. */
@@ -71,28 +49,21 @@ const HASTE_AURA_KINDS = ['buff_spellhaste'];
 /** The two aura kinds that stretch a swing, each a multiplier on the period. */
 const SWING_SLOW_KINDS = ['attackspeed', 'sanguine'];
 /**
- * The aura kind that SHORTENS a swing, which is the slows' opposite number.
- *
- * Published as a multiplier like a slow and folded like the spell haste above,
- * because that is what the game does with it: a slow multiplies the period and a
- * haste joins one additive bucket the period is then divided through.
+ * The aura kind that shortens a swing. Published as a multiplier like a slow, but folded
+ * like the spell haste above: a slow multiplies the period, a haste joins one additive
+ * bucket the period is then divided through.
  */
 const SWING_HASTE_KINDS = ['buff_haste'];
 const DEFAULT_HEIGHT = 14;
 const MIN_HEIGHT = 8;
 const MAX_HEIGHT = 32;
-/** The space between two rows, which the strip's own height has to allow for. */
 const ROW_GAP = 2;
 /** The kit row's own side padding, kept while its vertical padding is dropped. */
 const ROW_PAD_X = 6;
 /**
- * The narrowest the strip may be dragged.
- *
- * The addon's own floor rather than the loader's, which keeps a structural one
- * underneath it so that a frame always has something left to grab. This one is
- * about READING a row: the figure on the right never shrinks and the name is the
- * only part that can, so under roughly this every row is a countdown with nothing
- * to say which timer it is counting.
+ * The narrowest the strip may be dragged. The addon's own floor, above the loader's
+ * structural one, and it is about reading a row: the figure on the right never shrinks
+ * and the name is the only part that can.
  */
 const MIN_FRAME_WIDTH = 96;
 /** Share of a row's height the text is drawn at, so a thin row still reads. */
@@ -100,7 +71,6 @@ const TEXT_SCALE = 0.72;
 const MIN_TEXT_PX = 9;
 /** Below this share left, a row goes warm: the thing it counts to is about to land. */
 const NEARLY_DONE = 0.25;
-/** How much smaller a combo pip is than the row height it sits under. */
 const PIP_INSET = 4;
 const MIN_PIP_PX = 4;
 /** The game's own accent, so a point reads as a point rather than as a swatch. */
@@ -108,12 +78,11 @@ const PIP_COLOR = 'var(--gold, rgb(212 175 55))';
 /** Filled and spent, as opacity on one colour rather than as two colours. */
 const PIP_ON = '1';
 const PIP_OFF = '0.25';
-/** The band, in the kit's own danger colour: it is a warning, not an invitation. */
+/** The band, in the kit's own danger colour. */
 const BAND_COLOR = 'rgb(255 143 133 / 30%)';
 
 // The row key, the setting that switches it on, and the label it carries. Triples
-// rather than an object because the setting ids are the MANIFEST's names, not
-// names this file chose.
+// rather than an object, because the setting ids are the manifest's names.
 const ROW_SPECS = [
   ['swing', 'show-swing', 'Swing'],
   ['gcd', 'show-gcd', 'GCD'],
@@ -122,13 +91,9 @@ const ROW_SPECS = [
 ];
 
 /**
- * Every resource id the game sends, and what to call each on the row.
- *
- * Three, and three is the WHOLE set rather than the obvious part of a longer one:
- * the game's `ResourceType` is exactly `rage | mana | energy`, and a class without
- * a bar of its own is on mana (a hunter is, which is the one worth saying because
- * it is the class most likely to be assumed to have a fourth). The fallback below
- * is therefore reached only by a kind a future game release adds.
+ * Every resource id the game sends, and what to call each on the row. The game's
+ * `ResourceType` is exactly `rage | mana | energy`, and a class without a bar of its own
+ * is on mana. The fallback below is reached only by a kind a future release adds.
  */
 const RESOURCE_LABELS = [
   ['mana', 'Mana'],
@@ -168,7 +133,7 @@ function settingNumber(id, fallback) {
   return fallback;
 }
 
-/** A number the game gave us, or zero. Every read here is a claim about the game. */
+/** A number the game gave us, or zero. */
 function numberOf(value) {
   if (typeof value === 'number' && Number.isFinite(value)) {
     return value;
@@ -177,36 +142,28 @@ function numberOf(value) {
 }
 
 /**
- * What one line gets out of the box, or null until something has divided one.
- *
- * It overrides the row height SETTING while it holds a number, and it is
- * in-session like every other override in this catalogue: an addon cannot write
- * its own settings, and the loader already remembers the frame's BOX per
- * character, so the size comes back on its own without this being persisted.
+ * What one line gets out of the box, or null until something has divided one. It
+ * overrides the row height setting while it holds a number, and it is in-session: the
+ * loader remembers the frame's box per character, so the size comes back on its own.
  */
 let linePx = null;
 
 /**
- * The height the loader is drawing the strip at, which the lines divide between.
- *
- * A bare frame CLIPS what does not fit and an addon cannot restate its frame's
- * height after it is built, so the box is the budget and everything on the strip
- * has to come out of it. See `fitLines`.
+ * The height the loader is drawing the strip at, which the lines divide between. A bare
+ * frame clips what does not fit and an addon cannot restate its frame's height after it
+ * is built, so the box is the budget. See `fitLines`.
  */
 let boxHeight = null;
 
-/** The row height, held inside what a strip of bars can actually draw. */
 function rowHeight() {
   const wanted = linePx ?? settingNumber('bar-height', DEFAULT_HEIGHT);
   return Math.min(Math.max(wanted, MIN_HEIGHT), MAX_HEIGHT);
 }
 
 /**
- * How many rows the settings ask for, counted before any of them exist.
- *
- * `shownRows` cannot answer this and is not a candidate: a frame's size bounds are
- * stated when the frame is CREATED, which is before `buildRows` has put a single
- * row on screen.
+ * How many rows the settings ask for, counted before any of them exist. `shownRows`
+ * cannot answer this: a frame's size bounds are stated when the frame is created, which
+ * is before `buildRows` has put a row on screen.
  */
 function wantedRows() {
   let count = 0;
@@ -218,27 +175,21 @@ function wantedRows() {
   return Math.max(count, 1);
 }
 
-/** What a stack of lines measures at a given line height, gaps included. */
 function stackHeight(height, lines) {
   return lines * height + (lines - 1) * ROW_GAP;
 }
 
-/** What the rows the settings ask for measure, stacked at a given row height. */
 function stripHeight(height) {
   return stackHeight(height, wantedRows());
 }
 
 /**
- * The most lines the strip can ever be asked to draw, which is what its FLOOR is
- * stated from.
+ * The most lines the strip can be asked to draw, which is what its floor is stated from.
  *
- * The rows the settings ask for, plus the combo pips wherever the resource row is
- * on. The pips are a line that appears mid-session, on the one class that has
- * points, and a frame's bounds are read once when it is built, so a floor stated
- * for the rows alone is one the pips can be dragged out of existence under. It
- * costs a class with no points ten pixels of a floor it has to drag to before
- * meeting, and it buys the class that has them a strip that cannot be made
- * smaller than what it draws, which is what a density that CLIPS asks for.
+ * The rows the settings ask for, plus the combo pips wherever the resource row is on.
+ * The pips are a line that appears mid-session on the one class that has points, and a
+ * frame's bounds are read once when it is built, so a floor stated for the rows alone is
+ * one the pips can be dragged out of existence under.
  */
 function floorLines() {
   if (settingFlag('show-power', true)) {
@@ -247,7 +198,6 @@ function floorLines() {
   return wantedRows();
 }
 
-/** How many rows are on screen, which is what the frame's height is divided between. */
 function shownRows() {
   let count = 0;
   for (const row of rows.values()) {
@@ -262,13 +212,9 @@ function shownRows() {
 }
 
 /**
- * Re-size what is already drawn, without rebuilding it.
- *
- * A settings change rebuilds, because which rows exist can change with it and a
- * row's contents are decided when it is built. A DRAG cannot change which rows
- * exist, and it fires at pointer rate, so it takes this path instead: rebuilding
- * a strip of kit bars and their tooltips on every pointer move is the kind of
- * work that makes a resize feel like it is fighting back.
+ * Re-size what is already drawn, without rebuilding it. A settings change rebuilds,
+ * since which rows exist can change with it, but a drag cannot change that and fires at
+ * pointer rate.
  */
 function applySize() {
   for (const row of rows.values()) {
@@ -284,17 +230,13 @@ function applySize() {
 /**
  * Divide the box between the lines currently on the strip.
  *
- * Called when the box changes AND when the number of lines does, and the second
- * half is the one a drag handler alone misses. The combo pips are a line of their
- * own that appears the first time a class has a point to show, and the frame's
- * height was stated for the ROWS: a bare frame clips, and an addon cannot restate
- * that height, so without this the pips are drawn outside the box and the one
- * class that has them never sees them at all.
+ * Called when the box changes and when the number of lines does. The combo pips are a
+ * line of their own that appears the first time a class has a point to show, and the
+ * frame's height was stated for the rows, so without this they are drawn outside the box
+ * and the one class that has them never sees them.
  *
- * The gaps are paid for before the division and the share is floored, because
- * every pixel over the box is a pixel of the bottom row that is quietly not
- * there. A line count that leaves less than a row's minimum is what the frame's
- * own `minHeight` is for.
+ * The gaps are paid for before the division and the share is floored, because every
+ * pixel over the box is a pixel of the bottom row that is quietly not there.
  */
 function fitLines() {
   if (boxHeight === null) {
@@ -330,16 +272,12 @@ function toneFor(fraction) {
 }
 
 /**
- * What a countdown counts down FROM, learned from its own reset.
+ * What a countdown counts down from, learned from its own reset.
  *
- * The swing is the only caller, and it is the only one there can be: this is what
- * a row does when the arithmetic is unavailable, and the global cooldown's is
- * available. Learning a figure that can be computed would draw the first bar of a
- * session against a guess for no reason at all.
- *
- * `seen` is null before the first sample and whenever the strip stops drawing, so
- * the frame that resumes only records. Without that a row coming back mid-swing
- * would read the gap as a re-arm and take a part-spent remaining as the length.
+ * The swing is the only caller there can be, since this is what a row does when the
+ * arithmetic is unavailable. `seen` is null before the first sample and whenever the
+ * strip stops drawing, so the frame that resumes only records: without that a row coming
+ * back mid-swing would read the gap as a re-arm.
  */
 function relearn(cell, remaining, seed) {
   const rearmed = cell.seen !== null && remaining > cell.seen;
@@ -357,13 +295,10 @@ function relearn(cell, remaining, seed) {
 }
 
 /**
- * Show or hide a flex line, BOTH ways, because either alone is wrong here.
- *
- * `hidden` is an attribute the UA answers with `display: none` at the lowest
- * priority there is, so an inline `display: flex` beats it outright and an
- * element hidden that way is still on screen. Setting only the display would fix
- * the drawing and leave the element in the accessibility tree, announcing a
- * strip of timers that nobody can see.
+ * Show or hide a flex line both ways, because either alone is wrong. `hidden` is
+ * answered with `display: none` at the lowest priority there is, so an inline
+ * `display: flex` beats it; setting only the display leaves the element in the
+ * accessibility tree, announcing timers nobody can see.
  */
 function setShown(el, shown) {
   el.hidden = !shown;
@@ -387,53 +322,38 @@ pips.style.gap = '2px';
 setShown(pips, false);
 
 /**
- * The overlay. Bare, because the rows ARE the display and a panel behind four
- * thin bars is furniture around something that needs none. The title is kept for
- * the accessible name and for the label the loader draws while frames are
- * unlocked, which is how this gets positioned while it is empty.
+ * The overlay. Bare, because the rows are the display. The title is kept for the
+ * accessible name and for the label the loader draws while frames are unlocked, which is
+ * how this gets positioned while it is empty.
  */
 const frame = woc.ui.frame({
   id: 'strip',
   title: 'Cadence',
   width: FRAME_WIDTH,
-  // The rows and their gaps, and nothing else: a bare frame has no chrome to
-  // allow for. Without a height the kit opens at its own fallback, which for four
-  // 14px rows is nearly twice the strip and leaves the difference as an invisible
-  // drag area sitting over the game.
+  // The rows and their gaps, and nothing else. Without a height the kit opens at its own
+  // fallback, which for four 14px rows leaves an invisible drag area over the game.
   height: stripHeight(rowHeight()),
   density: 'bare',
   save: true,
-  // A frame is content-sized and therefore not resizable by default, which is
-  // right for a list whose height is its rows and wrong here: these bars have a
-  // width the player reads numbers off and a height that is a matter of taste.
+  // A frame is content-sized and therefore not resizable by default, which is wrong
+  // here: these bars have a width the player reads numbers off.
   resizable: true,
-  // BOTH bounds are stated, because a frame that states neither takes the size it
-  // opened at as its floor and can never be dragged smaller than its first paint.
-  // That was reported from a live session as the strip refusing to come down, and
-  // the height was the worse half: the floor was the kit's fallback rather than
-  // anything about these rows.
+  // Both bounds are stated, because a frame that states neither takes the size it opened
+  // at as its floor and can never be dragged smaller than its first paint.
   //
-  // The height's floor is the ROW HEIGHT setting's own minimum spread over every
-  // line the strip can be asked for, which makes that setting the thing that
-  // decides how small the strip goes. It is a real limit and not a convenience:
-  // the lines follow the box, they stop shrinking at that minimum, and a frame
-  // shorter than its lines would clip them rather than get any smaller. See
+  // The height's floor is the row height setting's own minimum spread over every line the
+  // strip can be asked for, so that setting decides how small the strip goes. See
   // `floorLines` for the line the row count alone does not know about.
   //
-  // Both are read once, here. Switching a row off later rebuilds the strip but
-  // cannot restate the bounds, so a player who does that keeps the floor of the
-  // row count they logged in with until the next reload.
+  // Both are read once, here. Switching a row off later rebuilds the strip but cannot
+  // restate the bounds, so the floor holds until the next reload.
   minWidth: MIN_FRAME_WIDTH,
   minHeight: stackHeight(MIN_HEIGHT, floorLines()),
   /**
-   * The lines follow the box, which is the whole point of letting it be dragged.
-   *
-   * Measuring the element instead would force a synchronous layout on every
-   * pointer move of a display that already writes styles every frame, which is
-   * why the loader hands the box over rather than making an addon ask for it.
-   *
-   * The height is split between the lines that are SHOWN, so hiding a row makes
-   * the rest taller rather than leaving a gap where it was.
+   * The lines follow the box. Measuring the element instead would force a synchronous
+   * layout on every pointer move of a display that already writes styles every frame.
+   * The height is split between the lines that are shown, so hiding a row makes the rest
+   * taller rather than leaving a gap.
    */
   onMove: (box) => {
     boxHeight = box.h;
@@ -446,12 +366,9 @@ frame.body.appendChild(list);
 boxHeight = stripHeight(rowHeight());
 
 /**
- * Size one row to the height the player picked.
- *
- * The kit row is a block whose head is a flex line, so the height is written here
- * and the head is centred in it rather than sitting at the top of a thin bar. The
- * text scales with the row for the same reason: a 16px label in a 10px row is
- * cropped by the row's own overflow rule and reads as a bar with no name.
+ * Size one row to the height the player picked. The kit row is a block whose head is a
+ * flex line, so the height is written here and the head is centred in it. The text scales
+ * with the row, or a 16px label in a 10px row is cropped by the row's own overflow rule.
  */
 function styleRow(el) {
   const height = rowHeight();
@@ -461,26 +378,18 @@ function styleRow(el) {
   el.style.flexDirection = 'column';
   el.style.justifyContent = 'center';
   el.style.fontSize = `${String(Math.max(MIN_TEXT_PX, Math.round(height * TEXT_SCALE)))}px`;
-  // The three declarations that make the height above the truth rather than a
-  // request, and every one of them is a thing a flex column does on its own. A
-  // kit row carries 2px of vertical padding and a normal line box, so its own
-  // content measures more than a thin row is given; `min-height: auto` on a flex
-  // item then refuses to shrink it, and the strip silently stands taller than the
-  // box its frame was built at. A bare frame clips, so what that costs is the
-  // BOTTOM row, which is a display that is simply missing its last line and says
-  // nothing about why. Verified in a browser through `pnpm stage`, since happy-dom
-  // lays nothing out and every one of these reads as correct in a suite.
+  // The three declarations that make the height above the truth rather than a request. A
+  // kit row carries 2px of vertical padding and a normal line box, so its own content
+  // measures more than a thin row is given, and `min-height: auto` on a flex item then
+  // refuses to shrink it. A bare frame clips, so what that costs is the bottom row.
   el.style.padding = `0 ${String(ROW_PAD_X)}px`;
   el.style.lineHeight = '1';
   el.style.minHeight = '0';
 }
 
 /**
- * The latency band, inside the cast row and behind its text.
- *
- * A negative z-index like the kit's own fill, and appended after it, so the band
- * sits over the fill and under the label. The row already has `position: relative`
- * and clips its own overflow, so nothing here can escape the bar it belongs to.
+ * The latency band, inside the cast row and behind its text. A negative z-index like the
+ * kit's own fill, appended after it, so the band sits over the fill and under the label.
  */
 function createBand(el) {
   const band = document.createElement('div');
@@ -532,12 +441,9 @@ function buildRows() {
 }
 
 /**
- * 'frost_bolt' reads as 'Frost Bolt'. The FALLBACK, not the label.
- *
- * A guess from the id, reached only for something outside your own spellbook,
- * and wrong wherever the game's own name has diverged from the id: `arcane_shot`
- * is displayed everywhere as "Fell Shot". Wrong-but-readable beats a blank row on
- * the one thing you are currently casting.
+ * 'frost_bolt' reads as 'Frost Bolt'. The fallback, not the label: it is reached only
+ * for something outside your own spellbook and is wrong wherever the game's display name
+ * has diverged from the id, but wrong-but-readable beats a blank row on a live cast.
  */
 function readable(abilityId) {
   return abilityId
@@ -548,10 +454,8 @@ function readable(abilityId) {
 
 /**
  * The cast's label and school, looked up only when the ability changed.
- *
- * `world.abilities` rebuilds a signature over the whole spellbook on every read,
- * which is fine once a cast and wasteful sixty times a second for an answer that
- * only moves when a cast starts.
+ * `world.abilities` rebuilds a signature over the whole spellbook on every read, which is
+ * wasteful sixty times a second for an answer that moves only when a cast starts.
  */
 function castOf(me) {
   const abilityId = me.castingAbility;
@@ -579,16 +483,9 @@ function forgetCast() {
 }
 
 /**
- * Fold every aura of the given kinds into one number.
- *
- * A fold rather than a filtered list of magnitudes, because both callers run on
- * every frame and this file already refuses per-frame work it can avoid: two
- * throwaway arrays sixty times a second, to read at most a handful of numbers, is
- * the same waste as walking the spellbook once a frame would be.
- *
- * The aura list is the game's own array handed over untouched, so it is read
- * defensively. An entity that turns out to carry none costs a term rather than
- * the frame the whole strip is drawn in.
+ * Fold every aura of the given kinds into one number. A fold rather than a filtered list
+ * of magnitudes, because both callers run on every frame. The aura list is the game's own
+ * array handed over untouched, so it is read defensively.
  */
 function foldAuras(me, kinds, start, fold) {
   const carried = me.auras;
@@ -627,15 +524,11 @@ function hastened(total, value) {
 /**
  * What the first swing of a session is measured against.
  *
- * `weapon.speed` is the unhasted period and every aura term of the game's own
- * period is published, so the seed reproduces its arithmetic: the kinds that
- * STRETCH a swing multiply it, and the kind that shortens one joins an additive
- * bucket the result is divided through.
- *
- * What is left over is the melee haste STAT, which is not on the wire and which
- * the published `spellHaste` cannot stand in for. That term alone, so the seed is
- * long only for a player carrying melee haste from gear or a passive, and the
- * first observed reset replaces it either way.
+ * `weapon.speed` is the unhasted period and every aura term of the game's own period is
+ * published, so the seed reproduces its arithmetic. What is left over is the melee haste
+ * stat, which is not on the wire and which the published `spellHaste` cannot stand in
+ * for, so the seed is long for a player carrying melee haste. The first observed reset
+ * replaces it either way.
  */
 function swingSeed(me) {
   const period = foldAuras(me, SWING_SLOW_KINDS, numberOf(me.weapon?.speed), stretched);
@@ -644,10 +537,8 @@ function swingSeed(me) {
 }
 
 /**
- * The swing row.
- *
- * `autoAttack` decides whether there is anything to say at all: a swing timer on a
- * character who is not attacking is a number counting to nothing.
+ * The swing row. `autoAttack` decides whether there is anything to say at all: a swing
+ * timer on a character who is not attacking counts to nothing.
  */
 function paintSwing(row, me) {
   const remaining = numberOf(me.swingTimer);
@@ -669,15 +560,11 @@ function gcdBase(me) {
 }
 
 /**
- * How long the global cooldown currently running actually is.
- *
- * The game's own arithmetic rather than an observation, and every term of it is
- * published, which is what makes this row exact on the first press of a session
- * where the swing above it cannot be. Three things the obvious version gets
- * wrong, and each is a wrong denominator on a real character rather than a
- * rounding difference: a rogue's base is 1.0 and not 1.5, no amount of haste
- * takes it under a 0.75 floor, and haste AURAS add on top of the `spellHaste`
- * stat rather than already being folded into it.
+ * How long the global cooldown currently running actually is: the game's own arithmetic
+ * rather than an observation, which is what makes this row exact on the first press of a
+ * session. Three terms the obvious version gets wrong, each a wrong denominator on a real
+ * character: a rogue's base is 1.0 and not 1.5, no amount of haste takes it under a 0.75
+ * floor, and haste auras add on top of the `spellHaste` stat rather than being folded in.
  */
 function gcdLength(me) {
   const haste = foldAuras(me, HASTE_AURA_KINDS, numberOf(me.spellHaste), added);
@@ -685,12 +572,10 @@ function gcdLength(me) {
 }
 
 /**
- * The global cooldown. Empty rather than zero when it is not running: that is ready.
- *
- * The length is recomputed each frame, so a haste aura that falls off part way
- * through leaves a remaining longer than the length now says. The kit clamps the
- * fill, which draws a full bar, and full is the honest reading: what is left is
- * everything this row can still count.
+ * The global cooldown. Empty rather than zero when it is not running, since that is
+ * ready. The length is recomputed each frame, so a haste aura falling off part way
+ * through leaves a remaining longer than the length now says; the kit clamps the fill,
+ * and a full bar is the honest reading of what is left to count.
  */
 function paintGcd(row, me) {
   const remaining = numberOf(me.gcdRemaining);
@@ -702,10 +587,8 @@ function paintGcd(row, me) {
 }
 
 /**
- * The last stretch of the cast that your round trip covers.
- *
- * Drawn from the left edge because the fill drains toward it, so the band is the
- * end of the cast rather than the start of it.
+ * The last stretch of the cast that your round trip covers. Drawn from the left edge
+ * because the fill drains toward it, so the band is the end of the cast.
  */
 function paintBand(row, total) {
   const { band } = row;
@@ -759,14 +642,10 @@ function resourceLabel(me) {
 }
 
 /**
- * One pip per combo point, over as many slots as the most points ever seen.
- *
- * Repainted only when the count moved, since this runs at the frame rate and a
- * still combo count is the ordinary case.
- *
- * The first point of a session adds a LINE to the strip, so the box is divided
- * again on the frame that reveals it: see `fitLines`. That is the whole of what makes
- * the pips visible at all, since the frame was built for the rows alone.
+ * One pip per combo point, over as many slots as the most points ever seen. Repainted
+ * only when the count moved, since this runs at the frame rate. The first point of a
+ * session adds a line to the strip, so the box is divided again on the frame that reveals
+ * it: see `fitLines`.
  */
 function paintPips(points) {
   if (points > pipSlots) {
@@ -857,12 +736,9 @@ function draw(me) {
 }
 
 /**
- * Whether the strip draws at all right now.
- *
- * The frame's own visibility is left alone deliberately: it is the player's, the
- * loader persists it per character, and an addon that also wrote it would argue
- * with the restore of a frame the player had closed. Hiding the CONTENT of a bare
- * frame leaves nothing on screen either way.
+ * Whether the strip draws at all right now. The frame's own visibility is left alone: it
+ * is the player's, the loader persists it per character, and an addon that also wrote it
+ * would argue with the restore of a frame the player had closed.
  */
 function drawing() {
   if (!settingFlag('hide-out-of-combat', false)) {
@@ -883,15 +759,12 @@ function stand() {
 buildRows();
 applyVisibility();
 
-// The one subscription in the file. Combat is a state that changes, which is
-// exactly what world.on reports; everything else here is a number counting down,
-// which it deliberately does not.
+// The one subscription in the file. Combat is a state that changes, which is what
+// `world.on` reports; everything else here is a number counting down.
 woc.world.on('combat', applyVisibility);
 
-// On the loop the loader already runs, rather than one of this addon's own. Four
-// bars whose numbers genuinely move every frame is what that tick is for, and a
-// strip standing down is one `if` on a shared callback rather than a browser one
-// per addon.
+// On the loop the loader already runs. Four bars whose numbers move every frame is what
+// that tick is for, and a strip standing down is one `if` on a shared callback.
 woc.onFrame(() => {
   const me = woc.world.player;
   if (frame.visible && !list.hidden && me !== null) {
@@ -906,11 +779,8 @@ woc.keys.bind('toggle', () => {
 });
 
 /**
- * Throw the rows away and build them again.
- *
- * Which rows exist and how tall they are are both decided when a row is BUILT, so
- * neither can be repainted into. Everything a rebuild costs is one frame of a
- * display that redraws every frame anyway.
+ * Throw the rows away and build them again. Which rows exist and how tall they are are
+ * both decided when a row is built, so neither can be repainted into.
  */
 function rebuild() {
   for (const off of tips.splice(0)) {
@@ -925,18 +795,15 @@ function rebuild() {
   pipsPainted = -1;
   buildRows();
   applyVisibility();
-  // The rows the settings now ask for, divided into the box the frame already
-  // has. A NEW row height cannot land here and is not meant to: the frame's
-  // height was stated when it was built and an addon cannot restate it, so
-  // honouring the setting now would draw rows taller than the box and a bare
-  // frame would clip the difference away. It opens at the new height next
-  // reload, which is the same reload the size bounds above wait for.
+  // The rows the settings now ask for, divided into the box the frame already has. A new
+  // row height cannot land here: the frame's height was stated when it was built and an
+  // addon cannot restate it, so honouring the setting now would draw rows the bare frame
+  // clips. It opens at the new height next reload.
   fitLines();
 }
 
 woc.onSettingsChange(rebuild);
 
-// Nothing is registered with woc.onDispose, and that is a statement rather than an
-// omission: everything this file creates lives inside a kit widget or inside the
-// frame body, both of which the loader drains on disable, and the frame handler is
-// woc.onFrame, which is unsubscribed with them.
+// Nothing is registered with `woc.onDispose`: everything this file creates lives inside
+// a kit widget or inside the frame body, both of which the loader drains on disable, and
+// the frame handler is `woc.onFrame`, which is unsubscribed with them.

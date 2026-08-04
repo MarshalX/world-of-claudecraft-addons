@@ -1,26 +1,21 @@
 // Longwatch on the stage: a roster with time on it.
 //
-// The state worth photographing here is one no session can be walked into. Half
-// the shipped respawns are hours long, so a panel that says anything at all is a
-// panel belonging to somebody who has been killing rares across four zones for
-// most of an afternoon. A scenario states that afternoon instead: a kill is a
-// death record with a wall-clock stamp, and `stage.elapse` is what puts the stamp
-// in the past.
+// The state worth photographing is one no session can be walked into. Half the shipped respawns
+// are hours long, so a panel that says anything at all belongs to somebody who has been killing
+// rares across four zones for most of an afternoon. A scenario states that afternoon instead: a
+// kill is a death record with a wall-clock stamp, and `stage.elapse` is what puts the stamp in
+// the past.
 //
-// THE ROSTER IS THE SHIPPED FILE, imported rather than restated. It is the whole
-// content of this addon, and a fixture that named its own rares would photograph a
-// roster nobody installs. It arrives as `data`, which is how the loader's own
-// install-time cache holds it: raw text keyed by the path the manifest declares.
+// The roster is the shipped file, imported rather than restated. It is the whole content of this
+// addon, and a fixture that named its own rares would photograph a roster nobody installs. It
+// arrives as `data`, which is how the loader's own install-time cache holds it.
 //
-// TWO THINGS ARE ARRANGED SO THE PICTURE IS THE PANEL AND NOTHING ELSE, and both
-// are honest rather than staged. The rare that is UP is standing where the player
-// is standing, and it is in interest scope BEFORE the addon evaluates a line: a
-// rare found in the first walk is one the player did not ride up to, so the addon
-// deliberately says nothing about it, and a banner over the shot would be a picture
-// of the alert rather than of the roster. And the camp the pins would be drawn over
-// is behind the player, which is where the pins go too. `pnpm shots` crops around
-// world anchors as well as frames, so a pin projecting into the middle of the
-// viewport would stretch the preview across everything between it and the panel.
+// Two things are arranged so the picture is the panel and nothing else, and both are honest
+// rather than staged. The rare that is up is standing where the player is standing, and it is in
+// interest scope before the addon evaluates a line: a rare found in the first walk is one the
+// player did not ride up to, so the addon says nothing about it and no banner covers the shot.
+// And the camp the pins would be drawn over is behind the player, since `pnpm shots` crops
+// around world anchors as well as frames.
 
 import type { Scenario, Stage, WorldDraft } from '../../stage/src/stage.ts';
 import { eventsFrame, PLAYER_ENTITY } from '../../tests/fakes/frames.ts';
@@ -36,13 +31,11 @@ const FIRST_CORPSE_ID = 800;
 const STANDING_ID = 799;
 
 /**
- * Where this hunter is standing, and it is chosen rather than arbitrary.
- *
- * Inside Eastbrook Vale, since the zone is resolved from the POSITION rather than
- * from `world.zone`, so the detail line under every row is a real distance from
- * here. South of every camp in the zone, because the stage camera looks down world
- * -z from over the player's shoulder and a pin behind it is not drawn: see the top
- * of this file for why that matters to the crop rather than to the addon.
+ * Where this hunter is standing, and it is chosen rather than arbitrary. Inside Eastbrook Vale,
+ * since the zone is resolved from the position rather than from `world.zone`, so the detail line
+ * under every row is a real distance from here. South of every camp in the zone, because the
+ * stage camera looks down world -z from over the player's shoulder and a pin behind it is not
+ * drawn.
  */
 const PLAYER_POS = { x: -95, y: 5, z: -95 };
 
@@ -52,14 +45,11 @@ const STANDING_NAME = 'Grix the Tunnelking';
 const STANDING_POS = { x: -95, y: 5, z: -78 };
 
 /**
- * What this character has killed, and how long ago in seconds.
- *
- * Spread across all four zones and all five respawn lengths the roster carries, so
- * the countdown column reads from seconds to hours and the sort has something to
- * do. `old_cragmaw` is past its own 180 seconds on purpose: due back and not yet
- * seen back is a state of its own, and it is the one a player is deciding to ride
- * over on. Seven rares are deliberately left out of this list, because a roster is
- * mostly rares nobody has met and "Unseen" is what most of it says.
+ * What this character has killed, and how long ago in seconds. Spread across all four zones and
+ * all five respawn lengths the roster carries, so the countdown column reads from seconds to
+ * hours and the sort has something to do. `old_cragmaw` is past its own 180 seconds on purpose:
+ * due back and not yet seen back is a state of its own. Seven rares are left out, because a
+ * roster is mostly rares nobody has met and "Unseen" is what most of it says.
  */
 const KILLS: readonly { id: string; ago: number }[] = [
   { id: 'sister_nhalia', ago: 9000 },
@@ -87,12 +77,9 @@ function wait(ms: number): Promise<void> {
 }
 
 /**
- * The session before the addon has run a line.
- *
- * The standing rare is here rather than in `run` and that is the load-bearing half:
- * `announce` is suppressed for everything found in the first walk of interest scope,
- * so stated here it draws a row and no banner, and stated a moment later it would
- * draw both.
+ * The session before the addon has run a line. The standing rare is here rather than in `run` and
+ * that is the load-bearing half: `announce` is suppressed for everything found in the first walk
+ * of interest scope, so stated here it draws a row and no banner.
  */
 function aRareHunter(draft: WorldDraft): void {
   draft.set(draft.player, 'templateId', 'hunter');
@@ -106,14 +93,10 @@ function aRareHunter(draft: WorldDraft): void {
 }
 
 /**
- * Kill one rare, the way the wire reports one.
- *
- * The corpse exists only for the length of the record. The addon reads the template
- * off the entity the death names, because the record carries an entity id and
- * nothing else identifying, and then the body is taken back out: left in the world
- * it would be one more thing in interest scope, and the next poll would walk it.
- *
- * Never polled between the two, so this is not a spawn the addon ever saw.
+ * Kill one rare, the way the wire reports one. The corpse exists only for the length of the
+ * record: the addon reads the template off the entity the death names, because the record carries
+ * an entity id and nothing else identifying, and then the body is taken back out. Never polled
+ * between the two, so this is not a spawn the addon ever saw.
  */
 function bury(stage: Stage, templateId: string, id: number): void {
   stage.mob(id, { templateId, name: templateId, dead: true });
@@ -122,12 +105,9 @@ function bury(stage: Stage, templateId: string, id: number): void {
 }
 
 /**
- * Play the afternoon out, oldest kill first, ending at now.
- *
- * The wall clock walks forward through the kills rather than each one being stamped
- * and then pushed back, because a stamp is taken from the clock as it stands: the
- * only way to say a kill happened 9,000 seconds ago is to be 9,000 seconds before
- * the end when it lands.
+ * Play the afternoon out, oldest kill first, ending at now. The wall clock walks forward through
+ * the kills rather than each one being stamped and then pushed back, because a stamp is taken
+ * from the clock as it stands.
  */
 function killEverything(stage: Stage): void {
   let at = KILLS[0]?.ago ?? 0;
@@ -148,16 +128,14 @@ async function panelUp(stage: Stage): Promise<void> {
 /**
  * The rare that walks up in the alert scenario, and where the player is when it does.
  *
- * Mogger's camp is the one this scenario stands at, since an entity is only ever
- * seen in interest scope and a rare is authored as a one-mob camp: the sighting and
- * the camp being the same place is what makes the world this describes a real one.
- * The player is a few yards SOUTH of it, which puts the mob behind the stage camera
- * along with every other camp in the zone, so no pin is drawn.
+ * Mogger's camp is the one this scenario stands at, since an entity is only ever seen in interest
+ * scope and a rare is authored as a one-mob camp. The player is a few yards south of it, which
+ * puts the mob behind the stage camera along with every other camp in the zone, so no pin is
+ * drawn.
  *
- * Mogger is also the shortest name on the roster, and a banner is set in the game's
- * display serif at around 40px across the whole view: a longer one photographs as a
- * headline several times wider than the panel it belongs beside, which is a sheet
- * whose two pictures are wildly different sizes.
+ * Mogger is also the shortest name on the roster, and a banner is set in the game's display serif
+ * at around 40px across the whole view: a longer one photographs as a headline several times
+ * wider than the panel it belongs beside.
  */
 const SIGHTED_RARE = 'mogger';
 const SIGHTED_NAME = 'Mogger';
@@ -166,15 +144,12 @@ const SIGHTED_POS = { x: 120, y: 5, z: -28 };
 const CAMP_POS = { x: 118, y: 5, z: -40 };
 
 /**
- * The panel, deliberately NOT on screen.
- *
- * This pane is the alert and nothing else, because the roster is already the pane
- * beside it: drawing the panel twice would say the preview is two states of one
- * window rather than the two halves of what the addon does. A hidden frame has no
+ * The panel, deliberately not on screen. This pane is the alert and nothing else, because the
+ * roster is already the pane beside it: drawing the panel twice would say the preview is two
+ * states of one window rather than the two halves of what the addon does. A hidden frame has no
  * box on screen at all, so the crop closes to the banner alone.
  *
- * The box is still stated because a frame's saved state is a box AND a visibility,
- * and it is what a player at the picker would get back if they pressed the toggle.
+ * The box is still stated because a frame's saved state is a box and a visibility.
  */
 const ALERT_PANEL = { box: { x: 370, y: 372, w: 460, h: 300 }, visible: false };
 
@@ -187,18 +162,15 @@ function atMoggersCamp(draft: WorldDraft): void {
 /**
  * Kill everything, then have one more rare walk up.
  *
- * The order is the whole scenario. `announce` says nothing about a rare found in the
- * first walk of interest scope, because everything already standing there at login
- * is something the player did not ride up to, so a sighting has to arrive LATER than
- * that walk to be one. Mogger is therefore absent while the addon boots and spawns
- * afterwards, which is the only sequence that produces a banner at all.
+ * The order is the whole scenario. `announce` says nothing about a rare found in the first walk
+ * of interest scope, so a sighting has to arrive later than that walk to be one. Mogger is
+ * therefore absent while the addon boots and spawns afterwards.
  *
- * The banner then stays up rather than expiring under the capture: the shared
- * harness hands the kit no timers, so the three seconds a real one lasts never pass.
+ * The banner then stays up rather than expiring under the capture: the shared harness hands the
+ * kit no timers, so the three seconds a real one lasts never pass.
  *
- * The kills are here even though this pane's panel is hidden, because the world a
- * scenario states has to be one somebody could be in: a character who has never
- * killed a rare is not the character an alert about one interrupts.
+ * The kills are here even though this pane's panel is hidden, because the world a scenario states
+ * has to be one somebody could be in.
  */
 async function sighting(stage: Stage): Promise<void> {
   await panelUp(stage);
@@ -229,9 +201,9 @@ const SCENARIOS: readonly Scenario[] = [
     },
   },
   {
-    // The other half of the addon: it is a watch rather than a table, so the moment
-    // it exists for is a rare walking into range while the player is doing something
-    // else, with the panel shut. A banner and a cue, and nothing else on screen.
+    // The other half of the addon: it is a watch rather than a table, so the moment it exists for
+    // is a rare walking into range while the player is doing something else, with the panel shut.
+    // A banner and a cue, and nothing else on screen.
     id: 'alert',
     label: 'A rare walks into range',
     preview: true,
@@ -243,9 +215,9 @@ const SCENARIOS: readonly Scenario[] = [
     run: sighting,
   },
   {
-    // One zone, which is the filter a player watching a single camp circuit sets.
-    // Worth its own scenario because it is a different panel rather than the same
-    // one shortened: five rows fit one column, and the grid reflows to it.
+    // One zone, which is the filter a player watching a single camp circuit sets. Worth its own
+    // scenario because it is a different panel rather than the same one shortened: five rows fit
+    // one column, and the grid reflows to it.
     id: 'one-zone',
     label: 'Filtered to the zone you are in',
     settings: { zones: 'The zone I am in' },
@@ -258,9 +230,8 @@ const SCENARIOS: readonly Scenario[] = [
     },
   },
   {
-    // Nothing killed and nothing seen, which is what a fresh install looks like
-    // and is the state this panel spends its first session in. A roster that reads
-    // well full and reads as broken empty is one a player meets empty first.
+    // Nothing killed and nothing seen, which is what a fresh install looks like. A roster that
+    // reads well full and reads as broken empty is one a player meets empty first.
     id: 'unseen',
     label: 'Before you have killed anything',
     data: { [ROSTER_FILE]: JSON.stringify(ROSTER) },

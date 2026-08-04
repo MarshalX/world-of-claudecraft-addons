@@ -2,23 +2,21 @@
 
 // Purelight, run through the real loader.
 //
-// The subject is one decision: whether an effect can be removed. It is the game's
-// own rule and the loader publishes it, so what this suite pins is not the rule
-// itself but that the addon asks the right question of the right shape.
+// The subject is one decision: whether an effect can be removed. It is the game's own rule and
+// the loader publishes it, so what this suite pins is that the addon asks the right question of
+// the right shape.
 //
-// Three cases carry most of that weight. The same stun twice, once owned by an
-// encounter and once not, because an addon that skips `unbreakableControl` passes
-// everything else here and tells a healer to spend a global on something nothing
-// can remove. A ROOT, because a root carries a magnitude of 0 and a dot carries a
-// positive one, so any display that reads polarity off a magnitude drops both and
-// looks entirely correct while doing it. And a hostile target, because on one of
-// those the question is reversed: what can be stripped is the BENEFIT.
+// Three cases carry most of that weight. The same stun twice, once owned by an encounter and
+// once not, because an addon that skips `unbreakableControl` passes everything else here and
+// tells a healer to spend a global on something nothing can remove. A root, because a root
+// carries a magnitude of 0 and a dot carries a positive one, so any display that reads polarity
+// off a magnitude drops both while looking entirely correct. And a hostile target, because
+// there the question is reversed: what can be stripped is the benefit.
 //
-// The party rows in the fixture exist to be ignored. The addon reads entities
-// only, deliberately, since a row carries neither a school nor `unbreakableControl`
-// and those are the two clauses whose absence costs a player a global. A row is
-// carried here anyway so that a future version that starts reading them again
-// fails on the member who has a row and no entity.
+// The party rows in the fixture exist to be ignored. The addon reads entities only, since a row
+// carries neither a school nor `unbreakableControl` and those are the two clauses whose absence
+// costs a player a global. A row is carried here anyway so that a future version that starts
+// reading them fails on the member who has a row and no entity.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { validateManifest } from '../../loader/src/shared/schema.ts';
@@ -177,11 +175,9 @@ const BLESSING: Effect = {
 };
 
 /**
- * A frost mage's own proc, which is a BENEFIT and therefore a purge tile on an enemy.
- *
- * The game applies it to the mage itself with the bare ability id and no tail, which
- * is what makes it the case `artId` must not trim: `brain_freeze` is a file and
- * `brain` is not.
+ * A frost mage's own proc, which is a benefit and therefore a purge tile on an enemy. The game
+ * applies it to the mage itself with the bare ability id and no tail, which makes it the case
+ * `artId` must not trim: `brain_freeze` is a file and `brain` is not.
  */
 const BRAIN_FREEZE: Effect = {
   id: 'brain_freeze',
@@ -211,10 +207,8 @@ function manifest() {
 }
 
 /**
- * What the addon marks a cell with.
- *
- * The caster is in it, which is the whole point: two players carrying the same
- * debuff on one unit are two effects and must be two tiles.
+ * What the addon marks a cell with. The caster is in it, which is the whole point: two players
+ * carrying the same debuff on one unit are two effects and must be two tiles.
  */
 function key(unitId: number, abilityId: string, source: number = MOB_SOURCE): string {
   return `${String(unitId)}:${abilityId}:${String(source)}`;
@@ -280,13 +274,12 @@ interface Selection {
 }
 
 /**
- * Who the player is, for the two things that are read off them rather than off an
- * effect: the class an ally's art is filed under, and the spellbook.
+ * Who the player is, for the two things read off them rather than off an effect: the class an
+ * ally's art is filed under, and the spellbook.
  *
- * A healer by default, since that is who installs this. The mage is here for the
- * one branch a healer cannot reach: no paladin, priest, druid or shaman ability id
- * ends in anything AURA_SUFFIXES would trim, so the "leave a named ability alone"
- * case needs a class whose kit contains one.
+ * A healer by default, since that is who installs this. The mage is here for the one branch a
+ * healer cannot reach: no paladin, priest, druid or shaman ability id ends in anything
+ * `AURA_SUFFIXES` would trim.
  */
 interface SelfSpec {
   cls: string;
@@ -296,12 +289,11 @@ interface SelfSpec {
 const A_PALADIN: SelfSpec = { cls: 'paladin', known: [] };
 
 /**
- * A frost mage, who knows the one ability in this file whose id ends in a tail.
- *
- * `brain_freeze` is a real proc: the game applies it to the mage itself, with the
- * bare ability id and no tail, and it is a BENEFIT, so on an enemy mage it is a
- * purge tile. A frost mage looking at another frost mage therefore has it in their
- * own spellbook, which is the only way the guard in `artId` can fire at all.
+ * A frost mage, who knows the one ability in this file whose id ends in a tail. `brain_freeze`
+ * is a real proc the game applies to the mage itself, with the bare ability id and no tail, and
+ * it is a benefit, so on an enemy mage it is a purge tile. A frost mage looking at another frost
+ * mage therefore has it in their own spellbook, which is the only way the guard in `artId` can
+ * fire.
  */
 const A_MAGE: SelfSpec = {
   cls: 'mage',
@@ -323,11 +315,8 @@ interface StartOpts {
   /** Defaults to the paladin every other case here is written against. */
   self?: SelfSpec;
   /**
-   * Frame state as a previous session saved it, seeded before the addon loads.
-   *
-   * The restore is the same path a drag takes: the loader clamps the box and
-   * reports it through `onMove`, so a saved box is how a suite drives a resize
-   * without a pointer.
+   * Frame state as a previous session saved it, seeded before the addon loads. The restore is
+   * the same path a drag takes: the loader clamps the box and reports it through `onMove`.
    */
   frames?: Record<string, { box: FrameBox; visible: boolean }>;
 }
@@ -377,11 +366,8 @@ async function settleFrames(): Promise<void> {
 }
 
 /**
- * Every entity the world holds, and the aura arrays they are actually carrying.
- *
- * `live` holds the very arrays the entities carry, so an effect landing mutates
- * what the game would be mutating rather than replacing a list the loader is
- * already holding.
+ * Every entity the world holds, and the aura arrays they are actually carrying. `live` holds the
+ * very arrays the entities carry, so an effect landing mutates what the game would be mutating.
  */
 /** The roster the loader reads, or null for a player standing on their own. */
 function partyOf(grouped: boolean, members: MemberRow[]) {
@@ -424,10 +410,8 @@ function buildWorld(grouped: boolean, self: SelfSpec) {
 }
 
 /**
- * Start the addon, optionally solo and optionally with settings stored.
- *
- * Settings are seeded before the addon loads, because the loader hydrates them and
- * then evaluates: the addon reads them while it takes its first reading.
+ * Start the addon, optionally solo and optionally with settings stored. Settings are seeded
+ * before the addon loads, because the loader hydrates them and then evaluates.
  */
 async function start(opts: StartOpts = {}): Promise<PurelightHarness> {
   const { live, members, selection, world } = buildWorld(
@@ -504,12 +488,9 @@ async function start(opts: StartOpts = {}): Promise<PurelightHarness> {
 }
 
 /**
- * `start`, plus the wait for the overlay to actually come up.
- *
- * A saved frame starts hidden and is shown once its stored state arrives, and that
- * answer is keyed per character, so it takes a sample to find the character and a
- * storage read to come back. The addon skips the DRAWING while the frame is
- * hidden, so every case about what the strip shows wants this to have happened.
+ * `start`, plus the wait for the overlay to come up. A saved frame starts hidden and is shown
+ * once its stored state arrives, keyed per character, so it takes a sample and a storage read.
+ * The addon skips the drawing while the frame is hidden.
  */
 async function run(opts: StartOpts = {}): Promise<PurelightHarness> {
   const harness = await start(opts);
@@ -536,12 +517,10 @@ describe('its manifest', () => {
   });
 });
 
-// The whole addon, in a handful of assertions on one effect each.
-//
-// `unbreakableControl` is the field that separates a scripted mechanic's control
-// from an ordinary one. It is absent on almost every aura in the game, so an addon
-// that never reads it looks correct on every ordinary effect and is wrong on
-// exactly the ones a player would be reaching for a cooldown during.
+// The whole addon, in a handful of assertions on one effect each. `unbreakableControl`
+// separates a scripted mechanic's control from an ordinary one. It is absent on almost every
+// aura in the game, so an addon that never reads it looks correct on every ordinary effect and
+// is wrong on exactly the ones a player would be reaching for a cooldown during.
 describe('whether an effect can actually be removed', () => {
   it('shows an ordinary stun', async () => {
     const h = await run();
@@ -579,11 +558,10 @@ describe('whether an effect can actually be removed', () => {
     expect(h.drawn()).toEqual([]);
   });
 
-  // The regression that this addon was rebuilt for. A root's magnitude is 0 and a
-  // dot's is a POSITIVE figure per tick, so both look identical to a heal over
-  // time by sign, and both are harmful by KIND. Any display that reads polarity
-  // off a magnitude, or off the party row's `neg` flag which is the same sign
-  // test, silently drops most of what a healer would actually dispel.
+  // A root's magnitude is 0 and a dot's is a positive figure per tick, so both look identical to
+  // a heal over time by sign, and both are harmful by kind. Any display that reads polarity off
+  // a magnitude, or off the party row's `neg` flag which is the same sign test, silently drops
+  // most of what a healer would actually dispel.
   it('shows a root, which carries no negative magnitude at all', async () => {
     const h = await run();
 
@@ -614,10 +592,9 @@ describe('whether an effect can actually be removed', () => {
     expect(h.drawn()).toEqual([key(NEAR, 'sap')]);
   });
 
-  // A member with a party row and no entity. The row carries no school and no
-  // encounter flag, so it cannot answer the question, and guessing from it is the
-  // failure this addon exists to avoid. The fixture pushes the row anyway, so a
-  // version that starts reading rows again fails right here.
+  // A member with a party row and no entity. The row carries no school and no encounter flag, so
+  // it cannot answer the question. The fixture pushes the row anyway, so a version that starts
+  // reading rows again fails right here.
   it('leaves off an effect on a member too far away to have an entity', async () => {
     const h = await run();
 
@@ -639,8 +616,8 @@ describe('whether an effect can actually be removed', () => {
   });
 });
 
-// The reach. None of this was answerable while polarity came off a party row,
-// because a unit outside the group has no row and therefore had no polarity.
+// The reach. None of this is answerable while polarity comes off a party row, because a unit
+// outside the group has no row.
 describe('the units it answers for', () => {
   it('reads the player as a unit like anyone else', async () => {
     const h = await run();
@@ -686,10 +663,10 @@ describe('the units it answers for', () => {
     expect(h.drawn()).toEqual([key(FOE, 'blessing')]);
   });
 
-  // The same unit reached by two routes. Your target is very often somebody in
-  // your own group, and reading them twice puts their effects into the reading
-  // twice. The tile cache would hide that on its own, so this is measured against
-  // the tile BUDGET, where a duplicate pushes somebody else's effect off the end.
+  // The same unit reached by two routes. Your target is very often somebody in your own group,
+  // and reading them twice puts their effects into the reading twice. The tile cache would hide
+  // that, so this is measured against the tile budget, where a duplicate pushes somebody else's
+  // effect off the end.
   it('reads a unit once when it is both in your group and your target', async () => {
     const h = await run({ settings: { 'max-tiles': 2 } });
     h.select(NEAR);
@@ -701,8 +678,8 @@ describe('the units it answers for', () => {
     expect(h.drawn()).toEqual([key(NEAR, 'gravebind'), key(ME, 'corruption')]);
   });
 
-  // Solo used to draw nothing at all, on the reasoning that no party row meant no
-  // polarity for anything, not even for your own debuffs.
+  // Solo has to work: a reading that took polarity from a party row answers nothing at all for a
+  // player standing on their own, including for their own debuffs.
   it('works with no group at all', async () => {
     const h = await run({ grouped: false });
 
@@ -847,12 +824,11 @@ describe('the order they are drawn in', () => {
     expect(h.drawn()).toEqual([key(ME, 'gravebind'), key(NEAR, 'corruption')]);
   });
 
-  // The four kinds that carry the rest of the game's control. Every one of them is
-  // a kind the game actually classifies, which is the point rather than a detail:
-  // an earlier CONTROL_KINDS named `fear`, `sleep`, `charm` and `horror`, none of
-  // which is an aura kind here at all, and a real polymorph therefore sorted BELOW
-  // a dot with nothing raising anywhere. `fear` is the diminishing-returns category
-  // an `incapacitate` is filed under, which is why the wrong list reads as right.
+  // The four kinds that carry the rest of the game's control. Every one is a kind the game
+  // actually classifies, which is the point: a list naming `fear`, `sleep`, `charm` and `horror`
+  // names nothing that is an aura kind here, so a real polymorph sorts below a dot with nothing
+  // raising anywhere. `fear` is the diminishing-returns category an `incapacitate` is filed
+  // under, which is why the wrong list reads as right.
   it.each(['incapacitate', 'polymorph', 'silence', 'root'])(
     'ranks a %s as control rather than as ordinary',
     async (kind) => {
@@ -1039,21 +1015,16 @@ describe('the tooltip on a tile', () => {
   });
 });
 
-// Resizing the strip, which is how a player picks the tile size.
+// Resizing the strip, which is how a player picks the tile size. The same arrangement Cooldown
+// Bars draws its tile strip with, on purpose: both are bare strips of kit tiles, so a player who
+// has sized one has already learned how to size the other.
 //
-// This is the same arrangement Cooldown Bars draws its tile strip with, and it is
-// the same arrangement on purpose: both are bare strips of kit tiles, so a player
-// who has sized one has already learned how to size the other. It was reported
-// from a live session that this one could not be sized at all.
+// The height is the size, less the caption band: the loader owns a resizable frame's box and
+// reports it through `onMove`, and the addon writes what is left onto every tile. Measuring the
+// element instead would force a synchronous layout on every pointer move.
 //
-// The height IS the size, less the caption band: the loader owns a resizable
-// frame's box and reports it through `onMove`, and the addon writes what is left
-// onto every tile. Measuring the element instead would force a synchronous layout
-// on every pointer move of a display that already writes styles every frame.
-//
-// Driven here by the SAVED box, because that is the same path a drag takes: the
-// restore lands asynchronously and reports through the same callback, so a strip a
-// player sized last session comes back at that size.
+// Driven here by the saved box, because that is the same path a drag takes: the restore lands
+// asynchronously and reports through the same callback.
 describe('the size of the strip', () => {
   function frameEl(): HTMLElement | null {
     return document.querySelector<HTMLElement>('[data-woc-frame="strip"]');
@@ -1088,12 +1059,9 @@ describe('the size of the strip', () => {
     expect(sizeOf(key(NEAR, 'gravebind'))).toBe('40px');
   });
 
-  // The tile is built BEFORE the restore lands, which is the live path: a tile
-  // already up has to be resized rather than rebuilt, or a drag would throw away
-  // the art the browser has decoded on every pointer move.
-  //
-  // `start` rather than `run`, because that window IS the subject: waiting for the
-  // overlay to come up would wait for the very restore this is watching land.
+  // The tile is built before the restore lands, which is the live path: a tile already up has to
+  // be resized rather than rebuilt, or a drag would throw away the art the browser has decoded.
+  // `start` rather than `run`, because that window is the subject.
   it('resizes a tile that was built before the box arrived', async () => {
     const h = await start({ frames: { strip: { box: DRAGGED, visible: true } } });
     h.poll();

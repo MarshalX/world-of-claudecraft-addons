@@ -1,43 +1,35 @@
 // Emberwatch on the stage: what fired, and the rules it fired from.
 //
-// BOTH FRAMES IN ONE PICTURE, because this addon is a rules engine and a strip of
-// tiles is only half of it. Five squares is what every tile display looks like; the
-// rules under them are the thing a player is actually installing, and the pane is
-// also where the two questions this addon refuses to answer are written down.
+// Both frames in one picture, because this addon is a rules engine and a strip of tiles is only
+// half of it. Five squares is what every tile display looks like; the rules under them are the
+// thing a player is installing, and the pane is where the two questions this addon refuses to
+// answer are written down.
 //
-// EVERY ID, NAME, KIND, SCHOOL, DURATION AND STACK HERE IS THE GAME'S OWN, read out
-// of its content files rather than invented, and the ids and the names disagree on
-// purpose because the game's do: `arcane_power` is displayed as "Aether Surge" and
-// `pyroblast` as "Pyrelance". That divergence is why art is filed under the ID and
-// why nothing here derives one from the other.
+// Every id, name, kind, school, duration and stack here is the game's own, and the ids and the
+// names disagree because the game's do: `arcane_power` is displayed as "Aether Surge" and
+// `pyroblast` as "Pyrelance". That divergence is why art is filed under the id.
 //
-// A FIRE MAGE, and the spec is a decision rather than a flavour. The shipped set
-// carries four mage rules and two of them belong to specs that cannot both be in
-// play: `hot_streak` is fire and `brain_freeze` is frost, so a scenario showing
-// both would be a character that does not exist. The pane still lists both, which
-// is honest and is what a player sees, since a rule is switched off by hand rather
-// than by a spec nothing on the wire states.
+// A fire mage, and the spec is a decision rather than a flavour. The shipped set carries four
+// mage rules and two of them belong to specs that cannot both be in play: `hot_streak` is fire
+// and `brain_freeze` is frost. The pane still lists both, which is what a player sees, since a
+// rule is switched off by hand rather than by a spec nothing on the wire states.
 //
-// THE FIVE TILES ARE ONE EACH OF EVERYTHING THE STRIP CAN SAY, and the three that
-// draw no picture each have a DIFFERENT reason for it, which is why they are all
-// three here rather than deduplicated down to one:
+// The five tiles are one each of everything the strip can say, and the three that draw no
+// picture each have a different reason for it:
 //
-//  - SILENCING SHRIEK is anchored on a KIND, which is how a rule names no ability at
-//    all. A mob applied it, and a mob has no class directory to file art under.
-//  - BROOD VENOM is anchored on nothing but a POLARITY and a stack count: "anything
-//    harmful on you, at three applications". Its aura id is
-//    `stackpoison_mirefen_broodmother`, which is not an ability id, so there is no
-//    file to point at however the caster resolves.
-//  - AETHER SURGE is the player's own and still has none: the game composites that
-//    icon at run time from a module an addon cannot reach.
-//  - HOT STREAK and PYRELANCE resolve, because the game ships a painted file for
-//    both and this mage cast them.
+//  - Silencing Shriek is anchored on a kind, which is how a rule names no ability at all. A mob
+//    applied it, and a mob has no class directory to file art under.
+//  - Brood Venom is anchored on nothing but a polarity and a stack count. Its aura id is
+//    `stackpoison_mirefen_broodmother`, which is not an ability id, so there is no file to point
+//    at however the caster resolves.
+//  - Aether Surge is the player's own and still has none: the game composites that icon at run
+//    time from a module an addon cannot reach.
+//  - Hot Streak and Pyrelance resolve, because the game ships a painted file for both.
 //
-// Pyrelance is the one on the TARGET, and its rule carries `mine`, which is the
-// clause the whole addon turns on: two mages on one boss both leave a `pyroblast`
-// dot, and the one worth a global is yours. It is also, with Aether Surge, one of
-// the two drawn in the warning amber rather than in its school, since a rule that
-// watches for an effect running out sets the tone and tone beats school.
+// Pyrelance is the one on the target, and its rule carries `mine`, which is the clause the whole
+// addon turns on: two mages on one boss both leave a `pyroblast` dot, and the one worth a global
+// is yours. It is also, with Aether Surge, one of the two drawn in the warning amber rather than
+// in its school, since a rule that watches for an effect running out sets the tone.
 
 import type { Scenario, Stage, WorldDraft } from '../../stage/src/stage.ts';
 import { PLAYER_ENTITY } from '../../tests/fakes/frames.ts';
@@ -59,12 +51,10 @@ const CLASS_ID = 'mage';
 /**
  * The strip, sized to the five squares it is holding.
  *
- * The addon opens at 420, which is room for the six the tile budget allows plus the
- * line saying what it is not showing. A bare frame reserves its whole box whether or
- * not anything is drawn in it, and a crop cannot recover that, so the shot is taken
- * at the width this many tiles actually occupy: five 48px squares, the 6px gaps
- * between them, and the gap before the empty overflow line. Nothing here crosses a
- * bound, since the addon's own floor is one square.
+ * The addon opens at 420, which is room for the six the tile budget allows plus the line saying
+ * what it is not showing. A bare frame reserves its whole box whether or not anything is drawn in
+ * it, and a crop cannot recover that, so the shot is taken at the width these tiles occupy: five
+ * 48px squares, the 6px gaps, and the gap before the empty overflow line.
  */
 const STRIP = { box: { x: 24, y: 24, w: 282, h: 63 }, visible: true };
 
@@ -74,16 +64,14 @@ const STRIP_SHUT = { box: STRIP.box, visible: false };
 /**
  * The rules pane, open, directly under the strip.
  *
- * ONE picture rather than a sheet of two panels, and the reason is the shapes rather
- * than taste: a sheet lines its panes up on the caption baseline, so a 63px strip
- * beside a 500px panel is a strip stranded at the bottom of an empty column. Two
- * frames in one scenario crop as the union of both, which puts them where this file
- * puts them, and what that shows is what a player actually has on screen with the
- * pane open: the alerts, and the rules they came from.
+ * One picture rather than a sheet of two panels, because of the shapes: a sheet lines its panes
+ * up on the caption baseline, so a 63px strip beside a 500px panel is a strip stranded at the
+ * bottom of an empty column. Two frames in one scenario crop as the union of both, which is what
+ * a player actually has on screen with the pane open.
  *
- * Wider and taller than the addon's own 460 by 380, for content rather than for
- * composition: the shipped set gives a mage eight rules, and the two notes under them
- * are the point of the pane and are the first thing a short box clips.
+ * Wider and taller than the addon's own 460 by 380, for content rather than composition: the
+ * shipped set gives a mage eight rules, and the two notes under them are the first thing a short
+ * box clips.
  */
 const PANE = { box: { x: 24, y: 110, w: 700, h: 526 }, visible: true };
 
@@ -93,11 +81,9 @@ function aura(over: Record<string, unknown>): Record<string, unknown> {
 }
 
 /**
- * The pull as the addon woke up in it.
- *
- * The class is here rather than in `run` for the reason the Cooldown Bars scenario
- * gives: skill art is filed per class, and a class stated after the addon has
- * mounted is a tile that was built without one and is never redrawn.
+ * The pull as the addon woke up in it. The class is here rather than in `run` for the reason the
+ * Cooldown Bars scenario gives: skill art is filed per class, and a class stated after the addon
+ * has mounted is a tile that was built without one and is never redrawn.
  */
 function aBroodmotherPull(draft: WorldDraft): void {
   draft.set(draft.player, 'templateId', CLASS_ID);
@@ -174,13 +160,10 @@ function afflictTarget(stage: Stage): void {
 }
 
 /**
- * Wait for the strip and the starter table before drawing anything.
- *
- * Two settles rather than one: a saved frame comes up hidden and is shown once its
- * stored state arrives, and the rules are a second read, of the data file the
- * manifest declares. The addon skips drawing entirely while its frame is hidden and
- * has no rules to fire until the table lands, so a scenario that only polls and
- * ticks photographs an empty page and reports success.
+ * Wait for the strip and the starter table before drawing anything. Two settles rather than one:
+ * a saved frame comes up hidden and is shown once its stored state arrives, and the rules are a
+ * second read, of the data file the manifest declares. The addon skips drawing entirely while its
+ * frame is hidden and has no rules to fire until the table lands.
  */
 async function show(stage: Stage): Promise<void> {
   stage.poll();
@@ -203,12 +186,10 @@ function anOgrePull(draft: WorldDraft): void {
 }
 
 /**
- * The half of this addon that works when nobody is looking at the strip.
- *
- * The stun lands AFTER the first reading rather than in it, and that ordering is the
- * whole scenario: the first reading of a live world is everything already up, which
- * is not news, so the addon deliberately makes no sound and raises no banner during
- * it. A stun stated in `world` would be photographed as a silent tile.
+ * The half of this addon that works when nobody is looking at the strip. The stun lands after the
+ * first reading rather than in it, and that ordering is the whole scenario: the first reading of
+ * a live world is everything already up, which is not news, so the addon makes no sound and
+ * raises no banner during it.
  */
 async function stunned(stage: Stage): Promise<void> {
   await show(stage);
@@ -264,11 +245,10 @@ const SCENARIOS: readonly Scenario[] = [
     run: show,
   },
   {
-    // The loud path, and the panel is the STRIP SHUT on purpose: a rule carrying
-    // `banner` is what reaches a player who is not looking at the overlay, and the
-    // engine keeps reading while the frame is hidden precisely so that it can. A
-    // strip drawn beside it would also crop badly, since the banner is a loader-owned
-    // slot at a fixed place in the view and a seeded frame is wherever it was put.
+    // The loud path, with the strip shut on purpose: a rule carrying `banner` is what reaches a
+    // player who is not looking at the overlay, and the engine keeps reading while the frame is
+    // hidden precisely so that it can. A strip drawn beside it would crop badly, since the banner
+    // is a loader-owned slot at a fixed place in the view.
     id: 'stun',
     label: 'A stun, with the banner it raises',
     preview: true,
@@ -280,10 +260,9 @@ const SCENARIOS: readonly Scenario[] = [
     run: stunned,
   },
   {
-    // Nothing worth saying, which is most of a fight and the state nobody thinks to
-    // photograph. A bare strip with no alert on it draws nothing at all, which is
-    // the point and is also indistinguishable from an addon that is switched off:
-    // the unlock outline is how a player finds it again to move it.
+    // Nothing worth saying, which is most of a fight. A bare strip with no alert on it draws
+    // nothing at all, which is the point and is also indistinguishable from an addon that is
+    // switched off: the unlock outline is how a player finds it again to move it.
     id: 'quiet',
     label: 'Nothing worth an alert',
     data: { [RULES_FILE]: JSON.stringify(RULES) },

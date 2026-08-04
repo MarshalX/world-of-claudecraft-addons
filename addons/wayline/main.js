@@ -2,88 +2,68 @@
 
 // Wayline: where the next level is, in time rather than in numbers.
 //
-// A RATE IS A LIE UNLESS IT SAYS WHAT IT IS A RATE OF, and that sentence is the
-// whole addon. The obvious implementation keeps a running total and divides it by
-// the time since the addon started. It is one line, it looks right for the first
-// hour, and it fails in the one situation a levelling display is actually looked
-// at: the player stops. The total then stops moving while the denominator keeps
-// growing, so the rate decays smoothly toward zero and the time to level grows
-// without limit, and at no point does anything on screen say that nothing has
-// happened for forty minutes. It reports a number the entire time, which is worse
-// than reporting nothing, because a number is acted on.
+// A rate is a lie unless it says what it is a rate of, and that is the whole addon. The
+// obvious implementation keeps a running total and divides it by the time since the addon
+// started. It looks right for the first hour and fails in the one situation a levelling
+// display is looked at: the player stops. The total then stops moving while the
+// denominator keeps growing, so the rate decays toward zero and the time to level grows
+// without limit, with nothing on screen saying that nothing has happened for forty
+// minutes.
 //
-// So every award is RECORDED with the moment it landed, the rate is measured over
-// a rolling window of the last few minutes, and WHEN THE WINDOW HOLDS NOTHING THE
-// PANEL SAYS SO rather than dividing. The rate row spells that out ("nothing in
-// 10m") and the two figures derived from it fall back to a dash. That is the
-// behaviour to protect: a display that stops claiming, rather than one that decays.
+// So every award is recorded with the moment it landed, the rate is measured over a
+// rolling window of the last few minutes, and when the window holds nothing the panel
+// says so rather than dividing. The rate row spells that out ("nothing in 10m") and the
+// two figures derived from it fall back to a dash.
 //
-// WHAT THE RATE IS A RATE OF, said plainly because the game makes it slippery.
-// Experience from a kill is split between everyone within 80 yards, and a kill far
-// below your level lands in the grey band and is worth nothing at all. So the same
-// player doing the same thing earns wildly different amounts depending on who is
-// standing nearby and what they are hitting, and a rate averaged over a session
-// that changed either is a number about a session that is over. That is the reason
-// the window is short by default and the reason its length is the first setting:
-// the shorter it is, the more nearly it describes what you are doing right now.
+// What the rate is a rate of, since the game makes it slippery: experience from a kill is
+// split between everyone within 80 yards, and a kill far below your level lands in the
+// grey band and is worth nothing. The same player doing the same thing earns wildly
+// different amounts depending on who is standing nearby, so a rate averaged over a
+// session that changed either is a number about a session that is over. That is why the
+// window is short by default and why its length is the first setting.
 //
-// KILLS ARE INFERRED, because an xp event does not say what earned it. It carries
-// an amount and, when one applied, the rested bonus inside that amount. A quest
-// turn-in and a kill are the same record. What is separately visible is `death`,
-// which carries the dead entity and its killer, so an award that lands within a
-// couple of seconds of a death credited to you, your pet or your party is counted
-// as a kill award and everything else is not. That is a heuristic and it is stated
-// as one in the tooltip: a quest handed in during a fight is miscounted, and the
-// cost of that is a slightly wrong divisor rather than a wrong reading of the wire.
+// Kills are inferred, because an xp event does not say what earned it: it carries an
+// amount and, when one applied, the rested bonus inside that amount, and a quest turn-in
+// and a kill are the same record. What is separately visible is `death`, which carries
+// the dead entity and its killer, so an award landing within a couple of seconds of a
+// death credited to you, your pet or your party is counted as a kill award. That is a
+// heuristic and the tooltip says so: a quest handed in during a fight is miscounted.
 //
-// THE RESTED POOL IS SHOWN AND ITS FILLING IS NOT. Rested accrues only while the
-// character is resting inside an inn, which is a PLACE. Nothing published says
-// where you are logged out or whether the pool is filling, so this draws the pool
-// against its cap and never a fill rate. Guessing one from two readings taken a
-// session apart would be an addon inventing a mechanic on the player's behalf.
+// The rested pool is shown and its filling is not. Rested accrues only while the
+// character is resting inside an inn, which is a place, and nothing published says where
+// you are logged out or whether the pool is filling. So this draws the pool against its
+// cap and never a fill rate.
 //
-// THE VIRTUAL LEVEL IS DERIVED, COSMETIC, AND A FUNCTION OF `lifetimeXp` ALONE.
-// Nothing on the wire carries a virtual level, and the field that looks like the
-// one to build it from is the one that cannot be: `world.player.level` stops at the
-// cap, and `character.xp` does not carry on past it either. The game returns before
-// touching that bar for a capped character and zeroes the remainder on the award
-// that dings them to it, so a capped character reads 0 there for the rest of their
-// life. A virtual level derived from it would read as the first one forever, on a
-// character who had played for two hundred hours, with nothing on screen wrong
-// enough for anyone to report. `lifetimeXp` is credited on every award INCLUDING at
-// the cap, which is what makes it the only number this curve can be a function of.
+// The virtual level is derived, cosmetic, and a function of `lifetimeXp` alone. Nothing
+// on the wire carries one, and the field that looks like the one to build it from cannot
+// be: `world.player.level` stops at the cap and `character.xp` does not carry on past it
+// either, because the game returns before touching that bar for a capped character and
+// zeroes the remainder on the award that dings them to it. A virtual level derived from
+// it would read as the first one forever. `lifetimeXp` is credited on every award
+// including at the cap, which is what makes it the only number this curve can use.
 //
-// TWO CLOCKS, and the split is the only reason this survives a page reload. Sample
-// times are `woc.now()`, which is monotonic and therefore restarts at every page
-// load, so a stored one means nothing afterwards. Each sample also carries the WALL
-// clock reading it was taken at, `woc.wallClock()`, which is the only part that
-// survives, and the restore turns it back into a monotonic one by subtracting the
-// wall time that has passed since. Publishing both clocks does not collapse them
-// into one: a wall reading is not monotonic and a monotonic one does not outlive the
-// page, so that conversion is still the only correct way to restore the AGE of a
-// measurement. It is taken in those two places only, and every window measurement
-// is `woc.now()`.
+// Two clocks, and the split is why this survives a page reload. Sample times are
+// `woc.now()`, which is monotonic and restarts at every page load, so a stored one means
+// nothing afterwards. Each sample also carries the wall clock reading it was taken at,
+// and the restore turns that back into a monotonic one by subtracting the wall time that
+// has passed since. Both clocks are needed: a wall reading is not monotonic and a
+// monotonic one does not outlive the page.
 //
-// NOTHING HERE ANIMATES, so nothing here runs a frame loop. Every figure on the
-// panel moves at most once a second and most of them move only when an award
-// lands, so the display is a `woc.setInterval` at one second for the figures the
-// CLOCK moves (the rate ages as time passes, and the two projections built on it
-// age with it) plus a `world.on('character')` subscription for the ones the game
-// moves. A `requestAnimationFrame` loop here would rewrite the same six strings
-// sixty times a second to report that a minute has not yet elapsed.
+// Nothing here animates, so nothing here runs a frame loop. Every figure moves at most
+// once a second, so the display is a `woc.setInterval` at one second for the figures the
+// clock moves plus a `world.on('character')` subscription for the ones the game moves.
 
 /**
  * Experience needed to leave each level, index 0 being level 1 to 2.
  *
- * A SNAPSHOT OF GAME CONTENT, read out of the game's progression source at game
- * 0.33.0. Nothing on the wire carries this table and nothing the loader publishes
- * derives it, so a release that retunes levelling makes these numbers wrong with
- * nothing anywhere to report it. Written as a string of figures rather than as an
- * array of them because that is what it is: one blob of copied content, parsed
- * once, rather than twenty values this file chose.
+ * A snapshot of game content, read out of the game's progression source at game 0.33.0.
+ * Nothing on the wire carries this table and nothing the loader publishes derives it, so
+ * a release that retunes levelling makes these numbers wrong with nothing to report it.
+ * Written as a string of figures because that is what it is: one blob of copied content,
+ * parsed once.
  *
- * The last entry is the level 20 requirement, which is also exactly what one
- * prestige costs and the figure the virtual level curve grows from.
+ * The last entry is the level 20 requirement, which is also what one prestige costs and
+ * the figure the virtual level curve grows from.
  */
 const XP_PER_LEVEL =
   '400 900 1400 2100 2800 3600 4500 5400 6500 7600 8800 10100 11400 12900 14400 16000 17700 19400 21300 23200'
@@ -119,13 +99,11 @@ const DEFAULT_WINDOW_MINUTES = 10;
 const MIN_WINDOW_MINUTES = 1;
 const MAX_WINDOW_MINUTES = 60;
 /**
- * The shortest stretch that may be called an hourly rate.
- *
- * Without it the first award of a window divides by however many milliseconds have
- * passed since it landed, which for the first second is a rate in the millions.
- * Clamping the DENOMINATOR rather than refusing to answer means the figure starts
- * low and climbs to the truth, which errs toward saying the level is further away
- * than it is. That is the safe direction for a projection.
+ * The shortest stretch that may be called an hourly rate. Without it the first award of a
+ * window divides by however many milliseconds have passed since it landed, which for the
+ * first second is a rate in the millions. Clamping the denominator rather than refusing
+ * to answer means the figure starts low and climbs to the truth, which errs toward saying
+ * the level is further away than it is.
  */
 const MIN_SPAN_MS = 60_000;
 /** How long after a credited death an award still counts as that kill's. */
@@ -145,13 +123,11 @@ const samples = [];
 /** When a death credited to this player or their group was last seen. */
 const kill = { at: null };
 /**
- * How many times the recorded awards have moved, and which of those is on disk.
- *
- * A revision rather than a dirty flag because a boolean initialised to `false` is
- * read as the literal type `false`, so the test guarding the write is reported as
- * one that can only go one way. Counting is the more useful thing anyway: a write marks
- * the revision it covered only once it has landed, so a failed one is retried by
- * the next tick rather than being silently forgotten.
+ * How many times the recorded awards have moved, and which of those is on disk. A
+ * revision rather than a dirty flag, because a boolean initialised to `false` is read as
+ * the literal type `false` and the test guarding the write is then reported as one that
+ * can only go one way. A write marks the revision it covered only once it has landed, so
+ * a failed one is retried by the next tick.
  */
 const store = { revision: 0, written: -1 };
 /** What the frame was built at, since a frame's density is decided when it is built. */
@@ -181,7 +157,7 @@ function settingText(id, fallback) {
   return fallback;
 }
 
-/** A number the game or the wire gave us, or zero. Every read here is a claim. */
+/** A number the game or the wire gave us, or zero. */
 function numberOf(value) {
   if (typeof value === 'number' && Number.isFinite(value)) {
     return value;
@@ -238,22 +214,20 @@ function levelRequirement(level) {
 }
 
 /**
- * The cumulative LIFETIME experience needed to reach each level, real and virtual.
+ * The cumulative lifetime experience needed to reach each level, real and virtual.
  *
- * The shape is the game's own: real levels reuse the table above exactly, so below
- * the cap the virtual level and the real one are the same number, and past it each
- * step grows by a tenth from the level 20 requirement.
+ * The shape is the game's own: real levels reuse the table above exactly, so below the cap
+ * the virtual level and the real one are the same number, and past it each step grows by
+ * a tenth from the level 20 requirement.
  *
- * WHERE THE ROUNDING GOES IS PART OF THE CURVE. The running step stays a float and
- * is rounded only on its way into the total, which is where the game rounds it.
- * Rounding it IN PLACE, so that the next step grows from the rounded figure, is the
- * obvious alternative and is a different curve: it agrees for the first eleven
- * virtual levels and then drifts, by 21 experience at virtual 40 and by billions at
- * 200. A rewrite that moves the `Math.round` one line up therefore looks correct on
- * every character anybody would sit down and check it against.
+ * Where the rounding goes is part of the curve. The running step stays a float and is
+ * rounded only on its way into the total, which is where the game rounds it. Rounding it
+ * in place, so the next step grows from the rounded figure, is a different curve: it
+ * agrees for the first eleven virtual levels and then drifts, by 21 experience at virtual
+ * 40 and by billions at 200.
  *
- * Index 1 is 0, since reaching level 1 costs nothing. Index 0 is unused padding and
- * exists so the level is the index rather than the index plus one.
+ * Index 1 is 0, since reaching level 1 costs nothing. Index 0 is unused padding, so that
+ * the level is the index rather than the index plus one.
  */
 const LIFETIME_TO_REACH = (() => {
   const cumulative = [0, 0];
@@ -272,19 +246,16 @@ const LIFETIME_TO_REACH = (() => {
 })();
 
 /**
- * The virtual level a LIFETIME total stands at, and the way into the next one.
+ * The virtual level a lifetime total stands at, and the way into the next one.
  *
- * It reads `lifetimeXp` and not `xp`, which is the whole correction here, and the
- * reason is stronger than "xp is only this level's progress". At the cap `xp` is
- * FROZEN AT 0: the game returns before touching that bar for a capped character and
- * zeroes the remainder on the award that dings them to the cap, so it is not a
- * number that moves slowly, it is a number that never moves again. A curve over it
- * reports virtual 1 for the life of the character. `lifetimeXp` is credited on every
- * award including at the cap and is monotonic for that whole life, which is what the
- * game's own curve is a function of and what this reproduces.
+ * It reads `lifetimeXp` and not `xp`, which is the whole correction here. At the cap `xp`
+ * is frozen at 0: the game returns before touching that bar for a capped character and
+ * zeroes the remainder on the award that dings them to it, so a curve over it reports
+ * virtual 1 for the life of the character. `lifetimeXp` is credited on every award
+ * including at the cap and is monotonic, which is what the game's own curve uses.
  *
- * Still derived rather than read, because nothing publishes a virtual level; what is
- * not in doubt is the arithmetic, which is the game's own construction step for step.
+ * Derived rather than read, because nothing publishes a virtual level. The arithmetic is
+ * the game's own construction step for step.
  */
 function virtualStanding(lifetime) {
   const total = Math.max(numberOf(lifetime), 0);
@@ -311,11 +282,9 @@ function playerLevel() {
 }
 
 /**
- * What the panel is counting toward, or null when there is nothing to count to.
- *
- * Below the cap that is the next level. At the cap it is the next virtual level,
- * and only while the virtual display is switched on: a player who has hidden it is
- * not being told how many kills they are from a number they asked not to see.
+ * What the panel is counting toward, or null when there is nothing to count to. Below the
+ * cap that is the next level; at the cap it is the next virtual level, and only while the
+ * virtual display is switched on.
  */
 function target() {
   const { character } = woc.world;
@@ -336,12 +305,10 @@ function target() {
 }
 
 /**
- * What one award contributes to the rate.
- *
- * The rested bonus is INSIDE the amount rather than on top of it, so leaving it out
- * is a subtraction. It is a setting because the two readings answer different
- * questions: the whole amount is what actually landed in the bar, and the amount
- * without the bonus is the pace that survives the pool running out.
+ * What one award contributes to the rate. The rested bonus is inside the amount rather
+ * than on top of it, so leaving it out is a subtraction. It is a setting because the two
+ * readings answer different questions: the whole amount is what landed in the bar, and
+ * the amount without the bonus is the pace that survives the pool running out.
  */
 function counted(sample) {
   if (settingFlag('rested-apart', false)) {
@@ -370,11 +337,9 @@ function restedTotal() {
 }
 
 /**
- * Experience per hour over the window, or NULL when the window holds nothing.
- *
- * The null is the point of the whole file. See the header: an average over the
- * time since the addon started keeps answering forever, and the answer is about a
- * session that has stopped.
+ * Experience per hour over the window, or null when the window holds nothing. The null is
+ * the point of the whole file: an average over the time since the addon started keeps
+ * answering forever, about a session that has stopped.
  */
 function ratePerHour(now) {
   prune(now);
@@ -399,12 +364,10 @@ function averageKillAward() {
 }
 
 /**
- * Show or hide a row, BOTH ways.
- *
- * `hidden` is a UA rule at the lowest priority there is, and the loader's own
- * stylesheet is unlayered and more specific, so the attribute alone leaves a kit
- * row on screen. The display is removed rather than set back to a value when the
- * row returns, so this never has to know what the sheet draws that row as.
+ * Show or hide a row, both ways. `hidden` is a UA rule at the lowest priority there is,
+ * and the loader's own stylesheet is unlayered and more specific, so the attribute alone
+ * leaves a kit row on screen. The display is removed rather than set back to a value, so
+ * this never has to know what the sheet draws that row as.
  */
 function setShown(el, shown) {
   el.hidden = !shown;
@@ -414,13 +377,10 @@ function setShown(el, shown) {
   }
 }
 
-// The panel. It outlives the frame, because a density change rebuilds the frame
-// and every row inside this survives it.
-//
-// One gap for every row, because every row is the same kind of thing. See the note
-// on `createLine`: the three middle figures are kit rows too, so what separates the
-// panel's three parts is which of them carry a fill rather than how far apart they
-// sit.
+// The panel. It outlives the frame, because a density change rebuilds the frame and every
+// row inside this survives it. One gap for every row, because every row is the same kind
+// of thing: the three middle figures are kit rows too, so what separates the panel's
+// three parts is which of them carry a fill.
 const panel = document.createElement('div');
 panel.className = 'woc-wayline';
 panel.style.display = 'flex';
@@ -431,15 +391,11 @@ const levelBar = woc.ui.bar({ label: 'Level', className: 'woc-wayline-level' });
 panel.appendChild(levelBar.el);
 
 /**
- * One of the three figures, which is a kit row whose fill is never set.
- *
- * None of the three has a WHOLE to be a fraction of, so none of them can be a bar in
- * the sense the rows above and below are. What the kit is being asked for here is
- * the ROW: the padding, the ellipsis on a long label, the tabular figures, and above
- * all the font size, which a compact bar sets for itself and a plain div inherits
- * from the frame instead. Hand-rolled lines were the first version, and the middle
- * of the panel came out half again the size of the two rows it sits between, which
- * reads as a second addon bolted onto the first.
+ * One of the three figures, which is a kit row whose fill is never set. None of the three
+ * has a whole to be a fraction of, so none can be a bar in the sense the rows above and
+ * below are. What the kit is being asked for is the row: the padding, the ellipsis on a
+ * long label, the tabular figures, and above all the font size, which a compact bar sets
+ * for itself and a plain div inherits from the frame instead.
  */
 function createLine(key, name) {
   const line = woc.ui.bar({ label: name, className: 'woc-wayline-line' });
@@ -462,17 +418,14 @@ setShown(virtualBar.el, false);
 /**
  * Throw the recorded awards away and start measuring again.
  *
- * The kit's own button class, so it is drawn at the frame's density with the
- * loader's hover and focus treatment rather than an imitation of them. It exists
- * because of the trap in the header: the moment a player leaves a group, changes
- * zone or stops grinding, the awards still in the window describe something they
- * are no longer doing, and waiting the window out is the slow way to say so.
+ * The kit's own button class, so it is drawn at the frame's density with the loader's
+ * hover and focus treatment. It exists because of the trap in the header: the moment a
+ * player leaves a group, changes zone or stops grinding, the awards still in the window
+ * describe something they are no longer doing.
  *
- * Its SIZE is left to the density and is deliberately not shrunk to match the rows.
- * A compact frame already gives up the game's tap-target floor, and a comfortable
- * one keeps it, which is the whole of what that setting is for; an inline height
- * here would take the floor away from a player who asked for it. It reads as a
- * footer rather than as one more row because of the margin, not because it is small.
+ * Its size is left to the density and is deliberately not shrunk to match the rows. A
+ * compact frame already gives up the game's tap-target floor and a comfortable one keeps
+ * it, so an inline height here would take the floor away from a player who asked for it.
  */
 const reset = document.createElement('button');
 reset.type = 'button';
@@ -487,14 +440,10 @@ function densitySetting() {
 }
 
 /**
- * The panel.
- *
- * `ui.frame` rather than `ui.window` because of what the two ANNOUNCE: a window is
- * `role="dialog"`, something the player opened, and a frame is `role="group"`, HUD
- * furniture that lives on screen and is toggled. This is toggled by a keybind, so it
- * is the second. It is not `bare` either: bare drops the panel from behind the
- * content, and six rows of small text with nothing behind them are unreadable over a
- * moving game.
+ * The panel. `ui.frame` rather than `ui.window` because of what the two announce: a window
+ * is `role="dialog"`, something the player opened, and a frame is `role="group"`, HUD
+ * furniture that is toggled. Not `bare` either: bare drops the panel from behind the
+ * content, and six rows of small text are unreadable over a moving game.
  */
 function buildFrame() {
   chrome.density = densitySetting();
@@ -504,9 +453,9 @@ function buildFrame() {
     width: FRAME_WIDTH,
     density: chrome.density,
     save: true,
-    // The mouse route to the same dismissal the keybind is, which is what a frame
-    // asks for instead of becoming a window. A live session found that a titled
-    // panel without one leaves the player hunting for a keybind they never chose.
+    // The mouse route to the same dismissal the keybind is, which is what a frame asks
+    // for instead of becoming a window: a titled panel without one leaves the player
+    // hunting for a keybind they never chose.
     closable: true,
   });
 }
@@ -515,12 +464,9 @@ let frame = buildFrame();
 frame.body.appendChild(panel);
 
 /**
- * The level row.
- *
- * `fraction` here is progress MADE rather than what is left, which is the opposite
- * of what the kit's timer rows mean by it, and it is deliberate: this is the same
- * bar the game draws for the same number, it fills as you earn, and a levelling bar
- * that drained would be read backwards by everyone who has ever seen one.
+ * The level row. `fraction` here is progress made rather than what is left, which is the
+ * opposite of what the kit's timer rows mean by it: this is the same bar the game draws
+ * for the same number, and a levelling bar that drained would be read backwards.
  */
 function paintLevel() {
   const { character } = woc.world;
@@ -534,8 +480,8 @@ function paintLevel() {
       label: `Level ${String(LEVEL_CAP)}`,
       fraction: 1,
       value: 'max',
-      // Lifetime past the cap, not `xp`: `xp` is frozen at 0 for a capped
-      // character, so a detail read from it would say `0 past the cap` forever.
+      // Lifetime past the cap, not `xp`: `xp` is frozen at 0 for a capped character, so a
+      // detail read from it would say `0 past the cap` forever.
       detail: `${grouped(pastCap(character.lifetimeXp))} past the cap`,
     });
     return;
@@ -580,14 +526,11 @@ function paintFigures(now) {
 }
 
 /**
- * The breakdown under the pool, and nothing at all when the pool is empty.
- *
- * An empty detail is HIDDEN by the kit rather than blanked, so the row loses its
- * second line instead of keeping an empty one. That matters most at the cap, where
- * the pool stops filling and stays at zero for the life of the character: a line
- * reading `0 bubbles, 0 xp` under a row already reading `0.0 levels` is the same
- * nothing said twice, on the panel a player looks at every day. Why it is zero is in
- * the row's tooltip, which is where a reason belongs.
+ * The breakdown under the pool, and nothing at all when the pool is empty. An empty detail
+ * is hidden by the kit rather than blanked, so the row loses its second line instead of
+ * keeping an empty one. That matters most at the cap, where the pool stays at zero for the
+ * life of the character and a line reading `0 bubbles, 0 xp` under a row already reading
+ * `0.0 levels` is the same nothing said twice. Why it is zero is in the row's tooltip.
  */
 function restedDetail(rested, levels) {
   if (rested <= 0) {
@@ -620,9 +563,8 @@ function paintVirtual() {
   }
   const standing = virtualStanding(character.lifetimeXp);
   virtualBar.update({
-    // The level standing at, not the next one: `standing.level` is absolute now
-    // that the curve is a function of the lifetime total rather than a count of
-    // levels bought past the cap.
+    // The level standing at, not the next one: `standing.level` is absolute, since the
+    // curve is a function of the lifetime total rather than a count of levels past the cap.
     label: `Virtual ${String(standing.level)}`,
     fraction: share(standing.into, standing.need),
     value: percent(standing.into, standing.need),
@@ -632,14 +574,13 @@ function paintVirtual() {
 
 function paint() {
   paintLevel();
-  // Before the button is judged, because this is what prunes: the awards a reset
-  // would throw away are the ones still inside the window after that call.
+  // Before the button is judged, because this is what prunes: the awards a reset would
+  // throw away are the ones still inside the window after that call.
   paintFigures(woc.now());
   paintRested();
   paintVirtual();
-  // A control that would do nothing says so, rather than sitting there at full
-  // strength offering it. This is the state the panel is in after the window has
-  // emptied, which is the state it spends every break in it.
+  // A control that would do nothing says so, rather than sitting there at full strength
+  // offering it. This is the state the panel spends every break in.
   reset.disabled = samples.length === 0;
 }
 
@@ -729,9 +670,9 @@ function restedTip() {
       tone: 'muted',
     },
   ];
-  // The one thing that CAN be said about the filling, and it is a negative. A
-  // capped character accrues no rested at all, so this row is a pool that will not
-  // move rather than one whose movement cannot be seen.
+  // The one thing that can be said about the filling, and it is a negative. A capped
+  // character accrues no rested at all, so this row is a pool that will not move rather
+  // than one whose movement cannot be seen.
   if (playerLevel() >= LEVEL_CAP) {
     lines.push({
       text: `At level ${String(LEVEL_CAP)} it stops filling entirely, however long you rest.`,
@@ -779,11 +720,9 @@ function credited(killerId, me) {
 }
 
 /**
- * Remember a death that this player's group is owed experience for.
- *
- * The player's own death is skipped rather than filtered later: it is credited to
- * whatever killed them, which is never the group, but a duel or a battleground puts
- * a party member on the other end of it.
+ * Remember a death that this player's group is owed experience for. The player's own death
+ * is skipped rather than filtered later: it is credited to whatever killed them, and a
+ * duel or a battleground puts a party member on the other end of it.
  */
 function noteDeath(event) {
   const me = woc.world.player;
@@ -828,10 +767,8 @@ function stored(sample) {
 }
 
 /**
- * Put stored awards back on this page's monotonic clock.
- *
- * Merged and re-sorted rather than assigned, because the read waits for the
- * character and awards can legitimately land while it is still waiting.
+ * Put stored awards back on this page's monotonic clock. Merged and re-sorted rather than
+ * assigned, because the read waits for the character and awards can land while it waits.
  */
 function adopt(entries) {
   const now = woc.now();
@@ -864,15 +801,14 @@ async function restore() {
 /**
  * Write the recorded awards back, for this character only.
  *
- * `world.ready` is awaited because a per-character WRITE refuses to wait on its
- * own: its payload was decided when it was called, so a held one would land on
- * whichever character the player then picked.
+ * `world.ready` is awaited because a per-character write refuses to wait on its own: its
+ * payload was decided when it was called, so a held one would land on whichever character
+ * the player then picked.
  *
- * The player is checked first, and that is not the same guard said twice. Awaiting
- * `world.ready` on the landing page is awaiting something that resolves only if the
- * player enters the world, so a tick every ten seconds before then would leave a
- * pending promise behind on each one. Nothing is lost by declining: every award
- * this writes arrives from inside the world.
+ * The player is checked first, which is not the same guard twice. Awaiting `world.ready`
+ * on the landing page is awaiting something that resolves only if the player enters the
+ * world, so a tick every ten seconds before then would leave a pending promise behind on
+ * each one. Every award this writes arrives from inside the world.
  */
 async function save() {
   const at = store.revision;
@@ -909,13 +845,12 @@ reset.addEventListener('click', () => {
 woc.net.onEvent('xp', record);
 woc.net.onEvent('death', noteDeath);
 
-// A level up moves the denominator and resets the experience into it, and the
-// clock below would show the old level for up to a second after. It costs one
-// subscription to make that instant.
+// A level up moves the denominator and resets the experience into it, and the clock below
+// would show the old level for up to a second after.
 woc.net.onEvent('levelup', paint);
 
-// The sheet moving is what the game reports; everything else on the panel is what
-// the CLOCK moves, which is the interval underneath.
+// The sheet moving is what the game reports; everything else on the panel is what the
+// clock moves, which is the interval underneath.
 woc.world.on('character', paint);
 
 woc.setInterval(paint, PAINT_MS);
@@ -926,11 +861,9 @@ woc.keys.bind('toggle', () => {
 });
 
 /**
- * Rebuild only what a setting actually decided.
- *
- * A frame's density is fixed when it is built, so that one setting needs a new
- * frame; everything else is answered by the next paint. Rebuilding on every change
- * would destroy and restore the saved box for a setting that did not touch it.
+ * Rebuild only what a setting actually decided. A frame's density is fixed when it is
+ * built, so that one setting needs a new frame; everything else is answered by the next
+ * paint. Rebuilding on every change would destroy and restore the saved box needlessly.
  */
 woc.onSettingsChange(() => {
   if (densitySetting() !== chrome.density) {
@@ -942,11 +875,10 @@ woc.onSettingsChange(() => {
   paint();
 });
 
-// The one thing registered, and it is a write rather than a teardown: disable is
-// hot, so the awards recorded since the last save would otherwise be the only ones
-// a player loses by turning the addon off. Everything else this file creates lives
-// inside a kit widget, inside the frame body, or on a woc timer, and the loader
-// drains all three.
+// The one thing registered, and it is a write rather than a teardown: disable is hot, so
+// the awards recorded since the last save would otherwise be the only ones a player loses
+// by turning the addon off. Everything else lives inside a kit widget, inside the frame
+// body, or on a woc timer, and the loader drains all three.
 woc.onDispose(persist);
 
 load();

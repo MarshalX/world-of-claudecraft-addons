@@ -1,53 +1,17 @@
 /// <reference types="@woc-addons/types" />
 
-// Combat Meter: what your damage and healing are made of.
+// Combat Meter: a per-ability breakdown of the damage you deal, the healing you do and
+// the damage that lands on you, plus your attack-table outcomes. Aggregated from the
+// `damage` and `heal2` events the client already receives; nothing is sent.
 //
-// The game ships its own meter (party damage, healing and threat, segmented into
-// encounters), so this deliberately does not compete on any of that. It answers
-// the question nothing in the game answers: your total is made of WHAT. A row per
-// ability with its share, its crit rate, its average and its biggest, for what you
-// deal, what you heal and what lands on you, plus the attack-table outcomes, which
-// is the readout that tells you whether you are hit capped.
+// A fight ends after an idle timeout rather than on a combat flag, since `inCombat` is
+// not on the wire. The default matches the 5 seconds the game's own meter uses.
 //
-// All of it is already on the socket: damage events carry `ability`, `school`, `crit`,
-// `kind` and `absorbed`, and `heal2` carries `ability`, `crit` and an `absorbed` of its
-// own, for the heal-absorb shields that eat a heal before it lands. So this aggregates
-// what the player is already being sent, and never sends anything.
-//
-// A fight ends when nothing has landed for a while, rather than when the game says
-// combat dropped. `inCombat` is not on the wire, so on a client it is false for the
-// entire session, and reading it concludes that every fight has ended and resets the
-// total on every hit. The idle timeout needs nothing from the server, and it matches
-// the 5 seconds the game's own meter uses to close an encounter, so the segments line
-// up.
-//
-// Three limits, stated rather than hidden.
-//
-// ICONS ONLY FOR YOUR OWN ABILITIES. Skill art is filed under the ability ID, while a
-// combat event carries the display NAME: `damage` and `heal2` fill that field from
-// `ability.name`, and only `castStart` and `spellfx` carry `ability.id`. The two have
-// DIVERGED in the game, where `arcane_shot` is displayed as "Fell Shot", so slugifying
-// the name gives `fell_shot`, which is not a file. `world.abilities` carries the id and
-// the name together and walks that join backwards, and what it covers is YOUR OWN kit,
-// so a mob's ability has no id to find and gets no icon. A missing icon here therefore
-// means "not something you cast" rather than "we could not work it out", and it is why
-// the rows are also tinted by school: the tint reaches the rows the art cannot.
-//
-// PET DAMAGE IS NOT COUNTED, AND CANNOT BE. The server delivers a combat event only
-// when its `sourceId` or `targetId` is the viewer's own pid or one of their party's
-// pids. A pet is a `mob`-kind entity with its own entity id and a party's members are
-// player pids, so a pet's swing at a mob matches neither and is dropped before it is
-// ever serialized; `net` is read-only, and there is no recovering an event the server
-// did not send. The game's own meter folds pet output into the owner's row, which is
-// real and works OFFLINE where the client runs the sim itself, and is unreachable
-// online because the events it needs are filtered out one layer below it. A pet hitting
-// YOU is delivered, since you are the target, and lands in the Taken table.
-//
-// There is no overhealing column, because no overheal figure rides the wire at all; the
-// healing here is what LANDED. The one thing the wire does report about a heal that
-// landed nothing is a shield eating it, and that shows as a row totalling zero with its
-// absorbed figure beside it. Reading differently from an overheal is the whole point:
-// the target is still at low health and the healing is being taken off them.
+// Limits: icons cover your own spellbook only, because art is filed under the ability
+// id while an event carries the display name and the two have diverged; pet damage is
+// never delivered, since the server filters combat events to the viewer's pid and their
+// party's and a pet is a mob-kind entity; and there is no overhealing column, because
+// no overheal figure is on the wire.
 
 const MS_PER_SECOND = 1000;
 const REPAINT_MS = 500;
@@ -58,21 +22,16 @@ const DEFAULT_TIMEOUT_SECONDS = 5;
 const DEFAULT_MAX_ROWS = 10;
 const FRAME_WIDTH = 340;
 const FRAME_HEIGHT = 320;
-/** Auto-attacks arrive with no ability at all, and they are usually a real share. */
+/** Auto-attacks arrive with no ability at all. */
 const MELEE_LABEL = 'Melee';
 
 /**
- * Attack-table outcomes, in the order they are worth reading.
- *
- * This list has to hold EVERY kind the wire can send, not only the ones worth
- * reading about: the line divides by every outcome recorded, so a kind missing
- * from here still takes its share of the denominator and shrinks every printed
- * percentage to make room for a row that is never drawn. `evade` was exactly
- * that, a leashing wild mob refusing the hit, and it read as a mystery miss rate.
+ * Attack-table outcomes, in the order they are worth reading. Must hold every kind the
+ * wire can send: the line divides by every outcome recorded, so a missing kind still
+ * takes its share of the denominator.
  */
 const OUTCOMES = ['hit', 'miss', 'dodge', 'parry', 'block', 'resist', 'evade'];
 
-/** The three tables, in the order the game's own meter puts its tabs. */
 const TABLES = [
   { id: 'dealt', label: 'Damage', noun: 'damage' },
   { id: 'healed', label: 'Healing', noun: 'healing' },
@@ -80,34 +39,24 @@ const TABLES = [
 ];
 
 function emptyTally() {
-  // Rows are coloured by school: it is the one identifying thing on a damage event that
-  // does not depend on the ability id. First seen wins, so one odd event cannot recolour
-  // a row mid-fight.
+  // School is the one identifying field on a damage event that does not depend on the
+  // ability id. First seen wins, so one odd event cannot recolour a row mid-fight.
   return { total: 0, count: 0, crits: 0, biggest: 0, absorbed: 0, school: null };
 }
 
-/**
- * The fight being measured.
- *
- * `endedAt` freezes the duration once nothing has landed for the timeout, so the
- * averages stop decaying while you read them. A running fight has null.
- */
+/** `endedAt` freezes the duration once the fight closes, so averages stop decaying. */
 function emptyFight(at) {
   return {
     startedAt: at,
     endedAt: null,
     lastEventAt: at,
-    /** Table id to its running total. */
     totals: { dealt: 0, healed: 0, taken: 0 },
-    /** Table id to a map of ability label to its tally. */
     tallies: { dealt: new Map(), healed: new Map(), taken: new Map() },
-    /** Outcome kind to how many of your swings and casts ended that way. */
     outcomes: new Map(),
   };
 }
 
 let fight = emptyFight(woc.now());
-/** Which table is on screen. */
 let tab = 'dealt';
 
 function settingNumber(id, fallback) {
@@ -131,14 +80,9 @@ function timeoutMs() {
 }
 
 /**
- * What to call the ability behind one event: exactly what the event said.
- *
- * The field is already a display name from every one of the four places the game fills
- * it (`ability.name`, `spell.name`, `queued.def.name`, and a literal 'Auto Shot' or
- * 'Wand' for a ranged auto-attack), so there is nothing here to title-case. Deliberately
- * NOT laundered: a wire that ever starts sending ids shows `measured_shot` in the panel,
- * which somebody reports on the first fight, rather than being tidied into something
- * that looks right and builds the wrong icon URL.
+ * The field is already a display name at every site that fills it, so there is nothing
+ * to title-case. Deliberately not laundered: if the wire ever starts sending ids,
+ * `measured_shot` shows in the panel rather than being tidied into a wrong icon URL.
  */
 function labelOf(event) {
   if (typeof event.ability !== 'string' || event.ability.length === 0) {
@@ -156,20 +100,11 @@ function absorbedOf(event) {
 }
 
 /**
- * Whether a record is a thing that happened, which is what earns it a row.
+ * Whether a record describes something that happened, which is what earns it a row.
  *
- * The gate is the PAIR, never the amount alone, and one rule covers all three
- * tables because all three meet the same record. A shield that ate a heal or a hit
- * whole leaves `amount: 0` with a real `absorbed`, and dropping that loses the only
- * fact separating two events that deserve opposite reactions: on Healing, a cast
- * wasted on somebody already at full health versus a target still at low health
- * whose healing is being eaten off them; on Taken, a swing that missed versus one
- * your own shield stopped. Both arrive at 0 and `absorbed` is all that parts them.
- *
- * What this must NOT let in is the genuinely empty record. A miss, a dodge, an
- * evade and an overheal all land at 0 carrying no absorb, and none of them belongs
- * in a table of what your total is made of. `cueOnly` is not decided here at all:
- * it is refused earlier, on its own flag, because it is not an event.
+ * The gate is the pair, never the amount alone. A shield that ate a heal or a hit whole
+ * leaves `amount: 0` with a real `absorbed`, which is the only field separating it from
+ * a miss or an overheal. `cueOnly` is refused earlier, on its own flag.
  */
 function landed(event) {
   return event.amount > 0 || absorbedOf(event) > 0;
@@ -186,7 +121,6 @@ function pct(part, whole) {
   return `${Math.round((part / whole) * PERCENT).toFixed(0)}%`;
 }
 
-/** `1m 42s` rather than `102s`, which is how the game's own meter reads. */
 function duration(seconds) {
   const whole = Math.round(seconds);
   if (whole < SECONDS_PER_MINUTE) {
@@ -200,7 +134,6 @@ function nounFor(id) {
   return TABLES.find((entry) => entry.id === id)?.noun ?? '';
 }
 
-/** Add one event's amount to a table's tally for its ability. */
 function record(id, label, event) {
   const map = fight.tallies[id];
   const tally = map.get(label) ?? emptyTally();
@@ -228,12 +161,8 @@ function startFight() {
 }
 
 /**
- * Close the fight once nothing has landed for the timeout.
- *
- * Called from the repaint rather than from a timer of its own: the frame is being
- * redrawn anyway, and a second timer would be a second thing to tear down. The
- * duration is measured to the last event, not to the moment the timeout noticed,
- * or every fight would read the timeout longer than it was.
+ * Close the fight once nothing has landed for the timeout. The duration is measured to
+ * the last event, or every fight would read the timeout longer than it was.
  */
 function expireFight(now) {
   if (fight.endedAt === null && now - fight.lastEventAt >= timeoutMs()) {
@@ -242,12 +171,8 @@ function expireFight(now) {
 }
 
 /**
- * Note that something happened, opening a fight if the last one had closed.
- *
- * Healing counts, which is what makes the meter work for a healer at all: they may
- * deal no damage and take none for a whole encounter. The cost is that topping
- * yourself up out of combat opens a short fight, which is exactly what the game's
- * own meter does under the same rule.
+ * Note that something happened, opening a fight if the last one had closed. Healing
+ * counts, or the meter would do nothing for a healer who deals no damage all encounter.
  */
 function noteActivity() {
   if (fight.endedAt !== null) {
@@ -269,9 +194,8 @@ woc.net.onEvent('damage', (event) => {
   noteActivity();
 
   if (mine) {
-    // Every outcome counts, including the ones that dealt nothing: a miss rate is
-    // the reason that line exists. Damage TAKEN is excluded, since that is the
-    // attacker's attack table and not yours.
+    // Every outcome counts, including the ones that dealt nothing, since a miss rate is
+    // the reason that line exists. Damage taken is the attacker's attack table, not yours.
     const kind = String(event.kind);
     fight.outcomes.set(kind, (fight.outcomes.get(kind) ?? 0) + 1);
     if (landed(event)) {
@@ -284,16 +208,14 @@ woc.net.onEvent('damage', (event) => {
 });
 
 // #region heal-attribution
-// `heal2`, not `heal`: only the former carries a `sourceId`, so it is the only one
-// a heal can be attributed from.
+// `heal2`, not `heal`: only the former carries a `sourceId` to attribute from.
 woc.net.onEvent('heal2', (event) => {
   const { player } = woc.world;
   if (player === null || event.sourceId !== player.id) {
     return;
   }
-  // `cueOnly` events carry no healing and exist to drive a sound. They must be skipped
-  // by this FLAG rather than by amount: a genuine direct heal can legitimately land at 0
-  // on a target already at full health, and inferring it from the amount drops those too.
+  // `cueOnly` events carry no healing and exist to drive a sound. Skip them on the flag
+  // rather than on the amount: a direct heal legitimately lands at 0 on a full target.
   if (event.cueOnly === true) {
     return;
   }
@@ -305,18 +227,8 @@ woc.net.onEvent('heal2', (event) => {
 // #endregion
 
 /**
- * The panel.
- *
- * A frame rather than a window, because a window's close button is what marks a
- * panel the player OPENS to read and then dismisses with the mouse. This is the
- * other kind: a readout that lives on the HUD for the length of a fight, put up
- * and taken down by the keybind the manifest declares for exactly that.
- *
- * `resizable` has to be spelled out, since a frame defaults to false and this one
- * is not sized by its content: `max-rows` goes to 40, and forty rows is a panel
- * taller than the game. The height is the box the player chose and the body
- * scrolls inside it.
- *
+ * A frame rather than a window: HUD furniture toggled by a keybind. `resizable` is
+ * explicit because the panel is not sized by its content, since `max-rows` goes to 40.
  */
 const panel = woc.ui.frame({
   id: 'meter',
@@ -350,7 +262,7 @@ const strip = woc.ui.tabs({
   active: tab,
   onSelect: (id) => {
     tab = id;
-    // Clearing is what makes the switch instant rather than one repaint late.
+    // Clearing makes the switch instant rather than one repaint late.
     clearRows();
     repaint();
   },
@@ -360,10 +272,8 @@ strip.el.classList.add('woc-meter-tabs');
 
 panel.body.append(strip.el, total, table, outcomes);
 
-/** Ability label to its row, reused across repaints. */
 const rows = new Map();
 
-/** Drop every row, for a tab switch or a reset. Rows are keyed by label. */
 function clearRows() {
   for (const row of rows.values()) {
     row.destroy();
@@ -373,18 +283,10 @@ function clearRows() {
 }
 
 /**
- * One row, from the loader's own timer bar rather than hand-built. Its second line
- * carries the per-ability detail with the fill spanning both, so the share reads as
- * the whole row's rather than as a bar on the top line of it.
- *
- * The art comes from the label by way of `world.abilities`, the only thing that turns
- * the display name an event carries back into the id the icon is filed under. A row
- * with no icon is therefore a row this character did not cast: a mob's ability, or
- * Melee. That is a real distinction rather than a gap, so it is left visible.
- *
- * The fill is tinted by SCHOOL, which survives on the rows the icons cannot reach and
- * says what KIND of damage a row is made of, which an icon does not. Healing rows pass
- * nothing, because `heal2` carries no school.
+ * The art comes from the label through `world.abilities`, the only way back from an
+ * event's display name to the id the icon is filed under, so a row with no icon is one
+ * this character did not cast. The fill is tinted by school instead, which reaches those
+ * rows; healing rows pass nothing, since `heal2` carries no school.
  */
 // #region school-tint
 function createRow(label, school) {
@@ -411,11 +313,8 @@ function rowTooltip(label, school) {
 }
 
 /**
- * The icon for a row, found from the display name the event gave us.
- *
- * Null for anything not in your own spellbook, which is every mob ability and Melee.
- * The kit hides its icon slot for a null or a URL that fails to load, so a row that
- * cannot have art simply has none.
+ * Null for anything outside your own spellbook. The kit hides its icon slot for a null
+ * or a URL that fails to load.
  */
 function abilityArt(label) {
   const info = woc.world.abilities.byName(label);
@@ -426,14 +325,12 @@ function abilityArt(label) {
   return woc.ui.icon.ability(info.id, woc.world.player?.templateId ?? '');
 }
 
-/** The tallies for the table on screen, biggest first and capped. */
 function tableRows() {
   const source = fight.tallies[tab];
   const ordered = [...source.entries()].sort((a, b) => b[1].total - a[1].total);
   return ordered.slice(0, settingNumber('max-rows', DEFAULT_MAX_ROWS));
 }
 
-/** `12 hits, 24% crit, avg 350, max 780`, plus absorbed when any was. */
 function detailText(tally) {
   const parts = [
     `${num(tally.count)} hits`,
@@ -447,7 +344,6 @@ function detailText(tally) {
   return parts.join(', ');
 }
 
-/** The detail line, or an empty string when the player has switched it off. */
 function detailLine(tally) {
   if (settingFlag('show-detail', true)) {
     return detailText(tally);
@@ -455,14 +351,13 @@ function detailLine(tally) {
   return '';
 }
 
-/** Put a row at its position, and only if it is not there already. */
+/** Move a row to its position only when it is not there already. */
 function place(el, at) {
   if (table.children[at] !== el) {
     table.insertBefore(el, table.children[at] ?? null);
   }
 }
 
-/** One row, against the table it is part of: the whole, the clock, and its slot. */
 function drawRow(label, tally, table_) {
   const row = rows.get(label) ?? createRow(label, tally.school);
   rows.set(label, row);
@@ -490,7 +385,6 @@ function drawTable(seconds) {
   }
 }
 
-/** `hit 92%, miss 5%, dodge 3%`: only the outcomes that happened. */
 function outcomeText() {
   let swings = 0;
   for (const count of fight.outcomes.values()) {
@@ -509,12 +403,7 @@ function outcomeText() {
   return parts.join(', ');
 }
 
-/**
- * The attack table is yours and is about damage, so it belongs to that tab only.
- *
- * On Healing it would be a non sequitur, and on Taken it would read as the
- * attacker's outcomes rather than as your own, which is the opposite of true.
- */
+/** Your own attack table, so it belongs to the damage tab only. */
 function outcomeLine() {
   if (tab !== 'dealt' || !settingFlag('show-outcomes', true)) {
     return '';
@@ -522,7 +411,6 @@ function outcomeLine() {
   return outcomeText();
 }
 
-/** Says the fight is over, so a frozen average does not read as a live one. */
 function fightSuffix() {
   if (fight.endedAt === null) {
     return '';
@@ -530,13 +418,12 @@ function fightSuffix() {
   return ', last fight';
 }
 
-/** Cleared by the first draw. Until then the panel has never had any content. */
 let neverDrawn = true;
 
 function repaint() {
   const now = woc.now();
-  // Ahead of the visibility check on purpose: a hidden panel keeps tallying, so it has
-  // to keep deciding when a fight ended.
+  // Ahead of the visibility check: a hidden panel keeps tallying, so it has to keep
+  // deciding when a fight ended.
   expireFight(now);
   if (!(panel.visible || neverDrawn)) {
     return;
@@ -544,8 +431,7 @@ function repaint() {
   neverDrawn = false;
   const seconds = fightSeconds(now);
 
-  // One direction per tab. Reporting all three put a "0 healing" in front of
-  // everyone who does not heal, which is most players most of the time.
+  // One direction per tab, or every player who does not heal reads a "0 healing" line.
   const amount = num(fight.totals[tab]);
   total.textContent = `${amount} ${nounFor(tab)} in ${duration(seconds)}${fightSuffix()}`;
 
@@ -554,10 +440,8 @@ function repaint() {
 }
 
 repaint();
-// Twice a second, and deliberately neither of the two obvious alternatives. Nothing here
-// moves on a frame, so `woc.onFrame` would redraw the same strings sixty times a second
-// between two hits; and a repaint per event would put a sort plus a write per row on the
-// game's event rate, which in a raid is not yours.
+// Twice a second: nothing here moves on a frame, and a repaint per event would put a
+// sort plus a write per row on the game's event rate.
 woc.setInterval(repaint, REPAINT_MS);
 
 woc.keys.bind('toggle', () => {
@@ -571,8 +455,7 @@ woc.keys.bind('reset', () => {
   repaint();
 });
 
-// A changed row cap has to take effect on the next repaint rather than at the next
-// hit, or the table sits on the old shape until something is attacked.
+// A changed row cap takes effect on the next repaint rather than at the next hit.
 woc.onSettingsChange(() => {
   repaint();
 });

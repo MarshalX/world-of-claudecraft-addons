@@ -2,33 +2,25 @@
 
 // Veinsight, run through the real loader.
 //
-// The decision this addon exists for is a JOIN, and every section below is about
-// one half of it. The game sends no entity for a gathering node and never will, so
-// the table is the addon's; the game sends the respawn timers and nothing else, so
-// the state is the game's; and the two meet on a node id string. The done-when the
-// roadmap sets is exactly that join being right: a pin has to land on the node the
-// player is standing on, so the first real case stands the player on an authored
-// coordinate out of the shipped file and demands the row, the distance and the pin
-// all agree that they are there.
+// The decision this addon exists for is a join, and every section below is about one half of
+// it. The game sends no entity for a gathering node and never will, so the table is the
+// addon's; the game sends the respawn timers and nothing else, so the state is the game's; and
+// the two meet on a node id string. The first real case stands the player on an authored
+// coordinate out of the shipped file and demands the row, the distance and the pin all agree.
 //
-// The fixtures are built from the SHIPPED `nodes.json`, never from a stub. Every
-// coordinate named below was read out of that file, and the case about a bad row
-// doctors the real file rather than inventing a small one, so a case about a broken
-// table stays a case about THIS table.
+// The fixtures are built from the shipped `nodes.json`, never from a stub. Every coordinate
+// named below was read out of that file, and the case about a bad row doctors the real file
+// rather than inventing a small one.
 //
 // Three things this suite deliberately cannot see, and does not pretend to:
 //
-//  - Where an anchor ended up. The projector is a stand-in and nothing is painted
-//    onto a real screen. Everything here asserts what a pin IS (which node it is
-//    for, which height it is standing on, whether the player is in reach of it),
-//    never where it went. Whether the pin is over the right rock is a live-session
-//    question.
-//  - Whether the bearing arrow points the way a player would say it does. The sign
-//    is derived from the game's own turn handling and asserted against that
-//    derivation, which is the most a suite can do for a claim about a camera.
-//  - What a real terrain height is. There is no terrain in a suite, so the three
-//    height provenances are driven by their INPUTS: an entity standing near the
-//    point, a harvest landing, and neither.
+//  - Where an anchor ended up. The projector is a stand-in and nothing is painted onto a real
+//    screen. Everything here asserts what a pin is, never where it went.
+//  - Whether the bearing arrow points the way a player would say it does. The sign is derived
+//    from the game's own turn handling and asserted against that derivation.
+//  - What a real terrain height is. There is no terrain in a suite, so the three height
+//    provenances are driven by their inputs: an entity standing near the point, a harvest
+//    landing, and neither.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { validateManifest } from '../../loader/src/shared/schema.ts';
@@ -59,12 +51,10 @@ const TICK_MS = 1000;
 /** How many microtask turns the table read, the frame restore and the reads want. */
 const SETTLE_TURNS = 14;
 /**
- * Seconds a node takes to come back, which is the denominator of every fill.
- *
- * Read out of the SHIPPED TABLE rather than written here, because a number written
- * here would be the addon's own constant spelled a second time: every fill assertion
- * would then agree with the addon whatever the game does, which is the one thing
- * these cases exist to catch. The table's figure comes off `NODE_HARVEST_TABLE`.
+ * Seconds a node takes to come back, which is the denominator of every fill. Read out of the
+ * shipped table rather than written here, because a number written here would be the addon's own
+ * constant spelled a second time: every fill assertion would then agree with the addon whatever
+ * the game does. The table's figure comes off `NODE_HARVEST_TABLE`.
  */
 const RESPAWN_SECONDS = (JSON.parse(TABLE_TEXT) as { respawnSeconds: { ore: number } })
   .respawnSeconds.ore;
@@ -85,10 +75,9 @@ const OTHER_PLAYER = 777;
 const ORE_T2 = { id: 'ore_mirefen_t2', x: 36, z: 350 };
 
 /**
- * Every eastbrook node WITHIN THE DEFAULT 150 YARD DRAW DISTANCE, nearest first from
- * ORE_1, which is the default standpoint. Twelve of the zone's eighteen: the density
- * pass at game 0.34.0 took every tuned-strip zone to six nodes of each type, and the
- * six it left out here are 152 to 248 yards off rather than absent.
+ * Every eastbrook node within the default 150 yard draw distance, nearest first from ORE_1,
+ * which is the default standpoint. Twelve of the zone's eighteen: the six left out are 152 to
+ * 248 yards off rather than absent.
  */
 const NEAR_ORE_1 = [
   'ore_eastbrook_1',
@@ -152,11 +141,9 @@ function settle(): Promise<void> {
 }
 
 /**
- * Write a field on a live entity.
- *
- * A computed access, because the fixture is a `Record<string, unknown>`: the linter
- * wants dot access on a literal key and the compiler forbids it on an index
- * signature, and a helper is what settles the two.
+ * Write a field on a live entity. A computed access, because the fixture is a
+ * `Record<string, unknown>`: the linter wants dot access on a literal key and the compiler
+ * forbids it on an index signature.
  */
 function setField(entity: Fake, field: string, value: unknown): void {
   entity[field] = value;
@@ -175,10 +162,9 @@ function textIn(id: string, selector: string): string {
 }
 
 /**
- * One data attribute off an element the addon wrote.
- *
- * The attribute rather than `dataset`, because that is an index signature: the
- * linter refuses the bracket form on it and the compiler refuses the dotted one.
+ * One data attribute off an element the addon wrote. The attribute rather than `dataset`,
+ * because that is an index signature: the linter refuses the bracket form on it and the compiler
+ * refuses the dotted one.
  */
 function dataOf(el: HTMLElement | null, name: string): string {
   return el?.getAttribute(`data-${name}`) ?? '';
@@ -208,10 +194,8 @@ interface TableRow {
 }
 
 /**
- * The shipped table with one node row broken, as a hand edit would leave it.
- *
- * Built from the real file so a case about a bad row is a case about THIS table with
- * one field wrong rather than about a fixture that stopped resembling it.
+ * The shipped table with one node row broken, as a hand edit would leave it. Built from the real
+ * file so a case about a bad row is a case about this table with one field wrong.
  */
 function doctored(id: string, patch: Record<string, unknown>): string {
   const file = JSON.parse(TABLE_TEXT) as { nodes: TableRow[] };
@@ -325,11 +309,9 @@ function overheadCamera() {
 }
 
 /**
- * Start the addon over a world holding nothing but the player.
- *
- * `nodeCooldowns` is a real Map because the loader's own watch signature refuses
- * anything else, and an empty one is what a character who has harvested nothing
- * holds. `inventory` is an array for the same reason: the tool gate scans it.
+ * Start the addon over a world holding nothing but the player. `nodeCooldowns` is a real Map
+ * because the loader's own watch signature refuses anything else, and an empty one is what a
+ * character who has harvested nothing holds. `inventory` is an array for the same reason.
  */
 async function start(
   settings: Record<string, unknown> = {},
@@ -460,10 +442,9 @@ async function start(
 }
 
 /**
- * `start`, plus the wait for the panel to come up and one draw in it.
- *
- * A frame that saves its state starts hidden and is shown once that state arrives,
- * keyed per character, and this addon draws nothing at all while it is hidden.
+ * `start`, plus the wait for the panel to come up and one draw in it. A frame that saves its
+ * state starts hidden and is shown once that state arrives, keyed per character, and this addon
+ * draws nothing while it is hidden.
  */
 async function run(
   settings: Record<string, unknown> = {},
@@ -509,9 +490,9 @@ describe('its manifest', () => {
   });
 });
 
-// The done-when, and the reason the whole addon has a data file at all. Nothing on
-// the wire says a node exists; the only thing that can put a marker on one is the
-// table agreeing with the player's own position.
+// The join, and the reason the addon has a data file at all. Nothing on the wire says a node
+// exists; the only thing that can put a marker on one is the table agreeing with the player's
+// own position.
 describe('the join between the table and the world', () => {
   it('pins the node the player is standing on', async () => {
     const h = await run({}, undefined, { at: ORE_1 });
@@ -572,12 +553,11 @@ describe('the respawn timers', () => {
     expect(h.fillOf(ORE_1.id)).toBeCloseTo((90 / RESPAWN_SECONDS) * 100, 1);
   });
 
-  // The respawn length is the game's number, not this addon's, and the whole point of
-  // taking it off the shipped table is that a tune to it cannot leave a constant here
-  // behind. It was 120 seconds until game 0.34.0 doubled it, and while the addon still
-  // held 120 every node with more than two minutes left drew a FULL bar that did not
-  // move for the whole first half of the wait: a reading that is not merely wrong but
-  // wrong in the direction that says "nothing is happening yet".
+  // The respawn length is the game's number rather than this addon's, and taking it off the
+  // shipped table is what stops a tune leaving a constant behind. With the addon holding 120
+  // while the game counts down from 240, every node with more than two minutes left draws a full
+  // bar that does not move for the whole first half of the wait, which reads as "nothing is
+  // happening yet".
   it('takes the respawn length from the table rather than a constant of its own', async () => {
     expect(RESPAWN_SECONDS).toBe(240);
 
@@ -591,9 +571,9 @@ describe('the respawn timers', () => {
     expect(h.fillOf(ORE_1.id)).toBeCloseTo(75, 1);
   });
 
-  // A tune the other way is the case a clamp hides: with the addon reading a LONGER
-  // respawn than the game uses, every bar would simply start part-full and nothing
-  // would look broken. So the fill is pinned at the top of the range too.
+  // A tune the other way is the case a clamp hides: with the addon reading a longer respawn than
+  // the game uses, every bar would start part-full and nothing would look broken. So the fill is
+  // pinned at the top of the range too.
   it('draws a freshly harvested node as a full bar', async () => {
     const h = await run({}, undefined, {
       at: ORE_1,
@@ -639,11 +619,10 @@ describe('the respawn timers', () => {
     expect(h.figureOf(ORE_1.id)).toBe('2m 0s');
   });
 
-  // A pin is a 40px square and a row is 300px wide, so the same answer is written
-  // twice in two units. Text that does not fit a tile is not clipped by it: the
-  // browser wraps it and paints the second line over the world. Seconds rather than
-  // a rounded minute, because a respawn is 120 of them and `2m` would stand for a
-  // quarter of the whole range.
+  // A pin is a 40px square and a row is 300px wide, so the same answer is written twice in two
+  // units. Text that does not fit a tile is not clipped by it: the browser wraps it and paints
+  // the second line over the world. Seconds rather than a rounded minute, because a respawn is
+  // 120 of them and `2m` would stand for a quarter of the whole range.
   it('writes the pin countdown in seconds where the row spells out the minutes', async () => {
     const h = await run({}, undefined, {
       at: ORE_1,
@@ -676,9 +655,8 @@ describe('the respawn timers', () => {
   });
 });
 
-// The gate the game actually applies, which is the tools in your bags rather than
-// your skill at the profession. A tier-2 node is unopenable with a tier-1 pick
-// however good a miner you are.
+// The gate the game actually applies, which is the tools in your bags rather than your skill at
+// the profession. A tier-2 node is unopenable with a tier-1 pick however good a miner you are.
 describe('the tool gate', () => {
   // Bare hands harvest nothing at all in this game, so an empty bag is not a
   // partial answer: every node in the world is shut, including a tier-1 one.
@@ -689,9 +667,8 @@ describe('the tool gate', () => {
     expect(h.figureOf(WOOD_2.id)).toBe('Tool');
   });
 
-  // The half that would be a lie if the two were collapsed: bags nobody can read
-  // look exactly like bags with nothing in them, and only one of those is a claim
-  // this addon is entitled to make.
+  // Bags nobody can read look exactly like bags with nothing in them, and only one of those is a
+  // claim this addon is entitled to make.
   it('applies no gate at all while the bags cannot be read', async () => {
     const h = await run({ 'list-length': 20 }, undefined, { at: ORE_1, bags: null });
 
@@ -717,10 +694,9 @@ describe('the tool gate', () => {
     expect(h.figureOf(ORE_T2.id)).toBe('Yours');
   });
 
-  // The join is per node TYPE, and the case has to be a node the tool's own TIER
-  // would otherwise cover: a sickle is tier 1 and so is this ore vein, so the only
-  // thing that can refuse it is the type. A single "best tool tier" number would
-  // open it.
+  // The join is per node type, and the case has to be a node the tool's own tier would otherwise
+  // cover: a sickle is tier 1 and so is this ore vein, so the only thing that can refuse it is
+  // the type. A single "best tool tier" number would open it.
   it('does not let a herb tool open an ore vein of the same tier', async () => {
     const h = await run({ 'list-length': 20 }, undefined, {
       at: ORE_1,
@@ -811,9 +787,8 @@ describe('the height under a node', () => {
     expect(storedHeights(storage)).toBeUndefined();
   });
 
-  // The measurement is what makes the pin exact, so it has to outlive the session
-  // that made it. A second addon over the same storage is the only honest way to
-  // test that, because nothing else proves the write and the read agree.
+  // The measurement is what makes the pin exact, so it has to outlive the session that made it.
+  // A second addon over the same storage is the only honest way to test that.
   it('takes a measured height back on the next session', async () => {
     const storage = createFakeStorage();
     const first = await run({}, storage, { at: ORE_1 });
@@ -937,9 +912,8 @@ describe('the type filters', () => {
   });
 });
 
-// Nothing in the loader can say which zone the player is in. Every node row carries
-// its own, so the filter is one bus message away and says so in words when nobody is
-// sending one.
+// Nothing in the loader can say which zone the player is in. Every node row carries its own, so
+// the filter is one bus message away and says so in words when nobody is sending one.
 describe('the zone filter', () => {
   it('lists every zone and says why when nothing is publishing', async () => {
     const h = await run({ 'list-length': 20, 'this-zone-only': true }, undefined, { at: ORE_1 });
@@ -1069,9 +1043,9 @@ describe('the bearing arrow', () => {
 // The table is a claim `woc.data` hands over as `unknown`, so this is where the
 // claim is checked. A hand edit costs the row it broke and nothing else.
 describe('the table it was given', () => {
-  // The warning as well as the drop, because a row with a coordinate that is not a
-  // number falls out of a distance test on its own: without the check it is absent
-  // for the wrong reason, and the log line is the only thing that tells them apart.
+  // The warning as well as the drop, because a row with a coordinate that is not a number falls
+  // out of a distance test on its own: without the check it is absent for the wrong reason, and
+  // the log line is the only thing that tells them apart.
   it('leaves out a node with no coordinate, says so, and keeps the rest', async () => {
     const h = await run({ 'list-length': 20 }, undefined, {
       at: ORE_1,

@@ -31,9 +31,8 @@ const SECOND = 1000;
 
 const teardown: Array<() => void> = [];
 
-// Fake timers because the meter draws on an interval rather than on every hit: a
-// repaint per damage event would be a layout write at the game's event rate. A
-// suite that only landed a hit would be reading the panel from before it.
+// Fake timers because the meter draws on an interval rather than on every hit: a repaint per
+// damage event would be a layout write at the game's event rate.
 beforeEach(() => {
   vi.useFakeTimers();
 });
@@ -122,16 +121,13 @@ function fillWidthOf(label: string): string {
 }
 
 /**
- * The ability on an event, where an explicit null is the auto-attack case.
+ * The ability on an event, where an explicit null is the auto-attack case. Not
+ * `?? 'Aimed Shot'`: that treats a deliberate null as absent, which is the case the Melee row
+ * exists for.
  *
- * Not `?? 'Aimed Shot'`: that treats a deliberate null as absent, which is exactly the
- * case the Melee row exists for, and would silently make that test assert the default.
- *
- * The values throughout this suite are DISPLAY NAMES, because that is what the wire puts
- * in this field: every `damage` and `heal2` emit fills it from `ability.name`, and only
- * `castStart` and `spellfx` carry the id. Ids here pass every assertion about a row just
- * as well, so the icon is the only thing that can tell the two apart, which is why it is
- * asserted below.
+ * The values throughout this suite are display names, because that is what the wire puts in
+ * this field. Ids here pass every assertion about a row just as well, so the icon is the only
+ * thing that can tell the two apart, which is why it is asserted below.
  */
 function abilityOf(hit: Hit): string | null {
   if ('ability' in hit) {
@@ -142,10 +138,8 @@ function abilityOf(hit: Hit): string | null {
 
 /**
  * A spellbook in the game's own shape, carrying the divergence this addon turns on.
- *
- * `arcane_shot` is displayed as "Fell Shot", so an event names one thing and the art
- * is filed under another. Both are here so a test can prove the join runs backwards
- * correctly rather than that some string reached some attribute.
+ * `arcane_shot` is displayed as "Fell Shot", so an event names one thing and the art is filed
+ * under another. Both are here so a test can prove the join runs backwards correctly.
  */
 const KNOWN = [
   {
@@ -163,12 +157,9 @@ interface RunOpts {
 }
 
 /**
- * Start the addon and wait for its panel to actually come up.
- *
- * A frame that saves its state starts hidden and is shown once that state arrives,
- * and the answer is keyed per character, so it takes a watcher sample to find the
- * character and then a storage read to come back. Every case here is about what the
- * meter DRAWS, and it does not draw to a panel nobody can see.
+ * Start the addon and wait for its panel to come up. A frame that saves its state starts
+ * hidden and is shown once that state arrives, keyed per character, so it takes a watcher
+ * sample and then a storage read. Every case here is about what the meter draws.
  */
 async function run(opts: RunOpts = {}): Promise<MeterHarness> {
   const player = liveEntity({ set: { templateId: 'priest' } });
@@ -228,9 +219,8 @@ async function run(opts: RunOpts = {}): Promise<MeterHarness> {
       ),
     figureOf: (label) => rowFor(label)?.querySelector('.woc-bar-value')?.textContent ?? '',
     detailOf: (label) => rowFor(label)?.querySelector('.woc-bar-detail')?.textContent ?? '',
-    // Selected inside the meter's own strip, by the kit's class rather than by
-    // one of the addon's: the buttons are the loader's now, and the addon marks
-    // only the strip it appended them in.
+    // Selected inside the meter's own strip, by the kit's class rather than one of the
+    // addon's: the buttons are the loader's, and the addon marks only the strip.
     openTab: (label) => {
       const button = [...document.querySelectorAll('.woc-meter-tabs .woc-tab')].find(
         (el) => el.textContent === label,
@@ -245,9 +235,9 @@ async function run(opts: RunOpts = {}): Promise<MeterHarness> {
   };
 }
 
-// The two surfaces the meter takes from the kit rather than hand-rolling: the tab strip,
-// which owns which tab is marked, and the tooltip, which is a function so a row reports
-// the tally as it is now rather than as it was when the row was built.
+// The two surfaces the meter takes from the kit rather than hand-rolling: the tab strip, which
+// owns which tab is marked, and the tooltip, which is a function so a row reports the tally as
+// it is now rather than as it was when the row was built.
 describe('what it takes from the kit', () => {
   function hover(label: string): string {
     const bar = document.querySelector(`[data-ability="${label}"]`);
@@ -311,9 +301,9 @@ describe('its manifest', () => {
     expect(validateManifest(MANIFEST_JSON).ok).toBe(true);
   });
 
-  // An id is the storage namespace and the keybind scope, so renaming a published one
-  // orphans every installed player's settings, keybinds and window position. Pinned in
-  // both places, since the id and the display name are separate decisions.
+  // An id is the storage namespace and the keybind scope, so renaming a published one orphans
+  // every installed player's settings, keybinds and window position. Pinned in both places,
+  // since the id and the display name are separate decisions.
   it('is the combat meter in both its id and its name', () => {
     expect(manifest().id).toBe('combat-meter');
     expect(manifest().name).toBe('Combat Meter');
@@ -335,11 +325,10 @@ describe('its manifest', () => {
     ]);
   });
 
-  // `closable` on a frame is a minor 2 member, so the manifest has to say 2 or the panel
-  // loses its close button on a loader that implements 1: an unknown option is ignored
-  // rather than refused, which is the silent degradation the minor exists to prevent.
-  // Not higher, either. A minor this addon does not use would refuse it outright on
-  // loaders that could run it perfectly well.
+  // `closable` on a frame is a minor 2 member, so the manifest has to say 2 or the panel loses
+  // its close button on a loader that implements 1: an unknown option is ignored rather than
+  // refused. Not higher either, since a minor this addon does not use would refuse it outright
+  // on loaders that could run it perfectly well.
   it('declares the API minor it actually needs', () => {
     expect(manifest().apiMinor).toBe(2);
   });
@@ -372,15 +361,13 @@ describe('loading it', () => {
   });
 });
 
-// It is a frame, not a window, and the five cases are the whole of that decision.
+// It is a frame rather than a window, and the five cases are the whole of that decision.
 //
-// The close button is NOT what separates them, which is the easy thing to get wrong:
-// `closable` works on either, and this frame asks for one. Neither is density, since a
-// window honours `compact` and refuses only `bare`. What decides it is the ARIA role a
-// screen reader announces: a window is a `dialog`, a thing the player opened, and a
-// frame is a `group`, HUD furniture that lives on screen for the length of a fight.
-// Pinned rather than left to the source, because the two calls take the same options and
-// swapping one for the other is invisible in a diff of the arguments.
+// The close button does not separate them: `closable` works on either, and this frame asks for
+// one. Neither does density, since a window honours `compact` and refuses only `bare`. What
+// decides it is the ARIA role a screen reader announces: a window is a `dialog`, a thing the
+// player opened, and a frame is a `group`, HUD furniture. Pinned rather than left to the
+// source, because the two calls take the same options.
 describe('the kind of panel it is', () => {
   function panel(): Element | null {
     return document.querySelector('[data-woc-frame="meter"]');
@@ -401,10 +388,9 @@ describe('the kind of panel it is', () => {
     expect(panel()?.getAttribute('role')).toBe('group');
   });
 
-  // A frame gets a close button only when it ASKS, and this one does: the keybind is
-  // the fast route to dismissing a read meter and the button is the discoverable one.
-  // The rail button's window menu is what brings it back, since a hidden frame has no
-  // button left to press.
+  // A frame gets a close button only when it asks, and this one does: the keybind is the fast
+  // route to dismissing a read meter and the button is the discoverable one. The rail button's
+  // window menu is what brings it back, since a hidden frame has no button left to press.
   it('carries the close button it asked for, and hiding it is what the button does', async () => {
     await run();
     const close = panel()?.querySelector('.woc-close');
@@ -416,9 +402,8 @@ describe('the kind of panel it is', () => {
     expect(panel()?.classList.contains('woc-hidden')).toBe(true);
   });
 
-  // What the change does NOT cost. A compact frame keeps its title bar, so the
-  // panel is still named and still has a bar to drag it by; only `bare` drops it,
-  // and this is not bare.
+  // A compact frame keeps its title bar, so the panel is still named and still has a bar to
+  // drag it by; only `bare` drops it.
   it('keeps the title bar it is named and dragged by', async () => {
     await run();
 
@@ -426,8 +411,7 @@ describe('the kind of panel it is', () => {
     expect(panel()?.querySelector('.woc-title')?.textContent).toBe('Combat');
   });
 
-  // Compact was already the density as a window and survives the move. A frame
-  // that said nothing would fall back to comfortable, which is a 40px tap-target
+  // A frame that said nothing would fall back to comfortable, which is a 40px tap-target
   // floor: right for a form, and the loudest thing on screen in a dense readout.
   it('says compact rather than falling back to the accessible default', async () => {
     await run();
@@ -437,9 +421,8 @@ describe('the kind of panel it is', () => {
 });
 
 describe('the running total', () => {
-  // The rolling per-second figure is gone. It was a single number that answered a
-  // question the per-ability rates already answer per ability, and it made the
-  // panel's loudest element the least specific thing in it.
+  // A single rolling figure answers a question the per-ability rates already answer per
+  // ability, and it makes the panel's loudest element the least specific thing in it.
   it('shows no single rolling figure', async () => {
     await run();
 
@@ -547,10 +530,9 @@ describe('the ability breakdown', () => {
     expect(h.detailOf('Aimed Shot')).toContain('40 absorbed');
   });
 
-  // A hit a shield ate whole is a `hit` landing at 0, and `kind` is what tells it
-  // apart from a swing that never connected. It is a thing that happened, so it
-  // reaches the table carrying the figure that says where the damage went, rather
-  // than being dropped for having no amount.
+  // A hit a shield ate whole is a `hit` landing at 0, and `kind` is what tells it apart from a
+  // swing that never connected. It is a thing that happened, so it reaches the table carrying
+  // the figure that says where the damage went.
   it('records a hit a shield ate whole', async () => {
     const h = await run();
 
@@ -561,10 +543,9 @@ describe('the ability breakdown', () => {
     expect(h.detailOf('Aimed Shot')).toContain('400 absorbed');
   });
 
-  // The half of that rule the kit is responsible for, pinned here because a row
-  // reading 0 of 0 is the one shape this change newly makes reachable: the share
-  // has no denominator at all when everything in the table was absorbed. It has to
-  // draw as an EMPTY bar, never as a full one and never as a dropped declaration.
+  // The half of that rule the kit is responsible for: a row reading 0 of 0 has no denominator
+  // at all when everything in the table was absorbed. It has to draw as an empty bar, never as
+  // a full one and never as a dropped declaration.
   it('draws a fully absorbed row as an empty bar rather than a full one', async () => {
     const h = await run();
 
@@ -599,12 +580,10 @@ describe('the outcome line', () => {
     expect(h.outcomes()).toBe('');
   });
 
-  // `evade` is a wild mob that broke leash walking home immune, and it is a real
-  // outcome of a real swing you took, so it belongs on the attack table with the
-  // rest. What it must not be is counted and unnamed: the total this line divides
-  // by is every outcome recorded, so an outcome missing from the printed list
-  // silently shrinks every percentage beside it to make room for a share nothing
-  // draws, and the shares stop adding up with nothing on screen to say why.
+  // `evade` is a wild mob that broke leash walking home immune, and it is a real outcome of a
+  // real swing you took. What it must not be is counted and unnamed: the total this line
+  // divides by is every outcome recorded, so an outcome missing from the printed list silently
+  // shrinks every percentage beside it.
   it('names an evade rather than only deflating the rest', async () => {
     const h = await run();
 
@@ -723,11 +702,9 @@ describe('the healing table', () => {
     expect(h.labels()).toEqual([]);
   });
 
-  // The documented trap. `cueOnly` events exist to drive a sound and carry no
-  // healing, and the game's own comment says a meter must ignore them by the FLAG
-  // rather than by the amount: a genuine direct heal can legitimately land at 0 on
-  // a target already at full health, so inferring it from the amount drops those
-  // real casts too.
+  // `cueOnly` events exist to drive a sound and carry no healing, and the game's own comment
+  // says a meter must ignore them by the flag rather than by the amount: a genuine direct heal
+  // legitimately lands at 0 on a target already at full health.
   it('ignores a cue-only heal', async () => {
     const h = await run();
 
@@ -739,10 +716,9 @@ describe('the healing table', () => {
     expect(h.fight()).toContain('0 healing');
   });
 
-  // A heal-absorb shield eats part of a heal before it lands, and the same field
-  // reports it on `heal2` as on `damage`. The row's total stays what LANDED, since
-  // that is what the healing table measures; the absorbed figure rides the detail
-  // line, where it says why the landed number is lower than the cast was worth.
+  // A heal-absorb shield eats part of a heal before it lands, and the same field reports it on
+  // `heal2` as on `damage`. The row's total stays what landed; the absorbed figure rides the
+  // detail line, where it says why the landed number is lower than the cast was worth.
   it('adds absorbed healing to the row a shield ate part of', async () => {
     const h = await run();
 
@@ -754,11 +730,10 @@ describe('the healing table', () => {
     expect(h.detailOf('Mend Wounds')).toContain('200 absorbed');
   });
 
-  // The case the `amount > 0` gate used to swallow, and the reason it matters: a
-  // heal a shield devoured and a heal that overhealed BOTH land at `amount: 0`, and
-  // `absorbed` is the only thing that parts them. They deserve opposite reactions,
-  // since one is a cast wasted on somebody already full and the other is a target
-  // still at low health whose healing is being eaten off them.
+  // A heal a shield devoured and a heal that overhealed both land at `amount: 0`, and
+  // `absorbed` is the only thing that parts them. They deserve opposite reactions: one is a
+  // cast wasted on somebody already full, the other a target still at low health whose healing
+  // is being eaten off them.
   it('records a heal a shield ate whole, which lands at zero', async () => {
     const h = await run();
 
@@ -770,9 +745,8 @@ describe('the healing table', () => {
     expect(h.detailOf('Mend Wounds')).toContain('500 absorbed');
   });
 
-  // The other half of that same `amount: 0`, which has to stay OUT. Nothing was
-  // absorbed, so the cast landed on somebody already at full health and there is no
-  // healing in it to report. This is what stops the ungating from going too far.
+  // The other half of that same `amount: 0`, which has to stay out. Nothing was absorbed, so
+  // the cast landed on somebody already at full health.
   it('records nothing for a heal that only overhealed', async () => {
     const h = await run();
 
@@ -783,12 +757,10 @@ describe('the healing table', () => {
     expect(h.labels()).toEqual([]);
   });
 
-  // `cueOnly` and a fully absorbed heal now look alike from the outside, since both
-  // are `amount: 0`, and only one of them is a real cast. The FLAG is what parts
-  // them and it has to keep being read first. The pairing below is not something the
-  // wire sends, a cue record carries no healing and no absorb: it is built to be
-  // adversarial, because what is being pinned is the ORDER of the two guards, and
-  // an absorb test that ran ahead of the flag would put a sound in the table.
+  // `cueOnly` and a fully absorbed heal look alike from the outside, since both are
+  // `amount: 0`, and only one is a real cast. The flag is what parts them and has to be read
+  // first. The pairing below is not something the wire sends: it is adversarial on purpose,
+  // because what is being pinned is the order of the two guards.
   it('still skips a cue-only record even though a zero heal can now count', async () => {
     const h = await run();
 
@@ -870,10 +842,9 @@ describe('the healing table', () => {
 });
 
 describe('when a fight ends', () => {
-  // The trap this suite exists for. `player.inCombat` is never sent to a client: it
-  // holds its constructed `false` for the whole session, so deciding a fight is over
-  // from it ends every fight and resets the total on EVERY hit. Nothing in the addon
-  // looks at a combat flag; the idle timeout is the whole of it.
+  // `player.inCombat` is never sent to a client: it holds its constructed `false` for the
+  // whole session, so deciding a fight is over from it ends every fight and resets the total
+  // on every hit. The idle timeout is the whole of it.
   it('keeps one fight going across a lull shorter than the timeout', async () => {
     const h = await run();
 
@@ -911,11 +882,9 @@ describe('when a fight ends', () => {
     expect(h.fight()).toContain('in 1s');
   });
 
-  // Minutes and seconds, the way the game's own meter reads them. A raw `102s`
-  // is a number the player has to divide before it means anything.
-  //
-  // Kept alive with a hit every four seconds rather than one long jump, because
-  // a long jump closes the fight and freezes the duration at the first hit.
+  // Minutes and seconds, the way the game's own meter reads them. Kept alive with a hit every
+  // four seconds rather than one long jump, because a long jump closes the fight and freezes
+  // the duration at the first hit.
   it('reads a long fight in minutes', async () => {
     const h = await run();
 
@@ -983,12 +952,11 @@ describe('disabling it', () => {
   });
 });
 
-// Skill art is filed under an ability's ID and a combat event carries its display NAME,
-// and the two have diverged in the game: `arcane_shot` is shown everywhere as "Fell
-// Shot", so slugifying the name gives `fell_shot`, which is not a file. `world.abilities`
-// carries the id and the name together and runs the join backwards, and what it covers is
-// the player's OWN kit, which is why the second case matters as much as the first: a
-// mob's ability has no id to find, and drawing nothing is correct rather than a failure.
+// Skill art is filed under an ability's id and a combat event carries its display name, and
+// the two have diverged: `arcane_shot` is shown everywhere as "Fell Shot", so slugifying the
+// name gives `fell_shot`, which is not a file. `world.abilities` runs the join backwards, and
+// it covers the player's own kit, which is why the second case matters as much as the first: a
+// mob's ability has no id to find, and drawing nothing is correct.
 describe('ability art', () => {
   it('draws art from the ID for an ability the event named differently', async () => {
     const h = await run();
@@ -1009,9 +977,8 @@ describe('ability art', () => {
     h.tick();
 
     const icon = rowFor('Crushing Blow')?.querySelector('img.woc-bar-icon');
-    // No src AT ALL rather than an empty one. An empty src resolves against the
-    // document base, so writing one would point every art-less row at the game's own
-    // page; the slot is built with none and a null icon leaves it that way.
+    // No src at all rather than an empty one. An empty src resolves against the document base,
+    // so writing one would point every art-less row at the game's own page.
     expect(icon?.hasAttribute('src')).toBe(false);
     expect(icon?.hasAttribute('hidden')).toBe(true);
   });
@@ -1028,13 +995,11 @@ describe('ability art', () => {
   });
 });
 
-// `school` is the one identifying thing a damage event carries that does not depend on
-// the ability id, so it is what tells apart the rows the art cannot reach, and the
-// palette is the game's own rather than one invented here.
-//
-// Deliberately NOT rank or share: the row already encodes rank by its position and
-// share by its fill width, so colouring by either would be a third encoding of a fact
-// already on screen, and rows would swap colours whenever the ranking shifted.
+// `school` is the one identifying thing a damage event carries that does not depend on the
+// ability id, so it tells apart the rows the art cannot reach, and the palette is the game's
+// own. Deliberately not rank or share: the row already encodes rank by its position and share
+// by its fill width, so colouring by either would be a third encoding of a fact already on
+// screen, and rows would swap colours whenever the ranking shifted.
 describe('colouring rows by school', () => {
   it('tints a row by the school the event reported', async () => {
     const h = await run();
@@ -1098,10 +1063,9 @@ describe('colouring rows by school', () => {
   });
 });
 
-// A hidden panel is not drawn to. Twice a second is small, but it is a sort of every
-// ability plus a row update each, for a panel nobody is looking at, for the whole
-// session. What must NOT stop is the tallying, which runs off the socket, or the
-// fight timeout, which is what decides a fight has ended.
+// A hidden panel is not drawn to: twice a second is a sort of every ability plus a row update
+// each, for the whole session. What must not stop is the tallying, which runs off the socket,
+// or the fight timeout, which is what decides a fight has ended.
 describe('a panel nobody can see', () => {
   it('keeps tallying while hidden and shows the fight when it comes back', async () => {
     const h = await run();
@@ -1151,9 +1115,8 @@ describe('a panel nobody can see', () => {
     expect(h.detailOf('Fell Shot')).toContain('2 hits');
   });
 
-  // The honest limit, and it is not new: the meter holds ONE fight, so a fight that
-  // starts while the panel is away replaces the one before it exactly as it would
-  // with the panel open. "Last fight" means the most recent, not a history.
+  // The honest limit: the meter holds one fight, so a fight that starts while the panel is
+  // away replaces the one before it. "Last fight" means the most recent, not a history.
   it('replaces the old fight when a new one starts while hidden', async () => {
     const h = await run();
 

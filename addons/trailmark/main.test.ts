@@ -2,33 +2,27 @@
 
 // Trailmark, run through the real loader.
 //
-// The decision this addon exists for is objective-to-location resolution, so that
-// is what most of this suite is about, and every case drives it through the
-// SHIPPED `quests.json` rather than a stub. A case that wants a broken row builds
-// it by doctoring the real file, so a case about a bad entry stays a case about
-// this table with one field wrong rather than about a fixture that stopped
-// resembling it.
+// The decision this addon exists for is objective-to-location resolution, so that is what most
+// of this suite is about, and every case drives it through the shipped `quests.json` rather than
+// a stub. A case that wants a broken row builds it by doctoring the real file, so a case about a
+// bad entry stays a case about this table with one field wrong.
 //
-// THE DONE WHEN IS THE FIRST SECTION AND IT IS ASSERTED WITH AN EMPTY WORLD. The
-// player stands at the origin in Eastbrook Vale, `world.entities` holds nobody but
-// them, and the quest log names an objective whose only location is 1100 yards
-// north in The Veiled Hollow. The row still names that zone and that distance,
-// because the answer comes off a shipped table and never off interest scope. An
-// addon that resolved from entities would draw nothing here and would look
-// perfectly correct standing next to the mob.
+// The first section is asserted with an empty world. The player stands at the origin in
+// Eastbrook Vale, `world.entities` holds nobody but them, and the quest log names an objective
+// whose only location is 1100 yards north in The Veiled Hollow. The row still names that zone
+// and that distance, because the answer comes off a shipped table and never off interest scope.
+// An addon that resolved from entities would draw nothing here and would look perfectly correct
+// standing next to the mob.
 //
-// THE SECOND CLAIM IS THE LEARNED DENOMINATOR. `QuestProgress.resolvedCounts` is
-// on the wire and off the published type, so the required count is learned from
-// the `questProgress` event instead, held per character, and until then the
-// shipped definition count is drawn as a LOWER BOUND with a plus on it. Both
-// halves are asserted, including that the plus goes away the moment the server
-// says a figure and that a stored figure survives a page load.
+// The second claim is the learned denominator. `QuestProgress.resolvedCounts` is on the wire and
+// off the published type, so the required count is learned from the `questProgress` event
+// instead, held per character, and until then the shipped definition count is drawn as a lower
+// bound with a plus on it. Both halves are asserted, including that the plus goes away the
+// moment the server says a figure and that a stored figure survives a page load.
 //
-// The two clocks are driven separately, as they are in the longwatch suite:
-// `advance` moves the monotonic clock a page load throws away, `setWallClock`
-// moves the one it does not, and advancing the fake timers by a second runs the
-// addon's own redraw. Nothing here needs a long wait, but the stamp on the stored
-// record is wall clock and the case that proves it says so.
+// The two clocks are driven separately, as in the longwatch suite: `advance` moves the monotonic
+// clock a page load throws away, `setWallClock` moves the one it does not, and advancing the
+// fake timers by a second runs the addon's own redraw.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { validateManifest } from '../../loader/src/shared/schema.ts';
@@ -77,11 +71,9 @@ const AMENDS = 'q_prof_amends_smith';
 /** The escort that starts on Farshore, which shares Eastbrook Vale's z band. */
 const FARSHORE = 'q_fs_bram_come_home';
 /**
- * The three work orders, one per gathering profession.
- *
- * Each is a COLLECT objective naming a material that only a gathering node yields,
- * which is the shape the classic collect lookups cannot answer: nothing drops it
- * tagged for the quest and no crate of it is placed.
+ * The three work orders, one per gathering profession. Each is a collect objective naming a
+ * material that only a gathering node yields, which is the shape the classic collect lookups
+ * cannot answer: nothing drops it tagged for the quest and no crate of it is placed.
  */
 const FORGE_ORDER = 'q_prof_workorder_forge';
 const TOOLWORKS_ORDER = 'q_prof_workorder_toolworks';
@@ -108,16 +100,13 @@ const WOLF_CAMPS = 2;
 /**
  * How many ore nodes the table carries, and how many are inside the pin reach.
  *
- * A gather objective resolves to every node of its type, which is the game's own
- * answer. Two of the fifty-two sit more than two thousand yards from the origin
- * the player starts at here, and two thousand is the manifest's own maximum for the
- * distance setting: the LOADER clamps a larger value to it, so the case below asks
- * for five thousand and gets the ceiling, which is the reading a player would get.
+ * A gather objective resolves to every node of its type, which is the game's own answer. Two of
+ * the fifty-two sit more than two thousand yards from the origin the player starts at here, and
+ * two thousand is the manifest's own maximum for the distance setting: the loader clamps a
+ * larger value to it, so the case below asks for five thousand and gets the ceiling.
  *
- * Thirty-three until game 0.34.0's density pass, which took the six tuned-strip
- * zones to six nodes of every type. The figure is content and moves with a release;
- * what the case is actually about is that the answer is EVERY node rather than the
- * near ones, and that the pin budget is what keeps that off the screen.
+ * The figure is content and moves with a release; what the case is actually about is that the
+ * answer is every node rather than the near ones, and that the pin budget keeps that off screen.
  */
 const ORE_NODES = 52;
 const ORE_IN_RANGE = 50;
@@ -146,11 +135,9 @@ interface Extra {
 }
 
 /**
- * Three saved boxes, which is how a resize is driven here.
- *
- * The same path a drag takes: the loader owns a resizable frame's box, restores a
- * saved one asynchronously, and reports it through `onMove`. Dragging an edge is
- * not reachable from a suite, and the restore is the honest stand-in for it.
+ * Three saved boxes, which is how a resize is driven here: the same path a drag takes, since the
+ * loader owns a resizable frame's box, restores a saved one asynchronously, and reports it
+ * through `onMove`.
  */
 const TALL: FrameBox = { x: 20, y: 20, w: 300, h: 400 };
 const SHORT: FrameBox = { x: 20, y: 20, w: 300, h: 90 };
@@ -187,11 +174,9 @@ function manifest() {
 }
 
 /**
- * Write a field on a live entity.
- *
- * A computed access, because the fixture is a `Record<string, unknown>`: the
- * linter wants dot access on a literal key and the compiler forbids it on an index
- * signature, and a helper is what settles the two.
+ * Write a field on a live entity. A computed access, because the fixture is a
+ * `Record<string, unknown>`: the linter wants dot access on a literal key and the compiler
+ * forbids it on an index signature.
  */
 function setField(entity: Fake, field: string, value: unknown): void {
   entity[field] = value;
@@ -292,11 +277,9 @@ interface TrailHarness extends SharedHarness {
 }
 
 /**
- * Start the addon over a world holding nothing but the player.
- *
- * The entity map is deliberately EMPTY apart from the player in every case. This
- * addon must never need an entity to answer where an objective happens, and a
- * suite that seeded the mobs would not be able to tell the difference.
+ * Start the addon over a world holding nothing but the player. The entity map is deliberately
+ * empty apart from the player in every case: this addon must never need an entity to answer
+ * where an objective happens, and a suite that seeded the mobs could not tell the difference.
  */
 async function start(
   settings: Record<string, unknown> = {},
@@ -388,13 +371,10 @@ async function start(
 }
 
 /**
- * `start`, plus the wait for the panel to come up and one draw in it.
- *
- * A frame that saves its state starts hidden and is shown once that state arrives,
- * keyed per character, and this addon draws nothing at all while it is hidden. The
- * extra tick is because the panel comes up asynchronously, after the addon's own
- * first draw has already declined to run. It moves no clock, so every case still
- * starts at `NOW`.
+ * `start`, plus the wait for the panel to come up and one draw in it. A frame that saves its
+ * state starts hidden and is shown once that state arrives, keyed per character, and this addon
+ * draws nothing while it is hidden. The extra tick is because the panel comes up asynchronously;
+ * it moves no clock, so every case still starts at `NOW`.
  */
 async function run(
   settings: Record<string, unknown> = {},
@@ -427,10 +407,10 @@ describe('its manifest', () => {
     expect(manifest().permissions).toEqual(['net.read', 'world.read', 'ui', 'storage', 'keys']);
   });
 
-  // `data` is what puts the tables in their own file, and the minor is what the
-  // surface reading it needs. An older loader strips an unknown manifest key
-  // rather than refusing it, so without the minor this addon would install on a
-  // loader with no `woc.data`, start, and find its only content file missing.
+  // `data` is what puts the tables in their own file, and the minor is what the surface reading
+  // it needs. An older loader strips an unknown manifest key rather than refusing it, so without
+  // the minor this addon would install on a loader with no `woc.data`, start, and find its only
+  // content file missing.
   it('declares the table and the minor that reads it', () => {
     expect(manifest().data).toEqual([TABLE_FILE]);
     expect(manifest().apiMinor).toBe(NEEDS_MINOR);
@@ -521,13 +501,10 @@ describe('resolving an objective to a place', () => {
     expect(pinsOf(h, HOLLOW_KEY)).toBe(0);
   });
 
-  // A work order asks for a GATHERED material: no mob drops it tagged for the
-  // quest and no crate of it is placed, so the two classic collect lookups both
-  // come back empty and this read "Nowhere on the map" until now. Game 0.34.0
-  // added the arm that answers it (`nodeYieldClusters`, reached from the collect
-  // branch of `questObjectiveAreas`), so the game's own map now circles the veins
-  // and the honest answer is no longer "nowhere". All three shipped work orders
-  // are this shape, one per gathering profession.
+  // A work order asks for a gathered material: no mob drops it tagged for the quest and no crate
+  // of it is placed, so the two classic collect lookups both come back empty. The arm that
+  // answers it is `nodeYieldClusters`, reached from the collect branch of `questObjectiveAreas`,
+  // so the game's own map circles the veins. All three shipped work orders are this shape.
   it.each([
     [FORGE_ORDER, FORGE_ORDER_KEY],
     [TOOLWORKS_ORDER, TOOLWORKS_ORDER_KEY],
@@ -584,9 +561,9 @@ describe('the required count', () => {
     expect(h.drawn()).not.toContain(AMENDS_KEY);
   });
 
-  // The three quest kinds are undescribed by the published catalogue, so the
-  // payload is `unknown` and every field is checked here. A bad denominator would
-  // be written to disk and outlive the session that produced it.
+  // The three quest kinds are undescribed by the published catalogue, so the payload is
+  // `unknown` and every field is checked here. A bad denominator would be written to disk and
+  // outlive the session that produced it.
   it('refuses a progress record that is not one', async () => {
     const h = await run({}, undefined, [{ questId: AMENDS, counts: [2] }]);
 
@@ -761,11 +738,10 @@ describe('a quest waiting to be handed in', () => {
     expect(h.drawn()[0]).toBe(TURN_IN_KEY);
   });
 
-  // An NPC the sim walks in mid-encounter rather than placing has no position at
-  // all. No shipped quest reaches this at 0.34.0, because the one that names a
-  // spawned-on-demand turn-in names a placed NPC beside it, so it is driven
-  // through a doctored table: the branch is kept because the table is game
-  // content and the next release owes this addon nothing.
+  // An NPC the sim walks in mid-encounter rather than placing has no position at all. No shipped
+  // quest reaches this today, because the one that names a spawned-on-demand turn-in names a
+  // placed NPC beside it, so it is driven through a doctored table: the branch is kept because
+  // the table is game content.
   it('says so when nothing placed can take it', async () => {
     const table = doctored(BOARS, { turnIn: ['brother_aldric_raid'] });
     const h = await run({}, undefined, Ready, { table });
@@ -849,10 +825,9 @@ describe('which zone an objective is in', () => {
     expect(h.drawn()).toEqual([WOLVES_KEY]);
   });
 
-  // THE RECTANGLE IS HALF-OPEN ON BOTH AXES AND THE X BOUNDS ARE LOAD-BEARING.
-  // The Farshore sits at x 180 to 540 and shares Eastbrook Vale's z band, so a
-  // test on z alone reports an objective standing on Farshore as being in
-  // Eastbrook Vale, which is the wrong side of the world.
+  // The rectangle is half-open on both axes and the x bounds are load-bearing. The Farshore sits
+  // at x 180 to 540 and shares Eastbrook Vale's z band, so a test on z alone reports an objective
+  // standing on Farshore as being in Eastbrook Vale.
   it('does not put a Farshore point in the zone sharing its band', async () => {
     const h = await run({ 'pin-distance': 2000 }, undefined, [{ questId: FARSHORE, counts: [0] }]);
 
@@ -888,10 +863,9 @@ describe('which zone an objective is in', () => {
   });
 });
 
-// Which way to turn, which is a fact about the CHARACTER and not about the camera.
-// The sign is the one thing here that cannot be caught by looking: an arrow that
-// points consistently the wrong way round reads as a working display right up until
-// somebody follows it.
+// Which way to turn, which is a fact about the character rather than the camera. The sign is the
+// one thing here that cannot be caught by looking: an arrow that points consistently the wrong
+// way round reads as a working display right up until somebody follows it.
 describe('the bearing on a row', () => {
   // The nearer wolf camp is at 24, 70, which is very nearly due north of a player
   // standing at the origin, and `facing` starts at 0, which is +z.
@@ -910,10 +884,10 @@ describe('the bearing on a row', () => {
     expect(h.detailOf(WOLVES_KEY)).toBe('Eastbrook Vale, 74 yd ↓');
   });
 
-  // THE SIGN. `facing` grows as the character turns LEFT, so with the character
-  // looking up +z an objective due +x is on their left, and the sectors have to run
-  // that way. Walked to twenty-three yards due west of the western wolf camp, at
-  // -27, 71, which puts that camp at +x and nothing else in the way of reading it.
+  // The sign. `facing` grows as the character turns left, so with the character looking up +z an
+  // objective due +x is on their left, and the sectors have to run that way. Walked to
+  // twenty-three yards due west of the western wolf camp, at -27, 71, which puts that camp at +x
+  // and nothing else in the way of reading it.
   it('puts an objective at +x on the left of a character facing +z', async () => {
     const h = await run({}, undefined, [{ questId: WOLVES, counts: [0] }]);
 
@@ -1000,10 +974,9 @@ describe('the panel resizing', () => {
     expect(h.note()).toContain('2 more below the panel');
   });
 
-  // The floor is one row, never the current count: bounds cannot be restated
-  // after the frame is built, so a floor set while three rows showed would trap
-  // the player who later has one. The loader clamps a saved box to the bounds the
-  // frame declared, so a box saved smaller than the floor comes back at the floor.
+  // The floor is one row, never the current count: bounds cannot be restated after the frame is
+  // built, so a floor set while three rows showed would trap the player who later has one. The
+  // loader clamps a saved box to the bounds the frame declared.
   it('never falls below one row', async () => {
     const h = await run({}, undefined, three, { saved: CRAMPED });
 
@@ -1037,9 +1010,9 @@ describe('when there is nothing to draw', () => {
     teardown.push(harness.dispose);
     await settle();
 
-    // Not asserted: that no row was built. An addon runs before world entry by
-    // design and the loader is what keeps its frames off the landing page. What
-    // must not happen is a world anchor, because there is no world to hang one in.
+    // Not asserted: that no row was built. An addon runs before world entry by design and the
+    // loader is what keeps its frames off the landing page. What must not happen is a world
+    // anchor, because there is no world to hang one in.
     expect(document.querySelectorAll('.woc-tm-anchor')).toHaveLength(0);
   });
 });
@@ -1094,11 +1067,9 @@ describe('a quest going ready', () => {
     expect(h.toast()).toContain('Eastbrook Vale');
   });
 
-  // An NPC the sim walks in mid-encounter rather than placing carries no position
-  // at all. No shipped quest reaches this at 0.34.0, because the one that names a
-  // spawned-on-demand turn-in names a placed NPC beside it, so the case is driven
-  // through a doctored table: the branch is kept because the table is game content
-  // and the next release owes this addon nothing.
+  // An NPC the sim walks in mid-encounter rather than placing carries no position at all. No
+  // shipped quest reaches this today, so the case is driven through a doctored table: the branch
+  // is kept because the table is game content and the next release owes this addon nothing.
   it('says the turn-in is not on the map when the NPC is spawned on demand', async () => {
     const table = doctored(BOARS, { turnIn: ['brother_aldric_raid'] });
     const h = await run({}, undefined, [{ questId: BOARS, counts: [5] }], { table });

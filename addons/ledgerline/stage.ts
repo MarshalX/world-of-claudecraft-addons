@@ -1,31 +1,26 @@
 // Ledgerline on the stage: a ledger somebody has been keeping for three days.
 //
-// THE STATE WORTH PHOTOGRAPHING CANNOT BE WALKED INTO, and that is the whole reason
-// this file is shaped the way it is. The server keeps no price history, so the only
-// history that exists is the one this addon wrote down while its player browsed, and a
-// panel with anything in it belongs to somebody who has stood at the Merchant on
-// several different days. A scenario states those days: three browses, with
-// `stage.elapse` putting the first two in the past.
+// The state worth photographing cannot be walked into. The server keeps no price history, so the
+// only history that exists is the one this addon wrote down while its player browsed, and a
+// panel with anything in it belongs to somebody who has stood at the Merchant on several
+// different days. A scenario states those days: three browses, with `stage.elapse` putting the
+// first two in the past.
 //
-// EVERY ITEM ID HERE SHIPS PAINTED ART, taken from the deployed `/ui/items/mapping.json`
-// rather than invented, so a missing icon in a shot is a real defect rather than a
-// fixture naming a file that never existed. `silverleaf_herb` is in the list on purpose:
-// its art is filed under "Sheenleaf Herb", which is one of the 21 ids in 303 where the
-// art name and the game's own display name disagree, and it is the case the label under
-// every row is hedging about.
+// Every item id here ships painted art, taken from the deployed `/ui/items/mapping.json`, so a
+// missing icon in a shot is a real defect rather than a fixture naming a file that never
+// existed. `silverleaf_herb` is in the list on purpose: its art is filed under "Sheenleaf Herb",
+// one of the 21 ids in 303 where the art name and the game's own display name disagree, and it
+// is the case the label under every row is hedging about.
 //
-// THE OTHERS SECTION IS SORTED THE WAY THE SERVER SORTS IT, by display name and then by
-// the stack's TOTAL price, and that is not decoration: the undercut check reads exactly
-// that ordering to find the cheapest competing listing without knowing what anything is
-// called. A fixture in any other order would be a page the server could not have sent,
-// and the verdicts drawn from it would be meaningless.
+// The others section is sorted the way the server sorts it, by display name and then by the
+// stack's total price. The undercut check reads exactly that ordering to find the cheapest
+// competing listing without knowing what anything is called, so a fixture in any other order
+// would be a page the server could not have sent.
 //
-// THE THREE VERDICTS ARE ALL ON SCREEN AT ONCE, which is the point of the Yours panel.
-// The copper ore is undercut by both readings, total and per item, so the row is not
-// arguable; the pristine hide is the cheapest on the page; and nobody else is selling
-// goldleaf on the page that was read, which reads as "not on this page" rather than as
-// "you are the cheapest", because those are different facts and only one of them is
-// knowable.
+// The three verdicts are all on screen at once, which is the point of the Yours panel. The
+// copper ore is undercut by both readings, total and per item; the pristine hide is the cheapest
+// on the page; and nobody else is selling goldleaf on the page that was read, which reads as
+// "not on this page" rather than as "you are the cheapest".
 
 import { inSeries } from '../../loader/src/shared/sequence.ts';
 import type { Scenario, Stage, WorldDraft } from '../../stage/src/stage.ts';
@@ -35,11 +30,9 @@ const HOUR_MS = 60 * 60 * 1000;
 const DAY_MS = 24 * HOUR_MS;
 
 /**
- * The Merchant's own terms, which are the game's real ones.
- *
- * The suite deliberately uses figures that are NOT these, so that an addon which wrote
- * either down could not agree with its fixture by accident. A photograph wants the
- * opposite: what a player actually reads at the counter.
+ * The Merchant's own terms, which are the game's real ones. The suite deliberately uses figures
+ * that are not these, so that an addon which wrote either down could not agree with its fixture
+ * by accident. A photograph wants the opposite: what a player actually reads at the counter.
  */
 const CUT_PCT = 5;
 const MAX_LISTINGS = 12;
@@ -64,13 +57,11 @@ interface Stack {
 /**
  * One item as the market carried it, browse by browse.
  *
- * `units` is a price PER ITEM and the wire carries the stack total, which is the
- * arithmetic this addon exists to get right: the rows below are built by multiplying,
- * exactly as a seller does, and everything the panel draws divides back down again.
+ * `units` is a price per item and the wire carries the stack total, which is the arithmetic this
+ * addon exists to get right: the rows below are built by multiplying, exactly as a seller does.
  *
- * A browse with no unit price is a browse where nobody had any: `goldleaf_herb` runs
- * out before the last one, which is what leaves the player holding the only listing of
- * it and is the case the "not on this page" verdict is for.
+ * A browse with no unit price is a browse where nobody had any: `goldleaf_herb` runs out before
+ * the last one, which leaves the player holding the only listing of it.
  */
 interface Stall {
   item: string;
@@ -327,13 +318,11 @@ const ART_MS = 5000;
 const ART_POLL_MS = 50;
 
 /**
- * Hold the shot until the art manifest has landed.
- *
- * `ui.icon.item` is optimistic and `ui.icon.itemArtName` answers null until the manifest
- * is read, so a picture taken before it lands is a panel of raw item ids: honest about
- * what the addon does when nothing has published a name, and not what it looks like on
- * a machine that has finished loading. Waited on the FACT rather than on a delay, and
- * the first row is enough because one manifest answers for every row.
+ * Hold the shot until the art manifest has landed. `ui.icon.item` is optimistic and
+ * `ui.icon.itemArtName` answers null until the manifest is read, so a picture taken before it
+ * lands is a panel of raw item ids: honest about what the addon does when nothing has published
+ * a name, and not what it looks like on a machine that has finished loading. Waited on the fact
+ * rather than on a delay, and the first row is enough because one manifest answers for every row.
  */
 function artLanded(): Promise<void> {
   const wanted = (STALLS[0] as Stall).name;
@@ -353,11 +342,9 @@ function artLanded(): Promise<void> {
 }
 
 /**
- * Three days of browsing, in the order they happened.
- *
- * The clock is moved between them, which is what puts the readings at different ages and
- * gives the trend line something to draw: every stamp this addon keeps comes from
- * `woc.wallClock()`, so a scenario about a ledger is a scenario about that clock.
+ * Three days of browsing, in the order they happened. The clock is moved between them, which is
+ * what puts the readings at different ages and gives the trend line something to draw: every
+ * stamp this addon keeps comes from `woc.wallClock()`.
  */
 async function browsedForDays(stage: Stage): Promise<void> {
   await drawn(stage);
@@ -371,12 +358,9 @@ async function browsedForDays(stage: Stage): Promise<void> {
 }
 
 /**
- * Open one of the panel's tabs, the way a player does.
- *
- * Clicked at the DOM rather than reached for through the stage, for the reason the
- * combat-meter scenarios give: the tab strip is the LOADER's `ui.tabs`, so a click is
- * the same path a player takes and a stage helper would be a second way in that only
- * scenarios use.
+ * Open one of the panel's tabs, the way a player does. Clicked at the DOM rather than reached
+ * for through the stage: the tab strip is the loader's `ui.tabs`, so a click is the same path a
+ * player takes and a stage helper would be a second way in that only scenarios use.
  */
 function openTab(label: string): void {
   const button = [...document.querySelectorAll('#woc-addons .woc-tab')].find(
@@ -386,13 +370,10 @@ function openTab(label: string): void {
 }
 
 /**
- * The panel as a player who has widened it holds it.
- *
- * The addon opens at 400 by 480, which spends nearly half its height on chrome that
- * cannot scroll: the tab strip, the status strip, the sentence under it, the search
- * field and the note. A shot at the opening size is four rows of ledger under all of
- * that, which is a picture of the chrome. This is a size the frame is genuinely
- * draggable to, and nothing here crosses a bound the addon declares.
+ * The panel as a player who has widened it holds it. The addon opens at 400 by 480, which spends
+ * nearly half its height on chrome that cannot scroll: the tab strip, the status strip, the
+ * sentence under it, the search field and the note. A shot at the opening size is four rows of
+ * ledger under all of that. This is a size the frame is genuinely draggable to.
  */
 const WIDENED = { x: 80, y: 140, w: 440, h: 620 };
 
@@ -422,9 +403,9 @@ const SCENARIOS: readonly Scenario[] = [
     },
   },
   {
-    // Away from the counter, holding the last page it read. The state most of a session
-    // is spent in, and the one the whole three-state read exists for: an empty market
-    // and a player standing in a town are different facts and the panel says which.
+    // Away from the counter, holding the last page it read: the state most of a session is spent
+    // in, and the one the whole three-state read exists for. An empty market and a player
+    // standing in a town are different facts and the panel says which.
     id: 'away',
     label: 'Walked away from the Merchant',
     frames: { ledger: { box: WIDENED, visible: true } },
@@ -445,10 +426,10 @@ const SCENARIOS: readonly Scenario[] = [
     run: drawn,
   },
   {
-    // The reconnect blip: the client force-nulls its own market mirror for one snapshot
-    // after a reconnect, so a player standing AT the counter reads away. The panel holds
-    // the page and says it is resyncing. It lasts two seconds by design, so this
-    // scenario is worth LOOKING at rather than photographing.
+    // The reconnect blip: the client force-nulls its own market mirror for one snapshot after a
+    // reconnect, so a player standing at the counter reads away. The panel holds the page and
+    // says it is resyncing. It lasts two seconds by design, so this scenario is worth looking at
+    // rather than photographing.
     id: 'resync',
     label: 'The reconnect blip',
     frames: { ledger: { box: WIDENED, visible: true } },

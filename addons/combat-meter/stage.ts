@@ -1,30 +1,25 @@
 // Combat Meter on the stage: three tables, and the limit that shapes all three.
 //
-// Like the cooldown-bars scenarios, this is `main.test.ts`'s `run()` with the
-// assertions taken out, and for the same reason: the suite's fixture is the only
-// description of this addon's world anybody has checked.
+// Like the cooldown-bars scenarios, this is `main.test.ts`'s `run()` with the assertions taken
+// out: the suite's fixture is the only description of this addon's world anybody has checked.
 //
-// THE ONE THING EVERY SHOT HERE HAS TO BE HONEST ABOUT is that a combat event
-// names an ability by its DISPLAY NAME and never by its id, while skill art is
-// filed under the id. So this addon can draw art only for abilities in YOUR OWN
-// spellbook, where `world.abilities.byName` closes the join, and for everything
-// else, which is most of what a mob casts, there is no icon that can be found.
-// That is why it tints rows by SCHOOL: the tint reaches the rows the art cannot.
+// Every shot here has to be honest about one thing: a combat event names an ability by its
+// display name and never by its id, while skill art is filed under the id. So this addon can
+// draw art only for abilities in your own spellbook, where `world.abilities.byName` closes the
+// join, and for everything else there is no icon to be found. That is why it tints rows by
+// school: the tint reaches the rows the art cannot.
 //
-// Every scenario below therefore mixes the three cases on purpose, because a
-// preview showing only the resolvable ones would claim a completeness this addon
-// does not have:
+// Every scenario below mixes the three cases, because a preview showing only the resolvable ones
+// would claim a completeness this addon does not have:
 //
-//   `arcane_shot` is displayed as "Fell Shot". The event says "Fell Shot" and the
-//   file is `arcane_shot.webp`, so a row with an icon here proves the join ran
-//   BACKWARDS correctly rather than that some string reached some attribute.
+//   `arcane_shot` is displayed as "Fell Shot". The event says "Fell Shot" and the file is
+//   `arcane_shot.webp`, so a row with an icon proves the join ran backwards correctly.
 //
-//   "Auto Shot" is in nobody's spellbook. It is the residue every meter carries,
-//   and it draws with a school tint and no art.
+//   "Auto Shot" is in nobody's spellbook. It is the residue every meter carries, and it draws
+//   with a school tint and no art.
 //
-//   A mob's ability, on the Taken table, is the unrecoverable half: the event
-//   carries a name, the game has no manifest that maps it, and there is no route
-//   to an icon at all. That table is nearly all this case.
+//   A mob's ability, on the Taken table, is the unrecoverable half: the event carries a name and
+//   there is no route to an icon at all. That table is nearly all this case.
 
 import type { Scenario, Stage, WorldDraft } from '../../stage/src/stage.ts';
 import { eventsFrame, PLAYER_ENTITY } from '../../tests/fakes/frames.ts';
@@ -36,21 +31,17 @@ const MOB_ID = 900;
 const CLASS_ID = 'hunter';
 
 /**
- * How long to wait for the meter to redraw.
- *
- * `woc.setInterval(repaint, 500)` is a REAL interval here rather than a fake one
- * the suite steps, so a scenario that seeded events and returned would photograph
- * the panel as it stood before any of them landed. Comfortably over the period,
+ * How long to wait for the meter to redraw. `woc.setInterval(repaint, 500)` is a real interval
+ * here rather than a fake one the suite steps, so a scenario that seeded events and returned
+ * would photograph the panel as it stood before any of them landed. Comfortably over the period,
  * because being early is a blank meter and being late costs a third of a second.
  */
 const REPAINT_WAIT_MS = 700;
 
 /**
- * The spellbook, in the game's own shape.
- *
- * Only these three can ever carry art. The ids are real hunter abilities that the
- * deployed `/ui/skills/hunter/mapping.json` ships a file for, so a missing icon in
- * a shot is a real defect rather than a fixture naming art that never existed.
+ * The spellbook, in the game's own shape. Only these three can ever carry art. The ids are real
+ * hunter abilities that the deployed `/ui/skills/hunter/mapping.json` ships a file for, so a
+ * missing icon in a shot is a real defect rather than a fixture naming art that never existed.
  */
 const KNOWN = Object.freeze([
   {
@@ -103,12 +94,10 @@ interface Blow {
 }
 
 /**
- * What the player did, over about twenty seconds.
- *
- * Three abilities that resolve to art, one that cannot, and four schools, so the
- * tint is doing visible work down the table. The misses and the dodge are there
- * because the outcome line is half of why this addon exists: a meter that showed
- * only landed hits would report a hit rate of 100% in every fight ever fought.
+ * What the player did, over about twenty seconds. Three abilities that resolve to art, one that
+ * cannot, and four schools, so the tint is doing visible work down the table. The misses and the
+ * dodge are there because the outcome line is half of why this addon exists: a meter showing only
+ * landed hits would report a hit rate of 100% in every fight ever fought.
  */
 const DEALT: readonly Blow[] = [
   { ability: 'Auto Shot', school: 'physical', amount: 214, after: 0 },
@@ -133,11 +122,9 @@ const DEALT: readonly Blow[] = [
 ];
 
 /**
- * What was hitting back.
- *
- * Every name here belongs to a mob, so not one of them can resolve to art however
- * this addon is improved: the game files art under an ability id and a combat
- * event carries a name. This table is what the school tint was built for.
+ * What was hitting back. Every name here belongs to a mob, so not one of them can resolve to art
+ * however this addon is improved: the game files art under an ability id and a combat event
+ * carries a name. This table is what the school tint was built for.
  */
 const TAKEN: readonly Blow[] = [
   { ability: 'Cleave', school: 'physical', amount: 268, after: 0 },
@@ -155,20 +142,18 @@ const HEALED = [
   { ability: 'Mend Wounds', amount: 340, after: 0 },
   { ability: 'Mend Wounds', amount: 512, crit: true, after: 2200 },
   { ability: 'Renewing Breath', amount: 180, after: 1800 },
-  // `cueOnly` records exist to drive a sound and carry no healing at all. Skipped
-  // on the flag rather than on the amount, because a genuine direct heal lands at
-  // 0 on a target already at full health and dropping those loses real casts.
+  // `cueOnly` records exist to drive a sound and carry no healing at all. Skipped on the flag
+  // rather than on the amount, because a genuine direct heal lands at 0 on a target already at
+  // full health and dropping those loses real casts.
   { ability: 'Mend Wounds', amount: 0, cueOnly: true, after: 900 },
   { ability: 'Renewing Breath', amount: 176, after: 1600 },
   { ability: 'Mend Wounds', amount: 366, after: 2100 },
 ];
 
 /**
- * The session this hunter logged in with, before the addon has run a line.
- *
- * The class and the spellbook are both facts about the character rather than about
- * the fight, so both belong here. The class is also what any icon is filed under,
- * and a row built before there is a class to file it under never gets one.
+ * The session this hunter logged in with, before the addon has run a line. The class and the
+ * spellbook are both facts about the character rather than about the fight. The class is also
+ * what any icon is filed under, and a row built before there is a class never gets one.
  */
 function aHunter(draft: WorldDraft): void {
   draft.set(draft.player, 'templateId', CLASS_ID);
@@ -228,12 +213,10 @@ async function exchange(stage: Stage, blows: readonly Blow[], direction: Directi
 }
 
 /**
- * Open one of the meter's tabs, the way a player does.
- *
- * Clicked at the DOM rather than reached for through the stage, which has no API
- * for this and should not grow one: the tab strip is the LOADER's `ui.tabs`, so a
- * click on it is the same path a player takes, and a stage helper would be a
- * second way to change tabs that only scenarios use.
+ * Open one of the meter's tabs, the way a player does. Clicked at the DOM rather than reached
+ * for through the stage: the tab strip is the loader's `ui.tabs`, so a click on it is the same
+ * path a player takes, and a stage helper would be a second way to change tabs that only
+ * scenarios use.
  */
 function openTab(label: string): void {
   const button = [...document.querySelectorAll('.woc-meter-tabs .woc-tab')].find(
@@ -290,9 +273,8 @@ const SCENARIOS: readonly Scenario[] = [
     },
   },
   {
-    // Before a single event. The state a meter is in every time a player logs in,
-    // and the one nobody thinks to photograph: a panel that reads well full and
-    // reads as broken empty is one a player meets empty first.
+    // Before a single event: the state a meter is in every time a player logs in. A panel that
+    // reads well full and reads as broken empty is one a player meets empty first.
     id: 'idle',
     label: 'Before the first fight',
     world: aHunter,
@@ -302,9 +284,9 @@ const SCENARIOS: readonly Scenario[] = [
     },
   },
   {
-    // Detail and outcome lines off, which is the setting a player who wants a
-    // small overlay reaches for. Worth its own shot because it is a different
-    // panel, not the same one with less in it: the rows lose their second line.
+    // Detail and outcome lines off, which is the setting a player who wants a small overlay
+    // reaches for. Worth its own shot because it is a different panel rather than the same one
+    // with less in it: the rows lose their second line.
     id: 'compact',
     label: 'Damage, detail lines off',
     settings: { 'show-detail': false, 'show-outcomes': false },

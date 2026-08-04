@@ -1,28 +1,24 @@
 // Satchel on the stage: an account somebody has been playing for three days.
 //
-// THE STATE WORTH PHOTOGRAPHING CANNOT BE WALKED INTO, which is the same reason
-// ledgerline's scenarios are shaped the way they are. Every pane here is drawn from a
-// record this addon wrote down while its player was logged in, and the panes that
-// matter are the ones about a character who is NOT logged in now. So a scenario is a
-// sequence of logins: Bruk three days ago, Sena yesterday, Marshal now, with
-// `stage.elapse` putting the first two in the past.
+// The state worth photographing cannot be walked into, which is the same reason ledgerline's
+// scenarios are shaped the way they are. Every pane here is drawn from a record this addon wrote
+// down while its player was logged in, and the panes that matter are the ones about a character
+// who is not logged in now. So a scenario is a sequence of logins: Bruk three days ago, Sena
+// yesterday, Marshal now, with `stage.elapse` putting the first two in the past.
 //
-// THE SWITCH IS THE REAL ONE. The game clones and removes its HUD rather than
-// reloading, so a character change inside one page load is an ordinary event and
-// `world.characterKey` moves with it. Writing a fixture straight into storage would
-// be quicker and would photograph a record shape rather than the recorder, which is
-// the half that has actually been wrong before.
+// The switch is the real one. The game clones and removes its HUD rather than reloading, so a
+// character change inside one page load is an ordinary event and `world.characterKey` moves with
+// it. Writing a fixture straight into storage would photograph a record shape rather than the
+// recorder, which is the half that has actually been wrong before.
 //
-// ONLY A READING TAKEN AT THE COUNTER IS RECORDED, so a scenario that wants an alt's
-// bank has to stand that alt at one. Bruk never does, which is the ordinary case and
-// is what the roster's per-store ages are there to say.
+// Only a reading taken at the counter is recorded, so a scenario that wants an alt's bank has to
+// stand that alt at one. Bruk never does, which is the ordinary case and is what the roster's
+// per-store ages are there to say.
 //
-// EVERY ITEM ID SHIPS PAINTED ART, taken from the deployed `/ui/items/mapping.json`
-// rather than invented, so a blank square in a shot is a real defect rather than a
-// fixture naming a file that never existed. `silverleaf_herb` is in on purpose: its
-// art is filed under "Sheenleaf Herb", one of the 21 ids in 303 where the art name and
-// the game's own display name disagree, which is what every label here is hedging
-// about.
+// Every item id ships painted art, taken from the deployed `/ui/items/mapping.json`, so a blank
+// square in a shot is a real defect rather than a fixture naming a file that never existed.
+// `silverleaf_herb` is in on purpose: its art is filed under "Sheenleaf Herb", one of the 21 ids
+// in 303 where the art name and the game's own display name disagree.
 
 import { inSeries } from '../../loader/src/shared/sequence.ts';
 import type { FrameState, Scenario, Stage, WorldDraft } from '../../stage/src/stage.ts';
@@ -84,11 +80,9 @@ interface Session {
 }
 
 /**
- * Bruk, three days ago: a bank mule with no bank.
- *
- * The ordinary case, and the one the roster's per-store ages exist to report. A
- * character's bags are recorded every time they are played and a counter is recorded
- * only if they walked up to one, so most of an account looks like this.
+ * Bruk, three days ago: a bank mule with no bank. The ordinary case, and the one the roster's
+ * per-store ages exist to report. A character's bags are recorded every time they are played and
+ * a counter is recorded only if they walked up to one.
  */
 const BRUK: Session = {
   name: 'Bruk',
@@ -158,11 +152,9 @@ const SENA: Session = {
 };
 
 /**
- * The mailbox Marshal is standing at.
- *
- * Two unread, which is what the title badge counts, and two of the letters carry a
- * parcel: an attachment is an item the character owns and cannot see, so the index
- * counts it exactly like a bag cell.
+ * The mailbox Marshal is standing at. Two unread, which is what the title badge counts, and two
+ * of the letters carry a parcel: an attachment is an item the character owns and cannot see, so
+ * the index counts it exactly like a bag cell.
  */
 const LETTERS: Letter[] = [
   {
@@ -211,15 +203,13 @@ const LETTERS: Letter[] = [
 ];
 
 /**
- * Marshal, now: the character in play, at a banker and a mailbox at once.
+ * Marshal, now: the character in play, at a banker and a mailbox at once. Not a state a player is
+ * often in, and it is the one worth photographing: it puts a live reading behind all three detail
+ * panes at the same time.
  *
- * Not a state a player is often in, and it is the one worth photographing: it puts a
- * live reading behind all three detail panes at the same time, so a shot of any of
- * them is a shot of the addon rather than of what it remembers.
- *
- * `mosshide_vest` is worn AND in the bags, which is the spare mark; the ores are split
- * across cells, which is the split mark; and the bank holds copper ore the bags hold
- * too, which is the carried mark. All three come from ids alone.
+ * `mosshide_vest` is worn and in the bags, which is the spare mark; the ores are split across
+ * cells, which is the split mark; and the bank holds copper ore the bags hold too, which is the
+ * carried mark. All three come from ids alone.
  */
 const MARSHAL: Session = {
   name: 'Marshal',
@@ -344,17 +334,14 @@ const IMAGES_POLL_MS = 60;
 /**
  * Hold a character switch until this character's art has finished loading.
  *
- * Not cosmetic, and not the addon's bug. A bag cell is REUSED rather than rebuilt, so
- * logging in as somebody else points the same square at a different item: `src` is
- * reassigned, the browser cancels the request that was in flight, and the abandoned
- * request lands as `net::ERR_ABORTED`. On screen that is invisible and correct, since
- * the square goes on to load the picture it now wants. To `pnpm shots` it is a failed
- * request, and that tool is right to refuse to photograph one: a transport failure and
- * an item the game ships no art for produce the same collapsed slot, and only one of
- * them is worth committing.
+ * A bag cell is reused rather than rebuilt, so logging in as somebody else points the same square
+ * at a different item: `src` is reassigned, the browser cancels the request in flight, and the
+ * abandoned request lands as `net::ERR_ABORTED`. On screen that is invisible and correct. To
+ * `pnpm shots` it is a failed request, and that tool is right to refuse to photograph one: a
+ * transport failure and an item the game ships no art for produce the same collapsed slot.
  *
- * So the scenario waits rather than the tool relaxing. A player switching characters
- * genuinely does leave a beat between logins, and every session here is one login.
+ * So the scenario waits rather than the tool relaxing. A player switching characters genuinely
+ * does leave a beat between logins.
  */
 function imagesSettled(): Promise<void> {
   return new Promise((resolve) => {
@@ -380,12 +367,10 @@ const HISTORY: readonly (readonly [Session, number])[] = [
 ];
 
 /**
- * Play the account forward: three characters, three days.
- *
- * Bruk is already in the world when the addon starts, so the loop below picks up at
- * Sena. The clock is moved between logins, which is what puts the readings at
- * different ages: every stamp this addon keeps is a `woc.wallClock()` reading, and a
- * scenario about a record that outlives a session is a scenario about that clock.
+ * Play the account forward: three characters, three days. Bruk is already in the world when the
+ * addon starts, so the loop below picks up at Sena. The clock is moved between logins, which is
+ * what puts the readings at different ages: every stamp this addon keeps is a `woc.wallClock()`
+ * reading.
  */
 async function playedForDays(stage: Stage): Promise<void> {
   await drawn(stage);
@@ -405,24 +390,17 @@ const ART_MS = 5000;
 const ART_POLL_MS = 50;
 
 /**
- * The one label in this fixture that PROVES the manifest landed.
- *
- * `silverleaf_herb` files its art under "Sheenleaf Herb", which is one of the 21 ids in
- * 303 where the art name and the game's display name disagree. That divergence is what
- * makes it usable as a signal: every other row reads the same either way, because the
- * addon's last-resort name is the id read back as words and most ids read back as
- * exactly what the art is called. Waiting on a label that merely "looks like a name"
- * would therefore resolve immediately, before a single art name had been read.
+ * The one label in this fixture that proves the manifest landed. `silverleaf_herb` files its art
+ * under "Sheenleaf Herb", one of the 21 ids in 303 where the art name and the game's display name
+ * disagree. That divergence is what makes it usable as a signal: every other row reads the same
+ * either way, so waiting on a label that merely looks like a name would resolve immediately.
  */
 const ART_PROOF = 'Sheenleaf Herb';
 
 /**
- * Hold the shot until the art manifest has landed.
- *
- * `ui.icon.item` is optimistic and `ui.icon.itemArtName` answers null until the
- * manifest is read, so a picture taken before it lands is a panel of ids read back as
- * words: honest about what this addon does when nothing has published a name, and not
- * what it looks like on a machine that has finished loading.
+ * Hold the shot until the art manifest has landed. `ui.icon.item` is optimistic and
+ * `ui.icon.itemArtName` answers null until the manifest is read, so a picture taken before it
+ * lands is a panel of ids read back as words.
  */
 function artLanded(): Promise<void> {
   return new Promise((resolve) => {
@@ -441,12 +419,9 @@ function artLanded(): Promise<void> {
 }
 
 /**
- * Open one of the panel's tabs, the way a player does.
- *
- * Clicked at the DOM rather than reached for through the stage, for the reason the
- * combat-meter scenarios give: the strip is the LOADER's `ui.tabs`, so a click is the
- * same path a player takes and a stage helper would be a second way in that only
- * scenarios use.
+ * Open one of the panel's tabs, the way a player does. Clicked at the DOM rather than reached for
+ * through the stage: the strip is the loader's `ui.tabs`, so a click is the same path a player
+ * takes and a stage helper would be a second way in that only scenarios use.
  */
 function openTab(label: string): void {
   const button = [...document.querySelectorAll('#woc-addons .woc-tab')].find(
@@ -462,23 +437,18 @@ async function onTab(stage: Stage, label: string): Promise<void> {
 }
 
 /**
- * The panel as a player who has widened it holds it.
- *
- * The addon opens at 340 by 420, which is a bag grid six squares across under five
- * tabs: a picture of the chrome. This is a size the frame is genuinely draggable to,
- * and nothing here crosses a bound the addon declares.
+ * The panel as a player who has widened it holds it. The addon opens at 340 by 420, which is a
+ * bag grid six squares across under five tabs: a picture of the chrome. This is a size the frame
+ * is genuinely draggable to.
  */
 const WIDENED = { x: 80, y: 120, w: 420, h: 560 };
 
 /**
- * The box BOTH preview panels are seeded with, which is shorter than the one above.
- *
- * One height rather than two, and that is the whole reason it exists. A sheet lays its
- * panes out in a row and centres them against each other, so two panels of different
- * heights read as one that has slipped. Matching them is the fix that costs nothing,
- * and the height to match on is the GRID's: a list pane is full at any height, and a
- * bag grid is only as tall as its cell ceiling, which is 52 squares over five rows.
- * Anything taller is black under the last row.
+ * The box both preview panels are seeded with, which is shorter than the one above. One height
+ * rather than two: a sheet lays its panes out in a row and centres them against each other, so
+ * two panels of different heights read as one that has slipped. The height to match on is the
+ * grid's, since a list pane is full at any height and a bag grid is only as tall as its cell
+ * ceiling.
  */
 const SHEET_BOX = { x: 80, y: 120, w: 420, h: 440 };
 

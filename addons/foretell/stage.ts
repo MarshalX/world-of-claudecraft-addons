@@ -1,47 +1,36 @@
 // Foretell on the stage: four things casting at once, and one of them a mob.
 //
-// EVERY ABILITY ID AND ITS DISPLAY NAME HERE IS THE GAME'S OWN, read out of the
-// deployed i18n bundle rather than invented, and that is what makes the picture say
-// something true rather than something plausible. `shadow_bolt` is shown everywhere
-// in the game as "Gloom Bolt", so the row this addon works out from the id reads
-// "Shadow Bolt" and is WRONG, which is exactly what the note under the list is
-// warning about. An invented id title-cases into a label that looks right, and a
-// preview built on one would illustrate the caveat with a case where the caveat
-// costs nothing.
+// Every ability id and its display name here is the game's own, read out of the deployed i18n
+// bundle. `shadow_bolt` is shown everywhere in the game as "Gloom Bolt", so the row this addon
+// works out from the id reads "Shadow Bolt" and is wrong, which is exactly what the note under
+// the list is warning about. An invented id title-cases into a label that looks right, and a
+// preview built on one would illustrate the caveat with a case where the caveat costs nothing.
 //
-// ONE MOB AND THREE HOSTILE PLAYERS, and the split is the whole composition rather
-// than scenery.
+// One mob and three hostile players, and the split is the whole composition:
 //
-//  - THE MOB is the reason this addon exists. `rift_thunderhead` is what the entity
-//    carries while Tempest Vharok, the storm rift boss, winds up its mechanic, and
-//    nothing raises a cast event for it: a display built on `castStart` draws
-//    nothing here at all. It is also everything this addon cannot recover. Skill art
-//    is filed under a player CLASS and `templateId` on a mob is the mob template, so
-//    there is no icon to draw; a school is recoverable only out of your own
-//    spellbook, so the fill is left plain. That row is the honest common case.
-//  - THE PLAYERS are what makes the other half of the display visible. Two of them
-//    cast something this mage also knows, so those rows carry the game's own name,
-//    the game's own art and the school colour it files that damage under, and the
-//    third casts a warlock's `shadow_bolt`, which no mage's spellbook can name: art,
-//    because the caster is a player, and a guessed label, because the ability is not
-//    yours.
+//  - The mob is the reason this addon exists. `rift_thunderhead` is what the entity carries while
+//    Tempest Vharok winds up its mechanic, and nothing raises a cast event for it: a display
+//    built on `castStart` draws nothing here at all. It is also everything this addon cannot
+//    recover. Skill art is filed under a player class and `templateId` on a mob is the mob
+//    template, so there is no icon to draw; a school is recoverable only out of your own
+//    spellbook, so the fill is left plain.
+//  - The players make the other half of the display visible. Two of them cast something this mage
+//    also knows, so those rows carry the game's own name, the game's own art and the school
+//    colour it files that damage under, and the third casts a warlock's `shadow_bolt`, which no
+//    mage's spellbook can name: art, because the caster is a player, and a guessed label.
 //
-// A contested rift is where those two meet, which is why the shot is one. Four mobs
-// would be four plain untinted rows, true to the common case and silent about the
-// rest of the display; four players would be a picture of a cast bar that any
-// display built on the cast event could have drawn.
+// A contested rift is where those two meet. Four mobs would be four plain untinted rows, silent
+// about the rest of the display; four players would be a picture of a cast bar that any display
+// built on the cast event could have drawn.
 //
-// The 0.7 second row is the only red one. Tone wins over school in the kit, so a row
-// in its last second stops saying what kind of damage it is and starts saying that it
-// is about to land, and putting that on the row whose name is a guess keeps the two
-// readings separate: the colour is about time and the label is about knowledge.
+// The 0.7 second row is the only red one. Tone wins over school in the kit, so a row in its last
+// second stops saying what kind of damage it is and starts saying that it is about to land, and
+// putting that on the row whose name is a guess keeps the two readings separate.
 //
-// ONLY THE COLUMN IS PHOTOGRAPHED. Both layouts draw the same four casts and the
-// anchored one is here to look at on the stage, but a sheet of the two is a picture of
-// a setting rather than a picture of the addon: the panels are the same bars twice, and
-// the anchored half is bars scattered over an empty background, which reads at card
-// size as a screenshot that failed to crop. The column says what this addon is in one
-// glance and is the layout it opens in.
+// Only the column is photographed. Both layouts draw the same four casts and the anchored one is
+// here to look at on the stage, but a sheet of the two is a picture of a setting rather than of
+// the addon: the anchored half is bars scattered over an empty background, which reads at card
+// size as a screenshot that failed to crop.
 
 import type { Fake, Scenario, Stage, WorldDraft } from '../../stage/src/stage.ts';
 
@@ -60,28 +49,22 @@ const PLAYER_HEIGHT = 1.8;
 /**
  * The list as a player who has widened it holds it, which is what gets photographed.
  *
- * The addon opens at 240, which is a HUD width: narrow enough to park beside the game's
- * own frames and wide enough for a name and a countdown. As a picture it is a tall thin
- * strip, and a Browse card is a wide slot, so the shot is taken at a width the frame is
- * genuinely draggable to rather than by changing what the addon opens at. Nothing here
- * moves a bound: the only one this crosses is the addon's own 120px floor, and this is
- * above it.
+ * The addon opens at 240, which is a HUD width: narrow enough to park beside the game's own
+ * frames and wide enough for a name and a countdown. As a picture it is a tall thin strip and a
+ * Browse card is a wide slot, so the shot is taken at a width the frame is genuinely draggable
+ * to. Nothing here moves a bound.
  *
- * The HEIGHT is room for exactly the four casts below and no fifth row, which is the
- * one thing a crop cannot fix: a bare frame reserves its box whether or not anything
- * is drawn in it, so a five-row box would put a fifth of the picture aside for a bar
- * that is not there. 4 rows at the addon's own 39px pitch.
+ * The height is room for exactly the four casts below and no fifth row, which is the one thing a
+ * crop cannot fix: a bare frame reserves its box whether or not anything is drawn in it. Four
+ * rows at the addon's own 39px pitch.
  */
 const WIDENED = { x: 60, y: 60, w: 380, h: 156 };
 
 /**
- * This mage's spellbook, in the game's own shape.
- *
- * Three fields of it are read and the rest is left out rather than filled in with
- * numbers nobody checked: `world.abilities` is the only bridge from an ability id to
- * anything the game says about it, and this addon asks it for a name and a school.
- * Every name here diverges from its id, which is why an id is a guess rather than a
- * near miss.
+ * This mage's spellbook, in the game's own shape. Three fields of it are read and the rest is
+ * left out rather than filled in with numbers nobody checked: `world.abilities` is the only
+ * bridge from an ability id to anything the game says about it, and this addon asks it for a name
+ * and a school. Every name here diverges from its id.
  */
 const KNOWN = Object.freeze([
   { def: { id: 'pyroblast', name: 'Pyrelance', school: 'fire', requiresTarget: true }, rank: 2 },
@@ -111,16 +94,13 @@ interface Enemy {
 }
 
 /**
- * Where the casters stand, in yards, around a player at the origin.
+ * Where the casters stand, in yards, around a player at the origin. Read by the anchored panel
+ * and by nothing else, but stated once for both: the two panels are the same fight seen two ways,
+ * and a world that changed between them would make the pair a comparison of two fights.
  *
- * Read by the anchored panel and by nothing else, but stated once for both: the two
- * panels are the same fight seen two ways, and a world that changed between them
- * would make the pair a comparison of two fights.
- *
- * The two mages stand close enough that their bars would land on top of each other,
- * which is the case `ui.project` and its depth exist for: the nearer keeps its place
- * and the farther is lifted clear. Everything else is far enough apart to be left
- * where it belongs.
+ * The two mages stand close enough that their bars would land on top of each other, which is the
+ * case `ui.project` and its depth exist for: the nearer keeps its place and the farther is
+ * lifted clear.
  */
 const ENEMIES: readonly Enemy[] = [
   {
@@ -185,12 +165,9 @@ function aMage(draft: WorldDraft): void {
 }
 
 /**
- * The fight, stated before the addon has run a line.
- *
- * In `world` rather than in `run` because that is what a session looks like: the
- * addon starts, reads the world, and draws what is already happening. Its frame
- * handler repopulates from the world the first time the display is up, so a cast
- * that was underway before it started is drawn exactly like one that began after.
+ * The fight, stated before the addon has run a line. In `world` rather than in `run` because that
+ * is what a session looks like: the addon starts, reads the world, and draws what is already
+ * happening. Its frame handler repopulates from the world the first time the display is up.
  */
 function aContestedRift(draft: WorldDraft): void {
   aMage(draft);
@@ -201,13 +178,10 @@ function aContestedRift(draft: WorldDraft): void {
 }
 
 /**
- * Let the frame come back, then read the world once and draw it.
- *
- * The settle is not optional here and it is the one step this scenario cannot skip.
- * A frame that saves its visibility starts HIDDEN and shows once storage has
- * answered, and this addon draws nothing at all while its frame is down, so a poll
- * and a frame taken before that answer lands produce a display that never populates:
- * an empty box, photographed.
+ * Let the frame come back, then read the world once and draw it. The settle is not optional: a
+ * frame that saves its visibility starts hidden and shows once storage has answered, and this
+ * addon draws nothing at all while its frame is down, so a poll and a frame taken before that
+ * answer lands produce an empty box, photographed.
  */
 async function look(stage: Stage): Promise<void> {
   await stage.settle();
@@ -234,10 +208,9 @@ const SCENARIOS: readonly Scenario[] = [
     run: look,
   },
   {
-    // What the display looks like with nothing casting, which is most of a session
-    // and the state nobody thinks to photograph. The frame is bare, so there is
-    // nothing on screen at all: the room it reserves is the price of having handles
-    // to size it by.
+    // What the display looks like with nothing casting, which is most of a session. The frame is
+    // bare, so there is nothing on screen at all: the room it reserves is the price of having
+    // handles to size it by.
     id: 'quiet',
     label: 'Nothing casting',
     world: aMage,

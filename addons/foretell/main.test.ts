@@ -2,18 +2,16 @@
 
 // Foretell, run through the real loader.
 //
-// The claim this suite exists to hold is the one the addon was written for: a mob
-// casting raises no `castStart` event, so nothing an addon can subscribe to says a
-// boss mechanic started. Every case below drives the world by setting cast state on
-// an ENTITY, which is where the game actually puts it, and never delivers an event of
-// any kind. A display built the other way round would pass none of this.
+// The claim this suite holds is the one the addon was written for: a mob casting raises no
+// `castStart` event, so nothing an addon can subscribe to says a boss mechanic started. Every
+// case below drives the world by setting cast state on an entity, which is where the game puts
+// it, and never delivers an event of any kind.
 //
-// The second claim is the one every animated display shares: the subscription reports
-// the SET of casts changing and the bar's fill moves in a frame handler that reads the
-// world again. So the cases that drain a cast advance a frame and poll nothing. That
-// frame is the LOADER's one loop, stepped through `harness.frames`, which is what makes
-// every drain case here also a case about the addon being on `woc.onFrame` rather than
-// on a `requestAnimationFrame` of its own: the addon draws nothing without it.
+// The second claim is the one every animated display shares: the subscription reports the set
+// of casts changing and the bar's fill moves in a frame handler that reads the world again. So
+// the cases that drain a cast advance a frame and poll nothing. That frame is the loader's one
+// loop, stepped through `harness.frames`, so every drain case is also a case about the addon
+// being on `woc.onFrame` rather than on a `requestAnimationFrame` of its own.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { validateManifest } from '../../loader/src/shared/schema.ts';
@@ -102,11 +100,9 @@ afterEach(() => {
 });
 
 /**
- * Write a field on a live entity.
- *
- * A computed access, because the fixture is a `Record<string, unknown>`: the linter
- * wants dot access on a literal key and the compiler forbids it on an index
- * signature, and a helper is what settles the two.
+ * Write a field on a live entity. A computed access, because the fixture is a
+ * `Record<string, unknown>`: the linter wants dot access on a literal key and the compiler
+ * forbids it on an index signature.
  */
 function setField(entity: Fake, field: string, value: unknown): void {
   entity[field] = value;
@@ -175,14 +171,13 @@ async function settleFrames(): Promise<void> {
 }
 
 /**
- * Start the addon over an empty world, with settings already stored.
+ * Start the addon over an empty world, with settings already stored. Seeded before the body is
+ * evaluated, because the layout decides whether there is a frame at all and the addon reads
+ * that on its first line.
  *
- * Seeded before the body is evaluated, because the layout decides whether there is a
- * frame at all and the addon reads that on its first line.
- *
- * A saved frame box is seeded the same way, and it is how every case about the SIZE of
- * the list is driven: the restore takes the same path a drag does, clamped against the
- * same bounds and reported through the same callback.
+ * A saved frame box is seeded the same way, and it is how every case about the size of the list
+ * is driven: the restore takes the same path a drag does, clamped against the same bounds and
+ * reported through the same callback.
  */
 async function start(
   settings: Record<string, unknown> = {},
@@ -258,12 +253,9 @@ async function start(
 }
 
 /**
- * `start`, plus the wait for the panel to come up.
- *
- * A frame that saves its state starts hidden and is shown once that state arrives,
- * keyed per character, so it takes a watcher sample to find the character and a
- * storage read to come back. A hidden display draws nothing at all, deliberately, so
- * every case about what is on screen wants that to have happened first.
+ * `start`, plus the wait for the panel to come up. A frame that saves its state starts hidden
+ * and is shown once that state arrives, keyed per character, so it takes a watcher sample and a
+ * storage read. A hidden display draws nothing at all, deliberately.
  */
 async function run(
   settings: Record<string, unknown> = {},
@@ -280,20 +272,18 @@ describe('its manifest', () => {
     expect(validateManifest(MANIFEST_JSON).ok).toBe(true);
   });
 
-  // The point of the addon, stated as a permission: it reads the world, never the
-  // socket. An addon asking for `net.read` here would be asking for the surface that
-  // cannot answer the question.
+  // The point of the addon, stated as a permission: it reads the world, never the socket. An
+  // addon asking for `net.read` here would be asking for the surface that cannot answer the
+  // question.
   it('asks for no network permission', () => {
     expect(manifest().permissions).toEqual(['world.read', 'ui', 'keys']);
   });
 });
 
-// The reason the addon exists.
-//
-// `net.onEvent('castStart')` fires for a player cast, a pet, gathering and fishing.
-// A mob's mechanic sets its cast state directly on the entity and announces nothing,
-// so a boss mod built on the event is silent for every mob in the game. Nothing here
-// delivers an event; the world is driven exactly the way the game drives it.
+// `net.onEvent('castStart')` fires for a player cast, a pet, gathering and fishing. A mob's
+// mechanic sets its cast state directly on the entity and announces nothing, so a boss mod
+// built on the event is silent for every mob in the game. Nothing here delivers an event; the
+// world is driven exactly the way the game drives it.
 describe('a boss with a scripted cast', () => {
   it('shows a bar, with no cast event anywhere', async () => {
     const h = await run();
@@ -319,9 +309,9 @@ describe('a boss with a scripted cast', () => {
     expect(h.drawn()).toEqual([]);
   });
 
-  // A boss that finishes one mechanic and immediately starts another keeps its row,
-  // and the row has to follow: the entity id alone has not changed, so a display that
-  // named the bar once would keep announcing the mechanic that already landed.
+  // A boss that finishes one mechanic and immediately starts another keeps its row, and the row
+  // has to follow: the entity id alone has not changed, so a display that named the bar once
+  // would keep announcing the mechanic that already landed.
   it('renames the bar when the same caster starts something else', async () => {
     const h = await run();
     const boss = h.caster(BOSS);
@@ -356,11 +346,9 @@ describe('which casts are drawn', () => {
     expect(h.drawn()).toEqual([ADD, BOSS]);
   });
 
-  // Your own bar is the game's to draw, under the crosshair, and it draws it whether
-  // this addon is installed or not.
-  //
-  // Friendly casts are switched ON here on purpose: you are a friendly entity, so with
-  // the default filter this would pass without anything having excluded YOU.
+  // Your own bar is the game's to draw, under the crosshair. Friendly casts are switched on
+  // here on purpose: you are a friendly entity, so with the default filter this would pass
+  // without anything having excluded you.
   it('leaves your own cast to the game', async () => {
     const h = await run({ friendly: true });
 
@@ -436,9 +424,9 @@ describe('the filters', () => {
     expect(h.drawn()).toEqual([]);
   });
 
-  // The trap in that filter. It is measured against the cast's TOTAL, because a long
-  // cast is nearly over exactly when it matters most: filtering on what is LEFT would
-  // take the bar away in its final second, which is the second it exists for.
+  // The trap in that filter. It is measured against the cast's total, because a long cast is
+  // nearly over exactly when it matters most: filtering on what is left would take the bar away
+  // in its final second.
   it('keeps a long cast up once it is nearly done', async () => {
     const h = await run({ 'min-cast': 3 });
     const boss = h.caster(BOSS);
@@ -453,11 +441,9 @@ describe('the filters', () => {
   });
 });
 
-// The drain, which is the half a subscription cannot do.
-//
-// `world.on('casts')` reports a cast starting, ending or being replaced and says
-// nothing as the bar moves, so every case here changes the remaining time and
-// advances a FRAME. Nothing is polled and nothing is published.
+// The drain, which is the half a subscription cannot do. `world.on('casts')` reports a cast
+// starting, ending or being replaced and says nothing as the bar moves, so every case here
+// changes the remaining time and advances a frame.
 describe('the bar itself', () => {
   it('starts full', async () => {
     const h = await run();
@@ -498,11 +484,9 @@ describe('the bar itself', () => {
   });
 });
 
-// Naming a cast, which is the trap the roadmap names for this addon.
-//
-// `EntityCast.ability` is an ID, unlike the display NAME a damage record carries.
-// `world.abilities` bridges the two for your own kit and for nothing else, so a mob
-// mechanic falls back to a title-cased id and says so nowhere else.
+// `EntityCast.ability` is an id, unlike the display name a damage record carries.
+// `world.abilities` bridges the two for your own kit and for nothing else, so a mob mechanic
+// falls back to a title-cased id.
 describe('what a bar is called', () => {
   it('calls a known ability what the game calls it', async () => {
     const h = await run();
@@ -541,11 +525,9 @@ describe('what a bar is called', () => {
   });
 });
 
-// The school colour, and the honesty about not having one.
-//
 // An `EntityCast` carries no school at all. The only place to recover one is your own
-// spellbook, so a cast you also know is tinted and a boss mechanic is not. Guessing
-// would put the game's own colour for a damage type on a row nothing said that about.
+// spellbook, so a cast you also know is tinted and a boss mechanic is not. Guessing would put
+// the game's own colour for a damage type on a row nothing said that about.
 describe('the school tint', () => {
   it('tints a cast your own spellbook knows', async () => {
     const h = await run();
@@ -570,11 +552,11 @@ describe('the school tint', () => {
 
 // Saying the limit on screen, which is the half a comment in this file cannot do.
 //
-// A worked-out name and an untinted fill are the NORMAL case here rather than a
-// failure, so a player who is not told reads a plain uncoloured bar carrying a name
-// the game does not use as a display that is broken. The hedge is ON the row that
-// earned it: a question mark, which travels with the bar into a layout that has no
-// panel to put a footnote under and no pointer events to hover.
+// A worked-out name and an untinted fill are the normal case here rather than a failure, so a
+// player who is not told reads a plain uncoloured bar carrying a name the game does not use as
+// a display that is broken. The hedge is on the row that earned it: a question mark, which
+// travels with the bar into a layout that has no panel to put a footnote under and no pointer
+// events to hover.
 describe('what the display admits to', () => {
   it("marks a name it had to work out and leaves the game's own alone", async () => {
     const h = await run();
@@ -624,11 +606,9 @@ describe('what the display admits to', () => {
   });
 });
 
-// Rows are re-ordered, not re-appended.
-//
-// `appendChild` on an element already in the document MOVES it, which is a removal and
-// an insertion, and the browser drops an element's hover state on the removal. Doing
-// it to every row on every animation frame strands whatever was being tracked on it.
+// Rows are re-ordered, not re-appended. `appendChild` on an element already in the document
+// moves it, which is a removal and an insertion, and the browser drops an element's hover state
+// on the removal.
 describe('how rows are placed', () => {
   it('leaves a row alone when its position has not changed', async () => {
     const h = await run();
@@ -684,18 +664,16 @@ describe('the anchored layout', () => {
   /**
    * Put the casters somewhere on screen, which the shared fake cannot do.
    *
-   * `tests/fakes/shared-services.ts` answers ONE constant screen point for every world
-   * point and resolves no unit at all, because it has no renderer behind it, so the
-   * declutter has nothing to work on there. Both halves are ordinary fields on the kit
-   * that `ui.project` reads per call, so a suite that needs real positions can say what
-   * they are.
+   * `tests/fakes/shared-services.ts` answers one constant screen point for every world point
+   * and resolves no unit at all, because it has no renderer behind it, so the declutter has
+   * nothing to work on there. Both halves are ordinary fields on the kit that `ui.project`
+   * reads per call.
    *
-   * The unit point carries the entity id in its x and nothing else, and the projector
-   * reads it back out: one map then answers both halves and cannot disagree with
-   * itself. Only `ui.project` is affected. The anchors were built over the fake's own
-   * projector and stay where that puts them, which is the right scope for these cases:
-   * what is under test is the arithmetic this addon does with an answer, not the
-   * loader's placement of an element.
+   * The unit point carries the entity id in its x and nothing else, and the projector reads it
+   * back out, so one map answers both halves and cannot disagree with itself. Only `ui.project`
+   * is affected: the anchors were built over the fake's own projector and stay where that puts
+   * them, which is the right scope, since what is under test is the arithmetic this addon does
+   * with an answer.
    */
   function placeCasters(h: ForetellHarness, spots: Map<number, Spot>): void {
     const kit = h.shared.kit as unknown as {
@@ -742,12 +720,11 @@ describe('the anchored layout', () => {
     expect(h.detailOf(BOSS)).toBe('');
   });
 
-  // The head point is the LOADER's, off the renderer's own view of that model, and
-  // the case worth pinning is the one where there is no view: past the game's draw
-  // range, or in a suite with no renderer in it at all. No view is no point, so there
-  // is no bar, which is exactly where the game draws no nameplate either. The fixed
-  // offset above `entity.pos` this replaced had an answer here, and its answer was a
-  // bar floating over a unit nothing was drawing.
+  // The head point is the loader's, off the renderer's own view of that model, and the case
+  // worth pinning is the one where there is no view: past the game's draw range, or in a suite
+  // with no renderer. No view is no point, so there is no bar, which is where the game draws no
+  // nameplate either. A fixed offset above `entity.pos` answers here with a bar floating over a
+  // unit nothing is drawing.
   it('draws no bar over a unit the game is drawing no model for', async () => {
     const h = await run({ layout: 'anchors' });
     const boss = h.caster(BOSS);
@@ -759,10 +736,10 @@ describe('the anchored layout', () => {
     expect(anchors()[0]?.classList.contains('woc-anchor3d-off')).toBe(true);
   });
 
-  // The declutter reads `ui.project`, and a point it cannot answer for is a bar the
-  // loader has already hidden. Nothing is moved and, more importantly, nothing is
-  // DROPPED: this addon exists to show casts nothing else announces, so tidying the
-  // screen by taking one away would throw away the thing it is for.
+  // The declutter reads `ui.project`, and a point it cannot answer for is a bar the loader has
+  // already hidden. Nothing is moved and nothing is dropped: this addon exists to show casts
+  // nothing else announces, so tidying the screen by taking one away would throw away the thing
+  // it is for.
   it('leaves every bar alone while no cast has a place on screen', async () => {
     const h = await run({ layout: 'anchors' });
     const boss = h.caster(BOSS);
@@ -778,12 +755,10 @@ describe('the anchored layout', () => {
     expect(barFor(ADD)?.style.transform).toBe('');
   });
 
-  // The declutter, which is what `ui.project` and its depth are for.
-  //
-  // Two casters standing together put two bars in one place, and the nearer of them is
-  // the one whose place is worth keeping. Nothing is dropped to make room: the farther
-  // bar moves up and takes its caster's name back, because a bar that is no longer
-  // over anybody must stop claiming to be positional.
+  // The declutter, which is what `ui.project` and its depth are for. Two casters standing
+  // together put two bars in one place, and the nearer of them keeps its place. The farther bar
+  // moves up and takes its caster's name back, because a bar that is no longer over anybody
+  // must stop claiming to be positional.
   it('lifts a bar off the nearer one it would have landed on', async () => {
     const h = await run({ layout: 'anchors' });
     const boss = h.caster(BOSS);
@@ -887,21 +862,18 @@ describe('the anchored layout', () => {
 
 // The idle state, which is most of a session.
 //
-// Something is casting for a few seconds at a time and nothing is casting the rest
-// of the time, so whatever this display looks like empty is what it looks like
-// mostly. At any chromed density that is a small titled box parked on the HUD saying
-// nothing. The rows ARE the display, so the frame carries no chrome at all: an empty
-// one is nothing on screen.
+// Something is casting for a few seconds at a time and nothing is casting the rest of the
+// time, so whatever this display looks like empty is what it looks like mostly. At any chromed
+// density that is a small titled box parked on the HUD saying nothing. The rows are the
+// display, so the frame carries no chrome at all.
 //
-// happy-dom lays nothing out, so none of this can be asserted in pixels. What it can
-// assert is that there is nothing there to have any: no panel, no title bar, no
-// close button, and a body with nothing in it.
+// happy-dom lays nothing out, so none of this can be asserted in pixels. What it can assert is
+// that there is nothing there to have any: no panel, no title bar, no close button, and a body
+// with nothing in it.
 //
-// The frame does hold a BOX while idle, and that is the price of being resizable
-// rather than a contradiction of the above: a resizable frame is one the loader paints
-// a width and a height onto, so the room it reserves is there whether or not anything
-// is drawn in it. Nothing is VISIBLE in that room. It is the same trade the two tile
-// strips make, and it is the price of having handles at all.
+// The frame does hold a box while idle, which is the price of being resizable: a resizable
+// frame is one the loader paints a width and a height onto, so the room it reserves is there
+// whether or not anything is drawn in it. Nothing is visible in that room.
 describe('while nothing is casting', () => {
   function frameEl(): HTMLElement | null {
     return document.querySelector('[data-woc-frame="casts"]');
@@ -924,10 +896,9 @@ describe('while nothing is casting', () => {
     expect(document.querySelectorAll('.woc-ft-list > *')).toHaveLength(0);
   });
 
-  // The chrome goes and the NAME stays. It is the frame's accessible name and the
-  // row in the rail menu a player clicks to get the display back, and with no title
-  // bar and no close button those are the only two ways to it: dropping the title
-  // along with the bar that drew it would leave an overlay nothing can name.
+  // The chrome goes and the name stays. It is the frame's accessible name and the row in the
+  // rail menu a player clicks to get the display back, and with no title bar and no close
+  // button those are the only two ways to it.
   it('is still called Casts', async () => {
     const h = await run();
 
@@ -938,15 +909,13 @@ describe('while nothing is casting', () => {
 
 // Resizing the list, and the two halves of that which only work together.
 //
-// A bare frame with no `resizable` has no handles at all, so there is nothing to size
-// it by. Handles alone are the other half of the same bug, because the loader's bare
-// body CLIPS rather than scrolls: a frame with no floor takes the size it opened at as
-// its minimum, and any box under what the display draws cuts a bar in half rather than
-// offering a scrollbar.
+// A bare frame with no `resizable` has no handles at all. Handles alone are the other half of
+// the same bug, because the loader's bare body clips rather than scrolls: a frame with no floor
+// takes the size it opened at as its minimum, and any box under what the display draws cuts a
+// bar in half rather than offering a scrollbar.
 //
-// Driven by the SAVED box, because that is the same path a drag takes: the restore
-// lands asynchronously, is clamped against the same bounds, and reports through the
-// same callback.
+// Driven by the saved box, because that is the same path a drag takes: the restore lands
+// asynchronously, is clamped against the same bounds, and reports through the same callback.
 describe('the size of the list', () => {
   function frameEl(): HTMLElement | null {
     return document.querySelector<HTMLElement>('[data-woc-frame="casts"]');
@@ -1020,11 +989,10 @@ describe('the toggle', () => {
 });
 
 describe('disabling it', () => {
-  // The frame handler is the loader's now, so leaving one behind is not this addon
-  // burning a callback of its own: it is a handler the shared loop goes on calling
-  // against a world its addon has stopped reading, and it keeps the loop awake for
-  // every other addon too. `pending()` is one while the loop is live and zero once
-  // nothing is on it, which is what makes it the assertion rather than a proxy for it.
+  // The frame handler is the loader's, so leaving one behind is not this addon burning a
+  // callback of its own: it is a handler the shared loop goes on calling against a world its
+  // addon has stopped reading, and it keeps the loop awake for every other addon too.
+  // `pending()` is one while the loop is live and zero once nothing is on it.
   it('leaves no bar, no anchor, no keybind and nothing on the frame loop', async () => {
     const h = await run({ layout: 'anchors' });
     const boss = h.caster(BOSS);

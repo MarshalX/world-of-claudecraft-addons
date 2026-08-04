@@ -2,91 +2,75 @@
 
 // Veinsight: every gathering node in the world, pinned where it actually is.
 //
-// A gathering node is never an entity. The server spawns nothing for one and the
-// snapshot carries nothing about one: the game's own renderer draws all 156 straight
-// out of an authored table (`src/sim/content/gather_nodes.ts`), and the only thing
-// that ever reaches the wire is YOUR OWN respawn timers. So the table is the addon's
-// to carry and the timers are the game's to answer, and this file is the join.
+// A gathering node is never an entity. The server spawns nothing for one and the snapshot
+// carries nothing about one: the game's renderer draws all of them straight out of an
+// authored table (`src/sim/content/gather_nodes.ts`), and the only thing that reaches the
+// wire is your own respawn timers. So the table is the addon's to carry and the timers
+// are the game's to answer, and this file is the join.
 //
-// THE TABLE IS A FILE. `nodes.json`, declared as `data` in the manifest, fetched by
-// the loader at install and read back through `woc.data`. It is generated from a game
-// checkout by `generate.mjs` beside it, stamped with the version it was read from,
-// and nothing in it is inferred:
+// The table is a file: `nodes.json`, declared as `data` in the manifest, fetched by the
+// loader at install and read back through `woc.data`. It is generated from a game
+// checkout by `generate.mjs` beside it, stamped with the version it was read from, and
+// nothing in it is inferred:
 //
-//  - `nodes` is `GATHER_NODES` from `src/sim/content/gather_nodes.ts`, all 156 rows,
-//    52 of each type, 138 at tier 1, 12 at tier 2 and 6 at tier 3. Unlike a mob camp a
-//    node is NOT scattered by a world seed: the authored `pos` is where it is drawn,
-//    so a copy of the table is exact rather than approximate. The count is not stable
-//    across releases and nothing here assumes it is: game 0.34.0's density pass took
-//    the six tuned-strip zones to six nodes of every type against a doubled 240 second
-//    respawn, adding 57 rows and nudging 20 that were already there, and the eight
-//    expansion zones still carry their two-per-type starter kits until their own pass.
+//  - `nodes` is `GATHER_NODES`, every row. Unlike a mob camp a node is not scattered by a
+//    world seed: the authored `pos` is where it is drawn, so the copy is exact. The count
+//    is not stable across releases and nothing here assumes it is.
 //  - `tools` is every `use: { type: 'gatherTool' }` item in `src/sim/content/items.ts`,
 //    filed under the node type its profession opens rather than under the profession,
-//    because the type is what a node row carries. Fishing rods are left out: fishing
-//    has no world nodes at all.
-//  - `zones` is each zone's own `name` from its content file under `src/sim/content/`.
-//    They are THIS ADDON'S labels for THIS ADDON'S table and are never compared
-//    against `world.zone`, which is localized display text rather than an id.
-//  - `respawnSeconds` is `NODE_HARVEST_TABLE`'s own figure per node type, which is the
-//    denominator of every bar here. It is in the FILE rather than in this source
-//    because it is a tuning number that moves on a content pass: 0.34.0 doubled it to
-//    240 alongside the density pass, and a constant here would have gone on dividing
-//    by 120 and drawing a bar pinned at full for the whole first half of every wait.
+//    because the type is what a node row carries. Fishing rods are left out, since
+//    fishing has no world nodes.
+//  - `zones` is each zone's own `name` from its content file. They are this addon's
+//    labels for this addon's table and are never compared against `world.zone`, which is
+//    localized display text rather than an id.
+//  - `respawnSeconds` is `NODE_HARVEST_TABLE`'s figure per node type, which is the
+//    denominator of every bar here. It is in the file rather than in this source because
+//    it is a tuning number that moves on a content pass.
 //
-// WHAT IS A FACT HERE, AND WHAT IS AN INFERENCE. This is the important half.
+// What is a fact here and what is an inference:
 //
-// The cooldowns are FACTS. `world.nodeCooldowns` is node id to seconds remaining,
-// keyed by the same ids the table carries, so the join is direct and needs nothing
-// worked out. It is per PLAYER: the server keeps one deadline map per character
-// (`meta.nodeHarvestReadyAt`) and ships only the entries still counting, so a node
-// with no entry is ready FOR YOU whatever anybody else did to it. There is no camping
-// race, which is why every figure here says "yours" rather than "up". It rides the
-// snapshot, so it survives a reload with nothing stored and nothing to reconstruct.
+// The cooldowns are facts. `world.nodeCooldowns` is node id to seconds remaining, keyed
+// by the same ids the table carries. It is per player: the server keeps one deadline map
+// per character and ships only the entries still counting, so a node with no entry is
+// ready for you whatever anybody else did to it. It rides the snapshot, so it survives a
+// reload with nothing stored.
 //
-// The tool gate is a FACT, and it is a TOOL gate rather than a skill one. Reading a
-// node's tier against the best matching tool in your own bags is exactly what the
-// game does at the harvest boundary (`gathering.ts harvestNode`, `tools.ts
-// canGatherTier`): a tool covers its own tier and every tier below it, bare hands
-// cover nothing, and a node you have no tool for cannot be opened however good you
-// are at the profession. Gathering proficiency moves the RARITY of what a harvest
-// yields and how fast the cast runs, and gates nothing, so it is not read here.
+// The tool gate is a fact, and it is a tool gate rather than a skill one. Reading a
+// node's tier against the best matching tool in your bags is what the game does at the
+// harvest boundary (`gathering.ts harvestNode`, `tools.ts canGatherTier`): a tool covers
+// its own tier and every tier below it, and bare hands cover nothing. Gathering
+// proficiency moves the rarity of what a harvest yields and gates nothing.
 //
-// The HEIGHT is an inference, always, and the display says which of three kinds.
-// The table carries x and z and no y, because the game authors none: ground height is
-// a function of a world seed that no addon can call and no server sends. Three
-// answers, best first, and each pin's pillar says which one it is standing on:
+// The height is always an inference, and the display says which of three kinds. The table
+// carries x and z and no y, because ground height is a function of a world seed no addon
+// can call and no server sends. Each pin's pillar says which answer it is standing on:
 //
-//   harvested  You have gathered this node on this character, so its height was read
-//              off your own feet at the moment the harvest landed. Exact.
-//   sampled    An entity was standing within a few yards of the point, and mobs,
-//              NPCs and players stand on the ground. Captured ONCE rather than
-//              tracked, because tracking slides a marker up a ramp.
+//   harvested  You have gathered this node on this character, so its height was read off
+//              your own feet at the moment the harvest landed. Exact.
+//   sampled    An entity was standing within a few yards of the point, and mobs, NPCs and
+//              players stand on the ground. Captured once rather than tracked, because
+//              tracking slides a marker up a ramp.
 //   guessed    Nothing better was available, so the pin sits at your own height.
 //
-// That is why a pin is a tile on a pillar rather than a flat disc: a disc at the
-// wrong height reads as a bug, and a pillar that starts slightly high still points
-// at one spot on the ground.
+// That is why a pin is a tile on a pillar rather than a flat disc: a disc at the wrong
+// height reads as a bug, and a pillar that starts slightly high still points at one spot.
 //
-// The BEARING is a fact about your character and not about your camera. `facing` is
-// radians with 0 at +Z (`facingToward` is `atan2(dx, dz)`, `src/sim/eastbrook_layout.ts`)
-// and turning LEFT increases it (`src/sim/player_motion.ts`), so a positive difference
-// puts a node to your left, and that is the way the arrows run. Where the camera is
-// pointed is a different question and this addon does not claim to answer it.
+// The bearing is a fact about your character rather than your camera. `facing` is radians
+// with 0 at +Z and turning left increases it, so a positive difference puts a node to
+// your left and the arrows run that way. Where the camera points is a different question
+// this addon does not answer.
 //
-// The ZONE FILTER cannot be answered alone. The loader publishes no zone id, because
-// the game's own resolver clamps rather than answering null and so names an overworld
-// zone for a player standing in a dungeon. Every node row carries its own `zoneId`, so
-// nothing here needs a rectangle: what is missing is only which zone YOU are in, which
-// is one bus topic away. Nothing publishes it unless a zone addon is installed, so the
-// filter degrades to every zone and the panel says so in words rather than quietly
-// listing everything.
+// The zone filter cannot be answered alone. The loader publishes no zone id, because the
+// game's own resolver clamps rather than answering null and so names an overworld zone
+// for a player standing in a dungeon. Every node row carries its own `zoneId`, so what is
+// missing is only which zone you are in, which is one bus topic away. Nothing publishes
+// it unless a zone addon is installed, so the filter degrades to every zone and the panel
+// says so in words.
 //
-// The split between the two clocks is the usual one. The list, the pins and every
-// countdown move at most once a second and live on `woc.setInterval`; the only thing
-// on `woc.onFrame` is the route line, whose two ends have to be re-projected as the
-// camera turns. The pins position themselves, because `ui.anchor3d` rides the
-// loader's own loop already.
+// The list, the pins and every countdown move at most once a second and live on
+// `woc.setInterval`. The only thing on `woc.onFrame` is the route line, whose two ends
+// have to be re-projected as the camera turns; the pins position themselves, since
+// `ui.anchor3d` rides the loader's own loop.
 
 /** Yards the game lets you harvest from, `INTERACT_RANGE` in `src/sim/types.ts`. */
 const REACH_YARDS = 5;
@@ -95,14 +79,11 @@ const SAMPLE_YARDS = 6;
 const MS_PER_SECOND = 1000;
 const SECONDS_PER_MINUTE = 60;
 /**
- * Under this many SECONDS left, a row goes warm: the node is nearly yours again.
+ * Under this many seconds left, a row goes warm: the node is nearly yours again.
  *
- * ABSOLUTE, and deliberately NOT a share of the respawn. It is how much warning the
- * player gets to start walking, and how far away they are has nothing to do with how
- * long the node sleeps, so it does not track `respawnByType` and must not be rewritten
- * to. Spelled out because the ratio moved on its own: it was an eighth of the old 120
- * second respawn and is a sixteenth of 0.34.0's 240, which is exactly the shape of
- * number a later reader assumes was proportional and "corrects".
+ * Absolute, and deliberately not a share of the respawn. It is how much warning the player
+ * gets to start walking, and how far away they are has nothing to do with how long the
+ * node sleeps, so it does not track `respawnByType` and must not be rewritten to.
  */
 const NEARLY_READY = 15;
 
@@ -116,23 +97,18 @@ const PILLAR_WIDTH_PX = 3;
 /** The type edge down the left of a row. */
 const ROW_EDGE_PX = 3;
 /**
- * Where a row's text starts, and therefore where the note above the rows lines up.
- *
- * The kit's own 4px of padding inside a bar, plus the edge this addon draws OUTSIDE
- * that padding. Written out because the note is a plain div and has no bar to
- * inherit either number from; a few pixels out would only ever look like a few
- * pixels out, which is why it is safe to state rather than derive.
+ * Where a row's text starts, and therefore where the note above the rows lines up. The
+ * kit's own 4px of padding inside a bar, plus the edge this addon draws outside that
+ * padding. Written out because the note is a plain div with no bar to inherit from.
  */
 const TEXT_INSET_PX = 7;
 /** How opaque a pin is while its node is still cooling down for you. */
 const COOLING_OPACITY = 0.45;
 const READY_OPACITY = 1;
 /**
- * How many pins may be in the world at once.
- *
- * A cap rather than a promise, because the draw distance goes to 400 yards and a
- * node cluster is six deep. It is drawn as a NUMBER in the note when it bites, so
- * the display never quietly shows a subset as if it were everything.
+ * How many pins may be in the world at once. A cap rather than a promise, since the draw
+ * distance goes to 400 yards and a node cluster is six deep. It is drawn as a number in
+ * the note when it bites, so the display never shows a subset as if it were everything.
  */
 const MAX_PINS = 24;
 
@@ -161,12 +137,10 @@ const TYPES = ['ore', 'wood', 'herb'];
 const TYPE_LABEL = { ore: 'Ore vein', wood: 'Wood stand', herb: 'Herb patch' };
 
 /**
- * Each type's colour, and it is the GAME'S rather than one this addon picked.
- *
- * `NODE_COLOR` in `src/render/gather_nodes_lookup.ts` is what the world mesh is
- * tinted with, so a pillar in the same colour matches the thing it points at.
- * Nothing else here is coloured: a bar's fill is the kit's to tint by tone, and an
- * addon passing its own colour is how two addons stop looking alike.
+ * Each type's colour, which is the game's rather than one this addon picked. `NODE_COLOR`
+ * in `src/render/gather_nodes_lookup.ts` is what the world mesh is tinted with, so a
+ * pillar in the same colour matches the thing it points at. Nothing else here is
+ * coloured: a bar's fill is the kit's to tint by tone.
  */
 const TYPE_TINT = { ore: '#8a8f98', wood: '#5b3a21', herb: '#4caf50' };
 
@@ -174,11 +148,8 @@ const TYPE_TINT = { ore: '#8a8f98', wood: '#5b3a21', herb: '#4caf50' };
 const TYPE_SETTING = { ore: 'show-ore', wood: 'show-wood', herb: 'show-herb' };
 
 /**
- * Eight sectors around the player, starting straight ahead and turning LEFT.
- *
- * Left rather than right because that is the direction `facing` increases in, and
- * getting it backwards would be a display that is wrong in a way nobody can see
- * until they have followed it.
+ * Eight sectors around the player, starting straight ahead and turning left, because that
+ * is the direction `facing` increases in.
  */
 const ARROWS = ['↑', '↖', '←', '↙', '↓', '↘', '→', '↗'];
 const SECTOR_RADIANS = (Math.PI * 2) / ARROWS.length;
@@ -197,12 +168,10 @@ const DEFAULT_DISTANCE = 150;
 const DEFAULT_LENGTH = 6;
 
 /**
- * The longest a gather cast can run, `GATHER_CAST_BASE_SEC` in `gathering.ts`.
- *
- * The formula only ever shortens it, so this is a ceiling rather than a guess. It
- * is here because an interrupted cast emits no result, and a note saying a harvest
- * is under way with nothing behind it is exactly the kind of thing that reads as
- * live and is not.
+ * The longest a gather cast can run, `GATHER_CAST_BASE_SEC` in `gathering.ts`. The formula
+ * only ever shortens it, so this is a ceiling rather than a guess. It is here because an
+ * interrupted cast emits no result, and a note saying a harvest is under way with nothing
+ * behind it reads as live when it is not.
  */
 const GATHER_CAST_MS = 2500;
 
@@ -214,32 +183,27 @@ let zoneNames = new Map();
 /** Node type to the tools that open it, each with the tier it covers. */
 let toolsByType = new Map();
 /**
- * Node type to the seconds a harvested node of it takes to come back, off the game's
- * own `NODE_HARVEST_TABLE`.
+ * Node type to the seconds a harvested node of it takes to come back, off the game's own
+ * `NODE_HARVEST_TABLE`.
  *
  * It comes out of the data file rather than being written down here, because it is a
- * TUNING number: it moves on a content pass with nothing on the wire to announce it,
- * and game 0.34.0 doubled it from 120 to 240. A constant here is wrong the moment
- * that happens and wrong SILENTLY, because the fill is clamped: dividing by 120 while
- * the server counts down from 240 draws a bar pinned at full for the whole first two
- * minutes, which reads as a node that has not started coming back rather than as a
- * display that is lying.
+ * tuning number that moves on a content pass with nothing on the wire to announce it. A
+ * constant here is wrong silently, since the fill is clamped: dividing by 120 while the
+ * server counts down from 240 draws a bar pinned at full for the whole first half.
  *
- * Per type because the game's table is keyed per type; all three agree today. Empty
- * until the data file lands, and nothing draws against it before then: `readTable`
- * refuses a file that does not carry a positive figure for every type, so by the time
- * there is a node to draw, its own type has one.
+ * Per type because the game's table is keyed per type; all three agree today. Empty until
+ * the data file lands, and nothing draws against it before then: `readTable` refuses a
+ * file that does not carry a positive figure for every type.
  */
 let respawnByType = new Map();
 /** Node type to the best tier you own, recomputed once per draw rather than per node. */
 let tierByType = new Map();
 
 /**
- * Node id to the height under it, and which of the three ways that was arrived at.
- *
- * A `harvested` entry is the only kind written down, because it is the only kind
- * that is a measurement. A `sampled` one is an estimate a different session would
- * make differently, and storing it would turn one passer-by into a permanent claim.
+ * Node id to the height under it, and which of the three ways that was arrived at. A
+ * `harvested` entry is the only kind written down, because it is the only kind that is a
+ * measurement: a `sampled` one is an estimate a different session would make differently,
+ * and storing it would turn one passer-by into a permanent claim.
  */
 const heights = new Map();
 
@@ -301,12 +265,10 @@ function readTool(value) {
 
 /**
  * The respawn map, or null unless every type carries a positive number of seconds.
- *
- * Refused outright rather than defaulted, which is the opposite of how a bad NODE row
- * is treated, and deliberately: a node that does not check out is one row left out of
- * a list, while a missing respawn length is the denominator of every bar in the panel.
- * There is no honest number to fall back to, and the last one this addon happened to
- * know is exactly the stale constant reading it from the file is here to remove.
+ * Refused outright rather than defaulted, which is the opposite of how a bad node row is
+ * treated: a node that does not check out is one row left out of a list, while a missing
+ * respawn length is the denominator of every bar in the panel, and there is no honest
+ * number to fall back to.
  */
 function readRespawn(value) {
   if (typeof value !== 'object' || value === null) {
@@ -353,7 +315,6 @@ function keep(listed, read, what) {
   return kept;
 }
 
-/** Group the tools by the node type each one opens. */
 function indexTools(kept) {
   const byType = new Map(TYPES.map((type) => [type, []]));
   for (const tool of kept) {
@@ -400,10 +361,9 @@ function listLength() {
 const note = document.createElement('div');
 note.className = 'woc-vs-note';
 note.style.opacity = '0.75';
-// Indented to the rows rather than to the body, which is what it looked like it
-// should be until there were rows under it: with no padding of its own the sentence
-// starts 7px left of every label below it and ends hard against the panel's border,
-// and a line of text touching a border reads as a line that has been cut off.
+// Indented to the rows rather than to the body: with no padding of its own the sentence
+// starts 7px left of every label below it and ends hard against the panel's border, and a
+// line of text touching a border reads as one that has been cut off.
 note.style.padding = `2px ${String(TEXT_INSET_PX)}px 4px`;
 
 const list = document.createElement('div');
@@ -413,13 +373,12 @@ list.style.flexDirection = 'column';
 list.style.gap = '3px';
 
 /**
- * A frame rather than a window, because the player TOGGLES it rather than opening
- * it, and compact rather than comfortable because it is glanced at while riding.
+ * A frame rather than a window, because the player toggles it rather than opening it, and
+ * compact rather than comfortable because it is glanced at while riding.
  *
- * Not resizable, and that is the pair rule rather than an omission: how many rows
- * there are is a number the player sets, so a handle that changed the height either
- * clips the rows or leaves a gap under them. The honest control is a size setting,
- * which is what `list-length` is.
+ * Not resizable: how many rows there are is a number the player sets, so a handle that
+ * changed the height would either clip the rows or leave a gap under them. The honest
+ * control is the `list-length` setting.
  */
 const frame = woc.ui.frame({
   id: 'nodes',
@@ -433,17 +392,15 @@ const frame = woc.ui.frame({
 /**
  * The column the content lays out in, and the whole of what fixes the width.
  *
- * A frame that is not resizable is CONTENT SIZED: the loader writes its position and
- * leaves the box to the browser, since `frame/interactive.ts` paints a width only for
- * a frame somebody can drag. So `width` above is the opening box and the floor a
- * resize could reach, and neither of those reaches a frame nobody can resize. What
- * that leaves is a panel as wide as its longest line, which is not a constant: it
- * measured 403px holding the note above and 169px holding "No node within 20 yd", so
- * it changed width under the player every time the note changed, and again on a zone
- * whose name is longer than Eastbrook Vale.
+ * A frame that is not resizable is content sized: the loader writes its position and
+ * leaves the box to the browser, since `frame/interactive.ts` paints a width only for a
+ * frame somebody can drag. So `width` above is the opening box and the floor a resize
+ * could reach, and neither reaches a frame nobody can resize. What that leaves is a panel
+ * as wide as its longest line, which changed width under the player every time the note
+ * changed.
  *
- * A column of a stated width is what `width` was meant to say. The note wraps inside
- * it, the rows lay out against it, and the panel is the same width all session.
+ * A column of a stated width is what `width` was meant to say: the note wraps inside it,
+ * the rows lay out against it, and the panel is the same width all session.
  */
 const column = document.createElement('div');
 column.className = 'woc-vs-column';
@@ -476,16 +433,15 @@ function coolingFor(node) {
 }
 
 /**
- * The best tier of tool you own for one type, `NO_TOOL` for none, or null for bags
- * that cannot be read.
+ * The best tier of tool you own for one type, `NO_TOOL` for none, or null for bags that
+ * cannot be read.
  *
- * The bags rather than the equipment, because a gathering tool has no slot: the
- * game's own gate scans the whole inventory (`bestOwnedGatherToolTierOrNone`).
+ * The bags rather than the equipment, because a gathering tool has no slot: the game's own
+ * gate scans the whole inventory (`bestOwnedGatherToolTierOrNone`).
  *
- * Null and `NO_TOOL` are different answers and collapsing them would be the whole
- * display lying at once: an inventory the loader cannot read yet would otherwise say
- * every node in the world is shut to you, which is what "you own no tools" looks
- * like from the outside. Null means the gate is not applied and the panel says so.
+ * Null and `NO_TOOL` are different answers and collapsing them would make the whole
+ * display lie: an inventory the loader cannot read yet would say every node in the world
+ * is shut to you. Null means the gate is not applied and the panel says so.
  */
 function bestToolTier(type) {
   const bags = woc.world.inventory;
@@ -509,7 +465,6 @@ function refreshTools() {
   tierByType = new Map(TYPES.map((type) => [type, bestToolTier(type)]));
 }
 
-/** The best tier owned for a type, or null while the bags cannot be read. */
 function toolTier(type) {
   return tierByType.get(type) ?? null;
 }
@@ -535,11 +490,9 @@ function distanceTo(node) {
 }
 
 /**
- * Which way to turn for a node, as one of eight arrows.
- *
- * Relative to your character's facing rather than to the camera, and the sign is
- * the game's: `facing` grows as you turn left, so a positive difference is a node on
- * your left and the sectors run that way.
+ * Which way to turn for a node, as one of eight arrows. Relative to your character's
+ * facing rather than to the camera, and the sign is the game's: `facing` grows as you turn
+ * left, so a positive difference is a node on your left.
  */
 function bearingTo(node) {
   const me = player();
@@ -566,9 +519,8 @@ function sampleHeight(node) {
 }
 
 /**
- * The height under a node and where that number came from, or null with no world.
- *
- * A harvested height is kept forever and a sampled one is captured once; a guess is
+ * The height under a node and where that number came from, or null with no world. A
+ * harvested height is kept forever and a sampled one is captured once; a guess is
  * recomputed every time, because it is the player's own height and they move.
  */
 function heightFor(node) {
@@ -653,17 +605,14 @@ function countdown(seconds) {
 /**
  * The same countdown in bare seconds: `83s`, `12s`.
  *
- * For the pin, which is a 40px square rather than a 300px row: `1m 23s` does not fit
- * in one, and what a browser does with text that does not fit is wrap it and paint
- * the second line past the tile.
+ * For the pin, which is a 40px square rather than a 300px row: `1m 23s` does not fit, and
+ * what a browser does with text that does not fit is wrap it and paint the second line
+ * past the tile.
  *
- * Seconds all the way up rather than minutes above a minute, which is what every
- * other countdown in a tile does. The range is what makes the difference: an aura
- * runs to ten minutes and needs the shorter unit, while a node comes back inside one
- * respawn, which at game 0.34.0 is 240 seconds, so the longest figure is `240s` and
- * four characters still fit. Rounding that range to whole minutes would leave four
- * distinct readings across the entire wait, which costs the one thing the figure is
- * for, namely whether it is worth standing here.
+ * Seconds all the way up rather than minutes above a minute, which is what every other
+ * countdown in a tile does. A node comes back inside one respawn, so the longest figure is
+ * four characters, and rounding that range to whole minutes would leave four distinct
+ * readings across the entire wait.
  */
 function pinCountdown(seconds) {
   return `${String(Math.ceil(seconds))}s`;
@@ -680,11 +629,9 @@ function takeable(node) {
 }
 
 /**
- * The figure a node is drawn with, in whichever length the caller has room for.
- *
- * The two states are words rather than times and are the same in both places: a
- * pin that abbreviated "Tool" would be saying something else, and there is nothing
- * shorter than "Yours" that still says whose the timer is.
+ * The figure a node is drawn with, in whichever length the caller has room for. The two
+ * states are words rather than times and are the same in both places: a pin that
+ * abbreviated "Tool" would be saying something else.
  */
 function figureIn(node, time) {
   if (!openable(node)) {
@@ -708,11 +655,10 @@ function pinFigure(node) {
 }
 
 /**
- * How full a row is, in the kit's own sense: how much of the timer is LEFT.
- *
- * A node that is ready has no timer, so it draws empty and the figure carries the
- * state. Nothing here inverts the fill to make the good state loud, because a bar
- * meaning "remaining" on one row and "progress" on another means nothing at all.
+ * How full a row is, in the kit's own sense: how much of the timer is left. A node that is
+ * ready has no timer, so it draws empty and the figure carries the state. Nothing here
+ * inverts the fill, because a bar meaning "remaining" on one row and "progress" on another
+ * means nothing at all.
  */
 function fillFor(node) {
   const left = coolingFor(node);
@@ -772,22 +718,19 @@ function createRow(node) {
   const bar = woc.ui.bar({ label: labelFor(node), className: 'woc-vs-row' });
   bar.el.dataset.node = node.id;
   bar.el.style.borderLeft = `${String(ROW_EDGE_PX)}px solid ${TYPE_TINT[node.type]}`;
-  // The same width back on the other side, and invisible. A border sits outside the
-  // kit's padding, so an edge on one side alone makes the row lopsided: the name
-  // gets 7px of air and the countdown 4, which puts the figure nearer the panel's
-  // border than anything else on the row and reads as a number about to be cut off.
-  // Mirrored rather than measured, so it stays right if the kit's padding moves.
+  // The same width back on the other side, and invisible. A border sits outside the kit's
+  // padding, so an edge on one side alone makes the row lopsided and puts the figure
+  // nearer the panel's border than anything else on the row. Mirrored rather than
+  // measured, so it stays right if the kit's padding moves.
   bar.el.style.borderRight = `${String(ROW_EDGE_PX)}px solid transparent`;
   woc.ui.tooltip(bar.el, () => rowTooltip(node));
   return bar;
 }
 
 /**
- * The pillar under a pin, whose line style is the height's provenance.
- *
- * Drawn rather than written because a pin cannot carry a tooltip: the loader makes
- * every anchor pointer-transparent, so nothing over the world is hoverable. The
- * words are on the row in the list, which is.
+ * The pillar under a pin, whose line style is the height's provenance. Drawn rather than
+ * written because a pin cannot carry a tooltip: the loader makes every anchor
+ * pointer-transparent. The words are on the row in the list, which is hoverable.
  */
 function createPillar(node) {
   const pillar = document.createElement('div');
@@ -801,10 +744,9 @@ function createPillar(node) {
 }
 
 /**
- * One pin: a tile with the respawn sweeping over it, standing on a pillar.
- *
- * The anchor centres its content on the point, so the whole thing is lifted by half
- * its own height to put the pillar's FOOT on the node rather than its middle.
+ * One pin: a tile with the respawn sweeping over it, standing on a pillar. The anchor
+ * centres its content on the point, so the whole thing is lifted by half its own height to
+ * put the pillar's foot on the node rather than its middle.
  */
 function createPin(node) {
   const tile = woc.ui.tile({
@@ -998,14 +940,12 @@ function redraw() {
 }
 
 /**
- * The route's stops: the nearest nodes that are actually yours, chained one to the
- * next from where you stand.
+ * The route's stops: the nearest nodes that are actually yours, chained one to the next
+ * from where you stand.
  *
- * Nearest-neighbour rather than anything cleverer, because the honest claim is "go
- * here, then here" and not "this is the shortest tour", which is a claim this addon
- * would have no way to stand behind. Only takeable nodes are joined: a leg to
- * something still cooling, or to something your tools cannot open, is a walk to
- * nothing.
+ * Nearest-neighbour rather than anything cleverer, because the honest claim is "go here,
+ * then here" and not "this is the shortest tour". Only takeable nodes are joined: a leg to
+ * something still cooling, or to something your tools cannot open, is a walk to nothing.
  */
 function routeStops(entries) {
   const left = entries.map((entry) => entry.node).filter(takeable);
@@ -1085,11 +1025,10 @@ function screenEnd(end) {
 }
 
 /**
- * Lay one leg out from where its two ends are on screen right now.
- *
- * This is the only thing in the addon on the frame tick, and it has to be: a leg's
- * length and angle are answers about the CAMERA, so they change when nothing in the
- * world has moved at all. Written only when the rounded numbers changed.
+ * Lay one leg out from where its two ends are on screen right now. The only thing in the
+ * addon on the frame tick, and it has to be: a leg's length and angle are answers about
+ * the camera, so they change when nothing in the world has moved. Written only when the
+ * rounded numbers changed.
  */
 function paintLeg(leg) {
   const start = screenEnd(leg.from);
@@ -1153,11 +1092,9 @@ function persist() {
 }
 
 /**
- * Take a stored height back, over a node nothing better is known about.
- *
- * A per-character READ waits for the character, so this settles at world entry,
- * which is after a harvest could already have landed. What this session measured is
- * newer by definition, so a stored value never overwrites a harvested one.
+ * Take a stored height back, over a node nothing better is known about. A per-character
+ * read waits for the character, so this settles at world entry, which is after a harvest
+ * could already have landed: what this session measured is newer by definition.
  */
 function reclaim(id, value) {
   const known = heights.get(id);
@@ -1187,18 +1124,16 @@ function load() {
 }
 
 // The key set changing is the one signal a node becoming yours again produces, and
-// `world.on` reports that set rather than the seconds counting down, which is
-// exactly the split this addon is drawn on. The inventory watch is the tool gate:
-// buying a better pick changes what half of these rows say.
+// `world.on` reports that set rather than the seconds counting down. The inventory watch
+// is the tool gate: buying a better pick changes what half of these rows say.
 woc.world.on('nodeCooldowns', redraw);
 woc.world.on('inventory', redraw);
 
 /**
- * A harvest landed, so this node's height is now a measurement rather than a guess.
- *
- * The player is standing ON the node when the cast completes, which is what makes
- * their own feet the exact answer for a point the table gives no height for. It
- * overwrites whatever was there, because every other kind of answer is an estimate.
+ * A harvest landed, so this node's height is now a measurement rather than a guess. The
+ * player is standing on the node when the cast completes, which is what makes their own
+ * feet the exact answer. It overwrites whatever was there, since every other kind of
+ * answer is an estimate.
  */
 woc.net.onEvent('gatherResult', (event) => {
   harvesting = null;
@@ -1213,17 +1148,16 @@ woc.net.onEvent('gatherResult', (event) => {
 });
 
 /**
- * A gather cast has started, and it says the TYPE and no node id at all.
+ * A gather cast has started, and it says the type and no node id at all.
  *
  * So the note says a harvest is under way and deliberately does not say of what:
- * attributing it to the nearest node of that type would be a guess drawn as a fact,
- * and the id arrives on the result a second or two later anyway.
+ * attributing it to the nearest node of that type would be a guess drawn as a fact, and
+ * the id arrives on the result a second or two later.
  *
- * Two guards, and both of them are about the note being true rather than merely
- * present. `castStart` is a BROADCAST rather than a personal record, so somebody
- * else mining beside you emits one and would otherwise say YOU were harvesting.
- * And an interrupted cast emits no result at all, so the note is stamped with the
- * longest a cast can run rather than left standing until one arrives.
+ * Two guards, both about the note being true rather than merely present. `castStart` is a
+ * broadcast rather than a personal record, so somebody else mining beside you emits one.
+ * And an interrupted cast emits no result at all, so the note is stamped with the longest
+ * a cast can run rather than left standing until one arrives.
  */
 woc.net.onEvent('castStart', (event) => {
   const me = player();
@@ -1236,11 +1170,10 @@ woc.net.onEvent('castStart', (event) => {
 });
 
 /**
- * The player has become somebody else without the page reloading.
- *
- * Heights are per character in storage, and a sampled one is per session, so both
- * sets belong to whoever was playing a moment ago. Left in place, the next harvest
- * would write the previous character's measurements out under this one's key.
+ * The player has become somebody else without the page reloading. Heights are per
+ * character in storage and a sampled one is per session, so both sets belong to whoever
+ * was playing a moment ago: left in place, the next harvest would write the previous
+ * character's measurements out under this one's key.
  */
 woc.world.on('characterKey', () => {
   heights.clear();
@@ -1248,10 +1181,10 @@ woc.world.on('characterKey', () => {
   redraw();
 });
 
-// A zone publisher, if one is installed. `anySender` rather than a hardcoded fqid,
-// because `official/wayfarer` is right only on the official marketplace and the same
-// addon installed from a fork publishes under another name. Silence is ordinary: it
-// means nobody is publishing, which the note says in words.
+// A zone publisher, if one is installed. `anySender` rather than a hardcoded fqid, because
+// `official/wayfarer` is right only on the official marketplace and the same addon
+// installed from a fork publishes under another name. Silence is ordinary: it means nobody
+// is publishing, which the note says in words.
 woc.bus.on(woc.bus.anySender, ZONE_TOPIC, (message) => {
   const zone = message.payload;
   if (typeof zone === 'object' && zone !== null && typeof zone.id === 'string') {
@@ -1266,9 +1199,8 @@ function askForZone() {
   woc.bus.emit(`${ZONE_TOPIC}:ask`);
 }
 
-// Once a second, because every figure on this panel moves at most that often: a
-// countdown is written in whole seconds and a 240 second sweep moves a sixth of a
-// degree a tick. The route is the exception and rides the frame loop below.
+// Once a second, because every figure on this panel moves at most that often. The route
+// is the exception and rides the frame loop below.
 woc.setInterval(redraw, MS_PER_SECOND);
 
 // The legs only, and only while there are any. Everything else here would be sixty
@@ -1281,8 +1213,8 @@ woc.onFrame(() => {
 
 woc.keys.bind('toggle', () => {
   frame.toggle();
-  // Now rather than up to a second from now: somebody who just hid the panel should
-  // not watch its pins hang over the world waiting for the next tick.
+  // Now rather than up to a second from now: somebody who just hid the panel should not
+  // watch its pins hang over the world waiting for the next tick.
   redraw();
 });
 
@@ -1292,13 +1224,11 @@ woc.onSettingsChange(() => {
 });
 
 /**
- * Read the table in, then do the two things that needed one.
- *
- * Every handler above is wired first and is a no-op against an empty table rather
- * than wrong, which is what makes that order safe: an addon's first line runs at
- * document-start, and subscribing after an await would miss whatever landed during
- * it. `load()` rather than `await restore()`, because a per-character read waits for
- * the character and awaiting it here would hold the first draw on the landing page.
+ * Read the table in, then do the two things that needed one. Every handler above is wired
+ * first and is a no-op against an empty table rather than wrong, which is what makes that
+ * order safe: subscribing after an await would miss whatever landed during it. `load()`
+ * rather than `await restore()`, because a per-character read waits for the character and
+ * would hold the first draw on the landing page.
  */
 async function boot() {
   const table = readTable(await woc.data(DATA_FILE));

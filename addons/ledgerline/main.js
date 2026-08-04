@@ -2,79 +2,69 @@
 
 // Ledgerline: a price history for a market that keeps none.
 //
-// THE SERVER KEEPS NOTHING. There is no history table, no sold-price record and no
-// query for either, and a listing simply exists until somebody buys it or it expires.
-// So a price history is not something this addon READS, it is something this addon IS:
-// every page the player browses at the Merchant is written down, and the ledger is
-// exactly as complete as the browsing behind it. Nothing here can act, either: there is
-// no send API, so every figure below is a RECORD of what the player saw and the panes
-// say so wherever a reader might otherwise take a row for a button.
+// The server keeps nothing. There is no history table, no sold-price record and no query
+// for either, and a listing simply exists until somebody buys it or it expires. So a price
+// history is not something this addon reads, it is something this addon is: every page the
+// player browses at the Merchant is written down, and the ledger is exactly as complete as
+// the browsing behind it. Nothing here can act either, since there is no send API, so
+// every figure below is a record of what the player saw and the panes say so wherever a
+// reader might take a row for a button.
 //
-// ONLY `near` IS EVER RECORDED, which is the single worst bug this feature can have.
-// `world.market` is three-state: `near` carries the page, `away` means the player is
-// not at the Merchant, and `unknown` means nothing has decoded yet. The last two carry
-// null and differ only in why. Recording `away` as an empty market would erase the
-// ledger the moment the player took three steps, and presenting it as one would tell a
-// player standing in a town that nobody is selling anything. One `away` after a
-// reconnect is neither, and the guard for it is at `onAway`.
+// Only `near` is ever recorded, which is the single worst bug this feature can have.
+// `world.market` is three-state: `near` carries the page, `away` means the player is not
+// at the Merchant, and `unknown` means nothing has decoded yet. Recording `away` as an
+// empty market would erase the ledger the moment the player took three steps, and
+// presenting it as one would tell a player standing in a town that nobody is selling
+// anything. One `away` after a reconnect is neither, and the guard for it is at `onAway`.
 //
-// `price` IS THE TOTAL BUYOUT FOR THE WHOLE STACK, not a unit price. Every series here
-// divides by `count` before comparing anything, because a stack of 20 against a single
-// is not a price movement, it is a stack size. Both figures are kept: the total is what
-// the server sorts on and therefore what the undercut check compares, and the unit is
+// `price` is the total buyout for the whole stack rather than a unit price. Every series
+// here divides by `count` before comparing anything, because a stack of 20 against a
+// single is a stack size rather than a price movement. Both figures are kept: the total is
+// what the server sorts on and therefore what the undercut check compares, and the unit is
 // what a series is drawn from.
 //
-// THE QUERY ECHO IS THE SIGNAL THAT THE QUERY RESET. The payload echoes `filter`,
-// `itemType`, `subtype`, `armorClass`, `primaryStat` and `rarity` precisely because a
-// fresh join resets the server-side query while the window's own controls survive, so
-// the player believes a filter is applied that no longer is. Every recorded entry
-// carries the query that produced it, and an item whose readings came from more than
-// one query says so, because a low taken under a filter and a low taken without one are
-// not answers to the same question.
+// The query echo is the signal that the query reset. The payload echoes `filter`,
+// `itemType`, `subtype`, `armorClass`, `primaryStat` and `rarity` because a fresh join
+// resets the server-side query while the window's own controls survive, so the player
+// believes a filter is applied that no longer is. Every recorded entry carries the query
+// that produced it, and an item whose readings came from more than one query says so.
 //
-// THE UNDERCUT CHECK NEEDS NO ITEM NAMES, because the server's own ordering settles it:
+// The undercut check needs no item names, because the server's own ordering settles it:
 // see `blockStart` for the ordering and `verdictFor` for the two answers it refuses to
 // give.
 //
-// NAMES ARE NOT REQUIRED AND ARE NOT AVAILABLE. No API answers what an item is called:
-// the item table is bundled inside the game's own chunk. `ui.icon.item` builds a picture
-// from the id, `ui.icon.itemArtName` gives the name the art FILE was filed under, which
-// is provenance for the picture rather than the item's name and disagrees with the game
-// for 21 of 303 ids, and an addon publishing on the bus outranks both. The ledger is
-// complete without a single name; a name that turns up moves a label.
+// Names are not required and are not available. No API answers what an item is called,
+// since the item table is bundled inside the game's own chunk. `ui.icon.itemArtName` gives
+// the name the art file was filed under, which is provenance for the picture rather than
+// the item's name, and an addon publishing on the bus outranks it. The ledger is complete
+// without a single name; a name that turns up moves a label.
 //
-// "FIRST SEEN BY YOU" IS THIS ADDON'S OWN RECORD AND IS LABELLED AS ONE. A listing
-// expires at 48 hours and NO WIRED ROW CARRIES AN EXPIRY: a row is an id, a seller, an
-// item, a count, a price, whether it is yours, whether it is the house's, and sometimes
-// an instance. Nothing counts down and nothing can be derived. So the nearest honest
-// substitute is when this addon first saw the row, and it never appears beside the word
-// "expires".
+// "First seen by you" is this addon's own record and is labelled as one. A listing expires
+// at 48 hours and no wired row carries an expiry: a row is an id, a seller, an item, a
+// count, a price, whether it is yours, whether it is the house's, and sometimes an
+// instance. So the nearest honest substitute is when this addon first saw the row, and it
+// never appears beside the word "expires".
 //
-// THE CUT AND THE CAP ARE READ, NEVER WRITTEN DOWN. `cutPct` and `maxListings` are
-// echoed back on every page, so a release that moves either is followed for free, and
-// nothing here contains the number 5 or the number 12.
+// The cut and the cap are read, never written down. `cutPct` and `maxListings` are echoed
+// back on every page, so a release that moves either is followed for free.
 //
-// A VISIT IS THE UNIT OF THE LEDGER, not a listing, and that is the data model rather
-// than a saving. A page of twelve asks for one ore says ONE thing about that ore: what
-// it was going for when you looked. So a reading is `[when, cheapest, dearest, query]`
-// per item per trip to the counter, several pages read in one trip merge into one
-// reading, and every figure on screen is one vote per visit. A median over listings is
-// a median weighted by how many people happened to be selling that day.
+// A visit is the unit of the ledger rather than a listing, and that is the data model. A
+// page of twelve asks for one ore says one thing about that ore: what it was going for
+// when you looked. So a reading is `[when, cheapest, dearest, query]` per item per trip to
+// the counter, several pages read in one trip merge into one reading, and every figure on
+// screen is one vote per visit. A median over listings is a median weighted by how many
+// people happened to be selling that day.
 //
-// IT IS ALL ONE KEY, and the first version was one key per item, which is the mistake
-// worth stating. A namespace is a PREFIX on one flat GM store shared by every addon, so
-// a key per item cost `storage.keys()` a scan of everything the loader holds, one
+// It is all one key. A namespace is a prefix on one flat GM store shared by every addon,
+// so a key per item costs `storage.keys()` a scan of everything the loader holds, one
 // bridge round trip per item on the way in, and a cross-tab value-change watcher left
-// behind for each: a month of browsing was four hundred keys, four hundred round trips
-// and five megabytes to draw a panel that shows a low, a median and a line. Writes are
-// held for a moment and coalesced, since the whole value is rewritten and a player
-// flipping pages would otherwise write on every flip.
+// behind for each. Writes are held for a moment and coalesced, since the whole value is
+// rewritten and a player flipping pages would otherwise write on every flip.
 //
-// STORAGE IS PER ACCOUNT, not per character, because a market is a realm rather than a
-// character: a price your alt saw is a price you saw. `woc.storage` rather than
-// `woc.storage.character` for exactly that reason, and every stamp comes from
-// `woc.wallClock()`, never `woc.now()`, because a monotonic reading stored in one
-// session and read in the next is a moment in the future with nothing to indicate it.
+// Storage is per account rather than per character, because a market is a realm rather
+// than a character: a price your alt saw is a price you saw. Every stamp comes from
+// `woc.wallClock()`, never `woc.now()`, because a monotonic reading stored in one session
+// and read in the next is a moment in the future with nothing to indicate it.
 
 /** The whole price history for one market, in ONE key. See `ledgerKey`. */
 const LEDGER_PREFIX = 'ledger';
@@ -106,15 +96,13 @@ const DEFAULT_HISTORY_DAYS = 30;
 /**
  * How much of the ledger is held at all, and both figures are drawn rather than hidden.
  *
- * The retention setting bounds it in TIME and these bound it in size, because a player
- * who browses an unfiltered book for a week has seen thousands of ids and the whole
- * thing is read and written as one value. The item dropped at the ceiling is the one
- * seen least recently; the visit dropped is the oldest, since the point of a series is
- * where the price is going.
+ * The retention setting bounds it in time and these bound it in size, because a player who
+ * browses an unfiltered book for a week has seen thousands of ids and the whole thing is
+ * read and written as one value. The item dropped at the ceiling is the one seen least
+ * recently; the visit dropped is the oldest.
  *
- * Thirty visits is a month of looking twice a day, and it is drawn into a line about a
- * hundred and forty pixels wide: past that the points are closer together than the
- * pixels they would be drawn on.
+ * Thirty visits is a month of looking twice a day, drawn into a line about a hundred and
+ * forty pixels wide: past that the points are closer together than the pixels.
  */
 const MAX_ITEMS = 400;
 const MAX_VISITS = 30;
@@ -122,13 +110,11 @@ const MAX_VISITS = 30;
 /**
  * How long a trip to the counter lasts, for the purpose of being one reading.
  *
- * A player at the Merchant flips through several pages and often searches twice, and
- * every one of those is a separate payload carrying the same asks. They are one visit
- * rather than four: nothing changed between them, and a trend line with four points a
- * minute apart followed by nothing for a day is a picture of the browsing rather than
- * of the market. A reading whose query differs starts a new visit whatever the clock
- * says, because a filtered page and an unfiltered one are answers to different
- * questions.
+ * A player at the Merchant flips through several pages and often searches twice, and every
+ * one of those is a separate payload carrying the same asks. They are one visit rather
+ * than four, or a trend line has four points a minute apart followed by nothing for a day,
+ * which is a picture of the browsing rather than of the market. A reading whose query
+ * differs starts a new visit whatever the clock says.
  */
 const VISIT_MINUTES = 10;
 const VISIT_WINDOW_MS = VISIT_MINUTES * MINUTE_MS;
@@ -137,12 +123,10 @@ const VISIT_WINDOW_MS = VISIT_MINUTES * MINUTE_MS;
  * How long a change waits before it is written down.
  *
  * The whole ledger is one value, so a write is a whole serialization and a broadcast to
- * every other tab. Flipping through a book fires one of those per page, and the player
- * is going to flip again in a second, so writes are held for a moment and coalesced. It
- * is a ceiling on the RATE rather than a delay on the last one: whatever has arrived
- * when the timer fires goes in the same write, and anything after it opens a new window.
- * What that costs is up to this much unsaved browsing if the tab is closed mid-page,
- * which is why disposal writes as well.
+ * every other tab. It is a ceiling on the rate rather than a delay on the last change:
+ * whatever has arrived when the timer fires goes in the same write, and anything after it
+ * opens a new window. What that costs is up to this much unsaved browsing if the tab is
+ * closed mid-page, which is why disposal writes as well.
  */
 const WRITE_HOLD_MS = 2 * MS_PER_SECOND;
 
@@ -154,17 +138,14 @@ const FRAME_WIDTH = 400;
 const FRAME_HEIGHT = 480;
 const MIN_WIDTH = 320;
 /**
- * What the shortest useful frame spends on everything that is not the scrolling list.
+ * What the shortest useful frame spends on everything that is not the scrolling list: the
+ * title bar, the tab strip, the status strip, the sentence under it, the search field and
+ * the footer. The worst case, so it counts the sentence, which is drawn only where it has
+ * something to say.
  *
- * The title bar, the tab strip, the status strip, the sentence under it, the search
- * field and the footer. The WORST case, so it counts the sentence, which is drawn only
- * where it has something to say.
- *
- * STATED rather than measured, and it is the one figure here that is: a size floor is
- * settled once when the frame is built and can never be restated, so it cannot come
- * from a layout that does not exist yet. The floor is ONE row, never the number of rows
- * on screen, or a player who later has one item is trapped in a frame sized for the day
- * they had thirty.
+ * Stated rather than measured, because a size floor is settled once when the frame is
+ * built and cannot come from a layout that does not exist yet. The floor is one row, never
+ * the number of rows on screen.
  */
 const CHROME_HEIGHT = 240;
 const ROW_HEIGHT = 48;
@@ -175,20 +156,16 @@ const SPARK_WIDTH = 140;
 const SPARK_HEIGHT = 16;
 const SPARK_PAD = 2;
 /**
- * Two VISITS is the fewest that can be a line, and one draws nothing at all.
- *
- * Nothing rather than a dot: a single point says only that the item was seen once,
- * which the reading count beside it already says, and a mark on an empty box invites
- * being read as a flat price.
+ * Two visits is the fewest that can be a line, and one draws nothing at all. Nothing rather
+ * than a dot: a single point says only that the item was seen once, which the reading count
+ * beside it already says, and a mark on an empty box reads as a flat price.
  */
 const MIN_SPARK_POINTS = 2;
 
 /**
- * The filter axes the server echoes back, in the order the pane names them.
- *
- * An array of the GAME's own field names rather than an object keyed by them, read
- * through `fieldText`, because these are names the game owns and a record literal of
- * them would be this addon claiming to have chosen them.
+ * The filter axes the server echoes back, in the order the pane names them. An array of the
+ * game's own field names rather than an object keyed by them, read through `fieldText`,
+ * because a record literal of them would be this addon claiming to have chosen them.
  */
 const QUERY_FIELDS = ['filter', 'itemType', 'subtype', 'armorClass', 'primaryStat', 'rarity'];
 
@@ -196,11 +173,9 @@ const QUERY_FIELDS = ['filter', 'itemType', 'subtype', 'armorClass', 'primarySta
 const NO_QUERY = 'the whole book';
 
 /**
- * A flag that changes, in a cell.
- *
- * The factory keeps the value a BOOLEAN rather than the literal it starts as: a
- * property initialized to `false` reads as the type `false`, so every later test of it
- * is reported as a condition that can never be true.
+ * A flag that changes, in a cell. The factory keeps the value a boolean rather than the
+ * literal it starts as: a property initialized to `false` reads as the type `false`, so
+ * every later test of it is reported as a condition that can never be true.
  */
 function cell(value) {
   return { on: value };
@@ -218,14 +193,11 @@ const mineSeen = new Map();
 /** Set once the stored ledger has been read, or once reading it has failed. */
 const loaded = cell(false);
 /**
- * Which market and character the held data belongs to.
- *
- * `world.characterKey` is a watch key, so the loader models a player switching
- * characters inside one session, and switching can move BOTH: another character on the
- * same realm reads the same ledger and different stamps, and one on another realm reads
- * neither. Held so that a switch is noticed rather than assumed away, since the failure
- * is silent and one-directional: one realm's prices written into another realm's key
- * cannot be told apart afterwards.
+ * Which market and character the held data belongs to. Switching characters inside one
+ * session can move both: another character on the same realm reads the same ledger and
+ * different stamps, and one on another realm reads neither. Held so that a switch is
+ * noticed rather than assumed away, since one realm's prices written into another realm's
+ * key cannot be told apart afterwards.
  */
 const loadedFor = { ledger: '', character: '' };
 /** Cleared on disable, so an awaited continuation cannot draw into a dead frame. */
@@ -236,11 +208,9 @@ const scheduled = cell(false);
 const alerted = cell(false);
 
 /**
- * The last page read at the Merchant, and where the player stands.
- *
- * `page` is a CAPTURE of the game's page rather than the object itself: the reading has
- * to outlive walking away from the counter, and holding the game's own array for that
- * long is holding something the client is free to replace under you.
+ * The last page read at the Merchant, and where the player stands. `page` is a capture of
+ * the game's page rather than the object itself: the reading has to outlive walking away
+ * from the counter, and the client is free to replace its own array.
  */
 const live = { status: 'unknown', page: null };
 /** Whether the held page is being resynced after a reconnect. See `onAway`. */
@@ -267,10 +237,8 @@ function settingFlag(id, fallback) {
 }
 
 /**
- * How long a reading is kept.
- *
- * Read straight through: the manifest declares the bounds and the loader coerces
- * against them, so an addon that clamped again would be writing dead code.
+ * How long a reading is kept. Read straight through: the manifest declares the bounds and
+ * the loader coerces against them, so a second clamp here would be dead code.
  */
 function historyDays() {
   return settingNumber('history-days', DEFAULT_HISTORY_DAYS);
@@ -301,10 +269,8 @@ function numberOr(value, fallback) {
 }
 
 /**
- * One field of the game's own payload, by a name held in a variable.
- *
- * The computed access is the point: a literal key here would be this project naming a
- * field it does not own, and the query echo is six of them.
+ * One field of the game's own payload, by a name held in a variable. The computed access is
+ * the point: a literal key here would be this project naming a field it does not own.
  */
 function fieldText(source, name) {
   if (typeof source !== 'object' || source === null) {
@@ -314,13 +280,10 @@ function fieldText(source, name) {
 }
 
 /**
- * Copper as text, which is the loader's own split rather than this addon's.
- *
- * Four addons wrote this arithmetic before the kit carried it, and the readouts they
- * drew all spelled a price slightly differently. `ui.money` is the one split now, and
- * the rows below do better still: a bar's figure takes an AMOUNT and is drawn with the
- * game's own coins, so this is left with the places that take text, which is a tooltip
- * line and the status strip.
+ * Copper as text, which is the loader's own split rather than this addon's. `ui.money` is
+ * the one split now, and the rows below do better still: a bar's figure takes an amount and
+ * is drawn with the game's own coins, so this is left with the places that take text, which
+ * is a tooltip line and the status strip.
  */
 function money(amount) {
   return woc.ui.money(amount);
@@ -334,10 +297,9 @@ function unitAgo(count, unit) {
 }
 
 /**
- * How old a reading is, in the coarsest unit that still says something.
- *
- * The wall clock on both sides, which is the whole reason a stamp is taken from
- * `woc.wallClock()` rather than `woc.now()`: this subtraction spans page loads.
+ * How old a reading is, in the coarsest unit that still says something. The wall clock on
+ * both sides, which is why a stamp is taken from `woc.wallClock()`: this subtraction spans
+ * page loads.
  */
 function agoText(at) {
   if (!Number.isFinite(at) || at <= 0) {
@@ -375,21 +337,18 @@ function artName(itemId) {
 }
 
 /**
- * The best name there is, and the raw id when there is none. Never blank.
- *
- * A PUBLISHER first and the loader second, which is the opposite of the usual ordering
- * and is right here for one reason: what the loader has is not the item's name and says
- * so in its own documentation. A publisher's is.
+ * The best name there is, and the raw id when there is none. Never blank. A publisher
+ * first and the loader second, which is the opposite of the usual ordering and is right
+ * here for one reason: what the loader has is not the item's name and says so in its own
+ * documentation. A publisher's is.
  */
 function nameOf(itemId) {
   return known(itemId)?.name ?? artName(itemId) ?? itemId;
 }
 
 /**
- * One published record, checked.
- *
- * A bus payload is `unknown` and is another addon's idea of the shape, so nothing is
- * taken on trust: an id and a name are required and everything else is optional.
+ * One published record, checked. A bus payload is `unknown` and is another addon's idea of
+ * the shape, so an id and a name are required and everything else is optional.
  */
 function parseItem(payload) {
   if (typeof payload !== 'object' || payload === null) {
@@ -413,10 +372,9 @@ function onItem(message) {
 }
 
 /**
- * What one listing costs per item in it.
- *
- * `price` is the TOTAL buyout for the whole stack, so a series built on it compares a
- * stack of 20 against a single and calls the difference a price movement.
+ * What one listing costs per item in it. `price` is the total buyout for the whole stack,
+ * so a series built on it compares a stack of 20 against a single and calls the difference
+ * a price movement.
  */
 function unitPrice(price, count) {
   if (count <= 0) {
@@ -426,11 +384,9 @@ function unitPrice(price, count) {
 }
 
 /**
- * One listing off the page, under this addon's own names.
- *
- * A LIVE row only. Nothing here is stored: the ledger keeps what a page SAID about an
- * item rather than the listings it said it with, so a seller's name and the house flag
- * are read while the page is on screen and never written down.
+ * One listing off the page, under this addon's own names. A live row only: the ledger keeps
+ * what a page said about an item rather than the listings it said it with, so a seller's
+ * name and the house flag are read while the page is on screen and never written down.
  */
 function makeRow(row) {
   const count = Math.max(1, Math.round(numberOr(row.count, 1)));
@@ -446,11 +402,9 @@ function makeRow(row) {
 }
 
 /**
- * The signature of the query that produced a page, as one comparable string.
- *
- * Empty when nothing is applied, rather than the five bare separators joining six empty
- * fields: it is stored on every visit of every item, and the whole book is the common
- * case.
+ * The signature of the query that produced a page, as one comparable string. Empty when
+ * nothing is applied rather than five bare separators joining six empty fields, since it is
+ * stored on every visit of every item and the whole book is the common case.
  */
 function querySignature(info) {
   const parts = QUERY_FIELDS.map((name) => fieldText(info, name));
@@ -486,11 +440,8 @@ function countOf(value) {
 }
 
 /**
- * The page, as this addon holds it after the player walks away.
- *
- * A copy rather than the game's own object, for the reason `live` gives: this reading
- * has to outlive standing at the counter, and the client is free to replace its page at
- * any time.
+ * The page, as this addon holds it after the player walks away. A copy rather than the
+ * game's own object: this reading has to outlive standing at the counter.
  */
 function capture(info, now) {
   const queryText = querySignature(info);
@@ -521,12 +472,9 @@ function capture(info, now) {
 /**
  * One item's history: what each visit to the counter found, oldest first.
  *
- * A VISIT rather than a listing is the unit here, and that is the whole data model.
- * The panel draws a low, a median, a high, a latest and a line with one point per trip,
- * and not one of those needs the individual asks that produced them: a page of twelve
- * listings for an ore says one thing about that ore, which is what it was going for
- * when you looked. Keeping the twelve was keeping forty times what the screen can
- * express, in a key per item.
+ * A visit rather than a listing is the unit, and that is the whole data model. The panel
+ * draws a low, a median, a high, a latest and a line with one point per trip, and not one
+ * of those needs the individual asks that produced them.
  */
 function emptySeries(itemId) {
   return { itemId, at: 0, visits: [] };
@@ -535,10 +483,9 @@ function emptySeries(itemId) {
 /**
  * One stored visit, checked, because a player can edit what is in storage.
  *
- * An ARRAY rather than an object, and this is the one place in the addon where the
- * stored shape is not the shape in memory. The ledger is one value holding every item a
- * player has ever browsed, so the field names would be repeated once per visit for
- * thousands of visits and would be most of the file. The seconds are the same economy:
+ * An array rather than an object, and the one place in the addon where the stored shape is
+ * not the shape in memory: the ledger is one value holding every item a player has browsed,
+ * so the field names would be most of the file. The seconds are the same economy, since
  * nothing on screen is finer than a minute.
  */
 function parseVisit(value) {
@@ -606,12 +553,10 @@ function storedLedger() {
 }
 
 /**
- * Whether two readings are the same listing.
- *
- * The id alone is not enough. It is stable for the whole life of a listing and comes
- * from a monotonic per-boot counter, so after a server restart a fresh listing can
- * inherit a number this addon already holds. Price and count are immutable on a live
- * listing, so a row that matches an id and not those is a different listing.
+ * Whether two readings are the same listing. The id alone is not enough: it comes from a
+ * monotonic per-boot counter, so after a server restart a fresh listing can inherit a
+ * number this addon already holds. Price and count are immutable on a live listing, so a
+ * row that matches an id and not those is a different listing.
  */
 function sameListing(held, row) {
   return held.price === row.price && held.count === row.count;
@@ -629,13 +574,11 @@ function cutoffAt(now) {
 }
 
 /**
- * Whether a row belongs in the ledger at all.
- *
- * The house is the Merchant's own standing stock, priced by the game's own formula
- * rather than by anybody's judgement, so it is off by default: a shelf price folded into
- * a series of player asks moves the low and the median without anyone having decided
- * anything. It stays in the UNDERCUT check whatever this says, because a buyer can buy
- * it and it therefore competes.
+ * Whether a row belongs in the ledger at all. The house is the Merchant's own standing
+ * stock, priced by the game's own formula rather than by anybody's judgement, so it is off
+ * by default: a shelf price folded into a series of player asks moves the low and the
+ * median without anyone having decided anything. It stays in the undercut check whatever
+ * this says, because a buyer can buy it and it therefore competes.
  */
 function recordable(row) {
   if (row.itemId === '') {
@@ -645,22 +588,18 @@ function recordable(row) {
 }
 
 /**
- * What this page said about each item on it: the cheapest ask and the dearest.
- *
- * OVER `others` ALONE, and that is where the player's own listings are kept out of the
- * series rather than in a test further down: a price the player chose is not a reading
- * of what the market is asking, and folding it in would put their own hopeful price
- * into the low they are judging it against.
+ * What this page said about each item on it: the cheapest ask and the dearest. Over
+ * `others` alone, which is where the player's own listings are kept out of the series: a
+ * price the player chose is not a reading of what the market is asking, and folding it in
+ * would put their own hopeful price into the low they are judging it against.
  */
 function pageAsks(page) {
   const asks = new Map();
   for (const row of page.others) {
     if (recordable(row)) {
-      // WHOLE copper. A unit price is a total divided by a stack size, so it arrives
-      // fractional as often as not, and 51.3 is both three bytes of a value that is
-      // stored thousands of times and a precision the game does not have: nothing is
-      // ever bought or sold for a third of a copper, and every figure on screen is
-      // rounded before it is drawn anyway.
+      // Whole copper. A unit price is a total divided by a stack size, so it arrives
+      // fractional as often as not, and 51.3 is both three bytes of a value stored
+      // thousands of times and a precision the game does not have.
       const unit = Math.round(row.unit);
       const held = asks.get(row.itemId);
       if (held === undefined) {
@@ -675,13 +614,10 @@ function pageAsks(page) {
 }
 
 /**
- * Fold one page's reading of one item into its visits.
- *
- * A page read close behind the last one, under the same query, is the SAME trip to the
- * counter rather than a new one: the player flipped a page or looked again. Merging
- * takes the wider of the two spreads and moves the stamp forward, so a trip that
- * covered four pages is one point at the time the player finished looking. See
- * VISIT_MINUTES for why that is not just a saving.
+ * Fold one page's reading of one item into its visits. A page read close behind the last
+ * one, under the same query, is the same trip to the counter rather than a new one. Merging
+ * takes the wider of the two spreads and moves the stamp forward, so a trip that covered
+ * four pages is one point at the time the player finished looking.
  */
 function foldVisit(record, ask, page) {
   const last = record.visits.at(-1);
@@ -737,13 +673,11 @@ function saveLedger() {
 }
 
 /**
- * Write the ledger down, at most once every WRITE_HOLD_MS.
- *
- * The state is serialized when the TIMER fires rather than when the change arrived, so
- * everything a player read during the window rides one write and nothing is queued
- * behind a stale copy. That is also why nothing is cloned here, unlike the version that
- * wrote a key per item: there is no window in which a live record could be mutated
- * between being handed over and being stored.
+ * Write the ledger down, at most once every `WRITE_HOLD_MS`. The state is serialized when
+ * the timer fires rather than when the change arrived, so everything a player read during
+ * the window rides one write and nothing is queued behind a stale copy. That is also why
+ * nothing is cloned: there is no window in which a live record could be mutated between
+ * being handed over and being stored.
  */
 function keep() {
   if (saving.on) {
@@ -754,12 +688,10 @@ function keep() {
 }
 
 /**
- * Remember when each of the player's own listings was first seen.
- *
- * The nearest honest thing to a remaining time, because no wired row carries an expiry.
- * A stored stamp is only trusted where the price and count match too: a listing id is
- * reused after a server restart, and an inherited number would otherwise hand a fresh
- * listing somebody else's age.
+ * Remember when each of the player's own listings was first seen, which is the nearest
+ * honest thing to a remaining time, because no wired row carries an expiry. A stored stamp
+ * is only trusted where the price and count match too, since a listing id is reused after a
+ * server restart.
  */
 function foldOwn(page) {
   let moved = false;
@@ -784,19 +716,16 @@ function pruneOwn(now) {
 }
 
 /**
- * The stamps are the CHARACTER's, so they live in the character's own store.
+ * The stamps are the character's, so they live in the character's own store.
  *
- * The opposite call from the ledger one line up, and for the opposite reason: a price
- * is the market's and belongs to everybody on the realm, while "my listings" is the one
- * thing here that is genuinely one character's. A listing id also comes from a per-boot
- * counter on one server, so ids from two realms collide by construction, and an
- * account-wide key would hand a fresh listing the age of whatever held that number
- * somewhere else. The loader's per-character namespace already carries the deployment
- * and the character, so both go away for free.
+ * The opposite call from the ledger one line up, and for the opposite reason: a price is
+ * the market's and belongs to everybody on the realm, while "my listings" is genuinely one
+ * character's. A listing id also comes from a per-boot counter on one server, so ids from
+ * two realms collide by construction, and an account-wide key would hand a fresh listing
+ * the age of whatever held that number somewhere else.
  *
- * A per-character WRITE refuses before world entry, which is why this is never reached
- * there: nothing is recorded until the ledger has loaded, and that now waits for the
- * world as well.
+ * A per-character write refuses before world entry, which is why this is never reached
+ * there: nothing is recorded until the ledger has loaded, and that waits for the world.
  */
 function keepOwn() {
   const stored = [...mineSeen.entries()].map(([id, held]) => ({ ...held, id }));
@@ -817,23 +746,22 @@ function firstSeen(row) {
 /**
  * Everything the panel says about one item, from its visits.
  *
- * ONE VOTE PER VISIT, in every figure here, and that is a deliberate change of meaning
- * rather than a consequence of storing less. A median over every listing ever seen is
- * a median weighted by how many people happened to be selling: a trip that found twelve
- * asks outvotes six trips that found two, so the "typical" price is really the price on
- * the busiest day. A median over the cheapest ask of each visit answers the question a
- * player is actually asking, which is what this normally goes for.
+ * One vote per visit in every figure here, which is a deliberate change of meaning rather
+ * than a consequence of storing less. A median over every listing ever seen is a median
+ * weighted by how many people happened to be selling: a trip that found twelve asks
+ * outvotes six trips that found two. A median over the cheapest ask of each visit answers
+ * the question a player is actually asking.
  *
- * The LOW of a visit rather than its median, because the low is the price the item can
- * actually be had for and the one the next seller undercuts.
+ * The low of a visit rather than its median, because the low is the price the item can be
+ * had for and the one the next seller undercuts.
  */
 function statsFor(record) {
   const lows = record.visits.map((visit) => visit.low).sort((a, b) => a - b);
   const newest = record.visits.at(-1);
   return {
     low: lows[0] ?? 0,
-    // The dearest ask of any visit, which is the top of the spread rather than the top
-    // of the trend line: both are drawn, and they are different facts.
+    // The dearest ask of any visit, which is the top of the spread rather than the top of
+    // the trend line: both are drawn, and they are different facts.
     high: record.visits.reduce((top, visit) => Math.max(top, visit.high), 0),
     median: median(lows, Math.floor(lows.length / 2)),
     latest: newest?.low ?? 0,
@@ -859,23 +787,21 @@ function trendOf(record) {
 }
 
 /**
- * Where an item's block starts among the rows that are not the player's own.
- *
- * The server sorts that section by the item's display name and then by price, so one
- * item's listings are contiguous and ascending and the block's first row is the
- * cheapest competing listing. No name table is needed for any of it.
+ * Where an item's block starts among the rows that are not the player's own. The server
+ * sorts that section by the item's display name and then by price, so one item's listings
+ * are contiguous and ascending and the block's first row is the cheapest competing listing.
+ * No name table is needed for any of it.
  */
 function blockStart(others, itemId) {
   return others.findIndex((row) => row.itemId === itemId);
 }
 
 /**
- * What the page can honestly say about one of the player's own listings.
- *
- * `unknown` where the item has no block on this page, which under a filter is most of
- * the market and is never evidence that nobody else is selling. `partial` where the
- * block begins at the very first row of the others section on a page after the first,
- * because the rows before it are on the previous page and one of them may be cheaper.
+ * What the page can honestly say about one of the player's own listings. `unknown` where
+ * the item has no block on this page, which under a filter is most of the market and is
+ * never evidence that nobody else is selling. `partial` where the block begins at the very
+ * first row of the others section on a page after the first, because the rows before it are
+ * on the previous page and one of them may be cheaper.
  */
 function verdictFor(row, page) {
   const at = blockStart(page.others, row.itemId);
@@ -900,11 +826,10 @@ function undercutCount(page) {
 }
 
 /**
- * Say something once when a listing stops being the cheapest, and re-arm when none is.
- *
- * On the crossing rather than on the state, or every page read while undercut would say
- * it again. Only ever computed from a page read AT the Merchant, since it is the only
- * place the competing rows exist.
+ * Say something once when a listing stops being the cheapest, and re-arm when none is. On
+ * the crossing rather than on the state, or every page read while undercut would say it
+ * again. Only ever computed from a page read at the Merchant, since it is the only place
+ * the competing rows exist.
  */
 function checkUndercut(page) {
   const count = undercutCount(page);
@@ -943,14 +868,12 @@ function countedVisits(count) {
 }
 
 /**
- * The realm in play, off the loader's own character key.
- *
- * `characterKey` is `realm/name` and is null until BOTH are known, which is exactly the
- * moment this addon can say which market it is keeping a history of. The realm also
- * rides `net.state.realm`, and reading it there is the version of this that shipped for
- * an hour: the hello frame and world entry are different signals, so a ledger keyed
- * from it loaded under `offline` whenever the read won the race, and then wrote nothing
- * for the rest of the session because the key it had loaded no longer matched.
+ * The realm in play, off the loader's own character key. `characterKey` is `realm/name` and
+ * is null until both are known, which is exactly the moment this addon can say which market
+ * it is keeping a history of. The realm also rides `net.state.realm`, and reading it there
+ * is wrong: the hello frame and world entry are different signals, so a ledger keyed from
+ * it loads under `offline` whenever the read wins the race and then writes nothing for the
+ * rest of the session.
  */
 function realmNow() {
   const key = text(woc.world.characterKey);
@@ -964,18 +887,14 @@ function realmNow() {
 /**
  * Which market this ledger is of: the deployment and the realm, in the key.
  *
- * ACCOUNT-WIDE ON PURPOSE, which is the whole reason this is not
- * `woc.storage.character`: a price is a fact about the world rather than about who was
- * standing at the counter, so the alt you level reads what the character you raid on
- * saw, and a player who logs in on a second character does not start again.
+ * Account-wide on purpose, which is why this is not `woc.storage.character`: a price is a
+ * fact about the world rather than about who was standing at the counter.
  *
- * SCOPED TO ONE MARKET FOR THE SAME REASON, and that is not the same thing. The realm
- * is the world: names are unique per realm in the game's own model and a market belongs
- * to one, so two realms in one ledger would be two economies averaged into a low that
- * is true of neither. The deployment is a second, coarser split of the same kind: GM
- * storage is ONE store for the userscript across live, pbe and pbe2 (only per-character
- * keys carry the channel, see the loader's `hosts.ts`), so without this a week on the
- * test realm would quietly become the price history a player reads on live.
+ * Scoped to one market for the same reason, which is not the same thing. The realm is the
+ * world: names are unique per realm in the game's own model and a market belongs to one, so
+ * two realms in one ledger would be two economies averaged into a low that is true of
+ * neither. The deployment is a second, coarser split of the same kind, because GM storage
+ * is one store for the userscript across live, pbe and pbe2.
  */
 function ledgerKey() {
   const realm = realmNow();
@@ -986,27 +905,25 @@ function ledgerKey() {
 }
 
 /**
- * The reconnect count, which is a PROPERTY on `net.state` rather than a call.
- *
- * Read defensively, like everything reached through the loader's view of the game: the
- * cost of a future change here has to be a missing guard rather than a dead panel.
+ * The reconnect count, which is a property on `net.state` rather than a call. Read
+ * defensively, like everything reached through the loader's view of the game.
  */
 function reconnectCount() {
   return numberOr(woc.net.state?.reconnects, 0);
 }
 
 /**
- * The grace only ends on a TIMER, and that is not the obvious design.
+ * The grace only ends on a timer, which is not the obvious design.
  *
- * The obvious one is to grant grace to the first `away` after a reconnect and take the
- * next one at face value, and it does not work: a watch key fires on a CHANGE, so a
- * player who is still away sends no second reading and there is no next one to take at
- * face value. A player who reconnected at the counter and then walked off before the
- * refill would leave the panel saying "resyncing" for the rest of the session.
+ * The obvious one is to grant grace to the first `away` after a reconnect and take the next
+ * one at face value, and it does not work: a watch key fires on a change, so a player who
+ * is still away sends no second reading. A player who reconnected at the counter and then
+ * walked off before the refill would leave the panel saying "resyncing" for the rest of the
+ * session.
  *
- * The client refills its mirror from the next snapshot, about fifty milliseconds later,
- * so a couple of seconds is generous by a factor of forty and still short enough that a
- * player never reads a stale label. A `near` inside the window cancels it.
+ * The client refills its mirror from the next snapshot about fifty milliseconds later, so a
+ * couple of seconds is generous and still short enough that a player never reads a stale
+ * label. A `near` inside the window cancels it.
  */
 const RESYNC_GRACE_MS = 2 * MS_PER_SECOND;
 
@@ -1019,11 +936,10 @@ function endGrace() {
 }
 
 /**
- * One `away` after a reconnect is the client's own resync, not the player walking off.
- *
- * The mirror is force-nulled on reconnect and refilled from the next snapshot, so the
- * held page stays and the pane says it is resyncing rather than blanking. Any `away`
- * that is not the first one after a reconnect is taken at face value immediately.
+ * One `away` after a reconnect is the client's own resync rather than the player walking
+ * off. The mirror is force-nulled on reconnect and refilled from the next snapshot, so the
+ * held page stays and the pane says it is resyncing rather than blanking. Any `away` that
+ * is not the first one after a reconnect is taken at face value immediately.
  */
 function onAway() {
   const count = reconnectCount();
@@ -1064,9 +980,8 @@ function recordPage(page) {
 }
 
 /**
- * The market moved: a page arrived, the player walked off, or the query reset.
- *
- * Recording happens ONLY on `near`, which is the rule the whole feature turns on.
+ * The market moved: a page arrived, the player walked off, or the query reset. Recording
+ * happens only on `near`, which is the rule the whole feature turns on.
  */
 function onMarket() {
   const state = woc.world.market;
@@ -1081,13 +996,10 @@ function onMarket() {
 }
 
 /**
- * Read the ledger back: ONE key, and one read.
- *
- * It was a key per item and a read per key, which is what a namespace cannot carry:
- * `storage.keys()` scans every value the loader holds for every addon, and each key
- * read costs a round trip over the bridge and leaves a cross-tab watcher behind for the
- * rest of the session. A player with a month of browsing paid four hundred of each
- * before the panel drew a row.
+ * Read the ledger back: one key, and one read. A key per item cannot work here, because
+ * `storage.keys()` scans every value the loader holds for every addon and each key read
+ * costs a round trip over the bridge and leaves a cross-tab watcher behind for the rest of
+ * the session.
  */
 async function loadLedger() {
   const key = ledgerKey();
@@ -1129,16 +1041,14 @@ async function loadOwn() {
 /**
  * Read what is stored for whoever is playing, then draw.
  *
- * THE READ WAITS FOR A CHARACTER, and both halves of the store are the reason. The
- * ledger is keyed on the realm, which is half of `world.characterKey`; the stamps are
- * per character, and the loader's own rule is that a per-character read waits for the
- * character anyway. Nothing is lost by waiting: a page can only be read at a Merchant,
- * and there is no Merchant before world entry.
+ * The read waits for a character, and both halves of the store are the reason: the ledger
+ * is keyed on the realm, which is half of `world.characterKey`, and the stamps are per
+ * character. Nothing is lost by waiting, since a page can only be read at a Merchant.
  *
- * The read failing is not a reason to show nothing: `loaded` is set either way, so a
- * player whose storage is unavailable still gets a live panel for the pages they read
- * this session. Recording waits for it, because folding a page into an empty ledger and
- * then writing it would overwrite a history that was merely still being read.
+ * The read failing is not a reason to show nothing: `loaded` is set either way, so a player
+ * whose storage is unavailable still gets a live panel for the pages they read this
+ * session. Recording waits for it, because folding a page into an empty ledger and then
+ * writing it would overwrite a history that was merely still being read.
  */
 async function startLedger() {
   await Promise.all([
@@ -1153,28 +1063,23 @@ async function startLedger() {
     return;
   }
   loaded.on = true;
-  // The baseline for the reconnect guard is taken HERE, at the first reading, so a
-  // player who had already reconnected before this addon started is not handed a grace
-  // window for a counter they are nowhere near.
+  // The baseline for the reconnect guard is taken here, at the first reading, so a player
+  // who had already reconnected before this addon started is not handed a grace window.
   lastRead.reconnects = reconnectCount();
-  // A watch key reports a CHANGE, and the first sample is the baseline it changes from,
-  // so a player who was already at the Merchant when this addon started gets no handler
-  // call at all. One read here is what tells the panel which of the three states it is
-  // actually in, and it is also what records the page they are standing over.
+  // A watch key reports a change, and the first sample is the baseline it changes from, so
+  // a player who was already at the Merchant when this addon started gets no handler call.
+  // One read here is what tells the panel which of the three states it is in.
   onMarket();
   draw();
 }
 
 /**
- * The one way in, and it is the character rather than the world.
- *
- * A player switches characters without reloading the page, and the switch can move BOTH
+ * The one way in, and it is the character rather than the world. A switch can move both
  * halves of the store: another character on the same realm shares the ledger and not the
- * stamps, and one on another realm shares neither. Everything held is dropped rather
- * than merged, because what is in memory is one market's and there is nothing to merge
- * it into. Nothing is written on the way out, deliberately: every change was already
- * written within a couple of seconds of being read, and a save here would be a save of
- * one realm's ledger under whatever key the new one derives.
+ * stamps, and one on another realm shares neither. Everything held is dropped rather than
+ * merged, because what is in memory is one market's. Nothing is written on the way out:
+ * every change was already written within a couple of seconds, and a save here would be a
+ * save of one realm's ledger under whatever key the new one derives.
  */
 function characterChanged() {
   const character = text(woc.world.characterKey);
@@ -1197,12 +1102,10 @@ function characterChanged() {
 }
 
 /**
- * Show the market as soon as there is a world, whether or not there is a character yet.
- *
- * The panel is honest before the ledger loads: it says what it is reading and it draws
- * the page in front of the player, and only the RECORDING waits. This is also the first
- * sample of a watch key that notifies nobody, which is why the character is read here
- * by hand rather than left to the subscription.
+ * Show the market as soon as there is a world, whether or not there is a character yet. The
+ * panel is honest before the ledger loads: it says what it is reading and draws the page in
+ * front of the player, and only the recording waits. This is also the first sample of a
+ * watch key that notifies nobody, which is why the character is read here by hand.
  */
 async function begin() {
   await woc.world.ready;
@@ -1261,14 +1164,11 @@ function column(className) {
 /**
  * A rule across the pane, above the list and above the sentence under it.
  *
- * The rows carry no separators of their own, deliberately: a line between every two
- * items is furniture the length of the list. What the panel does need is an edge where
- * the list STOPS, since the note under it is a different kind of thing (what the panel
- * has, what it is judging from) and without a rule it reads as one more row that
- * happens to have no price. An `hr` rather than a styled div, because that is what it
- * is, and it comes with the separator role for free.
- *
- * The game gives a border colour to inherit, so nothing here picks one.
+ * The rows carry no separators of their own: a line between every two items is furniture
+ * the length of the list. What the panel needs is an edge where the list stops, since the
+ * note under it is a different kind of thing and without a rule it reads as one more row
+ * with no price. An `hr` rather than a styled div, because that is what it is, and it comes
+ * with the separator role for free.
  */
 function rule(parent) {
   const el = document.createElement('hr');
@@ -1347,22 +1247,19 @@ function setStat(chip, value) {
 /**
  * The trend chart, which is the one thing on screen the kit has no widget for.
  *
- * IT SPANS THE ROW, and its first version did not: a fixed 140px box under a 400px row
- * drew the whole series into the left third and left two thirds of the row blank, which
- * reads as a chart that was cut off rather than as one that is complete. The width is
- * the element's and the geometry is the viewBox's, with `preserveAspectRatio="none"` to
- * stretch one onto the other, so the same three readings fill whatever width the player
- * has dragged the panel out to.
+ * It spans the row: the width is the element's and the geometry is the viewBox's, with
+ * `preserveAspectRatio="none"` to stretch one onto the other, so the same three readings
+ * fill whatever width the player has dragged the panel out to. A fixed box under a wider
+ * row draws the whole series into the left third, which reads as a chart that was cut off.
  *
- * `non-scaling-stroke` is what that costs and is not optional: a stretched viewBox
- * scales x and y by different factors, so a plain 1.5px stroke comes out thick on the
- * verticals and thin on the horizontals, which looks like a rendering fault.
+ * `non-scaling-stroke` is what that costs and is not optional: a stretched viewBox scales x
+ * and y by different factors, so a plain 1.5px stroke comes out thick on the verticals and
+ * thin on the horizontals.
  *
- * THE AREA UNDER THE LINE is drawn as well, at a low opacity. A hairline alone in a row
- * of text reads as an underline or a divider, which is exactly what it was mistaken for;
- * filling under it says chart. Both are `currentColor`, so the whole thing inherits
- * whatever the frame's density, theme and row tone give it, and there is no axis of any
- * kind: a chart at the size of a line of text that carried numbers would be neither.
+ * The area under the line is drawn as well, at a low opacity, because a hairline alone in a
+ * row of text reads as an underline or a divider. Both are `currentColor`, so the whole
+ * thing inherits whatever the frame's density, theme and row tone give it, and there is no
+ * axis of any kind.
  */
 function buildSpark() {
   const el = document.createElementNS(SVG_NS, 'svg');
@@ -1370,22 +1267,17 @@ function buildSpark() {
   el.setAttribute('viewBox', `0 0 ${String(SPARK_WIDTH)} ${String(SPARK_HEIGHT)}`);
   el.setAttribute('preserveAspectRatio', 'none');
   el.setAttribute('aria-hidden', 'true');
-  // A strip along the bottom of the row's own box, INSIDE it rather than after it:
-  // the geometry is the viewBox's and the width is the row's, so the same three
-  // readings stretch to whatever the panel has been dragged out to.
-  //
-  // Its own strip rather than the whole row's background, which is what it was for
-  // one draft: a line free to cross the box crosses the text, and a line through a
-  // word reads as a word struck out rather than as a price falling. It sits inside
-  // the row so that it belongs to the row above it: as an element between two rows it
-  // read as a divider that happened to slope, and the row it described was a coin
-  // toss. Inert, or a chart under a row would eat the row's own hover.
+  // A strip along the bottom of the row's own box, inside it rather than after it. Its own
+  // strip rather than the whole row's background: a line free to cross the box crosses the
+  // text, and a line through a word reads as a word struck out. It sits inside the row so
+  // that it belongs to the row above it. Inert, or a chart under a row would eat the row's
+  // own hover.
   el.style.position = 'absolute';
   el.style.left = '0';
   el.style.bottom = '0';
-  // Stated rather than left to the two offsets: an `svg` with no width sizes itself
-  // from its viewBox, so `left: 0; right: 0` alone drew a 140px chart in the corner of
-  // a 400px row and looked exactly like a series that had been cut off.
+  // Stated rather than left to the two offsets: an `svg` with no width sizes itself from
+  // its viewBox, so `left: 0; right: 0` alone draws a 140px chart in the corner of a 400px
+  // row and looks like a series that has been cut off.
   el.style.width = '100%';
   el.style.height = `${String(SPARK_HEIGHT)}px`;
   el.style.pointerEvents = 'none';
@@ -1430,8 +1322,8 @@ function paintSpark(spark, values) {
   }
   spark.el.style.display = 'block';
   const range = { low: Math.min(...values), high: Math.max(...values) };
-  // Edge to edge rather than inset: the box is the row's width now, so a pad on the x
-  // axis is a gap at the start and end of a line that is meant to fill it.
+  // Edge to edge rather than inset: the box is the row's width, so a pad on the x axis is a
+  // gap at the start and end of a line that is meant to fill it.
   const span = SPARK_WIDTH / (values.length - 1);
   const points = values.map((value, at) => sparkPoint(value, at, span, range));
   spark.path.setAttribute('points', points.join(' '));
@@ -1439,14 +1331,11 @@ function paintSpark(spark, values) {
 }
 
 /**
- * The panel.
- *
- * A FRAME rather than a window, because the player toggles it with a keybind: the two
- * differ by the ARIA role and a close button is `closable` on either. RESIZABLE, since
- * what it draws is a list that can outrun any fixed height, with both bounds stated
- * because a frame that states neither takes its opening size as its floor. The floor is
- * ONE row: a bound cannot be restated after the frame is built, so a floor derived from
- * the rows on screen would trap the player who later has fewer.
+ * The panel. A frame rather than a window, because the player toggles it with a keybind:
+ * the two differ by the ARIA role and a close button is `closable` on either. Resizable,
+ * since what it draws is a list that can outrun any fixed height, with both bounds stated
+ * because a frame that states neither takes its opening size as its floor. The floor is one
+ * row, since a bound cannot be restated after the frame is built.
  */
 const frame = woc.ui.frame({
   id: 'ledger',
@@ -1465,11 +1354,10 @@ frame.body.style.display = 'flex';
 frame.body.style.flexDirection = 'column';
 frame.body.style.gap = '6px';
 frame.body.style.minHeight = '0';
-// The body of a FRAME does not grow: the loader's own sheet gives one `flex: 0 1 auto`
-// and fills only a window's, because a frame is normally sized by what it draws. A
-// frame the player can RESIZE is the exception, and without this the panel keeps its
-// content at the top and leaves the height they dragged out as dead space under it,
-// with the list scrolling inside a box a third of the panel while the rest is empty.
+// The body of a frame does not grow: the loader's own sheet gives one `flex: 0 1 auto` and
+// fills only a window's, because a frame is normally sized by what it draws. A frame the
+// player can resize is the exception, and without this the panel keeps its content at the
+// top and leaves the height they dragged out as dead space under it.
 frame.body.style.flex = '1 1 auto';
 
 const panes = new Map([
@@ -1546,12 +1434,10 @@ const lists = new Map([
   ['mine', mineList],
 ]);
 /**
- * The rule that OPENS each list, which is the one that comes and goes.
- *
- * The footer rule is always drawn, since the sentence under it always says something.
- * This one is drawn only when there are rows to open: an empty pane would otherwise
- * put two rules together with nothing between them, which is a double line where the
- * list should have been.
+ * The rule that opens each list, which is the one that comes and goes. The footer rule is
+ * always drawn, since the sentence under it always says something. This one is drawn only
+ * when there are rows to open, or an empty pane would put two rules together with nothing
+ * between them.
  */
 const listTops = new Map([
   ['prices', priceTop],
@@ -1572,20 +1458,16 @@ function place(list, el, at) {
 /**
  * One row: the kit's bar, standing on its item's trend.
  *
- * THE CHART IS THE ROW'S BACKGROUND rather than a band under it, which is the third
- * shape this has taken and the first that is honestly a chart. A 140px box beside the
- * text drew the whole series into the left third of the row; the same box at full width
- * drew a grey wedge between every two rows, which reads as a divider that happens to
- * slope. Behind the figures it is what it is: the price of THIS item over time, with
- * this item's name and price standing on it, costing no height at all, so a panel of a
- * given size holds a third more rows than it did.
+ * The chart is the row's background rather than a band under it. Behind the figures it is
+ * what it is: the price of this item over time, with this item's name and price standing on
+ * it, costing no height at all. A box beside the text draws the series into the left third
+ * of the row, and the same box at full width between rows reads as a divider that happens
+ * to slope.
  *
- * A price row carries no kit FILL, and that is deliberate rather than unfinished: a
- * fill's width means a SHARE of something, and one item's price is not a share of
- * another item's. The one place a fill is drawn is a listing of your own that needs
- * looking at, where it is a full-width wash rather than a width anybody could read a
- * number off. See `ownEntry`. The wash and the chart sit on top of each other there
- * quite happily: one is the whole row's colour and the other is a line through it.
+ * A price row carries no kit fill, and that is deliberate: a fill's width means a share of
+ * something, and one item's price is not a share of another item's. The one place a fill is
+ * drawn is a listing of your own that needs looking at, where it is a full-width wash
+ * rather than a width anybody could read a number off. See `ownEntry`.
  */
 function buildRow(list, key, tip) {
   const el = document.createElement('div');
@@ -1594,14 +1476,14 @@ function buildRow(list, key, tip) {
   el.style.display = 'flex';
   el.style.flexDirection = 'column';
   el.style.position = 'relative';
-  // The strip the chart is drawn in, which is the row's own space rather than a gap
-  // between rows. A row with no chart keeps it: rows that changed height as their
-  // second reading landed would make the list twitch while a page is being read.
+  // The strip the chart is drawn in, which is the row's own space rather than a gap between
+  // rows. A row with no chart keeps it: rows that changed height as their second reading
+  // landed would make the list twitch while a page is being read.
   el.style.paddingBottom = `${String(SPARK_HEIGHT)}px`;
   const bar = woc.ui.bar({ className: 'woc-ledgerline-bar' });
   const spark = buildSpark();
-  // The chart first, so the row's own text paints over it: both are positioned, and
-  // with no z-index on either that is decided by document order.
+  // The chart first, so the row's own text paints over it: both are positioned, and with no
+  // z-index on either that is decided by document order.
   el.append(spark.el, bar.el);
   list.appendChild(el);
   woc.ui.tooltip(el, () => tip(key));
@@ -1614,11 +1496,9 @@ function destroyRow(row) {
 }
 
 /**
- * A list takes the room it needs and an EMPTY one takes none.
- *
- * The list is what grows into whatever height the player dragged the panel out to, so
- * an empty one grew into all of it and pushed the sentence explaining why it is empty
- * to the bottom edge, a screen away from where the reader is looking. Emptying it hands
+ * A list takes the room it needs and an empty one takes none. The list is what grows into
+ * whatever height the player dragged the panel out to, so an empty one grows into all of it
+ * and pushes the sentence explaining why it is empty to the bottom edge. Emptying it hands
  * that room back and the sentence sits under the field, where the rows would have been.
  */
 function growWhen(list, filled) {
@@ -1677,9 +1557,8 @@ function priceEntry(record) {
     update: {
       label: nameOf(record.itemId),
       icon: woc.ui.icon.item(record.itemId),
-      // Said rather than left to be inferred: a bare figure at the end of a row reads
-      // as the price, and this one is the cheapest per item anybody has been seen
-      // asking, which is a different number from what it is going for today.
+      // Said rather than left to be inferred: a bare figure at the end of a row reads as
+      // the price, and this one is the cheapest per item anybody has been seen asking.
       value: { copper: Math.round(stats.low), prefix: 'low' },
       detail: `median ${money(Math.round(stats.median))}, ${countedVisits(stats.visits)}, last ${agoText(stats.at)}`,
     },
@@ -1753,11 +1632,9 @@ function pricesNoteText(matching) {
 }
 
 /**
- * The list and the sentence under it, from ONE reading of the ledger.
- *
- * Taken once and passed down rather than asked for again: narrowing sorts every held
- * item, and the note that reports how many matched was asking the same question a third
- * time to print one number.
+ * The list and the sentence under it, from one reading of the ledger. Taken once and passed
+ * down rather than asked for again: narrowing sorts every held item, and the note that
+ * reports how many matched would be asking the same question a third time.
  */
 function paintPrices() {
   const matching = ledgerRows();
@@ -1808,13 +1685,10 @@ function ownEntry(row, page) {
       icon: woc.ui.icon.item(row.itemId),
       value: { copper: row.price, prefix: 'asking' },
       tone,
-      // A WASH rather than a measurement, and the only place this addon draws a fill
-      // at all. The kit paints a tone on the fill and nowhere else, so a toned row
-      // with no fill is a verdict the player cannot see: the whole point of this pane
-      // is finding the beaten row among five that are fine, and it was being said in
-      // grey text half way along a second line. It is the SAME width on every row
-      // that has one, so there is no quantity to misread it as, which is what the
-      // rule against a fill in the price list is actually about.
+      // A wash rather than a measurement, and the only place this addon draws a fill at
+      // all. The kit paints a tone on the fill and nowhere else, so a toned row with no fill
+      // is a verdict the player cannot see. It is the same width on every row that has one,
+      // so there is no quantity to misread it as.
       fraction: washFor(tone),
       detail: `${String(row.count)} for ${money(Math.round(row.unit))} each, ${VERDICT_TEXT.get(verdict.state) ?? ''}, first seen by you ${agoText(stamp)}`,
     },
@@ -1868,10 +1742,9 @@ function ownTip(page, id) {
       rivalLine(verdict),
       verdictLine(verdict),
       {
-        // The line under a listing is the ITEM's, and saying so matters more here than
-        // in the price list: everything else on this row is the player's own asking
-        // price, so a line beside it reads as the history of what they have charged,
-        // and this addon does not keep one.
+        // The line under a listing is the item's, and saying so matters more here than in
+        // the price list: everything else on this row is the player's own asking price, so a
+        // line beside it reads as the history of what they have charged.
         text: 'The line under the row is what the item has been going for, at the cheapest ask of each of your visits. It is not a record of your own price.',
         tone: 'muted',
       },
@@ -1895,8 +1768,8 @@ function mineNoteText() {
     return 'You had no listings at the Merchant when this page was read.';
   }
   if (live.status === 'near') {
-    // The cap is already a figure in the strip, so this line spends itself on the one
-    // thing no figure can say: what a verdict is drawn from and therefore cannot see.
+    // The cap is already a figure in the strip, so this line spends itself on the one thing
+    // no figure can say: what a verdict is drawn from and therefore cannot see.
     return 'Judged from the page you are reading now, which is not the whole market.';
   }
   return `Read ${agoText(live.page.at)}, at the Merchant. Your listings and everyone else's may have moved since.`;
@@ -1935,18 +1808,16 @@ function whereText() {
 const NO_FIGURE = '';
 
 /**
- * The one sentence, which is drawn only when it has something to say.
+ * The one sentence, drawn only when it has something to say.
  *
  * Every state where the figures above it could be misread gets one, and the state where
  * they cannot gets none: standing at the counter with no search applied, "Searching the
- * whole book." is a line of the panel spent saying that nothing unusual is going on.
- * `say` hides an empty line rather than leaving a gap, so the chrome above the list
- * shrinks by a line exactly when the player is reading a live page, which is when the
- * room is worth most.
+ * whole book." is a line spent saying that nothing unusual is going on. `say` hides an
+ * empty line rather than leaving a gap.
  *
- * A search IS worth the line, and it is the reason the query echo is read at all: a
- * fresh join resets the server-side query while the window's own controls keep showing
- * it, so a player can be looking at a filtered book believing it is the whole one.
+ * A search is worth the line, and it is the reason the query echo is read at all: a fresh
+ * join resets the server-side query while the window's own controls keep showing it, so a
+ * player can be looking at a filtered book believing it is the whole one.
  */
 function statusText() {
   if (resyncing.on) {
@@ -1989,14 +1860,10 @@ function capText(page) {
 }
 
 /**
- * What is waiting to be collected, off the same page every other figure here is off.
- *
- * The FLAG is ungated by proximity and the AMOUNT is not, so a player who has walked
- * away knows there is something and knows only what the last page said it was. That is
- * exactly the standing of `page`, `cut` and `listings` beside it, and the sentence under
- * the strip is what says how old all four are. A page with nothing to say it from is
- * the one case with no figure at all, and it says `something` rather than a number
- * nobody has read.
+ * What is waiting to be collected, off the same page every other figure here is off. The
+ * flag is ungated by proximity and the amount is not, so a player who has walked away knows
+ * there is something and knows only what the last page said it was. A page with nothing to
+ * say it from says `something` rather than a number nobody has read.
  */
 function collectText(page) {
   if (woc.world.marketCollectPending !== true) {
@@ -2019,11 +1886,9 @@ function paintStatus() {
 }
 
 /**
- * The collection badge.
- *
- * `marketCollectPending` is ungated by proximity, so this is right in another zone
- * entirely rather than only at the counter, which is the whole reason it is worth
- * drawing: the thing a player forgets is the gold they walked away from.
+ * The collection badge. `marketCollectPending` is ungated by proximity, so this is right in
+ * another zone entirely rather than only at the counter, which is why it is worth drawing:
+ * the thing a player forgets is the gold they walked away from.
  */
 function paintTitle() {
   if (woc.world.marketCollectPending === true) {
@@ -2041,11 +1906,9 @@ function draw() {
 }
 
 /**
- * One repaint per frame, however many things asked for one.
- *
- * A publisher catching this addon up answers the ask with a message per id, and a
- * repaint per message would be a hundred rebuilds of the same list inside one frame.
- * Nothing here animates, so a frame's delay costs nothing.
+ * One repaint per frame, however many things asked for one. A publisher catching this addon
+ * up answers the ask with a message per id, and a repaint per message would be a hundred
+ * rebuilds of the same list inside one frame.
  */
 function schedulePaint() {
   if (scheduled.on) {
@@ -2058,9 +1921,9 @@ function schedulePaint() {
   });
 }
 
-// The page and the badge are separate keys on purpose: the page is gated on standing at
-// the Merchant and the badge streams everywhere, which is what makes a title badge work
-// with the pane closed and in another zone entirely.
+// The page and the badge are separate keys: the page is gated on standing at the Merchant
+// and the badge streams everywhere, which is what makes a title badge work with the pane
+// closed and in another zone entirely.
 woc.world.on('market', onMarket);
 woc.world.on('marketCollectPending', () => {
   schedulePaint();
@@ -2070,9 +1933,9 @@ woc.world.on('marketCollectPending', () => {
 // it without reloading the page. See `characterChanged`.
 woc.world.on('characterKey', characterChanged);
 
-// The subscription first and the ask second, because delivery is SYNCHRONOUS: a
-// publisher that answers inside this emit call reaches a handler that already exists,
-// and one registered afterwards would miss its own answer. Silence is ordinary.
+// The subscription first and the ask second, because delivery is synchronous: a publisher
+// that answers inside this emit call reaches a handler that already exists, and one
+// registered afterwards would miss its own answer. Silence is ordinary.
 woc.bus.on(woc.bus.anySender, ITEM_TOPIC, onItem);
 woc.bus.emit(ASK_TOPIC);
 
@@ -2081,9 +1944,9 @@ woc.keys.bind('toggle', () => {
 });
 
 woc.onSettingsChange(() => {
-  // A shorter retention is a smaller ledger, applied at once rather than at the next
-  // page: a player who cuts it to a day and still sees a month of rows would reasonably
-  // conclude the setting does nothing.
+  // A shorter retention is a smaller ledger, applied at once rather than at the next page:
+  // a player who cuts it to a day and still sees a month of rows would reasonably conclude
+  // the setting does nothing.
   const cutoff = cutoffAt(woc.wallClock());
   const emptied = [];
   for (const [itemId, record] of series) {
@@ -2103,18 +1966,15 @@ woc.onSettingsChange(() => {
 });
 
 // Every age on screen is relative, so the panel rewrites them on a slow interval rather
-// than joining the frame loop: six strings a second would be sixty rewrites of the same
-// six strings.
+// than joining the frame loop.
 woc.setInterval(() => {
   schedulePaint();
 }, AGE_TICK_MS);
 
 /**
- * Read the item art manifest once, then repaint.
- *
- * Both art answers are provisional until it lands: `ui.icon.item` hands back a hopeful
- * URL and `ui.icon.itemArtName` hands back null, so the first list of a session is drawn
- * with optimistic pictures and no art names. It never rejects and nothing waits for it.
+ * Read the item art manifest once, then repaint. Both art answers are provisional until it
+ * lands: `ui.icon.item` hands back a hopeful URL and `ui.icon.itemArtName` hands back null.
+ * It never rejects and nothing waits for it.
  */
 async function learnArt() {
   await woc.ui.icon.preloadItems();
@@ -2123,14 +1983,14 @@ async function learnArt() {
   }
 }
 
-// The one thing registered by hand. Everything else lives inside a kit widget or the
-// frame body and is drained on disable, but both starts below are awaiting something and
-// either continuation could otherwise resume against a frame already torn down.
+// The one thing registered by hand. Everything else lives inside a kit widget or the frame
+// body and is drained on disable, but both starts below are awaiting something and either
+// continuation could otherwise resume against a frame already torn down.
 woc.onDispose(() => {
   running.on = false;
   // A write may be sitting on its timer, and the timer is about to be disposed with
-  // everything else. Whether it lands is not something an addon can insist on at this
-  // point, but the alternative is knowingly dropping the last page the player read.
+  // everything else. Whether it lands is not something an addon can insist on here, but the
+  // alternative is knowingly dropping the last page the player read.
   if (saving.on && loaded.on) {
     saveLedger();
   }

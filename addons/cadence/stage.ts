@@ -1,34 +1,24 @@
 // Cadence on the stage: the two halves of the strip, which no one session shows.
 //
-// This is `main.test.ts`'s `start()` with the assertions taken out, for the reason
-// every scenario file here is: the suite's fixture is the only description of this
-// addon's world anybody has checked, so a scenario inventing its own would be a
-// second one, drifting, with a screenshot as the only place the difference showed.
+// This is `main.test.ts`'s `start()` with the assertions taken out, for the reason every
+// scenario file here is: the suite's fixture is the only description of this addon's world
+// anybody has checked, so a scenario inventing its own would be a second one, drifting.
 //
-// TWO PANELS, AND THE GAME DECIDES IT RATHER THAN A SETTING. The strip's two
-// distinctive rows are a cast with a latency band across its last stretch and a
-// resource with combo points as pips, and no single character can be photographed
-// showing both: the points belong to the rogue and the rogue on this panel is not
-// casting. So a picture of either alone is a picture of half the addon, which is
-// the same reason `cooldown-bars` ships a sheet.
+// Two panels, and the game decides it rather than a setting. The strip's two distinctive rows
+// are a cast with a latency band across its last stretch and a resource with combo points as
+// pips, and no single character can be photographed showing both: the points belong to the
+// rogue and the rogue on this panel is not casting.
 //
-// EVERY NAME, RESOURCE AND WEAPON SPEED HERE IS THE GAME'S OWN, read off the class
-// and item tables the deployed client ships rather than invented. `aimed_shot` is
-// displayed everywhere as "Long Draw", and that divergence is exactly what
-// `world.abilities` exists to close: a label worked out from the id would read
-// "Aimed Shot", which is a name the game does not use anywhere.
+// Every name, resource and weapon speed here is the game's own, read off the class and item
+// tables the deployed client ships. `aimed_shot` is displayed everywhere as "Long Draw", and
+// that divergence is exactly what `world.abilities` exists to close.
 //
-// THE HUNTER IS ON MANA, and that is worth stating because this scenario used to
-// put it on `focus`. There is no such resource: the game's `ResourceType` is
-// exactly `rage | mana | energy` and a hunter is on mana like every class without
-// a bar of its own. The addon carried a matching "Focus" label, this picture
-// showed it, and nothing in either was reachable from a running game.
+// The hunter is on mana. The game's `ResourceType` is exactly `rage | mana | energy`, and a
+// hunter is on mana like every class without a bar of its own.
 //
-// THE ROGUE'S CAST ROW IS EMPTY ON PURPOSE. A row with nothing to say keeps its
-// place rather than being removed, because the strip is read by muscle memory at a
-// fixed spot, and that is a state a player looks at far more often than a full
-// strip. Photographing it beside a running cast is what says the row was always
-// there.
+// The rogue's cast row is empty on purpose. A row with nothing to say keeps its place rather
+// than being removed, because the strip is read by muscle memory at a fixed spot, and that is a
+// state a player looks at far more often than a full strip.
 
 import type { Scenario, Stage, WorldDraft } from '../../stage/src/stage.ts';
 
@@ -41,13 +31,10 @@ const HUNTER = 'hunter';
 const ROGUE = 'rogue';
 
 /**
- * Zealotsbane Blade, in the shape the self record carries a mainhand.
- *
- * A weapon the hunter can actually hold, which the one before it was not:
- * `mistcallers_edge` ("Fogbinder's Edge") is `requiredClass: WAR`, so the panel
- * pictured a hunter swinging a warrior's sword at the right speed. This one lists
- * hunter among its classes and happens to carry the same 2.3, so the swing row is
- * measured against the same period it always was.
+ * Zealotsbane Blade, in the shape the self record carries a mainhand. A weapon the hunter can
+ * actually hold: `mistcallers_edge` is `requiredClass: WAR`, so a panel using it pictures a
+ * hunter swinging a warrior's sword. This one lists hunter among its classes and carries the
+ * same 2.3, so the swing row is measured against the same period.
  */
 const HUNTER_WEAPON = { min: 18, max: 29, speed: 2.3 };
 /** Duskfang Dirk. The speed is what seeds the swing row until it sees a reset. */
@@ -56,32 +43,25 @@ const ROGUE_WEAPON = { min: 13, max: 21, speed: 1.7, dagger: true };
 /**
  * The box a rogue's strip is photographed at: the addon's own width, five lines.
  *
- * The frame opens sized for the ROWS, so the first combo point of a session is a
- * fifth line that has to come out of the same box and every row goes down to 10px
- * to make room. That is the addon behaving correctly and the wrong picture: beside
- * a panel whose rows are 14px it reads as two different addons rather than as one
- * class carrying a line the other has not got. A rogue drags the strip a line
- * taller on their first fight, and this is that drag, seeded the way the loader
- * stores it.
+ * The frame opens sized for the rows, so the first combo point of a session is a fifth line that
+ * has to come out of the same box and every row goes down to 10px to make room. That is the
+ * addon behaving correctly and the wrong picture: beside a panel whose rows are 14px it reads as
+ * two different addons. A rogue drags the strip a line taller on their first fight, and this is
+ * that drag, seeded the way the loader stores it.
  */
 const ROGUE_BOX = { box: { x: 40, y: 60, w: 190, h: 78 }, visible: true };
 
 /**
- * The round trip behind the band, in milliseconds.
- *
- * Stated rather than driven, and it is the one thing on the strip that has to be:
- * the loader measures latency by pairing an outbound input frame's sequence number
- * against a later snapshot's acknowledgement, and only the inbound tap is wired
- * here. The suite states one for the same reason.
+ * The round trip behind the band, in milliseconds. Stated rather than driven: the loader
+ * measures latency by pairing an outbound input frame's sequence number against a later
+ * snapshot's acknowledgement, and only the inbound tap is wired here.
  */
 const ROUND_TRIP_MS = 180;
 
 /**
- * The hunter's spellbook, in the game's own shape.
- *
- * One entry, because one is all this addon reads: the cast row looks the casting
- * ability up for its display NAME and its school, and takes the length off the
- * entity. `cooldown` rides along as part of the shape and is read by nobody here.
+ * The hunter's spellbook, in the game's own shape. One entry, because one is all this addon
+ * reads: the cast row looks the casting ability up for its display name and its school, and
+ * takes the length off the entity.
  */
 const HUNTER_KNOWN = Object.freeze([
   {
@@ -105,11 +85,9 @@ function aHunter(draft: WorldDraft): void {
 }
 
 /**
- * A rogue mid-fight: energy, a dagger, and no spellbook.
- *
- * Nothing is casting on this panel, so there is nothing for the cast row to look
- * up and a spellbook here would be a fixture no row reads. What the panel is
- * about is the pips, which come off the self record alone.
+ * A rogue mid-fight: energy, a dagger, and no spellbook. Nothing is casting on this panel, so
+ * there is nothing for the cast row to look up. What the panel is about is the pips, which come
+ * off the self record alone.
  */
 function aRogue(draft: WorldDraft): void {
   draft.set(draft.player, 'templateId', ROGUE);
@@ -123,15 +101,12 @@ function aRogue(draft: WorldDraft): void {
 /**
  * The cast in flight, with everything else on the strip running under it.
  *
- * The global cooldown is 0.9 of a hunter's unhasted 1.5, and the swing 1.4 of the
- * weapon's own 2.3: both are the arithmetic the addon does rather than numbers
- * chosen to look busy, so what is on screen is what those inputs actually draw.
+ * The global cooldown is 0.9 of a hunter's unhasted 1.5, and the swing 1.4 of the weapon's own
+ * 2.3: both are the arithmetic the addon does rather than numbers chosen to look busy.
  *
- * The settle before the frame is not a formality, and every scenario here needs
- * it. This addon's loop stands down while its frame is hidden, and a saved frame
- * comes up hidden until its stored visibility arrives, so a tick before that
- * lands paints nothing at all: the rows are built and every countdown is blank,
- * which photographs as an addon that draws labels and no numbers.
+ * The settle before the frame is not a formality, and every scenario here needs it. This addon's
+ * loop stands down while its frame is hidden, and a saved frame comes up hidden until its stored
+ * visibility arrives, so a tick before that lands paints nothing at all.
  */
 async function midCast(stage: Stage): Promise<void> {
   const { player } = stage;
@@ -147,12 +122,10 @@ async function midCast(stage: Stage): Promise<void> {
 }
 
 /**
- * Three points of the five this fight has already shown.
- *
- * Two frames, because the strip is as wide as the most points seen this SESSION
- * and there is no maximum on the wire to widen it any other way. A rogue who
- * spent a finisher at five and has rebuilt to three is what that looks like, and
- * it is the only state in which a lit pip and a spent one are both on screen.
+ * Three points of the five this fight has already shown. Two frames, because the strip is as
+ * wide as the most points seen this session and there is no maximum on the wire to widen it any
+ * other way. A rogue who spent a finisher at five and has rebuilt to three is the only state in
+ * which a lit pip and a spent one are both on screen.
  */
 async function comboPoints(stage: Stage): Promise<void> {
   const { player } = stage;
@@ -193,11 +166,9 @@ const SCENARIOS: readonly Scenario[] = [
     run: comboPoints,
   },
   {
-    // Standing about, which is most of a session and the state nobody thinks to
-    // photograph. Every row has nothing to say and every row is still there: the
-    // swing reads 'off' rather than counting to a swing that is not coming, the
-    // global cooldown is empty because empty means the next press goes through,
-    // and the cast row is named after nothing.
+    // Standing about, which is most of a session. Every row has nothing to say and every row is
+    // still there: the swing reads 'off', the global cooldown is empty because empty means the
+    // next press goes through, and the cast row is named after nothing.
     id: 'idle',
     label: 'Nothing running',
     world: (draft) => {
