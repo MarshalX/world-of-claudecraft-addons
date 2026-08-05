@@ -1,0 +1,85 @@
+{
+  "id": "wayfarer",
+  "name": "Wayfarer",
+  "version": "1.0.0",
+  "apiVersion": 1,
+  "apiMinor": 2,
+  "author": "MarshalX",
+  "description": "An atlas: where everything is, how far, and which way. Every row carries an arrow pointing the way you would have to turn to walk there, so the list is read by turning until one of them points up.",
+  "entry": "main.js",
+  "preview": {
+    "file": "preview.png",
+    "alt": "four named pins standing over the world, each with its distance beside it, and a panel under them. The pins are labels on thin dotted pillars planted where those places are: Eastbrook Rest at 75 yd, Eastbrook at 63 yd and Forge at 53 yd across the middle distance, and Reliquary Hill at 112 yd higher up the view on a dashed pillar, dashed because a prowler standing on the hill gave that pin a measured height while the other three sit at the player's own. The panel is headed Eastbrook Vale, levels 1 to 7, which this addon resolved from the player's position rather than read anywhere; under it a quiet line reads Minimap: Eastbrook Vale, which is the game's own label. Then a strip of four tabs, All, Explore, Travel and Service, with All open. Then four rows, nearest first. Each begins with a small arrow pointing the way the player would have to turn to walk there, then the name over what kind of place it is, then a bar filled by how much of the three hundred yard draw distance you have already closed, so the nearest row is almost full and each one below it is shorter, and then the distance on the right: Wolf Run, a point of interest, explored, 10 yd, whose arrow points back down the way the player came; Forge, a crafting station, 53 yd; Eastbrook, a town, explored, 63 yd; and Eastbrook, a mailbox, 68 yd, the last three all ahead and their arrows pointing up. A dim footer closes it: 3 of 12 explored, 12 more in range, 12 pins max, heights estimated."
+  },
+  "data": ["atlas.json"],
+  "homepage": "https://github.com/MarshalX/world-of-claudecraft-addons",
+  "tags": ["world", "progression", "interface"],
+  "permissions": ["world.read", "ui", "keys"],
+  "keybinds": [
+    {
+      "id": "toggle",
+      "label": "Show or hide the atlas",
+      "default": "Alt+KeyW"
+    }
+  ],
+  "settings": [
+    {
+      "id": "show-points",
+      "type": "boolean",
+      "label": "List points of interest",
+      "default": true
+    },
+    {
+      "id": "show-towns",
+      "type": "boolean",
+      "label": "List town hubs",
+      "default": true
+    },
+    {
+      "id": "show-graveyards",
+      "type": "boolean",
+      "label": "List graveyards",
+      "default": true
+    },
+    {
+      "id": "show-portals",
+      "type": "boolean",
+      "label": "List portals",
+      "default": true
+    },
+    {
+      "id": "show-mailboxes",
+      "type": "boolean",
+      "label": "List mailboxes",
+      "default": true
+    },
+    {
+      "id": "show-stations",
+      "type": "boolean",
+      "label": "List crafting stations",
+      "default": true
+    },
+    {
+      "id": "draw-distance",
+      "type": "number",
+      "label": "How far out to look, in yards",
+      "default": 300,
+      "min": 40,
+      "max": 1200
+    },
+    {
+      "id": "list-length",
+      "type": "number",
+      "label": "How many rows the list holds",
+      "default": 8,
+      "min": 1,
+      "max": 20
+    },
+    {
+      "id": "show-visited",
+      "type": "boolean",
+      "label": "Show how much of this zone you have explored",
+      "default": true
+    }
+  ]
+}

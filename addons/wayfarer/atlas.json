@@ -1,0 +1,1032 @@
+{
+  "source": {
+    "game": "0.34.0",
+    "files": [
+      "src/sim/data.ts (ZONES, WORLD_SIZE, INSTANCE_X_BASE, PORTALS)",
+      "src/sim/content/*.ts (one ZoneDef and one PortalDef[] per zone)",
+      "src/sim/content/graveyards.ts (OVERWORLD_GRAVEYARDS)",
+      "src/sim/content/mailboxes.ts (MAILBOXES)",
+      "src/sim/*_layout.ts (the points, ids and names a town layout owns, which the two tables above and one zone hub read through it)"
+    ],
+    "notes": [
+      "Crafting stations are deliberately NOT here. world.stations is published and carries the game's own placements with their zone ids, so a copy would be a second table to keep in step with nothing gained.",
+      "A poi id is FROZEN game content: the exploration deed marks key on it as poi:<zoneId>:<poiId>. A poi label is display-only and the game re-words them freely, which is why the_statuary_walk is labelled The Parterre Walk and the_rose_wilds is labelled Dawnhold Castle.",
+      "A town flag marks the poi that stands on its zone's own hub. The game authors the hub separately, with a name and a radius; every zone's hub name is also a poi label, so the flag carries the fact without a duplicate row.",
+      "Most mailboxes have no id and no name in the game: MAILBOXES is a bare list of points, and only the two towns with their own layout name theirs (mailbox_eastbrook and mailbox_fenbridge). Every id and every label here is derived from the hub of the zone the point falls in, which is the one rule that covers all fourteen and which agrees with the game on both of the named ones. The game also nudges a mailbox clear of buildings at spawn (findSafePos), so a point here is where it was authored rather than exactly where it stands.",
+      "A portal has no display name in the game either. The label here is title-cased from the frozen id.",
+      "No y anywhere, because the game authors none: ground height is a function of the world seed, which no addon can call and no server sends."
+    ]
+  },
+  "world": {
+    "stripMinX": -180,
+    "stripMaxX": 180,
+    "instanceXBase": 99400
+  },
+  "zones": [
+    {
+      "id": "eastbrook_vale",
+      "name": "Eastbrook Vale",
+      "zMin": -180,
+      "zMax": 180,
+      "levelRange": [1, 7],
+      "pois": [
+        {
+          "id": "eastbrook",
+          "label": "Eastbrook",
+          "x": 0,
+          "z": -3,
+          "town": true
+        },
+        {
+          "id": "wolf_run",
+          "label": "Wolf Run",
+          "x": -2,
+          "z": 70
+        },
+        {
+          "id": "boar_meadow",
+          "label": "Boar Meadow",
+          "x": 65,
+          "z": 0
+        },
+        {
+          "id": "mirror_lake",
+          "label": "Mirror Lake",
+          "x": -88,
+          "z": 82
+        },
+        {
+          "id": "sableweb",
+          "label": "Sableweb",
+          "x": -60,
+          "z": 4
+        },
+        {
+          "id": "copper_dig",
+          "label": "Copper Dig",
+          "x": -84,
+          "z": -64
+        },
+        {
+          "id": "bandit_camp",
+          "label": "Bandit Camp",
+          "x": 76,
+          "z": -76
+        },
+        {
+          "id": "fallen_chapel",
+          "label": "Fallen Chapel",
+          "x": 80,
+          "z": 80
+        },
+        {
+          "id": "reliquary_hill",
+          "label": "Reliquary Hill",
+          "x": -5,
+          "z": -52
+        },
+        {
+          "id": "brightwood_glade",
+          "label": "Brightwood Glade",
+          "x": 40,
+          "z": 140
+        },
+        {
+          "id": "the_sowfield",
+          "label": "The Sowfield",
+          "x": -11,
+          "z": -112
+        },
+        {
+          "id": "the_farshore_causeway",
+          "label": "The Farshore Causeway",
+          "x": 150,
+          "z": -46
+        }
+      ]
+    },
+    {
+      "id": "mirefen_marsh",
+      "name": "Mirefen Marsh",
+      "zMin": 180,
+      "zMax": 540,
+      "levelRange": [6, 13],
+      "pois": [
+        {
+          "id": "fenbridge",
+          "label": "Fenbridge",
+          "x": 0,
+          "z": 300,
+          "town": true
+        },
+        {
+          "id": "prowler_reeds",
+          "label": "Prowler Reeds",
+          "x": -40,
+          "z": 230
+        },
+        {
+          "id": "deepfen_shallows",
+          "label": "Deepfen Shallows",
+          "x": -105,
+          "z": 300
+        },
+        {
+          "id": "widow_thicket",
+          "label": "Widow Thicket",
+          "x": 80,
+          "z": 315
+        },
+        {
+          "id": "drowned_chapel",
+          "label": "Drowned Chapel",
+          "x": 100,
+          "z": 435
+        },
+        {
+          "id": "troll_mounds",
+          "label": "Troll Mounds",
+          "x": -95,
+          "z": 440
+        },
+        {
+          "id": "gravecaller_encampment",
+          "label": "Gravecaller Encampment",
+          "x": 0,
+          "z": 485
+        },
+        {
+          "id": "the_sunken_bastion",
+          "label": "The Sunken Bastion",
+          "x": 45,
+          "z": 515
+        }
+      ]
+    },
+    {
+      "id": "thornpeak_heights",
+      "name": "Thornpeak Heights",
+      "zMin": 540,
+      "zMax": 900,
+      "levelRange": [13, 20],
+      "pois": [
+        {
+          "id": "highwatch",
+          "label": "Highwatch",
+          "x": 0,
+          "z": 660,
+          "town": true
+        },
+        {
+          "id": "stalker_ridge",
+          "label": "Stalker Ridge",
+          "x": -50,
+          "z": 590
+        },
+        {
+          "id": "deeprock_burrows",
+          "label": "Deeprock Burrows",
+          "x": 85,
+          "z": 615
+        },
+        {
+          "id": "ogre_foothills",
+          "label": "Ogre Foothills",
+          "x": -90,
+          "z": 700
+        },
+        {
+          "id": "drogmars_war_camp",
+          "label": "Drogmar's War-Camp",
+          "x": -130,
+          "z": 740
+        },
+        {
+          "id": "stormcrag",
+          "label": "Stormcrag",
+          "x": 110,
+          "z": 760
+        },
+        {
+          "id": "the_glimmermere",
+          "label": "The Glimmermere",
+          "x": -70,
+          "z": 770
+        },
+        {
+          "id": "wyrmcult_tents",
+          "label": "Wyrmcult Tents",
+          "x": 55,
+          "z": 820
+        },
+        {
+          "id": "revenant_fields",
+          "label": "Revenant Fields",
+          "x": -40,
+          "z": 830
+        },
+        {
+          "id": "gravewyrm_sanctum",
+          "label": "Gravewyrm Sanctum",
+          "x": 0,
+          "z": 880
+        }
+      ]
+    },
+    {
+      "id": "veiled_hollow",
+      "name": "The Veiled Hollow",
+      "zMin": 900,
+      "zMax": 1440,
+      "levelRange": [15, 20],
+      "pois": [
+        {
+          "id": "eldergleam",
+          "label": "Eldergleam",
+          "x": -40,
+          "z": 1030,
+          "town": true
+        },
+        {
+          "id": "duskfall_cave",
+          "label": "Duskfall Cave",
+          "x": -140,
+          "z": 952
+        },
+        {
+          "id": "duskfall_overlook",
+          "label": "Duskfall Overlook",
+          "x": -118,
+          "z": 988
+        },
+        {
+          "id": "elder_grove",
+          "label": "Elder Grove",
+          "x": 30,
+          "z": 955
+        },
+        {
+          "id": "starfall_basin",
+          "label": "Starfall Basin",
+          "x": 110,
+          "z": 985
+        },
+        {
+          "id": "the_sunken_court",
+          "label": "The Sunken Court",
+          "x": 125,
+          "z": 1085
+        },
+        {
+          "id": "crystalline_shallows",
+          "label": "Crystalline Shallows",
+          "x": 75,
+          "z": 1165
+        },
+        {
+          "id": "the_gleaming_deep",
+          "label": "The Gleaming Deep",
+          "x": -70,
+          "z": 1155
+        }
+      ]
+    },
+    {
+      "id": "drakelands",
+      "name": "The Drakelands",
+      "zMin": 1820,
+      "zMax": 2420,
+      "xMin": 180,
+      "xMax": 540,
+      "levelRange": [16, 20],
+      "pois": [
+        {
+          "id": "wyrmwatch",
+          "label": "Wyrmwatch",
+          "x": 404,
+          "z": 1900,
+          "town": true
+        },
+        {
+          "id": "the_gatewood",
+          "label": "The Gatewood",
+          "x": 360,
+          "z": 1940
+        },
+        {
+          "id": "cinder_dunes",
+          "label": "Cinder Dunes",
+          "x": 330,
+          "z": 2100
+        },
+        {
+          "id": "trollmoot",
+          "label": "Trollmoot",
+          "x": 460,
+          "z": 2140
+        },
+        {
+          "id": "the_last_keep",
+          "label": "The Last Keep",
+          "x": 406,
+          "z": 2032
+        },
+        {
+          "id": "bloodglass_fields",
+          "label": "Bloodglass Fields",
+          "x": 270,
+          "z": 2270
+        },
+        {
+          "id": "drakemaw_caldera",
+          "label": "Drakemaw Caldera",
+          "x": 390,
+          "z": 2320
+        }
+      ]
+    },
+    {
+      "id": "frostveil",
+      "name": "The Frostveil Reach",
+      "zMin": 1440,
+      "zMax": 1960,
+      "levelRange": [17, 20],
+      "pois": [
+        {
+          "id": "icemantle",
+          "label": "Icemantle",
+          "x": -30,
+          "z": 1560,
+          "town": true
+        },
+        {
+          "id": "the_snowline",
+          "label": "The Snowline",
+          "x": -10,
+          "z": 1495
+        },
+        {
+          "id": "glacier_tarn",
+          "label": "Glacier Tarn",
+          "x": 60,
+          "z": 1640
+        },
+        {
+          "id": "the_aurora_steps",
+          "label": "The Aurora Steps",
+          "x": 30,
+          "z": 1740
+        },
+        {
+          "id": "the_shiverfen",
+          "label": "The Shiverfen",
+          "x": -90,
+          "z": 1760
+        },
+        {
+          "id": "the_howling_terraces",
+          "label": "The Howling Terraces",
+          "x": 100,
+          "z": 1810
+        }
+      ]
+    },
+    {
+      "id": "amberfall",
+      "name": "The Amberfall",
+      "zMin": 1820,
+      "zMax": 2380,
+      "xMin": -540,
+      "xMax": -180,
+      "levelRange": [18, 20],
+      "pois": [
+        {
+          "id": "lanternmere",
+          "label": "Lanternmere",
+          "x": -360,
+          "z": 2072,
+          "town": true
+        },
+        {
+          "id": "the_goldmelt",
+          "label": "The Goldmelt",
+          "x": -350,
+          "z": 1848
+        },
+        {
+          "id": "the_gilded_orchard",
+          "label": "The Gilded Orchard",
+          "x": -432,
+          "z": 1992
+        },
+        {
+          "id": "harvest_hollow",
+          "label": "Harvest Hollow",
+          "x": -290,
+          "z": 1960
+        },
+        {
+          "id": "the_great_mere",
+          "label": "The Great Mere",
+          "x": -360,
+          "z": 2132
+        },
+        {
+          "id": "cindermaple_rise",
+          "label": "Cindermaple Rise",
+          "x": -430,
+          "z": 2210
+        },
+        {
+          "id": "the_leaning_monolith",
+          "label": "The Leaning Monolith",
+          "x": -276,
+          "z": 2230
+        }
+      ]
+    },
+    {
+      "id": "willowfen",
+      "name": "The Willowfen",
+      "zMin": 180,
+      "zMax": 700,
+      "xMin": -540,
+      "xMax": -180,
+      "levelRange": [19, 20],
+      "pois": [
+        {
+          "id": "bridgemere",
+          "label": "Bridgemere",
+          "x": -360,
+          "z": 362,
+          "town": true
+        },
+        {
+          "id": "the_amberfen_steps",
+          "label": "The Amberfen Steps",
+          "x": -380,
+          "z": 208
+        },
+        {
+          "id": "the_lilymoors",
+          "label": "The Lilymoors",
+          "x": -444,
+          "z": 308
+        },
+        {
+          "id": "bogshine_pools",
+          "label": "Bogshine Pools",
+          "x": -286,
+          "z": 292
+        },
+        {
+          "id": "willowweep",
+          "label": "Willowweep",
+          "x": -430,
+          "z": 466
+        },
+        {
+          "id": "the_drowsy_flats",
+          "label": "The Drowsy Flats",
+          "x": -320,
+          "z": 496
+        }
+      ]
+    },
+    {
+      "id": "nightbloom",
+      "name": "The Nightbloom",
+      "zMin": 1260,
+      "zMax": 1820,
+      "xMin": -540,
+      "xMax": -180,
+      "levelRange": [20, 20],
+      "pois": [
+        {
+          "id": "moonrest",
+          "label": "Moonrest",
+          "x": -370,
+          "z": 1420,
+          "town": true
+        },
+        {
+          "id": "the_nightgate",
+          "label": "The Nightgate",
+          "x": -390,
+          "z": 1292
+        },
+        {
+          "id": "the_moonwell",
+          "label": "The Moonwell",
+          "x": -290,
+          "z": 1380
+        },
+        {
+          "id": "gloamfield",
+          "label": "Gloamfield",
+          "x": -444,
+          "z": 1496
+        },
+        {
+          "id": "the_standing_vigil",
+          "label": "The Standing Vigil",
+          "x": -272,
+          "z": 1538
+        },
+        {
+          "id": "the_sleepless_barrow",
+          "label": "The Sleepless Barrow",
+          "x": -360,
+          "z": 1650
+        }
+      ]
+    },
+    {
+      "id": "wraithwood",
+      "name": "The Wraithwood",
+      "zMin": 1260,
+      "zMax": 1820,
+      "xMin": 180,
+      "xMax": 540,
+      "levelRange": [20, 20],
+      "pois": [
+        {
+          "id": "gallowmere",
+          "label": "Gallowmere",
+          "x": 360,
+          "z": 1430,
+          "town": true
+        },
+        {
+          "id": "the_crowgate",
+          "label": "The Crowgate",
+          "x": 390,
+          "z": 1292
+        },
+        {
+          "id": "widows_thicket",
+          "label": "Widow's Thicket",
+          "x": 280,
+          "z": 1484
+        },
+        {
+          "id": "the_hanging_glade",
+          "label": "The Hanging Glade",
+          "x": 440,
+          "z": 1530
+        },
+        {
+          "id": "the_mournstone_chapel",
+          "label": "The Mournstone Chapel",
+          "x": 300,
+          "z": 1620
+        },
+        {
+          "id": "the_huntsmans_clearing",
+          "label": "The Huntsman's Clearing",
+          "x": 380,
+          "z": 1680
+        }
+      ]
+    },
+    {
+      "id": "palmreach",
+      "name": "The Palmreach",
+      "zMin": 700,
+      "zMax": 1260,
+      "xMin": -540,
+      "xMax": -180,
+      "levelRange": [20, 20],
+      "pois": [
+        {
+          "id": "drifthaven",
+          "label": "Drifthaven",
+          "x": -300,
+          "z": 820,
+          "town": true
+        },
+        {
+          "id": "the_tanglemouth",
+          "label": "The Tanglemouth",
+          "x": -420,
+          "z": 732
+        },
+        {
+          "id": "the_palmstrand",
+          "label": "The Palmstrand",
+          "x": -460,
+          "z": 890
+        },
+        {
+          "id": "the_emerald_tangle",
+          "label": "The Emerald Tangle",
+          "x": -360,
+          "z": 980
+        },
+        {
+          "id": "the_vinefall",
+          "label": "The Vinefall",
+          "x": -400,
+          "z": 1080
+        },
+        {
+          "id": "the_sapphire_lagoon",
+          "label": "The Sapphire Lagoon",
+          "x": -270,
+          "z": 950
+        },
+        {
+          "id": "the_sunken_idol",
+          "label": "The Sunken Idol",
+          "x": -256,
+          "z": 1090
+        }
+      ]
+    },
+    {
+      "id": "evergarden",
+      "name": "The Evergarden",
+      "zMin": 700,
+      "zMax": 1260,
+      "xMin": 180,
+      "xMax": 540,
+      "levelRange": [20, 20],
+      "pois": [
+        {
+          "id": "hedgewick",
+          "label": "Hedgewick",
+          "x": 320,
+          "z": 810,
+          "town": true
+        },
+        {
+          "id": "the_garden_gate",
+          "label": "The Garden Gate",
+          "x": 410,
+          "z": 732
+        },
+        {
+          "id": "the_statuary_walk",
+          "label": "The Parterre Walk",
+          "x": 360,
+          "z": 875
+        },
+        {
+          "id": "the_rose_wilds",
+          "label": "Dawnhold Castle",
+          "x": 263,
+          "z": 889
+        },
+        {
+          "id": "the_petal_pond",
+          "label": "The Petal Pond",
+          "x": 440,
+          "z": 850
+        },
+        {
+          "id": "the_great_maze",
+          "label": "The Great Maze",
+          "x": 360,
+          "z": 946
+        },
+        {
+          "id": "the_fountain_court",
+          "label": "The Fountain Court",
+          "x": 360,
+          "z": 1016
+        },
+        {
+          "id": "the_old_mill",
+          "label": "The Old Mill",
+          "x": 504,
+          "z": 754
+        },
+        {
+          "id": "the_north_watch",
+          "label": "The North Watch",
+          "x": 412,
+          "z": 1112
+        },
+        {
+          "id": "the_lily_basin",
+          "label": "The Lily Basin",
+          "x": 340,
+          "z": 1170
+        }
+      ]
+    },
+    {
+      "id": "galecrest",
+      "name": "The Galecrest",
+      "zMin": 180,
+      "zMax": 700,
+      "xMin": 180,
+      "xMax": 540,
+      "levelRange": [20, 20],
+      "pois": [
+        {
+          "id": "wickharbor",
+          "label": "Wickharbor",
+          "x": 420,
+          "z": 360,
+          "town": true
+        },
+        {
+          "id": "the_windway",
+          "label": "The Windway",
+          "x": 200,
+          "z": 440
+        },
+        {
+          "id": "the_howling_downs",
+          "label": "The Howling Downs",
+          "x": 280,
+          "z": 320
+        },
+        {
+          "id": "the_old_beacon",
+          "label": "The Old Beacon",
+          "x": 498,
+          "z": 308
+        },
+        {
+          "id": "the_shear",
+          "label": "The Shear",
+          "x": 455,
+          "z": 535
+        },
+        {
+          "id": "the_wreckfields",
+          "label": "The Wreckfields",
+          "x": 340,
+          "z": 645
+        },
+        {
+          "id": "the_mirror_tarn",
+          "label": "The Mirror Tarn",
+          "x": 300,
+          "z": 560
+        },
+        {
+          "id": "the_galecrest_stables",
+          "label": "The Galecrest Stables",
+          "x": 378,
+          "z": 598
+        }
+      ]
+    },
+    {
+      "id": "farshore_isle",
+      "name": "The Farshore",
+      "zMin": -180,
+      "zMax": 180,
+      "xMin": 180,
+      "xMax": 540,
+      "levelRange": [3, 7],
+      "pois": [
+        {
+          "id": "gullhaven",
+          "label": "Gullhaven",
+          "x": 305,
+          "z": 70,
+          "town": true
+        },
+        {
+          "id": "the_landing",
+          "label": "The Landing",
+          "x": 250,
+          "z": 14
+        },
+        {
+          "id": "the_watch_meadow",
+          "label": "The Watch Meadow",
+          "x": 375,
+          "z": -5
+        },
+        {
+          "id": "the_sundered_cliffs",
+          "label": "The Sundered Cliffs",
+          "x": 402,
+          "z": -72
+        },
+        {
+          "id": "the_riftfields",
+          "label": "The Riftfields",
+          "x": 434,
+          "z": 58
+        }
+      ]
+    }
+  ],
+  "graveyards": [
+    {
+      "id": "gy_eastbrook",
+      "label": "Eastbrook Rest",
+      "x": -14,
+      "z": -14
+    },
+    {
+      "id": "gy_vale_chapel",
+      "label": "Vale Chapel Yard",
+      "x": 4,
+      "z": -56
+    },
+    {
+      "id": "gy_fenbridge",
+      "label": "Fenbridge Barrow",
+      "x": -18,
+      "z": 286
+    },
+    {
+      "id": "gy_thornpeak",
+      "label": "Thornpeak Cairns",
+      "x": 15,
+      "z": 645
+    },
+    {
+      "id": "gy_thornpeak_east",
+      "label": "East Ridge Graves",
+      "x": 141,
+      "z": 712
+    },
+    {
+      "id": "gy_thornpeak_south",
+      "label": "Sanctum Approach Graves",
+      "x": 138,
+      "z": 838
+    },
+    {
+      "id": "gy_thornpeak_west",
+      "label": "West Spire Graves",
+      "x": -139,
+      "z": 787
+    },
+    {
+      "id": "gy_veiled_hollow",
+      "label": "Eldergleam Rest",
+      "x": -60,
+      "z": 1004
+    },
+    {
+      "id": "gy_farshore",
+      "label": "Gullhaven Rest",
+      "x": 290,
+      "z": 86
+    },
+    {
+      "id": "gy_willowfen",
+      "label": "Willowfen Barrow",
+      "x": -344,
+      "z": 306
+    },
+    {
+      "id": "gy_galecrest",
+      "label": "Galecrest Rest",
+      "x": 404,
+      "z": 344
+    },
+    {
+      "id": "gy_palmreach",
+      "label": "Palmreach Rest",
+      "x": -318,
+      "z": 802
+    },
+    {
+      "id": "gy_evergarden",
+      "label": "Evergarden Rest",
+      "x": 309,
+      "z": 793
+    },
+    {
+      "id": "gy_nightbloom",
+      "label": "Nightbloom Rest",
+      "x": -388,
+      "z": 1402
+    },
+    {
+      "id": "gy_wraithwood",
+      "label": "Wraithwood Graves",
+      "x": 378,
+      "z": 1412
+    },
+    {
+      "id": "gy_frostveil",
+      "label": "Frostveil Barrow",
+      "x": -34,
+      "z": 1576
+    },
+    {
+      "id": "gy_drakelands",
+      "label": "Drakelands Cairns",
+      "x": 422,
+      "z": 1885
+    },
+    {
+      "id": "gy_amberfall",
+      "label": "Amberfall Rest",
+      "x": -336,
+      "z": 2050
+    }
+  ],
+  "mailboxes": [
+    {
+      "id": "mailbox_eastbrook",
+      "label": "Eastbrook",
+      "x": 0,
+      "z": -7.5
+    },
+    {
+      "id": "mailbox_fenbridge",
+      "label": "Fenbridge",
+      "x": 6,
+      "z": 294
+    },
+    {
+      "id": "mailbox_highwatch",
+      "label": "Highwatch",
+      "x": 6,
+      "z": 654
+    },
+    {
+      "id": "mailbox_eldergleam",
+      "label": "Eldergleam",
+      "x": -33,
+      "z": 1025
+    },
+    {
+      "id": "mailbox_wyrmwatch",
+      "label": "Wyrmwatch",
+      "x": 397,
+      "z": 1905
+    },
+    {
+      "id": "mailbox_icemantle",
+      "label": "Icemantle",
+      "x": -23,
+      "z": 1555
+    },
+    {
+      "id": "mailbox_lanternmere",
+      "label": "Lanternmere",
+      "x": -353,
+      "z": 2067
+    },
+    {
+      "id": "mailbox_bridgemere",
+      "label": "Bridgemere",
+      "x": -354,
+      "z": 356
+    },
+    {
+      "id": "mailbox_moonrest",
+      "label": "Moonrest",
+      "x": -364,
+      "z": 1415
+    },
+    {
+      "id": "mailbox_gallowmere",
+      "label": "Gallowmere",
+      "x": 354,
+      "z": 1436
+    },
+    {
+      "id": "mailbox_drifthaven",
+      "label": "Drifthaven",
+      "x": -294,
+      "z": 815
+    },
+    {
+      "id": "mailbox_hedgewick",
+      "label": "Hedgewick",
+      "x": 314,
+      "z": 816
+    },
+    {
+      "id": "mailbox_wickharbor",
+      "label": "Wickharbor",
+      "x": 427,
+      "z": 355
+    },
+    {
+      "id": "mailbox_gullhaven",
+      "label": "Gullhaven",
+      "x": 299,
+      "z": 76
+    }
+  ],
+  "portals": [
+    {
+      "id": "duskfall_passage",
+      "label": "Duskfall Passage",
+      "radius": 2,
+      "a": {
+        "x": 10,
+        "z": 770
+      },
+      "b": {
+        "x": -122,
+        "z": 959
+      }
+    }
+  ]
+}
