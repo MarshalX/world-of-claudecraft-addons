@@ -2,7 +2,7 @@
   "schema": 1,
   "name": "Official Marketplace",
   "maintainer": "MarshalX",
-  "generated": "2026-08-04T18:44:51.000Z",
+  "generated": "2026-08-05T00:08:19.000Z",
   "addons": [
     {
       "id": "cadence",
@@ -535,7 +535,7 @@
     {
       "id": "ledgerline",
       "name": "Ledgerline",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "apiVersion": 1,
       "apiMinor": 2,
       "author": "MarshalX",
@@ -548,6 +548,9 @@
       "companions": [
         "lorebind"
       ],
+      "companionReasons": {
+        "lorebind": "publishes what every item is called, so a price row reads as an item rather than as an id"
+      },
       "homepage": "https://github.com/MarshalX/world-of-claudecraft-addons",
       "tags": [
         "economy",
@@ -594,7 +597,7 @@
     {
       "id": "longwatch",
       "name": "Longwatch",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "apiVersion": 1,
       "apiMinor": 2,
       "author": "MarshalX",
@@ -624,7 +627,7 @@
         {
           "id": "toggle",
           "label": "Show or hide the rare list",
-          "default": "Alt+KeyL"
+          "default": "Alt+KeyR"
         }
       ],
       "settings": [
@@ -741,15 +744,21 @@
     {
       "id": "satchel",
       "name": "Satchel",
-      "version": "1.0.0",
+      "version": "1.1.0",
       "apiVersion": 1,
       "apiMinor": 2,
       "author": "MarshalX",
-      "description": "One list of everything you own, across every character. Bags, bank and mailbox are recorded as they are read, so an item is one row with a total however many stacks and characters hold it, and hovering says who has how many and where.",
+      "description": "One list of everything you own, across every character. Bags, bank and mailbox are recorded as they are read, so an item is one row with a total however many stacks and characters hold it, and hovering says who has how many and where. What a vendor would pay for a bag, a bank and the whole account.",
       "entry": "main.js",
       "preview": {
         "file": "preview.png",
         "alt": "On the left, Everything you own, the Items tab of a panel headed Satchel (2 unread), over a search field reading every character, every store. Nine rows, one per item rather than one per stack, each with the game's own art, a total on the right and a faint line under it naming who holds them: Bristly Boar Hide 16, Marshal 9, Bruk 7; Chime Dust 35, Marshal 4, Sena 31; Chime Essence 6, Sena 6; Chunk Of Ore 6, Marshal 6; Copper Ore 181, Marshal 87, Bruk 54, +1 more; Game Meat 30, Marshal 18, Bruk 12; Ghostly Essence 6, Marshal 4, Sena 2; Glyphsteel Bar 9, Marshal 6, Sena 3; and Goldleaf Herb 66, Marshal 46, Sena 20, the last of them cut off by the scrolling list. Each row is washed to a width that is its share of the largest pile, so Copper Ore fills its row and Chime Essence is a stub. Marshal's 87 copper ore is three stacks in the bags and one in the bank counted as one figure, and Sena and Bruk are not logged in: their rows come from what was recorded the last time they were played. A footer reads KINDS 26, COPIES 747. On the right, One character, live, the Bags tab of the same panel, showing the character who is logged in. A selector reads Marshal (here), a slot bar reads 24 / 52 with 28 free, and a strip under it reads Live, MARKED 3 split 1 worn, SOCKETS 4 / 4, over a Carrying row drawn in the game's own coins: 1462 gold, 38 silver, 4 copper. Below that a grid of 52 squares eleven across, 24 of them holding the game's item art with a stack count in the corner (three of copper ore at 20, 20 and 7, two of iron ore at 20 and 16, hides, potions, herbs, cloth and meat) and the remaining 28 drawn as faint dashed outlines. Four squares are outlined warm: the three copper ore stacks, which are one item split over more than one cell, and a spare of the vest the character is wearing."
+      },
+      "companions": [
+        "lorebind"
+      ],
+      "companionReasons": {
+        "lorebind": "publishes what every item is called and what a vendor pays, which is what puts a name and a worth on these rows"
       },
       "homepage": "https://github.com/MarshalX/world-of-claudecraft-addons",
       "tags": [
@@ -871,7 +880,7 @@
     {
       "id": "veinsight",
       "name": "Veinsight",
-      "version": "1.1.0",
+      "version": "1.1.1",
       "apiVersion": 1,
       "apiMinor": 2,
       "author": "MarshalX",
@@ -965,7 +974,7 @@
     {
       "id": "wayline",
       "name": "Wayline",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "apiVersion": 1,
       "apiMinor": 2,
       "author": "MarshalX",
