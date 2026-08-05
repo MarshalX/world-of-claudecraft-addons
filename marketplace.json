@@ -2,7 +2,7 @@
   "schema": 1,
   "name": "Official Marketplace",
   "maintainer": "MarshalX",
-  "generated": "2026-08-05T00:08:19.000Z",
+  "generated": "2026-08-05T00:11:28.000Z",
   "addons": [
     {
       "id": "cadence",
@@ -670,6 +670,71 @@
         }
       ],
       "path": "addons/longwatch"
+    },
+    {
+      "id": "lorebind",
+      "name": "Lorebind",
+      "version": "1.0.0",
+      "apiVersion": 1,
+      "apiMinor": 3,
+      "author": "MarshalX",
+      "description": "A browser for every item in the game, and the name service every other addon subscribes to.",
+      "entry": "main.js",
+      "preview": {
+        "file": "preview.png",
+        "alt": "the Lorebind window browsing every epic piece of armor in the game. Under the title a row of tabs reads All, Armor, Weapon, Food, Quest, Other, with Armor open. Under that, six quality chips, each written in the game's own colour for its tier: grey Poor, white Common, green Uncommon, blue Rare, purple Epic and orange Legendary, with Epic alone lit in its own colour and the other five dimmed. Then a search box reading name, id, kind or slot and two dropdowns of the loader's own, Any slot and Name, with an unticked box reading Only what I have seen under them. The body of the window is the game's own item art in a grid nine squares across and four and a bit rows deep, scrolling, every square edged in the purple the game paints an epic item with and carrying the same soft purple glow it gives that tier in a bag: rings, hoods, gauntlets, breastplates, legguards, boots and belts. The third square of the first row is ringed in gold, and the record under the grid is its: a larger copy of the same art beside Ashstalker Cowl written in that same purple, then a column of facts one to a line, the way the game's own item tooltip reads: Epic leather armor, helmet; 150 Armor; plus 5 Agility and plus 5 Stamina in green; Item level 28; Requires level 20; Soulbound; and last, quieter than the rest, ashstalker_cowl and from the table. Two lines close the panel: Showing 120 of 147 items, narrow it to see the rest; and 815 named from the table, 1 from a roll, 1 by nothing, Seen 8."
+      },
+      "data": [
+        "items.json"
+      ],
+      "companions": [
+        "satchel",
+        "ledgerline"
+      ],
+      "companionReasons": {
+        "satchel": "draws the bags, bank and mailbox this names the items in, and totals them at the prices it publishes",
+        "ledgerline": "records what the Merchant is asking, which is the other half of what an item is worth"
+      },
+      "homepage": "https://github.com/MarshalX/world-of-claudecraft-addons",
+      "tags": [
+        "economy",
+        "interface"
+      ],
+      "permissions": [
+        "world.read",
+        "ui",
+        "keys"
+      ],
+      "keybinds": [
+        {
+          "id": "toggle",
+          "label": "Show or hide the item codex",
+          "default": "Alt+KeyI"
+        }
+      ],
+      "settings": [
+        {
+          "id": "learn-rolls",
+          "type": "boolean",
+          "label": "Learn item names from loot rolls the group answers",
+          "default": true
+        },
+        {
+          "id": "tooltips",
+          "type": "boolean",
+          "label": "Describe any item another addon has marked, on hover",
+          "default": true
+        },
+        {
+          "id": "max-results",
+          "type": "number",
+          "label": "How many item squares to draw at once",
+          "default": 120,
+          "min": 24,
+          "max": 400
+        }
+      ],
+      "path": "addons/lorebind"
     },
     {
       "id": "purelight",

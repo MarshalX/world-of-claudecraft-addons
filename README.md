@@ -40,7 +40,7 @@ The per-browser procedure lives on the site rather than here, because two copies
 
 <!-- addons:start -->
 
-**13 addons ship with the loader**, reviewed and installed from inside the game. Five of them:
+**14 addons ship with the loader**, reviewed and installed from inside the game. Five of them:
 
 **[Combat Meter](addons/combat-meter)** — What your damage and healing are made of: a row per ability with crit rate, average and biggest hit, plus your real miss and dodge rates and what is hitting you.
 
@@ -62,13 +62,14 @@ The per-browser procedure lives on the site rather than here, because two copies
 
 <img src="addons/ledgerline/preview.png" width="440" alt="On the left, The ledger, the Prices tab of a panel headed Ledgerline (to collect), with a strip over the list reading at the Merchant, page 1 of 1, a 5 percent cut, 6 of 12 listing slots used and 62 silver and 2 items waiting to be collected. Under a search field, six item rows fenced off by a rule at each end, each carrying the game&#39;s own art, its price as coins (a disc per unit, gold, silver or copper, with the empty units left out) and a chart across the bottom of the row: Copper Ore, low 44 copper over a median of 48 and 3 visits; Ghostly Essence, low 7 silver 80; Healing Potion, low 2 silver 45; Iron Ore, low 1 silver 5; Pristine Hide, low 14 silver; and Rough Hide, low 84 copper, its chart cut off by the scrolling list. Every figure is one vote per visit to the counter rather than one per listing, and each chart has one point per visit: copper ore falls across the three days and iron ore and pristine hide climb. A footer reads 9 items recorded, keeping 30 days. On the right, Your listings, the Yours tab of the same panel, with the same strip over six listings of the player&#39;s own, each asking a price in the game&#39;s own coins. Copper Ore asking 9 silver and Spider Silk asking 6 silver 20 are washed red and read undercut, because a cheaper listing of each leads its block on the page that was read. Goldleaf Herb asking 17 silver reads not on this page, which is the panel refusing to call it uncontested: nobody else was selling any, and an item missing from a page is not an item nobody is selling. Iron Ore at 26 silver, Pristine Hide at 15 silver and Rough Hide at 8 silver 60 read cheapest on this page. Every row also gives the price per item, carries that item&#39;s own price chart across the bottom of it, and says the listing was first seen by you 6 hours ago, which is this addon&#39;s own record rather than an expiry, since no listing on the wire carries one. Under a rule, a footer reads that the verdicts are judged from the page you are reading now, which is not the whole market." />
 
-### The other 8
+### The other 9
 
 - **[Cadence](addons/cadence)** — The four timings a rotation is played against, on one thin strip: your swing, the global cooldown, your cast with a latency band, and your resource with combo points as pips.
 - **[Cooldown Bars](addons/cooldown-bars)** — A draining bar for every ability you have on cooldown, soonest ready first, measured against the real length of anything in your own spellbook.
 - **[Emberwatch](addons/emberwatch)** — A rules engine for effects and procs: name an effect on a unit and get a tile, a cue and a banner when it lands, stacks up or runs out.
 - **[Foretell](addons/foretell)** — A cast bar for everything casting near you, soonest to land first, as a borderless column or floating over each caster.
 - **[Longwatch](addons/longwatch)** — The rare spawns, where they live and when they are due back.
+- **[Lorebind](addons/lorebind)** — A browser for every item in the game, and the name service every other addon subscribes to.
 - **[Purelight](addons/purelight)** — Every effect in front of you that can actually be removed, worst first: on you, your pet, your group and your target, each tile naming who carries it.
 - **[Veinsight](addons/veinsight)** — Every ore vein, wood stand and herb patch in the world, pinned where it stands and listed nearest first with a distance, a bearing and your own respawn timer.
 - **[Wayline](addons/wayline)** — How far the next level is in time rather than in numbers: experience per hour over a rolling window, the kills and the time left to reach it, and a derived virtual level past the cap.
