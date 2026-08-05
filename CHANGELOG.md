@@ -13,17 +13,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Add lorebind addon
 - Add wayfarer addon
+- Add quality colour readout
 
 ### Changed
 
 - Regenerate the changelog for v1.2.0.
 - Sync with game resources 0.34
 - Rewrite the addon comments to drop narrative and stale references
-- Extend companion addons support; add quality colour readout; fix keybind collision; fix select component; fix input component; fix frame sizing
+- Extend companion addons support
 
 ### Fixed
 
 - Correct the missed Emberwatch version bump for the 0.34.0 table
+- Fix keybind collision
+- Fix select component
+- Fix input component
+- Fix frame sizing
 
 ## [1.2.0] - 2026-08-02
 
