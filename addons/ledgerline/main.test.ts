@@ -230,6 +230,8 @@ interface LedgerHarness extends SharedHarness {
   settle: () => Promise<void>;
   /** Publish an item record as another addon would. */
   publish: (payload: unknown, from?: string) => void;
+  /** Publish the batch form, which is how a publisher answers a catch-up. */
+  publishAll: (rows: unknown, from?: string) => void;
   /** The socket came back, which is what the away blip rides on. */
   reconnect: () => void;
 }
@@ -397,6 +399,9 @@ async function start(options: StartOptions = {}): Promise<LedgerHarness> {
     settle,
     publish: (payload, from = PUBLISHER) => {
       harness.shared.bus.emit(from, 'item', payload);
+    },
+    publishAll: (rows, from = PUBLISHER) => {
+      harness.shared.bus.emit(from, 'items', rows);
     },
     reconnect: () => {
       reconnects.count += 1;
@@ -1180,11 +1185,65 @@ describe('the bus', () => {
     expect(labelOf('prices', 'ore')).toBe('ore');
   });
 
+  // The batch is what an ask is actually answered with: a publisher holding a whole item table
+  // sends it as one message rather than one emit per row, so a consumer subscribed to the
+  // single-record topic alone hears the ask answered and takes nothing from it.
+  it('takes a batch of names, which is what a catch-up is answered with', async () => {
+    const h = await start();
+    h.send({
+      market: page([
+        listing({ id: 1, itemId: 'ore', price: 500 }),
+        listing({ id: 2, itemId: 'silk', price: 700 }),
+      ]),
+    });
+    await h.settle();
+    h.publishAll([
+      { id: 'ore', name: 'Copper Ore' },
+      { id: 'silk', name: 'Spider Silk' },
+    ]);
+    await h.settle();
+
+    expect(labelOf('prices', 'ore')).toBe('Copper Ore');
+    expect(labelOf('prices', 'silk')).toBe('Spider Silk');
+  });
+
+  it('keeps the good rows of a batch that carries a bad one', async () => {
+    const h = await start();
+    h.send({ market: page([listing({ id: 1, itemId: 'ore', price: 500 })]) });
+    await h.settle();
+    h.publishAll([null, { id: 'ore' }, 'copper ore', { id: 'ore', name: 'Copper Ore' }]);
+    await h.settle();
+
+    expect(labelOf('prices', 'ore')).toBe('Copper Ore');
+  });
+
+  // The second half is the half that bites. A handler that walked a payload without checking
+  // it is a list throws, the hub catches the throw, and the label stays the raw id either way:
+  // what says the guard is there is that the batch AFTER it still lands.
+  it('ignores a batch that is not a list and keeps taking the next one', async () => {
+    const h = await start();
+    h.send({ market: page([listing({ id: 1, itemId: 'ore', price: 500 })]) });
+    await h.settle();
+    h.publishAll({ id: 'ore', name: 'Wrong Shape' });
+    await h.settle();
+
+    expect(labelOf('prices', 'ore')).toBe('ore');
+
+    h.publishAll([{ id: 'ore', name: 'Copper Ore' }]);
+    await h.settle();
+
+    expect(labelOf('prices', 'ore')).toBe('Copper Ore');
+  });
+
   // Delivery is synchronous, so a publisher answering the ask does so inside the emit call. An
   // addon that asked before subscribing would miss its own answer, and that failure looks
   // exactly like a publisher that was not installed. The only way to see it is to stand in for
   // the publisher and answer the ask, which needs the bus wired up before the addon is
   // evaluated, so this case builds the services itself rather than using `start`.
+  //
+  // The answer is the BATCH, because that is the message the publisher in the catalogue sends
+  // here: a stand-in answering with a single record would leave this green while the real pair
+  // never exchanged a name.
   it('asks for a catch-up after subscribing, so a synchronous answer reaches it', async () => {
     const player = liveEntity({ set: { name: PLAYER_ENTITY.name, templateId: 'hunter' } });
     const state: MarketState = {
@@ -1206,7 +1265,7 @@ describe('the bus', () => {
         owner: PUBLISHER,
         handler: (message) => {
           asks.push(message.from);
-          shared.shared.bus.emit(PUBLISHER, 'item', { id: 'ore', name: 'Copper Ore' });
+          shared.shared.bus.emit(PUBLISHER, 'items', [{ id: 'ore', name: 'Copper Ore' }]);
         },
         onError: () => undefined,
       }),

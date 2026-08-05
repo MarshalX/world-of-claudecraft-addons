@@ -81,6 +81,16 @@ interface UiParts {
   root: AddonRoot;
   unlock: UnlockMode;
   stacking: Stacking;
+  /**
+   * The shared surfaces, built BEFORE the manager rather than with the rest of the kit.
+   *
+   * They used to be built inside `buildKit`, which runs after the manager is mounted, and the
+   * order was free until the manager needed one of them: its dropdowns are the loader's own
+   * menu, the same one an addon's are, so there is exactly one popup in the loader and the
+   * manager's forms cannot drift away from `ui.field`. Nothing in `buildSurfaces` needs the
+   * manager, so hoisting it costs nothing.
+   */
+  surfaces: Surfaces;
 }
 
 /**
@@ -119,6 +129,8 @@ function mountManagerPair(deps: UiDeps, parts: UiParts): ManagerPair {
     reloadAll: deps.reloadAll,
     formatTime: deps.formatTime,
     config,
+    // The loader's one menu, so the manager's dropdowns and an addon's are the same control.
+    openMenu: parts.surfaces.menus.open,
     capture: () => {
       const capture = deps.dispatcher.capture();
       return capture.done;
@@ -162,7 +174,7 @@ function buildKit(deps: UiDeps, parts: UiParts, manager: Manager): UiKit {
     manager.toggle();
   };
 
-  const surfaces = buildSurfaces(deps, parts.root);
+  const { surfaces } = parts;
   const roster = createFrameRoster();
 
   addLoaderRoutes({ doc: deps.doc, injector, menus: surfaces.menus, roster, unlock, onOpen });
@@ -305,7 +317,12 @@ export function mountUi(deps: UiDeps): MountedUi {
   // Ahead of both halves, because both raise through it: the manager when it is
   // shown, and every addon frame when it is built or shown. It needs only the
   // root, so nothing about the order costs anything.
-  const parts: UiParts = { root, unlock, stacking: createStacking({ root: root.el }) };
+  const parts: UiParts = {
+    root,
+    unlock,
+    stacking: createStacking({ root: root.el }),
+    surfaces: buildSurfaces(deps, root),
+  };
   const { manager, config } = mountManagerPair(deps, parts);
   const kit = buildKit(deps, parts, manager);
 

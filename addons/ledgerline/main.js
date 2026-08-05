@@ -37,7 +37,10 @@
 // since the item table is bundled inside the game's own chunk. `ui.icon.itemArtName` gives
 // the name the art file was filed under, which is provenance for the picture rather than
 // the item's name, and an addon publishing on the bus outranks it. The ledger is complete
-// without a single name; a name that turns up moves a label.
+// without a single name; a name that turns up moves a label. Both topics are subscribed to,
+// `item` for one record and `items` for a batch, because the batch is what the ask is
+// answered with: taking only the single form would leave the catch-up arriving and doing
+// nothing, which reads on screen as a publisher nobody installed.
 //
 // "First seen by you" is this addon's own record and is labelled as one. A listing expires
 // at 48 hours and no wired row carries an expiry: a row is an id, a seller, an item, a
@@ -73,8 +76,9 @@ const NO_REALM = 'offline';
 /** Where the first-seen stamps for the player's OWN listings live. One small key. */
 const MINE_KEY = 'mine-seen';
 
-/** The topic registry's item record, and the ask a late subscriber sends. */
+/** The topic registry's item record, its batch form, and the ask a late subscriber sends. */
 const ITEM_TOPIC = 'item';
+const ITEMS_TOPIC = 'items';
 const ASK_TOPIC = 'item:ask';
 
 const MS_PER_SECOND = 1000;
@@ -173,9 +177,8 @@ const QUERY_FIELDS = ['filter', 'itemType', 'subtype', 'armorClass', 'primarySta
 const NO_QUERY = 'the whole book';
 
 /**
- * A flag that changes, in a cell. The factory keeps the value a boolean rather than the
- * literal it starts as: a property initialized to `false` reads as the type `false`, so
- * every later test of it is reported as a condition that can never be true.
+ * A flag that changes, in a cell, so a handler can flip one the paint path reads without
+ * either of them holding a stale copy.
  */
 function cell(value) {
   return { on: value };
@@ -362,13 +365,43 @@ function parseItem(payload) {
   return { id: itemId, name, quality: text(payload.quality), kind: text(payload.kind) };
 }
 
-function onItem(message) {
-  const record = parseItem(message.payload);
+function remember(payload, from) {
+  const record = parseItem(payload);
   if (record === null) {
+    return false;
+  }
+  names.set(record.id, { ...record, from });
+  return true;
+}
+
+function onItem(message) {
+  if (remember(message.payload, message.from)) {
+    schedulePaint();
+  }
+}
+
+/**
+ * The batch form, and the one an ask is actually answered with: a publisher holding a whole
+ * item table sends it as one message rather than one emit per row. A consumer subscribed to
+ * `item` alone hears its own catch-up answered and takes nothing out of it, which looks
+ * exactly like a publisher that is not installed.
+ *
+ * A bad entry is dropped rather than abandoning the message. One batch is the publisher's
+ * whole table, and one malformed row in it must not cost the other eight hundred.
+ */
+function onItems(message) {
+  if (!Array.isArray(message.payload)) {
     return;
   }
-  names.set(record.id, { ...record, from: message.from });
-  schedulePaint();
+  let learned = 0;
+  for (const entry of message.payload) {
+    if (remember(entry, message.from)) {
+      learned += 1;
+    }
+  }
+  if (learned > 0) {
+    schedulePaint();
+  }
 }
 
 /**
@@ -1937,6 +1970,7 @@ woc.world.on('characterKey', characterChanged);
 // that answers inside this emit call reaches a handler that already exists, and one
 // registered afterwards would miss its own answer. Silence is ordinary.
 woc.bus.on(woc.bus.anySender, ITEM_TOPIC, onItem);
+woc.bus.on(woc.bus.anySender, ITEMS_TOPIC, onItems);
 woc.bus.emit(ASK_TOPIC);
 
 woc.keys.bind('toggle', () => {

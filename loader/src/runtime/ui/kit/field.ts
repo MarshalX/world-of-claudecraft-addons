@@ -21,6 +21,7 @@
 
 import type { Teardown } from '../../disposal.ts';
 import { FIELD_CLASS } from './field-shape.ts';
+import { createPicker, type OpenMenu } from './picker.ts';
 
 /** What every field hands back. `T` is what that control's value is. */
 interface Field<T> {
@@ -125,30 +126,33 @@ function createCheckbox(doc: Document, opts: FieldOpts<boolean>): Field<boolean>
   };
 }
 
-function createSelect(doc: Document, opts: SelectOpts): Field<string> {
+/**
+ * A dropdown, drawn by the loader rather than by the operating system.
+ *
+ * It was a native `<select>` until its popup was looked at: the list is drawn by the OS, in
+ * the OS font, outside the document and beyond styling, which puts a white system menu in the
+ * middle of a dark fantasy HUD. The game replaced its own selects for the same reason. See
+ * kit/picker.ts, which is the button and the kit's own menu.
+ */
+function createSelect(doc: Document, opts: SelectOpts, openMenu: OpenMenu): Field<string> {
   const id = nextId();
-  const select = doc.createElement('select');
-  select.id = id;
-  select.className = FIELD_CLASS.control;
-  select.disabled = opts.disabled === true;
-  for (const option of opts.options) {
-    const el = doc.createElement('option');
-    el.value = option;
-    el.textContent = option;
-    select.appendChild(el);
-  }
-  select.value = opts.value;
-  select.addEventListener('change', () => {
-    opts.onChange(select.value);
-  });
+  const picker = createPicker(
+    doc,
+    {
+      options: opts.options,
+      value: opts.value,
+      onChange: opts.onChange,
+      disabled: opts.disabled === true,
+    },
+    openMenu,
+  );
+  picker.el.id = id;
 
-  const row = buildRow(doc, opts.label, select, id);
+  const row = buildRow(doc, opts.label, picker.el, id);
   return {
     el: row,
-    value: () => select.value,
-    set: (next) => {
-      select.value = next;
-    },
+    value: picker.value,
+    set: picker.set,
     destroy: destroyer(row),
   };
 }

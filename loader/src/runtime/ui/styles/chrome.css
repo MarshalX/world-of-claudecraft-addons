@@ -120,16 +120,23 @@
   letter-spacing: 0.5px;
 }
 
+/* The game's own `.x-btn`, which this button already WEARS: 14px, a hairline
+   border and four pixels of padding, and no minimum at all. The square is ours,
+   because the mark inside is a 12px path rather than a glyph in a text run and a
+   padding-only box around it is not square. The touch floor is in touch.css. */
 #woc-addons .woc-close {
   background: none;
   border: 1px solid var(--color-border-default, rgb(78 61 29));
   border-radius: var(--radius-sm, 4px);
   color: var(--color-text-muted, rgb(153 141 106));
   cursor: pointer;
-  /* The mobile tap-target floor the game itself holds to. */
-  min-width: 40px;
-  min-height: 40px;
-  font-size: 16px;
+  min-width: 24px;
+  min-height: 24px;
+  padding: 0;
+  font-size: 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 #woc-addons .woc-close:hover,
@@ -156,11 +163,11 @@
   color: var(--color-text-muted, rgb(153 141 106));
   cursor: pointer;
   font-family: inherit;
-  /* 16px keeps iOS Safari from auto-zooming the page, the same floor the game
-     holds every control to. */
-  font-size: 16px;
-  min-height: 40px;
-  padding: 4px 12px;
+  /* The game's own window tabs (`.bank-tab`, `.delve-tab`, `.chat-tab`): 13px on
+     roughly seven pixels of vertical padding, and no minimum height. See the
+     note above the compact block for why this is no longer 16px on 40px. */
+  font-size: 13px;
+  padding: 7px 12px;
 }
 
 #woc-addons .woc-tab:hover {
@@ -179,6 +186,33 @@
   outline-offset: 2px;
 }
 
+/* Inside anything that scrolls, the ring is drawn INWARDS instead.
+ *
+ * An outline is painted outside the element's border box and contributes nothing
+ * to scrollable overflow, and a scroll container paints nothing outside its own
+ * padding box. `.woc-frame-body` and `.woc-pane` both scroll and neither has
+ * padding of its own, so every control the loader lays out is flush with that
+ * clip edge and the 2px gap above puts the left and right strokes of its ring
+ * exactly where they cannot be drawn. What is left is a ring with no sides,
+ * which reads as a broken border rather than as focus: reported from a live
+ * session against a text field, and equally true of the first tab in a strip and
+ * of every button in a pane.
+ *
+ * Ringing inwards rather than making room for the ring, because room is a layout
+ * change to every frame in the loader to fix something painted, and it would
+ * still leave the block direction clipped at the two ends of the scrollport. It
+ * is also the game's own answer wherever it has the same problem: `.ta-row`,
+ * `.delve-tab` and `.ui-dd-item` all carry a negative offset, and only the
+ * controls it puts in a padded container keep the gap. The gap above is
+ * therefore still the rule everywhere the ring has somewhere to go.
+ *
+ * A descendant selector rather than a child one, so a scroll container an ADDON
+ * builds inside its own frame is covered by the same rule. */
+#woc-addons .woc-frame-body :focus-visible,
+#woc-addons .woc-pane :focus-visible {
+  outline-offset: -2px;
+}
+
 #woc-addons .woc-pane {
   overflow-y: auto;
   overscroll-behavior: contain;
@@ -187,15 +221,28 @@
 /* The compact density (ui.frame/ui.window `density: 'compact'`).
  *
  * `comfortable` is the default and needs no rules of its own: it is what
- * everything above is already drawn at, 16px labels on a 40px minimum, which is
- * the mobile tap-target floor the game itself holds to. That floor is right for
- * the manager and for anything a player OPERATES, and wrong for a dense readout
- * they glance at, where it makes the loader's own chrome the loudest thing in the
- * panel. The game's own combat meter is drawn at roughly these numbers.
+ * everything above is already drawn at, which is the scale the GAME draws its own
+ * windows at on a desktop. 13px tabs, a 12.5px button, a 15px panel title, a 14px
+ * close mark, a 12px tooltip.
  *
- * Opting in gives up the tap floor, which is why it is opt-in and why the
- * default is the other one: an addon that has not thought about it keeps the
- * accessible sizing. Compact is a desktop readout's trade to make.
+ * It used to be 16px labels on a 40px minimum, on the claim that this was the
+ * floor the game holds every control to, and that claim was wrong in a way worth
+ * recording. The game holds that floor on TOUCH ONLY. Its own rules say so in as
+ * many words: `base.css` floors every focusable control at 16px inside
+ * `@media (pointer: coarse)` with a comment about iOS Safari's auto-zoom,
+ * `components.css` gives `.ui-dd-item` its 40px inside the same query, and
+ * `hud.mobile.css` gives the bank tabs theirs under `body.mobile-touch`. On a
+ * desktop the game runs 11px to 13px throughout. So the loader was drawing its
+ * chrome about a third larger than every panel it sits beside, which reads as a
+ * different application rendered on top of the game rather than as part of it.
+ * Reported from a live session, with the Lorebind and Ledgerline panels next to
+ * the game's own action bars. The floor is not gone; it moved to touch.css, which
+ * is where the game keeps it.
+ *
+ * What compact now MEANS therefore changed with it. It used to be the escape
+ * hatch from the touch floor, and every dense readout had to take it; it is now
+ * tighter than the game's own panels, which is a real thing to want for a strip
+ * glanced at mid-fight and is no longer something an ordinary window needs.
  *
  * Selectors carry both classes so specificity beats the base `.woc-window`
  * rules whatever order the sheets are concatenated in.
@@ -214,12 +261,9 @@
 }
 
 #woc-addons .woc-density-compact .woc-close {
-  min-width: 24px;
-  min-height: 24px;
-  padding: 0;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
+  min-width: 20px;
+  min-height: 20px;
+  font-size: 12px;
 }
 
 #woc-addons .woc-density-compact .woc-tabs {

@@ -23,8 +23,6 @@ const HOST_MODULE = /(^|\/)loader\/src\/host\//;
 const NODE_IMPORT =
   /^(node:|(fs|path|url|crypto|http|https|os|child_process|worker_threads|process|util|stream|buffer|events|zlib|net|tls|dns|readline|assert|module|v8|vm|perf_hooks)$)/;
 
-/** Whatever precedes a `{` that opens a rule body, which is its selector list. */
-const RULE_HEAD = /(^|\})\s*([^{}@]+?)\s*\{/g;
 const COMMENT = /\/\*[\s\S]*?\*\//g;
 const WHITESPACE = /\s+/g;
 
@@ -153,9 +151,14 @@ if (hostModules.length > 0) {
  *  2. EVERY RULE SCOPED to a loader-owned element. The flip side of being
  *     unlayered is that these rules also beat the game's, so an unscoped one
  *     restyles the game itself.
- *  3. NO SELECTOR IN TWO SHEETS. `styles/index.ts` concatenates them, so a
- *     selector defined twice makes the result depend on the join order, which
- *     is exactly the kind of coupling splitting the file was meant to avoid.
+ *  3. NO SELECTOR IN TWO SHEETS UNDER THE SAME CONDITION. `styles/index.ts`
+ *     concatenates them, so a selector defined twice at equal specificity makes
+ *     the result depend on the join order, which is exactly the kind of coupling
+ *     splitting the file was meant to avoid. The condition is part of the
+ *     identity because touch.css exists: it overrides a selector that panes.css
+ *     also declares, from inside `@media (pointer: coarse)`, and that is the
+ *     cascade doing its job rather than two sheets disagreeing. Order still
+ *     decides which wins, which is why that sheet is joined LAST and says so.
  *  4. EVERY KEYFRAMES NAME PREFIXED. An animation name is global to the document
  *     rather than scoped to a subtree, so this is what rule 2 means for a
  *     keyframes rule: its steps match nothing, and its name can collide.
@@ -169,16 +172,52 @@ const sheets = await Promise.all(
   })),
 );
 
-const selectorsOf = ({ name, css }) =>
-  [...css.replaceAll(KEYFRAMES_BLOCK, '').matchAll(RULE_HEAD)]
-    .map(([, , selectorList]) => selectorList.trim().replaceAll(WHITESPACE, ' '))
-    .filter((selector) => selector.length > 0 && !selector.startsWith('@'))
-    .map((selector) => ({ sheet: name, selector }));
+/**
+ * Every rule in a sheet, with the conditional at-rules it sits inside.
+ *
+ * A scan rather than a regex over rule heads, for two reasons the regex got wrong.
+ * It anchored each head to the `}` or the start of file before it, so the FIRST
+ * rule inside any `@media` was invisible: an unscoped one there would have passed
+ * the scoping check silently. And it reported a selector's name alone, which
+ * conflates a rule with the same selector under a different CONDITION, which is
+ * not a duplicate at all but the cascade being used for what it is for.
+ */
+const rulesOf = ({ name, css }) => {
+  const found = [];
+  const enclosing = [];
+  let prelude = '';
+  for (const char of css.replaceAll(KEYFRAMES_BLOCK, '')) {
+    if (char === '{') {
+      const head = prelude.trim().replaceAll(WHITESPACE, ' ');
+      // Pushed whether or not it is an at-rule, so the depth stays in step with the
+      // closing braces; only an at-rule contributes a condition.
+      if (head.startsWith('@')) {
+        enclosing.push(head);
+      } else {
+        enclosing.push(null);
+        if (head.length > 0) {
+          const when = enclosing.filter((one) => one !== null).join(' ');
+          found.push({ sheet: name, selector: head, when });
+        }
+      }
+      prelude = '';
+    } else if (char === '}') {
+      enclosing.pop();
+      prelude = '';
+    } else if (char === ';') {
+      // A declaration, or a statement at-rule like `@import`. Neither is a head.
+      prelude = '';
+    } else {
+      prelude += char;
+    }
+  }
+  return found;
+};
 
 const animationsOf = ({ name, css }) =>
   [...css.matchAll(KEYFRAMES_NAME)].map(([, animation]) => ({ sheet: name, animation }));
 
-const rules = sheets.flatMap(selectorsOf);
+const rules = sheets.flatMap(rulesOf);
 const unprefixed = sheets
   .flatMap(animationsOf)
   .filter(({ animation }) => !animation.startsWith('woc-'))
@@ -188,9 +227,17 @@ const unscoped = rules
   .filter(({ selector }) => !selector.split(',').every((one) => LOADER_OWNED.test(one.trim())))
   .map(({ sheet, selector }) => `${sheet}: ${selector}`);
 
+// Keyed on the CONDITION as well as the selector, so `.woc-input` at the top level
+// and `.woc-input` inside `@media (pointer: coarse)` are two different rules rather
+// than a collision. Two sheets styling the same selector under the same condition
+// still fails, which is the accident this check is for.
 const definedIn = new Map();
-for (const { sheet, selector } of rules) {
-  definedIn.set(selector, [...(definedIn.get(selector) ?? []), sheet]);
+for (const { sheet, selector, when } of rules) {
+  let key = selector;
+  if (when.length > 0) {
+    key = `${when} { ${selector} }`;
+  }
+  definedIn.set(key, [...(definedIn.get(key) ?? []), sheet]);
 }
 const duplicated = [...definedIn].filter(([, where]) => where.length > 1);
 
@@ -214,7 +261,7 @@ if (unprefixed.length > 0) {
 }
 if (duplicated.length > 0) {
   throw new Error(
-    `a selector is defined in more than one sheet, which makes the result depend on join order:\n  ${duplicated
+    `a selector is declared twice under the same condition, so which one wins depends on join order:\n  ${duplicated
       .map(([selector, where]) => `${selector} (${where.join(', ')})`)
       .join('\n  ')}`,
   );

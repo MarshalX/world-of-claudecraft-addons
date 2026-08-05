@@ -23,6 +23,7 @@
   overflow-y: auto;
   padding: 4px;
   border-radius: var(--radius-sm, 4px);
+  background-color: var(--panel-base, rgb(15 13 10));
   z-index: 100002;
 }
 
@@ -33,13 +34,12 @@
   color: var(--color-text-light, rgb(240 235 216));
   cursor: pointer;
   font-family: inherit;
-  font-size: 14px;
-  /* The tap-target floor the game holds its own controls to. A menu is operated
-     rather than glanced at, so it keeps the floor even inside a compact frame:
-     the frame's density says how tightly ITS chrome is drawn, and this is not in
-     the frame at all. */
-  min-height: 40px;
-  padding: 4px 10px;
+  /* The game draws its own dropdown rows (`.ui-dd-item`) at 12px on 5px of padding
+     and gives them a 40px floor only under `@media (pointer: coarse)`. 13px here
+     because this menu is also the right-click menu, whose rows are sentences
+     rather than one-word options. The floor is in touch.css. */
+  font-size: 13px;
+  padding: 5px 10px;
   text-align: left;
   white-space: nowrap;
   overflow: hidden;
@@ -48,6 +48,14 @@
 
 #woc-addons .woc-menu-item:hover:not(:disabled) {
   background: rgb(255 255 255 / 8%);
+  color: var(--gold, rgb(255 209 0));
+}
+
+/* The chosen row of a menu that is a CHOICE, which is what a dropdown's is. The game marks
+   its own the same way, in the accent and by nothing else: `kit/menu.ts` carries the fact to
+   a reader who cannot see a colour as `aria-checked`, which is what this rule selects on, so
+   the two cannot say different things. */
+#woc-addons .woc-menu-item[aria-checked="true"] {
   color: var(--gold, rgb(255 209 0));
 }
 
@@ -80,7 +88,7 @@
    which is the part a player's pointer and touch settings already tune. */
 #woc-addons .woc-slider {
   width: 100%;
-  min-height: 40px;
+  min-height: 24px;
   accent-color: var(--gold-dim, rgb(200 168 56));
 }
 

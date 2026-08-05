@@ -283,7 +283,9 @@ Windows, and the pieces that go in them.
 
 <!-- include: addons/cooldown-bars/main.js#frame -->
 
-`ui.frame` is a light HUD panel and `ui.window` is a full one with a body that fills. Both take `density: 'comfortable' | 'compact' | 'bare'`. Comfortable is the default: 16px labels on a 40px minimum, the tap-target floor the game itself holds to. Compact gives that floor up deliberately, for a dense readout you glance at rather than operate.
+`ui.frame` is a light HUD panel and `ui.window` is a full one with a body that fills. Both take `density: 'comfortable' | 'compact' | 'bare'`. Comfortable is the default and is the scale the game draws its own windows at on a desktop: 13px tabs and buttons under a 15px panel title. Compact is tighter still, for a dense readout you glance at rather than operate.
+
+Neither gives up the tap-target floor. The loader restores 16px type on a 40px target under `@media (pointer: coarse)`, whichever density you picked, which is where the game keeps its own floor too. The one thing that defeats it is writing a `font-size` or `min-height` onto a kit control yourself: an inline style beats every stylesheet rule, so hand-sizing a control opts it out of that floor on a phone. Change the padding instead.
 
 `bare` removes the chrome altogether: no panel behind your content, no padding, no title bar. Reach for it when the thing on screen IS your content, a row of timers floating on the HUD rather than a panel holding them.
 
@@ -331,6 +333,10 @@ woc.ui.frame({ id: 'strip', resizable: true, height: 40, onMove: (box) => scaleT
 
 Use it rather than measuring `frame.el`. A measurement forces a synchronous layout, and a display that scales with its frame would pay for one on every frame it draws. It fires on a drag, on a resize at pointer rate, on the async restore of a saved box, and when the window is resized under you, but never for the initial placement, which is the size you asked for and therefore already hold. A throw inside it is caught and written to your addon's log rather than breaking the gesture the player is in the middle of.
 
+A frame that is NOT resizable, which is every frame unless you ask, is held to the `width` you declared and its height is whatever it is holding. That is the shape a HUD readout wants, since its text changes and a fixed height would leave it padded out one moment and clipped the next.
+
+The width is a width in both directions, and the second one is the reason. Without it the panel is sized by its content, so it moves whenever the content does: a header that gains a clause steps the whole frame out and pulls it back when the clause goes, rows reflowing, exactly while the player is doing the thing that changed the text. A long note wraps inside your column instead, and a short one leaves the box where it was. Omitting `width` does not opt out of this; it takes the default.
+
 **By default a frame cannot be dragged smaller than the size it was created at.** That catches people out, so it is worth stating plainly: `width: 400` is also a floor of 400 unless you say otherwise. Say otherwise with `minWidth` and `minHeight`, and cap the other end with `maxWidth` and `maxHeight`.
 
 ```js
@@ -346,6 +352,19 @@ Cooldown Bars uses the pair for its tile strip: the frame's height is the icon s
 <!-- include: addons/cooldown-bars/main.js#bar -->
 
 A bar's fill can be tinted by damage school, which is a separate axis from `tone`. Tone is urgency; a school is what kind of damage a row is made of. Where both are set, tone wins.
+
+### Items, and the colour a player reads them by
+
+A row or a square that is an ITEM takes a third axis, `quality`, and it is the one a player picks an item out of a grid by before reading a word of it. A bar colours its label and a tile colours its border, which is what the game does with an item's name and an item's icon, down to the two palettes it keeps for the two of them and the soft glow it gives epic and legendary.
+
+```js
+row.update({ label: 'Ashstalker Cowl', quality: 'epic', icon: woc.ui.icon.item('ashstalker_cowl') });
+cell.update({ icon: woc.ui.icon.item('ashstalker_cowl'), quality: 'epic' });
+```
+
+There is no way to pass a colour, for the reason there is none for a school: two addons drawing an epic should draw the same purple, and it should be the purple in the player's own bags. For an element you drew yourself, a chip or a heading or a name in a panel of your own, the same six colours are on the class `woc-quality-<tier>`, which you may put on anything you own, exactly as you may reuse `woc-btn` and `woc-tab`.
+
+Nothing in the loader knows an item's quality: the game's item table is bundled into its own chunk and is served nowhere. So a tier is something you got from somewhere, which today means a `LootRoll` off `world.group`, a record another addon published on the bus, or a table your own addon ships. Null, and anything outside the six tiers, colours nothing, which is the honest answer for the 96 items the game ranks at no tier at all and for an id you have not looked up.
 
 ### Money
 
@@ -383,7 +402,7 @@ Pick between the two by what carries the meaning. A bar has room for a name, so 
 
 `fraction` is what is LEFT, the same as a bar's, and the wedge gives the art back as it runs down. Neither one animates itself: subscribe for the set changing and move `fraction` from a frame loop, which is the pattern the whole world API is built around.
 
-A tile's border takes the same `school` and `tone` axes a bar's fill does. Its square defaults to 40px, the tap-target floor the game holds its own controls to, and `size` gives that up deliberately for a dense strip.
+A tile's border takes the same `school`, `tone` and `quality` axes a bar has, with the same order between them: a tone or a school wins the border over a tier. Its square defaults to 40px, the tap-target floor the game holds its own controls to, and `size` gives that up deliberately for a dense strip.
 
 `label` is never drawn. It is how the tile is announced, as one image named for everything it says, since there is nowhere to put a name on a square that is all art. A tile without one is hidden from assistive technology rather than announced as a bare number.
 
@@ -392,6 +411,8 @@ Cooldown Bars offers both under a `layout` setting, which is worth reading as th
 ### Your own settings pane
 
 `ui.field` is the four labelled controls the manager's own forms are drawn with, and `ui.tabs` is its tab strip. Reuse them and a form inside your frame answers to that frame's density and matches the game, with no palette copied into your addon.
+
+`ui.field.select` is NOT a native `<select>`, and that is worth knowing because it is the one control where the browser's own version is unusable here: a select's popup is drawn by the operating system, outside the document, in the system font and beyond styling, so it opens as a white system list in the middle of a dark fantasy HUD. What you get instead is a button and the loader's own menu, with the chosen row in the game's accent. The game replaced its own selects for the same reason. Nothing about the API changed: the same `{label, value, options, onChange}` in, the same `{el, value, set, destroy}` out.
 
 ```js
 const window_ = woc.ui.field.slider({ label: 'Rolling window', value: 5, min: 1, max: 60,
@@ -427,6 +448,8 @@ row.addEventListener('contextmenu', (event) => {
 The reason this is in the loader rather than in your addon is the **dismissal**. A menu has to close on select, on Escape, on a click anywhere else including one a game control swallows, and when your addon is disabled with it open. Every one of those listens to something you do not own, and hand-rolling it gets three of the four right.
 
 There is one menu for the whole loader and opening a second closes the first. An item can be `disabled`, and `separator` draws a rule above it, ignored on the first item where it would draw a lid on the menu instead.
+
+`checked` says an item is the one currently chosen: it is drawn in the game's accent and announced as a radio rather than as a command, which is what turns a menu of actions into a menu of choices. Put it on EVERY item of such a menu rather than only on the chosen one, or a reader is told about one radio button and a list of commands. `ui.field.select` is built on exactly that.
 
 ### Over a point in the world
 

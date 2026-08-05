@@ -390,22 +390,16 @@ const frame = woc.ui.frame({
 });
 
 /**
- * The column the content lays out in, and the whole of what fixes the width.
+ * The column the content lays out in.
  *
- * A frame that is not resizable is content sized: the loader writes its position and
- * leaves the box to the browser, since `frame/interactive.ts` paints a width only for a
- * frame somebody can drag. So `width` above is the opening box and the floor a resize
- * could reach, and neither reaches a frame nobody can resize. What that leaves is a panel
- * as wide as its longest line, which changed width under the player every time the note
- * changed.
- *
- * A column of a stated width is what `width` was meant to say: the note wraps inside it,
- * the rows lay out against it, and the panel is the same width all session.
+ * It used to carry `width: FRAME_WIDTH` of its own, because a frame nobody can resize was
+ * sized by whatever its longest line came to and the declared `width` reached only the
+ * opening box. The loader holds a content-sized frame to that width now, so a column
+ * stating it again would be stating it 20px too wide: the frame's own padding is inside
+ * that number, and the panel then clipped its own rows rather than growing to fit them.
  */
 const column = document.createElement('div');
 column.className = 'woc-vs-column';
-column.style.width = `${String(FRAME_WIDTH)}px`;
-column.style.boxSizing = 'border-box';
 column.appendChild(note);
 column.appendChild(list);
 frame.body.appendChild(column);

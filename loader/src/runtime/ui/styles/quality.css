@@ -1,0 +1,70 @@
+/* The colour the game writes an item's NAME in, and the two places the kit writes it.
+ *
+ * `QUALITY_COLOR` in the game's `src/ui/icons.ts`, transcribed. The BORDER table is a second
+ * one and lives in tile.css beside the rule it has to sit between; they differ at one tier,
+ * where common is white as a word and a dimmer grey as an edge. Neither is a custom property:
+ * the game hard-codes both, so both are transcriptions with the same standing as the item
+ * table an addon has to carry, and both move when the game's do.
+ *
+ * The point of having it here at all is that a tier is the fact a player picks an item out of
+ * a grid by, and a browser, a bag panel and a market ledger drawing three different purples
+ * for epic would be worse than none of them drawing any. So no addon may pass a colour, the
+ * same refusal the school tints make.
+ *
+ * Written as rgb(), which is this sheet family's notation, against a source written as hex:
+ * poor #9d9d9d, common #ffffff, uncommon #1eff00, rare #0070dd, epic #a335ee, legendary
+ * #ff8000. */
+
+/* The text family, for an element an addon drew itself: a chip, a heading, a name in a record
+   under a grid. Documented for reuse the way `.woc-btn` and `.woc-tab` are, since the
+   alternative is every addon holding its own copy of these six values. */
+#woc-addons .woc-quality-poor {
+  color: rgb(157 157 157);
+}
+
+#woc-addons .woc-quality-common {
+  color: rgb(255 255 255);
+}
+
+#woc-addons .woc-quality-uncommon {
+  color: rgb(30 255 0);
+}
+
+#woc-addons .woc-quality-rare {
+  color: rgb(0 112 221);
+}
+
+#woc-addons .woc-quality-epic {
+  color: rgb(163 53 238);
+}
+
+#woc-addons .woc-quality-legendary {
+  color: rgb(255 128 0);
+}
+
+/* A bar is a NAME with a fill behind it, so its tier colours the name rather than the row.
+   The fill is the school's and the row is the tone's, so all three axes can be set on one bar
+   without any of them taking another's property. */
+#woc-addons .woc-bar-quality-poor .woc-bar-label {
+  color: rgb(157 157 157);
+}
+
+#woc-addons .woc-bar-quality-common .woc-bar-label {
+  color: rgb(255 255 255);
+}
+
+#woc-addons .woc-bar-quality-uncommon .woc-bar-label {
+  color: rgb(30 255 0);
+}
+
+#woc-addons .woc-bar-quality-rare .woc-bar-label {
+  color: rgb(0 112 221);
+}
+
+#woc-addons .woc-bar-quality-epic .woc-bar-label {
+  color: rgb(163 53 238);
+}
+
+#woc-addons .woc-bar-quality-legendary .woc-bar-label {
+  color: rgb(255 128 0);
+}

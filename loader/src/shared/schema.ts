@@ -57,6 +57,15 @@ const DataFile = RelativeFile.refine(
 const MAX_COMPANIONS = 4;
 
 /**
+ * How long one companion's reason may be. See `companionReasons`.
+ *
+ * A sentence rather than a paragraph, because the manager draws it as one hover
+ * line on a row: a reason that wrapped four times would be a second description
+ * competing with the first, which is the thing this field exists to stop.
+ */
+const MAX_COMPANION_REASON = 140;
+
+/**
  * The screenshot the manager and the site both show.
  *
  * A structure rather than a bare path because a picture with no alt text is a
@@ -120,73 +129,98 @@ export const SettingDecl = z.discriminatedUnion('type', [
     }),
 ]);
 
-export const AddonManifest = z.object({
-  id: AddonId,
-  name: z.string().min(1),
-  version: z.string().regex(SEMVER_RE, 'must be semver, e.g. "1.2.0"'),
-  apiVersion: z.number().int(),
-  /**
-   * The smallest API minor carrying every member this addon uses.
-   *
-   * Optional, and absent reads as 0, which is what an addon published before the
-   * minor existed was written against. That default is the point: the loader
-   * accepts other people's marketplaces, so an addon already in the wild
-   * declaring only `apiVersion` keeps working rather than being refused by a
-   * field its author never saw.
-   */
-  apiMinor: z.number().int().min(0).optional(),
-  author: z.string().min(1),
-  description: z.string().min(1),
-  entry: RelativeFile,
-  /** A screenshot in the addon's own directory. Absent is ordinary, not a defect. */
-  preview: PreviewDecl.optional(),
-  /**
-   * JSON files in this addon's own directory, fetched by the host at install and
-   * read back through `woc.data(name)`.
-   *
-   * Declared rather than discovered, for the reason `entry` is declared: what the
-   * loader will fetch out of a marketplace has to be a fixed list the manifest
-   * states, never a path an addon composes at run time. It is also what makes the
-   * surface refusable, since `woc.data` checks its argument against this list
-   * instead of joining it onto a URL.
-   */
-  data: z
-    .array(DataFile)
-    .max(MAX_DATA_FILES)
-    .refine((files) => new Set(files).size === files.length, 'duplicate data file')
-    .optional(),
-  /**
-   * Other addons this one works better with. A NOTE, never a dependency.
-   *
-   * Bare addon ids rather than fqids: the same addon installed from a fork is a
-   * different fqid and is still the companion the author meant. It gates nothing,
-   * installs nothing, and stops nothing from starting. See the manager's
-   * `companions.ts` for how one is resolved.
-   */
-  companions: z.array(AddonId).max(MAX_COMPANIONS).optional(),
-  homepage: z.string().url().optional(),
-  /**
-   * Browse's filter categories. Same shape as an addon id, so the filter can
-   * compare them without normalizing and two authors cannot publish 'Combat'
-   * and 'combat' as different tags. Bounded because the filter renders one
-   * control per distinct tag across every source in the list.
-   */
-  tags: z.array(AddonId).max(MAX_TAGS).optional(),
-  gameVersion: z
-    .string()
-    .refine(isValidRange, 'must be a semver range, e.g. ">=0.31.0" or "^0.31.0"')
-    .optional(),
-  channels: z.array(z.enum(CHANNELS)).min(1).optional(),
-  permissions: z.array(z.enum(PERMISSIONS)).optional(),
-  keybinds: z
-    .array(KeybindDecl)
-    .refine((k) => new Set(k.map((x) => x.id)).size === k.length, 'duplicate keybind id')
-    .optional(),
-  settings: z
-    .array(SettingDecl)
-    .refine((s) => new Set(s.map((x) => x.id)).size === s.length, 'duplicate setting id')
-    .optional(),
-});
+export const AddonManifest = z
+  .object({
+    id: AddonId,
+    name: z.string().min(1),
+    version: z.string().regex(SEMVER_RE, 'must be semver, e.g. "1.2.0"'),
+    apiVersion: z.number().int(),
+    /**
+     * The smallest API minor carrying every member this addon uses.
+     *
+     * Optional, and absent reads as 0, which is what an addon published before the
+     * minor existed was written against. That default is the point: the loader
+     * accepts other people's marketplaces, so an addon already in the wild
+     * declaring only `apiVersion` keeps working rather than being refused by a
+     * field its author never saw.
+     */
+    apiMinor: z.number().int().min(0).optional(),
+    author: z.string().min(1),
+    description: z.string().min(1),
+    entry: RelativeFile,
+    /** A screenshot in the addon's own directory. Absent is ordinary, not a defect. */
+    preview: PreviewDecl.optional(),
+    /**
+     * JSON files in this addon's own directory, fetched by the host at install and
+     * read back through `woc.data(name)`.
+     *
+     * Declared rather than discovered, for the reason `entry` is declared: what the
+     * loader will fetch out of a marketplace has to be a fixed list the manifest
+     * states, never a path an addon composes at run time. It is also what makes the
+     * surface refusable, since `woc.data` checks its argument against this list
+     * instead of joining it onto a URL.
+     */
+    data: z
+      .array(DataFile)
+      .max(MAX_DATA_FILES)
+      .refine((files) => new Set(files).size === files.length, 'duplicate data file')
+      .optional(),
+    /**
+     * Other addons this one works better with. A NOTE, never a dependency.
+     *
+     * Bare addon ids rather than fqids: the same addon installed from a fork is a
+     * different fqid and is still the companion the author meant. It gates nothing,
+     * installs nothing, and stops nothing from starting. See the manager's
+     * `companions.ts` for how one is resolved.
+     */
+    companions: z.array(AddonId).max(MAX_COMPANIONS).optional(),
+    /**
+     * What each named companion ADDS, one short sentence per id.
+     *
+     * The half of the field a description used to have to carry. `companions`
+     * answers which addon and the manager answers whether it is here; neither says
+     * why a player should care, so the sentence went into descriptions instead,
+     * where it is read before the player knows the companion exists and cannot say
+     * anything about state.
+     *
+     * A SECOND KEY rather than a richer shape for `companions`, and the reason is
+     * not taste. A marketplace index is one `z.array(MarketplaceEntry)` parse, so
+     * one entry an older loader cannot read fails the whole index and takes that
+     * source dark for every player still on that loader. An unrecognised key is
+     * dropped, which is the compatibility this whole schema already relies on.
+     *
+     * Keyed by an id the same manifest names, enforced below rather than trusted:
+     * two keys describing one relationship is exactly the shape that drifts, and a
+     * reason for an addon nobody named is the drift.
+     */
+    companionReasons: z.record(AddonId, z.string().min(1).max(MAX_COMPANION_REASON)).optional(),
+    homepage: z.string().url().optional(),
+    /**
+     * Browse's filter categories. Same shape as an addon id, so the filter can
+     * compare them without normalizing and two authors cannot publish 'Combat'
+     * and 'combat' as different tags. Bounded because the filter renders one
+     * control per distinct tag across every source in the list.
+     */
+    tags: z.array(AddonId).max(MAX_TAGS).optional(),
+    gameVersion: z
+      .string()
+      .refine(isValidRange, 'must be a semver range, e.g. ">=0.31.0" or "^0.31.0"')
+      .optional(),
+    channels: z.array(z.enum(CHANNELS)).min(1).optional(),
+    permissions: z.array(z.enum(PERMISSIONS)).optional(),
+    keybinds: z
+      .array(KeybindDecl)
+      .refine((k) => new Set(k.map((x) => x.id)).size === k.length, 'duplicate keybind id')
+      .optional(),
+    settings: z
+      .array(SettingDecl)
+      .refine((s) => new Set(s.map((x) => x.id)).size === s.length, 'duplicate setting id')
+      .optional(),
+  })
+  .refine(
+    (m) => Object.keys(m.companionReasons ?? {}).every((id) => (m.companions ?? []).includes(id)),
+    'every companionReasons key must be an addon named in companions',
+  );
 
 /** One row of marketplace.json: a manifest plus the addon's directory in the repo. */
 export const MarketplaceEntry = AddonManifest.extend({

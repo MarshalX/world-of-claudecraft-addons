@@ -52,6 +52,7 @@ function row(manifest: AddonManifest): CatalogAddon {
     settings: manifest.settings ?? [],
     keybinds: manifest.keybinds ?? [],
     companions: manifest.companions ?? [],
+    companionReasons: manifest.companionReasons ?? {},
   };
 }
 
@@ -125,6 +126,8 @@ interface CatalogAddon {
   readonly keybinds: readonly KeybindDecl[];
   /** Addon ids this one works better with. A note, never a dependency. */
   readonly companions: readonly string[];
+  /** What each of them adds, keyed by that id. Empty for a companion named without one. */
+  readonly companionReasons: Readonly<Record<string, string>>;
 }
 
 export type { CatalogAddon, CatalogPreview };

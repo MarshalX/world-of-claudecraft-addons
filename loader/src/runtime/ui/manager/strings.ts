@@ -70,6 +70,15 @@ export const UI_TEXT = {
   browseInstalledHint: 'This addon is already in your Installed list.',
 
   companions: 'Works better with',
+  companionEnable: 'Enable',
+  companionEnableHint: 'Switch this addon back on. The same switch as the one on its own row.',
+  companionGet: 'Get',
+  companionGetHint: 'Show what this addon declares, then install it.',
+  companionFind: 'Find it',
+  companionFindHint: 'Open Browse with this addon searched for.',
+  /** What one companion's line says when nothing on it needs a reason of its own. */
+  companionNoReason: 'The author of this addon named it as one theirs works better with.',
+  confirmRecommendedBy: 'Recommended by',
 
   confirmHeading: 'Install',
   confirmFrom: 'From',

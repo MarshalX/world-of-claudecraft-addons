@@ -26,6 +26,7 @@
 import type { Teardown } from '../../disposal.ts';
 import type {
   ArtSlot,
+  ReadoutQuality,
   ReadoutSchool,
   ReadoutTone,
   StyleSlot,
@@ -68,6 +69,8 @@ const SWEEP_PROPERTY = '--woc-tile-sweep';
 type TileTone = ReadoutTone;
 
 type TileSchool = ReadoutSchool;
+
+type TileQuality = ReadoutQuality;
 
 /**
  * Point the sweep at how much time is LEFT, the same sense a bar's fill has.
@@ -189,6 +192,15 @@ interface TileUpdate {
   count?: number | null;
   /** Tint the border by the game's own colour for a damage school. */
   school?: TileSchool | null;
+  /**
+   * Colour it by the game's own colour for an item quality tier.
+   *
+   * A THIRD axis rather than more tones: a tier is what an item IS, where a tone is how
+   * urgent a row has become, so an item panel setting both is saying two true things. Null
+   * and an unrecognised value colour nothing, which is the answer for the items the game
+   * ranks at no tier at all.
+   */
+  quality?: TileQuality | null;
   tone?: TileTone;
   /**
    * The square's side in pixels. Defaults to the game's tap-target floor.
@@ -282,5 +294,5 @@ function createTile(doc: Document, opts: TileOpts = {}): Tile {
   };
 }
 
-export type { Tile, TileOpts, TileSchool, TileTone, TileUpdate };
+export type { Tile, TileOpts, TileQuality, TileSchool, TileTone, TileUpdate };
 export { createTile };

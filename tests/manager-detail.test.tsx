@@ -19,8 +19,9 @@ import { mountManager } from '../loader/src/runtime/ui/manager/index.tsx';
 import { UI_TEXT } from '../loader/src/runtime/ui/manager/strings.ts';
 import type { InstalledAddon } from '../loader/src/shared/protocol.ts';
 import { configNamespace, SETTINGS_KEY } from '../loader/src/shared/storage-keys.ts';
+import { choosePicker, pickerValue } from './fakes/controls.ts';
 import { createFakeStorage, type FakeStorage } from './fakes/storage.ts';
-import { fakeRegistry, supervisorServices } from './fakes/ui-deps.ts';
+import { fakeRegistry, menuService, supervisorServices } from './fakes/ui-deps.ts';
 
 const FQID = 'official/combat-meter';
 const SETTLE_TURNS = 6;
@@ -139,6 +140,7 @@ function open(options: OpenOptions = {}) {
     market: null,
     dev: null,
     unlock: createUnlockMode(document.createElement('div')),
+    openMenu: menuService(document, root),
     ...supervisorServices(),
   });
   const repaint = (): void => {
@@ -217,13 +219,17 @@ describe('an addon updated while its page is open', () => {
     return harness;
   }
 
+  /**
+   * Choose a value in one setting's dropdown, through the real menu.
+   *
+   * It used to assign `.value` on the element and dispatch a change, which is what a native
+   * `<select>` takes. That degraded silently the day the control became a button and a menu,
+   * because a button carries a `value` property too: the assignment landed on the DOM, the
+   * assertion read it back, and the case passed without the manager ever being told anything.
+   */
   function pick(id: string, value: string): void {
     const field = document.getElementById(`woc-setting-official-combat-meter-${id}`);
-    const select = field as HTMLSelectElement | null;
-    if (select !== null) {
-      select.value = value;
-      select.dispatchEvent(new Event('change', { bubbles: true }));
-    }
+    choosePicker(field?.parentElement ?? document, value);
   }
 
   it('draws the control the update added', async () => {
@@ -244,8 +250,12 @@ describe('an addon updated while its page is open', () => {
     await settle();
 
     expect(text()).not.toContain('no setting declared');
-    const select = document.getElementById('woc-setting-official-combat-meter-layout');
-    expect((select as HTMLSelectElement).value).toBe('tiles');
+    expect(
+      pickerValue(
+        document.getElementById('woc-setting-official-combat-meter-layout')?.parentElement ??
+          document,
+      ),
+    ).toBe('tiles');
   });
 
   // The settings already on screen belong to the same addon and the same storage,
@@ -323,7 +333,9 @@ describe('the settings form', () => {
     expect(document.querySelector('input[type="checkbox"].woc-input')).toBeNull();
     expect(document.querySelector('.woc-field input[type="checkbox"]')).not.toBeNull();
     expect(document.querySelector('input[type="text"]')).not.toBeNull();
-    expect(document.querySelectorAll('select option')).toHaveLength(2);
+    // A select declaration renders the loader's own dropdown rather than a native control, so
+    // what there is to find is the button: its menu is not in the document until it is opened.
+    expect(document.querySelector('button.woc-picker')).not.toBeNull();
   });
 
   it('shows the stored value rather than the default', async () => {

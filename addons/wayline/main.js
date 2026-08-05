@@ -85,7 +85,7 @@ const RESTED_FILL_HOURS = 8;
 /** Everyone inside this many yards shares a kill's experience. */
 const PARTY_XP_RANGE_YARDS = 80;
 
-const FRAME_WIDTH = 232;
+const FRAME_WIDTH = 140;
 const MS_PER_MINUTE = 60_000;
 const MS_PER_HOUR = 3_600_000;
 const MINUTES_PER_HOUR = 60;

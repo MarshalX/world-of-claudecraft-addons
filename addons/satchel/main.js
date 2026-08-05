@@ -107,6 +107,19 @@
 //   may be disabled, or may simply not answer. Nothing here waits for one or tells the
 //   player something is broken: the index is complete without a single name.
 //
+// A price rides the same records, and it is the one figure here that has NO other source:
+// nothing on the addon API says what an item is worth, the item table is inside the game's
+// own chunk, and the art manifest carries a name and an icon size. So what a bag, a bank and
+// the whole account are worth is arithmetic over what somebody else published, and three
+// things follow from that and are the whole of the honesty here. An item nobody priced is
+// left OUT of a total rather than added at nothing, so the figure is never quietly wrong.
+// Every total says how many of its kinds it could price, because a sum over two kinds of
+// nine looks exactly like a complete one. And with nothing priced at all the row is not
+// drawn, since `0c` over a full bag is a claim rather than a silence.
+//
+// It is a VENDOR price, which is a floor and not what the thing would fetch, and every
+// sentence about one says so. Nothing here can sell anything either way.
+//
 // The layout, which is three rules that only bite together:
 //
 //   An element comes back as the display it was built with. `setShown` clears the inline
@@ -147,19 +160,35 @@ const CELL_GAP = 3;
 const MIN_COLUMNS = 6;
 const MIN_ROWS = 3;
 
-/** Wide enough for five tabs at the compact density without them wrapping. */
+/**
+ * Wide enough for five tabs on one row. Measured rather than reasoned about, in a browser at
+ * this width: the strip needs 279px of the 324 the padding leaves it, so the five stay on one
+ * row with room to spare. It used to say "at the compact density", which was the density this
+ * frame was built at and is no longer.
+ */
 const FRAME_WIDTH = 340;
 /** Tall enough for a backpack of 16 squares, its bar, its strip and the tabs above. */
 const FRAME_HEIGHT = 420;
-/** The compact density's own padding, which the frame's width has to carry twice. */
+/**
+ * The padding the frame's width has to carry twice. It belongs to `.woc-addon-frame` rather
+ * than to a density, so it is the same 8px at comfortable as it was at compact.
+ */
 const FRAME_PADDING = 8;
 /**
  * What the shortest useful frame spends on everything that is not the scrolling pane: the
  * title bar, the tab strip, the character selector, a capacity bar and the status strip.
- * Stated rather than measured, because a size floor is settled once when the frame is built
- * and cannot be derived from a layout that does not exist yet.
+ * Stated rather than measured at run time, because a size floor is settled once when the frame
+ * is built and cannot be derived from a layout that does not exist yet.
+ *
+ * The number itself IS a measurement, taken in a browser on the Bags tab: 229px at
+ * comfortable, against the 200 the same chrome took at compact. Nothing under Vitest can
+ * check it, since every `.css` import resolves to `''` there and happy-dom lays nothing out.
+ * The worth row is deliberately not in it: it is drawn only once something has published a
+ * price, so a floor that reserved its 23px would be 23px of dead space for every player with
+ * no publisher installed, and a floored frame that has one shows two rows of squares and a
+ * scrollbar rather than three.
  */
-const CHROME_HEIGHT = 200;
+const CHROME_HEIGHT = 230;
 
 const DEFAULT_WARN_FREE = 4;
 const PERCENT = 100;
@@ -251,9 +280,8 @@ const names = new Map();
 const largest = new Map();
 
 /**
- * A flag that changes, in a cell. The factory keeps the value a boolean rather than the
- * literal it starts as: a property initialized to `false` reads as the type `false`, so
- * every later test of it is reported as a condition that can never be true.
+ * A flag that changes, in a cell, so a handler can flip one the paint path reads without
+ * either of them holding a stale copy.
  */
 function cell(value) {
   return { on: value };
@@ -281,7 +309,7 @@ const titleShown = { text: FRAME_TITLE };
 /** Which character the three detail panes are showing. See `viewedKey`. */
 const selection = { key: '', follow: cell(true) };
 /** The index behind the rows on screen, so a tooltip describes the row it is over. */
-const found = { index: new Map() };
+const found = { index: new Map(), worth: { copper: 0, priced: 0, kinds: 0 } };
 /**
  * Letter bodies for the character in play, which the stored form deliberately drops. A body
  * is the longest field a letter has and is worth nothing to the index, and it is only
@@ -321,6 +349,18 @@ function text(value) {
     return value;
   }
   return '';
+}
+
+/**
+ * A number another addon published, or 0 for anything that is not one. A string that spells a
+ * price is not a price: the payload is that addon's idea of the shape, and coercing one would
+ * turn a bug on its side into a figure the player reads as a fact.
+ */
+function positive(value) {
+  if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) {
+    return 0;
+  }
+  return value;
 }
 
 /** A number somebody else stored, or the fallback. Everything here is untrusted input. */
@@ -499,6 +539,61 @@ function nameOf(itemId) {
 }
 
 /**
+ * What a vendor pays for one of something, or null while nobody has published a price.
+ *
+ * Zero stands for absent inside the record, and that is safe in one direction only: the
+ * publisher's rule is that a field it cannot state is left OUT of the payload, so nothing on
+ * the bus sends a real zero, and reading one as absent keeps an item nobody priced out of a
+ * total rather than adding it in at nothing.
+ *
+ * There is no other source for this. No published field on the addon API says what anything
+ * is worth, the item table is bundled inside the game's own chunk, and the art manifest
+ * carries a name and an icon size. So a price is something another addon knew and told this
+ * one, or it is not known at all.
+ */
+function sellOf(itemId) {
+  const said = known(itemId)?.sellValue ?? 0;
+  if (said <= 0) {
+    return null;
+  }
+  return said;
+}
+
+/**
+ * What a pile is worth to a vendor, and how much of it could be priced at all.
+ *
+ * The count is as load-bearing as the figure. A total drawn from two kinds out of nine is a
+ * real answer and looks exactly like a complete one, so the two are computed together and
+ * every place that draws the figure draws the count beside it.
+ */
+function worthOf(counts) {
+  const sums = { copper: 0, priced: 0, kinds: 0 };
+  for (const [itemId, held] of counts) {
+    sums.kinds += 1;
+    const each = sellOf(itemId);
+    if (each !== null) {
+      sums.priced += 1;
+      sums.copper += each * held;
+    }
+  }
+  return sums;
+}
+
+/** One store's stacks as the `[id, count]` pairs `worthOf` adds up. */
+function storeCounts(stacks) {
+  return [...stacksIn(stacks)].map(([itemId, counts]) => [itemId, counts.held]);
+}
+
+/**
+ * Every copy of everything on the account, off the index the Items pane has already built
+ * this frame. `draw` paints the items pane first, which is what makes that safe, and building
+ * a second index here would be the same walk over every character for the same answer.
+ */
+function accountCounts() {
+  return [...found.index].map(([itemId, row]) => [itemId, row.total]);
+}
+
+/**
  * One published record, checked. A bus payload is `unknown` and is another addon's idea of
  * the shape, so an id and a name are required and everything else reads as absent when it
  * is the wrong kind.
@@ -518,6 +613,7 @@ function parseItem(payload) {
     kind: text(payload.kind),
     quality: text(payload.quality),
     source: text(payload.source),
+    sellValue: positive(payload.sellValue),
   };
 }
 
@@ -1141,11 +1237,15 @@ function say(el, said) {
 }
 
 /**
- * A kit field laid on one line, at the size the rest of this panel is drawn at. `ui.field`
- * stacks its label over a control with a 40px floor, which is right for a settings pane and
- * is 120 pixels of chrome over a list here. The floor is given up deliberately, the same
- * trade `density: 'compact'` makes, and only for these two: they are read at a glance and
- * operated once.
+ * A kit field laid on one line rather than stacked, with its label shrunk to a caption.
+ *
+ * LAYOUT only. It used to hand-size the control as well, at 13px on a 24px floor, because
+ * `ui.field` stacked a 14px label over a 16px control with a 40px minimum and two of those
+ * were 120 pixels of chrome over a list. The kit is drawn at the game's own desktop scale
+ * now, so the sizes it gives are already the ones this was reaching for, and the writes were
+ * doing nothing but beating the coarse-pointer floor on a phone: an inline style outranks
+ * every selector a stylesheet can spell, so an addon that hand-sizes a kit control opts
+ * itself out of an accessibility rule it never meant to have an opinion about.
  */
 function inline(field, width) {
   const row = field.el;
@@ -1163,9 +1263,6 @@ function inline(field, width) {
   const control = row.querySelector('.woc-input');
   if (control !== null) {
     control.style.flex = `1 1 ${String(width)}px`;
-    control.style.minHeight = '24px';
-    control.style.fontSize = '13px';
-    control.style.padding = '2px 6px';
   }
   return fixed(row);
 }
@@ -1231,6 +1328,19 @@ function stat(parent, role, label) {
   parent.appendChild(el);
   setShown(el, false);
   return { el, figure };
+}
+
+/**
+ * One worth row, built the same way in all three places that draw one. Hidden to begin with,
+ * because it is hidden whenever nothing has been priced and the first paint is one of those
+ * moments: a row that flashed a figure and then went would read as something being lost.
+ */
+function worthRow(role) {
+  const bar = woc.ui.bar({ label: 'Worth', className: 'woc-satchel-worth' });
+  bar.el.dataset.role = role;
+  fixed(bar.el);
+  setShown(bar.el, false);
+  return bar;
 }
 
 /** A figure, or nothing at all, which takes the whole chip off the strip. */
@@ -1378,7 +1488,7 @@ const frame = woc.ui.frame({
   title: FRAME_TITLE,
   width: FRAME_WIDTH,
   height: FRAME_HEIGHT,
-  density: 'compact',
+  density: 'comfortable',
   closable: true,
   save: true,
   resizable: true,
@@ -1606,6 +1716,10 @@ itemsPane.appendChild(itemsRows.el);
 const itemsStrip = strip(itemsPane, 'items-strip');
 const shownStat = stat(itemsStrip, 'items-shown', 'Kinds');
 const heldStat = stat(itemsStrip, 'items-held', 'Copies');
+// A chip here rather than a row, unlike the three panes that draw one: this figure follows
+// the SEARCH, so it is a fact about the list above it in the way the two counts beside it
+// are, and it belongs in the same line as them.
+const worthStat = stat(itemsStrip, 'items-worth', 'Worth');
 const itemsNote = line(itemsPane, 'items-note');
 
 // A grid pane puts its readout above the grid, which every list pane does the opposite of,
@@ -1627,6 +1741,12 @@ const purse = woc.ui.bar({ label: 'Carrying', className: 'woc-satchel-purse' });
 purse.el.dataset.role = 'purse';
 fixed(purse.el);
 bagsPane.appendChild(purse.el);
+// Under the purse and in the same shape, because the two are the same question about the
+// same character: what they are carrying, and what the rest of it would fetch. It is a row
+// rather than a chip for the reason the purse is, and it is the row that goes away entirely
+// when nobody has published a price.
+const bagsWorth = worthRow('bags-worth');
+bagsPane.appendChild(bagsWorth.el);
 bagsPane.appendChild(bagGrid.el);
 const recentLine = line(bagsPane, 'recent');
 const bagsNote = line(bagsPane, 'bags-note');
@@ -1642,6 +1762,8 @@ const bankStrip = strip(bankBody, 'bank-strip');
 const bankAgeLine = wrapping(line(bankStrip, 'bank-age'));
 const bankMarksStat = stat(bankStrip, 'bank-marks', 'Marked');
 const bankTermsStat = stat(bankStrip, 'bank-terms', 'Slots');
+const bankWorth = worthRow('bank-worth');
+bankBody.appendChild(bankWorth.el);
 bankBody.appendChild(bankGrid.el);
 bankPane.appendChild(bankBody);
 const bankNote = line(bankPane, 'bank-note');
@@ -1664,6 +1786,8 @@ const accountBar = woc.ui.bar({ label: 'Every character', className: 'woc-satche
 accountBar.el.dataset.role = 'account';
 fixed(accountBar.el);
 rosterPane.appendChild(accountBar.el);
+const accountWorth = worthRow('account-worth');
+rosterPane.appendChild(accountWorth.el);
 const rosterStrip = strip(rosterPane, 'roster-strip');
 const rosterCountStat = stat(rosterStrip, 'roster-characters', 'Characters');
 const rosterSlotsStat = stat(rosterStrip, 'roster-slots', 'Slots');
@@ -1799,6 +1923,19 @@ function placeLines(places) {
   }));
 }
 
+/**
+ * What one item is worth, each and for every copy of it. Empty when nobody has priced it,
+ * which is the ordinary case for most of a bag and reads better as a line that is not there
+ * than as one saying the price is unknown on every row.
+ */
+function worthLine(itemId, total) {
+  const each = sellOf(itemId);
+  if (each === null) {
+    return '';
+  }
+  return `A vendor pays ${money(each)} each, ${money(each * total)} for all ${String(total)}.`;
+}
+
 /** `47 across 2 characters`, or the bare total when only one holds any. */
 function spreadText(row) {
   const who = byCharacter(row.places).length;
@@ -1815,6 +1952,10 @@ function itemTipFor(itemId) {
   }
   const lines = [`Item id: ${itemId}`, spreadText(row)];
   lines.push(...placeLines(row.places));
+  const worth = worthLine(itemId, row.total);
+  if (worth !== '') {
+    lines.push(worth);
+  }
   lines.push(...nameLines(itemId));
   lines.push({ text: 'Nothing here can move, mail or sell an item.', tone: 'muted' });
   return { title: nameOf(itemId), icon: woc.ui.icon.item(itemId), lines };
@@ -1862,6 +2003,18 @@ function heldText(order) {
   return String(total);
 }
 
+/**
+ * What the matching rows are worth, spelled rather than drawn as coins: this one is a chip on
+ * a strip beside two counts, and a chip takes text. Empty while nothing is priced, which takes
+ * the chip off the strip rather than putting a `0c` on it.
+ */
+function worthText(sums) {
+  if (sums.priced === 0) {
+    return '';
+  }
+  return money(sums.copper);
+}
+
 /** The largest pile on screen, which every fill is drawn as a share of. */
 function largestOf(order) {
   let most = 0;
@@ -1883,6 +2036,11 @@ function paintItems() {
   );
   setStat(shownStat, shownText(shown.length, order.length));
   setStat(heldStat, heldText(order));
+  // Over everything the search matched rather than over the rows drawn, which is what the
+  // count beside it does: a capped list says it is capped, and a total that quietly stopped at
+  // the fortieth row would not.
+  found.worth = worthOf(order.map((itemId) => [itemId, found.index.get(itemId)?.total ?? 0]));
+  setStat(worthStat, worthText(found.worth));
   say(itemsNote, itemsNoteText(shown.length, order.length));
 }
 
@@ -1962,6 +2120,74 @@ function moneyTip() {
   };
 }
 woc.ui.tooltip(purse.el, moneyTip);
+
+/** `1 of 2 kinds priced`, which is what says the figure beside it is a partial answer. */
+function pricedText(sums) {
+  return `${String(sums.priced)} of ${String(sums.kinds)} kinds priced`;
+}
+
+/**
+ * Draw a worth, or take the row off the panel altogether.
+ *
+ * A `0c` is a claim that everything here is worth nothing, and with nobody publishing prices
+ * that is exactly the wrong claim: the honest answer to what a bag is worth, when nothing has
+ * said what anything in it is worth, is no answer rather than zero.
+ */
+function paintWorth(bar, sums) {
+  setShown(bar.el, sums.priced > 0);
+  bar.update({ value: { copper: sums.copper }, detail: pricedText(sums) });
+}
+
+/** What every worth figure has to say about itself, wherever it is drawn. */
+function worthTipFor(said, sums) {
+  return {
+    title: 'Worth',
+    lines: [
+      said,
+      {
+        text: `${pricedText(sums)}. What nobody priced is left out rather than counted at nothing.`,
+        tone: 'muted',
+      },
+      { text: 'Nothing here can sell an item.', tone: 'muted' },
+    ],
+  };
+}
+
+/** The stacks behind one of the two per-character rows, or none before anybody is recorded. */
+function viewedCounts(source) {
+  if (viewedRecord() === null) {
+    return [];
+  }
+  return storeCounts(viewedSource(source).stacks);
+}
+
+woc.ui.tooltip(bagsWorth.el, () =>
+  worthTipFor(
+    'These bags at what a vendor pays for each thing in them.',
+    worthOf(viewedCounts('bags')),
+  ),
+);
+
+woc.ui.tooltip(bankWorth.el, () =>
+  worthTipFor(
+    'This bank at what a vendor pays for each thing in it.',
+    worthOf(viewedCounts('bank')),
+  ),
+);
+
+// Every store rather than the bags alone, which is the opposite of the slot total above it,
+// and the line says so: slots are bags only because a bank is recorded only for a visit to
+// one, while a thing owned is owned wherever it was last seen.
+woc.ui.tooltip(accountWorth.el, () =>
+  worthTipFor(
+    'Every store of every character recorded, bank and mailbox included, at what a vendor pays.',
+    worthOf(accountCounts()),
+  ),
+);
+
+woc.ui.tooltip(worthStat.el, () =>
+  worthTipFor('What the rows matching the search are worth to a vendor.', found.worth),
+);
 
 /**
  * What to say about names, without saying anything is wrong. Both silences are ordinary:
@@ -2283,6 +2509,7 @@ function clearBags() {
     setStat(chip, '');
   }
   setShown(purse.el, false);
+  setShown(bagsWorth.el, false);
 }
 
 function paintBags() {
@@ -2304,6 +2531,7 @@ function paintBags() {
   setStat(socketsStat, socketsText(snap));
   setShown(purse.el, true);
   purse.update({ value: { copper: record.copper } });
+  paintWorth(bagsWorth, worthOf(storeCounts(snap.stacks)));
   say(recentLine, liveRecent(live));
 }
 
@@ -2457,6 +2685,7 @@ function paintBank() {
   say(bankAgeLine, `${whoseText(record)}${ageText(snap, live && isNear(woc.world.bank))}`);
   setStat(bankMarksStat, marksText(view));
   setStat(bankTermsStat, expansionText(snap));
+  paintWorth(bankWorth, worthOf(storeCounts(snap.stacks)));
 }
 
 function isNear(state) {
@@ -2792,6 +3021,7 @@ function paintRosterTotals() {
   setShown(rosterStrip, sums.characters > 0);
   setShown(accountBar.el, sums.characters > 0);
   accountBar.update({ value: { copper: sums.copper } });
+  paintWorth(accountWorth, worthOf(accountCounts()));
   setStat(rosterCountStat, String(sums.characters));
   setStat(rosterSlotsStat, `${String(sums.used)} / ${String(sums.total)}`);
   setStat(rosterFreeStat, String(Math.max(0, sums.total - sums.used)));

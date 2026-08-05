@@ -14,6 +14,7 @@
   position: relative;
   padding: 2px 6px;
   overflow: hidden;
+  flex-shrink: 0;
   border-radius: var(--radius-sm, 4px);
   /* Its own stacking context, so the fill sits behind this row's text and not
      behind a neighbouring row that happens to come later in the DOM. */

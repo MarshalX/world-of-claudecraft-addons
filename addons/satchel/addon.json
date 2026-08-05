@@ -1,11 +1,11 @@
 {
   "id": "satchel",
   "name": "Satchel",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "apiVersion": 1,
   "apiMinor": 2,
   "author": "MarshalX",
-  "description": "One list of everything you own, across every character. Bags, bank and mailbox are recorded as they are read, so an item is one row with a total however many stacks and characters hold it, and hovering says who has how many and where.",
+  "description": "One list of everything you own, across every character. Bags, bank and mailbox are recorded as they are read, so an item is one row with a total however many stacks and characters hold it, and hovering says who has how many and where. What a vendor would pay for a bag, a bank and the whole account.",
   "entry": "main.js",
   "preview": {
     "file": "preview.png",
@@ -14,6 +14,10 @@
   "homepage": "https://github.com/MarshalX/world-of-claudecraft-addons",
   "tags": ["economy", "interface"],
   "permissions": ["world.read", "net.read", "ui", "sound", "storage", "keys"],
+  "companions": ["lorebind"],
+  "companionReasons": {
+    "lorebind": "publishes what every item is called and what a vendor pays, which is what puts a name and a worth on these rows"
+  },
   "keybinds": [
     {
       "id": "toggle",

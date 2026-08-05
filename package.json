@@ -24,7 +24,7 @@
     "shots": "node loader/build-stage.mjs && node tools/shots.mjs",
     "build:runtime": "node loader/build-runtime.mjs",
     "build:runtime:debug": "node loader/build-runtime.mjs --sourcemap",
-    "check": "pnpm run check:ts && pnpm run check:pkg && pnpm run lint && pnpm run test && pnpm run validate",
+    "check": "pnpm run check:ts && pnpm run check:pkg && pnpm run lint && pnpm run test && pnpm run build:runtime && pnpm run validate",
     "check:ts": "tsc --noEmit",
     "check:pkg": "tsc --noEmit --ignoreConfig --strict packages/types/index.d.ts",
     "lint": "node tools/lint.mjs",

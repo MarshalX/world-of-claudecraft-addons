@@ -84,12 +84,21 @@ Declare `apiMinor: 2` when you use it. An older loader drops a manifest key it h
 ## Naming an addon yours works better with
 
 ```json
-{ "companions": ["lorebind"] }
+{
+  "companions": ["lorebind"],
+  "companionReasons": {
+    "lorebind": "publishes item names and prices, which is what puts a name and a worth on every row here"
+  }
+}
 ```
 
-Up to four bare addon ids. The manager draws each one under your description with what the player would do about it: installed and running, installed but switched off, available in Browse, or not offered by any source they have.
+Up to four bare addon ids, and one short sentence each saying what that addon ADDS to yours. The manager draws them under your description with the name the player would recognise, the state they are in, and the one thing to do about it: installed and running, installed but switched off with an Enable beside it, available in Browse with a Get, or offered by no source they have and nothing to press.
 
-It is a **note and nothing else**. It gates nothing, installs nothing, orders nothing, and stops nothing from starting. Bare ids rather than fully-qualified ones, because the same addon installed from a fork is still the companion you meant. Nothing on the `woc` surface changes, so do not raise `apiMinor` for it, and nothing checks the id exists: a companion may legitimately live on a marketplace this repository has never heard of.
+**Write the reason here rather than in your description.** A description is read before the player knows the companion exists and can say nothing about whether they have it; this is read next to the answer to both. The sentence hangs on the companion's name, and a player who follows a Get sees it again on the install confirmation, which is the screen where it decides something.
+
+`companionReasons` is keyed by an id you also list in `companions`, and a key that is not there fails validation rather than being quietly dropped: two keys describing one relationship is the shape that drifts, so the tie between them is enforced. It is a separate key rather than a richer `companions` on purpose. A marketplace index is parsed as one array of manifests, so one entry an older loader cannot read takes the WHOLE source down for everyone still on that loader; an unrecognised key is dropped instead, which is what lets a manifest carrying reasons still install on a loader that has never heard of them.
+
+It still **gates nothing**. It installs nothing on its own, orders nothing, and stops nothing from starting; every action it offers is a jump into a control that already existed, and an install still goes through the same confirmation any other install does. Bare ids rather than fully-qualified ones, because the same addon installed from a fork is still the companion you meant. Nothing on the `woc` surface changes, so do not raise `apiMinor` for it, and nothing checks the id exists: a companion may legitimately live on a marketplace this repository has never heard of.
 
 ## Checking it
 

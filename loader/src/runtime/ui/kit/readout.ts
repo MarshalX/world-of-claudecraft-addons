@@ -52,14 +52,39 @@ const SCHOOLS = Object.freeze([
   'nature',
 ] as const);
 
+/**
+ * The game's item quality tiers, which a readout drawing an ITEM can colour itself by.
+ *
+ * The third axis of the same kind as the other two, and the one an item panel needs: a
+ * player picks an item out of a grid by its tier before they read a word of it, and every
+ * addon that draws items was otherwise carrying its own copy of six hexes.
+ *
+ * The palette is the GAME'S, and unlike the schools it is not a token: the game keeps two
+ * tables of literals, `QUALITY_COLOR` in `src/ui/icons.ts` for a NAME and the `.q-*` rules
+ * in its own stylesheet for a BORDER, which differ only in that common is white as a word
+ * and a dimmer grey as an edge. `styles/quality.css` carries both, transcribed, for the
+ * reason lorebind carries the item table: nothing serves either of them.
+ */
+const QUALITIES = Object.freeze([
+  'poor',
+  'common',
+  'uncommon',
+  'rare',
+  'epic',
+  'legendary',
+] as const);
+
 type ReadoutTone = (typeof TONES)[number];
 
 type ReadoutSchool = (typeof SCHOOLS)[number];
 
-/** The two axes, as any update carrying them states them. */
+type ReadoutQuality = (typeof QUALITIES)[number];
+
+/** The three axes, as any update carrying them states them. */
 interface ReadoutVariants {
   tone?: ReadoutTone;
   school?: ReadoutSchool | null;
+  quality?: ReadoutQuality | null;
 }
 
 /**
@@ -71,6 +96,7 @@ interface ReadoutVariants {
 interface VariantState {
   tone: ReadoutTone;
   school: ReadoutSchool | null;
+  quality: ReadoutQuality | null;
 }
 
 /** An element whose text is written only when it moved. */
@@ -100,6 +126,10 @@ function isSchool(value: unknown): value is ReadoutSchool {
   return typeof value === 'string' && (SCHOOLS as readonly string[]).includes(value);
 }
 
+function isQuality(value: unknown): value is ReadoutQuality {
+  return typeof value === 'string' && (QUALITIES as readonly string[]).includes(value);
+}
+
 function normalizeTone(tone: unknown): ReadoutTone {
   if (isTone(tone)) {
     return tone;
@@ -117,6 +147,21 @@ function normalizeTone(tone: unknown): ReadoutTone {
 function normalizeSchool(school: unknown): ReadoutSchool | null {
   if (isSchool(school)) {
     return school;
+  }
+  return null;
+}
+
+/**
+ * The tier, or none for anything the game does not rank.
+ *
+ * No fallback colour, for the reason a school has none: the game declares no quality at all
+ * for 96 of its items, and painting one would claim a tier nobody said. An addon that knows
+ * an item is unranked and an addon that has not looked it up both pass null, and both get an
+ * item drawn in the panel's own colours.
+ */
+function normalizeQuality(quality: unknown): ReadoutQuality | null {
+  if (isQuality(quality)) {
+    return quality;
   }
   return null;
 }
@@ -146,6 +191,25 @@ function applySchool(el: HTMLElement, prefix: string, school: unknown, state: Va
   state.school = next;
 }
 
+function applyQuality(
+  el: HTMLElement,
+  prefix: string,
+  quality: unknown,
+  state: VariantState,
+): void {
+  const next = normalizeQuality(quality);
+  if (next === state.quality) {
+    return;
+  }
+  if (state.quality !== null) {
+    el.classList.remove(`${prefix}-quality-${state.quality}`);
+  }
+  if (next !== null) {
+    el.classList.add(`${prefix}-quality-${next}`);
+  }
+  state.quality = next;
+}
+
 function toneClass(prefix: string, tone: unknown): string {
   return `${prefix}-${normalizeTone(tone)}`;
 }
@@ -157,7 +221,7 @@ function toneClass(prefix: string, tone: unknown): string {
  * class that is not there and leave the built one alongside the new one.
  */
 function variantState(tone: unknown): VariantState {
-  return { tone: normalizeTone(tone), school: null };
+  return { tone: normalizeTone(tone), school: null, quality: null };
 }
 
 /**
@@ -178,6 +242,9 @@ function applyVariants(
   }
   if (next.school !== undefined) {
     applySchool(el, prefix, next.school, state);
+  }
+  if (next.quality !== undefined) {
+    applyQuality(el, prefix, next.quality, state);
   }
 }
 
@@ -283,6 +350,7 @@ function clampFraction(fraction: unknown): number {
 
 export type {
   ArtSlot,
+  ReadoutQuality,
   ReadoutSchool,
   ReadoutTone,
   ReadoutVariants,
@@ -294,6 +362,7 @@ export {
   applyVariants,
   buildArt,
   clampFraction,
+  QUALITIES as READOUT_QUALITIES,
   SCHOOLS as READOUT_SCHOOLS,
   styleSlot,
   TONES as READOUT_TONES,

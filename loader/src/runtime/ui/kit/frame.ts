@@ -99,6 +99,11 @@ function sizeBounds(opts: FrameOpts, size: Viewport): SizeBounds {
   return bounds;
 }
 
+/** Whether the edges resize, which is also whether anything writes the size. */
+function isResizable(deps: FrameDeps): boolean {
+  return deps.opts.resizable ?? deps.chrome === 'window';
+}
+
 /** What the drag and clamp layer is told about one frame. */
 function gestureDeps(
   deps: FrameDeps,
@@ -106,7 +111,7 @@ function gestureDeps(
   size: Viewport,
   onCommit: () => void,
 ): InteractiveFrameDeps {
-  const resizable = deps.opts.resizable ?? deps.chrome === 'window';
+  const resizable = isResizable(deps);
   const bounds = sizeBounds(deps.opts, size);
   const gestures: InteractiveFrameDeps = {
     el: chrome.el,
@@ -148,11 +153,41 @@ interface FrameMechanics {
   destroy: () => void;
 }
 
+/**
+ * Give a non-resizable frame the width the addon declared, if it declared one.
+ *
+ * A resizable frame is given its box outright by `frame/interactive.ts` and does not come
+ * through here. A non-resizable one is shrink-to-fit by default, and a shrink-to-fit element
+ * is sized by its content in BOTH directions, which is wrong in both. Too wide: it has no
+ * ceiling, so the panel is as wide as the longest line its content will not break, and wayfarer
+ * declared 300 and drew at 693 the first time one of its own lines was a sentence, with the
+ * world pins it sits beside hidden underneath it. Too narrow, which a ceiling alone does not
+ * fix: the width follows the content, so it MOVES. Veinsight's header gains a clause while the
+ * player is harvesting and the whole panel steps out and back with it, rows reflowing, under
+ * the eye of someone doing the thing that caused it. Reported from a live session.
+ *
+ * So `width` is a width, and it is written whether the addon named one or took the default:
+ * an addon that never thought about its width is exactly the one whose panel would otherwise
+ * move, so making the answer depend on whether the field was present would leave the failure
+ * with the authors least likely to have anticipated it.
+ *
+ * There is deliberately no equivalent for the HEIGHT. A readout's line count changes with what
+ * it is reporting, and a bounded frame would clip itself rather than grow, which is a worse
+ * failure than a box that gets taller: nothing on screen says the row you wanted is below the
+ * fold. A frame that needs a fixed height asks to be resizable and states its bounds.
+ */
+function applyWidth(el: HTMLElement, size: Viewport, resizable: boolean): void {
+  if (!resizable) {
+    el.style.width = `${String(size.w)}px`;
+  }
+}
+
 function mountFrame(deps: FrameDeps, chrome: Chrome, size: Viewport): FrameMechanics {
   const { opts } = deps;
   let destroyed = false;
 
   deps.root.appendChild(chrome.el);
+  applyWidth(chrome.el, size, isResizable(deps));
 
   // Everything about WHEN a frame is on screen, including why a saved one starts
   // hidden, is in kit/frame-visibility.ts.

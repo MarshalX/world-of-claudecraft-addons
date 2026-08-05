@@ -18,6 +18,7 @@ import type { SettingValue, SettingValues } from '../../settings/values.ts';
 import { FIELD_CLASS } from '../kit/field-shape.ts';
 import { ErrorNote } from './error-note.tsx';
 import { fieldId } from './fields.ts';
+import { Picker } from './picker.tsx';
 import { UI_TEXT } from './strings.ts';
 
 interface FieldProps {
@@ -82,20 +83,15 @@ function SelectField(props: FieldProps & { domId: string }) {
       <label className={FIELD_CLASS.label} htmlFor={props.domId}>
         {decl.label}
       </label>
-      <select
+      <Picker
         id={props.domId}
-        className={FIELD_CLASS.control}
+        label={decl.label}
         value={String(props.value)}
-        onChange={(event) => {
-          props.onChange(decl.id, (event.currentTarget as HTMLSelectElement).value);
+        options={decl.options.map((option) => ({ value: option, label: option }))}
+        onChange={(picked) => {
+          props.onChange(decl.id, picked);
         }}
-      >
-        {decl.options.map((option) => (
-          <option key={option} value={option}>
-            {option}
-          </option>
-        ))}
-      </select>
+      />
     </div>
   );
 }

@@ -38,8 +38,39 @@ interface InstallConfirmProps {
   row: BrowseRow;
   /** True while the install is in flight, so the button cannot be pressed twice. */
   busy: boolean;
+  /** The addon that recommended this one, empty for a player who found it themselves. */
+  from: string;
+  /** That addon's reason, empty when it named a companion without saying why. */
+  reason: string;
   onConfirm: () => void;
   onCancel: () => void;
+}
+
+/**
+ * Who sent the player here, and what they said.
+ *
+ * The one place a companion's reason is READ rather than hovered. It rides a
+ * `title` on the row it came from, which is nothing at all on a touch screen,
+ * and this is the screen where it decides something: the player is being asked
+ * to install an addon they did not go looking for.
+ */
+/** The recommender, and their sentence when they gave one. */
+function saidBy(from: string, reason: string): string {
+  if (reason === '') {
+    return from;
+  }
+  return `${from}: ${reason}`;
+}
+
+function Recommendation(props: { from: string; reason: string }) {
+  if (props.from === '') {
+    return null;
+  }
+  return (
+    <p className="woc-note">
+      {UI_TEXT.confirmRecommendedBy} {saidBy(props.from, props.reason)}
+    </p>
+  );
 }
 
 export function InstallConfirm(props: InstallConfirmProps) {
@@ -58,6 +89,7 @@ export function InstallConfirm(props: InstallConfirmProps) {
       <p className="woc-note">
         {UI_TEXT.confirmFrom} {market.name}
       </p>
+      <Recommendation from={props.from} reason={props.reason} />
 
       <Declared permissions={entry.permissions} />
       <p className="woc-note woc-note-warn">{UI_TEXT.confirmTrust}</p>

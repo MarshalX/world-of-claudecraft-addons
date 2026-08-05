@@ -11,12 +11,20 @@
 // readability rather than correctness: chrome sets a window up, panes fill it,
 // catalog refines the four marketplace surfaces, kit covers the surfaces an addon
 // asks the loader for, menu covers the two of those with no rules anywhere else,
-// and bar, tile and banner are the three it assembles itself.
+// menu and picker cover the popup pair, and quality, bar, tile and banner are what it
+// assembles itself.
 //
-// One exception where the order is NOT the whole story. The reduced-motion floor
-// closes kit.css, and it carries !important because it has to outrank rules in the
-// two sheets after it AND any class-level rule anywhere: `#woc-addons *` is one id
-// and loses to every selector that actually sets an animation. See the note there.
+// TWO exceptions where the order is NOT merely readability.
+//
+// The reduced-motion floor closes kit.css, and it carries !important because it
+// has to outrank rules in the sheets after it AND any class-level rule anywhere:
+// `#woc-addons *` is one id and loses to every selector that actually sets an
+// animation. See the note there.
+//
+// touch.css is LAST and has to be. Its coarse-pointer floor overrides density
+// variants that weigh (1,2,0), so it matches that weight and wins on source order
+// alone; moved anywhere earlier, a compact frame would keep its desktop sizing on
+// a phone. See the note at the head of that file.
 //
 // Injected UNLAYERED by runtime/ui/root.ts. Every game rule lives inside
 // @layer base or @layer components, and an unlayered rule beats any layered one
@@ -49,10 +57,25 @@ import chrome from './chrome.css';
 import kit from './kit.css';
 import menu from './menu.css';
 import panes from './panes.css';
+import picker from './picker.css';
+import quality from './quality.css';
 import tile from './tile.css';
+import touch from './touch.css';
 
-// biome-ignore-end lint/correctness/noUnresolvedImports: the eight sheets above are the whole of it
+// biome-ignore-end lint/correctness/noUnresolvedImports: the eleven sheets above are the whole of it
 
-const LOADER_CSS = [chrome, panes, catalog, kit, menu, bar, tile, banner].join('\n');
+const LOADER_CSS = [
+  chrome,
+  panes,
+  catalog,
+  kit,
+  menu,
+  picker,
+  quality,
+  bar,
+  tile,
+  banner,
+  touch,
+].join('\n');
 
 export { LOADER_CSS };

@@ -251,14 +251,39 @@ describe('the pointer policy', () => {
 });
 
 describe('sizing', () => {
-  // A frame is content-sized. Writing a height would leave it padded out or
-  // clipped as its text changes.
-  it('does not write a size onto a non-resizable frame', () => {
+  // A frame is sized by its content on the HEIGHT and only there. Writing a
+  // height would leave it padded out or, worse, clipped as its text changes,
+  // with nothing on screen to say a row is below the fold.
+  it('does not write a height onto a non-resizable frame', () => {
     const frame = open({ id: 'a' }, 'frame');
 
-    expect(frame.el.style.width).toBe('');
     expect(frame.el.style.height).toBe('');
     expect(frame.el.style.left).not.toBe('');
+  });
+
+  // A width, not a ceiling, and the difference is whether the panel MOVES. It was
+  // a ceiling first, which fixed wayfarer asking for 300 and drawing at 693 the
+  // first time one of its lines was a sentence, and left the other half: under a
+  // ceiling the width still follows the content, so veinsight's header gaining a
+  // clause mid-harvest stepped the whole panel out and back with rows reflowing.
+  it('holds a non-resizable frame to the width it declared', () => {
+    const frame = open({ id: 'a', width: 300 }, 'frame');
+
+    expect(frame.el.style.width).toBe('300px');
+    expect(frame.el.style.height).toBe('');
+  });
+
+  // The frame default, for an addon that named no width at all. Written like any
+  // other, because an addon that never thought about its width is precisely the
+  // one whose panel would otherwise move.
+  it('falls back to the default frame width when the addon named none', () => {
+    expect(open({ id: 'a' }, 'frame').el.style.width).toBe('240px');
+  });
+
+  // A resizable frame is given its box outright by frame/interactive.ts, so this
+  // would be a second statement of a number that surface already has.
+  it('leaves a resizable frame to the layer that owns its box', () => {
+    expect(open({ id: 'a', width: 300, resizable: true }, 'frame').el.style.maxWidth).toBe('');
   });
 
   it('writes a size onto a window', () => {
@@ -268,9 +293,13 @@ describe('sizing', () => {
     expect(win.el.style.height).not.toBe('');
   });
 
+  // Asserted on the HEIGHT rather than the width, because the width is no longer
+  // evidence either way: applyWidth writes one for a non-resizable surface too, so
+  // both arms would carry one and the case would pass while proving nothing. The
+  // height is the axis only the gesture layer writes.
   it('honours an explicit resizable flag over the chrome default', () => {
-    expect(open({ id: 'a', resizable: true }, 'frame').el.style.width).not.toBe('');
-    expect(open({ id: 'b', resizable: false }, 'window').el.style.width).toBe('');
+    expect(open({ id: 'a', resizable: true }, 'frame').el.style.height).not.toBe('');
+    expect(open({ id: 'b', resizable: false }, 'window').el.style.height).toBe('');
   });
 
   it('opens a window at the width the addon asked for', () => {

@@ -341,7 +341,7 @@ describe('its manifest', () => {
   });
 
   it('binds the toggle where the roster says', () => {
-    expect(manifest().keybinds?.[0]?.default).toBe('Alt+KeyL');
+    expect(manifest().keybinds?.[0]?.default).toBe('Alt+KeyR');
   });
 });
 
@@ -766,7 +766,7 @@ describe('the world pins', () => {
     const h = await run();
     expect(h.pinned().length).toBeGreaterThan(0);
 
-    h.press('Alt+KeyL');
+    h.press('Alt+KeyR');
 
     expect(h.pinned()).toEqual([]);
     expect(document.querySelectorAll('.woc-lw-anchor')).toHaveLength(0);
@@ -874,7 +874,7 @@ describe('the toggle', () => {
   it('hides the panel', async () => {
     const h = await run();
 
-    h.press('Alt+KeyL');
+    h.press('Alt+KeyR');
 
     expect(document.querySelector('[data-woc-frame="rares"]')?.classList).toContain('woc-hidden');
   });

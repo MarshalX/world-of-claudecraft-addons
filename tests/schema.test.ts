@@ -199,6 +199,50 @@ describe('validateManifest', () => {
     expect(validateManifest(withField('companions', ['a', 'b', 'c', 'd', 'e'])).ok).toBe(false);
   });
 
+  // The compatibility this key exists in the shape it does for. A manifest naming bare ids and
+  // nothing else is every manifest published before the reasons landed, and it has to keep
+  // validating unchanged: a marketplace index is one array parse, so an entry this rejected
+  // would take the whole source down rather than one addon.
+  it('accepts companions with no reasons at all', () => {
+    expect(validateManifest(withField('companions', ['lorebind'])).ok).toBe(true);
+  });
+
+  it('accepts a reason for a companion it names', () => {
+    const manifest = {
+      ...valid,
+      companions: ['lorebind'],
+      companionReasons: { lorebind: 'publishes item prices' },
+    };
+
+    expect(validateManifest(manifest).ok).toBe(true);
+  });
+
+  // Two keys describing one relationship is the shape that drifts, so the tie between them is
+  // enforced rather than trusted: a reason for an addon nobody named is the drift, and it is a
+  // CI failure rather than a line the manager silently never draws.
+  it('refuses a reason for an addon it does not name', () => {
+    const manifest = {
+      ...valid,
+      companions: ['lorebind'],
+      companionReasons: { satchel: 'publishes item prices' },
+    };
+
+    expect(validateManifest(manifest).ok).toBe(false);
+  });
+
+  it('refuses a reason with no companions list at all', () => {
+    expect(validateManifest(withField('companionReasons', { lorebind: 'why' })).ok).toBe(false);
+  });
+
+  it.each([
+    ['an empty reason', ''],
+    ['a reason past the length cap', 'x'.repeat(141)],
+  ])('refuses %s', (_case, reason) => {
+    const manifest = { ...valid, companions: ['lorebind'], companionReasons: { lorebind: reason } };
+
+    expect(validateManifest(manifest).ok).toBe(false);
+  });
+
   it.each([null, 'string', 42, []])('rejects non-object input %j', (input) => {
     expect(validateManifest(input).ok).toBe(false);
   });

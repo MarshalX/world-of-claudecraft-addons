@@ -45,6 +45,7 @@ import type { InstalledAddon } from '../../loader/src/shared/protocol.ts';
 import { validateManifest } from '../../loader/src/shared/schema.ts';
 import { addonNamespace } from '../../loader/src/shared/storage-keys.ts';
 import { type MountInput, mountAddon, parseManifest } from '../../tests/fakes/addon.ts';
+import { choosePicker, pickerOptions as optionsOf } from '../../tests/fakes/controls.ts';
 import { liveEntity } from '../../tests/fakes/entity.ts';
 import { HELLO_FRAME, PLAYER_ENTITY } from '../../tests/fakes/frames.ts';
 import {
@@ -386,7 +387,25 @@ function coinsIn(list: string, key: string): string {
 
 /** The same, for a bar that is not in a list: the purse and the account total. */
 function coinsAt(role: string): string {
-  return coinsOf(document.querySelector(`[data-role="${role}"]`));
+  return coinsOf(barAt(role));
+}
+
+function barAt(role: string): HTMLElement | null {
+  return document.querySelector(`[data-role="${role}"]`);
+}
+
+/** What a worth row says beside its figure, which is the half that says it is partial. */
+function worthDetail(role: string): string {
+  return partOf(barAt(role), '.woc-bar-detail');
+}
+
+/**
+ * Whether a bar is on screen at all. A worth of nothing is not drawn as `0c`, so the cases
+ * about silence assert on this rather than on the figure.
+ */
+function shownAt(role: string): boolean {
+  const el = barAt(role);
+  return el !== null && !el.hidden;
 }
 
 function detailOf(list: string, key: string): string {
@@ -539,21 +558,22 @@ function bandWidth(): string {
   return band.style.width;
 }
 
-/** The character selector, which is how a pane is pointed at somebody else. */
-function picker(): HTMLSelectElement | null {
-  return document.querySelector<HTMLSelectElement>('[data-role="picker"] select');
+/**
+ * The character selector, which is how a pane is pointed at somebody else.
+ *
+ * A dropdown is the loader's own button and menu rather than a native `<select>`, so reading
+ * what it offers and choosing from it are both clicks. See tests/fakes/controls.ts.
+ */
+function picker(): HTMLElement | null {
+  return document.querySelector<HTMLElement>('[data-role="picker"]');
 }
 
 function pickerOptions(): string[] {
-  return [...(picker()?.options ?? [])].map((option) => option.textContent ?? '');
+  return optionsOf(picker() ?? document);
 }
 
 function choose(label: string): void {
-  const select = picker();
-  if (select !== null) {
-    select.value = label;
-    select.dispatchEvent(new Event('change'));
-  }
+  choosePicker(picker() ?? document, label);
 }
 
 function typeSearch(value: string): void {
@@ -1633,6 +1653,18 @@ describe('its layout', () => {
     expect(frameEl()?.style.height).not.toBe('');
   });
 
+  // Comfortable is the game's own desktop scale, and this panel sits open beside the game's
+  // windows rather than being glanced at mid-fight, so it is not one of the surfaces compact
+  // is for. It was compact, on the reasoning compact used to carry, and the two size constants
+  // above were derived from that density's metrics: this is what stops a change of mind from
+  // going back without those being re-measured.
+  it('draws at the game’s own scale rather than tighter than it', async () => {
+    await start();
+
+    expect(frameEl()?.className).toContain('woc-density-comfortable');
+    expect(frameEl()?.className).not.toContain('woc-density-compact');
+  });
+
   // The list is what scrolls, not the pane above it: a tab strip that scrolls away is
   // one the player has to scroll back to before they can leave the tab.
   it('scrolls the list in each pane and leaves the tab strip alone', async () => {
@@ -1932,6 +1964,134 @@ describe('the bus contract', () => {
     expect(said).toContain('Its art file carries no name');
     expect(said).toContain('nothing is publishing names over the bus');
     expect(said).not.toContain('error');
+  });
+});
+
+// What a vendor pays is published by the same addon that publishes the names, and nothing on
+// the addon API answers it, so every case here is about a total that is PARTIAL by construction:
+// what matters is that the panel never presents one as complete and never counts an item nobody
+// priced as worth nothing.
+describe('what it is all worth', () => {
+  it('totals the bags from published prices', async () => {
+    const h = await start({ carry: { inventory: cells('ore', 20, 2) } });
+    h.publish('item', { id: 'ore', name: 'Copper Ore', sellValue: 25 });
+    await h.settle();
+
+    expect(coinsAt('bags-worth')).toBe('10 silver');
+    expect(worthDetail('bags-worth')).toBe('1 of 1 kinds priced');
+  });
+
+  // The half that keeps the figure honest. An item nobody priced is left OUT of the sum rather
+  // than added at nothing, and the count beside the figure is what says so: a total that quietly
+  // skipped half a bag and looked complete is worse than no total.
+  it('leaves an unpriced item out of the sum and says how many kinds it could price', async () => {
+    const h = await start({
+      carry: { inventory: [...cells('ore', 20), ...cells('cloth', 4)] },
+    });
+    h.publish('item', { id: 'ore', name: 'Copper Ore', sellValue: 25 });
+    await h.settle();
+
+    expect(coinsAt('bags-worth')).toBe('5 silver');
+    expect(worthDetail('bags-worth')).toBe('1 of 2 kinds priced');
+  });
+
+  // Nobody publishing is the ordinary state, and a `0c` row is a claim that the bags are worth
+  // nothing. There is no row at all instead.
+  it('draws no worth at all while nothing has published a price', async () => {
+    const h = await start({ carry: { inventory: cells('ore', 20) } });
+    h.publish('item', { id: 'ore', name: 'Copper Ore' });
+    await h.settle();
+
+    expect(nameAt(0)).toBe('Copper Ore, 20');
+    expect(shownAt('bags-worth')).toBe(false);
+  });
+
+  it('totals the bank the same way, from the same prices', async () => {
+    const h = await start({
+      carry: { bank: bankPayload({ slots: cells('ore', 20, 3) }) },
+    });
+    h.publish('item', { id: 'ore', name: 'Copper Ore', sellValue: 25 });
+    await h.settle();
+
+    expect(coinsAt('bank-worth')).toBe('15 silver');
+  });
+
+  // The account figure counts every store of every character, which is the opposite of what the
+  // slot total beside it does: slots are bags only, because a bank is recorded only for a visit
+  // to one. Money owned is money owned wherever it was last seen.
+  it('totals every store of every character on the account', async () => {
+    const storage = createFakeStorage();
+    seed(
+      storage,
+      storedCharacter('Alt', {
+        sources: {
+          bags: snapshot({ stacks: cells('ore', 20) }),
+          bank: snapshot({ stacks: cells('ore', 20, 2) }),
+          mail: snapshot(),
+        },
+      }),
+    );
+    const h = await start({ storage, carry: { inventory: cells('ore', 10) } });
+    h.publish('item', { id: 'ore', name: 'Copper Ore', sellValue: 25 });
+    await h.settle();
+
+    // 10 here, 20 in the alt's bags, 40 in the alt's bank: 70 at 25 copper.
+    expect(coinsAt('account-worth')).toBe('17 silver, 50 copper');
+  });
+
+  it('follows the search on the items strip', async () => {
+    const h = await start({
+      carry: { inventory: [...cells('ore', 20), ...cells('cloth', 10)] },
+    });
+    h.publish('items', [
+      { id: 'ore', name: 'Copper Ore', sellValue: 25 },
+      { id: 'cloth', name: 'Linen Cloth', sellValue: 10 },
+    ]);
+    await h.settle();
+
+    expect(statFor('items-worth')).toBe('6s');
+
+    typeSearch('copper');
+    await h.settle();
+
+    expect(statFor('items-worth')).toBe('5s');
+  });
+
+  it('says a vendor price is not a market price, and that it cannot sell anything', async () => {
+    const h = await start({ carry: { inventory: cells('ore', 20) } });
+    h.publish('item', { id: 'ore', name: 'Copper Ore', sellValue: 25 });
+    await h.settle();
+
+    const said = tipOver(document.querySelector('[data-role="bags-worth"]'));
+
+    expect(said).toContain('what a vendor pays');
+    expect(said).toContain('1 of 1 kinds priced');
+    expect(said).toContain('left out rather than counted at nothing');
+    expect(said).toContain('Nothing here can sell an item.');
+  });
+
+  it('prices one row under the pointer, each and for the pile', async () => {
+    const h = await start({ carry: { inventory: cells('ore', 20, 2) } });
+    h.publish('item', { id: 'ore', name: 'Copper Ore', sellValue: 25 });
+    await h.settle();
+
+    expect(tipOver(rowIn('items', 'ore'))).toContain('A vendor pays 25c each, 10s for all 40');
+  });
+
+  // A price is a number off another addon, so it is checked like every other field of the
+  // payload: a string that looks like one is not one, and a zero is a real answer the
+  // publisher's own rule says it will never send.
+  it('ignores a price that is not a positive number', async () => {
+    const h = await start({ carry: { inventory: cells('ore', 20) } });
+    h.publish('item', { id: 'ore', name: 'Copper Ore', sellValue: '25' });
+    await h.settle();
+
+    expect(shownAt('bags-worth')).toBe(false);
+
+    h.publish('item', { id: 'ore', name: 'Copper Ore', sellValue: 25 });
+    await h.settle();
+
+    expect(shownAt('bags-worth')).toBe(true);
   });
 });
 

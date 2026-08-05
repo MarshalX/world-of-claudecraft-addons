@@ -33,7 +33,7 @@ import { OFFICIAL } from '../loader/src/shared/marketplace.ts';
 import type { InstalledAddon } from '../loader/src/shared/protocol.ts';
 import { fakeMarketApi, marketEntry, marketState } from './fakes/market.ts';
 import { createFakeStorage } from './fakes/storage.ts';
-import { fakeRegistry, supervisorServices } from './fakes/ui-deps.ts';
+import { fakeRegistry, menuService, supervisorServices } from './fakes/ui-deps.ts';
 
 const FQID = 'official/combat-meter';
 
@@ -152,6 +152,7 @@ function openManager() {
     }),
     dev: null,
     unlock: createUnlockMode(document.createElement('div')),
+    openMenu: menuService(document, root),
     ...supervisorServices(),
   });
   manager.open();
@@ -177,7 +178,12 @@ describe('the kit renderer', () => {
     ['text', () => createText(document, { label: 'A', value: '', onChange: vi.fn() })],
     [
       'select',
-      () => createSelect(document, { label: 'A', value: 'x', options: ['x'], onChange: vi.fn() }),
+      () =>
+        createSelect(
+          document,
+          { label: 'A', value: 'x', options: ['x'], onChange: vi.fn() },
+          () => () => undefined,
+        ),
     ],
     [
       'slider',

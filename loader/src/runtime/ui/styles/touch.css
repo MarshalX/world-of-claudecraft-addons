@@ -1,0 +1,79 @@
+/* The touch floor: 16px type on a 40px target, for a coarse pointer only.
+ *
+ * Last of the sheets runtime/ui/styles/index.ts concatenates, and it has to be
+ * last. Several of the rules it overrides are density variants at (1,2,0), so
+ * matching that weight and winning on source order is what makes the floor reach
+ * a compact frame as well as a comfortable one. A phone does not care which
+ * density an addon author picked.
+ *
+ * This is the game's own arrangement rather than an invention, and copying it is
+ * the whole point of the file. `base.css` in the game floors every focusable
+ * control at 16px inside `@media (pointer: coarse)`, with a comment recording why
+ * the number is 16 and not something rounder: iOS Safari auto-zooms the page
+ * whenever a focused text-entry control renders below 16px, it ignores the
+ * viewport scale-lock in the meta tag, and 16px is the documented threshold.
+ * `components.css` gives its custom dropdown rows their 40px in the same query,
+ * with its own note that the global coarse floor covers input/textarea/select and
+ * therefore misses a trigger that replaces a native select. This kit has exactly
+ * that trigger, in kit/picker.ts, so it is named here for the same reason.
+ *
+ * The 40px is the tap target and the 16px is the zoom threshold; they are two
+ * different constraints that happen to arrive together, which is why a rule here
+ * sets both rather than one being derived from the other.
+ *
+ * The rules the loader drew before this existed applied these numbers
+ * UNCONDITIONALLY, which is what made every loader panel about a third larger
+ * than the game window beside it. See the note above the compact block in
+ * chrome.css for how that read on screen and how it was found.
+ *
+ * Selector lists are written out per element rather than collapsed with :is(),
+ * because the build's scoping guard splits a list on commas and reads each half
+ * on its own: every one of them has to carry #woc-addons itself.
+ */
+
+@media (pointer: coarse) {
+  #woc-addons .woc-tab,
+  #woc-addons .woc-btn,
+  #woc-addons .woc-density-compact .woc-tab,
+  #woc-addons .woc-density-compact .woc-btn {
+    font-size: 16px;
+    min-height: 40px;
+    padding: 4px 12px;
+  }
+
+  #woc-addons .woc-input {
+    font-size: 16px;
+    min-height: 40px;
+    padding: 4px 8px;
+  }
+
+  /* The picker is the custom trigger the game's own note is about: it replaces a
+     native select, so the global coarse floor for form controls never reaches it
+     and it has to be named. */
+  #woc-addons .woc-picker,
+  #woc-addons .woc-menu-item {
+    font-size: 16px;
+    min-height: 40px;
+  }
+
+  #woc-addons .woc-close,
+  #woc-addons .woc-density-compact .woc-close {
+    min-width: 40px;
+    min-height: 40px;
+    font-size: 16px;
+  }
+
+  #woc-addons .woc-toggle,
+  #woc-addons .woc-field-inline {
+    font-size: 16px;
+    min-height: 40px;
+  }
+
+  #woc-addons .woc-field-label {
+    font-size: 14px;
+  }
+
+  #woc-addons .woc-slider {
+    min-height: 40px;
+  }
+}

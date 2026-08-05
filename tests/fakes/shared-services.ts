@@ -195,6 +195,19 @@ interface SharedOptions {
    * fake rather than of the addon.
    */
   fetchJson?: (url: string) => Promise<unknown>;
+  /**
+   * The game's own minimap label, which is the whole of what `world.zone` is.
+   *
+   * Defaults to null, which is what the reading genuinely is before world entry and what a
+   * suite about a decision wants: the label is a LOCALIZED display name, so an addon that
+   * compared it against anything would be right on one client and wrong on every other.
+   *
+   * It is a function rather than a string because the label moves: the player crosses a border,
+   * and underground the delve painter owns the same element. It cannot be read off the world
+   * object either, in a fake or in the game, since the game publishes no zone at all and the
+   * loader takes this from the HUD.
+   */
+  zoneName?: () => string | null;
 }
 
 /**
@@ -293,7 +306,7 @@ function createSharedServices(
       // branches, which is what a test driving world state wants to exercise.
       lastDamageAt: () => null,
       now: () => 0,
-      zoneName: () => null,
+      zoneName: options.zoneName ?? ((): string | null => null),
       simNow: () => null,
       // Off the hello frame, exactly as `runtime/surfaces.ts` wires it. Hardwired to
       // null before, which made `world.characterKey` read `offline/<name>` in every

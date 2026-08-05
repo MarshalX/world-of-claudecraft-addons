@@ -8,13 +8,13 @@
 #woc-addons .woc-subhead {
   font-family: var(--title-font, serif);
   color: var(--gold-dim, rgb(200 168 56));
-  font-size: 14px;
+  font-size: 13px;
   margin: 12px 0 4px;
 }
 
 #woc-addons .woc-note {
   color: var(--color-text-muted, rgb(153 141 106));
-  font-size: 14px;
+  font-size: 13px;
   line-height: 1.5;
   margin: 8px 0;
 }
@@ -90,7 +90,7 @@
 #woc-addons .woc-row-meta,
 #woc-addons .woc-row-desc {
   color: var(--color-text-muted, rgb(153 141 106));
-  font-size: 13px;
+  font-size: 12px;
 }
 
 #woc-addons .woc-toggle {
@@ -98,8 +98,8 @@
   align-items: center;
   gap: 6px;
   cursor: pointer;
-  font-size: 14px;
-  min-height: 40px;
+  font-size: 13px;
+  min-height: 24px;
   white-space: nowrap;
 }
 
@@ -108,7 +108,7 @@
   grid-template-columns: minmax(90px, auto) 1fr;
   gap: 4px 12px;
   margin: 0;
-  font-size: 14px;
+  font-size: 13px;
 }
 
 /* The rows are a display: contents wrapper so the dt and dd land in the grid. */
@@ -132,7 +132,7 @@
   display: flex;
   flex-direction: column;
   gap: 2px;
-  font-size: 13px;
+  font-size: 12px;
 }
 
 #woc-addons .woc-anchors li {
@@ -166,11 +166,12 @@
   color: var(--color-text-light, rgb(240 235 216));
   cursor: pointer;
   font-family: inherit;
-  /* 16px keeps iOS Safari from auto-zooming the page, and 40px is the tap-target
-     floor the game itself holds to. */
-  font-size: 16px;
-  min-height: 40px;
-  padding: 4px 12px;
+  /* The game's own `.btn`: 12.5px on six pixels of vertical padding, no minimum
+     height. Rounded up to 13px because this one also carries a monospaced variant
+     (`.woc-combo`), where the half pixel lands differently. The touch floor these
+     used to carry unconditionally is in touch.css. */
+  font-size: 13px;
+  padding: 6px 14px;
   white-space: nowrap;
 }
 
@@ -217,23 +218,27 @@
   align-items: center;
   gap: 8px;
   cursor: pointer;
-  min-height: 40px;
+  min-height: 24px;
 }
 
+/* 12px, which is what the game labels its own fields at (`.delve-companion-label`,
+   `.mt-label`): a label names the control under it and should not compete with the
+   value in it. */
 #woc-addons .woc-field-label {
   color: var(--color-text-muted, rgb(153 141 106));
-  font-size: 14px;
+  font-size: 12px;
 }
 
 #woc-addons .woc-input {
   background: rgb(0 0 0 / 35%);
+  box-sizing: border-box;
   border: 1px solid var(--color-border-default, rgb(78 61 29));
   border-radius: var(--radius-sm, 4px);
   color: var(--color-text-light, rgb(240 235 216));
   font-family: inherit;
-  font-size: 16px;
-  min-height: 40px;
-  padding: 4px 8px;
+  font-size: 13px;
+  min-height: 28px;
+  padding: 5px 8px;
   /* Without this an <input> in a flex column stretches to the widest sibling
      and then refuses to shrink when the window is narrowed. */
   min-width: 0;
@@ -243,13 +248,25 @@
    The kit's general :focus-visible rule holds the ring 2px clear of the
    element, which is right for a button and wrong for a control that already
    has a border: the dim border then reads as a second, competing line just
-   inside the bright one. The game draws exactly this distinction, and the
-   below is its own treatment for a text field (.mail-field and .cal-form in
-   components.css): the ring tightens to 1px and the border is recoloured to
-   match it, so the two read as one thicker ring. Buttons keep the gap, in the
-   game and here. */
+   inside the bright one. The game draws exactly this distinction and tightens
+   the ring on its own text fields (.mail-field and .cal-form in components.css),
+   to 1px there because those fields sit in a padded panel.
+
+   Ours do not. A field fills the width of a frame body, which scrolls and
+   therefore clips at its padding box, so at any positive offset the ring loses
+   its left and right strokes entirely and the field reads as having grown a
+   broken second border. See the note beside the scroll-container rule in
+   chrome.css, which this has to restate: that rule is the same weight and an
+   earlier sheet, so a positive offset here would beat it and this is the one
+   control the whole thing was reported against.
+
+   -2px puts the ring flush with the border box, over the border rather than
+   outside it, so the two are one 2px line instead of two thin ones with a gap
+   between them. The border is still recoloured, because an outline's corner
+   radius shrinks with its offset and a dim arc would otherwise show at each
+   corner of the ring. */
 #woc-addons .woc-input:focus-visible {
-  outline-offset: 1px;
+  outline-offset: -2px;
   border-color: var(--color-border-focus, rgb(200 168 56));
 }
 

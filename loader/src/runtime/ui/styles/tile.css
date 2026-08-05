@@ -81,16 +81,61 @@
   font-size: 11px;
 }
 
+/* Item quality, which is what a square of ITEM art is bordered by: this is the game's own
+   bag cell, down to the soft glow it gives the top two tiers.
+
+   THE GAME KEEPS TWO TABLES and this is the border one, from the `.q-*` rules in its own
+   stylesheet; the other colours a NAME and lives in quality.css with the two families that
+   read it. They differ at one tier, where common is white as a word and this dimmer grey as
+   an edge, because a pure white edge on the commonest thing in the game shouts. Neither is a
+   custom property: the game hard-codes both, so both are transcriptions rather than tokens,
+   and they move when the game's do. Written as rgb() like everything else here, against a
+   source written as hex: poor #9d9d9d, common #b8b8b8, uncommon #1eff00, rare #0070dd, epic
+   #a335ee, legendary #ff8000, the glows at 40% of their own colour.
+
+   IT SITS HERE, between the base rule and the schools, and the cascade is why rather than
+   taste. `.woc-tile` above sets `border` as a SHORTHAND at this same specificity, so a tier
+   declared before it is overwritten wholesale and one declared after the schools would win a
+   border that belongs to urgency. The three groups from here down are one ordered run: a
+   tier is what the thing IS, a school is what kind of damage it is made of, and a tone is
+   that it has become urgent, and each later one wins the border from the one before. Do not
+   reorder these three groups. */
+#woc-addons .woc-tile-quality-poor {
+  border-color: rgb(157 157 157);
+}
+
+#woc-addons .woc-tile-quality-common {
+  border-color: rgb(184 184 184);
+}
+
+#woc-addons .woc-tile-quality-uncommon {
+  border-color: rgb(30 255 0);
+}
+
+#woc-addons .woc-tile-quality-rare {
+  border-color: rgb(0 112 221);
+}
+
+#woc-addons .woc-tile-quality-epic {
+  border-color: rgb(163 53 238);
+  box-shadow: 0 0 6px rgb(163 53 238 / 40%);
+}
+
+#woc-addons .woc-tile-quality-legendary {
+  border-color: rgb(255 128 0);
+  box-shadow: 0 0 6px rgb(255 128 0 / 40%);
+}
+
 /* School tints, from the game's OWN palette: --color-debuff-* is what it uses for the
    school border on a debuff icon, so a tile bordered this way matches the colour the
    player already reads for the same school elsewhere. Nothing is invented here, and
    each var carries the token's current value as a fallback, in the sheet's own rgb()
    notation, in case the game renames one.
 
-   These come FIRST and the tone rules follow, which is what makes tone win where an
-   addon sets both: tone is urgency and school is damage type, and a tile that is
-   about to matter has to say so over what kind of damage it was. Same specificity, so
-   the order is the mechanism. Do not reorder these two groups. */
+   These come after the tiers above and before the tone rules below, which is what makes
+   tone win where an addon sets both: tone is urgency and school is damage type, and a tile
+   that is about to matter has to say so over what kind of damage it was. Same specificity, so
+   the order is the mechanism. See the note on the quality group. */
 #woc-addons .woc-tile-school-physical {
   border-color: var(--color-debuff, rgb(192 57 43));
 }

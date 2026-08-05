@@ -23,11 +23,18 @@ import type { NetState } from '../../loader/src/runtime/net/state.ts';
 import type { FrameBox } from '../../loader/src/runtime/ui/frame/geometry.ts';
 import { perCharacterKey, uiNamespace } from '../../loader/src/shared/storage-keys.ts';
 import { mountAddon } from '../../tests/fakes/addon.ts';
-import { liveEntity } from '../../tests/fakes/entity.ts';
 import { PLAYER_ENTITY } from '../../tests/fakes/frames.ts';
 import { type SharedHarness, WALL_CLOCK_MS } from '../../tests/fakes/shared-services.ts';
 import { createFakeStorage } from '../../tests/fakes/storage.ts';
-import { createStageCamera, type ModelSpec, type StageCamera } from './camera.ts';
+import { createStageCamera } from './camera.ts';
+import {
+  createDraft,
+  createPlayer,
+  createWorld,
+  createZoneLabel,
+  type Fake,
+  type WorldDraft,
+} from './draft.ts';
 
 /**
  * Who the stage is logged in as.
@@ -47,15 +54,6 @@ interface FrameState {
 }
 
 /**
- * A game object as a scenario writes one: fields by name, no declared shape.
- *
- * Deliberately untyped, for the reason `world/game-types.ts` gives: the shapes
- * belong to a repository this one cannot compile against, so a type here would be
- * a claim rather than a check. The suites use the same alias.
- */
-type Fake = Record<string, unknown>;
-
-/**
  * Let a pending frame restore land.
  *
  * Three microtask turns, which is what the suites wait and what a frame's stored
@@ -67,43 +65,6 @@ async function settleFrames(): Promise<void> {
   await Promise.resolve();
   await Promise.resolve();
   await Promise.resolve();
-}
-
-/**
- * The world before the addon has seen it.
- *
- * Separate from `Stage` because the ORDER is load-bearing and getting it wrong is
- * silent. An addon's body runs the moment it is loaded and reads the world on its
- * first line, so anything a scenario writes afterwards is a change the addon
- * reacts to rather than the state it started from, and the two are not the same
- * picture.
- *
- * The worked example, which is why this exists at all: `cooldown-bars` builds one
- * bar per running cooldown and asks for the ability's icon while building it, and
- * a skill icon is filed under the player's CLASS. A scenario that set `templateId`
- * after mounting got a row for every cooldown the fixture already carried drawn
- * with no icon and never redrawn, beside later rows that had one. It reads as a
- * loader bug in `icon.ability` and it is a fixture written in the wrong order.
- */
-interface WorldDraft {
-  /** The `__game.world` object itself, for a field no helper below covers. */
-  world: Fake;
-  /** The local player, already carrying every field the world types promise. */
-  player: Fake;
-  entities: Map<number, Fake>;
-  /** Add a hostile entity. Defaults match what a mob carries on the wire. */
-  mob: (id: number, over?: Fake) => Fake;
-  /** Write one field. A plain assignment, named so scenarios read alike. */
-  set: (target: Fake, field: string, value: unknown) => void;
-  /**
-   * How tall the game is drawing one unit, which is the whole of what an overhead
-   * anchor is placed by. Two yards unless a scenario says otherwise.
-   *
-   * On the renderer rather than on the entity, because that is where it is in the
-   * real game: nothing on the wire carries a model height, which is why `over:
-   * 'head'` exists at all. See stage/src/camera.ts.
-   */
-  model: (id: number, spec: ModelSpec) => void;
 }
 
 /** The controls a scenario drives its world with, once the addon is up. */
@@ -243,76 +204,6 @@ interface MountedStage {
   dispose: () => void;
 }
 
-/** What a mob carries that a player does not, so a scenario need not repeat it. */
-function mobDefaults(id: number): Fake {
-  return {
-    id,
-    name: `Mob${String(id)}`,
-    kind: 'mob',
-    hostile: true,
-    aggroTargetId: null,
-    forcedTargetId: null,
-    forcedTargetTimer: 0,
-    threat: new Map<number, number>(),
-  };
-}
-
-/**
- * The player a scenario starts from: a complete live entity, emptied of the
- * suites' fixture values.
- *
- * `liveEntity()` carries `cooldowns: new Map([['aimed_shot', 4]])`, which is a
- * convenience for a suite and a lie in a photograph. Every addon that reads
- * cooldowns would draw a row for an ability its scenario never mentioned, and an
- * addon whose subject is something else entirely would have one in the corner of
- * its Browse thumbnail. Emptied here rather than changed in the shared fixture,
- * because a suite asserting on that Map is asserting on something real.
- */
-function createPlayer(): Fake {
-  return liveEntity({
-    set: {
-      cooldowns: new Map<string, number>(),
-      auras: [],
-      kind: 'player',
-    },
-  });
-}
-
-/**
- * The fake `__game.world`, built before the addon so the loader can be handed it.
- *
- * `known` starts empty because that is the state every session genuinely starts
- * in: the spellbook is not populated before world entry, so an addon reading it
- * on its first line has to cope with nothing being there. A scenario that wants
- * one fills it in its `world` step, which still runs before the addon body.
- */
-function createWorld(player: Fake, entities: Map<number, Fake>): Fake {
-  return { entities, player, partyInfo: null, known: [] };
-}
-
-/** The half of the surface that works with no addon mounted. */
-function createDraft(
-  world: Fake,
-  player: Fake,
-  entities: Map<number, Fake>,
-  camera: StageCamera,
-): WorldDraft {
-  return {
-    world,
-    player,
-    entities,
-    mob: (id, over = {}) => {
-      const entity = liveEntity({ set: { ...mobDefaults(id), ...over } });
-      entities.set(id, entity);
-      return entity;
-    },
-    set: (target, field, value) => {
-      target[field] = value;
-    },
-    model: camera.model,
-  };
-}
-
 interface ControlDeps {
   draft: WorldDraft;
   harness: SharedHarness;
@@ -399,7 +290,14 @@ async function mountScenario(input: MountInput): Promise<MountedStage> {
   const player = createPlayer();
   const entities = new Map<number, Fake>([[PLAYER_ENTITY.id, player]]);
   const camera = createStageCamera({ entities, player, viewport: screenViewport });
-  const draft = createDraft(createWorld(player, entities), player, entities, camera);
+  const label = createZoneLabel();
+  const draft = createDraft({
+    world: createWorld(player, entities),
+    player,
+    entities,
+    camera,
+    label,
+  });
   const { scenario } = input;
   scenario.world?.(draft);
 
@@ -422,6 +320,7 @@ async function mountScenario(input: MountInput): Promise<MountedStage> {
     project: camera.project,
     unitPoint: camera.unitPoint,
     fetchJson,
+    zoneName: label.read,
   });
 
   const stage = createControls({ draft, harness });
@@ -429,5 +328,10 @@ async function mountScenario(input: MountInput): Promise<MountedStage> {
   return { stage, harness, dispose: harness.dispose };
 }
 
-export type { Fake, FrameState, MountedStage, Scenario, ScenarioRegistry, Stage, WorldDraft };
+// The two draft types are re-exported by name, so an addon's `stage.ts` has one module to
+// import its scenario shapes from: `WorldDraft` is what a scenario's own `world` step is handed
+// and `Stage` extends it, so splitting them across two import lines would be a seam that says
+// nothing about how a scenario is written.
+export type { Fake, WorldDraft } from './draft.ts';
+export type { FrameState, MountedStage, Scenario, ScenarioRegistry, Stage };
 export { mountScenario };

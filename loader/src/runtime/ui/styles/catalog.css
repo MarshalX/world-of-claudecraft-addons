@@ -52,16 +52,20 @@
   letter-spacing: 0.04em;
 }
 
-/* Companions: what the author says this addon works better with, and whether it
-   is here. Deliberately quiet, at the same weight as the description it sits
-   under, because it is a note and not something to act on: drawing it as a badge
-   would put it at the weight of the run status, which IS actionable. */
+/* Companions: what the author says this addon works better with, whether it is
+   here, and the one thing to do about it.
+
+   The label stays quiet and the NAME does not. What the block used to draw was a
+   bare lower-case id at 11px grey, which reads as a footnote about something the
+   player has never heard of; the name is what they are actually looking for, so
+   it sits at the description's own size and colour and the state is the
+   qualifier beside it. */
 #woc-addons .woc-companions {
   display: flex;
   flex-wrap: wrap;
-  align-items: baseline;
+  align-items: center;
   gap: 4px 8px;
-  margin-top: 2px;
+  margin-top: 4px;
   font-size: 11px;
   color: var(--color-text-muted, rgb(153 141 106));
 }
@@ -71,21 +75,48 @@
   letter-spacing: 0.04em;
 }
 
+/* One companion is one unbreakable run: its name, its state and its button
+   belong together, and a wrap between them reads as two companions. */
 #woc-addons .woc-companion {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   white-space: nowrap;
 }
 
-/* The id is what the player looks for; the state is the qualifier on it. */
+#woc-addons .woc-companion-name {
+  color: var(--color-text-default, rgb(214 202 168));
+  font-size: 12px;
+}
+
+/* The name is what the player looks for; the state is the qualifier on it. */
 #woc-addons .woc-companion-state {
   opacity: 0.75;
 }
 
 /* Installed and running is the case that needs no attention, so it is the one
-   that recedes. Switched off is the only state a player can act on in this
-   window, which is why it is the only one that brightens. */
-#woc-addons .woc-companion-disabled .woc-companion-state {
+   that recedes: its name drops back to the label's own colour. Every other state
+   is either something to do or something that cannot be done here. */
+#woc-addons .woc-companion-enabled .woc-companion-name {
+  color: inherit;
+}
+
+/* Switched off and available are the two a player can act on from this window,
+   which is why they are the two that brighten. */
+#woc-addons .woc-companion-disabled .woc-companion-state,
+#woc-addons .woc-companion-offered .woc-companion-state {
   color: var(--color-text-default, rgb(214 202 168));
   opacity: 1;
+}
+
+/* Smaller than a row's own buttons and deliberately so: it is an action about a
+   line inside a row, and at the row buttons' weight it would compete with the
+   Install and Configure controls that act on the addon the row is about. The
+   touch floor in touch.css still reaches it, because that query names .woc-btn
+   and this carries it. */
+#woc-addons .woc-companion-action {
+  font-size: 11px;
+  padding: 1px 8px;
 }
 
 /* A source is a block rather than a .woc-row: its readout, its notes, and its
@@ -108,7 +139,7 @@
 /* The description is the main thing this screen is asking about, so it reads at
    the pane's body size rather than at the size it takes in a list row. */
 #woc-addons .woc-confirm .woc-row-desc {
-  font-size: 14px;
+  font-size: 13px;
   line-height: 1.5;
 }
 
@@ -119,7 +150,7 @@
   display: flex;
   flex-direction: column;
   gap: 4px;
-  font-size: 14px;
+  font-size: 13px;
 }
 
 /* A dash rather than a bullet, so each line reads as a claim the author made

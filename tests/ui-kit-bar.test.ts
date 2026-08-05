@@ -184,6 +184,36 @@ describe('a bar', () => {
     expect([...bar.el.classList].some((name) => name.startsWith('woc-bar-school-'))).toBe(false);
   });
 
+  // The third axis, for a row that is an ITEM. It takes none of the other two's properties,
+  // so a market row can be an epic, made of shadow damage and about to expire at once.
+  it('carries a quality beside a tone and a school rather than instead of one', () => {
+    const bar = createBar(document, { tone: 'warn', school: 'shadow', quality: 'epic' });
+
+    expect(bar.el.classList.contains('woc-bar-warn')).toBe(true);
+    expect(bar.el.classList.contains('woc-bar-school-shadow')).toBe(true);
+    expect(bar.el.classList.contains('woc-bar-quality-epic')).toBe(true);
+  });
+
+  it('swaps the quality class rather than accumulating them', () => {
+    const bar = createBar(document, { quality: 'poor' });
+
+    bar.update({ quality: 'rare' });
+
+    expect(bar.el.classList.contains('woc-bar-quality-poor')).toBe(false);
+    expect(bar.el.classList.contains('woc-bar-quality-rare')).toBe(true);
+  });
+
+  // Null is an addon saying it does not know the tier, which is the ordinary state of an
+  // item id anywhere on this API, and it must colour nothing rather than guess at one.
+  it.each([
+    ['null, which an id nobody has looked up passes', null],
+    ['a tier the game does not rank', 'mythic' as 'epic'],
+  ])('colours nothing for %s', (_label, quality) => {
+    const bar = createBar(document, { quality });
+
+    expect([...bar.el.classList].some((name) => name.startsWith('woc-bar-quality-'))).toBe(false);
+  });
+
   it('clears a school it had when told null', () => {
     const bar = createBar(document, { school: 'nature' });
 

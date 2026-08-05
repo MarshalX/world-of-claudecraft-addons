@@ -257,6 +257,8 @@ interface VeinsightHarness extends SharedHarness {
   becomeCharacter: (name: string) => void;
   /** Publish a zone the way a zone addon would, from an addon that is not this one. */
   publishZone: (id: string) => void;
+  /** Publish a refusal, which is what a publisher sends outside the open world. */
+  publishNoZone: (place: string) => void;
   /** Re-read the world, which is what turns a set change into a handler call. */
   poll: () => void;
   /** Run the once-a-second redraw. */
@@ -403,7 +405,24 @@ async function start(
       setField(player, 'name', name);
     },
     publishZone: (id) => {
-      harness.shared.bus.emit('official/wayfarer', 'zone', { id, name: id, levelRange: [1, 7] });
+      // The shape a real publisher sends, which is one set of keys in every state: `place`
+      // says whether there is a zone at all and the other three are null when there is not.
+      // Written out rather than trimmed to the `id` this addon reads, so a fixture cannot
+      // go on describing a payload nobody emits.
+      harness.shared.bus.emit('official/wayfarer', 'zone', {
+        place: 'zone',
+        id,
+        name: id,
+        levelRange: { min: 1, max: 7 },
+      });
+    },
+    publishNoZone: (place) => {
+      harness.shared.bus.emit('official/wayfarer', 'zone', {
+        place,
+        id: null,
+        name: null,
+        levelRange: null,
+      });
     },
     poll: () => harness.shared.world.watcher.poll(),
     tick: () => {
@@ -938,6 +957,26 @@ describe('the zone filter', () => {
     expect(h.drawn()).not.toContain(ORE_T2.id);
     expect(h.drawn()).toContain('herb_eastbrook_3');
     expect(h.note()).not.toContain('zone publisher');
+  });
+
+  // The refusal half of the same contract, and the case that says this addon survived the
+  // publisher's payload changing shape. A publisher outside the open world sends the same
+  // keys with a null id rather than a bare null, so the guard here has to turn on the ID
+  // being a string and not on the payload being an object: an `instance` record is an
+  // object, and read as one it would name a zone called nothing.
+  it('ignores a publisher saying there is no zone to name', async () => {
+    const h = await run(
+      { 'draw-distance': 400, 'list-length': 20, 'this-zone-only': true },
+      undefined,
+      { at: { x: ORE_T2.x, z: ORE_T2.z } },
+    );
+
+    h.publishNoZone('instance');
+
+    // Still the unfiltered list, and still saying nobody has named a zone, which is the
+    // same thing the bare null this replaced produced.
+    expect(h.drawn()).toContain(ORE_T2.id);
+    expect(h.note()).toContain('No zone publisher is installed');
   });
 
   it('keeps the nodes of a zone a publisher named', async () => {

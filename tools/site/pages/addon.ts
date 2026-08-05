@@ -114,6 +114,19 @@ function declares(build: Build, addon: CatalogAddon): Html | false {
 </section>`;
 }
 
+/**
+ * One companion, named and explained. The reason is the author's own sentence
+ * about what that addon adds; a companion named without one is just the link,
+ * rather than a manufactured sentence saying nothing.
+ */
+function companionLine(one: CatalogAddon, reason: string): Html {
+  const link = html`<a href="${addonPath(one.id)}">${one.name}</a>`;
+  if (reason === '') {
+    return link;
+  }
+  return html`${link}, which ${reason}`;
+}
+
 /** Addons this one works better beside, as links. A note, never a dependency. */
 function companions(addon: CatalogAddon, catalog: readonly CatalogAddon[]): Html | false {
   const found = addon.companions
@@ -124,8 +137,8 @@ function companions(addon: CatalogAddon, catalog: readonly CatalogAddon[]): Html
   }
   return html`<p class="addon-companions">
   Works well beside ${join(
-    found.map((one) => html`<a href="${addonPath(one.id)}">${one.name}</a>`),
-    ', ',
+    found.map((one) => companionLine(one, addon.companionReasons[one.id] ?? '')),
+    '; ',
   )}. A note from the author rather than a dependency: nothing here installs anything.
 </p>`;
 }

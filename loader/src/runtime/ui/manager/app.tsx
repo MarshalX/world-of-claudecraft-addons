@@ -18,7 +18,8 @@ import type { AddonStatus } from '../../supervisor.ts';
 import type { FrameBox } from '../frame/geometry.ts';
 import { CLOSE_PATH, CLOSE_SIZE, CLOSE_STROKE_WIDTH, CLOSE_VIEWBOX } from '../kit/close-glyph.ts';
 import { BrowsePane } from './browse.tsx';
-import { catalogShots, offeredIds } from './catalog.ts';
+import type { BrowseFilter } from './catalog.ts';
+import { catalogShots, NO_FILTER, offeredAddons } from './catalog.ts';
 import type { CatalogStore } from './catalog-store.ts';
 import type { AddonConfig, ConflictReading } from './config.ts';
 import { DetailPane } from './detail.tsx';
@@ -94,7 +95,7 @@ function tabClass(active: boolean): string {
  * the stores an open page reads can be loaded before it renders and a repaint
  * driven from outside the tree does not reset it to the list.
  */
-function InstalledTab(props: { app: ManagerAppProps }) {
+function InstalledTab(props: { app: ManagerAppProps; onFind: (name: string) => void }) {
   const { app } = props;
   const open = app.openAddon;
   if (open !== null) {
@@ -128,25 +129,41 @@ function InstalledTab(props: { app: ManagerAppProps }) {
       state={app.installed}
       statuses={app.statuses}
       // Off the catalog rather than off the installed rows: "is this companion
-      // available at all" is a question only the source list can answer.
-      offered={offeredIds(catalog.markets)}
+      // available at all" is a question only the source list can answer, and so
+      // is what it would be called if the player took it.
+      offered={offeredAddons(catalog.markets)}
       // Off the catalog for a different reason: the registry keeps an addon's
       // manifest and not its directory, so it cannot say where the picture is.
       shots={catalogShots(catalog.markets)}
       onToggle={app.onToggle}
       onOpen={app.onOpenAddon}
+      onFind={props.onFind}
       unlocked={app.unlocked}
       onUnlock={app.onUnlock}
     />
   );
 }
 
+interface CatalogTabProps {
+  tab: TabId;
+  app: ManagerAppProps;
+  filter: BrowseFilter;
+  onFilter: (filter: BrowseFilter) => void;
+}
+
 /** Browse, Marketplaces, and Updates: the three views of one catalog reading. */
-function CatalogTab(props: { tab: TabId; app: ManagerAppProps }) {
+function CatalogTab(props: CatalogTabProps) {
   const { app } = props;
   const state = app.catalogStore.state();
   if (props.tab === 'browse') {
-    return <BrowsePane state={state} store={app.catalogStore} />;
+    return (
+      <BrowsePane
+        state={state}
+        store={app.catalogStore}
+        filter={props.filter}
+        onFilter={props.onFilter}
+      />
+    );
   }
   if (props.tab === 'marketplaces') {
     return <MarketsPane state={state} store={app.catalogStore} format={app.formatTime} />;
@@ -156,7 +173,11 @@ function CatalogTab(props: { tab: TabId; app: ManagerAppProps }) {
 
 const CATALOG_TABS: readonly TabId[] = ['browse', 'marketplaces', 'updates'];
 
-function Pane(props: { tab: TabId; app: ManagerAppProps }) {
+interface PaneProps extends CatalogTabProps {
+  onFind: (name: string) => void;
+}
+
+function Pane(props: PaneProps) {
   if (props.tab === 'diagnostics') {
     return <DiagnosticsPane read={props.app.readDiagnostics} />;
   }
@@ -172,9 +193,11 @@ function Pane(props: { tab: TabId; app: ManagerAppProps }) {
     );
   }
   if (CATALOG_TABS.includes(props.tab)) {
-    return <CatalogTab tab={props.tab} app={props.app} />;
+    return (
+      <CatalogTab tab={props.tab} app={props.app} filter={props.filter} onFilter={props.onFilter} />
+    );
   }
-  return <InstalledTab app={props.app} />;
+  return <InstalledTab app={props.app} onFind={props.onFind} />;
 }
 
 function TabStrip(props: { active: TabId; onPick: (id: TabId) => void }) {
@@ -244,8 +267,17 @@ function CloseGlyph() {
 
 function ManagerApp(props: ManagerAppProps) {
   const [tab, setTab] = useState<TabId>(DEFAULT_TAB);
+  // Browse's search, held here rather than inside that pane, so a companion's
+  // "Find it" on the Installed tab can switch tab AND say what to look for. A
+  // pane that owned its own filter would be rebuilt empty by the switch, which
+  // is the one thing that jump exists not to do.
+  const [filter, setFilter] = useState<BrowseFilter>(NO_FILTER);
   useEscapeToClose(props.onClose);
   const refs = useInteractiveFrame({ box: props.box, onGeometry: props.onGeometry });
+  const onFind = (name: string): void => {
+    setFilter({ ...NO_FILTER, query: name });
+    setTab('browse');
+  };
 
   return (
     <section
@@ -270,7 +302,7 @@ function ManagerApp(props: ManagerAppProps) {
       </header>
       <TabStrip active={tab} onPick={setTab} />
       <div className="woc-pane">
-        <Pane tab={tab} app={props} />
+        <Pane tab={tab} app={props} filter={filter} onFilter={setFilter} onFind={onFind} />
       </div>
     </section>
   );

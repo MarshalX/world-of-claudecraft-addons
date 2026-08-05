@@ -31,6 +31,7 @@ import type { Teardown } from '../../disposal.ts';
 import { type MoneyValue, writeValue } from './money.ts';
 import type {
   ArtSlot,
+  ReadoutQuality,
   ReadoutSchool,
   ReadoutTone,
   StyleSlot,
@@ -60,6 +61,8 @@ const PREFIX = 'woc-bar';
 type BarTone = ReadoutTone;
 
 type BarSchool = ReadoutSchool;
+
+type BarQuality = ReadoutQuality;
 
 function setFraction(fill: StyleSlot, fraction: unknown): void {
   writeStyle(fill, `${(clampFraction(fraction) * FULL_PERCENT).toFixed(DECIMALS)}%`);
@@ -167,6 +170,15 @@ interface BarUpdate {
    * legitimately has none for a heal, and should not have to omit the property.
    */
   school?: BarSchool | null;
+  /**
+   * Colour it by the game's own colour for an item quality tier.
+   *
+   * A THIRD axis rather than more tones: a tier is what an item IS, where a tone is how
+   * urgent a row has become, so an item panel setting both is saying two true things. Null
+   * and an unrecognised value colour nothing, which is the answer for the items the game
+   * ranks at no tier at all.
+   */
+  quality?: BarQuality | null;
   /** A quieter second line under the head. An empty string hides it again. */
   detail?: string;
   tone?: BarTone;
@@ -226,5 +238,5 @@ function createBar(doc: Document, opts: BarOpts = {}): Bar {
   };
 }
 
-export type { Bar, BarOpts, BarSchool, BarTone, BarUpdate };
+export type { Bar, BarOpts, BarQuality, BarSchool, BarTone, BarUpdate };
 export { createBar };

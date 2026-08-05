@@ -1,7 +1,7 @@
 {
   "id": "ledgerline",
   "name": "Ledgerline",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "apiVersion": 1,
   "apiMinor": 2,
   "author": "MarshalX",
@@ -15,6 +15,9 @@
   "tags": ["economy", "interface"],
   "permissions": ["world.read", "net.read", "ui", "storage", "keys"],
   "companions": ["lorebind"],
+  "companionReasons": {
+    "lorebind": "publishes what every item is called, so a price row reads as an item rather than as an id"
+  },
   "keybinds": [
     {
       "id": "toggle",

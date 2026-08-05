@@ -29,7 +29,7 @@ import type {
   MarketplaceState,
 } from '../loader/src/shared/protocol.ts';
 import { fakeMarketApi, marketState } from './fakes/market.ts';
-import { fakeRegistry, managerServices } from './fakes/ui-deps.ts';
+import { fakeRegistry, managerServices, menuService } from './fakes/ui-deps.ts';
 
 const READING: DiagnosticsReading = {
   origin: 'https://pbe.worldofclaudecraft.com',
@@ -123,6 +123,7 @@ async function open(options: Options = {}) {
     channel: 'pbe',
     readDiagnostics: () => READING,
     unlock: createUnlockMode(document.createElement('div')),
+    openMenu: menuService(document, root),
     ...managerServices(document),
     market: fakeMarketApi({
       list: () => Promise.resolve(markets(options.addons ?? [offered()])),
@@ -308,6 +309,7 @@ describe('with no bridge', () => {
       channel: 'pbe',
       readDiagnostics: () => READING,
       unlock: createUnlockMode(document.createElement('div')),
+      openMenu: menuService(document, root),
       ...managerServices(document),
     });
     cleanups.push(manager.dispose);

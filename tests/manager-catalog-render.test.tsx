@@ -19,9 +19,14 @@ import { mountManager } from '../loader/src/runtime/ui/manager/index.tsx';
 import { COMPANION_TEXT, UI_TEXT } from '../loader/src/runtime/ui/manager/strings.ts';
 import type { MarketplaceRef } from '../loader/src/shared/marketplace.ts';
 import { OFFICIAL } from '../loader/src/shared/marketplace.ts';
-import type { InstalledAddon, MarketplaceState, UpdateRow } from '../loader/src/shared/protocol.ts';
+import type {
+  InstalledAddon,
+  MarketplaceEntry,
+  MarketplaceState,
+  UpdateRow,
+} from '../loader/src/shared/protocol.ts';
 import { fakeMarketApi, marketEntry, marketState } from './fakes/market.ts';
-import { fakeRegistry, managerServices } from './fakes/ui-deps.ts';
+import { fakeRegistry, managerServices, menuService } from './fakes/ui-deps.ts';
 
 const READING: DiagnosticsReading = {
   origin: 'https://pbe.worldofclaudecraft.com',
@@ -51,8 +56,8 @@ const THIRD_PARTY: MarketplaceRef = {
 
 const FQID = 'official/combat-meter';
 
-function installedRow(fqid = FQID): InstalledAddon {
-  const { path: _path, ...manifest } = marketEntry();
+function installedRow(fqid = FQID, patch: Partial<MarketplaceEntry> = {}): InstalledAddon {
+  const { path: _path, ...manifest } = marketEntry(patch);
   return { fqid, marketplace: 'official', manifest, enabled: true, pin: null };
 }
 
@@ -109,6 +114,7 @@ function open(options: Options = {}) {
     }),
     dev: null,
     unlock: createUnlockMode(document.createElement('div')),
+    openMenu: menuService(document, root),
   });
   cleanups.push(manager.dispose);
   manager.open();
@@ -138,6 +144,15 @@ async function clickTab(label: string): Promise<void> {
 function buttonNamed(label: string): HTMLButtonElement | undefined {
   return [...document.querySelectorAll<HTMLButtonElement>('.woc-pane button')].find(
     (button) => button.textContent === label || button.getAttribute('aria-label') === label,
+  );
+}
+
+/** One companion line's name element, which is where its reason hangs. */
+function companionNamed(name: string): HTMLElement | null {
+  return (
+    [...document.querySelectorAll<HTMLElement>('.woc-companion-name')].find(
+      (el) => el.textContent === name,
+    ) ?? null
   );
 }
 
@@ -607,18 +622,62 @@ describe('companion notes', () => {
     return opened;
   }
 
-  // A companion is a NOTE. The refusal to make it anything else is the design,
-  // so it is pinned here: no gate on Install, no second install, no ordering.
+  // A companion still GATES nothing. The actions it grew are jumps into controls
+  // that already existed, so the one control this row is about is untouched.
   it('draws a companion note without touching the Install control', async () => {
     await browse({
-      markets: [marketState(OFFICIAL, [marketEntry({ companions: ['lorebind'] })])],
+      markets: [
+        marketState(OFFICIAL, [
+          marketEntry({ companions: ['lorebind'] }),
+          marketEntry({ id: 'lorebind', name: 'Lorebind' }),
+        ]),
+      ],
     });
 
     await until(() => {
-      expect(text()).toContain('lorebind');
+      expect(text()).toContain(UI_TEXT.companions);
     });
-    expect(text()).toContain(UI_TEXT.companions);
     expect(buttonNamed(`${UI_TEXT.browseInstall} Combat Meter`)?.disabled).toBe(false);
+  });
+
+  // What the player is looking for is a name. The manifest writes down a bare id
+  // because a fork's copy is the same companion, and drawing that id was most of
+  // why the block read as a footnote about something nobody had heard of.
+  it('draws the name a source offers rather than the bare id it was named by', async () => {
+    await browse({
+      markets: [
+        marketState(OFFICIAL, [
+          marketEntry({ companions: ['lorebind'] }),
+          marketEntry({ id: 'lorebind', name: 'Lorebind' }),
+        ]),
+      ],
+    });
+
+    await until(() => {
+      expect(companionNamed('Lorebind')).not.toBeNull();
+    });
+    expect(companionNamed('lorebind')).toBeNull();
+  });
+
+  // The half that used to have nowhere to live and went into a description
+  // instead, where it is read before the player knows the companion exists.
+  it('carries the reason its manifest gave, on the name', async () => {
+    await browse({
+      markets: [
+        marketState(OFFICIAL, [
+          marketEntry({
+            companions: ['lorebind'],
+            companionReasons: { lorebind: 'publishes the item prices this adds up' },
+          }),
+          marketEntry({ id: 'lorebind', name: 'Lorebind' }),
+        ]),
+      ],
+    });
+
+    await until(() => {
+      expect(companionNamed('Lorebind')).not.toBeNull();
+    });
+    expect(companionNamed('Lorebind')?.title).toContain('publishes the item prices this adds up');
   });
 
   // The one message the field exists for, and the one a description could not
@@ -631,13 +690,130 @@ describe('companion notes', () => {
           marketEntry({ id: 'lorebind', name: 'Lorebind' }),
         ]),
       ],
-      installed: [{ ...installedRow('official/lorebind'), enabled: false }],
+      installed: [
+        {
+          ...installedRow('official/lorebind', { id: 'lorebind', name: 'Lorebind' }),
+          enabled: false,
+        },
+      ],
     });
 
     await until(() => {
-      expect(text()).toContain('lorebind');
+      expect(text()).toContain(COMPANION_TEXT.disabled);
     });
-    expect(text()).toContain(COMPANION_TEXT.disabled);
+    expect(companionNamed('Lorebind')).not.toBeNull();
+  });
+
+  // Browse holds no toggle, so it offers no Enable: an action a pane cannot
+  // honour is worse than no action, and the pane that owns the switch has one.
+  it('offers no Enable in Browse, which has no toggle to offer', async () => {
+    await browse({
+      markets: [
+        marketState(OFFICIAL, [
+          marketEntry({ companions: ['lorebind'] }),
+          marketEntry({ id: 'lorebind', name: 'Lorebind' }),
+        ]),
+      ],
+      installed: [
+        {
+          ...installedRow('official/lorebind', { id: 'lorebind', name: 'Lorebind' }),
+          enabled: false,
+        },
+      ],
+    });
+
+    await until(() => {
+      expect(text()).toContain(COMPANION_TEXT.disabled);
+    });
+    expect(buttonNamed(`${UI_TEXT.companionEnable} Lorebind`)).toBeUndefined();
+  });
+
+  // Get is the SAME install path the row's own button takes, which is the whole
+  // reason it is allowed to exist: it opens the confirmation, and it opens the
+  // one for the companion rather than for the addon that recommended it.
+  it('sends Get to the confirmation for the companion, not for the naming row', async () => {
+    await browse({
+      markets: [
+        marketState(OFFICIAL, [
+          marketEntry({
+            companions: ['lorebind'],
+            companionReasons: { lorebind: 'publishes the item prices this adds up' },
+          }),
+          marketEntry({ id: 'lorebind', name: 'Lorebind' }),
+        ]),
+      ],
+    });
+
+    await until(() => {
+      expect(buttonNamed(`${UI_TEXT.companionGet} Lorebind`)).toBeDefined();
+    });
+    buttonNamed(`${UI_TEXT.companionGet} Lorebind`)?.click();
+
+    await until(() => {
+      expect(text()).toContain(`${UI_TEXT.confirmHeading} Lorebind`);
+    });
+    // And it says who sent them there, because the reason is otherwise a hover,
+    // and a hover is nothing at all on the screen a decision is being made on.
+    expect(text()).toContain(`${UI_TEXT.confirmRecommendedBy} Combat Meter`);
+    expect(text()).toContain('publishes the item prices this adds up');
+  });
+
+  // The Installed pane holds no install, so its route for a companion nobody has
+  // is a jump to the pane that does, carrying what to look for. The search is
+  // held by the manager rather than by Browse precisely so this survives the tab
+  // switch: a pane that owned its own filter would be rebuilt empty by it.
+  it('sends Find it to Browse with the companion already searched for', async () => {
+    open({
+      markets: [
+        marketState(OFFICIAL, [
+          marketEntry(),
+          marketEntry({ id: 'lorebind', name: 'Lorebind', description: 'Every item in the game.' }),
+        ]),
+      ],
+      installed: [installedRow(FQID, { companions: ['lorebind'] })],
+    });
+    const find = `${UI_TEXT.companionFind} Lorebind`;
+    await until(() => {
+      expect(buttonNamed(find)).toBeDefined();
+    });
+
+    buttonNamed(find)?.click();
+
+    await until(() => {
+      expect(document.querySelector('.woc-browse')).not.toBeNull();
+    });
+    expect(document.querySelector<HTMLInputElement>('#woc-browse-search')?.value).toBe('Lorebind');
+    // And the list is actually narrowed to it, rather than the query being
+    // written into a field nothing read.
+    expect(document.querySelectorAll('.woc-row')).toHaveLength(1);
+    expect(text()).toContain('Every item in the game.');
+  });
+
+  // The failure this shape invites: the pending row was looked up in the FILTERED
+  // list, and a player pressing Get has almost always searched for the addon that
+  // named the companion rather than for the companion.
+  it('opens the confirmation for a companion the current search hides', async () => {
+    await browse({
+      markets: [
+        marketState(OFFICIAL, [
+          marketEntry({ companions: ['lorebind'] }),
+          marketEntry({ id: 'lorebind', name: 'Lorebind' }),
+        ]),
+      ],
+    });
+
+    await until(() => {
+      expect(buttonNamed(`${UI_TEXT.companionGet} Lorebind`)).toBeDefined();
+    });
+    type('#woc-browse-search', 'combat');
+    await until(() => {
+      expect(text()).not.toContain('Lorebind Official Marketplace');
+    });
+    buttonNamed(`${UI_TEXT.companionGet} Lorebind`)?.click();
+
+    await until(() => {
+      expect(text()).toContain(`${UI_TEXT.confirmHeading} Lorebind`);
+    });
   });
 });
 

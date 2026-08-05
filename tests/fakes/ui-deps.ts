@@ -8,6 +8,7 @@
 import { createKeyDispatcher } from '../../loader/src/runtime/keys/dispatcher.ts';
 import { createGameBindings } from '../../loader/src/runtime/keys/game-bindings.ts';
 import { createLogBuffer } from '../../loader/src/runtime/log/buffer.ts';
+import { createMenus } from '../../loader/src/runtime/ui/kit/menu.ts';
 import { createConfigService } from '../../loader/src/runtime/ui/manager/config.ts';
 import type { ManagerDeps, ManagerRegistry } from '../../loader/src/runtime/ui/manager/index.tsx';
 import type { UiDeps } from '../../loader/src/runtime/ui/mount.ts';
@@ -66,6 +67,19 @@ function supervisorServices(): Pick<
     // must not depend on the machine's regional settings.
     formatTime: (at) => `t+${String(at)}`,
   };
+}
+
+/**
+ * The one menu every dropdown in the manager opens, built for real.
+ *
+ * A stub would make every case about a dropdown vacuous: a picker whose opener does nothing
+ * puts no menu in the document, so a case that then looked for the chosen row would find
+ * nothing and assert against whatever it happened to have. That is not hypothetical, it is
+ * what a `<select>`-driving helper degraded into the day the control changed: a button carries
+ * a `value` property too, so assigning one and reading it back passed while touching nothing.
+ */
+function menuService(doc: Document, root: HTMLElement): ManagerDeps['openMenu'] {
+  return createMenus({ doc, root, viewport: () => VIEWPORT }).open;
 }
 
 /** The extra half of UiDeps, for a suite that supplies the half it cares about. */
@@ -136,4 +150,12 @@ function managerServices(
 }
 
 export type { UiHarness };
-export { createUiHarness, fakeRegistry, managerServices, supervisorServices, uiServices, VIEWPORT };
+export {
+  createUiHarness,
+  fakeRegistry,
+  managerServices,
+  menuService,
+  supervisorServices,
+  uiServices,
+  VIEWPORT,
+};

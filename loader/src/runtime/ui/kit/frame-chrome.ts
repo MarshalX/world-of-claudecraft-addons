@@ -20,10 +20,13 @@ type FrameChrome = 'frame' | 'window';
  * position that was predicted here when the second was added, and it arrived
  * without the matrix a flag set would have made of it.
  *
- * `comfortable` is the default and is what the manager is drawn at: 16px labels
- * on a 40px minimum, which is the mobile tap-target floor the game itself holds
- * to. `compact` is for a dense readout an addon glances at rather than operates,
- * where that floor makes the chrome the loudest thing on screen. `bare` removes
+ * `comfortable` is the default and is what the manager is drawn at: the scale the
+ * GAME draws its own windows at on a desktop, 13px tabs and buttons under a 15px
+ * panel title. The mobile tap floor is not in it, and not because it was dropped:
+ * the game applies that floor under `@media (pointer: coarse)` and the loader now
+ * does too, in ui/styles/touch.css. `compact` is tighter than the game's own
+ * panels, for a dense readout an addon glances at rather than operates, and the
+ * touch floor reaches it as well. `bare` removes
  * the chrome entirely, for an overlay that is only its own content: no panel
  * behind it, no padding, no title bar.
  */
@@ -84,7 +87,7 @@ function pointerOf(opts: FrameOpts, density: FrameDensity): FramePointer {
  * the title bar that `bare` removes. Honouring it here would hand back a panel
  * with no way to dismiss it, which is worse than ignoring the option. An
  * unrecognised value falls back the same way, because the failure to avoid is a
- * typo silently dropping the tap-target floor.
+ * typo silently drawing a panel tighter than its author asked for.
  */
 function densityOf(opts: FrameOpts, chrome: FrameChrome): FrameDensity {
   if (opts.density === 'bare' && chrome === 'window') {
@@ -106,7 +109,14 @@ interface FrameOpts {
    * Ignored on a `bare` frame, which has no title bar to put it in.
    */
   closable?: boolean;
+  /**
+   * How wide it opens, and for a frame that is not resizable, how wide it may ever be.
+   *
+   * A content-sized frame is held to it as a CEILING rather than given it as a width. See
+   * kit/frame.ts applyWidth for why the two axes part company here.
+   */
   width?: number;
+  /** How tall it opens. A frame that is not resizable ignores it and follows its content. */
   height?: number;
   /**
    * How far the player may shrink it. Defaults to the opening size.

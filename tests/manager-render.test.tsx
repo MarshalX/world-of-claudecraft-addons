@@ -15,7 +15,7 @@ import { mountManager } from '../loader/src/runtime/ui/manager/index.tsx';
 import { UI_TEXT } from '../loader/src/runtime/ui/manager/strings.ts';
 import { TABS } from '../loader/src/runtime/ui/manager/tabs.ts';
 import type { InstalledAddon } from '../loader/src/shared/protocol.ts';
-import { fakeRegistry, managerServices } from './fakes/ui-deps.ts';
+import { fakeRegistry, managerServices, menuService } from './fakes/ui-deps.ts';
 
 const READING: DiagnosticsReading = {
   origin: 'https://pbe.worldofclaudecraft.com',
@@ -75,6 +75,7 @@ function open(registry: Partial<ManagerRegistry> | null) {
     channel: 'pbe',
     readDiagnostics: () => READING,
     unlock: createUnlockMode(document.createElement('div')),
+    openMenu: menuService(document, root),
     ...managerServices(document),
   });
   manager.open();
@@ -99,6 +100,13 @@ function text(): string {
   return document.body.textContent ?? '';
 }
 
+/** A control inside the pane, by its accessible name. See the catalog suite's copy. */
+function buttonNamed(label: string): HTMLButtonElement | undefined {
+  return [...document.querySelectorAll<HTMLButtonElement>('.woc-pane button')].find(
+    (button) => button.getAttribute('aria-label') === label,
+  );
+}
+
 afterEach(() => {
   document.body.innerHTML = '';
 });
@@ -116,6 +124,7 @@ describe('opening and closing', () => {
       channel: 'pbe',
       readDiagnostics: () => READING,
       unlock: createUnlockMode(document.createElement('div')),
+      openMenu: menuService(document, root),
       ...managerServices(document),
     });
 
@@ -230,6 +239,57 @@ describe('the installed pane', () => {
     // Shown with nothing installed too: a player who came here to find a window
     // they cannot see should find the control that shows them where it is.
     expect(text()).toContain('Unlock frames');
+  });
+
+  // The state the whole companion field exists for, and until now the one a
+  // player could read and do nothing about. Enable is not a second path to
+  // anything: it is this pane's own toggle, pointed at another row.
+  it('switches a companion back on through the same call its own row makes', async () => {
+    const setEnabled = vi.fn(() => Promise.resolve());
+    open({
+      list: () =>
+        Promise.resolve([
+          { ...addon(), manifest: { ...addon().manifest, companions: ['ledgerline'] } },
+          {
+            ...addon(),
+            fqid: 'official/ledgerline',
+            enabled: false,
+            manifest: { ...addon().manifest, id: 'ledgerline', name: 'Ledgerline' },
+          },
+        ]),
+      setEnabled,
+    });
+    const enable = `${UI_TEXT.companionEnable} Ledgerline`;
+    await vi.waitFor(() => {
+      expect(buttonNamed(enable)).toBeDefined();
+    });
+
+    buttonNamed(enable)?.click();
+
+    expect(setEnabled).toHaveBeenCalledWith('official/ledgerline', true);
+  });
+
+  // Nothing to do about it, so nothing to press. A button that ran an addon's
+  // own state back over itself would be a control that changes nothing, which is
+  // worse than the absence of one.
+  it('offers no action for a companion that is already running', async () => {
+    open({
+      list: () =>
+        Promise.resolve([
+          { ...addon(), manifest: { ...addon().manifest, companions: ['ledgerline'] } },
+          {
+            ...addon(),
+            fqid: 'official/ledgerline',
+            manifest: { ...addon().manifest, id: 'ledgerline', name: 'Ledgerline' },
+          },
+        ]),
+      setEnabled: vi.fn(),
+    });
+
+    await vi.waitFor(() => {
+      expect(document.querySelectorAll('.woc-row')).toHaveLength(2);
+    });
+    expect(document.querySelector('.woc-companion-action')).toBeNull();
   });
 
   // The host emits registry.changed when another tab writes, and the runtime

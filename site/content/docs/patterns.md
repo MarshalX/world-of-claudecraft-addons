@@ -126,6 +126,29 @@ Subscribe with `woc.bus.anySender` unless you genuinely mean one specific instal
 
 If you want to say in your manifest that you work better with another addon, that is `companions`. It is a note the manager draws, not a dependency: it gates nothing and waits for nothing.
 
+## The topics addons already publish
+
+There is no namespace on the bus and no registry the loader enforces. A topic is a bare string, so two addons picking the same name with different payloads is a collision nobody is warned about, and the only defence is writing down what the shipped ones use. This is that list. Read it before naming a topic, and treat a name on it as taken.
+
+`from` is stamped by the loader from the publisher's own fqid and the message is frozen, so a sender cannot claim to be somebody else. What it can do is publish a payload that is not the shape below, so validate before you use it: every consumer here drops a bad row rather than throwing, because one malformed entry in a batch must not cost the other eight hundred.
+
+| Topic | Published by | Payload |
+|---|---|---|
+| `zone` | `wayfarer` | `{ place, id, name, levelRange }` |
+| `zone:ask` | anyone | nothing |
+| `item` | `lorebind` | one item record |
+| `items` | `lorebind` | an array of them, the whole table at once |
+| `item:ask` | anyone | nothing |
+| `alert` | `emberwatch` | `{ ruleId, unit, auraId, state }` |
+
+**`zone`** is one shape in every state, never an object-or-null. `place` is `'zone'`, `'instance'`, `'nowhere'` or `'unknown'`, and `id`, `name` and `levelRange` are all null unless it is `'zone'`. The four are worth telling apart: `'instance'` means the player is in a dungeon, an arena or a delve, where a zone filter has nothing to say; `'nowhere'` means a point the publisher's rectangles do not cover; `'unknown'` means it cannot answer yet, which is every session's first seconds and is not a fact about where anybody is standing. A consumer that reads only `typeof payload.id === 'string'` and ignores the rest is correct and will stay correct. `levelRange` is `{ min, max }`.
+
+**`item`** carries `{ id, name, source }` plus whichever of `quality`, `kind`, `slot`, `sellValue`, `itemLevel` and `requiredLevel` the publisher actually knows. Fields are absent rather than null when unknown, because an item table is learned a piece at a time. **`items`** is the batch form and is what an ask is answered with: a publisher holding a whole table sends it as one message rather than one emit per row. Subscribe to both. A consumer subscribed to `item` alone hears its own catch-up answered and takes nothing out of it, which looks exactly like a publisher that is not installed.
+
+**`alert`** fires on an aura rule matching. `state` is `'active'` when the rule is met and `'cleared'` when it stops being met, so a consumer can pair them; `unit` is a unit key rather than an entity id.
+
+If you are adding a topic, prefer a noun for the fact and `<noun>:ask` for the catch-up, publish one shape in every state rather than a payload that vanishes, and add the row here in the same change.
+
 ## The global cooldown's length is computable, and the obvious version is wrong
 
 `player.gcdRemaining` counts down. It does not say what it counted down **from**, and a bar needs the length to draw a fill.

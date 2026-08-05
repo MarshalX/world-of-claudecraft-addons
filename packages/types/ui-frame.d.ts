@@ -35,7 +35,29 @@ export interface FrameOpts {
    * option. Dismiss a bare frame with its keybind or through the unlock mode.
    */
   closable?: boolean;
+  /**
+   * How wide it is. A resizable frame opens at this and the player may then drag it; one that
+   * is not is held to it, so a long line wraps inside your column rather than stretching the
+   * panel out to the length of the sentence, and a short one does not pull it back in.
+   *
+   * Both directions matter and the second is the one that surprises people. A frame with no
+   * width follows its content, so a header that gains a clause moves the whole panel out and
+   * back under the player's eye, rows reflowing, exactly while they are doing the thing that
+   * changed the text. Omitting this does not opt out of that; it takes the default width.
+   *
+   * The HEIGHT has no equivalent on purpose. A readout grows and shrinks with what it is
+   * reporting, and a fixed height would clip it with nothing on screen to say a row is below
+   * the fold. Ask for `resizable` and state your bounds if you need one.
+   */
   width?: number;
+  /**
+   * How tall it opens.
+   *
+   * A frame that is not resizable IGNORES this and is as tall as its content, because a readout
+   * whose text changes would otherwise be padded out one moment and clipped the next. It is the
+   * opening height of a resizable frame, and the floor a drag may not go under unless you set
+   * `minHeight`.
+   */
   height?: number;
   /**
    * How far the player may SHRINK it. Defaults to the size it opened at.
@@ -74,12 +96,15 @@ export interface FrameOpts {
   /**
    * How tightly the loader's own chrome is drawn. Defaults to 'comfortable'.
    *
-   * 'comfortable' is 16px labels on a 40px minimum, which is the tap-target
-   * floor the game itself holds to, and is right for anything a player OPERATES.
-   * 'compact' is for a dense readout they glance at, where that floor makes the
-   * title bar and close button the loudest things in the panel. Compact gives up
-   * the tap floor, which is why it is opt-in: pick it for a desktop readout, not
-   * for a form.
+   * 'comfortable' is the scale the game draws its own windows at on a desktop:
+   * 13px tabs and buttons under a 15px panel title. 'compact' is tighter still,
+   * for a dense readout the player glances at rather than operates.
+   *
+   * Neither gives up the tap-target floor. The loader restores 16px type on a
+   * 40px target under `@media (pointer: coarse)`, whichever density you picked,
+   * which is where the game keeps its own floor. What you must not do is write a
+   * font-size or a min-height onto a kit control yourself: an inline style beats
+   * every stylesheet rule, so hand-sizing a control opts it out of that floor.
    *
    * 'bare' removes the chrome altogether: no panel behind your content, no
    * padding, no title bar. It is for an overlay that IS its content, a row of

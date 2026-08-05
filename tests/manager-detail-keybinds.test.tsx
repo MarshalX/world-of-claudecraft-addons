@@ -23,7 +23,7 @@ import { UI_TEXT } from '../loader/src/runtime/ui/manager/strings.ts';
 import type { InstalledAddon } from '../loader/src/shared/protocol.ts';
 import { configNamespace, KEYBINDS_KEY } from '../loader/src/shared/storage-keys.ts';
 import { createFakeStorage, type FakeStorage } from './fakes/storage.ts';
-import { fakeRegistry, supervisorServices } from './fakes/ui-deps.ts';
+import { fakeRegistry, menuService, supervisorServices } from './fakes/ui-deps.ts';
 
 const FQID = 'official/combat-meter';
 const SETTLE_TURNS = 6;
@@ -146,6 +146,7 @@ function open(options: OpenOptions = {}) {
     market: null,
     dev: null,
     unlock: createUnlockMode(document.createElement('div')),
+    openMenu: menuService(document, root),
     ...supervisorServices(),
   });
   const repaint = (): void => {

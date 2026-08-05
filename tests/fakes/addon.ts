@@ -87,6 +87,13 @@ interface MountInput {
    * capture their fetcher when they are built. See SharedOptions.
    */
   fetchJson?: SharedOptions['fetchJson'];
+  /**
+   * The game's own minimap label, which is what `world.zone` answers.
+   *
+   * Defaults to null, which is the reading before world entry. Forwarded rather than patched
+   * for the reason the camera is: the world hub captures it when it is built. See SharedOptions.
+   */
+  zoneName?: SharedOptions['zoneName'];
 }
 
 interface AddonHarness extends SharedHarness {
@@ -165,6 +172,9 @@ async function mountAddon(input: MountInput): Promise<AddonHarness> {
   }
   if (input.fetchJson !== undefined) {
     options.fetchJson = input.fetchJson;
+  }
+  if (input.zoneName !== undefined) {
+    options.zoneName = input.zoneName;
   }
   const shared: SharedHarness = createSharedServices(document, storage, options);
   for (const [name, text] of Object.entries(input.data ?? {})) {

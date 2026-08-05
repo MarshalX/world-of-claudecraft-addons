@@ -31,6 +31,16 @@ interface MenuItem {
   disabled?: boolean;
   /** A rule above this item. Ignored on the first, where it would draw a lid. */
   separator?: boolean;
+  /**
+   * This item is the one currently chosen, drawn in the game's own accent.
+   *
+   * For a menu that is a CHOICE rather than a list of actions, which is what a dropdown is:
+   * `ui.field.select` is built on this. Stated rather than implied, and stated as a flag on
+   * every item of such a menu rather than only on the chosen one, because a menu where one
+   * item says `checked: true` and the rest say nothing announces one radio button and a list
+   * of commands. An item that leaves it out stays an ordinary action.
+   */
+  checked?: boolean;
 }
 
 interface MenuDeps {
@@ -98,6 +108,13 @@ function buildItem(doc: Document, item: MenuItem, first: boolean): HTMLElement {
   const button = doc.createElement('button');
   button.type = 'button';
   button.className = 'woc-menu-item';
+  // A choice rather than a command, so it is announced as one and drawn as one. The colour
+  // is the game's own for a chosen dropdown row; `aria-checked` is what carries the same
+  // fact to a reader who cannot see the colour.
+  if (item.checked !== undefined) {
+    button.setAttribute('role', 'menuitemradio');
+    button.setAttribute('aria-checked', String(item.checked));
+  }
   // A rule above the first item would draw a lid on the menu rather than
   // separating anything, so the flag is honoured everywhere else and dropped here.
   if (item.separator === true && !first) {
@@ -117,7 +134,9 @@ function buildMenu(deps: MenuDeps, items: readonly MenuItem[], close: Teardown):
 
   for (const [at, item] of items.entries()) {
     const button = buildItem(deps.doc, item, at === 0);
-    button.setAttribute('role', 'menuitem');
+    if (!button.hasAttribute('role')) {
+      button.setAttribute('role', 'menuitem');
+    }
     button.addEventListener('click', () => {
       // Closed FIRST, so a handler that opens another menu is not immediately
       // shut by the teardown of the one that launched it.

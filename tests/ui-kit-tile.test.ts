@@ -175,6 +175,35 @@ describe('a tile reused for something else', () => {
     expect([...tile.el.classList].some((name) => name.startsWith('woc-tile-school-'))).toBe(false);
   });
 
+  // The third axis, and the one a grid of items is read by. Swapped like a school rather
+  // than accumulated, for the same reason: a square reused for another item would otherwise
+  // carry two tiers at once and the sheet's order would decide which showed.
+  it('swaps its quality rather than collecting them', () => {
+    const tile = createTile(document, { quality: 'rare' });
+
+    tile.update({ quality: 'epic' });
+
+    expect(tile.el.classList.contains('woc-tile-quality-rare')).toBe(false);
+    expect(tile.el.classList.contains('woc-tile-quality-epic')).toBe(true);
+  });
+
+  // Null is what an addon passes for the 96 items the game ranks at no tier AND for an id it
+  // has not looked up, and both mean the same thing on screen: the square keeps the panel's
+  // own edge rather than being given a tier nobody claimed.
+  it('colours nothing for no tier at all, and takes the tier back off', () => {
+    const tile = createTile(document, { quality: 'legendary' });
+
+    tile.update({ quality: null });
+
+    expect([...tile.el.classList].some((name) => name.startsWith('woc-tile-quality-'))).toBe(false);
+  });
+
+  it('colours nothing for a tier the game does not rank', () => {
+    const tile = createTile(document, { quality: 'mythic' as 'epic' });
+
+    expect([...tile.el.classList].some((name) => name.startsWith('woc-tile-quality-'))).toBe(false);
+  });
+
   // The art slot hides itself when an image fails, so it has to come back when the
   // tile is pointed at a file that does exist.
   it('gets its art slot back when pointed at something else', () => {

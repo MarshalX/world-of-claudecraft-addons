@@ -105,6 +105,12 @@ interface AddonShot {
   alt: string;
 }
 
+/** One addon a source offers, reduced to what a companion note needs of it. */
+interface OfferedAddon {
+  name: string;
+  fqid: string;
+}
+
 /** Null for the ordinary case of an addon nobody has taken a picture of. */
 function shotFor(market: MarketplaceRef, entry: MarketplaceEntry): AddonShot | null {
   const { preview } = entry;
@@ -206,23 +212,31 @@ function pendingUpdates(updates: readonly UpdateRow[]): UpdateRow[] {
 }
 
 /**
- * Every bare addon id any source in the list offers.
+ * Every addon any source in the list offers, by bare id.
  *
  * Bare rather than fully qualified, because it answers a question asked in bare
  * ids: a `companions` entry names the addon the author meant, whichever source a
  * player happens to have it from. See manager/companions.ts.
+ *
+ * The NAME and the fqid ride along because a companion note needs both and can
+ * derive neither: a bare id is what the manifest wrote down, "Lorebind" is what
+ * a player is looking for, and an install has to name one source. FIRST source
+ * wins on a duplicate id, which is the order the market list is already in, so
+ * a note points at the same row Browse would have shown first.
  */
-function offeredIds(markets: readonly MarketplaceState[]): Set<string> {
-  const ids = new Set<string>();
+function offeredAddons(markets: readonly MarketplaceState[]): Map<string, OfferedAddon> {
+  const offered = new Map<string, OfferedAddon>();
   for (const market of markets) {
     for (const entry of market.addons) {
-      ids.add(entry.id);
+      if (!offered.has(entry.id)) {
+        offered.set(entry.id, { name: entry.name, fqid: makeFqid(market.ref.id, entry.id) });
+      }
     }
   }
-  return ids;
+  return offered;
 }
 
-export type { AddonShot, BrowseEmptiness, BrowseFilter, BrowseRow };
+export type { AddonShot, BrowseEmptiness, BrowseFilter, BrowseRow, OfferedAddon };
 export {
   browseEmptiness,
   browseRows,
@@ -230,7 +244,7 @@ export {
   catalogShots,
   catalogTags,
   NO_FILTER,
-  offeredIds,
+  offeredAddons,
   pendingUpdates,
   shotOf,
 };

@@ -31,6 +31,17 @@ interface CatalogState {
    * addon that is running and one that is not.
    */
   installed: ReadonlyMap<string, boolean>;
+  /**
+   * fqid to display name for everything installed.
+   *
+   * Beside `installed` rather than folded into it, because they answer to
+   * different readers: a row asks whether an fqid is enabled, and a companion
+   * note asks what an fqid is CALLED. It is the registry's copy of the manifest,
+   * which is the only name available for an addon whose source has since gone
+   * away, and the reason a companion note can say "Lorebind" rather than
+   * "lorebind" for something no marketplace currently offers.
+   */
+  names: ReadonlyMap<string, string>;
   /** Installed addons their marketplace now offers a newer version of. */
   updates: readonly UpdateRow[];
   /** What an action is running against, so its row can disable. Null when idle. */
@@ -52,6 +63,7 @@ const IDLE: CatalogState = {
   status: 'idle',
   markets: [],
   installed: new Map(),
+  names: new Map(),
   updates: [],
   busy: null,
   error: null,
@@ -86,6 +98,7 @@ async function read(deps: CatalogStoreDeps): Promise<CatalogState> {
     status: 'ready',
     markets,
     installed: new Map(rows.map((row) => [row.fqid, row.enabled])),
+    names: new Map(rows.map((row) => [row.fqid, row.manifest.name])),
     updates,
     busy: null,
     error: null,

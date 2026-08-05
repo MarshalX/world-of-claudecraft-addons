@@ -234,7 +234,10 @@ function addonTile(deps: UiDeps, opts: TileOpts | undefined): Tile {
 function fieldSurface(deps: UiDeps): FieldBuilders {
   return {
     checkbox: (opts) => addonField(deps, createCheckbox, opts),
-    select: (opts) => addonField(deps, createSelect, opts),
+    // The one field that needs a service rather than only a document: its popup IS the
+    // loader's menu, so it is handed the same opener `ui.menu` is.
+    select: (opts) =>
+      addonField(deps, (doc, one) => createSelect(doc, one, deps.kit.menus.open), opts),
     slider: (opts) => addonField(deps, createSlider, opts),
     text: (opts) => addonField(deps, createText, opts),
   };

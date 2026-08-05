@@ -19,7 +19,8 @@ import {
   browseRows,
   catalogHasPreviews,
   catalogTags,
-  offeredIds,
+  NO_FILTER,
+  offeredAddons,
   shotOf,
 } from './catalog.ts';
 import type { CatalogState, CatalogStore } from './catalog-store.ts';
@@ -27,6 +28,7 @@ import type { CompanionContext } from './companions.ts';
 import { Companions } from './companions.tsx';
 import { ErrorNote } from './error-note.tsx';
 import { InstallConfirm } from './install-confirm.tsx';
+import { Picker } from './picker.tsx';
 import { Preview } from './preview.tsx';
 import { UI_TEXT } from './strings.ts';
 
@@ -37,6 +39,26 @@ import { UI_TEXT } from './strings.ts';
  * resolved against the source the addon NAMING it came from before any other.
  */
 type CatalogCompanions = Omit<CompanionContext, 'market'>;
+
+/**
+ * The addon a confirmation is open for, and how the player got there.
+ *
+ * An fqid alone until companions could send one here. `from` and `reason` are
+ * empty for the ordinary route, which is a player pressing Install on the row
+ * they were reading, and carry the recommender and their sentence when the route
+ * in was a companion's Get: the reason otherwise lives only on a hover, and a
+ * confirmation is exactly where it decides something.
+ */
+interface Pending {
+  fqid: string;
+  from: string;
+  reason: string;
+}
+
+/** A row's own Install, which nobody recommended and which needs no explaining. */
+function ownInstall(fqid: string): Pending {
+  return { fqid, from: '', reason: '' };
+}
 
 function Tags(props: { tags: readonly string[] | undefined }) {
   const tags = props.tags ?? [];
@@ -62,6 +84,8 @@ interface RowProps {
   /** The installed set and what is on offer, for the companion note. */
   companions: CatalogCompanions;
   onInstall: (fqid: string) => void;
+  /** A companion's Get, which lands on the same confirmation this row's Install does. */
+  onGetCompanion: (pending: Pending) => void;
 }
 
 function Row(props: RowProps) {
@@ -80,7 +104,18 @@ function Row(props: RowProps) {
         </span>
         <span className="woc-row-desc">{entry.description}</span>
         <Tags tags={entry.tags} />
-        <Companions ids={entry.companions} ctx={{ ...props.companions, market: row.market.id }} />
+        <Companions
+          ids={entry.companions}
+          reasons={entry.companionReasons}
+          ctx={{ ...props.companions, market: row.market.id }}
+          actions={{
+            onGet: (note) => {
+              if (note.fqid !== null) {
+                props.onGetCompanion({ fqid: note.fqid, from: entry.name, reason: note.reason });
+              }
+            },
+          }}
+        />
       </div>
       <div className="woc-row-actions">
         <button
@@ -150,22 +185,18 @@ function TagFilter(props: FilterProps) {
       <label className={FIELD_CLASS.label} htmlFor={TAG_ID}>
         {UI_TEXT.browseTag}
       </label>
-      <select
+      <Picker
         id={TAG_ID}
-        className={FIELD_CLASS.control}
+        label={UI_TEXT.browseTag}
         value={filter.tag ?? ''}
-        onChange={(event) => {
-          const picked = (event.currentTarget as HTMLSelectElement).value;
+        options={[
+          { value: '', label: UI_TEXT.browseAllTags },
+          ...props.tags.map((tag) => ({ value: tag, label: tag })),
+        ]}
+        onChange={(picked) => {
           props.onChange({ ...filter, tag: pickedTag(picked) });
         }}
-      >
-        <option value="">{UI_TEXT.browseAllTags}</option>
-        {props.tags.map((tag) => (
-          <option key={tag} value={tag}>
-            {tag}
-          </option>
-        ))}
-      </select>
+      />
     </div>
   );
 }
@@ -204,7 +235,7 @@ interface ResultsProps {
   emptiness: BrowseEmptiness;
   companions: CatalogCompanions;
   busy: string | null;
-  onInstall: (fqid: string) => void;
+  onInstall: (pending: Pending) => void;
 }
 
 /** Which note an empty list gets, once the search has been ruled out. */
@@ -242,7 +273,10 @@ function Results(props: ResultsProps) {
           shots={props.shots}
           busy={props.busy === row.fqid}
           companions={props.companions}
-          onInstall={props.onInstall}
+          onInstall={(fqid) => {
+            props.onInstall(ownInstall(fqid));
+          }}
+          onGetCompanion={props.onInstall}
         />
       ))}
     </ul>
@@ -252,12 +286,38 @@ function Results(props: ResultsProps) {
 interface BrowsePaneProps {
   state: CatalogState;
   store: CatalogStore;
+  /**
+   * The search, held by the manager rather than by this pane.
+   *
+   * Lifted so that a companion's "Find it" in the Installed pane can switch to
+   * this tab with the addon already searched for. A filter this pane owned would
+   * be reset to empty by that switch, which is the one thing that jump must not
+   * do.
+   */
+  filter: BrowseFilter;
+  onFilter: (filter: BrowseFilter) => void;
+}
+
+/**
+ * The row a confirmation is open for, looked up in EVERY row rather than the
+ * filtered ones.
+ *
+ * That is what a companion's Get needs and what an earlier version of this got
+ * wrong: the player pressed it on a line inside a row they had searched for, and
+ * the addon that line names is almost never in the same search, so a lookup in
+ * the visible rows would find nothing and the button would do nothing.
+ */
+function pendingRow(state: CatalogState, pending: Pending | null): BrowseRow | null {
+  if (pending === null) {
+    return null;
+  }
+  const rows = browseRows(state.markets, state.installed, NO_FILTER);
+  return rows.find((row) => row.fqid === pending.fqid) ?? null;
 }
 
 export function BrowsePane(props: BrowsePaneProps) {
-  const { state, store } = props;
-  const [filter, setFilter] = useState<BrowseFilter>({ query: '', tag: null });
-  const [confirming, setConfirming] = useState<string | null>(null);
+  const { state, store, filter } = props;
+  const [confirming, setConfirming] = useState<Pending | null>(null);
 
   if (state.status === 'failed' && state.markets.length === 0) {
     return <p className="woc-note woc-note-bad">{state.error ?? UI_TEXT.catalogUnreachable}</p>;
@@ -266,14 +326,17 @@ export function BrowsePane(props: BrowsePaneProps) {
   const rows = browseRows(state.markets, state.installed, filter);
   const companions: CatalogCompanions = {
     installed: state.installed,
-    offered: offeredIds(state.markets),
+    names: state.names,
+    offered: offeredAddons(state.markets),
   };
-  const pending = rows.find((row) => row.fqid === confirming);
-  if (pending !== undefined) {
+  const pending = pendingRow(state, confirming);
+  if (pending !== null && confirming !== null) {
     return (
       <InstallConfirm
         row={pending}
         busy={state.busy === pending.fqid}
+        from={confirming.from}
+        reason={confirming.reason}
         onConfirm={() => {
           store.install(pending.fqid);
           setConfirming(null);
@@ -287,7 +350,7 @@ export function BrowsePane(props: BrowsePaneProps) {
 
   return (
     <section className="woc-browse">
-      <Filters filter={filter} tags={catalogTags(state.markets)} onChange={setFilter} />
+      <Filters filter={filter} tags={catalogTags(state.markets)} onChange={props.onFilter} />
       <div className="woc-row-actions">
         <button
           type="button"

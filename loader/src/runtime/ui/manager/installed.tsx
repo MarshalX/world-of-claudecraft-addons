@@ -5,7 +5,7 @@
 
 import type { InstalledAddon } from '../../../shared/protocol.ts';
 import type { AddonStatus } from '../../supervisor.ts';
-import type { AddonShot } from './catalog.ts';
+import type { AddonShot, OfferedAddon } from './catalog.ts';
 import type { CompanionContext } from './companions.ts';
 import { Companions } from './companions.tsx';
 import { EnableToggle } from './enable-toggle.tsx';
@@ -26,6 +26,8 @@ interface RowProps {
   companions: Omit<CompanionContext, 'market'>;
   onToggle: (fqid: string, on: boolean) => void;
   onOpen: (fqid: string) => void;
+  /** Take the player to Browse, searching for a companion this pane cannot install. */
+  onFind: (name: string) => void;
 }
 
 /**
@@ -61,7 +63,21 @@ function AddonRow(props: RowProps) {
         <span className="woc-row-desc">{addon.manifest.description}</span>
         <Companions
           ids={addon.manifest.companions}
+          reasons={addon.manifest.companionReasons}
           ctx={{ ...props.companions, market: addon.marketplace }}
+          // Enable is this pane's own toggle pointed at another row, which is
+          // why it is here and not in Browse. There is no install here at all,
+          // so a companion nobody has is a jump to the pane that owns one.
+          actions={{
+            onEnable: (note) => {
+              if (note.fqid !== null) {
+                props.onToggle(note.fqid, true);
+              }
+            },
+            onFind: (note) => {
+              props.onFind(note.name);
+            },
+          }}
         />
       </div>
       <div className="woc-row-actions">
@@ -130,7 +146,7 @@ interface InstalledPaneProps {
    * two different questions and this pane only knows the answer to one. Empty
    * while the catalog is still loading, which reads as `unknown` for one paint.
    */
-  offered: ReadonlySet<string>;
+  offered: ReadonlyMap<string, OfferedAddon>;
   /**
    * Each offered addon's screenshot by fqid, for the row thumbnails.
    *
@@ -143,6 +159,8 @@ interface InstalledPaneProps {
   shots: ReadonlyMap<string, AddonShot>;
   onToggle: (fqid: string, on: boolean) => void;
   onOpen: (fqid: string) => void;
+  /** Take the player to Browse, searching for a companion this pane cannot install. */
+  onFind: (name: string) => void;
   unlocked: boolean;
   onUnlock: (on: boolean) => void;
 }
@@ -154,6 +172,10 @@ interface InstalledPaneProps {
 function companionsOf(props: InstalledPaneProps): Omit<CompanionContext, 'market'> {
   return {
     installed: new Map(props.state.rows.map((row) => [row.fqid, row.enabled])),
+    // This pane's own rows, which is where an installed companion's NAME comes
+    // from: the registry keeps the manifest, so it can name an addon whose
+    // source has since been removed from the list.
+    names: new Map(props.state.rows.map((row) => [row.fqid, row.manifest.name])),
     offered: props.offered,
   };
 }
@@ -200,6 +222,7 @@ export function InstalledPane(props: InstalledPaneProps) {
             companions={companions}
             onToggle={props.onToggle}
             onOpen={props.onOpen}
+            onFind={props.onFind}
           />
         ))}
       </ul>

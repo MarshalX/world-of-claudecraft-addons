@@ -16,13 +16,14 @@
 // game and every other addon, so two checkboxes built by the same addon with the
 // same label must not both answer to the first one's text.
 
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   createCheckbox,
   createSelect,
   createSlider,
   createText,
 } from '../loader/src/runtime/ui/kit/field.ts';
+import type { MenuItem } from '../loader/src/runtime/ui/kit/menu.ts';
 import { createTabs } from '../loader/src/runtime/ui/kit/tabs.ts';
 
 describe('a checkbox', () => {
@@ -70,36 +71,58 @@ describe('a checkbox', () => {
   });
 });
 
+// A select is a button and the kit's own menu rather than a native control, so what a case
+// can reach is the ITEMS it would have opened. `openMenu` is captured rather than run: the
+// real one puts a menu in the document, and what is under test here is the field.
 describe('a select', () => {
+  const opened: MenuItem[][] = [];
+  const openMenu = (_at: Element, items: readonly MenuItem[]) => {
+    opened.push([...items]);
+    return () => undefined;
+  };
+
+  beforeEach(() => {
+    opened.length = 0;
+  });
+
   it('offers every option and reports the one chosen', () => {
     const onChange = vi.fn();
-    const field = createSelect(document, {
-      label: 'Anchor',
-      value: 'top',
-      options: ['top', 'bottom'],
-      onChange,
-    });
-    const select = field.el.querySelector<HTMLSelectElement>('select');
+    const field = createSelect(
+      document,
+      { label: 'Anchor', value: 'top', options: ['top', 'bottom'], onChange },
+      openMenu,
+    );
 
-    expect([...(select?.options ?? [])].map((option) => option.value)).toEqual(['top', 'bottom']);
+    field.el.querySelector('button')?.click();
+    expect(opened[0]?.map((item) => item.label)).toEqual(['top', 'bottom']);
 
-    if (select !== null) {
-      select.value = 'bottom';
-      select.dispatchEvent(new Event('change'));
-    }
+    opened[0]?.[1]?.onSelect();
 
     expect(onChange).toHaveBeenCalledWith('bottom');
+    expect(field.value()).toBe('bottom');
+  });
+
+  it('marks the chosen option in the menu it opens, and only that one', () => {
+    const field = createSelect(
+      document,
+      { label: 'Anchor', value: 'bottom', options: ['top', 'bottom'], onChange: vi.fn() },
+      openMenu,
+    );
+
+    field.el.querySelector('button')?.click();
+
+    expect(opened[0]?.map((item) => item.checked)).toEqual([false, true]);
   });
 
   it('opens on the value it was given rather than on the first option', () => {
-    const field = createSelect(document, {
-      label: 'Anchor',
-      value: 'bottom',
-      options: ['top', 'bottom'],
-      onChange: vi.fn(),
-    });
+    const field = createSelect(
+      document,
+      { label: 'Anchor', value: 'bottom', options: ['top', 'bottom'], onChange: vi.fn() },
+      openMenu,
+    );
 
     expect(field.value()).toBe('bottom');
+    expect(field.el.textContent).toContain('bottom');
   });
 });
 

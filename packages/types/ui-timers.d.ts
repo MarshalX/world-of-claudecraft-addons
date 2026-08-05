@@ -30,6 +30,24 @@ export type BarTone = 'default' | 'warn' | 'danger';
  */
 export type BarSchool = School;
 
+/**
+ * An item quality tier to colour a readout by. The game's six, low to high.
+ *
+ * A THIRD axis, and the one an item panel wants: a player picks an item out of a grid by its
+ * tier before reading a word of it. Where the other two are about a timer, this is about what
+ * the thing IS, so a row can carry a tier and a tone at once and be saying two true things.
+ *
+ * A bar colours its LABEL and a tile colours its BORDER, which is what the game does with an
+ * item name and an item icon respectively, down to the two palettes it keeps for them. So
+ * there is no way to pass a colour here either: two addons drawing an epic should draw the
+ * same purple, and it should be the purple in the player's bags.
+ *
+ * Null, and anything not in the union, colours nothing. That is the answer for the items the
+ * game ranks at no tier at all, of which there are 96, and for an id you have not looked up:
+ * an addon that knows an item is unranked and one that has not asked both pass null.
+ */
+export type BarQuality = 'poor' | 'common' | 'uncommon' | 'rare' | 'epic' | 'legendary';
+
 /** Everything a bar can be told. All of it is optional on an update. */
 /** An amount of the game's own money, for a readout's figure. */
 export interface MoneyValue {
@@ -85,6 +103,14 @@ export interface BarUpdate {
    */
   school?: BarSchool | null;
   /**
+   * Colour the LABEL by the game's own colour for an item quality tier.
+   *
+   * For a row that is an item: a market listing, a bag entry, a loot roll. Nothing in the
+   * loader knows an item's quality, so this is a tier you got from somewhere, which today is
+   * either a `LootRoll` off `world.group` or a record another addon published on the bus.
+   */
+  quality?: BarQuality | null;
+  /**
    * A quieter second line under the head, e.g. a hit count and crit rate.
    *
    * The fill spans both lines, so a share reads as the whole row's rather than as a
@@ -111,6 +137,8 @@ export interface Bar {
 export type TileTone = BarTone;
 
 export type TileSchool = BarSchool;
+
+export type TileQuality = BarQuality;
 
 /** Everything a tile can be told. All of it is optional on an update. */
 export interface TileUpdate {
@@ -151,6 +179,16 @@ export interface TileUpdate {
   count?: number | null;
   /** Tint the border by the game's own colour for a damage school. */
   school?: TileSchool | null;
+  /**
+   * Colour the BORDER by the game's own colour for an item quality tier.
+   *
+   * A square of art edged by its tier is the game's own bag cell, which is what makes a grid
+   * of them readable at a glance. Epic and legendary carry the game's soft glow too.
+   *
+   * A tone or a school wins the border where you set both: urgency is about to matter and a
+   * tier always did.
+   */
+  quality?: TileQuality | null;
   tone?: TileTone;
   /**
    * The square's side in pixels.
