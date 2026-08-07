@@ -2,20 +2,20 @@
   "schema": 1,
   "name": "Official Marketplace",
   "maintainer": "MarshalX",
-  "generated": "2026-08-07T16:58:53.000Z",
+  "generated": "2026-08-07T21:09:37.000Z",
   "addons": [
     {
       "id": "cadence",
       "name": "Cadence",
-      "version": "1.0.1",
+      "version": "1.0.2",
       "apiVersion": 1,
-      "apiMinor": 2,
+      "apiMinor": 4,
       "author": "MarshalX",
       "description": "The four timings a rotation is played against, on one thin strip: your swing, the global cooldown, your cast with a latency band, and your resource with combo points as pips.",
       "entry": "main.js",
       "preview": {
         "file": "preview.png",
-        "alt": "On the left, Casting, four thin rows. Swing at 1.4s of the 2.3 second weapon it learned from, GCD at 0.9s, a cast row named Long Draw with 0.8s left, and a Mana bar at 62 of 100. A pale band lies across the last stretch of the cast, covering the 180ms round trip the loader measured, and it is a measurement rather than a promise that a press inside it queues. There are no pips: a hunter has no combo points. On the right, Combo points, the same four rows on a rogue. Swing at 0.6s of a 1.7 second dagger, GCD at 0.4s against the one second base the game gives this class alone, an empty Cast row keeping its place rather than appearing when a cast starts, and an Energy bar at 45 of 100. Under it a strip of five pips with three lit, five being the most points this session has shown rather than a maximum anything on the wire states."
+        "alt": "On the left, Casting, four thin bars on a bare strip: swing, global cooldown, cast, resource. On the right, Combo points, the same four on a rogue, over a row of combo pips."
       },
       "homepage": "https://github.com/MarshalX/world-of-claudecraft-addons",
       "tags": [
@@ -86,7 +86,7 @@
     {
       "id": "combat-meter",
       "name": "Combat Meter",
-      "version": "1.4.0",
+      "version": "1.4.1",
       "apiVersion": 1,
       "apiMinor": 4,
       "author": "MarshalX",
@@ -94,7 +94,7 @@
       "entry": "main.js",
       "preview": {
         "file": "preview.png",
-        "alt": "The Combat Meter panel on its Damage tab, reading 5,850 damage (195.7/s) in 30s. Six rows (Aimed Shot 1,596, Fell Shot 1,334, Grizzle: Melee 1,086, Volley 827, Auto Shot 643, Serpent Sting 364) each show total, share and damage per second, over a second line of hits, crit rate, average and biggest hit. The third row is the swings the player pet Grizzle landed, folded into the total and labelled with the pet name. The fill behind each row is tinted by damage school, red for physical, blue for arcane and green for nature, and the four rows from the player own spellbook carry the art the game ships for that ability while Auto Shot and the pet row carry none. A summary line reads hit 88%, miss 6%, dodge 6%."
+        "alt": "The Combat Meter panel on its Damage tab: one fight broken down per ability, six rows tinted by damage school under a total with a per-second rate, above the player attack table."
       },
       "homepage": "https://github.com/MarshalX/world-of-claudecraft-addons",
       "tags": [
@@ -153,15 +153,15 @@
     {
       "id": "cooldown-bars",
       "name": "Cooldown Bars",
-      "version": "1.3.0",
+      "version": "1.3.1",
       "apiVersion": 1,
-      "apiMinor": 1,
+      "apiMinor": 4,
       "author": "MarshalX",
       "description": "A draining bar for every ability you have on cooldown, soonest ready first, measured against the real length of anything in your own spellbook. Draws as a column of named bars or as a strip of swept icons.",
       "entry": "main.js",
       "preview": {
         "file": "preview.png",
-        "alt": "On the left, Bars, five draining bars ordered by time remaining. Fell Shot at 4.4s carrying one of its two charges, Counter Shot? at 10.4s, Rapid Fire? at 41.2s, Howling Rage at 97.5s, and System Unstuck? at 155.5s. A question mark follows every name worked out from an ability id rather than read off the spellbook, and both marked abilities show why it is needed: the game calls them Hushing Shot and Fevered Draw, so both worked-out names are wrong and both say so. The four abilities carry the art the game files under their ids; System Unstuck draws no icon at all, being the anti-relog timer the game itself runs rather than an ability. On the right, Icon strip, the same five cooldowns as a row of square icons, each darkened by a sweep showing how much of its cooldown is left. What is left is drawn over the art, in whole seconds up to a minute and in minutes above it, so the last two squares read 2m and 3m; Fell Shot carries its charge count in the corner instead of a name. The last square holds its sweep and its countdown and nothing else, because System Unstuck is not an ability and the game files no art for it."
+        "alt": "On the left, Bars, a column of named, draining bars, soonest ready at the top. On the right, Icon strip, the same cooldowns as square icons, each swept and counting down."
       },
       "homepage": "https://github.com/MarshalX/world-of-claudecraft-addons",
       "tags": [
@@ -211,9 +211,9 @@
     {
       "id": "dev-harness",
       "name": "Dev Harness",
-      "version": "1.4.0",
+      "version": "1.4.1",
       "apiVersion": 1,
-      "apiMinor": 2,
+      "apiMinor": 4,
       "author": "MarshalX",
       "description": "Exercises every part of the addon API and reports what worked, repainting as the world moves, so a loader change can be checked in the game rather than only in a test.",
       "entry": "main.js",
@@ -242,6 +242,11 @@
           "id": "run",
           "label": "Run the checks again",
           "default": "Alt+Shift+KeyH"
+        },
+        {
+          "id": "probe",
+          "label": "Toggle the frame the toggleKey check builds",
+          "default": "Alt+Shift+KeyJ"
         }
       ],
       "settings": [
@@ -281,15 +286,15 @@
     {
       "id": "emberwatch",
       "name": "Emberwatch",
-      "version": "1.0.1",
+      "version": "1.0.2",
       "apiVersion": 1,
-      "apiMinor": 2,
+      "apiMinor": 4,
       "author": "MarshalX",
       "description": "A rules engine for effects and procs: name an effect on a unit and get a tile, a cue and a banner when it lands, stacks up or runs out. Ships a starter set for your class, and takes rules of your own captured off your target with a keybind.",
       "entry": "main.js",
       "preview": {
         "file": "preview.png",
-        "alt": "On the left, Alerts and rules, a row of five square alert tiles above the rules panel that produced them. Left to right, the two that carry no picture at all, each for its own reason: Silencing Shriek at 3 seconds, bordered in shadow purple and artless because a mob applied it and skill art is filed under a player class; then Brood Venom at 9 seconds in nature green, a 3 in its corner for the three bites that have landed, artless for a second and unrelated reason, that its aura id is not an ability id and no file is named for it. Then three that do carry the art the game ships for the ability that applied them, all three cast by the mage themselves: Aether Surge at 3 seconds, drawn in the warning amber a rule watching for an effect running out puts over the school colour; Hot Streak at 7 seconds in fire red; and Pyrelance at 4 seconds, amber again. Each tile names who is carrying the effect underneath: Marshal four times, and The Broodmother, clipped to the width of the square, under the mage's own dot on the boss. Below the strip, the Emberwatch rules panel lists the eight rules in force for a mage, each a switched-on checkbox with what it fires on written beside it: four that apply to every class, watching for a target made untouchable in a duel, for being silenced, for anything harmful reaching three stacks on you, and for being stunned; then Aether Surge ending, Brain Freeze, Hot Streak, and Pyrelance fading on your target, that last one marked mine only. Two lines in smaller type close the panel with what the addon cannot answer: a party row carries no source, no duration and no stacks, and nothing anywhere can say how much damage a control will take before it breaks. On the right, An alert, a banner across the middle of the view, reading STUNNED in the display serif the game keeps for its own warnings, in the red it keeps for danger, over a quieter second line naming who it landed on. It sits on a soft dark scrim that fades out on every side, and there is nothing else in the panel: the strip is shut, and the alert reaches the player anyway."
+        "alt": "On the left, Alerts and rules, five square alert tiles above the rules panel that produced them. On the right, An alert, a STUNNED banner across the view, the alert strip shut."
       },
       "data": [
         "rules.json"
@@ -375,15 +380,15 @@
     {
       "id": "facemark",
       "name": "Facemark",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "apiVersion": 1,
-      "apiMinor": 2,
+      "apiMinor": 4,
       "author": "MarshalX",
       "description": "A nameplate over every unit near you: its name, its level, a health bar, a cast bar, the harmful effects on it, a threat edge and its raid mark.",
       "entry": "main.js",
       "preview": {
         "file": "preview.png",
-        "alt": "two nameplates floating over the units they belong to. Tempest Vharok, level 22, the name in hostile red beside a yellow Star raid mark, a health bar at 58 percent, a cast bar reading Rift Thunderhead? because only the ability id reaches an addon and the name was worked out from it, and two effect tiles under it, Venom Barb and Rattling Shot, each carrying the art the game files under that ability. A red edge runs down its left, saying the player is top of its hate table. Beside it the friendly player Anserra at level 20 and 66 percent health, the name in player blue, no threat edge at all because a player keeps no hate table, and one effect on them, the boss snare Static Field, drawn as a bordered countdown with no picture because an effect a mob applied has none anywhere in the game."
+        "alt": "two nameplates over the units they belong to, each with a name, a level, a health bar and effect tiles. The hostile one adds a raid mark, a cast bar and a red threat edge."
       },
       "homepage": "https://github.com/MarshalX/world-of-claudecraft-addons",
       "tags": [
@@ -462,15 +467,15 @@
     {
       "id": "foretell",
       "name": "Foretell",
-      "version": "1.0.1",
+      "version": "1.0.2",
       "apiVersion": 1,
-      "apiMinor": 2,
+      "apiMinor": 4,
       "author": "MarshalX",
       "description": "A cast bar for everything casting near you, soonest to land first, as a borderless column or floating over each caster. Reads the world's own cast state, so a boss mechanic that raises no cast event still gets a bar.",
       "entry": "main.js",
       "preview": {
         "file": "preview.png",
-        "alt": "a borderless column of four draining bars, soonest to land first, each naming its caster underneath. Shadow Bolt? at 0.7 seconds by Vessken, its fill red because it lands within a second, and its name worked out by title-casing the ability id, which the game itself calls Gloom Bolt: the question mark is the display saying so. Rift Thunderhead? at 1.9 seconds by the boss Tempest Vharok, marked the same way and drawn in the plain fill with no icon, because skill art is filed under a player class and nothing on the wire says what school a mob cast is. Aether Darts at 2.4 seconds by Sorrelin and Pyrelance at 3.1 seconds by Ilvane, both abilities this mage also knows, so both carry the game's own name unmarked, its art, and the colour the game gives that school, arcane blue and fire orange."
+        "alt": "a borderless column of four draining cast bars, soonest to land first, each naming its caster underneath; a question mark marks a name worked out from the ability id."
       },
       "homepage": "https://github.com/MarshalX/world-of-claudecraft-addons",
       "tags": [
@@ -535,7 +540,7 @@
     {
       "id": "ledgerline",
       "name": "Ledgerline",
-      "version": "1.1.0",
+      "version": "1.1.1",
       "apiVersion": 1,
       "apiMinor": 4,
       "author": "MarshalX",
@@ -543,7 +548,7 @@
       "entry": "main.js",
       "preview": {
         "file": "preview.png",
-        "alt": "Panel 1 of 3, The ledger, the Prices tab of a panel headed Ledgerline (to collect), with a strip over the list reading at the Merchant, page 1 of 1, a 5 percent cut, 6 of 12 listing slots used and 33 silver 6 copper and 2 items waiting to be collected. Under a search field, seven item rows fenced off by a rule at each end, each carrying the game's own art, its price as coins (a disc per unit, gold, silver or copper, with the empty units left out) and a chart across the bottom of the row: Copper Ore, low 44 copper over a median of 48 and 3 visits; Ghostly Essence, low 7 silver 80; Healing Potion, low 2 silver 45; Iron Ore, low 1 silver 5; Pristine Hide, low 14 silver; Rough Hide, low 84 copper; and Sheenleaf Herb, low 1 silver 8, its chart cut off by the scrolling list. Every figure is one vote per visit to the counter rather than one per listing, and each chart has one point per visit: copper ore falls across the three days and iron ore and pristine hide climb. A footer reads 9 items recorded, keeping 30 days. Panel 2 of 3, Your listings, the Yours tab of the same panel, with the same strip over six listings of the player's own, each asking a price in the game's own coins. Copper Ore asking 9 silver and Spider Silk asking 6 silver 20 are washed red and read undercut, because a cheaper listing of each leads its block on the page that was read. Goldleaf Herb asking 17 silver reads not on this page, which is the panel refusing to call it uncontested: nobody else was selling any, and an item missing from a page is not an item nobody is selling. Iron Ore at 26 silver, Pristine Hide at 15 silver and Rough Hide at 8 silver 60 read cheapest on this page. Every row also gives the price per item, carries that item's own price chart across the bottom of it, and says the listing was first seen by you 6 hours ago, which is this addon's own record rather than an expiry, since no listing on the wire carries one. Under a rule, a footer reads that the verdicts are judged from the page you are reading now, which is not the whole market. Panel 3 of 3, What sold, the Sold tab of the same panel, over the same strip, listing four items the player has actually sold. Each row gives what a buyer paid per item, in the game's own coins, over a chart of the same: Copper Ore paid 48 copper, over 2 sales, 40 sold and 18 silver 24 copper after the cut, last read moments ago, and it is the only row carrying a chart, because two sales are the fewest that can be a line; Iron Ore paid 1 silver 28, 1 sale of 20 and 24 silver 32 after the cut, last read moments ago; Spider Silk paid 66 copper, 1 sale of 10 and 6 silver 27 after the cut, last read 6 hours ago; and Rough Hide paid 88 copper, 1 sale of 10 and 8 silver 36 after the cut, last read 3 days ago. Three of those five sales were collected before the picture was taken and are gone from the Merchant entirely, which is the state this pane exists for: the ledger it reads is emptied the moment a player collects, so a sale is only ever recorded once and never read back. None of these figures is on the Prices tab, because what was paid and what is being asked are two series and neither is folded into the other. A footer reads 4 items sold, keeping 30 days."
+        "alt": "Panel 1 of 3, The ledger, recorded prices over their own trends Panel 2 of 3, Your listings, undercuts washed red Panel 3 of 3, What sold, what a buyer paid, per item"
       },
       "companions": [
         "lorebind"
@@ -597,15 +602,15 @@
     {
       "id": "longwatch",
       "name": "Longwatch",
-      "version": "1.0.1",
+      "version": "1.0.2",
       "apiVersion": 1,
-      "apiMinor": 2,
+      "apiMinor": 4,
       "author": "MarshalX",
       "description": "The rare spawns, where they live and when they are due back. Carries the roster the wire cannot answer for, counts each rare down from the kill that dropped it, and keeps the countdown across a logout. Pins the rares in your own zone into the world and calls out a sighting with a banner and a cue.",
       "entry": "main.js",
       "preview": {
         "file": "preview.png",
-        "alt": "On the left, Rares list, a two-column list of the nineteen rare spawns Longwatch carries. Grix the Tunnelking is up and drawn loudest; Old Cragmaw is due back; ten more count down from 44 seconds to 5h 49m, each row a draining bar behind the name, the zone and the distance in yards, with the ones nobody has killed reading Unseen at the bottom. The list scrolls inside the panel. On the right, An alert, a banner across the middle of the view, set in the gold display serif the game uses for its own warnings, reading MOGGER IS UP over a quieter second line naming Eastbrook Vale. It is drawn over a soft dark scrim that fades out on every side, and there is nothing else on screen: the panel is shut, and the alert is what reaches you anyway."
+        "alt": "On the left, Rares list, a two-column list of rare spawns, a timer bar on every row On the right, An alert, a banner over an empty screen announcing that a rare is up"
       },
       "data": [
         "rares.json"
@@ -674,15 +679,15 @@
     {
       "id": "lorebind",
       "name": "Lorebind",
-      "version": "1.1.0",
+      "version": "1.1.1",
       "apiVersion": 1,
-      "apiMinor": 3,
+      "apiMinor": 4,
       "author": "MarshalX",
       "description": "A browser for every item in the game, and the name service every other addon subscribes to.",
       "entry": "main.js",
       "preview": {
         "file": "preview.png",
-        "alt": "the Lorebind window browsing every epic piece of armor in the game. Under the title a row of tabs reads All, Armor, Weapon, Food, Quest, Other, with Armor open. Under that, six quality chips, each written in the game's own colour for its tier: grey Poor, white Common, green Uncommon, blue Rare, purple Epic and orange Legendary, with Epic alone lit in its own colour and outlined in it, and the other five dimmed. Then three labelled controls, Search, Slot and Sort: a search box reading name, id, kind or slot, and two dropdowns of the loader's own reading Any slot and Name, with an unticked box reading Only what I have seen under them. The body of the window is the game's own item art in a grid nine squares across and three and a bit rows deep, scrolling, every square edged in the purple the game paints an epic item with and carrying the same soft purple glow it gives that tier in a bag: rings, hoods, gauntlets, breastplates, legguards, boots, belts and helms. The third square of the first row, a hood, is ringed in gold, and the record under the grid is its: a larger copy of the same art beside Ashstalker Cowl written in that same purple, then a column of facts one to a line, the way the game's own item tooltip reads: Epic leather armor, helmet; 168 Armor; plus 8 Agility, plus 8 Stamina and plus 18 Warfare in green; Item level 31; Requires level 20; Ashstalker Kit; Soulbound; Honor price 900; and last, quieter than the rest, ashstalker_cowl and from the table. Two lines close the panel: Showing 120 of 156 items, narrow it to see the rest; and 831 named from the table, 1 from a roll, 1 by nothing, Seen 8."
+        "alt": "the Lorebind window browsing the game's epic armor: a grid of item art, each square edged in the game's own colour for its tier, with one item's record open under it"
       },
       "data": [
         "items.json"
@@ -739,15 +744,15 @@
     {
       "id": "purelight",
       "name": "Purelight",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "apiVersion": 1,
-      "apiMinor": 2,
+      "apiMinor": 4,
       "author": "MarshalX",
       "description": "Every effect in front of you that can actually be removed, worst first: on you, your pet, your group and your target, each tile naming who carries it.",
       "entry": "main.js",
       "preview": {
         "file": "preview.png",
-        "alt": "a strip of five square tiles, each with a countdown over the art and the name of whoever is carrying the effect under it. Bewitch on Bragg first at 15 seconds, a polymorph and the only control on the strip, which is what puts it ahead of everything else whatever is left on it. Then Blackrot on Marshal at 16 seconds and Hex of Anguish on Sunna at 10, both damage over time, both bordered in the shadow school and both carrying the art the game files under the ability that applied them. Then Temporal Exhaustion on Karrek at 10m, a green nature border around no picture at all, because its aura id is not an ability id and there is no file for it anywhere. Last, Frostveil on Emberlash, the enemy mage, at 41 seconds, which is on the strip for the opposite reason: it is a benefit on a hostile unit, so it can be stripped away rather than lifted off."
+        "alt": "a strip of five square tiles, each a countdown over the art with the name of whoever carries the effect under it. The borders colour by school, and one tile has no art at all."
       },
       "homepage": "https://github.com/MarshalX/world-of-claudecraft-addons",
       "tags": [
@@ -809,15 +814,15 @@
     {
       "id": "satchel",
       "name": "Satchel",
-      "version": "1.1.0",
+      "version": "1.1.1",
       "apiVersion": 1,
-      "apiMinor": 2,
+      "apiMinor": 4,
       "author": "MarshalX",
       "description": "One list of everything you own, across every character. Bags, bank and mailbox are recorded as they are read, so an item is one row with a total however many stacks and characters hold it, and hovering says who has how many and where. What a vendor would pay for a bag, a bank and the whole account.",
       "entry": "main.js",
       "preview": {
         "file": "preview.png",
-        "alt": "On the left, Everything you own, the Items tab of a panel headed Satchel (2 unread), over a search field reading every character, every store. Nine rows, one per item rather than one per stack, each with the game's own art, a total on the right and a faint line under it naming who holds them: Bristly Boar Hide 16, Marshal 9, Bruk 7; Chime Dust 35, Marshal 4, Sena 31; Chime Essence 6, Sena 6; Chunk Of Ore 6, Marshal 6; Copper Ore 181, Marshal 87, Bruk 54, +1 more; Game Meat 30, Marshal 18, Bruk 12; Ghostly Essence 6, Marshal 4, Sena 2; Glyphsteel Bar 9, Marshal 6, Sena 3; and Goldleaf Herb 66, Marshal 46, Sena 20, the last of them cut off by the scrolling list. Each row is washed to a width that is its share of the largest pile, so Copper Ore fills its row and Chime Essence is a stub. Marshal's 87 copper ore is three stacks in the bags and one in the bank counted as one figure, and Sena and Bruk are not logged in: their rows come from what was recorded the last time they were played. A footer reads KINDS 26, COPIES 747. On the right, One character, live, the Bags tab of the same panel, showing the character who is logged in. A selector reads Marshal (here), a slot bar reads 24 / 52 with 28 free, and a strip under it reads Live, MARKED 3 split 1 worn, SOCKETS 4 / 4, over a Carrying row drawn in the game's own coins: 1462 gold, 38 silver, 4 copper. Below that a grid of 52 squares eleven across, 24 of them holding the game's item art with a stack count in the corner (three of copper ore at 20, 20 and 7, two of iron ore at 20 and 16, hides, potions, herbs, cloth and meat) and the remaining 28 drawn as faint dashed outlines. Four squares are outlined warm: the three copper ore stacks, which are one item split over more than one cell, and a spare of the vest the character is wearing."
+        "alt": "On the left, Everything you own, one row an item, pooled across every character On the right, One character, live, the bags of the character in play, as a grid of squares"
       },
       "companions": [
         "lorebind"
@@ -872,15 +877,15 @@
     {
       "id": "trailmark",
       "name": "Trailmark",
-      "version": "1.2.0",
+      "version": "1.2.1",
       "apiVersion": 1,
-      "apiMinor": 2,
+      "apiMinor": 4,
       "author": "MarshalX",
       "description": "Where the thing your quest wants actually is: the zone, the distance, the way to turn and a world pin for every objective in your log, and who takes each quest that is ready.",
       "entry": "main.js",
       "preview": {
         "file": "preview.png",
-        "alt": "a panel headed Trailmark listing five outstanding quest objectives as filling bars, with two pins hanging over the world below it. Every row carries a zone, a distance in yards and an arrow for the way to turn to reach it. The first row is a quest with nothing left to do, Pelts for the Causeway, its bar full and reading Ready, with Hand in to Provisioner Hale as its heading and Mirefen Marsh, 213 yd down and to the left underneath; it carries no picture, because the game ships no portrait for that NPC and the empty slot is closed up rather than left blank. Then Bristly Boar Hide at 3 of 5, in Eastbrook Vale 105 yards straight ahead, carrying the game art for the hide; Mirefen Widow slain at 4 of 10 behind that widow's own portrait, and Widow Venom Sac at 2 of 6, both 180 yards straight back in Mirefen Marsh, a zone this character has never entered and where nothing at all is in scope. The venom sac row is drawn in a warm amber and its figure carries a plus, which is this addon saying the count is the shipped definition and therefore a lower bound, until the server says otherwise. The last row, The Codfather at 0 of 1, reads Nowhere on the map where the others name a zone, a distance and a direction: the Codfather is a fish, and fishing has no world node anywhere in the game to point at, so no mob drops it, no crate holds it and the honest answer is that there is nowhere to send you. The row still carries the fish's own art, which is the shape of the whole limit: the game knows exactly what the thing looks like and cannot say where it is. Below the panel, two square pins carrying the boar hide art stand over the two camps that drop it, the nearer one hanging lower in the view than the one another forty yards beyond it."
+        "alt": "a panel of the outstanding objectives in your quest log, each a bar saying how far along it is, where it is and which way to turn, with pins in the world below"
       },
       "data": [
         "quests.json"
@@ -945,15 +950,15 @@
     {
       "id": "veinsight",
       "name": "Veinsight",
-      "version": "1.1.2",
+      "version": "1.1.3",
       "apiVersion": 1,
-      "apiMinor": 2,
+      "apiMinor": 4,
       "author": "MarshalX",
       "description": "Every ore vein, wood stand and herb patch in the world, pinned where it stands and listed nearest first with a distance, a bearing and your own respawn timer. Says which ones no tool in your bags can open.",
       "entry": "main.js",
       "preview": {
         "file": "preview.png",
-        "alt": "On the left, The circuit, a panel headed Veinsight, with three pins standing out in the world below it. The panel lists the four gathering nodes in range in Eastbrook Vale, nearest first, under a note reading Timers are yours alone, nobody else can take a node off you, which is the line the panel is free to draw because nothing is being held back: everything in reach is on screen. Each row is a draining bar carrying what the node is, the zone, the distance in yards and an arrow for the way to turn to reach it: a wood stand 19 yards behind at 1m 1s, an ore vein 27 yards off to the upper left at 1m 23s, another ore vein 30 yards straight ahead reading Yours rather than a time, and a third at 33 yards with 9 seconds left, drawn in a warm amber because it is nearly back. Below the panel, one pin over each of the three ore veins: a square tile on a thin pillar in the game's own grey for ore, each standing at its own height on the slope. The left one is dimmed and reads 83s, since it is the vein just harvested and still coming back; the middle reads Yours; the right is dimmed and reads 9s. The pillars are drawn three different ways to say how the ground under each pin was arrived at, which is the one thing on screen that is never a fact: solid where this character's own harvest measured it, dashed where somebody standing beside it gave it away, and dotted where nothing better was known and the pin sits at the player's own height. On the right, The tool gate, a panel headed Veinsight, with three pins standing out in the world below it. The panel lists the four gathering nodes in range in Eastbrook Vale, nearest first, under a note reading Timers are yours alone, nobody else can take a node off you. Three of the four rows are herb patches, at 25, 32 and 40 yards, and where a countdown would be each one reads Tool: this character carries a pick and an axe and no sickle, so no amount of waiting will open any of them, and the panel says which of the two reasons a node is unavailable for rather than leaving an empty timer to be read as a bug. The fourth row is a wood stand 57 yards off to the right reading Yours, meaning it is standing there now and the axe in these bags opens it, which is what makes the other three mean something rather than reading as a panel that simply says Tool. Below the panel, one pin over each of the three herb patches, a square tile on a thin pillar in the game's own green for herbs. Every pillar here is dotted, unlike the circuit picture beside it, because a dotted pillar means the ground under the pin was never measured and the tile is hanging at the player's own height: nobody has harvested this run and nobody is standing on it, and a height is something a harvest leaves behind."
+        "alt": "On the left, The circuit, a panel of gathering nodes in range, with pins in the world On the right, The tool gate, the same panel, three nodes reading Tool rather than a time"
       },
       "data": [
         "nodes.json"
@@ -1039,15 +1044,15 @@
     {
       "id": "wayfarer",
       "name": "Wayfarer",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "apiVersion": 1,
-      "apiMinor": 2,
+      "apiMinor": 4,
       "author": "MarshalX",
       "description": "An atlas: where everything is, how far, and which way. Every row carries an arrow pointing the way you would have to turn to walk there, so the list is read by turning until one of them points up.",
       "entry": "main.js",
       "preview": {
         "file": "preview.png",
-        "alt": "four named pins standing over the world, each with its distance beside it, and a panel under them. The pins are labels on thin dotted pillars planted where those places are: Eastbrook Rest at 75 yd, Eastbrook at 63 yd and Forge at 53 yd across the middle distance, and Reliquary Hill at 112 yd higher up the view on a dashed pillar, dashed because a prowler standing on the hill gave that pin a measured height while the other three sit at the player's own. The panel is headed Eastbrook Vale, levels 1 to 7, which this addon resolved from the player's position rather than read anywhere; under it a quiet line reads Minimap: Eastbrook Vale, which is the game's own label. Then a strip of four tabs, All, Explore, Travel and Service, with All open. Then four rows, nearest first. Each begins with a small arrow pointing the way the player would have to turn to walk there, then the name over what kind of place it is, then a bar filled by how much of the three hundred yard draw distance you have already closed, so the nearest row is almost full and each one below it is shorter, and then the distance on the right: Wolf Run, a point of interest, explored, 10 yd, whose arrow points back down the way the player came; Forge, a crafting station, 53 yd; Eastbrook, a town, explored, 63 yd; and Eastbrook, a mailbox, 68 yd, the last three all ahead and their arrows pointing up. A dim footer closes it: 3 of 12 explored, 12 more in range, 12 pins max, heights estimated."
+        "alt": "four named pins standing over the world on thin pillars, each with its distance beside it, and a panel under them naming the zone and listing the nearest places in it."
       },
       "data": [
         "atlas.json"
@@ -1135,15 +1140,15 @@
     {
       "id": "wayline",
       "name": "Wayline",
-      "version": "1.0.1",
+      "version": "1.0.2",
       "apiVersion": 1,
-      "apiMinor": 2,
+      "apiMinor": 4,
       "author": "MarshalX",
       "description": "How far the next level is in time rather than in numbers: experience per hour over a rolling window, the kills and the time left to reach it, and a derived virtual level past the cap.",
       "entry": "main.js",
       "preview": {
         "file": "preview.png",
-        "alt": "On the left, Levelling, a Level 12 row filled to 61 percent, reading 6,240 of the 10,100 the game asks for. Under it three figures: a rate of 9,200 xp/hr measured over the last ten minutes of play, 27 kills left at the average award of the eight in that window, and 25m to go at that pace. A Rested row below them holds 0.8 levels, 16 bubbles, banked against a cap of one and a half levels. On the right, Past the cap, the same panel on a character at the cap. The level row is full and reads max, with 90,379 earned past level 20 underneath, because the experience bar the game draws is frozen at 0 for the rest of that character's life. The three figures now count toward virtual 24 instead, and a Virtual 23 row at the bottom holds 13,587 of the 30,879 that level asks for, worked out here from the lifetime total the game does publish. The Rested row reads 0.0 levels, which is not an oversight: the pool stops filling at the cap."
+        "alt": "On the left, Levelling, a level bar over a rate, kills left and time left. On the right, Past the cap, the same panel at the cap, with a derived virtual level added."
       },
       "homepage": "https://github.com/MarshalX/world-of-claudecraft-addons",
       "tags": [
