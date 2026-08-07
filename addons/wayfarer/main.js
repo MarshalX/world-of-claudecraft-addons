@@ -1,77 +1,28 @@
 /// <reference types="@woc-addons/types" />
 
-// Wayfarer: an atlas. Where everything is, how far, WHICH WAY, and which zone you are in.
+// Wayfarer: an atlas. Where everything is, how far, which way, and which zone you are in.
 //
-// The direction is the reading this panel is built around, and it is the one an atlas made
-// of distances alone cannot give: `Forge, 53 yd` is a fact you cannot walk on. Every row
-// carries an arrow pointing at its place, turned on the frame loop from the player's own
-// `facing`, so the list is read by turning until one of them points up. See `bearingTo`,
-// which is the whole of the arithmetic, and `BEARING_SIGN`, which is the only part of it
-// that is a claim about the game rather than a subtraction.
+// The zone is resolved from this addon's own rectangles rather than from the loader, and
+// the refusal is the feature: the game's `zoneAt(x, z)` clamps to a nearest band, so it
+// names a real overworld zone for a player standing in a dungeon. `zoneContaining` below
+// is its strict sibling, copied from `src/sim/data.ts`.
 //
-// The arrow is the CHARACTER's heading and not the camera's, which are different questions
-// and only the first is answerable: the camera's yaw lives on the renderer and nothing
-// publishes it. So an arrow points up when the character would walk there, which is what
-// an atlas is for. The heading it reads is also the last one the SERVER confirmed, since
-// the client predicts a held turn locally and applies that to the model rather than to the
-// entity, so an arrow lags a fast spin by a round trip and settles the moment it stops.
+// An arrow is the CHARACTER's heading, not the camera's. The camera's yaw is on the
+// renderer and nothing publishes it, and the heading itself is the last one the server
+// confirmed, so an arrow lags a fast spin by a round trip.
 //
-// The zone is resolved from position, and the refusal is the feature.
+// `world.zone` is a LOCALIZED label. Draw it, never compare it.
 //
-// The loader publishes no zone id, because the game's own `zoneAt(x, z)` is not a pure
-// rectangle test: it carries a clamping fallback to the southmost band containing `z` and
-// then to the northmost zone, so `zoneAt(9999, 9999)` answers `drakelands` rather than
-// nothing. Shipping that would name a real overworld zone for every player standing in a
-// dungeon, an arena or a delve.
+// A pin's height is always an inference: the atlas carries x and z and no y, and no
+// server sends ground height. Each pillar says which answer it stands on.
 //
-// So this addon carries the rectangles itself and copies the game's other resolver,
-// `zoneContaining` (`src/sim/data.ts`), which is the one written for callers that must
-// tell the open world from the instanced plane.
-//
-// `world.zone` is never compared against anything. It is the game's own localized minimap
-// label, so a comparison against a string in this file would work on an English client and
-// match nothing on any other. It is drawn under the resolved heading, and it is the more
-// truthful of the two underground, where it names the delve and the rectangles have
-// nothing to say.
-//
-// The atlas is a file: `atlas.json`, declared as `data` in the manifest, fetched by the
-// loader at install and read back through `woc.data`, which hands back `unknown`. What is
-// in it, what was deliberately left out, and which game release it was read from all live
-// in `generate.mjs` and in the file's own `source` block rather than being restated here.
-// The one part of its shape that `zoneContaining` below cannot be read without: Farshore
-// Isle shares Eastbrook Vale's z band at x 180 to 540, so a test on z alone would put a
-// player standing on Farshore in Eastbrook.
-//
-// A pin's height is always an inference, because the atlas carries x and z and no y:
-// ground height is a function of a world seed no addon can call and no server sends. Each
-// pin's pillar says which answer it stands on, `sampled` or `guessed`.
-//
-// It publishes `zone` on the bus, in ONE SHAPE whether or not there is a zone to name:
-// `{ place, id, name, levelRange }`, where `place` is 'zone', 'instance', 'nowhere' or
-// 'unknown' and the other three are null on any of the last three. A subscriber can
-// therefore clear its own header rather than keep showing a zone the player has left, AND
-// say which of the three reasons it is doing so, which is the distinction this whole addon
-// is built to draw and which a bare null threw away. Nobody is obliged to listen and
-// silence is ordinary; see `zonePayload`.
+// The atlas file is `atlas.json`; see `generate.mjs` for what is in it and why.
 
 const DATA_FILE = 'atlas.json';
 const MS_PER_SECOND = 1000;
 const FRAME_WIDTH = 320;
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
-/** Half a turn in degrees, which is what converts a radian bearing into a rotation. */
-const HALF_TURN_DEG = 180;
-/**
- * Which way the screen turns against the world.
- *
- * `facing` is radians with 0 at +z and `atan2(dx, dz)` reads the same way, so subtracting
- * one from the other is the bearing relative to where the player is looking. The sign
- * flips because a player's RIGHT hand is `forward x up`, which for forward +z and up +y
- * is -x: a point at a positive relative bearing stands to the player's left and its arrow
- * therefore turns anticlockwise. Checked against the stage, whose camera is the loader's
- * own projector rather than a stub, and worth one look at a live client.
- */
-const BEARING_SIGN = -1;
 /** How far an arrow must have turned before it is worth writing a transform again. */
 const BEARING_STEP_DEG = 1;
 const ARROW_PX = 13;
@@ -85,7 +36,7 @@ const SAMPLE_YARDS = 6;
 /** A level range is a floor and a ceiling, and a row carrying anything else is broken. */
 const LEVEL_PAIR = 2;
 
-/** How many pins may be in the world at once, drawn as a number when it bites. */
+/** How many pins may be in the world at once. */
 const MAX_PINS = 12;
 /** How close two pins may land on screen before the farther one is dropped. */
 const PIN_SPACING_PX = 56;
@@ -96,18 +47,10 @@ const CHIP_FONT_PX = 11;
 /** What a chip is drawn on, so the world behind it cannot take the label away. */
 const CHIP_BACKDROP = 'rgb(6 6 10 / 55%)';
 
-const DEFAULT_DISTANCE = 300;
-const DEFAULT_LENGTH = 8;
-
 /** An empty count, and a whole one: a full bar, a one-item floor, a first character. */
 const NONE = 0;
 const FULL = 1;
 
-/** The topic this addon publishes on, and the question anybody may ask it with. */
-const ZONE_TOPIC = 'zone';
-const ASK_TOPIC = 'zone:ask';
-
-/** Category name to the id of the manifest setting that turns it on. */
 const CATEGORY_SETTING = {
   town: 'show-towns',
   poi: 'show-points',
@@ -118,12 +61,8 @@ const CATEGORY_SETTING = {
 };
 
 /**
- * The views the strip offers, each over the categories a player groups together.
- *
- * `icon` is a name in the GAME's own icon set rather than anything kept here: see
- * `gameGlyph`. All four are in the HUD markup the game ships, so all four are drawn
- * somewhere in the document once it has mounted; a name the game only builds on demand
- * would leave a slot empty for the rest of the session.
+ * The views the strip offers. `icon` must be one the HUD markup SHIPS, since `gameGlyph`
+ * clones a drawn node: a name the game only builds on demand leaves the slot empty forever.
  */
 const VIEWS = [
   { id: 'all', label: 'All', icon: 'map', categories: null },
@@ -135,7 +74,6 @@ const VIEWS = [
 /** Which view is open. Deliberately not persisted: it is navigation, not a setting. */
 let view = VIEWS[0].id;
 
-/** What each category is called on a row. */
 const CATEGORY_LABEL = {
   town: 'Town',
   poi: 'Point of interest',
@@ -145,41 +83,36 @@ const CATEGORY_LABEL = {
   station: 'Crafting station',
 };
 
-/** How a pin's pillar is drawn for each way its height was arrived at. */
 const PILLAR_STYLE = { sampled: 'dashed', guessed: 'dotted' };
 
-/** What each of those two is called when a tooltip says it in words. */
 const HEIGHT_WORDS = {
   sampled: 'sits at the height of something that was standing there',
   guessed: 'sits at your own height, because nothing was near enough to measure',
 };
 
-/** The three answers to "where is the player" that are not a zone. */
 const UNKNOWN_PLACE = Object.freeze({ kind: 'unknown', zone: null });
 const INSTANCE_PLACE = Object.freeze({ kind: 'instance', zone: null });
 const NOWHERE_PLACE = Object.freeze({ kind: 'nowhere', zone: null });
 
 /**
- * The atlas, empty until the data file lands. An addon's first line runs at document-start
- * and `woc.data` is a promise, so every session begins without one. Nothing is
- * special-cased: no rectangle contains anything in an empty list, so the place resolves to
- * unknown and the panel says it is still reading.
+ * Empty until the data file lands, which every session begins without. Nothing is
+ * special-cased: no rectangle contains anything in an empty list.
  */
 let zones = [];
-/** The world's own strip width and the base of the instanced plane, from the file. */
 let bounds = null;
-/** Every place in the file, flattened into rows with its zone resolved once. */
 let fixed = [];
-
-/** Entry id to its row, and to its pin, for the ones currently drawn. */
-const rows = new Map();
-const pins = new Map();
 
 /** Entry id to a SAMPLED height, kept once found. A guess is never stored: see `heightFor`. */
 const heights = new Map();
 
 /** The place and zone id last published, so a repeat of the same answer is not re-emitted. */
 let publishedKey = '';
+
+/**
+ * Per-sync context, which is the one thing a list's `update` cannot be handed: it takes the
+ * item and its index and this is neither. Named apart from the `visited` passed around below.
+ */
+let syncVisited = null;
 
 /** A number from the file, or the fallback for a field the file left out. */
 function orElse(value, fallback) {
@@ -189,7 +122,7 @@ function orElse(value, fallback) {
   return fallback;
 }
 
-/** One point of interest, or null. `id` is the FROZEN id a deed visit keys on. */
+/** `id` is FROZEN content: a deed visit keys on it, and the game re-words labels freely. */
 function readPoi(value) {
   if (typeof value !== 'object' || value === null) {
     return null;
@@ -203,10 +136,8 @@ function readPoi(value) {
 }
 
 /**
- * One zone rectangle, or null for a row that could never answer a containment test. The x
- * bounds are resolved here rather than at every test, because a zone without them is the
- * original full-width strip rather than a zone with no width: reading a missing bound as
- * zero would squeeze every strip zone into the world's centre line.
+ * One zone rectangle, or null for a row that could never answer a containment test. A zone
+ * with no x bounds is the full-width strip, NOT a zone of zero width.
  */
 function readZone(value, strip) {
   if (typeof value !== 'object' || value === null) {
@@ -234,7 +165,6 @@ function readZone(value, strip) {
   };
 }
 
-/** One graveyard or mailbox, which is an id, a label and a point and nothing else. */
 function readPlace(value) {
   if (typeof value !== 'object' || value === null) {
     return null;
@@ -247,7 +177,6 @@ function readPlace(value) {
   return null;
 }
 
-/** One end of a portal, which is a bare point. */
 function readSide(value) {
   if (typeof value !== 'object' || value === null) {
     return null;
@@ -274,7 +203,6 @@ function readPortal(value) {
   return null;
 }
 
-/** The world constants, or null: without them no rectangle can be resolved at all. */
 function readBounds(value) {
   if (typeof value !== 'object' || value === null) {
     return null;
@@ -287,7 +215,6 @@ function readBounds(value) {
   return null;
 }
 
-/** The file's five parts, or null when it is not the shape it claims to be. */
 function readAtlas(file) {
   if (typeof file !== 'object' || file === null) {
     return null;
@@ -316,10 +243,8 @@ function keep(listed, read, what) {
 }
 
 /**
- * The zone whose rectangle literally contains a point, or null for a point in none. The
- * game's `zoneContaining`, copied: half-open on both axes, first match wins, and no
- * fallback. Its sibling `zoneAt` clamps to a nearest band and is the one this addon must
- * not be. Everything that reads this has to handle null.
+ * The zone containing a point, or null. Half-open on BOTH axes and no fallback, unlike the
+ * game's `zoneAt`. The x test is not optional: Farshore Isle shares Eastbrook Vale's z band.
  */
 function zoneContaining(x, z) {
   for (const zone of zones) {
@@ -330,7 +255,6 @@ function zoneContaining(x, z) {
   return null;
 }
 
-/** The zone a fixed point sits in, as an id, or null for a point in none of them. */
 function zoneIdAt(x, z) {
   return zoneContaining(x, z)?.id ?? null;
 }
@@ -394,7 +318,6 @@ function portalEntries(portal) {
   });
 }
 
-/** Everything in the file, flattened into rows, with each one's zone resolved once. */
 function buildFixed(atlas) {
   const built = [];
   for (const zone of zones) {
@@ -420,31 +343,14 @@ function adopt(atlas) {
   fixed = buildFixed(atlas);
 }
 
-function settingFlag(id, fallback) {
-  const value = woc.settings[id];
-  if (typeof value === 'boolean') {
-    return value;
-  }
-  return fallback;
-}
-
-function settingNumber(id, fallback) {
-  const value = woc.settings[id];
-  if (typeof value === 'number' && Number.isFinite(value)) {
-    return value;
-  }
-  return fallback;
-}
-
 function drawDistance() {
-  return settingNumber('draw-distance', DEFAULT_DISTANCE);
+  return woc.settings['draw-distance'];
 }
 
 function listLength() {
-  return Math.max(FULL, Math.round(settingNumber('list-length', DEFAULT_LENGTH)));
+  return Math.max(FULL, Math.round(woc.settings['list-length']));
 }
 
-/** The heading, the game's own label under it, the strip, the rows, and the footer. */
 const head = document.createElement('div');
 head.className = 'woc-wf-head';
 head.style.fontWeight = '600';
@@ -469,15 +375,8 @@ note.className = 'woc-wf-note';
 note.style.opacity = '0.6';
 
 /**
- * A frame rather than a window, because the player toggles it, and comfortable because
- * that is the scale the game draws its own panels at: a panel that gave the tap-target
- * floor up would be a third smaller than the game's windows beside it, and nothing here
- * is read mid-fight tightly enough to be worth that.
- *
- * Left at the frame default of not resizable, and it should stay there: the rows do not
- * reflow with the box, since how many of them there are is a number the player sets, and a
- * handle over content that ignores the box either does nothing or clips it. The honest
- * control is the `list-length` setting.
+ * Not resizable, and it should stay that way: the row count is a setting rather than a
+ * function of the box, so a drag handle would either do nothing or clip.
  */
 const frame = woc.ui.frame({
   id: 'atlas',
@@ -496,16 +395,8 @@ frame.body.appendChild(note);
 /**
  * One of the game's own icons, cloned out of the running HUD, or null before there is one.
  *
- * The game keeps its icon set as markup inside a module that is not on `__game`, serves no
- * file for any of them and publishes no sprite, so there is nothing here to point a URL at
- * and nothing to import. What it does do is hydrate every `[data-icon]` in the document
- * into an `<svg class="ui-icon">` as the HUD mounts, which makes the DRAWN node reachable:
- * a clone of that is the game's glyph itself rather than a copy of one kept in this file,
- * and it follows the game rather than going stale the first time one is redrawn.
- *
- * Null for the whole of every session's first seconds, since an addon's first line runs at
- * document-start and the hydration is a world-entry thing. `fillGlyphs` is what keeps
- * asking rather than this answering a placeholder.
+ * The icon set is markup in a module that is not on `__game` and no file is served for any
+ * of it, so a clone of the hydrated node is the only route. Null until the HUD mounts.
  */
 function gameGlyph(name) {
   const drawn = document.querySelector(`[data-icon="${name}"] > svg`);
@@ -514,18 +405,16 @@ function gameGlyph(name) {
   }
   const copy = drawn.cloneNode(true);
   copy.classList.add('woc-wf-glyph');
-  // Which of the game's icons this is, so the strip can be read back without recognising a
-  // path. The game's own hydration keys on `data-icon`, so this deliberately is not that:
-  // a second element claiming to be one would be hydrated again on the next HUD mount.
+  // Deliberately not `data-icon`: the game's hydration keys on that and would redraw into
+  // this clone on the next HUD mount.
   copy.setAttribute('data-from', name);
-  // The game's own `.ui-icon` rule says exactly this. Written again so a strip of blank
-  // squares is not what a player gets if that rule is ever scoped tighter than it is now.
+  // The game's own `.ui-icon` sizing, restated so a tighter scope there cannot blank the strip.
   copy.style.width = '1em';
   copy.style.height = '1em';
   return copy;
 }
 
-/** The strip's buttons, by view id, so a glyph can be filled in once one exists. */
+/** Held by view id so a glyph can be dropped in once the HUD has one. */
 const tabButtons = new Map();
 
 /** Light the open one, and say which it is rather than only colouring it. */
@@ -538,14 +427,8 @@ function paintTabs() {
 }
 
 /**
- * One tab, wearing the kit's own classes so it answers to the frame's density.
- *
- * Hand-rolled rather than `ui.tabs`, which is the kit's strip and would ordinarily be the
- * right call: its tabs carry a label and nothing else, and the glyph here has to be a LIVE
- * node rather than a URL, both so `fill="currentColor"` inherits the strip's own colour on
- * either side of the active state and so it can be dropped in whenever the HUD turns up.
- * `.woc-tabs`, `.woc-tab` and `.woc-tab-active` are published for an addon to wear, so
- * what is rebuilt here is the click handling and nothing about how it looks.
+ * Hand-rolled rather than `ui.tabs`, whose tabs take a label and nothing else: the glyph has
+ * to be a LIVE node, both to inherit `currentColor` and to be dropped in once the HUD mounts.
  */
 function createTab(spec) {
   const button = document.createElement('button');
@@ -576,11 +459,8 @@ for (const spec of VIEWS) {
 paintTabs();
 
 /**
- * Put the game's own glyph in front of any tab still without one.
- *
- * Called from the redraw rather than once at build, because the HUD mounts long after an
- * addon's first line and the icons do not exist until it does. It stops asking per tab as
- * soon as that tab has one, so the steady state is four `has` checks a second.
+ * From the redraw rather than once at build, because the HUD mounts long after an addon's
+ * first line. Each tab stops asking once it has one.
  */
 function fillGlyph(spec) {
   const button = tabButtons.get(spec.id);
@@ -599,7 +479,6 @@ function fillGlyphs() {
   }
 }
 
-/** The categories the open view shows, or null for the one that shows every category. */
 function viewCategories() {
   return VIEWS.find((spec) => spec.id === view)?.categories ?? null;
 }
@@ -614,10 +493,8 @@ function player() {
 }
 
 /**
- * Where the player is: a zone, an instance, nowhere, or not knowable yet. The instance
- * check comes first and is deliberately wider than the game's own `DUNGEON_X_THRESHOLD`:
- * everything instanced is past `INSTANCE_X_BASE`, and refusing a little early costs
- * nothing, because there is no authored land out there.
+ * Where the player is: a zone, an instance, nowhere, or not knowable yet. The instance test
+ * is deliberately wider than the game's `DUNGEON_X_THRESHOLD`; there is no land out there.
  */
 function currentPlace() {
   const me = player();
@@ -632,25 +509,6 @@ function currentPlace() {
     return NOWHERE_PLACE;
   }
   return { kind: 'zone', zone };
-}
-
-/**
- * How far the player would have to turn to face a point, in degrees clockwise, or null
- * with nobody to be facing anything.
- *
- * This is the one reading on the panel that is not a distance, and it is what makes the
- * list a direction rather than a table: a row says how far AND which way. `facing` rides
- * the snapshot for every entity and reads in the same convention `atan2(dx, dz)` does, so
- * the whole of it is one subtraction. `BEARING_SIGN` carries why the screen turns the
- * other way.
- */
-function bearingTo(entry) {
-  const me = player();
-  if (me === null || !Number.isFinite(me.facing)) {
-    return null;
-  }
-  const relative = Math.atan2(entry.x - me.pos.x, entry.z - me.pos.z) - me.facing;
-  return (BEARING_SIGN * relative * HALF_TURN_DEG) / Math.PI;
 }
 
 /** The arrow, which is ours: nothing in the game points anywhere. */
@@ -671,16 +529,6 @@ function createArrow() {
   return svg;
 }
 
-/** Yards from the player to a point, flat, which is the distance the game measures. */
-function distanceTo(entry) {
-  const me = player();
-  if (me === null) {
-    return null;
-  }
-  return Math.hypot(me.pos.x - entry.x, me.pos.z - entry.z);
-}
-
-/** The y of the nearest entity standing over a point, or null for nothing near it. */
 function sampleHeight(entry) {
   let best = null;
   let nearest = SAMPLE_YARDS;
@@ -695,9 +543,8 @@ function sampleHeight(entry) {
 }
 
 /**
- * The height under a point and where that number came from, or null with no world. A
- * sampled height is captured once and kept; a guess is recomputed every time, because it
- * is the player's own height and the player moves.
+ * The height under a point and where it came from, or null with no world. A sample is kept;
+ * a guess is recomputed, because it is the player's own height and the player moves.
  */
 function heightFor(entry) {
   const known = heights.get(entry.id);
@@ -730,25 +577,17 @@ function provenance(entry) {
   return heightFor(entry)?.from ?? 'guessed';
 }
 
-/** `forge` reads as `Forge`. The game publishes a station's TYPE id and no name. */
-function titleCase(id) {
-  return id
-    .split('_')
-    .map((word) => word.slice(NONE, FULL).toUpperCase() + word.slice(FULL))
-    .join(' ');
-}
-
 /**
- * The crafting stations, from the loader rather than from the file. `world.stations` is
- * the game's own table, copied and frozen, and every row carries the zone id this addon
- * filters on. It is empty rather than null before world entry.
+ * The crafting stations, from the loader rather than the file. Empty, not null, before world
+ * entry. The title-cased type id is a LAST RESORT, and each row says so on its second line:
+ * the game publishes no display name for a station at all.
  */
 function stationEntries() {
   const built = [];
   for (const station of woc.world.stations) {
     built.push({
       id: `station:${station.id}`,
-      label: titleCase(station.type),
+      label: woc.fmt.titleCase(station.type),
       category: 'station',
       zone: station.zoneId,
       x: station.pos.x,
@@ -761,15 +600,11 @@ function stationEntries() {
 }
 
 /**
- * Whether a row is shown, which is two filters rather than one.
- *
- * The setting is the player saying they never want to see mailboxes; the open tab is them
- * looking at one group for a moment. Both narrow the same list and the footer's counts are
- * taken after both, so everything on the panel is answering about the tab in front of you
- * rather than about a list you would have to switch tabs to see.
+ * Two filters, not one: the setting is permanent and the open tab is momentary. The footer's
+ * counts are taken after both, so the whole panel answers about the tab in front of you.
  */
 function categoryAllows(entry) {
-  if (!settingFlag(CATEGORY_SETTING[entry.category], true)) {
+  if (!woc.settings[CATEGORY_SETTING[entry.category]]) {
     return false;
   }
   const only = viewCategories();
@@ -777,10 +612,8 @@ function categoryAllows(entry) {
 }
 
 /**
- * Everything worth a row right now, nearest first. Filtered to the zone the player is
- * standing in, which is why the whole list empties inside an instance rather than offering
- * the nearest overworld anything. A point across a border is genuinely left out, and that
- * is the cost of a list whose heading is a zone.
+ * Everything worth a row, nearest first, and only from the zone the player stands in. A
+ * point across a border is genuinely left out: that is the cost of a list headed by a zone.
  */
 function inRange() {
   const place = currentPlace();
@@ -790,7 +623,7 @@ function inRange() {
   const reach = drawDistance();
   const shown = [];
   for (const entry of [...fixed, ...stationEntries()]) {
-    const away = distanceTo(entry);
+    const away = woc.world.distanceTo(entry);
     const here = entry.zone === place.zone.id && categoryAllows(entry);
     if (here && away !== null && away <= reach) {
       shown.push({ entry, away });
@@ -800,13 +633,9 @@ function inRange() {
 }
 
 /**
- * The visited set, or null when the deed sheet cannot be read yet.
- *
- * The counters are what says whether it can, and the visited set cannot say it for itself:
- * an empty one is what an explorer with no marks looks like and also what the loader hands
- * back for a world carrying no `deedStats` at all. The game's own `freshDeedStats()`
- * writes every counter key at 0 client-side, so a counters record with no keys is a sheet
- * that has not arrived rather than a character who has done nothing.
+ * The visited set, or null when the deed sheet cannot be read yet. The COUNTERS decide that,
+ * not the set: an empty set is both a fresh explorer and a missing sheet, while the game
+ * writes every counter key at 0 client-side, so an empty counters record means not arrived.
  */
 function visitedSet() {
   const stats = woc.world.character?.deedStats;
@@ -820,7 +649,6 @@ function visitedSet() {
   return stats.visited;
 }
 
-/** How many of a zone's points this character has stood in, or null for unreadable. */
 function exploredIn(zone, visited) {
   if (visited === null) {
     return null;
@@ -828,7 +656,6 @@ function exploredIn(zone, visited) {
   return zone.pois.filter((poi) => visited.has(visitKey(zone.id, poi.id))).length;
 }
 
-/** The heading: the resolved zone and its level range, or the refusal in words. */
 function zoneHeading() {
   const place = currentPlace();
   if (place.kind === 'zone') {
@@ -868,7 +695,6 @@ function emptyNote() {
   return `Nothing within ${String(Math.round(drawDistance()))} yd of you in ${place.zone.name}.`;
 }
 
-/** What the panel says about its own explored count, in a state or in a number. */
 function exploredPart(zone, visited) {
   const explored = exploredIn(zone, visited);
   if (explored === null) {
@@ -877,18 +703,10 @@ function exploredPart(zone, visited) {
   return `${String(explored)}/${String(zone.pois.length)} explored`;
 }
 
-/**
- * The limits worth saying out loud, in a number where there is one.
- *
- * One line of clauses rather than the four sentences this used to be. All of it is still
- * here, including the two that are constants: a limit the player cannot see is a limit
- * they read the panel as not having, and "heights estimated" is the difference between a
- * pin somebody trusts and one they should not. What changed is that a note ABOUT the
- * readout stopped being drawn at the same weight and length as the readout.
- */
+/** Every limit, including the two constant ones: a limit nobody can see reads as no limit. */
 function limits(counts, zone, visited) {
   const parts = [];
-  if (settingFlag('show-visited', true)) {
+  if (woc.settings['show-visited']) {
     parts.push(exploredPart(zone, visited));
   }
   if (counts.total > counts.listed) {
@@ -909,7 +727,6 @@ function noteText(counts, visited) {
   return limits(counts, place.zone, visited).join(' · ');
 }
 
-/** What one row says about a deed visit, which only a point of interest has. */
 function visitLine(entry, visited) {
   if (entry.visit === null) {
     return { text: 'Nothing is marked for standing here', tone: 'muted' };
@@ -923,7 +740,6 @@ function visitLine(entry, visited) {
   return { text: `Stand within ${String(VISIT_RADIUS)} yd to mark it explored` };
 }
 
-/** The extra line a category earns, or null where it earns none. */
 function kindLine(entry) {
   if (entry.category === 'portal' && entry.leadsTo !== null) {
     return { text: `Steps you through to ${zoneName(entry.leadsTo)}`, tone: 'muted' };
@@ -965,13 +781,8 @@ function detailFor(entry, visited) {
 }
 
 /**
- * A row: an arrow pointing at the place, and the kit's bar saying what and how far.
- *
- * The arrow sits BESIDE the bar rather than in its icon slot, because that slot takes a
- * URL and this has to be an element: it is rewritten sixty times a second as the player
- * turns, and a data URI would be an image decode per row per frame to say the same
- * triangle is now pointing somewhere else. `bar.el` goes wherever an addon puts it, so a
- * wrapper holding the two is the ordinary use of it rather than a way around anything.
+ * The arrow sits BESIDE the bar rather than in its icon slot: that slot takes a URL, and this
+ * is rewritten sixty times a second, which as a data URI is an image decode per row per frame.
  */
 function createRow(entry) {
   const row = document.createElement('div');
@@ -988,18 +799,16 @@ function createRow(entry) {
   row.appendChild(arrow);
   row.appendChild(bar.el);
   woc.ui.tooltip(row, () => rowTooltip(entry, visitedSet()));
-  return { entry, el: row, bar, arrow, turned: null };
+  // The list removes the wrapper it inserted; the bar inside it is ours to take down.
+  return { entry, el: row, bar, arrow, turned: null, destroy: () => bar.destroy() };
 }
 
 /**
- * Point one row's arrow, and write nothing where it has not really moved.
- *
- * A degree is under the width of the arrow's own tip at this size, so anything finer is a
- * style write nobody can see. Null hides it rather than leaving it pointing at whatever it
- * last knew, which before world entry is nowhere at all.
+ * A degree is under the arrow's own tip at this size, so anything finer is a style write
+ * nobody can see. Null HIDES it rather than leaving it pointing at whatever it last knew.
  */
 function turnArrow(row) {
-  const degrees = bearingTo(row.entry);
+  const degrees = woc.world.bearingTo(row.entry);
   if (degrees === null) {
     row.arrow.style.visibility = 'hidden';
     return;
@@ -1013,10 +822,8 @@ function turnArrow(row) {
 }
 
 /**
- * A pin: the name on a chip, standing on a pillar whose line style is its height's
- * provenance. Written rather than drawn as a tile, because there is no timer here and a
- * tile is a timer shape. Nothing is hoverable either way, since the loader makes every
- * anchor pointer-transparent, so the words explaining a pin live on its row in the list.
+ * Written rather than drawn as a `ui.tile`, which is a timer shape and there is no timer here.
+ * Nothing on a pin is hoverable: every anchor is pointer-transparent, so the words live on the row.
  */
 function createChip(entry) {
   const chip = document.createElement('div');
@@ -1026,23 +833,14 @@ function createChip(entry) {
   chip.style.fontSize = `${String(CHIP_FONT_PX)}px`;
   chip.style.padding = '1px 5px';
   chip.style.borderRadius = '3px';
-  // A backdrop and a shadow, which is what makes a label READABLE over the world rather than
-  // over a screenshot of a dark stage. Nothing in the loader's sheet reaches an addon's own
-  // element, so a chip with padding and a radius and no fill is a word floating on whatever the
-  // player is standing in front of. The same two values facemark gives its plates, for the same
-  // reason.
+  // No loader rule reaches an addon's own element, so without a fill and a shadow this is a
+  // word floating on whatever the player happens to be standing in front of.
   chip.style.background = CHIP_BACKDROP;
   chip.style.textShadow = '0 1px 2px rgb(0 0 0 / 90%)';
   return chip;
 }
 
-/**
- * The yardage under the name, which is what turns a label into a marker.
- *
- * Its own node so the pin's distance can be rewritten without touching the name, and
- * quieter than the name because the name is what you are looking for and the number is
- * what you check once you have found it.
- */
+/** Its own node, so the distance is rewritten without touching the name beside it. */
 function createRange() {
   const range = document.createElement('span');
   range.className = 'woc-wf-range';
@@ -1074,18 +872,18 @@ function createPin(entry) {
   stack.appendChild(pillar);
   const anchor = woc.ui.anchor3d(() => pointOf(entry), { className: 'woc-wf-anchor' });
   anchor.el.appendChild(stack);
-  return { entry, anchor, stack, pillar, range, style: '', shown: '', said: '' };
-}
-
-function dropPin(id, pin) {
-  pin.anchor.destroy();
-  pins.delete(id);
-}
-
-function clearPins() {
-  for (const [id, pin] of pins) {
-    dropPin(id, pin);
-  }
+  // The stack hangs off the anchor, so the anchor is the whole teardown. The list has no
+  // parent here and removes nothing.
+  return {
+    entry,
+    anchor,
+    stack,
+    pillar,
+    range,
+    style: '',
+    said: '',
+    destroy: () => anchor.destroy(),
+  };
 }
 
 function paintPin(pin, away) {
@@ -1102,41 +900,21 @@ function paintPin(pin, away) {
   }
 }
 
-function syncPins(entries) {
-  const shown = new Map(entries.map((one) => [one.entry.id, one]));
-  for (const [id, pin] of pins) {
-    if (!shown.has(id)) {
-      dropPin(id, pin);
-    }
-  }
-  for (const [id, one] of shown) {
-    let pin = pins.get(id);
-    if (pin === undefined) {
-      pin = createPin(one.entry);
-      pins.set(id, pin);
-    }
+/**
+ * No `parent`, unlike the row list below: each pin carries its own `ui.anchor3d` and the
+ * loader is already placing it, so there is nothing here to insert or to order.
+ */
+const pinList = woc.ui.list({
+  key: (one) => one.entry.id,
+  create: (one) => createPin(one.entry),
+  update: (pin, one) => {
     paintPin(pin, one.away);
-  }
-}
-
-/** Put a row at its position, and only when it is not already there. */
-function putAt(el, at) {
-  if (list.children[at] !== el) {
-    list.insertBefore(el, list.children[at] ?? null);
-  }
-}
+  },
+});
 
 /**
- * How full a row is: how much of the way there you already are, so a place at your feet is
- * a full bar and one at the edge of your reach is nearly empty.
- *
- * This used to be the other way round, on the reasoning that the kit's `fraction` is how
- * much is LEFT and what is left of a walk is the distance still to cover. That is true and
- * it read as a fault. The list is sorted nearest first, so a fill growing DOWN it put the
- * loudest mark on the row that mattered least and made the strongest signal on the panel
- * disagree with its own ordering; every row also broke off mid-name at a different point,
- * which is what made a column of them look like damage rather than like a measurement.
- * Filling toward arrival is the same number read the other way and agrees with the sort.
+ * How much of the way there you already are, which is the inverse of the kit's usual
+ * "how much is LEFT": the list is sorted nearest first and the fill has to agree with it.
  */
 function fillFor(away) {
   const reach = Math.max(FULL, drawDistance());
@@ -1144,10 +922,8 @@ function fillFor(away) {
 }
 
 /**
- * Whether this row is about to earn the player something, which is the only urgency an
- * atlas has: a point of interest they have not stood in, close enough that walking the
- * last few yards marks it explored. Anything else is 'default', because a mailbox is not
- * more urgent for being near.
+ * The only urgency an atlas has: a point not yet stood in, near enough to be worth the walk.
+ * A mailbox is not more urgent for being close.
  */
 function toneFor(entry, away, visited) {
   const unearned = entry.visit !== null && visited !== null && !visited.has(entry.visit);
@@ -1157,59 +933,47 @@ function toneFor(entry, away, visited) {
   return 'default';
 }
 
-function paintRow(row, one, visited) {
+function paintRow(row, one) {
   row.bar.update({
     fraction: fillFor(one.away),
     value: `${String(Math.round(one.away))} yd`,
-    detail: detailFor(one.entry, visited),
-    tone: toneFor(one.entry, one.away, visited),
+    detail: detailFor(one.entry, syncVisited),
+    tone: toneFor(one.entry, one.away, syncVisited),
   });
   turnArrow(row);
 }
 
-function dropRow(id, row) {
-  row.bar.destroy();
-  row.el.remove();
-  rows.delete(id);
-}
-
-function syncRows(entries, visited) {
-  const shown = new Set(entries.map((one) => one.entry.id));
-  for (const [id, row] of rows) {
-    if (!shown.has(id)) {
-      dropRow(id, row);
-    }
-  }
-  for (const [at, one] of entries.entries()) {
-    let row = rows.get(one.entry.id);
-    if (row === undefined) {
-      row = createRow(one.entry);
-      rows.set(one.entry.id, row);
-    }
-    paintRow(row, one, visited);
-    putAt(row.el, at);
-  }
-}
+/**
+ * Keyed on the place rather than the position: the sort is by distance and the player is
+ * walking, so a key on the index would rebuild both rows every time two of them swapped.
+ */
+const rowList = woc.ui.list({
+  parent: list,
+  key: (one) => one.entry.id,
+  create: (one) => createRow(one.entry),
+  update: (row, one) => {
+    paintRow(row, one);
+  },
+});
 
 function redraw() {
   if (!frame.visible) {
-    clearPins();
+    pinList.clear();
     return;
   }
   fillGlyphs();
-  const visited = visitedSet();
+  syncVisited = visitedSet();
   const all = inRange();
   const listed = all.slice(NONE, listLength());
   const pinned = all.slice(NONE, MAX_PINS);
   const counts = { listed: listed.length, pinned: pinned.length, total: all.length };
   head.textContent = zoneHeading();
   minimap.textContent = minimapText();
-  note.textContent = noteText(counts, visited);
-  syncRows(listed, visited);
-  syncPins(pinned);
+  note.textContent = noteText(counts, syncVisited);
+  rowList.sync(listed);
+  pinList.sync(pinned);
 }
 
-/** Where a pin is on screen right now, or null when it has no trustworthy place. */
 function screenAt(entry) {
   const point = pointOf(entry);
   if (point === null) {
@@ -1218,7 +982,7 @@ function screenAt(entry) {
   return woc.ui.project(point);
 }
 
-/** Nearest to the camera first, with anything that did not project sorted last. */
+/** Nearest first, with anything that did not project sorted last. */
 function nearestFirst(a, b) {
   const near = a.at?.depth ?? Number.POSITIVE_INFINITY;
   const far = b.at?.depth ?? Number.POSITIVE_INFINITY;
@@ -1229,49 +993,25 @@ function crowded(at, kept) {
   return kept.some((other) => Math.hypot(at.x - other.x, at.y - other.y) < PIN_SPACING_PX);
 }
 
-function displayFor(show) {
-  if (show) {
-    return '';
-  }
-  return 'none';
-}
-
-function setShown(pin, show) {
-  const display = displayFor(show);
-  if (pin.shown !== display) {
-    pin.shown = display;
-    pin.stack.style.display = display;
-  }
-}
-
 /**
- * Turn every arrow, which is the second thing here that answers to the camera rather than
- * to the world: the distances on this panel move once a second and the direction to walk
- * changes the instant the player does. An arrow rewritten on the redraw would lag a turn
- * by up to a second, which on the one reading that says WHICH WAY is the whole of it.
- *
- * It is a subtraction and a guarded style write per row, over a list the player capped
- * themselves, so it costs about what reading the frame's own clock does.
+ * On the frame loop, not the redraw: the direction to walk changes the instant the player
+ * turns, and a second of lag on the one reading that says WHICH WAY is the whole of it.
  */
 function turnArrows() {
-  for (const row of rows.values()) {
+  for (const row of rowList.values()) {
     turnArrow(row);
   }
 }
 
 /**
- * Hide a pin that has landed on top of a nearer one.
+ * Hide a pin that has landed on top of a nearer one. On the frame tick, because overlap is a
+ * question about the camera; `ui.project` rather than measuring, which would force a layout.
  *
- * On the frame tick because whether two points overlap on screen is an answer about the
- * camera, so it changes while the world stands still. `ui.project` rather than measuring
- * the placed elements, because a measurement forces a synchronous layout and this runs on
- * every frame.
- *
- * A null projection hides the pin outright: it answers null behind the camera and closer
- * than the near plane, where the raw projection reports finite coordinates that are wrong.
+ * A null projection hides the pin outright: behind the camera the raw numbers are finite and
+ * wrong. `values()` order does not matter, since this sorts by depth first.
  */
 function thinPins() {
-  const shots = [...pins.values()].map((pin) => ({ pin, at: screenAt(pin.entry) }));
+  const shots = pinList.values().map((pin) => ({ pin, at: screenAt(pin.entry) }));
   shots.sort(nearestFirst);
   const kept = [];
   for (const shot of shots) {
@@ -1279,24 +1019,15 @@ function thinPins() {
     if (show) {
       kept.push(shot.at);
     }
-    setShown(shot.pin, show);
+    woc.ui.show(shot.pin.stack, show);
   }
 }
 
 /**
- * What the bus is told, which is ONE SHAPE whether or not there is a zone to name.
- *
- * `place` carries the refusal rather than deleting it, and that is the whole reason this is
- * an object rather than the bare null it used to be. This addon exists to distinguish four
- * states, and three of them collapsed into one `null` on the way out: a subscriber could
- * not tell "you are in a dungeon, so a zone filter does not apply here" from "you are off
- * the map" from "the atlas has not been read yet". The first is a fact worth acting on, the
- * third is a reason to wait, and answering both with `null` made every consumer either
- * treat a loading addon as a dungeon or keep a flag of its own to guess which it was.
- *
- * The other three fields are null outside a zone rather than absent, so a consumer reads
- * the same keys in every state. `levelRange` is `{ min, max }` rather than a pair, because
- * `levelRange[1]` is a consumer guessing which end it has hold of.
+ * ONE SHAPE in all four states, with the same keys nulled outside a zone. `place` carries
+ * WHICH refusal it is, because "in a dungeon", "off the map" and "not read yet" are a fact
+ * to act on, a fact to act on, and a reason to wait: a bare null told a consumer none of it.
+ * `levelRange` is `{ min, max }` rather than a pair, since `levelRange[1]` is a guess.
  */
 function zonePayload() {
   const place = currentPlace();
@@ -1312,31 +1043,36 @@ function zonePayload() {
   };
 }
 
-/**
- * Publish the zone, on a change and on being asked.
- *
- * The change test is on the PLACE as well as the id, which it has to be now that three
- * states share a null id: keyed on the id alone, a player riding out of a dungeon and off
- * the map would move between two genuinely different answers in silence. `force` is the
- * answer to `zone:ask`, which has to emit whatever the state is, since a subscriber that
- * started after the last border crossing would otherwise wait for the next.
- */
-function publishZone(force) {
-  const payload = zonePayload();
-  const key = `${payload.place}:${payload.id ?? ''}`;
-  if (!force && key === publishedKey) {
-    return;
-  }
-  publishedKey = key;
-  woc.bus.emit(ZONE_TOPIC, payload);
+function publishKey(payload) {
+  return `${payload.place}:${payload.id ?? ''}`;
 }
 
-// Once a second, because every figure on this panel moves at most that often and the zone
-// under a rider changes far more slowly. The publish is outside the draw: an addon's bus
-// contract is not the player's business, so hiding the panel must not stop the zone being
-// published.
+/** Both an ask and an announcement come through here, so it is where what went out is noted. */
+function zoneAnswer() {
+  const payload = zonePayload();
+  publishedKey = publishKey(payload);
+  return payload;
+}
+
+// Every ask is answered whatever the state is, which is why `zonePayload` never returns null:
+// there is no request-response on this bus, so the ask is the whole of the protocol.
+const zoneChannel = woc.bus.publish('zone', zoneAnswer);
+
+/**
+ * The change test is on the PLACE as well as the id, since three states share a null id:
+ * riding out of a dungeon and off the map is a real change the id alone cannot see.
+ */
+function announceZone() {
+  if (publishKey(zonePayload()) === publishedKey) {
+    return;
+  }
+  zoneChannel.announce();
+}
+
+// The announcement is outside the draw on purpose: hiding the panel must not stop the zone
+// being published, since an addon's bus contract is not the player's business.
 woc.setInterval(() => {
-  publishZone(false);
+  announceZone();
   redraw();
 }, MS_PER_SECOND);
 
@@ -1345,26 +1081,17 @@ woc.onFrame(() => {
   thinPins();
 });
 
-// Anybody may ask, including an addon that started after the last border crossing. There
-// is no request-response on this bus, so this is the whole of the protocol.
-woc.bus.on(woc.bus.anySender, ASK_TOPIC, () => {
-  publishZone(true);
-});
-
+// Not `toggleKey`: this key also clears the world pins, and a frame has no on-hide callback.
 woc.keys.bind('toggle', () => {
   frame.toggle();
-  // Now, rather than up to a second from now: somebody who just hid the panel should not
-  // watch its pins hang over the world waiting for the next tick.
   redraw();
 });
 
 woc.onSettingsChange(redraw);
 
 /**
- * Read the atlas in, then draw for the first time with something to draw. Every handler
- * above is wired first and is a no-op against an empty table rather than wrong, which is
- * what makes that order safe: subscribing after an await would miss whatever landed during
- * it.
+ * Every handler above is wired BEFORE this await and is a no-op against an empty table
+ * rather than wrong; subscribing afterwards would miss whatever landed during it.
  */
 async function boot() {
   const atlas = readAtlas(await woc.data(DATA_FILE));
@@ -1372,7 +1099,7 @@ async function boot() {
     throw new Error(`${DATA_FILE} is not an atlas: it is missing the world bounds or a table`);
   }
   adopt(atlas);
-  publishZone(false);
+  announceZone();
   redraw();
 }
 

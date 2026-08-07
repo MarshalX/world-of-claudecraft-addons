@@ -1,4 +1,5 @@
-// `pnpm stage`: serve the addon stage on :5182.
+// `pnpm run stage`: serve the addon stage on :5182. The `run` is required, since
+// pnpm owns `stage` as a subcommand of its own; AGENTS.md carries the detail.
 //
 // One addon, mounted in a real browser through the real loader over a scripted
 // fake world, so a preview screenshot does not need the state it pictures to be
@@ -6,7 +7,7 @@
 //
 // The socket only. Everything it decides lives in stage-core.ts.
 //
-// Run `node loader/build-stage.mjs --watch` beside it (which `pnpm stage` does)
+// Run `node loader/build-stage.mjs --watch` beside it (which `pnpm run stage` does)
 // and editing a scenario or a loader module rebuilds. Editing an addon's own
 // `main.js` needs no rebuild at all, since the page fetches it. A NEW
 // `addons/<id>/stage.ts` does need a restart, for the same reason the dev

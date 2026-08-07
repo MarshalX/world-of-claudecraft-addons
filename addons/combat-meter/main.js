@@ -1,35 +1,23 @@
 /// <reference types="@woc-addons/types" />
 
-// Combat Meter: a per-ability breakdown of the damage you deal, the healing you do and
-// the damage that lands on you, plus your attack-table outcomes. Aggregated from the
-// `damage` and `heal2` events the client already receives; nothing is sent.
+// Combat Meter: a per-ability breakdown of damage dealt, healing done and damage taken,
+// plus your attack table. Read off `damage` and `heal2`; nothing is sent.
 //
-// A fight ends after an idle timeout rather than on a combat flag, since `inCombat` is
-// not on the wire. The default matches the 5 seconds the game's own meter uses, and the
-// duration is floored at one second exactly as the game's is, or a burst shorter than
-// that divides by a fraction and reports a rate nobody achieved.
+// A fight ends on an idle timeout, because `inCombat` is not on the wire, and its duration
+// is floored at a second or a burst divides by a fraction and reports a rate nobody hit.
 //
-// A pet's output is yours, and being able to read it is new in game 0.35.0. Until then
-// the server compared raw entity ids when deciding who a combat record was delivered to,
-// so a pet matched nobody and an owner never received their own pet's events at all:
-// matching `sourceId` against your own id was accidentally right and is now a silent
-// undercount. The server resolves each side to its controller first now, so those records
-// arrive, and `Entity.ownerId` is what says whose they are. A pet's row is labelled
-// `{pet}: {ability}`, which is the format the game's own breakdown uses for it.
+// A pet's output is yours and `Entity.ownerId` is what says so, on a server that has resolved
+// each side to its controller since game 0.35.0. Its rows carry the game's own `{pet}: {ability}`.
 //
-// Limits: icons cover your own spellbook only, because art is filed under the ability id
-// while an event carries the display name and the two have diverged, and a pet's
-// abilities are in nobody's spellbook at any rate; and the overhealing figure is a FLOOR
-// rather than a total, because a heal that overheals completely emits no record to carry
-// it, which is why it is marked with a `+` and why there is no percentage.
+// Two limits: art covers your own spellbook alone, since an event carries a display name
+// and art is filed under the id, and the overhealing figure is a FLOOR rather than a total,
+// because a fully wasted heal emits no record at all.
 
 const MS_PER_SECOND = 1000;
 const REPAINT_MS = 500;
 const DECIMALS = 1;
 const PERCENT = 100;
 const SECONDS_PER_MINUTE = 60;
-const DEFAULT_TIMEOUT_SECONDS = 5;
-const DEFAULT_MAX_ROWS = 10;
 const FRAME_WIDTH = 340;
 const FRAME_HEIGHT = 320;
 /** Auto-attacks arrive with no ability at all. */
@@ -86,24 +74,8 @@ function emptyFight(at) {
 let fight = emptyFight(woc.now());
 let tab = 'dealt';
 
-function settingNumber(id, fallback) {
-  const value = woc.settings[id];
-  if (typeof value === 'number' && Number.isFinite(value)) {
-    return value;
-  }
-  return fallback;
-}
-
-function settingFlag(id, fallback) {
-  const value = woc.settings[id];
-  if (typeof value === 'boolean') {
-    return value;
-  }
-  return fallback;
-}
-
 function timeoutMs() {
-  return settingNumber('fight-timeout', DEFAULT_TIMEOUT_SECONDS) * MS_PER_SECOND;
+  return woc.settings['fight-timeout'] * MS_PER_SECOND;
 }
 
 /**
@@ -121,12 +93,8 @@ function labelOf(event) {
 /**
  * Whether an id is you, or something you control.
  *
- * The server asks the same question before it decides who a combat record reaches: its own
- * `principalOf` resolves each side through `ownerId` and falls back to the raw id. Asked
- * against the player rather than resolved to a principal, which means a pet already gone
- * from the snapshot answers no and degrades to the pre-0.35.0 behaviour, and a stranger's
- * pet answers no as well. That second one is the case worth stating: a resolver that
- * folded any owned entity in would turn this into a zone-wide damage display.
+ * Asked AGAINST the player rather than by resolving both sides to a principal: a resolver
+ * that folded in any owned entity would make this a zone-wide damage display.
  */
 function ownedByPlayer(id, player) {
   if (id === player.id) {
@@ -167,13 +135,8 @@ function overhealOf(event) {
 }
 
 /**
- * Which row an event belongs to, and whose it was.
- *
- * `{pet}: {ability}` is the game's own spelling for a pet's contribution, and the prefix
- * costs no art that was ever reachable: a pet's abilities are in no spellbook and its
- * swing carries no name at all, so every one of these rows draws bare either way. It also
- * keeps a pet's melee out of the bucket your own auto-attack lands in, which is the whole
- * reason to label the rows rather than fold them in silently.
+ * Which row an event belongs to, and whose it was. The prefix keeps a pet's melee out of
+ * the bucket your own auto-attack lands in, and costs no art that was ever reachable.
  */
 function rowFor(event, id, player) {
   const pet = petNameOf(id, player);
@@ -184,11 +147,8 @@ function rowFor(event, id, player) {
 }
 
 /**
- * Whether a record describes something that happened, which is what earns it a row.
- *
- * The gate is the pair, never the amount alone. A shield that ate a heal or a hit whole
- * leaves `amount: 0` with a real `absorbed`, which is the only field separating it from
- * a miss or an overheal. `cueOnly` is refused earlier, on its own flag.
+ * The gate is the PAIR, never the amount alone: a shield that ate a hit whole leaves
+ * `amount: 0` with a real `absorbed`, the only field separating it from a miss.
  */
 function landed(event) {
   return event.amount > 0 || absorbedOf(event) > 0;
@@ -205,6 +165,7 @@ function pct(part, whole) {
   return `${Math.round((part / whole) * PERCENT).toFixed(0)}%`;
 }
 
+/** Not `fmt.duration`: this is elapsed time and rounds to nearest, where that ceils. */
 function duration(seconds) {
   const whole = Math.round(seconds);
   if (whole < SECONDS_PER_MINUTE) {
@@ -271,13 +232,9 @@ function noteActivity() {
 }
 
 /**
- * Your attack table, and yours alone.
- *
- * Every outcome counts, including the ones that dealt nothing, since a miss rate is the
- * reason that line exists. Damage taken is the attacker's attack table rather than yours,
- * and a pet's swing is the PET'S: it rolls against its own hit rating, so folding it in
- * would blend two tables into one figure and leave neither readable. That is the one place
- * a pet is not treated as you, and it is the raw `sourceId` that says so.
+ * Your attack table, and yours alone. Every outcome counts, since a miss rate is the point.
+ * A pet's swing rolls against the PET's hit rating, so the raw `sourceId` keeps it out:
+ * the one place a pet is not treated as you.
  */
 function countOutcome(event, player) {
   if (event.sourceId !== player.id) {
@@ -305,9 +262,9 @@ woc.net.onEvent('damage', (event) => {
       record('dealt', rowFor(event, event.sourceId, player), event);
     }
   }
-  // Damage your pet took is damage you should see, and the server now delivers it on
-  // exactly that basis. The prefix on the row names who it landed on rather than who dealt
-  // it, which is the reading this table already has: the ability is the attacker's.
+  // Damage your pet took is damage you should see, and since game 0.35.0 the server delivers
+  // it on exactly that basis. The prefix names who it LANDED on rather than who dealt it,
+  // which is this table's reading: the ability is the attacker's.
   if (atMe && landed(event)) {
     record('taken', rowFor(event, event.targetId, player), event);
   }
@@ -345,6 +302,7 @@ const panel = woc.ui.frame({
   resizable: true,
   closable: true,
   save: true,
+  toggleKey: 'toggle',
 });
 
 const total = document.createElement('div');
@@ -369,8 +327,8 @@ const strip = woc.ui.tabs({
   onSelect: (id) => {
     tab = id;
     // Clearing makes the switch instant rather than one repaint late.
-    clearRows();
-    repaint();
+    bars.clear();
+    draw();
   },
 });
 // The addon's own marking, for its own styling. The kit's classes are already on it.
@@ -378,15 +336,18 @@ strip.el.classList.add('woc-meter-tabs');
 
 panel.body.append(strip.el, total, table, outcomes);
 
-const rows = new Map();
-
-function clearRows() {
-  for (const row of rows.values()) {
-    row.destroy();
-  }
-  rows.clear();
-  table.replaceChildren();
-}
+/**
+ * Keyed on the label, never on position, or two rows swap identities as the ranking moves.
+ * Nothing is measured on a row, so the cap can slice before `sync` and `shown` is not needed.
+ */
+const bars = woc.ui.list({
+  parent: table,
+  key: (item) => item.label,
+  create: (item) => createRow(item.label, item.tally),
+  update: (bar, item) => {
+    drawRow(bar, item);
+  },
+});
 
 /**
  * The art comes from the label through `world.abilities`, the only way back from an
@@ -439,10 +400,8 @@ function rowTooltip(label) {
 }
 
 /**
- * Null for anything outside your own spellbook, and for every pet row without asking:
- * a pet's abilities are in no spellbook, so the join could only ever answer null and the
- * prefixed label would send it looking for an ability nobody has. The kit hides its icon
- * slot for a null or a URL that fails to load.
+ * Null outside your own spellbook, and for a pet row without asking, since a pet's
+ * abilities are in nobody's. The kit hides the slot for a null or a URL that 404s.
  */
 function abilityArt(label, tally) {
   if (tally.pet !== null) {
@@ -459,7 +418,7 @@ function abilityArt(label, tally) {
 function tableRows() {
   const source = fight.tallies[tab];
   const ordered = [...source.entries()].sort((a, b) => b[1].total - a[1].total);
-  return ordered.slice(0, settingNumber('max-rows', DEFAULT_MAX_ROWS));
+  return ordered.slice(0, woc.settings['max-rows']);
 }
 
 function detailText(tally) {
@@ -472,10 +431,8 @@ function detailText(tally) {
   if (tally.absorbed > 0) {
     parts.push(`${num(tally.absorbed)} absorbed`);
   }
-  // Marked with a `+` because it is a floor and not a total: every emit site still gates on
-  // some healing having landed, so a tick that overhealed COMPLETELY sent no record at all
-  // and is missing from this figure. Which is also why there is no percentage anywhere,
-  // since that would divide by a total missing exactly the same ticks.
+  // A floor, not a total: a tick that overhealed COMPLETELY sends no record. Hence the
+  // `+`, and hence no percentage, which would divide by a total missing the same ticks.
   if (tally.overheal > 0) {
     parts.push(`${num(tally.overheal)}+ overhealed`);
   }
@@ -483,31 +440,18 @@ function detailText(tally) {
 }
 
 function detailLine(tally) {
-  if (settingFlag('show-detail', true)) {
+  if (woc.settings['show-detail']) {
     return detailText(tally);
   }
   return '';
 }
 
-/** Move a row to its position only when it is not there already. */
-function place(el, at) {
-  if (table.children[at] !== el) {
-    table.insertBefore(el, table.children[at] ?? null);
-  }
-}
-
 /**
- * Per second, and it says so.
- *
- * The figure was already the third column of every row and nothing on screen named it, so
- * three bare numbers were left to be told apart by guesswork. Two characters of suffix is
- * what the game's own meter spends on the same problem. There is deliberately no share of
- * the rate beside it: share of damage and share of DPS are the same number, because both
- * divide by the one fight duration, so a column for it would encode a fact already drawn.
+ * Per second, and it says so. No share of the rate beside it: share of damage and share of
+ * DPS are the same number, since both divide by the one fight duration.
  */
 function rateOf(amount, seconds) {
-  // Grouped like every other figure in the panel rather than a bare `toFixed`, which put
-  // `1000.0/s` on the same line as `1,000 damage`.
+  // Grouped like every other figure, or `1000.0/s` sits beside `1,000 damage`.
   const perSecond = (amount / seconds).toLocaleString(undefined, {
     minimumFractionDigits: DECIMALS,
     maximumFractionDigits: DECIMALS,
@@ -515,31 +459,19 @@ function rateOf(amount, seconds) {
   return `${perSecond}/s`;
 }
 
-function drawRow(label, tally, table_) {
-  const row = rows.get(label) ?? createRow(label, tally);
-  rows.set(label, row);
-  const share = pct(tally.total, table_.whole);
-  row.update({
-    fraction: tally.total / Math.max(table_.whole, 1),
-    value: `${num(tally.total)}  ${share}  ${rateOf(tally.total, table_.seconds)}`,
-    detail: detailLine(tally),
+function drawRow(bar, item) {
+  const share = pct(item.tally.total, item.whole);
+  bar.update({
+    fraction: item.tally.total / Math.max(item.whole, 1),
+    value: `${num(item.tally.total)}  ${share}  ${rateOf(item.tally.total, item.seconds)}`,
+    detail: detailLine(item.tally),
   });
-  place(row.el, table_.at);
 }
 
+/** The total and the duration ride the item: per-sync facts, decided in one place. */
 function drawTable(seconds) {
-  const ordered = tableRows();
   const whole = fight.totals[tab];
-  const shown = new Set(ordered.map(([label]) => label));
-  for (const [label, row] of rows) {
-    if (!shown.has(label)) {
-      row.destroy();
-      rows.delete(label);
-    }
-  }
-  for (const [at, [label, tally]] of ordered.entries()) {
-    drawRow(label, tally, { whole, seconds, at });
-  }
+  bars.sync(tableRows().map(([label, tally]) => ({ label, tally, whole, seconds })));
 }
 
 function outcomeText() {
@@ -562,7 +494,7 @@ function outcomeText() {
 
 /** Your own attack table, so it belongs to the damage tab only. */
 function outcomeLine() {
-  if (tab !== 'dealt' || !settingFlag('show-outcomes', true)) {
+  if (tab !== 'dealt' || !woc.settings['show-outcomes']) {
     return '';
   }
   return outcomeText();
@@ -575,48 +507,46 @@ function fightSuffix() {
   return ', last fight';
 }
 
-let neverDrawn = true;
+/**
+ * `{ frame }` holds a repaint asked for while the panel is hidden and performs exactly one
+ * when it returns, so nothing here checks visibility. Coalesced: one draw per frame at most.
+ */
+const draw = woc.paint(
+  () => {
+    const seconds = fightSeconds(woc.now());
 
-function repaint() {
-  const now = woc.now();
-  // Ahead of the visibility check: a hidden panel keeps tallying, so it has to keep
-  // deciding when a fight ended.
-  expireFight(now);
-  if (!(panel.visible || neverDrawn)) {
-    return;
-  }
-  neverDrawn = false;
-  const seconds = fightSeconds(now);
+    // One direction per tab, or a player who never heals reads a "0 healing" line.
+    const amount = num(fight.totals[tab]);
+    const rate = rateOf(fight.totals[tab], seconds);
+    const summary = `${amount} ${nounFor(tab)} (${rate}) in ${duration(seconds)}`;
+    total.textContent = `${summary}${fightSuffix()}`;
 
-  // One direction per tab, or every player who does not heal reads a "0 healing" line. The
-  // rate is stated rather than left to be divided out, which is what the game's own meter
-  // does on every bar it draws; the elapsed time stays, since it is what makes it legible.
-  const amount = num(fight.totals[tab]);
-  const rate = rateOf(fight.totals[tab], seconds);
-  const summary = `${amount} ${nounFor(tab)} (${rate}) in ${duration(seconds)}`;
-  total.textContent = `${summary}${fightSuffix()}`;
+    drawTable(seconds);
+    outcomes.textContent = outcomeLine();
+  },
+  { frame: panel },
+);
 
-  drawTable(seconds);
-  outcomes.textContent = outcomeLine();
+/**
+ * Expiring the fight must keep running while the panel is away, or a fight that closed
+ * behind it reopens looking live. Drawing must not, which is the split `woc.paint` owns.
+ * Twice a second rather than per event: a hit rate of repaints would sort and rewrite rows.
+ */
+function tick() {
+  expireFight(woc.now());
+  draw();
 }
 
-repaint();
-// Twice a second: nothing here moves on a frame, and a repaint per event would put a
-// sort plus a write per row on the game's event rate.
-woc.setInterval(repaint, REPAINT_MS);
-
-woc.keys.bind('toggle', () => {
-  panel.toggle();
-  repaint();
-});
+tick();
+woc.setInterval(tick, REPAINT_MS);
 
 woc.keys.bind('reset', () => {
   startFight();
-  clearRows();
-  repaint();
+  bars.clear();
+  draw();
 });
 
 // A changed row cap takes effect on the next repaint rather than at the next hit.
 woc.onSettingsChange(() => {
-  repaint();
+  draw();
 });

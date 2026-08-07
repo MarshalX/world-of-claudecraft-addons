@@ -1,15 +1,15 @@
 {
   "id": "emberwatch",
   "name": "Emberwatch",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "apiVersion": 1,
-  "apiMinor": 2,
+  "apiMinor": 4,
   "author": "MarshalX",
   "description": "A rules engine for effects and procs: name an effect on a unit and get a tile, a cue and a banner when it lands, stacks up or runs out. Ships a starter set for your class, and takes rules of your own captured off your target with a keybind.",
   "entry": "main.js",
   "preview": {
     "file": "preview.png",
-    "alt": "On the left, Alerts and rules, a row of five square alert tiles above the rules panel that produced them. Left to right, the two that carry no picture at all, each for its own reason: Silencing Shriek at 3 seconds, bordered in shadow purple and artless because a mob applied it and skill art is filed under a player class; then Brood Venom at 9 seconds in nature green, a 3 in its corner for the three bites that have landed, artless for a second and unrelated reason, that its aura id is not an ability id and no file is named for it. Then three that do carry the art the game ships for the ability that applied them, all three cast by the mage themselves: Aether Surge at 3 seconds, drawn in the warning amber a rule watching for an effect running out puts over the school colour; Hot Streak at 7 seconds in fire red; and Pyrelance at 4 seconds, amber again. Each tile names who is carrying the effect underneath: Marshal four times, and The Broodmother, clipped to the width of the square, under the mage's own dot on the boss. Below the strip, the Emberwatch rules panel lists the eight rules in force for a mage, each a switched-on checkbox with what it fires on written beside it: four that apply to every class, watching for a target made untouchable in a duel, for being silenced, for anything harmful reaching three stacks on you, and for being stunned; then Aether Surge ending, Brain Freeze, Hot Streak, and Pyrelance fading on your target, that last one marked mine only. Two lines in smaller type close the panel with what the addon cannot answer: a party row carries no source, no duration and no stacks, and nothing anywhere can say how much damage a control will take before it breaks. On the right, An alert, a banner across the middle of the view, reading STUNNED in the display serif the game keeps for its own warnings, in the red it keeps for danger, over a quieter second line naming who it landed on. It sits on a soft dark scrim that fades out on every side, and there is nothing else in the panel: the strip is shut, and the alert reaches the player anyway."
+    "alt": "On the left, Alerts and rules, five square alert tiles above the rules panel that produced them. On the right, An alert, a STUNNED banner across the view, the alert strip shut."
   },
   "homepage": "https://github.com/MarshalX/world-of-claudecraft-addons",
   "tags": ["combat", "interface"],

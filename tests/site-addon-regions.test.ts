@@ -18,27 +18,42 @@ const QUOTED = [
     file: 'addons/cooldown-bars/main.js',
     source: cooldownBars,
     regions: {
-      /** Quickstart, and the API page for `woc.ui.frame`. */
+      /** The API page for `woc.ui.frame`. */
       frame: ['woc.ui.frame', 'frame.body.appendChild'],
-      /** The API page for `woc.ui.bar`, icons and tooltips. */
+      /**
+       * The API page for `woc.ui.bar`, icons and tooltips, AND Patterns under
+       * "Reuse the kit before styling your own". Two pages, so an edit inside
+       * these markers has to suit both.
+       */
       bar: ['woc.ui.bar', 'woc.ui.icon.ability', 'woc.ui.tooltip'],
       /** The API page for `woc.ui.tile`, which is the same row as a square. */
       tile: ['woc.ui.tile', 'woc.ui.icon.ability', 'label'],
       /** The API page for a tooltip whose content is asked for when it is shown. */
       tooltip: ['title:', 'tone:', 'woc.ui.icon.ability'],
-      /** Patterns: redrawing a list moves every row, and what that costs. */
-      place: ['insertBefore', 'children'],
-      /** Patterns, item 1, and the single most important example in the docs. */
+      /**
+       * Patterns: redrawing a list moves every row, and what that costs.
+       *
+       * It was `place`, the hand-rolled reconcile pass, until `woc.ui.list`
+       * absorbed it. The page teaches `key` and `shown` by name, so both have to
+       * stay inside the markers: `shown` is the whole reason this addon holds
+       * more rows than it draws rather than slicing before it syncs.
+       */
+      list: ['woc.ui.list', 'key:', 'shown:'],
+      /**
+       * Patterns, "Subscribe for the set, animate from the read", which opens the
+       * page and is the single most important example in the docs.
+       */
       'subscribe-and-animate': ["woc.world.on('cooldowns'", 'woc.requestAnimationFrame'],
-      /** The API page for `woc.keys.bind`. */
-      keybind: ["woc.keys.bind('toggle'"],
     },
   },
   {
     file: 'addons/combat-meter/main.js',
     source: combatMeter,
     regions: {
-      /** Patterns, item 2: a heal is attributed from heal2, and cueOnly is a FLAG. */
+      /**
+       * Patterns, "An event's ability is a name, not an id": a heal is attributed
+       * from heal2, and cueOnly is a FLAG rather than an amount of zero.
+       */
       'heal-attribution': ["woc.net.onEvent('heal2'", 'event.sourceId', 'cueOnly'],
       /** The API page for a bar's school tinting. */
       'school-tint': ['woc.ui.bar', 'school'],

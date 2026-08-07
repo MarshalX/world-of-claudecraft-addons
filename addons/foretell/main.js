@@ -2,85 +2,41 @@
 
 // Foretell: a bar for every cast in the fight, including the ones nothing announces.
 //
-// `net.onEvent('castStart')` fires for a player's cast, a pet's cast and the timed
-// activities the game runs through the same cast machinery, and for no mob at all: a
-// mob's mechanic assigns its cast state directly on the entity, so an event-driven
-// display is silent for every mob in the game and cannot tell that from a boss that
-// never casts. `world.casts` is built from that entity state instead, and is the only
-// source read here.
+// `net.onEvent('castStart')` never fires for a mob, whose mechanic assigns cast state
+// directly on the entity, so `world.casts` is the only source read here. That map is
+// rebuilt on every read, so `castsNow` re-reads it rather than holding one.
 //
-// The map is rebuilt on every read from live entity fields, so there is nothing to hold:
-// `castsNow` reads it again rather than keeping the one the last handler was handed.
+// `world.on('casts')` decides which rows EXIST and the frame handler decides how full each
+// one is; the handler returns at once while nothing is up, since reading the map walks
+// every entity in interest scope.
 //
-// `world.on('casts')` reports a cast starting, ending or being replaced and says nothing
-// as the bar moves, so the subscription decides which rows exist and a frame handler
-// decides how full each one is. That handler is `woc.onFrame` and it returns immediately
-// while nothing is up, since reading the map walks every entity in interest scope. The
-// loader positions anchors after the handler, so a bar this file moves is followed in
-// the same frame rather than one behind the camera.
+// `EntityCast.ability` is an ability id OR an activity sentinel naming what a unit is
+// doing, from a set that grows with the game, so a crafter gets a bar too. Do not filter
+// on a list of sentinels; anything `world.abilities` cannot name falls back to a
+// title-cased id and carries the mark. The mark is on the LABEL rather than in a tooltip,
+// because an anchor takes no pointer events and there is nothing to hover.
 //
-// `EntityCast.ability` is an id rather than the display name a damage record carries, or
-// it is an activity sentinel: a fixed marker naming what the unit is DOING rather than
-// any ability, from a set that grows with the game, so a nearby player crafting or
-// fishing gets a bar as well. `world.abilities` turns an id into a name for your own kit
-// only and a sentinel resolves there for nobody, so anything else falls back to a
-// title-cased id and is marked with a question mark. A bar over a crafter is the honest
-// answer rather than a gap to filter: the unit is casting, and an exclusion list of
-// sentinels would need editing every time the game adds one. The mark is on the label
-// rather than in a footnote, because it has to survive the anchored layout, where an
-// anchor takes no pointer events and there is nothing to hover. The row's tooltip carries
-// the long version in the list.
+// A school is left unknown rather than guessed: an `EntityCast` carries none.
 //
-// The school is usually unknown and is left unknown. An `EntityCast` carries none and
-// the only place to recover one is your spellbook, so a mob's cast is drawn untinted
-// rather than tinted from a guess about its damage type.
+// Two layouts, picked by a setting: a borderless column sorted by time remaining, or the
+// same bar over each caster's head. The frame's bounds cannot be restated after it is
+// built, so its floor is one row and never the current row count.
 //
-// Two layouts, picked by a setting. The list is a borderless column sorted by time
-// remaining, so the next thing to land is at the top. The anchored layout puts the same
-// bar over the caster's head through `ui.anchor3d`, which is worth having when who is
-// casting matters more than the order, and drops the caster's name from the row.
-//
-// The list is resizable and its height is the row budget. A bare frame with no
-// `resizable` has no handles to grab, and a resizable one with no floor can be dragged
-// under what it draws, which with a clipping body loses a bar rather than gaining a
-// scrollbar. The height is room rather than a size, so the box says how many bars fit
-// and `rowCap` counts them; dividing the height between the rows that are up instead
-// would change every bar's height whenever anything started or stopped casting. The
-// floor is one bar, never the current row count, since bounds cannot be restated after
-// the frame is built.
-//
-// An anchored bar is placed by unit rather than by a point plus a guessed lift. The
-// loader's 'head' point is read off the renderer's own view of that unit, model height
-// and mount and scale included, so a bar over a boar and a bar over a dragon each clear
-// the model; nothing on the wire carries a model height. Two bars over casters standing
-// together are separated with `ui.project`, which gives a screen position and a depth
-// for a point with no element and no layout. The nearest caster keeps its place and
-// anything colliding with it is lifted clear rather than hidden, since dropping a cast
-// to tidy the screen would throw away what this addon is for. A lifted bar takes the
-// caster's name back as a second line and stops claiming to be positional.
+// An anchored bar is placed by UNIT, not by a point plus a guessed lift, since only the
+// renderer knows a model's height. Collisions are lifted clear rather than hidden, and a
+// lifted bar takes its caster's name back because it is no longer over them.
 
 const DECIMALS = 1;
 const FRAME_WIDTH = 240;
-const DEFAULT_MAX_BARS = 5;
-/** Show every cast by default: the shortest one is usually the one that matters. */
-const DEFAULT_MIN_CAST = 0;
 /** Under this much left the row goes danger: the mechanic is landing now. */
 const IMPACT_SECONDS = 1;
 /** An anchored bar has no column to be sized by, so it carries its own width. */
 const ANCHOR_WIDTH = 180;
 /**
- * What one named bar and the gap under it occupy, in pixels.
- *
- * A bar carrying a caster's name is two lines: the head at 19 and the detail at 13,
- * inside the kit's 2px padding, which is 36, and the column sets 3 between rows. It is
- * one constant because both things measured against it are measuring a named bar: how
- * much of the list's height one row takes, and how far one step of the anchored
- * declutter lifts a bar, where the lifted bar takes its caster's name back on the way.
- *
- * A constant rather than a measurement, since `offsetHeight` per row per frame is a
- * synchronous layout, which is the cost `ui.project` exists to avoid. A wrong figure is
- * silent in both directions: too small clips the bottom row, too large floats every
- * lifted bar further from its caster than it has to be.
+ * What one NAMED bar and the gap under it occupy: 19 and 13 inside 2px of padding, plus
+ * the column's 3. One constant, because the row height and the declutter step both measure
+ * a named bar. A constant rather than `offsetHeight`, which is a synchronous layout per
+ * row per frame, and it fails silently either way: too small clips, too large floats.
  */
 const ROW_PITCH = 39;
 /** How many steps a bar may be lifted before it is left where it belongs. */
@@ -94,31 +50,12 @@ const GUESS_MARK = '?';
  */
 const MIN_FRAME_WIDTH = 120;
 
-/** Entity id to the row drawing its cast: the kit widget, its anchor, its ability. */
-const rows = new Map();
-
 /** The column, which outlives the frame, so a layout change is one append. */
 const list = document.createElement('div');
 list.className = 'woc-ft-list';
 list.style.display = 'flex';
 list.style.flexDirection = 'column';
 list.style.gap = '3px';
-
-function settingNumber(id, fallback) {
-  const value = woc.settings[id];
-  if (typeof value === 'number' && Number.isFinite(value)) {
-    return value;
-  }
-  return fallback;
-}
-
-function settingFlag(id, fallback) {
-  const value = woc.settings[id];
-  if (typeof value === 'boolean') {
-    return value;
-  }
-  return fallback;
-}
 
 /** Whether the bars float over the casters. Anything unrecognised is the list. */
 function drawsAnchors() {
@@ -127,7 +64,7 @@ function drawsAnchors() {
 
 /** The most bars the player asked for, which is the ceiling the box works under. */
 function barBudget() {
-  return Math.max(settingNumber('max-bars', DEFAULT_MAX_BARS), 1);
+  return Math.max(woc.settings['max-bars'], 1);
 }
 
 function listHeight(count) {
@@ -135,29 +72,19 @@ function listHeight(count) {
 }
 
 /**
- * The height the loader last gave the frame. Held rather than measured, which is what
- * `onMove` is for: reading it back off the element would force a synchronous layout on
- * every pointer move. Seeded with the opening height, since `onMove` deliberately does
- * not fire for the initial placement.
+ * The height the loader last gave the frame. Held rather than measured, or every pointer
+ * move costs a layout. Seeded, because `onMove` does not fire for the initial placement.
  */
 let boxHeight = 0;
 
 /**
  * The overlay, or null when the bars are anchored in the world.
  *
- * Bare, because the rows are the display and nothing is casting most of the time. At any
- * chromed density the empty state is a small titled box parked on the HUD saying
- * nothing, and that state is what a session mostly looks at. The trade is that an empty
- * frame has no pixels to drag, which is what the loader's unlock mode answers.
- *
- * `closable` goes with the title bar that would have held the button, so the ways back
- * are the toggle keybind and the rail menu's frame list. The title stays as the frame's
- * accessible name and the label that menu row carries.
- *
- * Resizable, with both bounds stated: a bare frame with no `resizable` has no handles,
- * and one that states no bounds takes the size it opened at as its floor. It opens at
- * room for the row budget the player has set. The floor is one row, since bounds cannot
- * be restated after the frame is built.
+ * Bare, because nothing is casting most of the time and the empty state is what a session
+ * mostly looks at; the cost is that an empty frame has no pixels to drag, which the unlock
+ * mode answers. A bare frame has no title bar, so no close button and no `closable`: the
+ * ways back are the keybind and the rail menu. Both bounds are stated because a resizable
+ * frame with none takes its opening size as its floor.
  */
 function buildFrame() {
   if (drawsAnchors()) {
@@ -200,29 +127,22 @@ function visible() {
   return frame.visible;
 }
 
-/** 'shadow_bolt' reads as 'Shadow Bolt'. Unmarked: `describe` adds the hedge. */
-function readable(abilityId) {
-  return abilityId
-    .split('_')
-    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-    .join(' ');
-}
-
 /**
  * What to call this ability, what to tint it, and whether both were worked out.
  *
  * One lookup answering all three, since they have one source: `world.abilities` covers
  * your own kit, so a friendly caster using something you also know is named and tinted
  * properly, and every mob mechanic comes back marked as a guess with no school. The mark
- * is on the label, which is why this is the only place a row's name is built: it is the
- * one form of hedge that survives the anchored layout.
+ * is the addon's: `describe` reports `known: false` as a fact and leaves the presentation
+ * here, since the same string also reaches an accessible name. It goes on the label, which
+ * is the one form of hedge that survives the anchored layout.
  */
 function describe(abilityId) {
-  const known = woc.world.abilities.byId(abilityId) ?? null;
-  if (known === null) {
-    return { label: `${readable(abilityId)}${GUESS_MARK}`, school: null, guessed: true };
+  const found = woc.world.abilities.describe(abilityId);
+  if (!found.known) {
+    return { label: `${found.name}${GUESS_MARK}`, school: null, guessed: true };
   }
-  return { label: known.name, school: known.school, guessed: false };
+  return { label: found.name, school: found.school, guessed: false };
 }
 
 /**
@@ -231,12 +151,12 @@ function describe(abilityId) {
  * all for a name that came out of your spellbook.
  */
 function guessLines(id) {
-  const row = rows.get(id);
+  const row = bars.get(String(id));
   if (row === undefined || !row.guessed) {
     return '';
   }
   return {
-    title: `${readable(row.ability)}${GUESS_MARK}`,
+    title: `${woc.fmt.titleCase(row.ability)}${GUESS_MARK}`,
     lines: [
       {
         text: `Worked out from the cast id \`${row.ability}\`. The game publishes an ability's own name only for your own spellbook, and a cast that names an activity such as crafting or fishing names no ability at all, so this is a guess and is wrong wherever a name has moved away from its id.`,
@@ -272,7 +192,7 @@ function inScope(entity) {
   if (entity.hostile) {
     return true;
   }
-  return settingFlag('friendly', false);
+  return woc.settings.friendly;
 }
 
 /**
@@ -287,18 +207,16 @@ function wanted(entity, cast) {
   if (!inScope(entity)) {
     return false;
   }
-  if (cast.channeling && !settingFlag('channels', true)) {
+  if (cast.channeling && !woc.settings.channels) {
     return false;
   }
-  return cast.total >= settingNumber('min-cast', DEFAULT_MIN_CAST);
+  return cast.total >= woc.settings['min-cast'];
 }
 
 /**
- * How many bars there is room for, which is the setting held inside the box. The
- * anchored layout has no frame and therefore no box, so there the budget is the whole
- * answer. Dropping the surplus rather than letting it clip is what makes the drag a
- * control, and the order is what makes it safe: rows are sorted soonest-to-land first,
- * so what a shorter box gives up is the cast with the most time left on it.
+ * The setting held inside the box, or the setting alone when anchored, since that layout
+ * has no frame. Dropping the surplus rather than clipping is what makes the drag a control,
+ * and the soonest-first order is what makes it safe to drop from the end.
  */
 function rowCap() {
   const budget = barBudget();
@@ -331,7 +249,18 @@ function castsNow() {
 function createRow(entry) {
   const bar = woc.ui.bar({ className: 'woc-ft-bar' });
   bar.el.dataset.caster = String(entry.id);
-  const row = { bar, anchor: null, ability: '', guessed: false, lift: 0 };
+  const row = {
+    bar,
+    anchor: null,
+    ability: '',
+    guessed: false,
+    lift: 0,
+    // Read rather than captured, so one teardown covers both layouts.
+    destroy: () => {
+      bar.destroy();
+      row.anchor?.destroy();
+    },
+  };
   if (drawsAnchors()) {
     row.anchor = woc.ui.anchor3d({ unit: entry.id, over: 'head' }, { className: 'woc-ft-anchor' });
     row.anchor.el.style.width = `${ANCHOR_WIDTH}px`;
@@ -340,18 +269,6 @@ function createRow(entry) {
     woc.ui.tooltip(bar.el, () => guessLines(entry.id));
   }
   return row;
-}
-
-function dropRow(id, row) {
-  row.bar.destroy();
-  row.anchor?.destroy();
-  rows.delete(id);
-}
-
-function clearRows() {
-  for (const [id, row] of rows) {
-    dropRow(id, row);
-  }
 }
 
 /**
@@ -404,33 +321,27 @@ function paint(row, cast) {
   });
 }
 
-/** Put a row at its position, and only when it is not already there. */
-function place(el, at) {
-  if (list.children[at] !== el) {
-    list.insertBefore(el, list.children[at] ?? null);
+/**
+ * The parent IS the layout and is fixed when the list is built, so a layout change rebuilds
+ * the list. An anchored row carries its own anchor, so it is given no parent and is not ordered.
+ */
+function buildList() {
+  const opts = {
+    key: (entry) => String(entry.id),
+    create: createRow,
+    update: (row, entry) => {
+      name(row, entry);
+      paint(row, entry.cast);
+    },
+    element: (row) => row.bar.el,
+  };
+  if (!drawsAnchors()) {
+    opts.parent = list;
   }
+  return woc.ui.list(opts);
 }
 
-function apply(entries) {
-  const casting = new Set(entries.map((entry) => entry.id));
-  for (const [id, row] of rows) {
-    if (!casting.has(id)) {
-      dropRow(id, row);
-    }
-  }
-  for (const [at, entry] of entries.entries()) {
-    let row = rows.get(entry.id);
-    if (row === undefined) {
-      row = createRow(entry);
-      rows.set(entry.id, row);
-    }
-    name(row, entry);
-    paint(row, entry.cast);
-    if (row.anchor === null) {
-      place(row.bar.el, at);
-    }
-  }
-}
+let bars = buildList();
 
 /**
  * Where every anchored bar is on screen, nearest caster first. The same point the anchor
@@ -440,7 +351,7 @@ function apply(entries) {
 function onScreen(entries) {
   const found = [];
   for (const entry of entries) {
-    const row = rows.get(entry.id);
+    const row = bars.get(String(entry.id));
     if (row !== undefined && row.anchor !== null) {
       const at = woc.ui.project({ unit: entry.id, over: 'head' });
       if (at !== null) {
@@ -520,7 +431,7 @@ function stack(entries) {
 // the map every frame would walk every entity in interest scope to find out nothing.
 woc.world.on('casts', () => {
   if (visible()) {
-    apply(castsNow());
+    bars.sync(castsNow());
   }
 });
 
@@ -534,19 +445,20 @@ woc.onFrame(() => {
   if (!shown) {
     // A hidden display holds no rows, which is what takes the anchors out of the
     // world: they are not inside a frame and nothing else would hide them.
-    clearRows();
+    bars.clear();
     return;
   }
-  if (!appeared && rows.size === 0) {
+  if (!appeared && bars.size === 0) {
     return;
   }
   const entries = castsNow();
-  apply(entries);
+  bars.sync(entries);
   if (drawsAnchors()) {
     stack(entries);
   }
 });
 
+// Not `toggleKey`: the anchored layout has no frame, so the key flips a flag instead.
 woc.keys.bind('toggle', () => {
   if (frame === null) {
     anchorsShown = !anchorsShown;
@@ -561,10 +473,12 @@ woc.keys.bind('toggle', () => {
  * in the column, and neither can become the other.
  */
 function rebuild() {
-  clearRows();
+  // Destroyed rather than cleared: `parent` is fixed at build, and the layout decides it.
+  bars.destroy();
   const previous = frame;
   frame = buildFrame();
   previous?.destroy();
+  bars = buildList();
   // So the next frame counts as an appearance and repopulates from the world.
   wasVisible = false;
 }

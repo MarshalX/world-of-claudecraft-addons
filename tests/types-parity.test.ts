@@ -14,7 +14,9 @@
 // the suite reports that the check is present, not to do the checking.
 
 import { describe, expect, it } from 'vitest';
-import type { GameIdentity, WocApi } from '../loader/src/runtime/api/index.ts';
+import type { BusApi } from '../loader/src/runtime/api/bus.ts';
+import type { FmtApi } from '../loader/src/runtime/api/fmt.ts';
+import type { AddonIdentity, GameIdentity, WocApi } from '../loader/src/runtime/api/index.ts';
 import type { KeysApi } from '../loader/src/runtime/api/keys.ts';
 import type { NetApi } from '../loader/src/runtime/api/net.ts';
 import type { SoundApi } from '../loader/src/runtime/api/sound.ts';
@@ -25,9 +27,11 @@ import type { EventPayloads } from '../loader/src/runtime/net/events.ts';
 import type { Entity } from '../loader/src/runtime/world/game-types.ts';
 import type { WorldKey } from '../loader/src/runtime/world/signature.ts';
 import type { WorldValues } from '../loader/src/runtime/world/values.ts';
-import type { GameInfo } from '../packages/types/addon.js';
+import type { AddonInfo, GameInfo } from '../packages/types/addon.js';
+import type { BusApi as PublicBusApi } from '../packages/types/bus.js';
 import type { Entity as PublicEntity } from '../packages/types/entity.js';
 import type { EventPayloads as PublicEventPayloads } from '../packages/types/events.js';
+import type { FmtApi as PublicFmtApi } from '../packages/types/fmt.js';
 import type { WocApi as PublicWocApi } from '../packages/types/index.js';
 import type { KeysApi as PublicKeysApi } from '../packages/types/keys.js';
 import type { NetApi as PublicNetApi } from '../packages/types/net.js';
@@ -107,6 +111,29 @@ const publishedIsKeys: Assignable<PublicKeysApi, KeysApi> = true;
 const storageIsPublished: Assignable<AddonStorageApi, PublicStorageApi> = true;
 const publishedIsStorage: Assignable<PublicStorageApi, AddonStorageApi> = true;
 
+/**
+ * `duration`'s style is a named `DurationStyle` here and an inline union in the
+ * package, so a third style added to the alias would reach every internal caller
+ * and reach an author as an option their editor refuses to offer.
+ */
+const fmtIsPublished: Assignable<FmtApi, PublicFmtApi> = true;
+const publishedIsFmt: Assignable<PublicFmtApi, FmtApi> = true;
+
+/**
+ * The loader returns `Teardown` and the package `Unsubscribe`, both `() => void`,
+ * so nothing structural connects the two subscriber signatures.
+ */
+const busIsPublished: Assignable<BusApi, PublicBusApi> = true;
+const publishedIsBus: Assignable<PublicBusApi, BusApi> = true;
+
+/**
+ * Every field is `readonly` in the package and bare in the loader, which is right
+ * on both sides and which assignability is blind to, hence the field comparison.
+ */
+const addonIsPublished: Assignable<AddonIdentity, AddonInfo> = true;
+const publishedIsAddon: Assignable<AddonInfo, AddonIdentity> = true;
+const addonFieldsAgree: SameFields<AddonIdentity, AddonInfo> = true;
+
 const gameIsPublished: Assignable<GameIdentity, GameInfo> = true;
 const publishedIsGame: Assignable<GameInfo, GameIdentity> = true;
 
@@ -153,6 +180,28 @@ const wocCarriesKeys: Assignable<WocApi['keys'], PublicKeysApi> = true;
 const wocCarriesStorage: Assignable<WocApi['storage'], PublicStorageApi> = true;
 const wocCarriesWorld: Assignable<WocApi['world'], PublicWorldApi> = true;
 const wocCarriesNet: Assignable<WocApi['net'], PublicNetApi> = true;
+const wocCarriesFmt: Assignable<WocApi['fmt'], PublicFmtApi> = true;
+const wocCarriesBus: Assignable<WocApi['bus'], PublicBusApi> = true;
+const wocCarriesAddon: Assignable<WocApi['addon'], AddonInfo> = true;
+const wocCarriesGame: Assignable<WocApi['game'], GameInfo> = true;
+
+/**
+ * ONE direction on purpose. `PaintOpts.frame` is `{ visible: boolean }` where the
+ * package publishes the whole `Frame`, so the loader accepts strictly more and
+ * the reverse is false and should be. This direction is the load-bearing one: it
+ * fails when the package promises a `paint` the loader cannot honour.
+ */
+const wocCarriesPaint: Assignable<WocApi['paint'], PublicWocApi['paint']> = true;
+
+/**
+ * A backstop for every root member nobody named: `settings`, `onSettingsChange`,
+ * `onDispose`, `onFrame`, the timers, the log functions, both version numbers.
+ *
+ * The reverse is absent because two differences are deliberate rather than drift:
+ * `settings` is the schema's three types here and `unknown` in the package, and
+ * `paint` is the narrowing above.
+ */
+const wocSatisfiesPublished: Assignable<WocApi, PublicWocApi> = true;
 
 /**
  * The two ROOT members that are not facets, and both are the same kind of trap.
@@ -197,6 +246,13 @@ describe('the published types', () => {
       publishedIsKeys,
       storageIsPublished,
       publishedIsStorage,
+      fmtIsPublished,
+      publishedIsFmt,
+      busIsPublished,
+      publishedIsBus,
+      addonIsPublished,
+      publishedIsAddon,
+      addonFieldsAgree,
       gameIsPublished,
       publishedIsGame,
       worldIsPublished,
@@ -227,6 +283,12 @@ describe('the published types', () => {
       wocCarriesStorage,
       wocCarriesNet,
       wocCarriesWorld,
+      wocCarriesFmt,
+      wocCarriesBus,
+      wocCarriesAddon,
+      wocCarriesGame,
+      wocCarriesPaint,
+      wocSatisfiesPublished,
       wocCarriesData,
       publishedIsData,
       wocCarriesWallClock,

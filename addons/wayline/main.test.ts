@@ -649,10 +649,9 @@ describe('what it remembers', () => {
   // case above cannot express: there, both clocks stand still, so a restore that ignored the wall
   // reading entirely would pass it.
   //
-  // Here the wall clock is four hours further on than it was when the sample was written, while
-  // the monotonic clock is the fresh one this page started with. The sample was stamped five
-  // minutes before the current wall reading, so five minutes is the age it has to come back at.
-  // Both ways of dropping the conversion land on 60,000 instead.
+  // The wall clock is four hours on and the monotonic clock is a fresh page's. The sample is
+  // stamped five minutes before the wall reading, so five minutes is the age it must come back
+  // at; both ways of dropping the conversion land on 60,000.
   it('restores an award across a reload that moved one clock and reset the other', async () => {
     const wallNow = WALL_CLOCK_MS + 4 * HOUR;
     const hub = createFakeStorage();

@@ -194,7 +194,7 @@ const SCENARIOS: readonly Scenario[] = [
     id: 'column',
     label: 'Four casts as a column',
     preview: true,
-    alt: "a borderless column of four draining bars, soonest to land first, each naming its caster underneath. Shadow Bolt? at 0.7 seconds by Vessken, its fill red because it lands within a second, and its name worked out by title-casing the ability id, which the game itself calls Gloom Bolt: the question mark is the display saying so. Rift Thunderhead? at 1.9 seconds by the boss Tempest Vharok, marked the same way and drawn in the plain fill with no icon, because skill art is filed under a player class and nothing on the wire says what school a mob cast is. Aether Darts at 2.4 seconds by Sorrelin and Pyrelance at 3.1 seconds by Ilvane, both abilities this mage also knows, so both carry the game's own name unmarked, its art, and the colour the game gives that school, arcane blue and fire orange.",
+    alt: 'a borderless column of four draining cast bars, soonest to land first, each naming its caster underneath; a question mark marks a name worked out from the ability id.',
     frames: { casts: { box: WIDENED, visible: true } },
     world: aContestedRift,
     run: look,

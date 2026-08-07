@@ -1,15 +1,15 @@
 {
   "id": "facemark",
   "name": "Facemark",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "apiVersion": 1,
-  "apiMinor": 2,
+  "apiMinor": 4,
   "author": "MarshalX",
   "description": "A nameplate over every unit near you: its name, its level, a health bar, a cast bar, the harmful effects on it, a threat edge and its raid mark.",
   "entry": "main.js",
   "preview": {
     "file": "preview.png",
-    "alt": "two nameplates floating over the units they belong to. Tempest Vharok, level 22, the name in hostile red beside a yellow Star raid mark, a health bar at 58 percent, a cast bar reading Rift Thunderhead? because only the ability id reaches an addon and the name was worked out from it, and two effect tiles under it, Venom Barb and Rattling Shot, each carrying the art the game files under that ability. A red edge runs down its left, saying the player is top of its hate table. Beside it the friendly player Anserra at level 20 and 66 percent health, the name in player blue, no threat edge at all because a player keeps no hate table, and one effect on them, the boss snare Static Field, drawn as a bordered countdown with no picture because an effect a mob applied has none anywhere in the game."
+    "alt": "two nameplates over the units they belong to, each with a name, a level, a health bar and effect tiles. The hostile one adds a raid mark, a cast bar and a red threat edge."
   },
   "homepage": "https://github.com/MarshalX/world-of-claudecraft-addons",
   "tags": ["interface", "world"],

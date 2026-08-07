@@ -2,50 +2,32 @@
 
 // Purelight: the effects in front of you that can actually be removed.
 //
-// Every tile on this strip is one a player could spend a global on and change something.
 // Everything else is absent rather than dimmed or sorted lower, because the triage is
-// the feature.
+// the feature. Nothing can be removed FROM here: the loader never sends, so this says
+// what is worth a global and the player spends it.
 //
-// Removability is the game's own rule and the loader publishes it, so nothing here works
-// it out. `world.dispellable(aura, offensive)` is three clauses: the effect is not
-// control an encounter owns, its school is not physical, and its polarity points the way
-// the direction asks. The first is what separates a scripted mechanic's stun from an
-// ordinary one, and skipping it costs a global.
+// Removability is the game's own rule, published as `world.dispellable(aura, offensive)`
+// and never worked out here. Its three clauses are that the effect is not control an
+// encounter owns, that its school is not physical, and that its polarity points the way
+// the direction asks; the first separates a scripted mechanic's stun from an ordinary
+// one, and skipping it costs a global. The direction is per unit, from `Entity.hostile`,
+// so one strip covers lifting a debuff off a friend and stripping a buff off an enemy.
 //
-// The direction is per unit, from `Entity.hostile`. On you, your pet and your group the
-// question is which harmful effect can be lifted off; on a hostile target it is which
-// benefit can be stripped away. Both are the same three clauses with the polarity
-// reversed, so they share one strip and one set of tiles.
+// Only an ENTITY is read, never a party row: a row exists for a member across the map
+// where an entity does not, and it carries neither school nor `unbreakableControl`,
+// which are the two clauses whose absence costs a global. Nothing is inferred from an
+// aura's `value` or a row's `neg` either, since both are magnitudes rather than
+// polarities: a dot carries a positive figure per tick exactly as a hot does.
 //
-// Only an entity is read, never a party row. A row exists for a member on the far side
-// of the map where an entity does not, and it carries no school and no
-// `unbreakableControl`, which are the two clauses whose absence costs a global. So
-// `world.partyAuras` is unused here and a member with no entity is left off, which costs
-// nothing anybody could have acted on: such a member is out of interest scope entirely.
-//
-// Nothing is inferred from an aura's `value` or from a party row's `neg`. Both are
-// magnitudes rather than polarities: a damage over time carries a positive figure per
-// tick exactly as a heal over time does, and a root and a stun both carry 0.
-//
-// Nothing can be removed from here. The loader never sends, so this says what is worth a
-// global and the player spends it.
-//
-// A tile draws the applying ability's art when a player applied it. Art is filed per
-// player class and an aura carries no class of its own, so the caster's is the only
-// route to it, and a control aura is the same ability with a tail on its id (see
-// `AURA_SUFFIXES`, which the highest-ranked tiles are exactly the ones that need). An
-// effect a mob applied has an icon in the game and no file anywhere, because the game
-// composites those on a canvas no addon can reach, so those tiles carry the school's
+// A tile draws the applying ability's art only where a PLAYER applied it: art is filed
+// per player class and an aura carries none, so the caster is the only route, and a
+// control aura is that ability with a tail on its id (see `AURA_SUFFIXES`). A mob's
+// aura is composited on a canvas no addon can reach, so those tiles carry the school
 // colour, the countdown and the stack count, with the name one hover away.
 //
-// The strip is resizable and its height is the tile size plus the caption band under it,
-// which is the arrangement Cooldown Bars draws its own tile strip with. The width is
-// only room to grow into: tiles sized to fill it would shrink as more effects landed.
+// The strip's width is only room to grow into: tiles sized to fill it would shrink as
+// more effects landed.
 
-/** How many tiles the strip shows before it stops, unless the player says otherwise. */
-const DEFAULT_MAX_TILES = 6;
-/** Below this many seconds left, an effect will be gone before a global lands. */
-const DEFAULT_MIN_SECONDS = 1;
 /**
  * The tile strip's starting square, which is also its floor. 40 is the tap-target floor
  * the game holds its own controls to, and a strip below it cannot be hit or read.
@@ -61,21 +43,16 @@ const CAPTION_FONT = 11;
 /** How wide the strip starts. Only room to grow into. */
 const STRIP_WIDTH = 300;
 const DECIMALS = 1;
-/** Over this, a tile's countdown is drawn in minutes: 40 pixels does not fit "119". */
-const SECONDS_PER_MINUTE = 60;
 
 /**
- * The kinds that stop a player acting, which is the worst thing an effect can do.
+ * The kinds that stop a player acting. Every one is checked against
+ * `KnownHarmfulAuraKind` rather than written from what a control effect is usually
+ * called, since naming a kind that does not exist is silent in both directions: a fear
+ * is `incapacitate`, and `fear` is the diminishing-returns category it files under.
  *
- * Every one is checked against `KnownHarmfulAuraKind` rather than written from what a
- * control effect is usually called: a fear is `incapacitate`, and `fear` is the name of
- * the diminishing-returns category it is filed under. Naming a kind that does not exist
- * is silent in both directions.
- *
- * `AuraKind` is a plain string in the published types, because the set is content and a
- * release adds to it, so a kind added later ranks as ordinary rather than being dropped.
- * Being wrong here costs one position in the order, which is why the ranking is allowed
- * to be a judgement while removability is not.
+ * A kind added by a later release ranks as ordinary rather than being dropped, which
+ * costs one position in the order. That is why the ranking may be a judgement while
+ * removability may not.
  */
 const CONTROL_KINDS = ['stun', 'incapacitate', 'polymorph', 'silence', 'root'];
 const CONTROL_RANK = 2;
@@ -87,15 +64,13 @@ const DISPEL_REASON = 'Removable: harmful, not physical, and no encounter owns i
 const PURGE_REASON = 'Removable: a benefit on a hostile unit, and not physical.';
 
 /**
- * The tails the game appends when an ability's effect becomes a control aura.
+ * The tails the game appends when an ability's effect becomes a control aura, read out of
+ * its own effect dispatch. Copied rather than shared, since an addon is one file with no
+ * imports; Facemark carries the same table.
  *
- * Read out of the game's own effect dispatch, and the same table Facemark carries: an
- * addon is one file with no imports, so a shared rule about the game is copied or it is
- * absent. A player's stun is `${ability.id}_stun`, a silence is `_silence`, a fear is
- * `_incap`; only a dot and a polymorph carry the bare ability id. Stripping one is
- * correct by construction, since the id was built by concatenation, and the spellbook is
- * asked first because five real ability ids end in what would look like a tail
- * (`brain_freeze`, `deep_freeze`, `dismiss_pet`, `mend_pet`, `revive_pet`).
+ * Stripping one is correct by construction, since the id was built by concatenation, but
+ * the spellbook is asked FIRST because five real ability ids end in what looks like a
+ * tail (`brain_freeze`, `deep_freeze`, `dismiss_pet`, `mend_pet`, `revive_pet`).
  */
 const AURA_SUFFIXES = [
   '_absorb',
@@ -116,36 +91,34 @@ const AURA_SUFFIXES = [
   '_as',
 ];
 
-/** One cell per aura. See `keyFor` for what makes an aura one rather than another. */
-const cells = new Map();
-
 /**
- * Whether a cue has any news to report yet. The first reading of a live world is
- * everything already up, so without this an addon enabled mid-fight opens with a chime
- * per effect on the group.
+ * Whether a cue has news yet. The first reading of a live world is everything already up,
+ * so without this an addon enabled mid-fight chimes once per effect on the group.
  */
 let primed = false;
 
-function settingNumber(id, fallback) {
-  const value = woc.settings[id];
-  if (typeof value === 'number' && Number.isFinite(value)) {
-    return value;
-  }
-  return fallback;
-}
-
-function settingFlag(id, fallback) {
-  const value = woc.settings[id];
-  if (typeof value === 'boolean') {
-    return value;
-  }
-  return fallback;
-}
+/** Whether this reading built a cell. Set from `createCell`, which is what knows. */
+let arrived = false;
 
 const list = document.createElement('div');
 list.className = 'woc-pl-list';
 list.style.display = 'flex';
 list.style.gap = '4px';
+
+/**
+ * One cell per aura, the whole reading held and `shown` cutting it to the tile budget: a
+ * cell dropped off the end would take its tooltip and its decoded art with it and land
+ * back a moment later whenever the ordering moved. See `keyFor` for what makes an aura
+ * one rather than another.
+ */
+const cells = woc.ui.list({
+  parent: list,
+  key: (effect) => effect.key,
+  create: createCell,
+  update: paintCell,
+  shown: (_effect, index) => index < woc.settings['max-tiles'],
+  element: (cell) => cell.el,
+});
 
 function stripHeight(size) {
   return size + CAPTION_HEIGHT;
@@ -169,6 +142,7 @@ const frame = woc.ui.frame({
   height: stripHeight(TILE_FLOOR),
   density: 'bare',
   save: true,
+  toggleKey: 'toggle',
   // A frame is content-sized and therefore not resizable by default, which is wrong for
   // a strip of art: how big a square has to be to be recognised at a glance is a matter
   // of eyesight and of how much screen a player will give this.
@@ -186,21 +160,16 @@ frame.body.appendChild(list);
 
 /**
  * Follow the strip's height, which is one square and the caption under it. The box comes
- * from the loader; measuring the element instead would force a synchronous layout on
- * every pointer move. Called at pointer rate, so it does nothing when the square has not
- * moved. The floor is applied here as well as stated on the frame, since the arithmetic
- * has to hold for a box from anywhere: a restored one, a viewport clamp, or a height a
- * future bound lets through.
+ * from the loader; measuring the element would force a synchronous layout on every
+ * pointer move. The floor is applied here as well as stated on the frame, since the
+ * arithmetic has to hold for a box from anywhere: a restored one, a viewport clamp, or a
+ * height a future bound lets through.
+ *
+ * It records the answer and nothing else; `sizeCell` carries it to the cells already up
+ * on the next reading, one frame away.
  */
 function resize(height) {
-  const next = Math.max(Math.round(height - CAPTION_HEIGHT), TILE_FLOOR);
-  if (next === tileSize) {
-    return;
-  }
-  tileSize = next;
-  for (const cell of cells.values()) {
-    sizeCell(cell);
-  }
+  tileSize = Math.max(Math.round(height - CAPTION_HEIGHT), TILE_FLOOR);
 }
 
 /**
@@ -208,8 +177,17 @@ function resize(height) {
  * caption truncates against the art rather than against a column that stayed 40 wide.
  * The tile is updated rather than rebuilt, or every pointer move would throw away art
  * the browser has decoded.
+ *
+ * The size it last wrote is held on the cell, since this runs on every reading. The kit
+ * drops the tile half; the WIDTH is this addon's own div and nothing defends it, so
+ * without the guard a strip nobody is dragging writes a style attribute per cell per
+ * frame to say it has not moved.
  */
 function sizeCell(cell) {
+  if (cell.size === tileSize) {
+    return;
+  }
+  cell.size = tileSize;
   cell.el.style.width = `${String(tileSize)}px`;
   cell.ui.update({ size: tileSize });
 }
@@ -223,16 +201,12 @@ function live() {
 }
 
 /**
- * Every unit this display answers for, once each.
+ * Every unit this answers for, once each. Collected by entity id rather than by token,
+ * since your target is very often in your own group and would be drawn twice.
  *
- * Collected by entity id rather than by token, since the same entity reaches the list by
- * more than one route: your target is very often a member of your own group, and one
- * shared between two routes would be drawn twice.
- *
- * A party member is looked up by pid rather than through a `partyN` token, which is the
- * same lookup with the loader's 1-based numbering of the other members in between. That
- * numbering shifts the moment the player is left out of the walk, and a shift captions
- * one member's effects with another's name.
+ * A member is looked up by pid rather than through a `partyN` token: that numbering
+ * shifts the moment the player is left out of the walk, and a shift captions one member's
+ * effects with another's name.
  */
 function units() {
   const found = new Map();
@@ -242,7 +216,7 @@ function units() {
     }
   };
   const mine = woc.world.player?.id ?? null;
-  if (settingFlag('include-player', true)) {
+  if (woc.settings['include-player']) {
     add(woc.world.player);
     add(woc.world.unit('pet'));
   }
@@ -251,16 +225,15 @@ function units() {
       add(woc.world.entities.get(member.pid));
     }
   }
-  if (settingFlag('include-target', true)) {
+  if (woc.settings['include-target']) {
     add(woc.world.target);
   }
   return [...found.values()];
 }
 
 /**
- * The ability an effect was applied by, which is what art is filed under. The aura's own
- * id wherever the game names one, since an id it can name is an ability id by
- * definition. Otherwise the tail comes off: see `AURA_SUFFIXES`.
+ * What art is filed under: the aura's own id wherever the spellbook names one, since an
+ * id it can name is an ability id by definition. Otherwise the tail comes off.
  */
 function artId(auraId) {
   if (woc.world.abilities.byId(auraId) !== null) {
@@ -290,15 +263,10 @@ function artOf(aura, caster) {
 }
 
 /**
- * What makes one aura a different aura from another on the same unit.
- *
- * Not the ability id on its own. Two players can carry the same debuff on one target,
- * and keying on the id alone collapses the pair into one tile whose stack count is one
- * of the two auras' rather than the pair's, so the caster is in the key.
- *
- * The ordinal covers what the caster cannot: `sourceId` is 0 when the game did not say
- * who applied something, so two effects the world itself put on one unit would still
- * collide. It counts within a single reading, in the game's own aura order.
+ * Not the ability id on its own: two players can carry the same debuff on one target, and
+ * keying on the id alone collapses the pair into one tile counting one of them. So the
+ * caster is in the key, and an ordinal covers what the caster cannot, since `sourceId` is
+ * 0 wherever the game did not say who applied something.
  */
 function keyFor(unit, aura, seen) {
   const base = `${String(unit.id)}:${aura.id}:${String(aura.sourceId)}`;
@@ -328,11 +296,7 @@ function effectFrom(unit, aura, key) {
   };
 }
 
-/**
- * What can be removed from one unit, in that unit's own direction. One filter and no
- * join: the whole rule is `world.dispellable`, which is the game's own classifier rather
- * than a copy that would go stale on the release that adds a kind.
- */
+/** One filter and no join: the whole rule is the game's own classifier. */
 function removableOn(unit) {
   const seen = new Map();
   const found = [];
@@ -356,9 +320,8 @@ function severity(effect) {
 }
 
 /**
- * Worst first, and within a rank the one with longest left. Longest rather than
- * shortest, which is the opposite of a cooldown list: an effect about to fall off on its
- * own is the one not worth a global.
+ * Worst first, and within a rank the LONGEST left, which is the opposite of a cooldown
+ * list: an effect about to fall off on its own is the one not worth a global.
  */
 function worstFirst(a, b) {
   const rank = severity(b) - severity(a);
@@ -370,7 +333,7 @@ function worstFirst(a, b) {
 
 /** Everything removable in front of you right now, worst first. */
 function reading() {
-  const floor = settingNumber('min-seconds', DEFAULT_MIN_SECONDS);
+  const floor = woc.settings['min-seconds'];
   const found = [];
   for (const unit of units()) {
     for (const effect of removableOn(unit)) {
@@ -382,14 +345,6 @@ function reading() {
   return found.sort(worstFirst);
 }
 
-/** `8`, or `2m` for anything a 40 pixel square has no room to spell out. */
-function countdown(remaining) {
-  if (remaining >= SECONDS_PER_MINUTE) {
-    return `${String(Math.ceil(remaining / SECONDS_PER_MINUTE))}m`;
-  }
-  return String(Math.ceil(remaining));
-}
-
 /** Stacks in the corner, or nothing at all for the ordinary single application. */
 function stackCount(effect) {
   if (effect.stacks > 1) {
@@ -399,8 +354,8 @@ function stackCount(effect) {
 }
 
 /**
- * How much of the effect is left. A duration of zero is a permanent effect or one the
- * game did not state, and a full tile is right for both: an empty one reads as expired.
+ * A duration of zero is a permanent effect or one the game did not state, and a full tile
+ * is right for both: an empty one reads as expired.
  */
 function fractionOf(effect) {
   if (effect.duration > 0) {
@@ -417,10 +372,9 @@ function reasonFor(effect) {
 }
 
 /**
- * What one tile says under the pointer. A function, so it answers with what is left now
- * rather than with what was left when the tile was built, and so it can say why the
- * effect is on the strip at all. The caster is named when the game said who it was,
- * which is what tells two tiles of the same debuff on one unit apart.
+ * A function, so it answers with what is left NOW rather than when the tile was built.
+ * The caster is named where the game said who it was, which is what tells two tiles of
+ * the same debuff on one unit apart.
  */
 function tooltipFor(key) {
   const effect = reading().find((row) => row.key === key);
@@ -440,10 +394,9 @@ function tooltipFor(key) {
 }
 
 /**
- * One square, with the name of whoever is carrying it under it. The caption is not
- * something the kit draws, because a tile's whole face is art: `label` is how a tile is
- * announced, and this strip has to be readable by eye as well, since the first thing a
- * healer needs is who is carrying the effect.
+ * The caption is not something the kit draws, since a tile's whole face is art and
+ * `label` is only how it is announced. A healer needs to read who is carrying the effect
+ * by eye.
  */
 function createCell(effect) {
   const tile = woc.ui.tile({
@@ -474,10 +427,13 @@ function createCell(effect) {
   name.style.lineHeight = `${String(CAPTION_HEIGHT)}px`;
   name.textContent = effect.who;
   cell.append(tile.el, name);
-  const built = { ui: tile, el: cell, name };
+  const built = { ui: tile, el: cell, name, size: 0, destroy: tile.destroy };
   // Whatever the strip is at now, so a tile appearing mid-fight matches its neighbours.
+  // It is sized here as well as on every reading, because a cell built while the strip is
+  // hidden is never painted and would otherwise open at the kit's own default.
   sizeCell(built);
   woc.ui.tooltip(cell, () => tooltipFor(effect.key));
+  arrived = true;
   return built;
 }
 
@@ -486,87 +442,45 @@ function createCell(effect) {
  * as the figures, because a cell outlives one reading: the caster's art resolves only
  * once the class manifest has been read, so a tile built before that would keep an empty
  * icon slot for the life of the effect.
+ *
+ * Only the DRAWING stands down while the strip is hidden: the reading and the cue are the
+ * half of this display that works when nobody is looking.
  */
-function paint(cell, effect) {
+function paintCell(cell, effect) {
+  if (!frame.visible) {
+    return;
+  }
+  sizeCell(cell);
   cell.name.textContent = effect.who;
   cell.ui.update({
     label: `${effect.who}: ${effect.name}`,
     icon: effect.icon,
     fraction: fractionOf(effect),
-    value: countdown(effect.remaining),
+    value: woc.fmt.duration(effect.remaining),
     count: stackCount(effect),
     school: effect.school,
   });
 }
 
-/** Put a cell at its position, and only if it is not there already. */
-function place(el, at) {
-  if (list.children[at] !== el) {
-    list.insertBefore(el, list.children[at] ?? null);
-  }
-}
-
-function shownOrder(effects) {
-  return effects
-    .filter((effect) => cells.has(effect.key))
-    .slice(0, settingNumber('max-tiles', DEFAULT_MAX_TILES));
-}
-
-function draw(effects) {
-  const order = shownOrder(effects);
-  const shown = new Set(order.map((effect) => effect.key));
-  for (const [key, cell] of cells) {
-    if (!shown.has(key)) {
-      cell.el.remove();
-    }
-  }
-  for (const [at, effect] of order.entries()) {
-    const cell = cells.get(effect.key);
-    paint(cell, effect);
-    place(cell.el, at);
-  }
-}
-
 /** One chime for a reading that brought news, however many effects landed in it. */
 function chime() {
-  if (primed && settingFlag('cue', true)) {
+  if (primed && woc.settings.cue) {
     woc.sound.alert();
   }
 }
 
 /**
- * Rebuild the set of tiles from what is removable. A cell already up is kept rather than
- * rebuilt, so a tile does not lose a hover or a tooltip every time anything else in
- * front of the player changes.
+ * Apply one reading. A cell already up is kept rather than rebuilt, so a tile does not
+ * lose a hover or a tooltip every time anything else in front of the player changes. The
+ * whole reading goes in, past the tile budget included; see `cells`.
  */
-function sync(effects) {
-  const seen = new Set(effects.map((effect) => effect.key));
-  for (const [key, cell] of cells) {
-    if (!seen.has(key)) {
-      cell.ui.destroy();
-      cell.el.remove();
-      cells.delete(key);
-    }
-  }
-  let arrived = false;
-  for (const effect of effects) {
-    if (!cells.has(effect.key)) {
-      cells.set(effect.key, createCell(effect));
-      arrived = true;
-    }
-  }
+function resync() {
+  arrived = false;
+  cells.sync(reading());
   if (arrived) {
     chime();
   }
   primed = live();
-}
-
-function resync() {
-  const effects = reading();
-  sync(effects);
-  if (frame.visible) {
-    draw(effects);
-  }
 }
 
 // One handler on the loop the loader already runs. It reads on every frame rather than
@@ -577,10 +491,6 @@ function resync() {
 // It does not stand down while the strip is hidden, because the cue is the half of this
 // display that works when nobody is looking. Only the drawing is skipped.
 woc.onFrame(resync);
-
-woc.keys.bind('toggle', () => {
-  frame.toggle();
-});
 
 // Every setting moves what the next reading contains or how much of it is drawn, and
 // the next reading is one frame away, so there is nothing to subscribe to.

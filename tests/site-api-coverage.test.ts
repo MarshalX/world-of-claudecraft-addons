@@ -28,6 +28,7 @@ describe('the published API surface', () => {
     const owners = new Set(surface.map((one) => one.owner));
     expect([...owners].sort()).toEqual([
       'BusApi',
+      'FmtApi',
       'KeysApi',
       'NetApi',
       'SoundApi',

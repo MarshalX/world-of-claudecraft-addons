@@ -2,147 +2,69 @@
 
 // Satchel: where your things are, across every character on the account.
 //
-// The game's own bag window already aggregates your bags, so a panel that redraws them
-// earns nothing. Three questions the client cannot answer at all:
+// The game's own bag window aggregates your bags already, so this exists for the three
+// questions the client cannot answer: what is on another character, since only the one you are
+// logged in as exists on the client; what is in your bank or mail when you are not standing at
+// one, since both reads are proximity gated; and how many of something you own and where.
 //
-//   What is on another character. Only the character you are logged in as exists on the
-//   client, so an alt's bags are unreachable the moment you log out of them.
+// Every pane is drawn from a RECORD, refreshed from the live world before every paint for the
+// character in play. That is what makes an alt's bank and a walked-away bank readable, which are
+// the same case, and what the panes owe for it is AGE: a bank from three days ago is useful and
+// must never be presented as current.
 //
-//   What is in your bank or mail when you are not at one. Both reads are proximity gated:
-//   the server sends the payload on proximity alone and sends nothing otherwise.
+// ONLY `near` IS EVER RECORDED, which is the worst bug this feature can have. `world.bank` and
+// `world.mail` are three-state, and writing a snapshot on `away` erases a character's bank the
+// moment they walk away from it.
 //
-//   How many of something you own, and where. Answering that needs a record that outlives
-//   both the session and the character.
+// The key is `world.characterKey`, which is what `woc.storage.character` files under, so two
+// addons keeping a per-character record cannot disagree about whose a row is. The CHANNEL is
+// prefixed here because the loader adds it only to its own namespaces, and a character and its
+// PBE copy share a realm and a name. Storage is account-wide, ONE KEY PER CHARACTER: a
+// per-character store answers only about the character in play, which is the opposite of the
+// feature, and one blob makes every write a rewrite of every other character's row. The stamp is
+// `woc.wallClock()`, since a monotonic reading restored into a fresh page is a moment in 1970.
 //
-// So this is a cross-character item index that happens to also draw the current bags.
-// Items is the addon; the three detail panes are how you read one character's stores,
-// including a character you are not logged in as.
+// A CELL is an entry and an ITEM is a total, and the two must never share an answer. Used slots
+// is `inventory.length` and never the sum of the counts, or a player carrying 300 ore is told
+// their 52 cells are overdrawn; the Items pane asks the opposite question and does sum.
 //
-// Every pane is drawn from a record, and the record for the character in play is refreshed
-// from the live world before every paint. That is what makes walking away from a banker
-// show your bank as of ten minutes ago rather than a blank pane, and it is what makes
-// another character's bank readable at all, because the two cases are the same case. What
-// the panes owe in exchange is age: every stored reading says when it was taken, because a
-// bank from three days ago is still useful and must never be presented as current.
+// The ART is reachable and the NAME is not: an id resolves to no name, quality, kind or price
+// anywhere on this API. `ui.icon.item` answers null for an id with no file, so a blank face
+// means no art exists rather than a wrong id, and `ui.icon.itemArtName` is provenance for the
+// picture rather than the item's name. A publisher on the bus outranks it, it outranks the raw
+// id, and the tooltip says which was used.
 //
-// Only `near` is ever recorded, and this is the single worst bug this feature can have.
-// `world.bank` and `world.mail` are three-state: `near` carries the payload, `away` means
-// the player is not at the counter, and `unknown` means nothing has decoded. Writing a
-// snapshot on `away` would erase a character's bank the moment they walked away from it.
+// Capacity is POOLED and handed over as one number; `bagCapacity` has no watch key of its own,
+// so this subscribes to `bags`. `InvSlot.slot` is a placement hint, honoured and recorded, so an
+// alt's bags are drawn the way that alt arranged them. The observed stack maximum is a LOWER
+// BOUND and says so, since no published field carries one, which errs towards not promising room
+// that is not there.
 //
-// The key is the loader's, plus the channel. `world.characterKey` is the same derivation
-// `woc.storage.character` files its keys under, so this addon and any other keeping a
-// per-character record cannot disagree about whose a row is. It is opaque and nothing here
-// parses it. What it does not carry is the deployment, because the loader adds that itself
-// in `perCharacterKey` for the two namespaces it owns; a record filed in the account-wide
-// namespace gets no such help, so the channel is prefixed here. A character and its PBE
-// copy have the same realm and the same name and are not the same character.
+// There is no sort and there cannot be one: sorting, merging, selling and withdrawing are all
+// commands and the loader sends none, so every tooltip describing something a player might want
+// to act on says nothing here can. The market is absent for a different reason: a price history
+// is its own addon, and two panels recording the same pages would disagree about what was seen.
 //
-// Storage is account-wide, one key per character. A per-character store answers only about
-// the character in play, and reading a character you are not logged in as is the entire
-// feature. One key per character rather than one blob, because a blob makes every write a
-// rewrite of every other character's row, and two tabs on two characters would take turns
-// clobbering each other.
+// THE BUS CONTRACT, which this addon was the first consumer of. `item` is one record and `items`
+// is a batch. Subscribe with `woc.bus.anySender` and never a hardcoded fqid, since the same
+// addon from a fork publishes under another name and `message.from` is what a tooltip credits.
+// Ask once and draw without waiting. Silence is ORDINARY: the index is complete without a name.
 //
-// The stamp is `woc.wallClock()`, never `woc.now()`. A row is stored in one session and
-// read in the next, and a monotonic reading restored into a fresh page reads as a moment
-// in 1970 or one in the future depending on which way the two drifted.
+// A price rides the same records and has NO other source, so every total is arithmetic over what
+// somebody else published. An item nobody priced is left OUT rather than added at nothing, every
+// total says how many of its kinds it could price, and with nothing priced the row is not drawn,
+// since `0c` over a full bag is a claim rather than a silence. It is a VENDOR price, a floor
+// rather than what the thing would fetch, and every sentence about one says so.
 //
-// A cell is an entry and an item is a total, and the two questions must never share an
-// answer. One inventory entry is one cell holding 1 or 20 of something, so used slots is
-// `inventory.length` and never the sum of the counts: summing them tells a player carrying
-// 300 ore that their 52 cell bags are 248 slots overdrawn. The Items pane asks the opposite
-// question and therefore sums, so a stack split over four cells is one row reading 47.
+// Three layout rules that only bite together. Hiding is `woc.ui.show`, a class rather than a
+// display, so a grid comes back a grid. The frame is sized, its body told to fill it and its
+// panes scroll, since a frame is content-sized unless it says otherwise and the loader fills
+// only a WINDOW's body. And a row in a scrolling list must not shrink, or forty rows in a list
+// half that tall are squashed with their text clipped and no scrollbar to say so.
 //
-// The art is reachable and the name is not. An item id resolves to no name, no quality, no
-// kind and no price anywhere on this API, because the item table is bundled inside the
-// game's own chunk. `ui.icon.item(itemId)` builds a URL into the game's own item art
-// directory from that same id, so a panel that cannot say what an item is can still show
-// it. It returns null for an id that ships no file, so a blank face means "no art exists"
-// rather than "this addon built the wrong id". `ui.icon.itemArtName` serves the name the
-// art file was filed under, which is provenance for the picture rather than the item's
-// name, so it is a labelled fallback and the tooltip says where the name came from. A
-// publisher on the bus outranks it; the art name outranks the raw id. Loader last, because
-// this particular loader answer is not the item's name.
-//
-// Capacity is pooled rather than per container. The backpack is 16 cells and each of the
-// four bag sockets adds its own on top, to a ceiling of 72, and the game hands the pooled
-// total over as one number. `bagCapacity` is read rather than derived, and it has no watch
-// key of its own, so this subscribes to `bags`.
-//
-// `InvSlot.slot` is a placement hint and is honoured where there is one: it is the cell the
-// player dragged that stack into, absent for anything never moved by hand, so hinted stacks
-// are placed first and everything else flows into what is left. It is recorded too, so an
-// alt's bags are drawn the way that alt arranged them.
-//
-// The observed stack maximum is a lower bound and says so. No published field carries a
-// stack maximum, so what a merge would free is measured against the largest stack this
-// addon has actually seen, learned from every store it reads. That is the safe direction:
-// the failure it avoids is telling a player about room that is not there.
-//
-// There is no sort and there cannot be one. Sorting, merging, selling, mailing and
-// withdrawing are all commands and the loader never sends one, so every tooltip that
-// describes something the player might want to act on says that nothing here can act on it.
-//
-// The market is deliberately not here. `world.market` is readable and this addon does not
-// read it: a market pane is a price history, which is its own addon, and two panels
-// recording the same pages would disagree about what the player saw.
-//
-// The bus contract, which this addon is the first consumer of. Another addon can do better
-// than an id and publish what it learns, and the topic registry gives it `item` for one
-// record and `items` for a batch. Three rules follow, and they are the contract for every
-// consumer after this one:
-//
-//   Subscribe with `woc.bus.anySender`, never with a hardcoded fqid. A subscriber names its
-//   publisher, and `official/lorebind` is right only on the official marketplace: the same
-//   addon installed from a fork publishes as `someone/lorebind`. `message.from` says who
-//   actually answered, which is what a tooltip credits.
-//
-//   Ask once, then draw without waiting. A publisher emits on change, so a consumer that
-//   only subscribes hears nothing when the publisher emitted everything before this addon
-//   started. `item:ask` goes out after the subscriptions are up, because delivery is
-//   synchronous and an answer arrives inside the emit call itself.
-//
-//   Silence is an ordinary state rather than an error. The publisher may not be installed,
-//   may be disabled, or may simply not answer. Nothing here waits for one or tells the
-//   player something is broken: the index is complete without a single name.
-//
-// A price rides the same records, and it is the one figure here that has NO other source:
-// nothing on the addon API says what an item is worth, the item table is inside the game's
-// own chunk, and the art manifest carries a name and an icon size. So what a bag, a bank and
-// the whole account are worth is arithmetic over what somebody else published, and three
-// things follow from that and are the whole of the honesty here. An item nobody priced is
-// left OUT of a total rather than added at nothing, so the figure is never quietly wrong.
-// Every total says how many of its kinds it could price, because a sum over two kinds of
-// nine looks exactly like a complete one. And with nothing priced at all the row is not
-// drawn, since `0c` over a full bag is a claim rather than a silence.
-//
-// It is a VENDOR price, which is a floor and not what the thing would fetch, and every
-// sentence about one says so. Nothing here can sell anything either way.
-//
-// The layout, which is three rules that only bite together:
-//
-//   An element comes back as the display it was built with. `setShown` clears the inline
-//   display rather than writing one, so a grid comes back a grid and a sentence comes back
-//   a block. A helper that wrote `flex` on the way in puts 72 bag squares in one row.
-//
-//   The frame is sized, its body is told to fill it, and its panes scroll. A frame is
-//   content-sized unless it says otherwise, so a list of twenty rows makes a window twenty
-//   rows tall. Stating a height fixes the window and moves the problem inward twice: the
-//   loader fills only a window's body, so a resizable frame has to ask, and then the one
-//   list or grid in each pane takes what is left and scrolls inside it.
-//
-//   A row in a scrolling list must not shrink. A flex column shrinks its children to fit
-//   before it will scroll, so forty rows in a list half that tall are forty squashed rows
-//   with their text clipped, and the scrollbar never appears to say so.
-//
-// The figures in a pane are short labelled chips on one wrapping line, with the sentence
-// behind each one a hover away. What is not a chip is the panel's honesty rather than
-// its arithmetic: how old a reading is, and that a drawn reading is the last one rather
-// than a live one, stay on screen as sentences. Money is the exception, because it is the
-// one figure here the kit draws: `{ copper }` passed as a readout's value comes back as the
-// game's own coins and a chip takes text, so the two amounts a player scans for are kit
-// rows instead. `woc.ui.money` is the text form.
+// The figures in a pane are short labelled chips on one wrapping line. What is NOT a chip is the
+// panel's honesty rather than its arithmetic: how old a reading is, and that it is the last one
+// rather than a live one, stay on screen as sentences.
 
 /** The backpack, the socket count and the ceiling, for the sentence that explains pooling. */
 const BACKPACK_SLOTS = 16;
@@ -150,47 +72,40 @@ const BAG_SOCKETS = 4;
 const MAX_SLOTS = 72;
 
 /**
- * The square, and how few of them the frame may be dragged down to. There is no column
- * count: the grid is a wrapping track list, so the browser fits as many squares as the
- * frame is wide. The floor has to be stated, because a frame's size bounds are settled
- * when it is built and a grid two squares across is a list drawn the hard way.
+ * The square, and the floor a resize may take the grid to. No column count: the grid is a
+ * wrapping track list, so the browser refits it. The floor is stated because a frame's bounds
+ * are settled when it is built, and a grid two squares across is a list drawn the hard way.
  */
 const CELL_SIZE = 32;
 const CELL_GAP = 3;
 const MIN_COLUMNS = 6;
 const MIN_ROWS = 3;
 
+/** What the kit's layout boxes are spaced at here: a pane's rows, and a chip's two words. */
+const PANE_GAP = 3;
+const STAT_GAP = 4;
 /**
- * Wide enough for five tabs on one row. Measured rather than reasoned about, in a browser at
- * this width: the strip needs 279px of the 324 the padding leaves it, so the five stay on one
- * row with room to spare. It used to say "at the compact density", which was the density this
- * frame was built at and is no longer.
+ * The strip's two gaps: close together down the page and far apart across it, because a strip
+ * that wraps is still one line of figures rather than two lines of anything.
  */
+const STRIP_GAP = 10;
+const STRIP_WRAP_GAP = 2;
+
+/** Wide enough for five tabs on one row: measured at 279px of the 324 the padding leaves. */
 const FRAME_WIDTH = 340;
 /** Tall enough for a backpack of 16 squares, its bar, its strip and the tabs above. */
 const FRAME_HEIGHT = 420;
-/**
- * The padding the frame's width has to carry twice. It belongs to `.woc-addon-frame` rather
- * than to a density, so it is the same 8px at comfortable as it was at compact.
- */
+/** Carried twice by the width. It belongs to `.woc-addon-frame` rather than to a density. */
 const FRAME_PADDING = 8;
 /**
- * What the shortest useful frame spends on everything that is not the scrolling pane: the
- * title bar, the tab strip, the character selector, a capacity bar and the status strip.
- * Stated rather than measured at run time, because a size floor is settled once when the frame
- * is built and cannot be derived from a layout that does not exist yet.
- *
- * The number itself IS a measurement, taken in a browser on the Bags tab: 229px at
- * comfortable, against the 200 the same chrome took at compact. Nothing under Vitest can
- * check it, since every `.css` import resolves to `''` there and happy-dom lays nothing out.
- * The worth row is deliberately not in it: it is drawn only once something has published a
- * price, so a floor that reserved its 23px would be 23px of dead space for every player with
- * no publisher installed, and a floored frame that has one shows two rows of squares and a
- * scrollbar rather than three.
+ * Everything that is not the scrolling pane, measured in a browser at 229px on the Bags tab. A
+ * floor is settled when the frame is built, before there is a layout to measure, and nothing
+ * under Vitest can check it. The worth row is deliberately OUT of it: it is drawn only once
+ * something publishes a price, so reserving its 23px is dead space for a player with no
+ * publisher installed.
  */
 const CHROME_HEIGHT = 230;
 
-const DEFAULT_WARN_FREE = 4;
 const PERCENT = 100;
 /** Widths, at the precision the kit writes its own fill at. */
 const WIDTH_DECIMALS = 2;
@@ -204,17 +119,13 @@ const HOUR_MS = MINUTES_PER_HOUR * MINUTE_MS;
 const DAY_MS = HOURS_PER_DAY * HOUR_MS;
 
 /**
- * How stale a stamp may get before it is rewritten with nothing else changing. A stamp
- * answers "when was this last read" rather than "when did it last change", so a player who
- * stood at their bank a minute ago must not be told the reading is an hour old. Writing
- * every paint would be a storage write at snapshot rate.
+ * A stamp answers when this was last READ rather than when it last changed, so a player who
+ * stood at their bank a minute ago is not told the reading is an hour old. Writing every paint
+ * would be a storage write at snapshot rate.
  */
 const STAMP_REFRESH_MS = MINUTE_MS;
 
-/**
- * The account-wide key prefix, one key per character per deployment. The rest of the key is
- * `characterKey()`, which is the channel and the loader's own opaque character string.
- */
+/** One key per character per deployment; the rest is `characterKey()`. */
 const CHARACTER_PREFIX = 'char/';
 
 /** The three stores a character has, in the order every display lists them. */
@@ -231,24 +142,20 @@ const PICKER_WIDTH = 140;
 /** The window's own name, which the unread badge is appended to. See `paintTitle`. */
 const FRAME_TITLE = 'Satchel';
 
-// The registry's topics. `item` is one record, `items` is a batch of them, and the
-// ask is what a consumer that started late sends to be caught up.
+// `item` is one record and `items` is the batch an ask is answered with.
 const ITEM_TOPIC = 'item';
 const ITEMS_TOPIC = 'items';
-const ASK_TOPIC = 'item:ask';
+
+/** The older ask topic, sent beside the one `follow` derives. Drop next release. */
+const LEGACY_ASK_TOPIC = 'item:ask';
 
 /** The warning band, in the kit's own danger colour: it marks a limit, not a target. */
 const BAND_COLOR = 'rgb(255 143 133 / 30%)';
 
 /**
- * What tells an occupied cell from an empty one without the art.
- *
- * A blank face means the game ships no file, which is common: every weapon in the game is
- * filed under a model name nothing serves. A stack of one draws no count either, because a
- * grid where every single item reads "1" is noise. Those two together would leave a full
- * cell indistinguishable from an empty one, so the cell's own body carries the distinction:
- * a filled square with a solid edge against a faint dashed outline. Never `borderColor`,
- * which is the tone's, and an inline write would beat the class that sets it.
+ * What tells an occupied cell from an empty one WITHOUT the art, which is often missing, and
+ * without a count, which a stack of one does not draw. Never `borderColor`: that is the tone's,
+ * and an inline write would beat the class that sets it.
  */
 const OCCUPIED_FILL = 'rgb(255 255 255 / 7%)';
 const EMPTY_FILL = 'transparent';
@@ -258,10 +165,8 @@ const OCCUPIED_OPACITY = '1';
 const EMPTY_OPACITY = '0.4';
 
 /**
- * What a name taken from the art file is worth saying about itself. The loader is explicit
- * that this is provenance for the picture rather than the item's name, so a square drawn
- * from one has to say so somewhere. The tooltip is that somewhere: a tile's accessible name
- * is one string with no room to qualify anything.
+ * An art name is provenance for the PICTURE, so a square drawn from one has to say so. The
+ * tooltip is where: a tile's accessible name is one string with no room to qualify anything.
  */
 const ART_NOTE = {
   text: 'Named from its art file, which is not always what the game calls it.',
@@ -271,18 +176,13 @@ const ART_NOTE = {
 /** Item id to what somebody published about it, plus who published it. */
 const names = new Map();
 /**
- * Item id to the largest single stack of it seen, ever, including out of storage. The only
- * stack maximum obtainable at all, since no published field carries one. That is a lower
- * bound and is the safe direction, because the failure it avoids is telling a player about
- * room that is not there. Reading stored records back in feeds it too, so the estimate does
- * not reset every page load.
+ * The largest single stack ever seen, which is the only stack maximum obtainable since no field
+ * carries one. A LOWER bound, which is the safe direction: it never promises room that is not
+ * there. Stored records feed it too, so it does not reset every page load.
  */
 const largest = new Map();
 
-/**
- * A flag that changes, in a cell, so a handler can flip one the paint path reads without
- * either of them holding a stale copy.
- */
+/** A flag in a cell, so a handler and the paint path cannot hold different copies of it. */
 function cell(value) {
   return { on: value };
 }
@@ -297,8 +197,6 @@ const loaded = cell(false);
 const ready = cell(false);
 /** Cleared on disable, so an awaited continuation cannot draw into a dead frame. */
 const running = cell(true);
-/** One repaint per frame however many messages arrive. See `schedulePaint`. */
-const scheduled = cell(false);
 /** Whether the free-slot warning has already fired for this trip below the line. */
 const warned = cell(false);
 
@@ -311,37 +209,19 @@ const selection = { key: '', follow: cell(true) };
 /** The index behind the rows on screen, so a tooltip describes the row it is over. */
 const found = { index: new Map(), worth: { copper: 0, priced: 0, kinds: 0 } };
 /**
- * Letter bodies for the character in play, which the stored form deliberately drops. A body
- * is the longest field a letter has and is worth nothing to the index, and it is only
- * readable while standing at the pillar anyway, so it is held here for as long as the
- * reading lasts.
+ * Bodies for the character in play, which the stored form drops: the longest field a letter has,
+ * worth nothing to the index, and readable only at the pillar anyway.
  */
 const bodies = new Map();
 
-function settingNumber(id, fallback) {
-  const value = woc.settings[id];
-  if (typeof value === 'number' && Number.isFinite(value)) {
-    return value;
-  }
-  return fallback;
-}
-
-function settingFlag(id, fallback) {
-  const value = woc.settings[id];
-  if (typeof value === 'boolean') {
-    return value;
-  }
-  return fallback;
-}
-
 /** How few free slots is worth saying something about. */
 function threshold() {
-  return Math.max(0, Math.round(settingNumber('warn-free', DEFAULT_WARN_FREE)));
+  return Math.max(0, Math.round(woc.settings['warn-free']));
 }
 
 /** Whether anything at all is written down. Off means this session and no further. */
 function remembering() {
-  return settingFlag('remember', true);
+  return woc.settings.remember;
 }
 
 function text(value) {
@@ -352,9 +232,8 @@ function text(value) {
 }
 
 /**
- * A number another addon published, or 0 for anything that is not one. A string that spells a
- * price is not a price: the payload is that addon's idea of the shape, and coercing one would
- * turn a bug on its side into a figure the player reads as a fact.
+ * A string that spells a price is not a price: the payload is another addon's idea of the shape,
+ * and coercing one turns a bug on its side into a figure the player reads as a fact.
  */
 function positive(value) {
   if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) {
@@ -416,16 +295,9 @@ function freeCells() {
 }
 
 /**
- * Which character is playing, on which deployment.
- *
- * `world.characterKey` is the loader's derivation and is read rather than rebuilt from a
- * realm and a name, so that two addons keeping their own per-character records cannot
- * disagree about whose a row is. Opaque: nothing here parses it.
- *
- * The channel is prefixed, and leaving it off is a bug rather than a shortening. The
- * loader's own per-character keys carry the deployment because characters are issued per
- * deployment and are not comparable across them. This addon files under the account-wide
- * namespace, which the loader adds nothing to, so without this a PBE copy of a character
+ * `world.characterKey` READ rather than rebuilt from a realm and a name, so two addons keeping
+ * per-character records cannot disagree about whose a row is. The channel is prefixed because
+ * the loader adds it only to its own namespaces, and without it a PBE copy of a character
  * shares one record with the live character it was copied from.
  */
 function characterKey() {
@@ -437,13 +309,8 @@ function characterKey() {
 }
 
 /**
- * An amount spoken, for a tooltip line or a sentence. The loader's split rather than this
- * addon's arithmetic, so that two addons showing a price cannot spell it differently, and
- * it drops the units an amount has none of: postage of 30 copper reads as `30c`.
- *
- * The other form is `{ copper }` passed as a readout's `value`, which the kit draws with
- * the game's own coins. That one is for a figure the eye lands on; this one is for a figure
- * a sentence is about.
+ * An amount a sentence is ABOUT, in the loader's own split so two addons cannot spell a price
+ * differently. A figure the eye lands on is `{ copper }` on a readout, drawn in the game's coins.
  */
 function money(amount) {
   if (typeof amount !== 'number' || !Number.isFinite(amount)) {
@@ -452,32 +319,11 @@ function money(amount) {
   return woc.ui.money(amount);
 }
 
-function countedCells(count) {
-  if (count === 1) {
-    return '1 cell';
-  }
-  return `${String(count)} cells`;
-}
-
-function countedItems(count) {
-  if (count === 1) {
-    return '1 item';
-  }
-  return `${String(count)} items`;
-}
-
 function unitAgo(count, unit) {
-  if (count === 1) {
-    return `1 ${unit} ago`;
-  }
-  return `${String(count)} ${unit}s ago`;
+  return `${woc.fmt.count(count, unit)} ago`;
 }
 
-/**
- * How old a reading is, in the coarsest unit that still says something. The wall clock on
- * both sides, which is why a stamp comes from `woc.wallClock()`: this subtraction spans
- * page loads.
- */
+/** The coarsest unit that still says something. The wall clock, since this spans page loads. */
 function agoText(at) {
   if (!Number.isFinite(at) || at <= 0) {
     return 'never';
@@ -501,10 +347,8 @@ function known(itemId) {
 }
 
 /**
- * The name the item's art file was filed under, or null: for an id with no file, for one
- * whose art came out of a generated batch, and for every weapon in the game, since weapon
- * art is filed under a model name through a table nothing serves. Also null until the
- * manifest has been read, which is what `learnArt` is for.
+ * Null for an id with no file, for art out of a generated batch, until the manifest lands, and
+ * for every weapon, whose art is filed under a MODEL name through a table nothing serves.
  */
 function artName(itemId) {
   if (itemId === '') {
@@ -514,42 +358,19 @@ function artName(itemId) {
 }
 
 /**
- * `chunk_of_ore` read back as `Chunk Of Ore`. The last resort, and a guess: an item id is
- * not a name and the game capitalises plenty of things this gets wrong. It is still the
- * better of the two readable failures, because a list where one row in ten is a lowercase
- * identifier reads as a bug in the rows around it. The tooltip says where every name came
- * from.
- */
-function titleCase(itemId) {
-  return itemId
-    .split('_')
-    .filter((word) => word !== '')
-    .map((word) => word[0].toUpperCase() + word.slice(1))
-    .join(' ');
-}
-
-/**
- * The best name there is, and a reading of the id when there is none. Never blank. A
- * publisher first and the loader second, which is the opposite of the usual ordering and is
- * right here for one reason: what the loader has is not the item's name and says so in its
- * own documentation. A publisher's is.
+ * Never blank. A publisher outranks the loader here, which inverts the usual order: what the
+ * loader has is an art file's name and says so in its own documentation. `titleCase` is the last
+ * resort and a guess, taken because a list where one row in ten is a lowercase identifier reads
+ * as a bug in the rows around it. The tooltip says which was used.
  */
 function nameOf(itemId) {
-  return known(itemId)?.name ?? artName(itemId) ?? titleCase(itemId);
+  return known(itemId)?.name ?? artName(itemId) ?? woc.fmt.titleCase(itemId);
 }
 
 /**
- * What a vendor pays for one of something, or null while nobody has published a price.
- *
- * Zero stands for absent inside the record, and that is safe in one direction only: the
- * publisher's rule is that a field it cannot state is left OUT of the payload, so nothing on
- * the bus sends a real zero, and reading one as absent keeps an item nobody priced out of a
- * total rather than adding it in at nothing.
- *
- * There is no other source for this. No published field on the addon API says what anything
- * is worth, the item table is bundled inside the game's own chunk, and the art manifest
- * carries a name and an icon size. So a price is something another addon knew and told this
- * one, or it is not known at all.
+ * Null while nobody has published a price, and there is no other source for one. Zero stands for
+ * absent inside the record, which is safe in one direction only: a publisher leaves a field it
+ * cannot state OUT, so reading a zero as absent keeps an unpriced item out of a total.
  */
 function sellOf(itemId) {
   const said = known(itemId)?.sellValue ?? 0;
@@ -560,11 +381,8 @@ function sellOf(itemId) {
 }
 
 /**
- * What a pile is worth to a vendor, and how much of it could be priced at all.
- *
- * The count is as load-bearing as the figure. A total drawn from two kinds out of nine is a
- * real answer and looks exactly like a complete one, so the two are computed together and
- * every place that draws the figure draws the count beside it.
+ * The COUNT is as load-bearing as the figure: a total drawn from two kinds out of nine is a real
+ * answer that looks exactly like a complete one, so everywhere that draws one draws both.
  */
 function worthOf(counts) {
   const sums = { copper: 0, priced: 0, kinds: 0 };
@@ -584,20 +402,12 @@ function storeCounts(stacks) {
   return [...stacksIn(stacks)].map(([itemId, counts]) => [itemId, counts.held]);
 }
 
-/**
- * Every copy of everything on the account, off the index the Items pane has already built
- * this frame. `draw` paints the items pane first, which is what makes that safe, and building
- * a second index here would be the same walk over every character for the same answer.
- */
+/** Off the index the Items pane built this frame, which `draw` paints first. */
 function accountCounts() {
   return [...found.index].map(([itemId, row]) => [itemId, row.total]);
 }
 
-/**
- * One published record, checked. A bus payload is `unknown` and is another addon's idea of
- * the shape, so an id and a name are required and everything else reads as absent when it
- * is the wrong kind.
- */
+/** A bus payload is `unknown`: an id and a name are required, the rest reads as absent. */
 function parseItem(payload) {
   if (typeof payload !== 'object' || payload === null) {
     return null;
@@ -632,14 +442,17 @@ function onItem(message) {
   }
 }
 
-/** The batch form of the same topic, which the registry gives a publisher for a bulk answer. */
-function onItems(message) {
-  if (!Array.isArray(message.payload)) {
+/**
+ * The batch an ask is answered with. The `Array.isArray` guard is load-bearing rather than
+ * defensive: a publisher answers every ask, and one with nothing to say sends a null.
+ */
+function onItems(payload, from) {
+  if (!Array.isArray(payload)) {
     return;
   }
   let learned = 0;
-  for (const entry of message.payload) {
-    if (remember(entry, message.from)) {
+  for (const entry of payload) {
+    if (remember(entry, from)) {
       learned += 1;
     }
   }
@@ -649,10 +462,9 @@ function onItems(message) {
 }
 
 /**
- * One stack, from the wire or from storage, which are the same shape on purpose. `InvSlot`
- * is what the game hands over and what gets written down, so the live path and the stored
- * path share every reader below this line. The placement hint rides along, which is what
- * lets an alt's bags be drawn the way that alt arranged them.
+ * The wire's shape and the stored shape are the same on purpose, so the live and stored paths
+ * share every reader below. The placement hint rides along, which is what draws an alt's bags
+ * the way that alt arranged them.
  */
 function parseStack(value) {
   const itemId = entryId(value);
@@ -697,9 +509,8 @@ function parseIds(value) {
 }
 
 /**
- * One letter, without its body. The id is carried as a string because it is a row key
- * everywhere it is used, and a number that round-trips through JSON and is then used as a
- * DOM attribute is one implicit conversion away from a row that cannot be found again.
+ * The id is a STRING because it is a row key: a number round-tripped through JSON and then used
+ * as a DOM attribute is one implicit conversion away from a row nothing can find again.
  */
 function parseLetter(value) {
   if (typeof value !== 'object' || value === null) {
@@ -787,10 +598,8 @@ function parseBank(value) {
 }
 
 /**
- * What the next bank expansion costs, or null once they are all bought. Checked on the type
- * rather than coerced, because `Number(null)` is 0 and 0 is finite: a `nextExpansionCost`
- * of null read that way becomes an expansion that is free rather than one that does not
- * exist.
+ * Checked on the TYPE rather than coerced: `Number(null)` is 0 and 0 is finite, so a null read
+ * that way becomes an expansion that is free rather than one that does not exist.
  */
 function expansionCost(value) {
   if (typeof value === 'number' && Number.isFinite(value)) {
@@ -835,9 +644,8 @@ function emptyRecord(key) {
 }
 
 /**
- * One stored character, checked. A previous version of this addon wrote it and a player can
- * edit it. A record with no name is dropped outright: every character has one, so a row
- * without it is not a character.
+ * Checked, since a previous version wrote it and a player can edit it. A record with no name is
+ * dropped: every character has one, so a row without it is not a character.
  */
 function parseRecord(key, value) {
   if (typeof value !== 'object' || value === null) {
@@ -859,9 +667,8 @@ function parseRecord(key, value) {
 }
 
 /**
- * Item id to `{ cells, held }` over one store, recording the largest stack seen. The
- * recording is a side effect of a read on purpose: every reading of a store is also the only
- * chance to observe a stack size. Every store goes through here, the stored ones included.
+ * `{ cells, held }` per item, recording the largest stack seen on the way past: a reading of a
+ * store is the only chance to observe a stack size, and every store goes through here.
  */
 function stacksIn(entries) {
   const held = new Map();
@@ -885,10 +692,8 @@ function learnFrom(record) {
 }
 
 /**
- * How many cells merging this item's stacks would free, at least. Measured against the
- * largest stack seen, because no published field says how big a stack of anything may be.
- * An item never seen above one is a thing that does not stack, and the same arithmetic
- * answers zero for it without needing to be told.
+ * AT LEAST, measured against the largest stack seen, since no field says how big a stack may be.
+ * An item never seen above one answers zero without being told it does not stack.
  */
 function mergeable(itemId, held) {
   const biggest = largest.get(itemId) ?? 0;
@@ -904,14 +709,10 @@ function emptyView() {
 }
 
 /**
- * One reading of a store: what is held, what is doubled up, and what is a spare. Taken once
- * per paint and handed down. Every mark comes from ids alone, which is what makes them the
- * things this panel can highlight with nobody having named anything.
- *
- * `alsoIn` is the other store's ids and is one-directional: the bank marks what the
- * character is also carrying, and the bags do not mark what is also banked, because a bank
- * reading comes and goes as the player walks up to a counter and a mark that appeared and
- * vanished with it would read as a fault.
+ * Taken once per paint and handed down. Every mark comes from IDS alone, which is what lets the
+ * panel highlight anything with nobody having named it. `alsoIn` is one-directional: the bank
+ * marks what is also carried and not the reverse, since a bank reading comes and goes with the
+ * counter and a mark that vanished with it would read as a fault.
  */
 function readStore(entries, worn, alsoIn) {
   const held = stacksIn(entries);
@@ -964,9 +765,9 @@ function liveBank(info, now) {
 }
 
 /**
- * The mailbox, with every attachment flattened into `stacks`. The index asks one question
- * of every source, "what items are in here", and a parcel waiting in a letter is an item
- * the character owns and cannot see. Keeping the letters as well is what the Mail pane draws.
+ * Attachments are FLATTENED into `stacks`: a parcel waiting in a letter is an item the character
+ * owns and cannot see, and the index asks one question of every source. The letters are kept
+ * too, since the Mail pane draws them.
  */
 function liveMail(info, now) {
   const snap = emptyMail();
@@ -996,10 +797,9 @@ function holdBodies(messages) {
 }
 
 /**
- * Fold the live world into the record for the character in play. The bags are folded in
- * unconditionally, because they stream. The bank and the mailbox are folded in only on
- * `near`: the server sends nothing for a counter the player is not standing at, and
- * recording that as an empty store would erase what they have.
+ * The bags stream, so they fold in unconditionally. The bank and the mailbox fold in only on
+ * `near`: the server sends nothing for a counter nobody is at, and recording that as an empty
+ * store would erase what the player has.
  */
 function syncLive() {
   const key = characterKey();
@@ -1009,9 +809,8 @@ function syncLive() {
   const now = woc.wallClock();
   const record = records.get(key) ?? emptyRecord(key);
   record.key = key;
-  // Kept rather than overwritten when the entity has no name for a frame. A blank one is
-  // what `parseRecord` drops a stored row on, so writing one would quietly delete a
-  // character on the next page load rather than at the moment it happened.
+  // Kept rather than overwritten for a frame with no name: a blank is what `parseRecord` drops a
+  // stored row on, so writing one deletes a character on the next page load.
   const name = text(woc.world.player?.name);
   if (name !== '') {
     record.name = name;
@@ -1045,14 +844,9 @@ function recordSignature(record) {
 }
 
 /**
- * Write a record down, when it has changed or when its stamp has gone stale. The stale half
- * is what makes an age honest: a stamp answers when a store was last read, so a player
- * standing at their bank moving nothing must not be told the reading is an hour old, and
- * writing on every paint would be a storage write at snapshot rate.
- *
- * A rejection is the addon's own log and nothing else: this is a record the player did not
- * ask for at the moment it fails, and a toast about storage during a fight would be worse
- * than the missing row.
+ * On a change, or on a stamp going stale, which is what makes an age honest: a player standing
+ * at their bank moving nothing must not be told the reading is an hour old. A rejection is the
+ * log and nothing else, since a toast about storage mid-fight is worse than the missing row.
  */
 function keep(key, record) {
   if (!(ready.on && remembering())) {
@@ -1120,10 +914,9 @@ async function loadRecords() {
 }
 
 /**
- * Read what is stored, then wait for somebody to be playing. The read failing is not a
- * reason to show nothing: `loaded` is set either way. `ready` is separate and gates only the
- * write, because there is nobody to file a record under until world entry and one written
- * before it would be attributed to whoever logged in next.
+ * `loaded` is set even on a failed read, so a panel is drawn either way. `ready` is separate and
+ * gates only the WRITE: there is nobody to file a record under before world entry, and one
+ * written earlier is attributed to whoever logs in next.
  */
 async function startRecords() {
   await loadRecords().catch((err) => {
@@ -1142,48 +935,7 @@ async function startRecords() {
   draw();
 }
 
-/**
- * What an element's display is when it is shown, for the ones this addon lays out. Recorded
- * where the element is built rather than passed at every call site, because the call sites
- * are the paint functions and the thing being shown is whatever they happen to hold.
- */
-const displays = new WeakMap();
-
-/** Build-time: this element is a `grid`, or a `flex` column, or whatever it is. */
-function displayAs(el, display) {
-  displays.set(el, display);
-  el.style.display = display;
-  return el;
-}
-
-/**
- * Show or hide an element, both ways. `hidden` is a UA rule at the lowest priority there
- * is, so an inline display beats it outright and the element stays on screen; setting only
- * the display would leave it in the accessibility tree instead.
- *
- * An element this addon did not lay out comes back with no inline display at all, rather
- * than with a `flex` that only suits the ones it did: a kit bar shown as a flex line draws
- * its detail beside its figure instead of under it, and neither raises anything.
- */
-function setShown(el, shown) {
-  el.hidden = !shown;
-  if (!shown) {
-    el.style.display = 'none';
-    return;
-  }
-  const display = displays.get(el);
-  if (display === undefined) {
-    el.style.removeProperty('display');
-    return;
-  }
-  el.style.display = display;
-}
-
-/**
- * A flex child that takes what is left of its parent and may shrink to nothing.
- * `min-height: 0` is the half that is easy to leave out: a flex item's floor is its content,
- * so without it a list of forty rows refuses to shrink and pushes the frame open.
- */
+/** `min-height: 0` is the half easy to leave out: forty rows would push the frame open. */
 function fills(el) {
   el.style.flex = '1 1 auto';
   el.style.minHeight = '0';
@@ -1204,26 +956,20 @@ function fixed(el) {
   return el;
 }
 
-/** A sentence the pane says on its own line. See the header on what stays one. */
+/**
+ * `muted` carries the smaller size these want as well as the colour: a sentence beside a row of
+ * chips is part of the same footer, and at the frame's own size it towers over them until the
+ * figures read as its caption. The tone rather than a style, so a density can still reach it.
+ */
 function line(parent, role) {
-  const el = document.createElement('div');
-  el.className = 'woc-satchel-line';
+  const el = woc.ui.line({ parent, className: 'woc-satchel-line', tone: 'muted' });
   el.dataset.role = role;
-  el.style.lineHeight = '1.35';
-  // A size of its own, at the strip's rather than the frame's. A sentence beside a row of
-  // chips is read as part of the same footer, and at the frame's own size it towers over
-  // them: the strip's figures then read as a caption on the sentence.
-  el.style.fontSize = '12px';
-  fixed(el);
-  parent.appendChild(el);
   return el;
 }
 
 /**
- * A sentence sitting in a strip rather than under one. It has to give way, which is the
- * opposite of what every other line does: a flex item is as wide as its longest line by
- * default, so an age line in a narrow frame would push the strip wider than the panel.
- * `min-width: 0` is what actually lets it wrap.
+ * A sentence INSIDE a strip has to give way, which is the opposite of every other line: a flex
+ * item is as wide as its longest line, so it would push the strip wider than the panel.
  */
 function wrapping(el) {
   el.style.flexShrink = '1';
@@ -1232,20 +978,14 @@ function wrapping(el) {
 }
 
 function say(el, said) {
-  setShown(el, said !== '');
+  woc.ui.show(el, said !== '');
   el.textContent = said;
 }
 
 /**
- * A kit field laid on one line rather than stacked, with its label shrunk to a caption.
- *
- * LAYOUT only. It used to hand-size the control as well, at 13px on a 24px floor, because
- * `ui.field` stacked a 14px label over a 16px control with a 40px minimum and two of those
- * were 120 pixels of chrome over a list. The kit is drawn at the game's own desktop scale
- * now, so the sizes it gives are already the ones this was reaching for, and the writes were
- * doing nothing but beating the coarse-pointer floor on a phone: an inline style outranks
- * every selector a stylesheet can spell, so an addon that hand-sizes a kit control opts
- * itself out of an accessibility rule it never meant to have an opinion about.
+ * A kit field on one line rather than stacked, with its label shrunk to a caption. LAYOUT only:
+ * the CONTROL is never hand-sized, since an inline style outranks every selector and would opt
+ * it out of the coarse-pointer tap-target floor.
  */
 function inline(field, width) {
   const row = field.el;
@@ -1268,51 +1008,38 @@ function inline(field, width) {
 }
 
 function column(className) {
-  const el = document.createElement('div');
-  el.className = className;
-  el.style.flexDirection = 'column';
-  el.style.gap = '3px';
-  displayAs(el, 'flex');
-  setShown(el, true);
-  return el;
+  return woc.ui.column({ className, gap: PANE_GAP });
 }
 
 /**
- * The status strip: short labelled figures on one line, wrapping onto a second. Baseline
- * alignment rather than centre, because a label at 11px beside a figure at the frame's own
- * size is two different heights and centring them makes neither sit on the line the
- * sentence under it sits on.
+ * Baseline rather than centre: a label at 11px beside a figure at the frame's own size is two
+ * heights, and centring them leaves neither on the line the sentence under them sits on.
  */
 function strip(parent, role) {
-  const el = document.createElement('div');
-  el.className = 'woc-satchel-strip';
+  const el = woc.ui.row({
+    parent,
+    className: 'woc-satchel-strip',
+    wrap: true,
+    align: 'baseline',
+    // Close down, far across, or a wrapped strip reads as two strips.
+    gap: STRIP_GAP,
+    wrapGap: STRIP_WRAP_GAP,
+  });
   el.dataset.role = role;
-  el.style.flexWrap = 'wrap';
-  el.style.alignItems = 'baseline';
-  el.style.gap = '2px 10px';
-  displayAs(el, 'flex');
-  fixed(el);
-  parent.appendChild(el);
-  setShown(el, true);
   return el;
 }
 
-/**
- * One labelled figure, hidden until it has something to say. The label is drawn small and
- * quiet and the figure at the frame's own size, so the eye lands on four numbers rather
- * than on four sentences.
- */
+/** Hidden until it has something to say, so the eye lands on figures rather than sentences. */
 function stat(parent, role, label) {
-  const el = document.createElement('div');
-  el.className = 'woc-satchel-stat';
+  const el = woc.ui.row({
+    parent,
+    className: 'woc-satchel-stat',
+    align: 'baseline',
+    gap: STAT_GAP,
+  });
   el.dataset.role = role;
-  el.style.gap = '4px';
-  el.style.alignItems = 'baseline';
-  // A chip is a label and a figure that belong on one line, so it wraps as a WHOLE
-  // onto the next row of the strip rather than breaking between the two.
+  // A chip wraps as a WHOLE onto the strip's next row rather than breaking between its two words.
   el.style.whiteSpace = 'nowrap';
-  displayAs(el, 'flex');
-  fixed(el);
   const name = document.createElement('span');
   name.className = 'woc-satchel-stat-label';
   name.textContent = label;
@@ -1325,98 +1052,83 @@ function stat(parent, role, label) {
   figure.style.fontVariantNumeric = 'tabular-nums';
   figure.style.fontSize = '13px';
   el.append(name, figure);
-  parent.appendChild(el);
-  setShown(el, false);
+  woc.ui.show(el, false);
   return { el, figure };
 }
 
-/**
- * One worth row, built the same way in all three places that draw one. Hidden to begin with,
- * because it is hidden whenever nothing has been priced and the first paint is one of those
- * moments: a row that flashed a figure and then went would read as something being lost.
- */
+/** Hidden to begin with: a row that flashes a figure and then goes reads as something lost. */
 function worthRow(role) {
   const bar = woc.ui.bar({ label: 'Worth', className: 'woc-satchel-worth' });
   bar.el.dataset.role = role;
-  fixed(bar.el);
-  setShown(bar.el, false);
+  woc.ui.show(bar.el, false);
   return bar;
 }
 
 /** A figure, or nothing at all, which takes the whole chip off the strip. */
 function setStat(chip, value) {
-  setShown(chip.el, value !== '');
+  woc.ui.show(chip.el, value !== '');
   chip.figure.textContent = value;
 }
 
-/**
- * A list of kit rows that is rebuilt from a reading rather than from events. `rows` is what
- * is already on screen, so a repaint reuses a row rather than replacing it: an element
- * removed and re-inserted loses whatever the browser was tracking on it, hover included.
- */
-function group(name, tip) {
-  const el = column('woc-satchel-list');
-  el.dataset.list = name;
-  return { el, rows: new Map(), tip };
-}
-
-/** Put a cell or a row where it belongs, and only when it is not there already. */
-function place(list, el, at) {
-  if (list.children[at] !== el) {
-    list.insertBefore(el, list.children[at] ?? null);
-  }
-}
-
-function addRow(owner, key, icon) {
-  const bar = woc.ui.bar({ icon, className: 'woc-satchel-row' });
-  bar.el.dataset.row = key;
-  // A list is a flex column, and a flex column shrinks its children to fit before it will
-  // scroll: forty rows in a list half that tall are forty rows squashed to half a line each,
-  // their text clipped by the bar's own `overflow: hidden`, with no scrollbar to say so.
+function addRow(tip, entry) {
+  const bar = woc.ui.bar({ icon: entry.icon, className: 'woc-satchel-row' });
+  bar.el.dataset.row = entry.key;
+  // A flex column squashes its children before it scrolls, clipping every row's text with no
+  // scrollbar to say so. The kit's sheet carries this for `.woc-bar`; it is stated here too
+  // because a stylesheet is unreadable from a suite.
   fixed(bar.el);
-  woc.ui.tooltip(bar.el, () => owner.tip(key));
-  owner.rows.set(key, bar);
-  owner.el.appendChild(bar.el);
+  woc.ui.tooltip(bar.el, () => tip(entry.key));
   return bar;
 }
 
-/** Sync one list to a reading: drop what has gone, build what is new, place the rest. */
-function syncList(owner, entries) {
-  const wanted = new Set(entries.map((entry) => entry.key));
-  for (const [key, bar] of owner.rows) {
-    if (!wanted.has(key)) {
-      bar.destroy();
-      owner.rows.delete(key);
-    }
-  }
-  for (const [at, entry] of entries.entries()) {
-    const bar = owner.rows.get(entry.key) ?? addRow(owner, entry.key, entry.icon);
-    bar.update(entry.update);
-    place(owner.el, bar.el, at);
-  }
+/** Keyed on what the row is ABOUT, so a reused row keeps the hover a re-inserted one loses. */
+function group(name, tip) {
+  const el = column('woc-satchel-list');
+  el.dataset.list = name;
+  return {
+    el,
+    rows: woc.ui.list({
+      parent: el,
+      key: (entry) => entry.key,
+      create: (entry) => addRow(tip, entry),
+      update: (bar, entry) => {
+        bar.update(entry.update);
+      },
+    }),
+  };
 }
 
 /**
- * One grid of cells: the element, the tiles in it, and the reading behind them. Two of
- * these, because a deposit box is cells too. `plan` and `view` are held rather than
- * recomputed on demand, because a tooltip is asked for its content when it is shown and it
- * has to describe the square the pointer is over rather than whatever the store holds by
- * the time the answer is composed.
+ * Two of these, since a deposit box is cells too. `plan` and `view` are HELD rather than
+ * recomputed: a tooltip is asked for its content when it is shown, and it has to describe the
+ * square the pointer is over rather than whatever the store holds by then.
  */
 function createGrid(name) {
   const el = document.createElement('div');
   el.className = 'woc-satchel-grid';
   el.dataset.grid = name;
-  displayAs(el, 'grid');
-  // As many squares across as the frame is wide, decided by the browser on every resize. A
-  // fixed track rather than `minmax(32px, 1fr)`: a stretched track would stretch the square
-  // in it, and a bag cell that changes shape with the window is worse than a centred grid.
+  el.style.display = 'grid';
+  // A FIXED track rather than `minmax(32px, 1fr)`: a stretched track stretches the square in it,
+  // and a bag cell that changes shape with the window is worse than a centred grid.
   el.style.gridTemplateColumns = `repeat(auto-fill, ${String(CELL_SIZE)}px)`;
   el.style.gap = `${String(CELL_GAP)}px`;
   el.style.justifyContent = 'center';
   el.style.alignContent = 'start';
   scrolls(el);
-  return { el, cells: [], plan: [], view: emptyView() };
+  const grid = { el, plan: [], view: emptyView() };
+  // Keyed on the SLOT, which is the one place a position is the identity rather than an
+  // accident of order: cell 5 is cell 5 for as long as the store has one, and what changes is
+  // what is in it. So a store that grows builds the squares it gained and one that shrinks
+  // destroys the squares it lost, and nothing in between is rebuilt.
+  grid.cells = woc.ui.list({
+    parent: el,
+    key: (slot) => String(slot.at),
+    create: (slot) => createCell(grid, slot.at),
+    update: (tile, slot) => {
+      paintCell(tile, slot.entry, grid.view);
+    },
+  });
+  return grid;
 }
 
 /**
@@ -1456,10 +1168,8 @@ function fillSpill(plan, spill) {
 }
 
 /**
- * What each square of a store holds: one stack, or null for an empty cell. One planner for
- * both grids. The bags carry a placement hint per stack and the bank carries none, so the
- * bank flows into the front of its grid: honouring an absent hint and honouring none are
- * the same code.
+ * One planner for both grids: the bags carry a placement hint per stack and the bank carries
+ * none, and honouring an absent hint is the same code as honouring none.
  */
 function cellPlan(snap) {
   const total = Math.max(snap.total, snap.stacks.length);
@@ -1474,18 +1184,14 @@ function gridWidth(columns) {
 }
 
 /**
- * The panel.
- *
- * Resizable, which a frame is not by default and which this one has to be: what it draws is
- * a grid whose useful width is however many squares the player wants across, and five lists
- * any of which can outrun a fixed height. Both size bounds are stated because a frame that
- * states neither takes the size it opened at as its floor. They are derived from the square
- * and a minimum count, and they are settled here for good: a bound cannot be restated after
- * the frame is built, so the floor has to stay true for the widest tab as well.
+ * Resizable, since the useful width is however many squares the player wants across. Both bounds
+ * are stated, because a frame that states neither takes its opening size as its floor, and they
+ * are settled for good here: a bound cannot be restated, so the floor must hold for every tab.
  */
 const frame = woc.ui.frame({
   id: 'bags',
   title: FRAME_TITLE,
+  toggleKey: 'toggle',
   width: FRAME_WIDTH,
   height: FRAME_HEIGHT,
   density: 'comfortable',
@@ -1533,7 +1239,7 @@ const picker = { field: null, labels: [], keys: new Map() };
 
 function showPane(active) {
   for (const [name, pane] of panes) {
-    setShown(pane, name === active);
+    woc.ui.show(pane, name === active);
   }
   paintPicker();
 }
@@ -1564,10 +1270,8 @@ function labelFor(record, here) {
 }
 
 /**
- * A label per character, guaranteed unique. `ui.field.select` takes plain strings, which
- * are both the option and its value, so two characters of the same name on different realms
- * would collapse into one row. The key is opaque but unique, so the second of a pair
- * carries it.
+ * Unique by construction: a select's options are plain strings that are also their values, so
+ * two characters of one name on two realms would collapse into one row.
  */
 function uniqueLabel(record, here, used) {
   const base = labelFor(record, here);
@@ -1601,10 +1305,9 @@ function characterOptions() {
 }
 
 /**
- * Which character the detail panes are showing. Following the character in play is the
- * default and survives a switch, because a panel that stayed pointed at the character you
- * just logged out of would be answering a question nobody asked. A deliberate pick stops
- * following until the player picks the one in play again.
+ * Follows the character in PLAY by default and through a switch, since a panel pointed at the
+ * character you just logged out of answers a question nobody asked. A deliberate pick stops it
+ * following until the one in play is picked again.
  */
 function viewedKey() {
   const here = characterKey();
@@ -1665,7 +1368,7 @@ function buildPicker(options) {
 
 function paintPicker() {
   const options = characterOptions();
-  setShown(pickerRow, DETAIL_PANES.has(tabs.active()) && options.length > 0);
+  woc.ui.show(pickerRow, DETAIL_PANES.has(tabs.active()) && options.length > 0);
   if (!sameLabels(options.map((option) => option.label))) {
     buildPicker(options);
     return;
@@ -1676,10 +1379,8 @@ function paintPicker() {
 const capacityBar = woc.ui.bar({ label: 'Slots', className: 'woc-satchel-capacity' });
 
 /**
- * The warning band, inside the capacity bar and behind its text. The fill is what is left,
- * the kit's sense everywhere, so it drains toward the left edge as the bags fill and the
- * band is drawn from that edge: the moment the fill has shrunk into the band is the moment
- * the warning is about.
+ * The fill is what is LEFT, so it drains leftward as the bags fill and the band is drawn from
+ * that edge: the fill shrinking into the band is the moment the warning is about.
  */
 const warnBand = document.createElement('div');
 warnBand.className = 'woc-satchel-band';
@@ -1815,10 +1516,8 @@ frame.body.append(tabs.el, pickerRow, itemsPane, bagsPane, bankPane, mailPane, r
 showPane(tabs.active());
 
 /**
- * Every item on the account, and every place a copy of it sits. The question the addon
- * exists to answer. Counts are summed here rather than counted as cells, which is the
- * opposite of what the capacity bar does and the opposite question: how many of a thing you
- * own is a total, and how much room it takes up is a cell budget.
+ * The question the addon exists to answer. Counts are SUMMED here rather than counted as cells,
+ * which is the opposite of the capacity bar and the opposite question.
  */
 function buildIndex() {
   const index = new Map();
@@ -1864,12 +1563,7 @@ function itemOrder(index, needle) {
     .sort((a, b) => nameOf(a).localeCompare(nameOf(b)));
 }
 
-/**
- * A row's places folded to one entry per character, in the order they were added. The row
- * itself is already one line for an item however many cells hold it; this is the same fold
- * one level up, so a character whose bags and bank both hold some reads as one name with
- * one figure.
- */
+/** One entry per character: the same fold the row already does over cells, one level up. */
 function byCharacter(places) {
   const who = new Map();
   for (const spot of places) {
@@ -1919,7 +1613,7 @@ function itemEntry(itemId, most) {
  */
 function placeLines(places) {
   return places.map((spot) => ({
-    text: `${spot.name}, ${spot.source}: ${String(spot.count)} in ${countedCells(spot.cells)}, read ${agoText(spot.at)}`,
+    text: `${spot.name}, ${spot.source}: ${String(spot.count)} in ${woc.fmt.count(spot.cells, 'cell')}, read ${agoText(spot.at)}`,
   }));
 }
 
@@ -1962,10 +1656,8 @@ function itemTipFor(itemId) {
 }
 
 /**
- * What the pane says in sentences, which is only what a figure cannot say. The counts are on
- * the strip. What is left is the states where there is no count to draw, and the one
- * instruction: a capped list has to say that it is capped, or the fortieth row reads as the
- * last item on the account.
+ * Only what a figure cannot say, since the counts are on the strip: the states with no count to
+ * draw, and the cap, or the fortieth row reads as the last item on the account.
  */
 function itemsNoteText(shown, total) {
   if (records.size === 0) {
@@ -2030,10 +1722,7 @@ function paintItems() {
   const order = itemOrder(found.index, needle);
   const shown = order.slice(0, MAX_ITEM_ROWS);
   const most = largestOf(shown);
-  syncList(
-    itemsRows,
-    shown.map((itemId) => itemEntry(itemId, most)),
-  );
+  itemsRows.rows.sync(shown.map((itemId) => itemEntry(itemId, most)));
   setStat(shownStat, shownText(shown.length, order.length));
   setStat(heldStat, heldText(order));
   // Over everything the search matched rather than over the rows drawn, which is what the
@@ -2127,14 +1816,11 @@ function pricedText(sums) {
 }
 
 /**
- * Draw a worth, or take the row off the panel altogether.
- *
- * A `0c` is a claim that everything here is worth nothing, and with nobody publishing prices
- * that is exactly the wrong claim: the honest answer to what a bag is worth, when nothing has
- * said what anything in it is worth, is no answer rather than zero.
+ * Drawn or taken off the panel, never `0c`: with nobody publishing prices that is a claim that
+ * everything here is worth nothing, where the honest answer is no answer.
  */
 function paintWorth(bar, sums) {
-  setShown(bar.el, sums.priced > 0);
+  woc.ui.show(bar.el, sums.priced > 0);
   bar.update({ value: { copper: sums.copper }, detail: pricedText(sums) });
 }
 
@@ -2234,7 +1920,7 @@ function nameLines(itemId) {
 /** What a merge would free, at the precision an observed maximum allows. */
 function freeLine(frees) {
   if (frees > 0) {
-    return `Merging them by hand would free ${countedCells(frees)}.`;
+    return `Merging them by hand would free ${woc.fmt.count(frees, 'cell')}.`;
   }
   return {
     text: 'Merging them would free nothing, measured against the largest stack seen.',
@@ -2247,7 +1933,7 @@ function markLines(view, itemId) {
   const lines = [];
   const held = view.held.get(itemId);
   if (held !== undefined && held.cells > 1) {
-    lines.push(`${countedCells(held.cells)}, ${String(held.held)} held`);
+    lines.push(`${woc.fmt.count(held.cells, 'cell')}, ${String(held.held)} held`);
     lines.push(freeLine(mergeable(itemId, held)));
   }
   if (view.spare.has(itemId)) {
@@ -2269,9 +1955,8 @@ function itemTip(view, entry) {
 }
 
 /**
- * What a cell says under the pointer. Read from the plan and the reading of the last paint
- * rather than from the store, so the answer describes the square the pointer is actually
- * over rather than whatever the store holds by the time the tooltip composes its lines.
+ * From the last paint's plan rather than the store, so it describes the square the pointer is
+ * over rather than whatever the store holds by the time the lines are composed.
  */
 function cellTip(grid, at) {
   const entry = grid.plan[at];
@@ -2284,30 +1969,12 @@ function cellTip(grid, at) {
   return itemTip(grid.view, entry);
 }
 
-/**
- * One square. A tile rather than a bar, and it is the whole reason the grid is a grid: a bar
- * is a name with a fill behind it and this panel has no names to put in one, while a tile is
- * art with a count in the corner, which is what a bag cell is.
- */
+/** A tile rather than a bar: this panel has no names to put in one, and a cell is art. */
 function createCell(grid, at) {
   const tile = woc.ui.tile({ className: 'woc-satchel-cell', size: CELL_SIZE });
   tile.el.dataset.cell = String(at);
   woc.ui.tooltip(tile.el, () => cellTip(grid, at));
   return tile;
-}
-
-/** Grow or shrink a grid to its store's capacity. Cells are never reordered. */
-function sizeGrid(grid, total) {
-  while (grid.cells.length > total) {
-    const gone = grid.cells.pop();
-    gone.destroy();
-  }
-  while (grid.cells.length < total) {
-    const at = grid.cells.length;
-    const tile = createCell(grid, at);
-    grid.cells.push(tile);
-    place(grid.el, tile.el, at);
-  }
 }
 
 /** A count worth drawing. A grid where every single item reads "1" is noise. */
@@ -2328,11 +1995,8 @@ function markTone(itemId, view) {
 }
 
 /**
- * An empty cell. The label is unset rather than left alone, because a tile's accessible name
- * is otherwise only ever written and a cell reused from an occupied one would go on
- * announcing what used to be in it. `null` puts it back to unnamed, which hides the square
- * from assistive technology outright; an empty string says "this is called the empty
- * string" rather than "this has no name".
+ * The label is UNSET rather than left alone, or a cell reused from an occupied one announces the
+ * item it last held. `null` is unnamed; an empty string is a name that is blank.
  */
 function clearCell(tile) {
   tile.update({ label: null, icon: null, count: null, tone: 'default' });
@@ -2368,12 +2032,11 @@ function paintCell(tile, entry, view) {
 }
 
 function paintGrid(grid, plan, view) {
+  // Both are held before the sync rather than passed into it: `update` paints from `grid.view`
+  // and a tooltip is asked for its content when the pointer lands, which is long after.
   grid.plan = plan;
   grid.view = view;
-  sizeGrid(grid, plan.length);
-  for (const [at, entry] of plan.entries()) {
-    paintCell(grid.cells[at], entry, view);
-  }
+  grid.cells.sync(plan.map((entry, at) => ({ at, entry })));
 }
 
 /**
@@ -2406,21 +2069,23 @@ function isAre(count) {
   return 'are';
 }
 
-/** The sentences the figures used to be, for the hover. */
+/** The marks spelled out, which is what the chip on the strip is a count of. */
 function markSentences(view) {
   const lines = [];
   if (view.split.size > 0) {
     lines.push(
-      `${countedItems(view.split.size)} here ${isAre(view.split.size)} in more than one cell.`,
+      `${woc.fmt.count(view.split.size, 'item')} here ${isAre(view.split.size)} in more than one cell.`,
     );
     lines.push(freeLine(view.reclaim));
   }
   if (view.spare.size > 0) {
-    lines.push(`${countedItems(view.spare.size)} here ${isAre(view.spare.size)} also equipped.`);
+    lines.push(
+      `${woc.fmt.count(view.spare.size, 'item')} here ${isAre(view.spare.size)} also equipped.`,
+    );
   }
   if (view.carried.size > 0) {
     lines.push(
-      `${countedItems(view.carried.size)} here ${isAre(view.carried.size)} also in the bags.`,
+      `${woc.fmt.count(view.carried.size, 'item')} here ${isAre(view.carried.size)} also in the bags.`,
     );
   }
   return lines;
@@ -2508,15 +2173,15 @@ function clearBags() {
   for (const chip of [marksStat, socketsStat]) {
     setStat(chip, '');
   }
-  setShown(purse.el, false);
-  setShown(bagsWorth.el, false);
+  woc.ui.show(purse.el, false);
+  woc.ui.show(bagsWorth.el, false);
 }
 
 function paintBags() {
   const record = viewedRecord();
   const live = viewingSelf();
-  setShown(capacityBar.el, record !== null);
-  setShown(bagGrid.el, record !== null);
+  woc.ui.show(capacityBar.el, record !== null);
+  woc.ui.show(bagGrid.el, record !== null);
   if (record === null) {
     clearBags();
     return;
@@ -2529,7 +2194,7 @@ function paintBags() {
   say(bagsAgeLine, `${whoseText(record)}${ageText(snap, live)}`);
   setStat(marksStat, marksText(view));
   setStat(socketsStat, socketsText(snap));
-  setShown(purse.el, true);
+  woc.ui.show(purse.el, true);
   purse.update({ value: { copper: record.copper } });
   paintWorth(bagsWorth, worthOf(storeCounts(snap.stacks)));
   say(recentLine, liveRecent(live));
@@ -2562,7 +2227,9 @@ function expansionText(snap) {
 
 /** The same figures as sentences, and where each of them came from. */
 function expansionLines(snap) {
-  const lines = [`${countedCells(snap.bought)} bought and ${countedCells(snap.granted)} granted.`];
+  const lines = [
+    `${woc.fmt.count(snap.bought, 'cell')} bought and ${woc.fmt.count(snap.granted, 'cell')} granted.`,
+  ];
   if (snap.next === null) {
     lines.push('Every expansion has been bought.');
     return lines;
@@ -2580,7 +2247,7 @@ function bonusLines() {
   return state.info.bonusSources
     .filter((source) => numberOr(source?.slots, 0) > 0)
     .map((source) => ({
-      text: `${text(source?.id)}: ${countedCells(numberOr(source?.slots, 0))}`,
+      text: `${text(source?.id)}: ${woc.fmt.count(numberOr(source?.slots, 0), 'cell')}`,
       tone: 'muted',
     }));
 }
@@ -2614,11 +2281,9 @@ function bankTermsTip() {
 woc.ui.tooltip(bankTermsStat.el, bankTermsTip);
 
 /**
- * Why a bank or a mailbox is not being refreshed right now. Never "it is empty", which is
- * the whole reason the loader publishes a status rather than a nullable reading: the server
- * sends nothing for a counter the player is not standing at. What is drawn in the meantime
- * is the last reading that was taken, so this is a note about freshness rather than an
- * excuse for a blank pane.
+ * Never "it is empty", which is why the loader publishes a status rather than a nullable
+ * reading: the server sends nothing for a counter nobody is at. A note about FRESHNESS, since
+ * what is drawn meanwhile is the last reading taken.
  */
 function gateText(status, counter, live, drawn) {
   if (!live || status === 'near') {
@@ -2653,17 +2318,15 @@ function bankNoteText(record, snap, live) {
 }
 
 /**
- * The deposit box, live or remembered. The grid is drawn from the last `near` reading
- * whatever the current status is, and that is the feature. What must never happen is the
- * reverse, an `away` status being recorded as an empty bank, and that is refused in
- * `syncLive` rather than here.
+ * Drawn from the last `near` reading whatever the status is, which is the feature. The reverse,
+ * an `away` recorded as an empty bank, is refused in `syncLive`.
  */
 function paintBank() {
   const record = viewedRecord();
   const snap = viewedSource('bank');
   const live = viewingSelf();
   const drawn = record !== null && snap.at > 0;
-  setShown(bankBody, drawn);
+  woc.ui.show(bankBody, drawn);
   say(bankNote, bankNoteText(record, snap, live));
   if (!drawn) {
     paintGrid(bankGrid, [], emptyView());
@@ -2698,10 +2361,8 @@ function sentences(parts) {
 }
 
 /**
- * The badge: the one mail fact with no proximity gate on it at all. About the player rather
- * than about the selected character, which is why it is not taken from a record:
- * `world.mailUnread` streams everywhere, and a badge exists for the moment you are not at
- * the mailbox.
+ * The one mail fact with no proximity gate. About the PLAYER rather than the selected character,
+ * which is why it is not read off a record: a badge exists for when you are not at the mailbox.
  */
 function unreadText() {
   const unread = woc.world.mailUnread;
@@ -2718,10 +2379,8 @@ function unreadText() {
 }
 
 /**
- * The unread count in the window title. A badge has to be readable with the Mail tab closed
- * and a tab strip is built once and cannot be relabelled, so the title is what is left, and
- * it is on screen whichever pane is open. Written only on a change, since `setTitle` on
- * every paint would rewrite the same string at snapshot rate.
+ * In the TITLE because a badge has to be readable with the Mail tab closed and a tab strip
+ * cannot be relabelled. Written only on a change, or `setTitle` runs at snapshot rate.
  */
 function paintTitle() {
   const unread = woc.world.mailUnread;
@@ -2749,7 +2408,7 @@ function attachmentText(letter) {
     parts.push(money(letter.copper));
   }
   if (letter.items.length > 0) {
-    parts.push(countedItems(letter.items.length));
+    parts.push(woc.fmt.count(letter.items.length, 'item'));
   }
   if (parts.length === 0) {
     return '';
@@ -2829,7 +2488,7 @@ function mailTip(key) {
  */
 function paintMailTerms(snap, drawn) {
   setStat(postageStat, drawnText(drawn, money(snap.postage)));
-  setStat(attachmentsStat, drawnText(drawn, countedItems(snap.attachments)));
+  setStat(attachmentsStat, drawnText(drawn, woc.fmt.count(snap.attachments, 'item')));
   setStat(flightStat, drawnText(drawn, `${String(snap.flight)}s`));
 }
 
@@ -2846,7 +2505,7 @@ function mailTermsTip() {
   return {
     title: 'Sending a letter',
     lines: [
-      `Postage is ${money(snap.postage)}, up to ${countedItems(snap.attachments)} a letter, ${String(snap.flight)}s in flight.`,
+      `Postage is ${money(snap.postage)}, up to ${woc.fmt.count(snap.attachments, 'item')} a letter, ${String(snap.flight)}s in flight.`,
       { text: 'Read off the mailbox rather than written down here.', tone: 'muted' },
       { text: 'Nothing here can send one.', tone: 'muted' },
     ],
@@ -2868,21 +2527,16 @@ function unreadLine(record, snap, live) {
 }
 
 /**
- * The mailbox, live or remembered. The count in the title comes from `world.mailUnread`,
- * which streams everywhere, and the letters from `world.mail`, which exists only at a
- * pillar. Neither is derived from the other: `mail.unread` counts the same letters and is
- * the pane's own figure, and reaching for it to draw a badge would give a badge that only
- * lights while the player is already looking at the box.
+ * The title's count is `world.mailUnread`, which streams everywhere; the letters are
+ * `world.mail`, which exists only at a pillar. Neither is derived from the other, or the badge
+ * would light only while the player is already looking at the box.
  */
 function paintMail() {
   const record = viewedRecord();
   const snap = viewedSource('mail');
   const live = viewingSelf();
   const drawn = record !== null && snap.at > 0;
-  syncList(
-    mailRows,
-    snap.letters.map((letter) => mailEntry(letter)),
-  );
+  mailRows.rows.sync(snap.letters.map((letter) => mailEntry(letter)));
   paintMailTerms(snap, drawn);
   say(mailAgeLine, mailAgeText(record, snap, live));
   say(
@@ -2965,15 +2619,10 @@ function rosterNoteText() {
 }
 
 /**
- * Every character added up, which is the one question a list of them cannot answer.
- *
- * The bags only, and the tooltip says so. Bags are recorded every time a character is
- * played; a bank is recorded only if that character walked up to one, so a slot total that
- * included them would jump the first time somebody visited a banker. Money is the
- * account's, which is the figure a player with a bank mule is after.
- *
- * The ages behind these differ by days and nothing in a total can say so, which is why the
- * per-character rows keep their own stamps and the tooltip names the oldest of them.
+ * The BAGS only, and the tooltip says so: bags are recorded every time a character is played and
+ * a bank only if they walked up to one, so a total including banks jumps the first time somebody
+ * visits a banker. The ages behind these differ by days, which nothing in a total can say, so
+ * the rows keep their own stamps and the tooltip names the oldest.
  */
 function rosterTotals() {
   const sums = { characters: 0, used: 0, total: 0, copper: 0, oldest: 0 };
@@ -3018,8 +2667,8 @@ woc.ui.tooltip(rosterStrip, rosterSummaryTip);
 
 function paintRosterTotals() {
   const sums = rosterTotals();
-  setShown(rosterStrip, sums.characters > 0);
-  setShown(accountBar.el, sums.characters > 0);
+  woc.ui.show(rosterStrip, sums.characters > 0);
+  woc.ui.show(accountBar.el, sums.characters > 0);
   accountBar.update({ value: { copper: sums.copper } });
   paintWorth(accountWorth, worthOf(accountCounts()));
   setStat(rosterCountStat, String(sums.characters));
@@ -3029,10 +2678,7 @@ function paintRosterTotals() {
 
 function paintRoster() {
   const here = characterKey();
-  syncList(
-    rosterRows,
-    characterOrder().map((record) => rosterEntry(record, here)),
-  );
+  rosterRows.rows.sync(characterOrder().map((record) => rosterEntry(record, here)));
   paintRosterTotals();
   say(rosterNote, rosterNoteText());
 }
@@ -3049,25 +2695,15 @@ function draw() {
 }
 
 /**
- * One repaint per frame, however many things asked for one. A publisher catching this addon
- * up answers the ask with a message per id, and a repaint per message would be a hundred
- * rebuilds of the same index inside one frame.
+ * One repaint per frame however many ask, since a publisher's catch-up is a message per id. NO
+ * `{ frame }`: `draw` opens with `syncLive`, which is what writes this character's stores down,
+ * so a repaint held until somebody opens the panel is a session that recorded nothing.
  */
-function schedulePaint() {
-  if (scheduled.on) {
-    return;
-  }
-  scheduled.on = true;
-  woc.requestAnimationFrame(() => {
-    scheduled.on = false;
-    draw();
-  });
-}
+const schedulePaint = woc.paint(draw);
 
 /**
- * Say something once when the bags get tight, and re-arm when they do not. On the crossing
- * rather than on the state, or every loot while full would chime. Read from the live bags
- * whichever character the panes happen to be showing: a warning is about the player.
+ * On the CROSSING rather than the state, or every loot while full would chime. Off the live bags
+ * whichever character the panes are showing, since a warning is about the player.
  */
 function checkWarning() {
   const free = freeCells();
@@ -3080,7 +2716,7 @@ function checkWarning() {
   }
   if (!warned.on) {
     warned.on = true;
-    if (settingFlag('warn-cue', true)) {
+    if (woc.settings['warn-cue']) {
       woc.sound.alert();
     }
   }
@@ -3144,16 +2780,15 @@ woc.net.onEvent('vendor', (event) => {
   }
 });
 
-// Subscriptions first, then the ask, because delivery is SYNCHRONOUS: a publisher
-// that answers inside this emit call reaches a handler that already exists, and one
-// registered afterwards would miss its own answer.
+// The batch, subscribed to and asked for in one call. The order inside it is what matters and
+// is `follow`'s: delivery is SYNCHRONOUS, so a publisher that answers inside the ask reaches a
+// handler that already exists, where one registered afterwards would miss its own answer.
+woc.bus.follow(ITEMS_TOPIC, onItems);
+// The incremental form is a push with no ask half: one newly learned id whenever a publisher
+// learns one, so there is nothing to catch up on and a plain subscription is all of it.
 woc.bus.on(woc.bus.anySender, ITEM_TOPIC, onItem);
-woc.bus.on(woc.bus.anySender, ITEMS_TOPIC, onItems);
-woc.bus.emit(ASK_TOPIC);
-
-woc.keys.bind('toggle', () => {
-  frame.toggle();
-});
+// The older ask topic, sent beside the one `follow` derives. Drop next release.
+woc.bus.emit(LEGACY_ASK_TOPIC);
 
 woc.onSettingsChange(() => {
   if (!remembering()) {
@@ -3165,10 +2800,8 @@ woc.onSettingsChange(() => {
 });
 
 /**
- * Read the item art manifest once, then repaint. Both art answers are provisional until it
- * lands: `ui.icon.item` hands back a hopeful URL and `ui.icon.itemArtName` hands back null,
- * so the first grid of a session is drawn with optimistic pictures and no names. One request
- * covers every item in the game. It never rejects, and nothing waits for it.
+ * Both art answers are provisional until the manifest lands, so the first grid of a session is
+ * optimistic pictures and no names. One request covers every item, and it never rejects.
  */
 async function learnArt() {
   await woc.ui.icon.preloadItems();

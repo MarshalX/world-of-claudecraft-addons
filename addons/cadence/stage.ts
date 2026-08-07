@@ -104,9 +104,8 @@ function aRogue(draft: WorldDraft): void {
  * The global cooldown is 0.9 of a hunter's unhasted 1.5, and the swing 1.4 of the weapon's own
  * 2.3: both are the arithmetic the addon does rather than numbers chosen to look busy.
  *
- * The settle before the frame is not a formality, and every scenario here needs it. This addon's
- * loop stands down while its frame is hidden, and a saved frame comes up hidden until its stored
- * visibility arrives, so a tick before that lands paints nothing at all.
+ * EVERY scenario here needs the settle before the frame: the loop stands down while the frame
+ * is hidden, and a saved frame comes up hidden until its stored visibility lands.
  */
 async function midCast(stage: Stage): Promise<void> {
   const { player } = stage;
@@ -139,11 +138,9 @@ async function comboPoints(stage: Stage): Promise<void> {
   stage.frame();
 }
 
-const CAST_ALT =
-  'four thin rows. Swing at 1.4s of the 2.3 second weapon it learned from, GCD at 0.9s, a cast row named Long Draw with 0.8s left, and a Mana bar at 62 of 100. A pale band lies across the last stretch of the cast, covering the 180ms round trip the loader measured, and it is a measurement rather than a promise that a press inside it queues. There are no pips: a hunter has no combo points.';
+const CAST_ALT = 'four thin bars on a bare strip: swing, global cooldown, cast, resource.';
 
-const COMBO_ALT =
-  'the same four rows on a rogue. Swing at 0.6s of a 1.7 second dagger, GCD at 0.4s against the one second base the game gives this class alone, an empty Cast row keeping its place rather than appearing when a cast starts, and an Energy bar at 45 of 100. Under it a strip of five pips with three lit, five being the most points this session has shown rather than a maximum anything on the wire states.';
+const COMBO_ALT = 'the same four on a rogue, over a row of combo pips.';
 
 const SCENARIOS: readonly Scenario[] = [
   {

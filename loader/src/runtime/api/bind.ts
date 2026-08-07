@@ -14,6 +14,7 @@ import { createKeybindStore, type KeybindStore } from '../keys/store.ts';
 import { CONSOLE_SINK } from '../log/console.ts';
 import { createSettingsStore, type SettingsStore } from '../settings/store.ts';
 import { createFrameStateStore } from '../ui/kit/frame-state.ts';
+import { createFrameToggles, type FrameToggles } from '../ui/kit/frame-toggle.ts';
 import { type BusApi, createBus } from './bus.ts';
 import type { AddonContext, SharedServices, WocApi } from './context.ts';
 import { createData } from './data.ts';
@@ -69,7 +70,12 @@ function createNetTimers(shared: SharedServices): NetTimers {
  * stops following the pointer. Reported through the addon's log rather than
  * swallowed, so it reaches the manager's log tail where a player can quote it.
  */
-function createUiSurface(shared: SharedServices, addon: AddonContext, log: LogApi): UiApi {
+function createUiSurface(
+  shared: SharedServices,
+  addon: AddonContext,
+  log: LogApi,
+  toggles: FrameToggles,
+): UiApi {
   return createUi({
     doc: shared.doc,
     kit: shared.kit,
@@ -85,6 +91,7 @@ function createUiSurface(shared: SharedServices, addon: AddonContext, log: LogAp
       character: shared.character,
       known: shared.characterKnown,
     }),
+    toggles,
     viewport: shared.viewport,
     window: shared.window,
   });
@@ -189,12 +196,22 @@ function createSurfaces(
   keybinds: KeybindStore,
   log: LogApi,
 ): AddonSurfaces {
+  // Keys before ui: a frame's `toggleKey` goes through the addon's own
+  // `keys.bind`, or a rebind from the manager would not move it.
+  const keys = createKeysSurface(shared, addon, keybinds);
+  const toggles = createFrameToggles({
+    bind: keys.bind,
+    warn: (message, err) => {
+      log.warn(message, err);
+    },
+  });
+
   return {
     net: createNet(shared.net, addon.bag, createNetTimers(shared)),
     world: createWorld(shared.world, addon.bag),
-    ui: createUiSurface(shared, addon, log),
+    ui: createUiSurface(shared, addon, log, toggles),
     sound: createSoundSurface(shared, addon),
-    keys: createKeysSurface(shared, addon, keybinds),
+    keys,
     bus: createBusSurface(shared, addon, log),
     storage: createStorageSurface(shared, addon),
     data: createDataSurface(shared, addon),

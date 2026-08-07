@@ -384,10 +384,13 @@ describe('its manifest', () => {
     expect(manifest().permissions).toEqual(['world.read', 'ui', 'keys']);
   });
 
-  // `ui.anchor3d`'s unit point, `over: 'head'`, `ui.project`, `woc.onFrame` and `world.harmful`
-  // are all minor 2, and the addon is a guessed offset without the first two.
+  // The declaration is the smallest minor carrying every member this addon reads. Two are
+  // minor 4: `fmt.titleCase`, for an effect the wire sent with no name, and
+  // `world.abilities.describe`, for the cast bar's label. The rest are minor 2:
+  // `ui.anchor3d`'s unit point, `over: 'head'`, `ui.project`, `woc.onFrame` and
+  // `world.harmful`, and the addon is a guessed offset without the first two.
   it('declares the minor the surface it reads was added in', () => {
-    expect(manifest().apiMinor).toBe(2);
+    expect(manifest().apiMinor).toBe(4);
   });
 
   // `over: 'head'` answers the offset outright. Its correct value is always zero, so offering

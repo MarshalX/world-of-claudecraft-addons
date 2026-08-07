@@ -218,11 +218,19 @@ async function panelUp(stage: Stage): Promise<void> {
   await stage.settle();
 }
 
-/** Wait out one repaint period, since the meter draws on a real interval. */
-function repainted(): Promise<void> {
-  return new Promise((resolve) => {
+/**
+ * Wait out one repaint period, then run the frame that performs it.
+ *
+ * TWO steps because the meter's interval only ASKS: it draws through `woc.paint`, which
+ * coalesces the request onto the loader's frame loop, and the stage drives that loop by hand
+ * the way a suite does. Waiting alone leaves the panel drawn with whatever it last held,
+ * which for the first shot of a scenario is nothing at all.
+ */
+async function repainted(stage: Stage): Promise<void> {
+  await new Promise((resolve) => {
     setTimeout(resolve, REPAINT_WAIT_MS);
   });
+  stage.frame();
 }
 
 /** Deliver one blow as the socket would, from `by` to `at`. */
@@ -277,7 +285,7 @@ async function exchange(stage: Stage, blows: readonly Blow[], direction: Directi
     const side = sideFor(blow, direction);
     strike(stage, blow, side.by, side.at);
   }
-  await repainted();
+  await repainted(stage);
 }
 
 /**
@@ -298,7 +306,7 @@ const SCENARIOS: readonly Scenario[] = [
     id: 'damage',
     label: 'Damage, mid-fight',
     preview: true,
-    alt: 'The Combat Meter panel on its Damage tab, reading 5,850 damage (195.7/s) in 30s. Six rows (Aimed Shot 1,596, Fell Shot 1,334, Grizzle: Melee 1,086, Volley 827, Auto Shot 643, Serpent Sting 364) each show total, share and damage per second, over a second line of hits, crit rate, average and biggest hit. The third row is the swings the player pet Grizzle landed, folded into the total and labelled with the pet name. The fill behind each row is tinted by damage school, red for physical, blue for arcane and green for nature, and the four rows from the player own spellbook carry the art the game ships for that ability while Auto Shot and the pet row carry none. A summary line reads hit 88%, miss 6%, dodge 6%.',
+    alt: 'The Combat Meter panel on its Damage tab: one fight broken down per ability, six rows tinted by damage school under a total with a per-second rate, above the player attack table.',
     world: aHunter,
     run: async (stage) => {
       await exchange(stage, DEALT, OUTGOING);
@@ -328,7 +336,7 @@ const SCENARIOS: readonly Scenario[] = [
         );
       }
       openTab('Healing');
-      await repainted();
+      await repainted(stage);
     },
   },
   {
@@ -338,7 +346,7 @@ const SCENARIOS: readonly Scenario[] = [
     run: async (stage) => {
       await exchange(stage, TAKEN, INCOMING);
       openTab('Taken');
-      await repainted();
+      await repainted(stage);
     },
   },
   {
@@ -349,7 +357,7 @@ const SCENARIOS: readonly Scenario[] = [
     world: aHunter,
     run: async (stage) => {
       await panelUp(stage);
-      await repainted();
+      await repainted(stage);
     },
   },
   {

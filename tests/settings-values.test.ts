@@ -77,6 +77,25 @@ describe('hydrateSettings', () => {
     expect(hydrateSettings(DECLS, { window: -4 })).toMatchObject({ window: 1 });
   });
 
+  // The belt behind the schema's refine, which is the real fix. A manifest
+  // written before that refine existed, or read by a third-party marketplace's
+  // older validator, still must not hand an addon a number outside the range the
+  // same manifest declared: fifteen addons dropped their own defences on the
+  // strength of that promise, so the promise cannot be conditional on validation
+  // having happened here.
+  it('clamps a DECLARED default that sits outside its own range', () => {
+    const overCeiling: SettingDecl = {
+      id: 'window',
+      type: 'number',
+      label: 'W',
+      default: 100,
+      max: 40,
+    };
+    const underFloor: SettingDecl = { id: 'rows', type: 'number', label: 'R', default: 0, min: 1 };
+
+    expect(defaultSettings([overCeiling, underFloor])).toEqual({ window: 40, rows: 1 });
+  });
+
   it('ignores a stored key that is no longer declared', () => {
     const values = hydrateSettings(DECLS, { removed: 'gone', window: 9 });
 

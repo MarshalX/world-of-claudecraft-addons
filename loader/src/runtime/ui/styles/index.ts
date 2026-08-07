@@ -9,8 +9,9 @@
 // The order is the cascade. Every rule in every sheet is scoped to a loader-owned
 // element and none of them collide across the seams, so the order is about
 // readability rather than correctness: chrome sets a window up, panes fill it,
-// catalog refines the four marketplace surfaces, kit covers the surfaces an addon
-// asks the loader for, menu covers the two of those with no rules anywhere else,
+// catalog refines the four marketplace surfaces, layout is the vocabulary an addon
+// assembles a panel out of, kit covers the surfaces an addon asks the loader for,
+// menu covers the two of those with no rules anywhere else,
 // menu and picker cover the popup pair, and quality, bar, tile and banner are what it
 // assembles itself.
 //
@@ -55,6 +56,7 @@ import bar from './bar.css';
 import catalog from './catalog.css';
 import chrome from './chrome.css';
 import kit from './kit.css';
+import layout from './layout.css';
 import menu from './menu.css';
 import panes from './panes.css';
 import picker from './picker.css';
@@ -62,12 +64,13 @@ import quality from './quality.css';
 import tile from './tile.css';
 import touch from './touch.css';
 
-// biome-ignore-end lint/correctness/noUnresolvedImports: the eleven sheets above are the whole of it
+// biome-ignore-end lint/correctness/noUnresolvedImports: the twelve sheets above are the whole of it
 
 const LOADER_CSS = [
   chrome,
   panes,
   catalog,
+  layout,
   kit,
   menu,
   picker,

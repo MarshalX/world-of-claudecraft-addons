@@ -24,7 +24,12 @@ import { createAddonFrame } from '../ui/kit/frame.ts';
 import type { FrameOpts } from '../ui/kit/frame-chrome.ts';
 import { rostered } from '../ui/kit/frame-roster.ts';
 import type { FrameStateStore } from '../ui/kit/frame-state.ts';
+import type { FrameToggles } from '../ui/kit/frame-toggle.ts';
 import type { IconUrls } from '../ui/kit/icons.ts';
+import type { LineOpts, RowOpts, StackOpts } from '../ui/kit/layout.ts';
+import { createColumn, createLine, createRow, show } from '../ui/kit/layout.ts';
+import type { Destroyable, List, ListOpts } from '../ui/kit/list.ts';
+import { createList } from '../ui/kit/list.ts';
 import type { MenuItem } from '../ui/kit/menu.ts';
 import { moneyText } from '../ui/kit/money.ts';
 import type { Tabs, TabsOpts } from '../ui/kit/tabs.ts';
@@ -65,6 +70,16 @@ interface UiApi {
   bar: (opts?: BarOpts) => Bar;
   /** The square form of the same thing: art, a radial sweep, a figure and a count. */
   tile: (opts?: TileOpts) => Tile;
+  /** A keyed list: rows created, updated, ordered and destroyed as the data moves. */
+  list: <T, H extends Destroyable>(opts: ListOpts<T, H>) => List<T, H>;
+  /** A flex column, spaced at the density it is drawn in. */
+  column: (opts?: StackOpts) => HTMLElement;
+  /** The same across: a strip of chips, figures or controls. */
+  row: (opts?: RowOpts) => HTMLElement;
+  /** A sentence the panel says on its own line. */
+  line: (opts?: LineOpts) => HTMLElement;
+  /** On screen or not, without an addon having to remember what display it had. */
+  show: (el: Element, shown: boolean) => void;
   /** Where the game's own art lives, so no addon writes a path. */
   icon: IconUrls;
   /**
@@ -103,6 +118,8 @@ interface UiDeps {
   onError: (where: string, err: unknown) => void;
   /** Null when the addon's storage is unreachable; frames then never persist. */
   frameStore: FrameStateStore | null;
+  /** What a frame's `toggleKey` is bound through. See ui/kit/frame-toggle.ts. */
+  toggles: FrameToggles;
   viewport: () => { w: number; h: number };
   window: Pick<EventTarget, 'addEventListener' | 'removeEventListener'>;
 }
@@ -181,6 +198,7 @@ function addonFrame(deps: UiDeps, opts: FrameOpts, chrome: 'frame' | 'window'): 
     chrome,
     opts: guarded(deps, opts),
     store: storeFor(deps, opts),
+    toggles: deps.toggles,
     viewport: deps.viewport,
     window: deps.window,
     raise: deps.kit.stacking.raise,
@@ -223,6 +241,19 @@ function addonField<T, O>(deps: UiDeps, build: (doc: Document, opts: O) => Field
   return field;
 }
 
+/**
+ * A list whose teardown is in the bag, the way a bar's and a tile's removal are.
+ *
+ * The bag holds the LIST rather than each row: rows come and go on every sync, so a
+ * registration per row would grow the bag for the life of the addon with a teardown
+ * per row that ever existed. The list already destroys everything it holds.
+ */
+function addonList<T, H extends Destroyable>(deps: UiDeps, opts: ListOpts<T, H>): List<T, H> {
+  const list = createList(opts);
+  deps.bag.add(list.destroy);
+  return list;
+}
+
 /** The same, for the square form: a tile is DOM in someone else's frame too. */
 function addonTile(deps: UiDeps, opts: TileOpts | undefined): Tile {
   const tile = createTile(deps.doc, opts);
@@ -243,11 +274,29 @@ function fieldSurface(deps: UiDeps): FieldBuilders {
   };
 }
 
+/**
+ * The layout vocabulary, which is the one family here that needs no bag.
+ *
+ * These are plain elements the addon appends into its own frame, and the frame's
+ * teardown takes the whole tree with it. Contrast a bar, a tile or a list, each of
+ * which the addon may put in DOM the loader does not own and each of which holds
+ * something of its own to release. `show` builds nothing at all.
+ */
+function layoutSurface(deps: UiDeps): Pick<UiApi, 'column' | 'line' | 'row' | 'show'> {
+  return {
+    column: (opts) => createColumn(deps.doc, opts),
+    row: (opts) => createRow(deps.doc, opts),
+    line: (opts) => createLine(deps.doc, opts),
+    show,
+  };
+}
+
 function createUi(deps: UiDeps): UiApi {
   const { kit, bag } = deps;
 
   return {
     ...injectionSurface(deps, (off) => tracked(bag, off)),
+    ...layoutSurface(deps),
 
     frame: (opts) => addonFrame(deps, opts, 'frame'),
     window: (opts) => addonFrame(deps, opts, 'window'),
@@ -259,6 +308,8 @@ function createUi(deps: UiDeps): UiApi {
     bar: (opts) => addonBar(deps, opts),
 
     tile: (opts) => addonTile(deps, opts),
+
+    list: (opts) => addonList(deps, opts),
 
     icon: kit.icons,
 

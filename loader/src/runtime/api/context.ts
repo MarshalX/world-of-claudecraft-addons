@@ -23,9 +23,11 @@ import type { StorageHub } from '../storage/hub.ts';
 import type { UiKit } from '../ui/mount.ts';
 import type { WorldHub } from '../world/hub.ts';
 import type { BusApi } from './bus.ts';
+import type { FmtApi } from './fmt.ts';
 import type { KeysApi } from './keys.ts';
 import type { LogApi } from './log.ts';
 import type { NetApi } from './net.ts';
+import type { PaintApi } from './paint.ts';
 import type { SoundApi } from './sound.ts';
 import type { AddonStorageApi } from './storage.ts';
 import type { TimerHost, TimersApi } from './timers.ts';
@@ -63,6 +65,8 @@ interface WocApi extends TimersApi, LogApi {
   readonly storage: AddonStorageApi;
   /** Publish and subscribe between addons, in this page. */
   readonly bus: BusApi;
+  /** Durations, ids as words, counted nouns, arrows. Pure, and shared by every addon. */
+  readonly fmt: FmtApi;
   /**
    * A JSON file from this addon's own directory, declared as `data` in the
    * manifest. Fetched by the loader at install; this is a cached read.
@@ -80,6 +84,12 @@ interface WocApi extends TimersApi, LogApi {
    * arithmetic are as much a use of a frame tick as a sweep is.
    */
   onFrame: (handler: (dt: number) => void) => Teardown;
+  /**
+   * A repaint that runs at most once a frame, however many times it is asked for.
+   *
+   * Returns the function that asks. See runtime/api/paint.ts.
+   */
+  paint: PaintApi;
   /** Monotonic milliseconds. Right for an interval, wrong for anything you store. */
   now: () => number;
   /**

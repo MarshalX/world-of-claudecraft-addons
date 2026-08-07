@@ -317,3 +317,178 @@ describe('a cycle between two addons', () => {
     expect(MAX_DEPTH).toBeGreaterThan(2);
   });
 });
+
+// The ask-and-answer pattern: `follow` asks once at subscribe and `publish`
+// announces once at construction, so neither side has to start first.
+describe('publish and follow', () => {
+  it('answers an ask from another addon', () => {
+    const { addon } = bus();
+    const lorebind = addon(METER);
+    lorebind.api.publish('prices', () => ({ ore: 4 }));
+    const seen: unknown[] = [];
+    const listener = addon(BARS);
+    listener.api.on(listener.api.anySender, 'prices', (message) => seen.push(message.payload));
+
+    listener.api.emit('prices:ask');
+
+    expect(seen).toEqual([{ ore: 4 }]);
+  });
+
+  it('does not answer its own ask', () => {
+    const { addon } = bus();
+    const publisher = addon(METER);
+    const produce = vi.fn(() => ({ ore: 4 }));
+    publisher.api.publish('prices', produce);
+    // Publishing announces; what is under test is the addon's own ask after that.
+    produce.mockClear();
+    const heard = vi.fn();
+    addon(BARS).api.on(METER, 'prices', heard);
+
+    publisher.api.emit('prices:ask');
+
+    expect(produce).not.toHaveBeenCalled();
+    expect(heard).not.toHaveBeenCalled();
+  });
+
+  // Answering per subscriber would walk a publisher's whole table once per listener.
+  it('runs produce once per ask rather than once per subscriber', () => {
+    const { addon } = bus();
+    const produce = vi.fn(() => ({ ore: 4 }));
+    addon(METER).api.publish('prices', produce);
+    // The announce at publish is its own case below.
+    produce.mockClear();
+    const first = vi.fn();
+    const second = vi.fn();
+    addon(BARS).api.on(METER, 'prices', first);
+    addon('third/party').api.on(METER, 'prices', second);
+
+    addon('a/asker').api.emit('prices:ask');
+
+    expect(produce).toHaveBeenCalledTimes(1);
+    expect(first).toHaveBeenCalledTimes(1);
+    expect(second).toHaveBeenCalledTimes(1);
+  });
+
+  it('reaches every follower on announce', () => {
+    const { addon } = bus();
+    const publication = addon(METER).api.publish('prices', () => ({ ore: 4 }));
+    const first = vi.fn();
+    const second = vi.fn();
+    addon(BARS).api.follow('prices', first);
+    addon('third/party').api.follow('prices', second);
+    first.mockClear();
+    second.mockClear();
+
+    publication.announce();
+
+    expect(first).toHaveBeenCalledWith({ ore: 4 }, METER);
+    expect(second).toHaveBeenCalledWith({ ore: 4 }, METER);
+  });
+
+  it('asks exactly once when a follower subscribes', () => {
+    const { addon } = bus();
+    const asks = vi.fn();
+    const watcher = addon('a/watcher');
+    watcher.api.on(watcher.api.anySender, 'prices:ask', asks);
+
+    addon(BARS).api.follow('prices', vi.fn());
+
+    expect(asks).toHaveBeenCalledTimes(1);
+  });
+
+  // Without this, a publisher whose value never moves after startup never reaches
+  // a follower that started first: its ask went out before the publisher existed.
+  it('reaches a follower that started before it, with nobody calling announce', () => {
+    const { addon } = bus();
+    const heard = vi.fn();
+    addon(BARS).api.follow('prices', heard);
+
+    addon(METER).api.publish('prices', () => ({ ore: 4 }));
+
+    expect(heard).toHaveBeenCalledWith({ ore: 4 }, METER);
+  });
+
+  // What a null return is for: an answer a follower can ignore.
+  it('announces at publish even with nothing to say yet', () => {
+    const { addon } = bus();
+    const heard = vi.fn();
+    addon(BARS).api.follow('prices', heard);
+
+    addon(METER).api.publish('prices', () => null);
+
+    expect(heard).toHaveBeenCalledWith(null, METER);
+  });
+
+  it('reaches a follower that started before the publisher', () => {
+    const { addon } = bus();
+    const heard = vi.fn();
+    addon(BARS).api.follow('prices', heard);
+    const publication = addon(METER).api.publish('prices', () => ({ ore: 4 }));
+
+    publication.announce();
+
+    expect(heard).toHaveBeenCalledWith({ ore: 4 }, METER);
+  });
+
+  it('reaches a follower that started after the publisher, off its own ask', () => {
+    const { addon } = bus();
+    addon(METER).api.publish('prices', () => ({ ore: 4 }));
+    const heard = vi.fn();
+
+    addon(BARS).api.follow('prices', heard);
+
+    expect(heard).toHaveBeenCalledWith({ ore: 4 }, METER);
+  });
+
+  it('stops answering when the publication is stopped', () => {
+    const { addon } = bus();
+    const produce = vi.fn(() => ({ ore: 4 }));
+    const publication = addon(METER).api.publish('prices', produce);
+    produce.mockClear();
+
+    publication.stop();
+    addon(BARS).api.emit('prices:ask');
+
+    expect(produce).not.toHaveBeenCalled();
+  });
+
+  it('stops answering when the publishing addon is disabled', () => {
+    const { addon } = bus();
+    const publisher = addon(METER);
+    const produce = vi.fn(() => ({ ore: 4 }));
+    publisher.api.publish('prices', produce);
+    produce.mockClear();
+
+    publisher.bag.dispose();
+    addon(BARS).api.emit('prices:ask');
+
+    expect(produce).not.toHaveBeenCalled();
+  });
+
+  it('stops following when the following addon is disabled', () => {
+    const { addon } = bus();
+    const publication = addon(METER).api.publish('prices', () => ({ ore: 4 }));
+    const heard = vi.fn();
+    const follower = addon(BARS);
+    follower.api.follow('prices', heard);
+    heard.mockClear();
+
+    follower.bag.dispose();
+    publication.announce();
+
+    expect(heard).not.toHaveBeenCalled();
+  });
+
+  it('stops following when the follower drops it', () => {
+    const { addon } = bus();
+    const publication = addon(METER).api.publish('prices', () => ({ ore: 4 }));
+    const heard = vi.fn();
+    const off = addon(BARS).api.follow('prices', heard);
+    heard.mockClear();
+
+    off();
+    publication.announce();
+
+    expect(heard).not.toHaveBeenCalled();
+  });
+});

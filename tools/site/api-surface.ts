@@ -26,6 +26,10 @@ const API_INTERFACE = /export interface (\w+Api)\s*\{/g;
 const MEMBER = /^ {2}(?:readonly\s+)?([a-z][A-Za-z0-9]*)\??[(:<]/;
 const API_SUFFIX = /Api$/;
 
+const BLOCK_OPEN = '/*';
+const BLOCK_CLOSE = '*/';
+const LINE_MARK = '//';
+
 /** The root interface. Everything else hangs off a member of it. */
 const ROOT_API = 'WocApi';
 
@@ -56,16 +60,69 @@ function depthDelta(line: string): number {
   return delta;
 }
 
-/** Top-level members only: a nested object literal's fields are not the surface. */
+function withoutLineComment(line: string): string {
+  const at = line.indexOf(LINE_MARK);
+  if (at < 0) {
+    return line;
+  }
+  return line.slice(0, at);
+}
+
+/** One line's code, and whether a block comment is still open at the end of it. */
+interface Scan {
+  code: string;
+  open: boolean;
+}
+
+function afterComment(line: string): Scan {
+  const end = line.indexOf(BLOCK_CLOSE);
+  if (end < 0) {
+    return { code: '', open: true };
+  }
+  return codeOnLine(line.slice(end + BLOCK_CLOSE.length));
+}
+
+function codeOnLine(line: string): Scan {
+  const start = line.indexOf(BLOCK_OPEN);
+  if (start < 0) {
+    return { code: withoutLineComment(line), open: false };
+  }
+  const before = withoutLineComment(line.slice(0, start));
+  // Shorter than the slice means a `//` came first: `// see /* elsewhere` opens
+  // no block.
+  if (before.length < start) {
+    return { code: before, open: false };
+  }
+  const rest = afterComment(line.slice(start + BLOCK_OPEN.length));
+  return { code: before + rest.code, open: rest.open };
+}
+
+function scanLine(line: string, previous: Scan): Scan {
+  if (previous.open) {
+    return afterComment(line);
+  }
+  return codeOnLine(line);
+}
+
+/**
+ * Top-level members only: a nested object literal's fields are not the surface.
+ *
+ * Comments are stripped before anything is matched or counted. Prose legitimately
+ * carries unmatched delimiters (`[-180, 180)`), and counting one drives the depth
+ * negative, which drops every member below it and makes the docs guard this feeds
+ * quietly stop requiring them.
+ */
 function membersOf(body: string): string[] {
   const found: string[] = [];
   let depth = 0;
+  let scan: Scan = { code: '', open: false };
   for (const line of body.split('\n')) {
-    const name = depth === 0 && MEMBER.exec(line)?.[1];
+    scan = scanLine(line, scan);
+    const name = depth === 0 && MEMBER.exec(scan.code)?.[1];
     if (name) {
       found.push(name);
     }
-    depth += depthDelta(line);
+    depth += depthDelta(scan.code);
   }
   return [...new Set(found)];
 }
@@ -129,3 +186,5 @@ export interface ApiMember {
   /** What the docs have to contain, e.g. `net.onEvent`. */
   readonly qualified: string;
 }
+
+export { membersOf };

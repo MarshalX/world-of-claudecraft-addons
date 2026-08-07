@@ -1,61 +1,41 @@
 // Facemark on the stage: two plates, one hostile and one friendly.
 //
-// There is no panel to photograph. The plates are the display, so the picture is world anchors
-// over a flat background and the crop is taken from them: see `drawnIn` in stage/src/sheet.ts.
+// There is no panel to photograph, so the crop is taken from the world anchors themselves: see
+// `drawnIn` in stage/src/sheet.ts.
 //
-// Every name, id and level here is the game's own. An invented id title-cases into a label that
-// looks exactly like the real name, so a made-up `flame_pillar` reading as "Flame Pillar?" makes
-// the addon's own limit look like a rounding error. `rift_thunderhead` is what the entity carries
-// while Tempest Vharok casts, the game shows that cast as "Thunderhead", and this addon can only
-// reach the id, so the plate says "Rift Thunderhead?" and the question mark is doing real work.
+// Every name, id and level is the game's own. An invented id title-cases into a label that looks
+// exactly like a real name, which would make this addon's own limit read as a rounding error:
+// `rift_thunderhead` is what the entity really carries, the game displays it as "Thunderhead",
+// and the plate can only reach the id, so "Rift Thunderhead?" is the question mark doing real work.
 //
-// The levels are the game's too: a player caps at 20, so Anserra is 20 and so are you; the rift
-// bosses run to 23 and Tempest Vharok is one of them.
+// The two units are one of each side, since the name colours are the game's own and telling a mob
+// from a party member at a glance is most of what a nameplate is for. The boss carries the two
+// shapes an aura id comes in, a dot under the ability's own id and a control aura under the id
+// with a tail, so both resolve art and the second only because the tail comes off. The healer
+// carries the unresolvable half: a mob applied it, so there is no art file anywhere.
 //
-// Two units, one of each side, and the pairing is the whole composition. The name colours are
-// the game's own, and telling a mob from a party member at a glance is most of what a nameplate
-// is for. So the shot is a mob and a healer, and every other difference rides along for free:
+// The Star rather than the Skull, because a mark is written as a name in the game's colour for it
+// and the game's Skull is near-white.
 //
-//  - The boss is casting something no spellbook names, so its label is title-cased from the id
-//    and carries the question mark that says so. Its two effects are both yours and are the two
-//    shapes an aura id comes in: `serpent_sting` is a dot, whose aura id is the ability's own,
-//    and `concussive_shot_slow` is a control aura, which is the ability id with a tail the game
-//    appended. Both resolve art, and the second only because this addon takes the tail off. It is
-//    marked with the Star rather than the Skull because mark art is painted on a canvas at run
-//    time, so a mark is written as a name in the game's own colour for it, and the game's Skull
-//    is near-white. The player is top of its hate table, so its edge is the game's threat red.
-//  - The healer is a friendly player: a blue name, no threat edge at all because a player keeps
-//    no hate table, and one harmful effect, which is what the strip means on a friendly. That
-//    effect is the boss's own snare, `aoe_slow`, and it is the unresolvable half of the icon
-//    limit: a mob applied it, the game paints its icon on a canvas, and there is no file anywhere
-//    to point at. It draws as its school and its countdown.
-//
-// `show: 'players'` rather than the default, because the default draws hostiles only and half
-// this picture is a friendly.
-//
-// The model heights are stated because they are the reason `over: 'head'` exists: the boss is
-// drawn twice the healer's height, and the two plates clear their own models rather than sitting
-// at one offset that suits neither.
+// The model heights differ by a factor of two, which is what `over: 'head'` is for.
 
 import type { Scenario, Stage, WorldDraft } from '../../stage/src/stage.ts';
 
-/** The local player's own entity id, which the shared fixture fixes at 661. */
+/** What the shared fixture fixes the local player at. */
 const PLAYER_ID = 661;
 
 const BOSS = 900;
 const HEALER = 903;
 
-/** The Star, which is the first mark in the game's own index order. */
+/** First in the game's own mark index order. */
 const STAR = 0;
 
-/** The class the player is, which is the directory skill art is filed under. */
+/** The directory skill art is filed under. */
 const CLASS_ID = 'hunter';
 
 /**
- * This hunter's spellbook, in the game's own shape and with its own names. Both of these are
- * displayed under a name their id does not spell: `serpent_sting` is "Venom Barb" and
- * `concussive_shot` is "Rattling Shot". That divergence is why a name worked out from an id is a
- * guess, and it is also what makes these two safe to draw art for: art is filed under the id.
+ * Both of these display under a name their id does not spell (`serpent_sting` is "Venom Barb"),
+ * which is why a worked-out name is a guess and why art still resolves: art is filed under the id.
  */
 const KNOWN = Object.freeze([
   {
@@ -74,12 +54,12 @@ const KNOWN = Object.freeze([
   },
 ]);
 
-/** One effect in the shape the client decodes onto the entity. */
+/** The shape the client decodes onto an entity. */
 function aura(over: Record<string, unknown>): Record<string, unknown> {
   return { kind: 'dot', remaining: 6, duration: 12, value: 40, school: 'nature', ...over };
 }
 
-/** A cast where the game writes one, which is on the entity and nowhere else. */
+/** A cast lives on the entity and nowhere else. */
 function casting(draft: WorldDraft, unit: Record<string, unknown>, id: string, left: number): void {
   draft.set(unit, 'castingAbility', id);
   draft.set(unit, 'castRemaining', left);
@@ -87,7 +67,6 @@ function casting(draft: WorldDraft, unit: Record<string, unknown>, id: string, l
   draft.set(unit, 'channeling', false);
 }
 
-/** The boss: everything this display can say about one unit, on one plate. */
 function addBoss(draft: WorldDraft): void {
   const boss = draft.mob(BOSS, {
     name: 'Tempest Vharok',
@@ -122,7 +101,6 @@ function addBoss(draft: WorldDraft): void {
   draft.set(draft.world, 'markers', { [String(BOSS)]: STAR });
 }
 
-/** The healer: the other side, which is the half a hostile-only shot never shows. */
 function addHealer(draft: WorldDraft): void {
   draft.mob(HEALER, {
     name: 'Anserra',
@@ -133,9 +111,8 @@ function addHealer(draft: WorldDraft): void {
     hp: 66,
     maxHp: 100,
     pos: { x: -3, y: 0, z: -10 },
-    // The boss's own anti-kite snare, in the shape its emit site builds: a bare `aoe_slow` id
-    // shared by every template that has one, so it is not an ability id and could not resolve art
-    // even if a mob's art were served.
+    // A bare `aoe_slow`, shared by every template that has one, so it is not an ability id and
+    // could not resolve art even if a mob's were served.
     auras: [
       aura({
         id: 'aoe_slow',
@@ -152,7 +129,7 @@ function addHealer(draft: WorldDraft): void {
   draft.model(HEALER, { height: 1.8 });
 }
 
-/** Who you are, which is everything the addon reads before a plate exists. */
+/** Everything the addon reads before a plate exists. */
 function aHunter(draft: WorldDraft): void {
   draft.set(draft.player, 'templateId', CLASS_ID);
   draft.set(draft.player, 'pos', { x: 0, y: 0, z: 0 });
@@ -160,13 +137,9 @@ function aHunter(draft: WorldDraft): void {
 }
 
 /**
- * The pull walking into range, which is the only way a plate is ever built.
- *
- * In `run` rather than in `world`, and this is the one place the stage's usual advice does not
- * apply. `world.on('entities')` reports membership, so a unit that was already there when the
- * addon started is a set that never changed and no handler fires: the plates would then appear on
- * the addon's own 100ms sampler, which is after the single frame a scenario drives, and every
- * anchor would be captured still hidden.
+ * In `run` rather than `world`, against the usual advice: `world.on('entities')` reports
+ * membership, so units already present fire no handler and the plates would wait for the addon's
+ * own 100ms sampler, which lands after the one frame a scenario drives.
  */
 function aPull(stage: Stage): void {
   addBoss(stage);
@@ -181,14 +154,12 @@ const SCENARIOS: readonly Scenario[] = [
     label: 'A mob and a party member',
     preview: true,
     settings: { show: 'players' },
-    alt: 'two nameplates floating over the units they belong to. Tempest Vharok, level 22, the name in hostile red beside a yellow Star raid mark, a health bar at 58 percent, a cast bar reading Rift Thunderhead? because only the ability id reaches an addon and the name was worked out from it, and two effect tiles under it, Venom Barb and Rattling Shot, each carrying the art the game files under that ability. A red edge runs down its left, saying the player is top of its hate table. Beside it the friendly player Anserra at level 20 and 66 percent health, the name in player blue, no threat edge at all because a player keeps no hate table, and one effect on them, the boss snare Static Field, drawn as a bordered countdown with no picture because an effect a mob applied has none anywhere in the game.',
+    alt: 'two nameplates over the units they belong to, each with a name, a level, a health bar and effect tiles. The hostile one adds a raid mark, a cast bar and a red threat edge.',
     world: aHunter,
     run: aPull,
   },
   {
-    // What the display looks like with nothing around, which is most of a session. It is also the
-    // case the toggle has to be told apart from: an empty screen and a switched-off addon look
-    // identical, which is why turning them off toasts the way back.
+    // Nothing around, which an addon switched off looks identical to. That is why the toggle toasts.
     id: 'alone',
     label: 'Nothing nearby',
     world: aHunter,

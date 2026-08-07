@@ -133,14 +133,6 @@ describe('validateManifest', () => {
     expect(r.ok).toBe(false);
   });
 
-  it('rejects a number setting whose min exceeds max', () => {
-    const r = validateManifest({
-      ...valid,
-      settings: [{ id: 'w', type: 'number', label: 'W', default: 5, min: 10, max: 1 }],
-    });
-    expect(r.ok).toBe(false);
-  });
-
   it('rejects a select whose default is not among its options', () => {
     const r = validateManifest({
       ...valid,
@@ -249,6 +241,58 @@ describe('validateManifest', () => {
 
   it('pins the current API version', () => {
     expect(API_VERSION).toBe(1);
+  });
+});
+
+/**
+ * A number setting's three range rules, together because they are one subject.
+ *
+ * Split out of the `validateManifest` block rather than added to it: that block
+ * was at the 200-line ceiling `tests/**` allows a function, and the fix for a
+ * suite that outgrows one is a real subject to split on rather than a raised
+ * threshold.
+ */
+describe('a number setting declared range', () => {
+  it('rejects a min that exceeds its max', () => {
+    const r = validateManifest({
+      ...valid,
+      settings: [{ id: 'w', type: 'number', label: 'W', default: 5, min: 10, max: 1 }],
+    });
+    expect(r.ok).toBe(false);
+  });
+
+  // The one way a number could reach an addon outside its declared range. Every
+  // other route is closed by values.ts clamping what storage held, and nothing
+  // clamped the DECLARATION's own default, so a manifest could hand an addon 100
+  // for a setting whose ceiling it had just said was 40. Fifteen addons now read
+  // `woc.settings` directly on the strength of that guarantee.
+  it('rejects a default outside that range, from either side', () => {
+    const over = validateManifest({
+      ...valid,
+      settings: [{ id: 'w', type: 'number', label: 'W', default: 100, max: 40 }],
+    });
+    const under = validateManifest({
+      ...valid,
+      settings: [{ id: 'w', type: 'number', label: 'W', default: 0, min: 1 }],
+    });
+
+    expect(over.ok).toBe(false);
+    expect(under.ok).toBe(false);
+  });
+
+  // The guard against an over-eager refine. A bound is inclusive, and a setting
+  // that declares neither has no range to be outside of.
+  it('accepts a default sitting exactly on either bound, and one with no bounds', () => {
+    const r = validateManifest({
+      ...valid,
+      settings: [
+        { id: 'lo', type: 'number', label: 'Lo', default: 1, min: 1, max: 60 },
+        { id: 'hi', type: 'number', label: 'Hi', default: 60, min: 1, max: 60 },
+        { id: 'free', type: 'number', label: 'Free', default: -900 },
+      ],
+    });
+
+    expect(r.ok).toBe(true);
   });
 });
 

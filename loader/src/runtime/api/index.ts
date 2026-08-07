@@ -18,7 +18,9 @@ import type { SettingValues } from '../settings/values.ts';
 import { createLogSurface, createStores, createSurfaces } from './bind.ts';
 import type { AddonApi, AddonContext, GameIdentity, SharedServices, WocApi } from './context.ts';
 import { addonIdentity } from './context.ts';
+import { createFmtApi } from './fmt.ts';
 import type { LogApi } from './log.ts';
+import { createPaintApi } from './paint.ts';
 import { createTimers } from './timers.ts';
 
 /** Both the bag and the addon hold the unsubscribe, so an explicit call drops both. */
@@ -52,6 +54,25 @@ function frameSurface(
   };
 }
 
+/**
+ * The coalesced repaint, on the same loop and reported the same way.
+ *
+ * Beside `frameSurface` rather than in `api/timers.ts`, which owns the PLATFORM
+ * timers and is built from a `TimerHost` alone: the loader's loop is a shared
+ * service, and a repaint that armed its own `requestAnimationFrame` would be one
+ * browser callback per addon and would keep drawing while the loader is frozen.
+ */
+function paintSurface(
+  shared: SharedServices,
+  bag: DisposalBag,
+  log: LogApi,
+): Pick<WocApi, 'paint'> {
+  const report = (err: unknown): void => {
+    log.error('a paint handler threw, and further throws from it are not reported', err);
+  };
+  return { paint: createPaintApi({ frames: shared.frames, bag, report }) };
+}
+
 function createAddonApi(shared: SharedServices, addon: AddonContext): AddonApi {
   const { bag } = addon;
   const { settings, keybinds } = createStores(shared, addon);
@@ -79,6 +100,10 @@ function createAddonApi(shared: SharedServices, addon: AddonContext): AddonApi {
 
     ...createSurfaces(shared, addon, keybinds, log),
 
+    // Not built per addon and not bagged: pure functions with no context and
+    // nothing to tear down, so every addon is handed the same frozen object.
+    fmt: createFmtApi(),
+
     get settings(): SettingValues {
       return settings.values();
     },
@@ -88,6 +113,7 @@ function createAddonApi(shared: SharedServices, addon: AddonContext): AddonApi {
     onDispose: (teardown) => bag.add(teardown),
 
     ...frameSurface(shared, bag, log),
+    ...paintSurface(shared, bag, log),
 
     now: shared.now,
 

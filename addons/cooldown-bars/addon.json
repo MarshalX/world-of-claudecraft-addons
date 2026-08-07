@@ -1,15 +1,15 @@
 {
   "id": "cooldown-bars",
   "name": "Cooldown Bars",
-  "version": "1.3.0",
+  "version": "1.3.1",
   "apiVersion": 1,
-  "apiMinor": 1,
+  "apiMinor": 4,
   "author": "MarshalX",
   "description": "A draining bar for every ability you have on cooldown, soonest ready first, measured against the real length of anything in your own spellbook. Draws as a column of named bars or as a strip of swept icons.",
   "entry": "main.js",
   "preview": {
     "file": "preview.png",
-    "alt": "On the left, Bars, five draining bars ordered by time remaining. Fell Shot at 4.4s carrying one of its two charges, Counter Shot? at 10.4s, Rapid Fire? at 41.2s, Howling Rage at 97.5s, and System Unstuck? at 155.5s. A question mark follows every name worked out from an ability id rather than read off the spellbook, and both marked abilities show why it is needed: the game calls them Hushing Shot and Fevered Draw, so both worked-out names are wrong and both say so. The four abilities carry the art the game files under their ids; System Unstuck draws no icon at all, being the anti-relog timer the game itself runs rather than an ability. On the right, Icon strip, the same five cooldowns as a row of square icons, each darkened by a sweep showing how much of its cooldown is left. What is left is drawn over the art, in whole seconds up to a minute and in minutes above it, so the last two squares read 2m and 3m; Fell Shot carries its charge count in the corner instead of a name. The last square holds its sweep and its countdown and nothing else, because System Unstuck is not an ability and the game files no art for it."
+    "alt": "On the left, Bars, a column of named, draining bars, soonest ready at the top. On the right, Icon strip, the same cooldowns as square icons, each swept and counting down."
   },
   "homepage": "https://github.com/MarshalX/world-of-claudecraft-addons",
   "tags": ["combat", "interface"],

@@ -2,97 +2,30 @@
 
 // Lorebind: the item browser, and the name service the rest of the catalogue reads.
 //
-// WHO OPENS THIS AND WHY. It is two things and they are not equally visible. The name service
-// on the bus is what the rest of the catalogue needs and no player ever sees; the window is
-// what a PLAYER opens, and the question they open it with is not "what is id X" but one of
-// "what does this thing I am holding do for me", "what else is there at my level for this
-// slot", and "how much of the game have I actually seen". So the window is a BROWSER of the
-// game's whole item table rather than a lookup box: art in a grid, filtered by kind, by quality, by
-// slot and by whether this character has ever laid eyes on it, with one item's full record
-// under it: its armour or its damage, its stats, what it takes to equip it and what a vendor
-// pays for it, in the game's own words and in the game's own order.
+// An item id resolves to no name anywhere on the addon API: the game's item table is bundled
+// into its own chunk, and equipment, inventory and recipes all hand over bare ids. Solving that
+// once, for every addon, is what this is for.
 //
-// Quality is drawn in the game's own six colours (`QUALITY_COLOR` in its `src/ui/icons.ts`,
-// with the dimmer border table beside it), because that is the one thing a player reads an
-// item list by, and a codex that spells "epic" in the same grey as "poor" is asking them to
-// read where the game asks them to glance.
+// `resolve` is the only place the ranking is decided, and the order is load-bearing:
+//   1. `items.json`, the game's own table, right by construction for every id it covers.
+//   2. A loot roll's `itemName`, the same server table spelled out on the wire.
+//   3. `ui.icon.itemArtName`, provenance for a picture and never a name: 21 of its 303 named
+//      entries disagree with the game's own, so it is labelled on screen and never published.
+// `ui.icon.item` is not a fourth source and names nothing. A null from it is not evidence an id
+// is fake, since an item can ship before its art.
 //
-// An item id resolves to no name anywhere on this API and never will. The game's item
-// table is bundled into the play entry chunk, referenced by no object the
-// loader can reach. `world.equipment` hands over ids, `world.inventory` hands over ids,
-// and a recipe's reagents are ids, so every panel in the catalogue that wants to say what
-// an item is has the same problem. This is where it is solved once.
+// NO COUNT OF THE TABLE IS WRITTEN DOWN HERE. Content moves it in one commit, so every count on
+// screen is `table.size` as it is drawn.
 //
-// The source ranking is the addon; everything else is a search box drawn around it.
-// `resolve` is the only place that decides it, and it has three sources in this order:
+// Quality, kind, slot and every number exist for a table id and for nothing else. An id from a
+// roll has a name and a quality; one from an art file has neither, and says so rather than
+// picking a plausible default.
 //
-//   1. The embedded table, `items.json`. It is the game's own item table reduced to what its
-//      own tooltip draws, derived from the `ITEMS` merge at the game version its own header
-//      stamps, so for every id it covers it is right by construction. A NAME is the part of it
-//      the bus publishes and the part every other addon needs; everything else in the row is
-//      for the window.
-//   2. A name off a loot roll. `LootRoll.itemName` and `LootRollGroupStatus.itemName` are
-//      the same server-side table spelled out on the wire, so they are equal in authority
-//      to the file, and rank second only because coverage arrives one drop at a time.
-//   3. `ui.icon.itemArtName(id)`, a labelled fallback and never a name. The loader
-//      documents it as provenance for the picture: it is the name the art file was filed
-//      under, gated by the game only on being non-empty, and measured at game 0.33.0, 21
-//      of its 303 named entries disagreed with what the game displays, because a content
-//      rename rewrites the item table and touches the art manifest zero times.
-//
-// `ui.icon.item(id)` is read too, and it is not a fourth source: it names nothing. It
-// answers whether the art manifest lists an id, which feeds the art count and decides whether
-// a square draws a picture or two letters, and it is read one-directionally in both places. A null is not evidence an id
-// is fake, since items ship before their art does.
-//
-// AN ITEM LEVEL IS DERIVED RATHER THAN DECLARED, and the file carries it anyway. Nothing on
-// the wire has one and no ItemDef has one either: the game works it out from where the item
-// DROPS, which is a second index over the whole of content. So `generate.mjs` calls the
-// game's own `itemLevel` and `requiredLevelFor` rather than copying a rule that would be
-// right on the day it was written, and a little over half the rows come back with a level: the
-// rest have no derivable source, which is a fact about vendor and starter stock rather than a gap.
-// `Recipe.itemLevelBudget` is still not one, and the published type says so: it is the budget
-// the output was balanced against.
-//
-// The numbers are only ever as fresh as the file. Nothing re-reads them at run time, so an
-// item the game rebalanced reads here at its old stats until somebody regenerates and the diff
-// shows it, which is the same bargain the name itself is under. That is not hypothetical: the
-// line above said "after 0.34.0" and 0.35.0 is what arrived, retuning forty items at once, so
-// every WARFARE piece in the codex drew its old stats until the table was regenerated.
-//
-// NO COUNT OF THE TABLE IS WRITTEN DOWN ANYWHERE HERE, and that is a rule rather than an
-// oversight. The comments used to say 815 in seven places and the suite asserted it in six, and
-// a content release moved it in one commit; every count on screen is `table.size` at the moment
-// it is drawn, and the file's own header is the only place its version is recorded.
-//
-// Quality is trustworthy for two sources and no others. An id the table covers carries the
-// game's own quality and a roll sends one beside the name; an id named from its art file
-// carries no quality, kind or slot, because the art manifest holds none of the three, and
-// such an item says "quality unknown" rather than picking a plausible default. The same goes
-// for every other number in a row: they exist for a table id and for nothing else, so the
-// record under the grid is a name and a source alone for an id learned from a roll.
-//
-// The bus is the product rather than the panel. `item` carries one record on every newly
-// learned id and `items` carries a batch, both carrying
-// `{ id, name, source }` plus `quality`, `kind`, `slot`, `heroicOf`, `sellValue`, `itemLevel`
-// and `requiredLevel` where the table states them, with anything unknown left out rather than
-// sent empty or as a zero. `item:ask` is answered with everything known, which is what
-// lets an addon that started later catch up. `satchel` and `ledgerline` are the readers
-// today. An art-sourced name is never put on the bus: publishing it would launder a guess
-// into an answer a subscriber would rank above its own identical fallback.
-//
-// A subscriber taking only `item` hears its own ask answered and takes nothing from it,
-// because the answer is always the batch. Both topics or neither.
-//
-// What a vendor pays is the field a consumer needs most and the one the addon API answers
-// least: there is no price surface at all, so a bag panel totalling what a character is
-// carrying and a ledger judging a listing against the vendor floor are both reading this or
-// guessing. It is copper, which is the unit every price on the wire is in.
-//
-// Nothing here stamps `from`. The hub stamps it from the fqid the surface was built with,
-// a sender cannot set it, and a subscriber reads it to credit an answer. Any addon
-// watching loot rolls can publish a name on the same `item` topic, so this addon never
-// assumes it is the only publisher.
+// The bus is the product rather than the panel. `item` is one newly learned record, `items` is
+// the batch an ask is answered with, and both carry `{ id, name, source }` plus `quality`,
+// `kind`, `slot`, `heroicOf`, `sellValue`, `itemLevel` and `requiredLevel` where the table
+// states them, with anything unknown left OUT rather than sent empty or as a zero. A subscriber
+// on `item` alone hears its own ask answered and takes nothing from it: both topics or neither.
 
 /** The frame, and the floor a resize may take it to: chrome plus exactly ONE row of art. */
 const FRAME_TITLE = 'Lorebind';
@@ -100,11 +33,8 @@ const FRAME_WIDTH = 460;
 const FRAME_HEIGHT = 660;
 const FRAME_MIN_WIDTH = 340;
 /**
- * What the shortest useful window spends on everything that is not the grid: the title bar,
- * the tab strip, the quality chips, the search row, the record under the grid and the two
- * counting lines. Stated rather than measured, because a size floor is settled when the frame
- * is built and cannot be derived from a layout that does not exist yet. Floored at one row of
- * squares, never at however many happen to be showing.
+ * Everything that is not the grid. Stated rather than measured: a size floor is settled when the
+ * frame is built, before there is a layout to measure.
  */
 const CHROME_HEIGHT = 400;
 
@@ -113,6 +43,9 @@ const CELL_SIZE = 44;
 const CELL_GAP = 4;
 /** The record under the grid draws the same art larger, since it is one item rather than many. */
 const DETAIL_SIZE = 56;
+/** The art and the words beside it, and then the words against each other. */
+const RECORD_GAP = 8;
+const RECORD_LINE_GAP = 2;
 /** How a chip that is not lit is dimmed, and what marks the square being described. */
 const FADED_CHIP = '0.5';
 const CHOSEN_RING_PX = 2;
@@ -129,13 +62,9 @@ const INITIALS = 2;
 const FIRST = 1;
 
 /**
- * The class the loader colours a tier's TEXT with, for the two things here that are neither a
- * bar nor a tile: a filter chip and the name in the record.
- *
- * The palette itself is the loader's, from the game's own two tables, and reaching it by class
- * rather than by hex is the whole point: this addon held six literals of its own until the kit
- * grew the axis, and so would every other addon that draws an item. A tier the game does not
- * rank gets no class at all, which leaves the panel's own text colour.
+ * The loader's class for a tier's TEXT, worn by the two things here that are neither a bar nor a
+ * tile. A tier the game does not rank gets no class, leaving the panel's own colour; never a hex
+ * of this addon's own, or two addons drawing an item would disagree about the palette.
  */
 function qualityClass(quality) {
   if (QUALITIES.includes(quality)) {
@@ -145,13 +74,9 @@ function qualityClass(quality) {
 }
 
 /**
- * The tab strip, and the one place the game's twelve kinds are grouped.
- *
- * Twelve tabs is a wall and twelve is what the game declares, so they are bucketed by what a
- * player is actually looking for. `other` is a bucket and is named as one rather than given a
- * word that would be wrong for three of the four kinds in it: a mount is not a material. No
- * tab hides anything, since All is a tab, and every item's own kind is spelled out in the
- * record under the grid in the game's own word for it.
+ * The game's twelve kinds, bucketed into six shelves. `other` is named as a bucket rather than
+ * given a word that would be wrong for three of the four kinds in it. No tab hides anything,
+ * since All is a tab.
  */
 const KIND_TABS = [
   { id: 'all', label: 'All', kinds: null },
@@ -180,12 +105,8 @@ const SLOTS = [
 const ANY_SLOT = 'Any slot';
 
 /**
- * The orders the grid can be read in, and what each one is called.
- *
- * A browser needs more than one, because the questions are different: alphabetical is a
- * LOOKUP order, and the other three are comparisons. Item level answers "what is the best
- * thing here", quality answers it more coarsely and groups a set together, and price answers
- * what a bag of loot is worth. Nothing sorts by id, which is the one order no player thinks in.
+ * The orders the grid can be read in: one lookup and three comparisons. Nothing sorts by id,
+ * which is the one order no player thinks in.
  */
 const SORTS = [
   { label: 'Name', by: 'name' },
@@ -198,16 +119,16 @@ const SORT_NAMES = SORTS.map((sort) => sort.label);
 /** The data file, which is the first-ranked source and the reason this addon exists. */
 const TABLE_FILE = 'items.json';
 
-// The topics. `item` is one record, `items` is a batch of them, and the ask is what a
-// subscriber that started late sends to be caught up.
+// The topics. `item` is one record and `items` is a batch of them, which is what
+// `woc.bus.publish` answers an ask with.
 const ITEM_TOPIC = 'item';
 const ITEMS_TOPIC = 'items';
-const ASK_TOPIC = 'item:ask';
+/** The older ask topic, answered beside the `items:ask` `publish` derives. Drop next release. */
+const LEGACY_ASK_TOPIC = 'item:ask';
 
 /**
- * What each source is called, in the record and on the wire. These strings are the whole of
- * what a subscriber's `source` field means, so a second publisher describing the same kind
- * of evidence in different words would make the field useless: match these exactly.
+ * The whole of what a subscriber's `source` field means. A second publisher wording the same
+ * evidence differently makes the field useless, so match these exactly.
  */
 const SOURCE_TABLE = 'table';
 const SOURCE_ROLL = 'loot roll';
@@ -219,8 +140,6 @@ const MARK_ATTR = 'data-woc-item';
 const MS_PER_SECOND = 1000;
 /** How often the marked elements and the live id sources are re-read. */
 const SWEEP_MS = MS_PER_SECOND;
-
-const DEFAULT_MAX_CELLS = 120;
 
 /** Every field the search matches. */
 const SEARCHABLE = ['name', 'id', 'quality', 'kind', 'slot'];
@@ -245,14 +164,9 @@ const KINDS = [
 const QUALITIES = ['poor', 'common', 'uncommon', 'rare', 'epic', 'legendary'];
 
 /**
- * The stat block, in the game's own order, and what each abbreviation is called.
- *
- * Armor is in the table's `stats` beside the five attributes and is drawn apart from them,
- * which is what the game's own tooltip does: `{value} Armor` on a line of its own and
- * `+{value} {stat}` for everything else. The words are the game's English, from its own
- * `itemUi.stats` catalogue; nothing here is translated, because an addon cannot reach the
- * player's locale and inventing a second vocabulary for the same six numbers would be worse
- * than being in one language.
+ * The stat block in the game's own order and its own English, which an addon cannot translate
+ * because the player's locale is out of reach. Armor rides `stats` with the attributes and is
+ * drawn apart from them, as the game's tooltip does.
  */
 const STAT_ORDER = ['str', 'agi', 'sta', 'int', 'spi', 'armor'];
 const STAT_NAME = {
@@ -273,25 +187,17 @@ const RATING_NAME = {
 };
 
 /**
- * The Warfare pair, which the game stores as two numbers and DRAWS as one.
- *
- * `Math.min` of the two is the rating, in the game's own tooltip and in its compare arrows
- * alike, so this addon takes the min rather than inventing a second reading of the same pair.
- * They are equal on all 47 items that carry them at game 0.35.0, which makes the min look like
- * an identity and is not a reason to store one number: an item that raised one alone would then
- * read as having raised both.
+ * Two numbers the game DRAWS as one, at `Math.min`. All 47 items carrying them state them
+ * equal, which makes the min look like an identity: keep both, or an item raising one alone
+ * would read as having raised the other too.
  */
 const WARFARE_KEYS = ['pvpOffenseRating', 'pvpDefenseRating'];
 const WARFARE_NAME = 'Warfare';
 
 /**
- * The tag the game appends to a heroic variant's quality line, in its own words.
- *
- * It is the ONLY thing on screen that tells two identically named rows apart: the game resolves
- * a variant's display name to its base's unchanged, so 63 pairs in the table read as one name
- * twice over, and `itemDisplayName` is explicit that the tag rather than the name is where the
- * distinction lives. Written the game's way, in capitals and in brackets, because a player who
- * has read one on a drop is looking for the same mark here.
+ * The game's own mark for a heroic variant, and the ONLY thing that tells two identically named
+ * rows apart: it resolves a variant's display name to its base's unchanged, so 63 pairs in the
+ * table read as one name twice.
  */
 const HEROIC_TAG = '[HEROIC]';
 
@@ -316,25 +222,11 @@ const NUMBER_FIELDS = [
 ];
 
 /**
- * What a record carries besides the id, the name and the source. Deliberately shorter than
- * the table's own row: the panel here draws every field the game's tooltip does, and the bus
- * carries the ones a consumer cannot work out for itself and would otherwise have to embed a
- * second copy of the table to know.
- *
- * The price is the reason the numbers are here at all. Nothing on the addon API says what a
- * vendor pays, so a bag panel adding up what it holds and a price ledger judging a listing
- * against the vendor floor both have to be told. It is copper, the unit every price on the
- * wire is already in. The two levels ride along because they are the orders a consumer ranks
- * items in, and neither is derivable from anything else it holds.
- *
- * `heroicOf` is here for the same reason and is the newest of them: a subscriber holding an id
- * out of a bag or a mail gets the base item's name from this bus, because that is the name the
- * game itself uses for a variant, and 63 pairs in the table therefore arrive as one name twice.
- * The base id is the only thing that tells them apart, it is in no wire payload, and the id
- * prefix a reader would otherwise guess from is exactly the kind of guess this addon exists to
- * make unnecessary. `uniqueEquipped` deliberately does NOT ride along: it is a rule about what a
- * character may WEAR, no consumer today draws equipment, and a published flag with no reader is
- * a promise to keep for nothing.
+ * What the bus carries beyond the id, the name and the source: shorter than the table's own row,
+ * and every field on it is one a consumer cannot work out for itself. The price is copper, the
+ * unit the wire uses. `heroicOf` is what separates the 63 pairs that arrive as one name twice.
+ * `uniqueEquipped` stays off: nothing draws equipment, and a published field with no reader is a
+ * promise kept for nobody.
  */
 const PUBLISHED_TEXT = ['quality', 'kind', 'slot', 'heroicOf'];
 const PUBLISHED_NUMBERS = ['sellValue', 'itemLevel', 'requiredLevel'];
@@ -348,10 +240,7 @@ const SPEED_DECIMALS = 1;
 /** Two, for the halfway point between a weapon's two damage bounds. */
 const HALF = 2;
 
-/**
- * A flag that changes, in a cell, so a handler can flip one the paint path reads without
- * either of them holding a stale copy.
- */
+/** A flag in a cell, so a handler and the paint path cannot hold different copies of it. */
 function cell(value) {
   return { on: value };
 }
@@ -361,21 +250,17 @@ const table = new Map();
 /** Names read off a loot roll this session, id to `{ name, quality }`. Source 2. */
 const rolled = new Map();
 /**
- * Every id this addon has proven exists, from somewhere other than its own file: worn
- * gear, carried stacks, recipe results and reagents, a Merchant page, the bank, a letter's
- * parcels, a corpse's loot, the buyback ring. None of these carries a name and all of them
- * carry an id. An id in here and not in the table is either content newer than the file or
- * one this addon has no name for, and the coverage line counts it rather than hiding it.
+ * Every id proven to exist from somewhere other than the file: worn, carried, banked, mailed,
+ * looted, crafted. None of those carries a name. One in here and not in the table is content
+ * newer than the file, and the coverage line counts it rather than hiding it.
  */
 const seen = new Set();
 /** Ids already put on the bus, so a roll answered four times emits once. */
 const published = new Set();
 /**
- * Marked elements already carrying a codex tooltip, and how to take each back. A list
- * rather than a WeakSet, because a set says whether an element has been described and
- * cannot undescribe one: holding the unsubscribes is what makes the setting mean something
- * after the fact. Entries whose element has left the document are dropped on the next
- * sweep, which is what keeps this from growing with a list that rebuilds.
+ * Marked elements carrying a codex tooltip, and how to take each back. A list rather than a
+ * WeakSet: holding the unsubscribes is what lets the setting mean something after the fact.
+ * Disconnected entries are dropped on the next sweep, so a rebuilding list cannot grow it.
  */
 const described = [];
 
@@ -383,22 +268,10 @@ const described = [];
 const loaded = cell(false);
 /** Set once the item art manifest has been read, which makes `hasArt` exact. */
 const artKnown = cell(false);
-/** Cleared on disable, so an awaited continuation cannot draw into a dead frame. */
-const running = cell(true);
-/** One repaint per animation frame however many things changed. See `schedulePaint`. */
-const scheduled = cell(false);
 
 /**
- * Every filter at once, which is what the window IS.
- *
- * One record rather than five variables because they are read together on every paint and
- * changed one at a time by five different controls: a `filters.kind` at the call site says
- * which of them a handler is moving, where a bare `kind` would not.
- *
- * `qualities` empty means EVERY quality rather than none. That is the ordinary reading of a
- * chip row and it is also the only one that can be started from: six chips all lit is the
- * same answer and would make the first click a narrowing to five, which is not what pressing
- * Epic means.
+ * Every filter at once. `qualities` empty means EVERY quality rather than none: six chips lit
+ * says the same thing and would make the first press a narrowing to five.
  */
 const filters = { query: '', kind: 'all', slot: '', sort: 'name', qualities: new Set() };
 
@@ -415,44 +288,23 @@ function text(value) {
   return '';
 }
 
-function settingFlag(id, fallback) {
-  const value = woc.settings[id];
-  if (typeof value === 'boolean') {
-    return value;
-  }
-  return fallback;
-}
-
-function settingNumber(id, fallback) {
-  const value = woc.settings[id];
-  if (typeof value === 'number' && Number.isFinite(value)) {
-    return value;
-  }
-  return fallback;
-}
-
-/**
- * How many squares are drawn before the grid says it stopped. Read straight from the setting
- * with no clamping: the manifest declares `min` and `max` and the loader coerces against
- * them, so a second clamp here would be dead code that reads like a guard.
- */
+/** No clamp: the manifest declares `min` and `max` and the loader has already applied them. */
 function maxCells() {
-  return Math.round(settingNumber('max-results', DEFAULT_MAX_CELLS));
+  return Math.round(woc.settings['max-results']);
 }
 
 function learningFromRolls() {
-  return settingFlag('learn-rolls', true);
+  return woc.settings['learn-rolls'];
 }
 
 function describingMarked() {
-  return settingFlag('tooltips', true);
+  return woc.settings.tooltips;
 }
 
 /**
- * One row of the data file, checked. `woc.data` hands back `unknown`: nothing validates
- * the shape, and a table nothing checked is right only until somebody edits it. An id, a
- * name and a known kind are required; quality and slot are optional in the game's own
- * table, so a row without one is ordinary rather than broken and the field is left absent.
+ * One row of the data file, checked, since `woc.data` hands back `unknown`. Quality and slot
+ * are optional in the game's own table, so a row without one is ordinary and the field is left
+ * absent rather than filled in.
  */
 function readRow(value) {
   if (typeof value !== 'object' || value === null) {
@@ -588,9 +440,8 @@ function readVersion(value) {
 }
 
 /**
- * The name the item's art file was filed under, or null. Source 3, and a guess. Called
- * defensively like anything reached through a game object: a future update can leave
- * something callable in place that throws, and that has to cost a name rather than a panel.
+ * Source 3, and a guess. Guarded like anything reached through a game object: a future update
+ * can leave something callable in place that throws, and that must cost a name, not the panel.
  */
 function artName(itemId) {
   if (itemId === '') {
@@ -605,10 +456,8 @@ function artName(itemId) {
 }
 
 /**
- * Whether the game ships a painted file for this id. Source 4, and one-directional. A URL
- * means the manifest lists the id, so the id is almost certainly real. A null is true of
- * items that certainly exist, so it proves nothing and is never read as evidence against
- * an id.
+ * One-directional: a URL means the manifest lists the id, and a null is true of items that
+ * certainly exist, so it is never read as evidence against one.
  */
 function hasArt(itemId) {
   if (itemId === '') {
@@ -633,10 +482,8 @@ function artUrl(itemId) {
 }
 
 /**
- * The best name there is for an id, and where it came from. The ranking, in one function,
- * and the only place that decides it. `source` is null when nothing can name the id at
- * all, which is a real answer: an id with no name is not the same thing as an id that does
- * not exist.
+ * The ranking, in one function and nowhere else. A null `source` is a real answer: an id
+ * nothing can name is not the same thing as an id that does not exist.
  */
 function resolve(itemId) {
   const known = table.get(itemId);
@@ -655,10 +502,8 @@ function resolve(itemId) {
 }
 
 /**
- * The other spelling, when a roll and the file disagree about the same id. The file wins
- * the display because it is the ranked source, but the disagreement is the only evidence
- * available that the file has fallen behind the running game. Empty when the two agree or
- * when only one has an answer.
+ * The roll's spelling when it disagrees with the file. The file still wins the display; the
+ * disagreement is the only evidence available that the file has fallen behind the game.
  */
 function disagreement(itemId) {
   const known = table.get(itemId);
@@ -670,19 +515,10 @@ function disagreement(itemId) {
 }
 
 /**
- * One record for the bus, with anything unknown left out rather than sent empty. Absent
- * and empty are different answers, and a subscriber checking `payload.quality` cannot tell
- * an item whose quality nobody knows from one whose quality is the empty string. The same
- * rule decides the numbers and matters more there, because a `sellValue` of 0 is a
- * perfectly good reading of an item a vendor will not pay for.
- *
- * Returns null for every name that came off an art file: those are provenance for a
- * picture, a subscriber can read `ui.icon.itemArtName` for itself, and publishing one
- * would rank a guess above the fallback the subscriber already has.
- *
- * Both copiers are the ones the table reader uses, so a field is dropped here on exactly
- * the terms it was kept on: only the table states any of these, and a roll-sourced record
- * therefore carries a name, a quality and nothing else without needing to say so.
+ * One record for the bus, with anything unknown left OUT rather than sent empty: a subscriber
+ * cannot tell an unknown quality from an empty one, and `sellValue: 0` is a real reading of an
+ * item a vendor will not buy. Null for an art-sourced name, which would rank a guess above the
+ * identical fallback the subscriber already has.
  */
 function record(itemId) {
   const answer = resolve(itemId);
@@ -709,16 +545,14 @@ function publishItem(itemId) {
 }
 
 /**
- * Put everything known on the bus as one message. The table is eight hundred-odd rows, delivery
- * is synchronous inside this call, and one emit per row would be one allocation and one repaint
- * per row in every subscriber to say what one array says.
+ * Everything known, as ONE batch: delivery is synchronous, so a message per row would be a
+ * repaint per row in every subscriber to say what one array says.
  *
- * It walks every id the codex has heard of and lets `record` refuse, rather than walking
- * only the ids it expects to be publishable: with the ids filtered here, `record`'s
- * refusal to publish an art-sourced name is unreachable and its guard test passes with the
- * guard deleted. One decision point, and it is the one under test.
+ * It walks every id and lets `record` refuse rather than filtering first, so the refusal to
+ * publish an art-sourced name stays reachable and under test. Null when there is nothing to
+ * say, and that null is emitted: a follower cannot tell silence from an absent publisher.
  */
-function publishAll() {
+function everythingKnown() {
   const rows = [];
   for (const itemId of allIds()) {
     const payload = record(itemId);
@@ -727,16 +561,15 @@ function publishAll() {
       rows.push(payload);
     }
   }
-  if (rows.length > 0) {
-    woc.bus.emit(ITEMS_TOPIC, rows);
+  if (rows.length === 0) {
+    return null;
   }
+  return rows;
 }
 
 /**
- * Learn a name off a roll the group is answering. The wire spells an item out in very few
- * places and this is one of them. A name already held for the id is dropped here, and
- * `publishItem` keeps it to one emit per id, so the same drop rolled on four times in a
- * night is one message.
+ * A roll is one of the very few places the wire spells an item out. Guarded on the held name,
+ * and `publishItem` on the id, so a drop rolled on four times is one message.
  */
 function learnFromRoll(itemId, itemName, quality) {
   if (itemId === '' || itemName === '' || !learningFromRolls()) {
@@ -761,19 +594,12 @@ function rollQuality(value) {
 }
 
 /**
- * Every roll the group has open, from both of the two places it carries one.
+ * Both places a roll is carried. They OVERLAP rather than nest: `rolls` is what you were asked
+ * and drops the moment you answer, `rollStatus` is every open roll in the party and holds until
+ * it resolves, so reading both gets the ids you could not have won.
  *
- * `rolls` is what you were asked to answer and `rollStatus` is every open roll in the
- * party including ones you were never a candidate for. The two overlap rather than nest,
- * so reading both gets the ids you could not have won; `rolls` also drops a prompt the
- * moment you answer it while `rollStatus` holds it until the roll resolves.
- *
- * What this cannot see is master loot, and the gap is in the game rather than the reading.
- * A master-loot item in its curate phase is excluded from both by the same server-side
- * guard, because nobody is voting on it yet. Its name rides the `masterLoot` event, which
- * the published event catalogue does not describe, so reading it would mean guessing at a
- * payload shape nothing pins. A group using master loot teaches this addon fewer names,
- * and the coverage line shows that rather than hiding it.
+ * Master loot is invisible to both by a server-side guard, and its name rides an event the
+ * published catalogue does not describe. Such a group teaches this fewer names.
  */
 function learnFromGroup(group) {
   if (group === null || typeof group !== 'object') {
@@ -810,11 +636,7 @@ function noteStacks(stacks) {
   }
 }
 
-/**
- * The static half of the id sources: every recipe's result and every reagent.
- * `world.recipes` is content rather than state, which is why it has no watch key and why
- * reading it once is enough.
- */
+/** `world.recipes` is content rather than state: no watch key, and one read is enough. */
 function noteRecipes() {
   const { recipes } = woc.world;
   if (!Array.isArray(recipes)) {
@@ -852,9 +674,8 @@ function noteCorpses() {
 }
 
 /**
- * Re-read every live id source, on an interval rather than on a watch key. Most of these
- * have no watch key, and the ones that do report membership of a set rather than a field
- * changing inside it.
+ * On an interval rather than on watch keys: most of these have none, and the ones that do
+ * report membership of a set rather than a field changing inside it.
  */
 function collectSeen() {
   const before = seen.size;
@@ -875,10 +696,9 @@ function allIds() {
 }
 
 /**
- * How many ids each source can name, plus how many nothing can. Counted rather than
- * stored, because the answer moves as rolls land and as the player walks past a Merchant.
- * The four figures are kept apart: a single total would fold a name that is right by
- * construction together with one taken off an art file.
+ * What each source can name, counted rather than stored since the answer moves as rolls land.
+ * Four figures rather than one total, which would fold a name right by construction together
+ * with one taken off an art file.
  */
 function coverage() {
   const counts = { table: 0, roll: 0, art: 0, unnamed: 0, artless: 0, total: 0 };
@@ -918,13 +738,7 @@ function compareRows(a, b) {
   return a.name.localeCompare(b.name);
 }
 
-/**
- * How much of the sorted-by fact a row has, for the three orders that are numbers.
- *
- * Quality is a number here because it is a RANK: the game's six tiers are ordered, so sorting
- * by the word would put epic under poor and rare over uncommon, which is the alphabet
- * answering a question nobody asked.
- */
+/** Quality is a RANK rather than a word here, or the alphabet would put epic under poor. */
 function sortValue(row, key) {
   if (key === 'quality') {
     return QUALITIES.indexOf(text(row.quality));
@@ -937,12 +751,8 @@ function sortValue(row, key) {
 }
 
 /**
- * The chosen order, highest first, with the alphabet breaking every tie.
- *
- * Highest first because every one of the three numeric orders is a "best" question, and a row
- * the table has no answer for sorts to the BOTTOM rather than to the top: an item with no
- * item level is one the game derives none for, and leading a list of the best gear with the
- * things that have no level at all would answer the opposite question.
+ * Highest first, since all three numeric orders are "best" questions, with the alphabet
+ * breaking ties. A row the table has no answer for sorts to the BOTTOM rather than the top.
  */
 function compareBy(key) {
   return (a, b) => {
@@ -960,10 +770,8 @@ function tabKinds() {
 }
 
 /**
- * Whether one item survives the controls. Every arm is a fact the table already carries,
- * which is what makes these filters rather than a second search: an item with no kind is out
- * of every tab but All, because the codex does not know its kind rather than knowing it is
- * none of them.
+ * Whether one item survives the controls. An item with no kind is out of every tab but All: the
+ * codex does not know its kind rather than knowing it is none of them.
  */
 function passes(row, needle) {
   const kinds = tabKinds();
@@ -983,10 +791,8 @@ function passes(row, needle) {
 }
 
 /**
- * What the controls are pointed at, resolved and sorted. Every id the codex knows of rather
- * than only the ones in the file, so an id learned off a roll or seen in the bags is findable
- * the moment it is known. Untouched controls list everything, which is what makes the window
- * a browser of the game rather than a box you have to know an answer to use.
+ * Every id the codex knows of rather than only the file's, so one learned off a roll or seen in
+ * the bags is findable at once. Untouched controls list everything.
  */
 function results() {
   const needle = filters.query.trim().toLowerCase();
@@ -1009,7 +815,6 @@ function readableSlot(slot) {
   return text(slot).replaceAll('_', ' ');
 }
 
-/** Whether a string has anything in it, for filtering the parts of a composed line. */
 function filled(part) {
   return part !== '';
 }
@@ -1020,11 +825,9 @@ function capitalized(word) {
 }
 
 /**
- * `Uncommon armor, waist`, from whichever of the three the source could answer.
- *
- * The quality is in the words as well as in the colour. A colour alone would leave the one
- * fact a player sorts items by unreadable to anyone who cannot tell #0070dd from #a335ee, and
- * this line is also what a screen reader gets, since the grid's squares are art.
+ * `Uncommon armor, waist`. The quality is in the WORDS as well as the colour: a colour alone is
+ * unreadable to anyone who cannot tell the two blues apart, and this line is what a screen
+ * reader is given for a square that is nothing but art.
  */
 function kindLine(row) {
   const parts = [qualityAndKind(row)];
@@ -1035,12 +838,8 @@ function kindLine(row) {
 }
 
 /**
- * The head of that line, which always speaks to the quality even when nobody knows it.
- *
- * Absent is not poor: the game declares no quality for 96 of its items, and a line that simply
- * left the word out where every other one carries a tier would read as the lowest tier rather
- * than as a fact nobody has. The same goes the other way for an id learned off a roll, which
- * carries a quality and no kind at all.
+ * Absent is not poor. The game declares no quality for 96 of its items, and leaving the word out
+ * where every other row carries a tier reads as the lowest tier rather than as a fact nobody has.
  */
 function qualityAndKind(row) {
   const quality = text(row.quality);
@@ -1058,14 +857,9 @@ function qualityAndKind(row) {
 }
 
 /**
- * The heroic mark, on the kind line and nowhere else, which is where the game puts it.
- *
- * Not appended to the NAME, however tempting that is for a grid where two squares carry the same
- * word: the game's own display name for a variant is its base's, unchanged and deliberately so,
- * and an addon that spelled a different name than the game does would be wrong in the one place
- * this addon claims to be right. The kind line is what a square's accessible name and its
- * tooltip and the record all read from, so all three tell the two apart; the picture does not,
- * and cannot, since a variant is filed under its base's art.
+ * On the kind line and never on the NAME, which is where the game puts it: a variant's display
+ * name is its base's, and an addon spelling a different one would be wrong in the one place this
+ * addon claims to be right. The square, its tooltip and the record all read that line.
  */
 function heroicTag(row) {
   if (text(row.heroicOf) === '') {
@@ -1075,10 +869,8 @@ function heroicTag(row) {
 }
 
 /**
- * Where the name came from, spelled out in the record under the grid. This is the attribution
- * and it is why the panel is worth having. An art-sourced name is marked in words rather than
- * by a colour or a symbol: the colours here mean quality, and a caveat drawn in the same
- * language as a tier would read as one.
+ * The attribution, in WORDS rather than a colour or a symbol: colour means quality here, so a
+ * caveat drawn in the same language would read as a tier.
  */
 function sourceLine(row) {
   if (row.source === SOURCE_TABLE) {
@@ -1111,13 +903,9 @@ function qualityOf(row) {
 }
 
 /**
- * What stands in a square for art the game does not ship.
- *
- * 134 items have none, every one of them a weapon, and a grid of blank squares says nothing
- * about which blank is which. Two letters off the name is not a picture and is not pretending
- * to be one: it is enough to tell one square from its neighbour while the quality border and
- * the record under the grid carry the rest. An empty string for an item that HAS art, since
- * the figure would then be a monogram over a picture.
+ * Two letters for an item the game ships no art for, which is 134 of them and every weapon: a
+ * grid of blank squares says nothing about which blank is which. Empty where there IS art, or
+ * the figure would be a monogram over a picture.
  */
 function initials(row) {
   if (hasArt(row.id)) {
@@ -1156,11 +944,8 @@ function armorLine(row) {
 }
 
 /**
- * The one Warfare number, from the pair the table stores, or nothing.
- *
- * `Math.min` because that is what the game does with them, in the tooltip and in the compare
- * arrows alike. A pair where only one side is stated therefore reads as nothing, which is the
- * game's answer too: its own `?? 0` makes the min zero, and it draws no line for a zero.
+ * `Math.min`, as the game does. A pair with only one side stated therefore reads as nothing,
+ * which is the game's answer too.
  */
 function warfareRating(row) {
   const [offense, defense] = WARFARE_KEYS.map((key) => row[key] ?? 0);
@@ -1189,10 +974,8 @@ function statLines(row) {
 }
 
 /**
- * What using it does, in the four shapes the game keeps a consumable's effect in.
- *
- * Not `useLine`, which is what it was called for ten minutes: Biome reads a `use` prefix as a
- * React hook and refuses to see one called after an early return.
+ * The four shapes the game keeps a consumable's effect in. Not named `useLine`: Biome reads a
+ * `use` prefix as a React hook and refuses one called after an early return.
  */
 function effectLine(row) {
   const over = `over ${String(CONSUME_SECONDS)} sec`;
@@ -1225,12 +1008,8 @@ function elixirLine(row) {
 }
 
 /**
- * What it takes to use it and what it is worth, on one line.
- *
- * The classes are the game's own ids rather than its display names, because this addon has no
- * class table and title-casing `warlock` is a guess that happens to be right. Soulbound is
- * here rather than beside the name for the same reason the game puts it early: it is the
- * fact that decides whether the rest of the line is worth reading.
+ * What it takes to use it and what it is worth. The classes are the game's ids title-cased,
+ * which is a guess that happens to be right: there is no class table to read.
  */
 function gateLines(row) {
   const parts = [];
@@ -1257,15 +1036,9 @@ function gateLines(row) {
 }
 
 /**
- * The three facts about WEARING one, which the game keeps together and this addon does too.
- *
- * Unique-equipped is a fact about a FAMILY rather than about an id, and the family is the one
- * thing on a heroic variant a player cannot see: the rule keys on the base id, so Thronebane and
- * heroic Thronebane are one item for it and both rows read "Thronebane, Last Oath of Thornpeak".
- * That is why the base id is spelled out rather than the base NAME, which is by definition the
- * same word already on screen. The tag itself is the game's own derivation asked of the game in
- * `generate.mjs` rather than re-decided here from the quality, so a release that stops spelling
- * the rule that way shows up as a diff in the table instead of as a line this addon still draws.
+ * Unique-equipped is a rule about a FAMILY rather than an id: a variant and its base are one
+ * item for it. The base ID is drawn rather than its name, which is by definition the word
+ * already on screen, and the flag is the game's own derivation carried in the table.
  */
 function wearLines(row) {
   const parts = [];
@@ -1281,12 +1054,7 @@ function wearLines(row) {
   return parts;
 }
 
-/**
- * The numbers, for the tooltip, in the record's own order and with its own words.
- *
- * The stats line is `good` and the gates line is `muted`, which is the same distinction the
- * record draws in colour: what the item GIVES you, and what it asks of you first.
- */
+/** Stats are `good` and gates are `muted`: what the item gives you, and what it asks first. */
 function numberLines(row) {
   const lines = [];
   for (const said of [damageLine(row), armorLine(row), effectLine(row)]) {
@@ -1304,12 +1072,8 @@ function numberLines(row) {
 }
 
 /**
- * What a square's tooltip says, built when the pointer lands on it. The function form because
- * the answer moves: a roll landing while the window is open changes an item's source.
- *
- * It says everything the record says and is not redundant with it: a tooltip follows the
- * pointer across a grid at reading speed, and the record holds one item still while the player
- * looks at another.
+ * Built when the pointer lands, because the answer moves: a roll landing changes an item's
+ * source. Not redundant with the record, which holds one item still while the pointer moves.
  */
 function describeItem(itemId) {
   const row = resolve(itemId);
@@ -1338,67 +1102,52 @@ function describeItem(itemId) {
 const frame = woc.ui.frame({
   id: 'codex',
   title: FRAME_TITLE,
+  toggleKey: 'toggle',
   width: FRAME_WIDTH,
   height: FRAME_HEIGHT,
   density: 'comfortable',
   closable: true,
   save: true,
-  // Closed until asked for. A browser of the whole game is a thing the player opens, so
-  // leaving it on screen would put a 580px panel over the game for a question nobody is
-  // asking. `save` means a player who leaves it open gets it back.
+  // Closed until asked for: a browser of the whole game is a thing a player opens, and `save`
+  // gives it back to one who left it open.
   visible: false,
   resizable: true,
   minWidth: FRAME_MIN_WIDTH,
   minHeight: CHROME_HEIGHT + CELL_SIZE,
 });
 
-// A column, so the grid takes what is left of the window and scrolls inside it while the
-// controls above it and the record below it stay put.
+// A column, so the grid takes what is left and scrolls while the controls and record stay put.
 frame.body.style.display = 'flex';
 frame.body.style.flexDirection = 'column';
 frame.body.style.gap = '8px';
 frame.body.style.minHeight = '0';
 
-/** A row of controls that keeps its height whatever the grid does. */
+/**
+ * `align: 'end'` rather than baseline: every item is a label stacked OVER a control, so a
+ * baseline would line up the labels and leave the controls at four different heights.
+ */
 function strip(role) {
-  const el = document.createElement('div');
-  el.className = 'woc-lorebind-strip';
+  const el = woc.ui.row({
+    parent: frame.body,
+    className: 'woc-lorebind-strip',
+    wrap: true,
+    align: 'end',
+  });
   el.dataset.role = role;
-  el.style.display = 'flex';
-  el.style.flexWrap = 'wrap';
-  el.style.alignItems = 'flex-end';
-  el.style.gap = '6px';
-  el.style.flexShrink = '0';
-  frame.body.appendChild(el);
   return el;
 }
 
 /**
- * One of the two counting lines under the record.
- *
- * Drawn as a caption rather than as body text: they are footnotes about the grid, and at the
- * panel's own size they would take three of the rows of art the window exists to show. The
- * grid is the content here and these say how much of it there is.
+ * A footnote about the grid, drawn as a caption: at the panel's own size these two lines would
+ * take three of the rows of art the window exists to show.
  */
 function line(role) {
-  const el = document.createElement('div');
-  el.className = 'woc-lorebind-line';
+  const el = woc.ui.line({ parent: frame.body, className: 'woc-lorebind-line', tone: 'muted' });
   el.dataset.role = role;
-  el.style.flexShrink = '0';
-  el.style.fontSize = '12px';
-  el.style.lineHeight = '1.35';
-  el.style.opacity = '0.75';
-  frame.body.appendChild(el);
   return el;
 }
 
-/**
- * The kind strip, which is the coarsest cut and therefore the first control.
- *
- * `ui.tabs` rather than a sixth dropdown: these are the six shelves the window is divided
- * into and a player moves between them constantly, so they are navigation, which is what the
- * kit's tab strip is for. Every other control narrows what is on the open shelf.
- */
+/** Tabs rather than a sixth dropdown: six shelves moved between constantly is navigation. */
 const kindTabs = woc.ui.tabs({
   tabs: KIND_TABS.map((tab) => ({ id: tab.id, label: tab.label })),
   onSelect: (id) => {
@@ -1412,12 +1161,8 @@ frame.body.appendChild(kindTabs.el);
 const chipStrip = strip('qualities');
 
 /**
- * One quality chip: the word, in the game's own colour for it, pressed or not.
- *
- * The colour is the point. Quality is what a player sorts every item by and the game paints
- * it everywhere, so a filter that named the six tiers in the panel's own text colour would be
- * a legend for a thing the player already reads by hue. `aria-pressed` rather than a class
- * alone, because a toggle that only LOOKS pressed is a control a screen reader cannot report.
+ * The word in the game's own colour for its tier, which is how a player reads an item list.
+ * `aria-pressed` as well as the styling: a toggle that only LOOKS pressed says nothing aloud.
  */
 function createChip(quality) {
   const chip = document.createElement('button');
@@ -1451,8 +1196,8 @@ function paintChips() {
     const lit = filters.qualities.has(quality);
     const counts = filters.qualities.size === 0 || lit;
     chip.setAttribute('aria-pressed', String(lit));
-    // `currentColor`, so the edge of a lit chip is the tier's own colour without this file
-    // holding one: the class the loader gave it has already set the text to that colour.
+    // `currentColor`: the loader's class has already set the text to the tier's colour, so the
+    // edge follows without this file holding a hex.
     chip.style.borderColor = '';
     chip.style.opacity = FADED_CHIP;
     if (lit) {
@@ -1509,12 +1254,8 @@ sortField.el.dataset.role = 'sort';
 findStrip.appendChild(sortField.el);
 
 /**
- * The one filter that is about the PLAYER rather than about the game.
- *
- * Everything else here narrows a table every player installs identically. This one asks what
- * this character has actually laid eyes on: worn, carried, banked, posted, looted or read off
- * a recipe. It is the closest thing the codex has to a collection, and it is the reason the
- * counting line says how many of the table's rows have been seen at all.
+ * The one filter about the PLAYER rather than the game: what this character has laid eyes on,
+ * which is the closest thing the codex has to a collection.
  */
 const seenField = woc.ui.field.checkbox({
   label: 'Only what I have seen',
@@ -1529,56 +1270,44 @@ seenField.el.dataset.role = 'seen';
 findStrip.appendChild(seenField.el);
 
 /**
- * The grid, which is the window.
- *
- * A wrapping track list rather than a column of rows: item art IS the label in this game, a
- * player picks a thing out of their bags by its picture, and eight squares across a 460px
- * panel puts a whole shelf on screen where eight rows would be half a screenful. There is no
- * column count, so the browser fits as many as the frame is wide on every resize.
+ * A wrapping track list rather than a column of rows: art IS the label in this game, and eight
+ * squares across put a shelf on screen where eight rows are half a screenful. No column count,
+ * so the browser refits on every resize.
  */
 const grid = document.createElement('div');
 grid.className = 'woc-lorebind-grid';
 grid.style.display = 'grid';
 grid.style.gridTemplateColumns = `repeat(auto-fill, ${String(CELL_SIZE)}px)`;
 grid.style.gap = `${String(CELL_GAP)}px`;
-// Room for the ring on the chosen square, which is drawn OUTSIDE the cell's box: without it
-// the scroll box clips the ring on the top row and on both edges, so the one square the panel
-// is describing looks like the one square somebody cut a corner off.
+// Room for the chosen square's ring, which is drawn OUTSIDE the cell's box and is otherwise
+// clipped by the scroll box on the top row and both edges.
 grid.style.padding = `${String(CHOSEN_RING_PX + 1)}px`;
 grid.style.justifyContent = 'center';
 grid.style.alignContent = 'start';
-// Sized by its content and shrunk when there is not room, rather than grown to fill: an
-// underfull grid would otherwise hold a band of empty squares' worth of nothing between the
-// last row of art and the record, and the record is what the player is reading.
+// Sized by content rather than grown to fill, or an underfull grid holds a band of nothing
+// between the last row of art and the record.
 grid.style.flex = '0 1 auto';
-// A flex item's floor is its content, so without this a grid of 120 squares refuses to
-// shrink and pushes the window open from the inside.
+// A flex item's floor is its content, so without this 120 squares push the window open.
 grid.style.minHeight = `${String(CELL_SIZE * GRID_FLOOR_ROWS + CELL_GAP)}px`;
 grid.style.overflowY = 'auto';
 grid.style.overscrollBehavior = 'contain';
 frame.body.appendChild(grid);
 
 /**
- * The record under the grid: one item, spelled out.
+ * One item, spelled out, and not a substitute for the tooltip: a player comparing two helmets
+ * needs one of them to stay on screen while the pointer is over the other.
  *
- * The grid answers "what is there" and this answers "what is this one", which is the pair of
- * questions a browser is. It is not a substitute for the tooltip: the tooltip follows the
- * pointer and is gone the moment it leaves, and a player comparing two helmets needs one of
- * them to stay on screen while they look at the other.
+ * Aligned to the top, since art centred against six lines floats away from its name.
  */
-const detail = document.createElement('div');
-detail.className = 'woc-lorebind-record';
+const detail = woc.ui.row({
+  parent: frame.body,
+  className: 'woc-lorebind-record',
+  align: 'start',
+  gap: RECORD_GAP,
+});
 detail.dataset.role = 'record';
-detail.style.display = 'flex';
-detail.style.gap = '8px';
-// Top, not centre: the record is one line for a junk item and six for a weapon, and art
-// centred against six lines floats away from the name it belongs to.
-detail.style.alignItems = 'flex-start';
-// It may be two lines for a lump of ore and eleven for a legendary, so it takes what it needs
-// and the GRID gives way, down to a floor of two rows of art. Never the other way round: the
-// record is the answer to the click the player just made, and a record cut off at three of its
-// nine lines is the panel refusing to answer. Past its own share it scrolls rather than
-// pushing the grid below that floor.
+// Two lines for a lump of ore and eleven for a legendary, so the GRID gives way rather than the
+// record: it answers the click the player just made. Past its share it scrolls.
 detail.style.flex = '0 0 auto';
 detail.style.minHeight = `${String(DETAIL_SIZE)}px`;
 detail.style.maxHeight = `${String(DETAIL_SHARE_PCT)}%`;
@@ -1586,17 +1315,14 @@ detail.style.overflowY = 'auto';
 detail.style.overscrollBehavior = 'contain';
 detail.style.borderTop = '1px solid var(--color-border-default, rgb(78 61 29))';
 detail.style.paddingTop = '6px';
-frame.body.appendChild(detail);
 
 const recordArt = woc.ui.tile({ className: 'woc-lorebind-record-art', size: DETAIL_SIZE });
 detail.appendChild(recordArt.el);
 
-const recordText = document.createElement('div');
-recordText.style.display = 'flex';
-recordText.style.flexDirection = 'column';
-recordText.style.gap = '2px';
+const recordText = woc.ui.column({ parent: detail, gap: RECORD_LINE_GAP });
+// A flex item is as wide as its longest line, so without this a legendary's longest sentence
+// pushes the record wider than the panel instead of wrapping.
 recordText.style.minWidth = '0';
-detail.appendChild(recordText);
 
 function recordLine(role, size) {
   const el = document.createElement('div');
@@ -1611,20 +1337,11 @@ const recordName = recordLine('name', '15px');
 recordName.style.fontWeight = '600';
 const recordKind = recordLine('kind', '12px');
 /**
- * The numbers, ONE FACT PER LINE, which is how the game's own item tooltip reads.
- *
- * It was three lines with commas in them, and that was wrong twice over: a legendary's five
- * stats and six classes ran off the right edge of the panel and were cut, and a comma-joined
- * list is a paragraph where the game gives a column. A player comparing two helmets scans a
- * column; they do not read a sentence. Vertical space is what this panel has: the window is
- * resizable, the grid takes what is left, and a run of short lines costs nothing an item
- * browser needs more.
+ * ONE FACT PER LINE, as the game's own item tooltip reads. A player comparing two helmets scans
+ * a column; a comma-joined list is a paragraph, and it runs off the edge of the panel.
  */
-const recordBlock = document.createElement('div');
+const recordBlock = woc.ui.column({ parent: recordText, gap: 0 });
 recordBlock.dataset.role = 'block';
-recordBlock.style.display = 'flex';
-recordBlock.style.flexDirection = 'column';
-recordText.appendChild(recordBlock);
 
 const recordSource = recordLine('source', '12px');
 recordSource.style.opacity = '0.75';
@@ -1645,8 +1362,7 @@ function blockLine(said, role) {
   recordBlock.appendChild(el);
 }
 
-/** Draw the whole block for one item, or empty it. Rebuilt rather than diffed: it is six
- *  elements at most and it changes only when the player picks another square. */
+/** Rebuilt rather than diffed: six elements at most, and only when another square is picked. */
 function paintBlock(row) {
   recordBlock.replaceChildren();
   if (row === null) {
@@ -1669,8 +1385,11 @@ function paintBlock(row) {
 const statusLine = line('status');
 const coverageLine = line('coverage');
 
-/** Squares on screen, id to the kit tile drawing it. See `syncCells`. */
-const cells = new Map();
+/**
+ * The id the record is describing. Held rather than passed, since `ui.list` hands `update` the
+ * item and its index and this is one fact about the whole sync.
+ */
+const open = cell('');
 
 /** Select an item, which is what a click on a square means. */
 function choose(itemId) {
@@ -1679,13 +1398,9 @@ function choose(itemId) {
 }
 
 /**
- * One square: art, a quality border, and a way in from the keyboard.
- *
- * A tile rather than a bar for the reason a bag is a grid: a bar is a name with a fill behind
- * it and this panel's names are in the record below, while a tile is art with room for a
- * figure, which is what an item square is. The role and the tabindex are the kit's gap and
- * not its fault: `ui.tile` draws a square and says nothing about whether it does anything,
- * and one that answers a click has to answer Enter too.
+ * A tile rather than a bar: this panel's names are in the record below, so a square is art with
+ * room for a figure. The role and the tabindex are ours to add, since a tile says nothing about
+ * whether it does anything, and one that answers a click has to answer Enter too.
  */
 function addCell(itemId) {
   const tile = woc.ui.tile({ className: 'woc-lorebind-cell', size: CELL_SIZE });
@@ -1703,61 +1418,42 @@ function addCell(itemId) {
     }
   });
   woc.ui.tooltip(tile.el, () => describeItem(itemId));
-  cells.set(itemId, tile);
-  grid.appendChild(tile.el);
   return tile;
 }
 
-/** Put a square where it belongs, and only when it is not there already. */
-function place(el, at) {
-  if (grid.children[at] !== el) {
-    grid.insertBefore(el, grid.children[at] ?? null);
-  }
-}
-
 /**
- * Mark the square whose record is showing.
- *
- * An outline rather than the border, which is the item's quality and must not be overwritten
- * by a passing state: a selected epic would otherwise stop being purple for as long as it was
- * selected, which is the one moment a player is reading it hardest.
+ * An outline rather than the border, which is the item's QUALITY: a selected epic would
+ * otherwise stop being purple exactly while the player is reading it hardest.
  */
-function markChosen(tile, itemId, open) {
+function markChosen(tile, itemId) {
   tile.el.style.outline = '';
   tile.el.style.outlineOffset = '';
-  if (itemId === open) {
+  if (itemId === open.on) {
     tile.el.style.outline = CHOSEN_OUTLINE;
     tile.el.style.outlineOffset = '1px';
   }
 }
 
 /**
- * Sync the grid to a reading: drop what has gone, build what is new, place the rest. A square
- * is reused rather than replaced, because an element removed and re-inserted loses whatever
- * the browser was tracking on it, hover and focus included, and fires no leave event to say so.
+ * Keyed on the id rather than a position, so a square the sort moved is the same square: a
+ * re-inserted element loses hover and focus and fires no leave event to say so.
  */
-function syncCells(shown, open) {
-  const wanted = new Set(shown.map((row) => row.id));
-  for (const [itemId, tile] of cells) {
-    if (!wanted.has(itemId)) {
-      tile.destroy();
-      cells.delete(itemId);
-    }
-  }
-  for (const [at, row] of shown.entries()) {
-    const tile = cells.get(row.id) ?? addCell(row.id);
-    // The label is the accessible name of a square whose whole face is art, so it carries
-    // what a sighted reader gets from the picture and the border together.
+const cells = woc.ui.list({
+  parent: grid,
+  key: (row) => row.id,
+  create: (row) => addCell(row.id),
+  update: (tile, row) => {
+    // The accessible name of a square that is nothing but art, so it carries what the picture
+    // and the border say together.
     tile.update({
       label: `${rowLabel(row)}, ${kindLine(row)}`,
       icon: artUrl(row.id),
       value: initials(row),
       quality: qualityOf(row),
     });
-    markChosen(tile, row.id, open);
-    place(tile.el, at);
-  }
-}
+    markChosen(tile, row.id);
+  },
+});
 
 /** What the record shows when nothing has been picked yet, which is every first open. */
 function emptyRecord() {
@@ -1776,8 +1472,7 @@ function paintRecord(itemId) {
     return;
   }
   const row = resolve(itemId);
-  // The same tier the square in the grid carries, so the record reads as that square enlarged
-  // rather than as a second thing about the same item.
+  // The tier the square carries, so the record reads as that square enlarged.
   recordArt.update({
     icon: artUrl(itemId),
     value: initials(row),
@@ -1789,13 +1484,6 @@ function paintRecord(itemId) {
   recordKind.textContent = kindLine(row);
   paintBlock(row);
   recordSource.textContent = `${row.id} - ${sourceLine(row)}`;
-}
-
-function countedItems(count) {
-  if (count === 1) {
-    return '1 item';
-  }
-  return `${String(count)} items`;
 }
 
 /** Why the grid is short, or why it is empty. Never an empty box with a title on it. */
@@ -1813,18 +1501,14 @@ function statusText(found, drawn) {
     return 'The item table could not be read, so the codex knows nothing.';
   }
   if (drawn < found) {
-    return `Showing ${String(drawn)} of ${countedItems(found)}. Narrow it to see the rest.`;
+    return `Showing ${String(drawn)} of ${woc.fmt.count(found, 'item')}. Narrow it to see the rest.`;
   }
-  return `Showing ${countedItems(found)}.`;
+  return `Showing ${woc.fmt.count(found, 'item')}.`;
 }
 
 /**
- * The attribution and the collection, on one line.
- *
- * Four figures for the names rather than one total, because a name off the table and a name
- * off an art file are not the same kind of fact, and this addon's whole claim is that it says
- * which. The seen count rides the same line because it answers the other question a player
- * opens this with, and both are about the same set of things.
+ * Four figures rather than one total: a name off the table and a name off an art file are not
+ * the same kind of fact, and saying which is this addon's whole claim.
  */
 function coverageText(counts) {
   const parts = [`${String(counts.table)} named from the table`];
@@ -1841,14 +1525,9 @@ function coverageText(counts) {
 }
 
 /**
- * How many known ids draw as initials, and why. Held back until the art manifest has actually
- * been read, because until then `ui.icon.item` is optimistic and every id would count as
- * having art. Saying nothing is right for that window; saying zero would be a measurement
- * nobody took.
- *
- * On the coverage line's tooltip rather than in a line of its own: it is a caveat about the
- * grid, it is the same sentence every session, and a browser that spends two of its lines
- * explaining itself is the thing this window stopped being.
+ * Held back until the art manifest has landed: `ui.icon.item` is optimistic until then, so a
+ * figure now would be a measurement nobody took. On a tooltip rather than a line of its own,
+ * since it is the same caveat every session.
  */
 function artText(counts) {
   if (!artKnown.on) {
@@ -1872,9 +1551,8 @@ woc.ui.tooltip(coverageLine, () => ({
 }));
 
 /**
- * The item the record describes, which is what the player picked or, until they pick one, the
- * first square in the grid. A record that sat empty under a full grid would make the panel look
- * like it had not finished loading, and the first square is a real answer to what is on screen.
+ * What the player picked, or the first square until they pick one: an empty record under a full
+ * grid reads as a panel that has not finished loading.
  */
 function showing(shown) {
   if (chosen.id !== '') {
@@ -1886,42 +1564,22 @@ function showing(shown) {
 function draw() {
   const found = results();
   const shown = found.slice(0, maxCells());
-  const open = showing(shown);
-  syncCells(shown, open);
-  // A grid with nothing in it keeps its share of the panel and shows it as a hole, which reads
-  // as a window that failed to draw rather than as a search that found nothing. Hidden, the
-  // line under it saying so is where the eye lands.
-  grid.hidden = shown.length === 0;
+  open.on = showing(shown);
+  cells.sync(shown);
+  // Hidden rather than empty, or the hole where the grid was reads as a window that failed to
+  // draw rather than as a search that found nothing.
+  woc.ui.show(grid, shown.length > 0);
   paintChips();
-  paintRecord(open);
+  paintRecord(open.on);
   const counts = coverage();
   say(statusLine, statusText(found.length, shown.length));
   say(coverageLine, coverageText(counts));
 }
 
-/**
- * One repaint per animation frame however many things asked for one. A roll landing, a
- * sweep finding four new ids and a keystroke in the search field are three reasons to
- * redraw the same list, and doing it three times would rebuild every row three times.
- */
-function schedulePaint() {
-  if (scheduled.on) {
-    return;
-  }
-  scheduled.on = true;
-  woc.requestAnimationFrame(() => {
-    scheduled.on = false;
-    if (running.on) {
-      draw();
-    }
-  });
-}
+/** No `{ frame }`: the panel is closed most of the time and its figures must stay current. */
+const schedulePaint = woc.paint(draw);
 
-/**
- * Give every marked element a codex tooltip, once. `described` is what keeps this to one
- * attach per element rather than one per sweep, and the loader's tooltip kit owns the other
- * half of the problem, which is an anchor removed while the pointer is over it.
- */
+/** One attach per marked element rather than one per sweep, which is what `described` holds. */
 function describeMarked(root) {
   if (!describingMarked()) {
     forgetMarked();
@@ -1952,38 +1610,27 @@ function forgetMarked() {
 }
 
 /**
- * Where a marked element is looked for: the whole document. A frame sits in a band inside
- * the loader's root rather than directly under it, and there is no published handle on that
- * root, so a scoped sweep would be inferring loader internals. The cost is one attribute
- * selector a second over a tree that is mostly the game's, which stays correct whatever the
- * loader does with its own layout next.
+ * The whole document, since no published handle reaches the loader's root and a scoped sweep
+ * would be inferring its layout. One attribute selector a second.
  */
 function tooltipRoot() {
   return document;
 }
 
 /**
- * The sweep, which is also what makes the group subscription an optimisation. A watch key
- * fires on change and the world is already live by the time an addon's body runs, so a roll
- * that was open before this addon started fires no handler at all. Reading the group here
- * costs one field read a second and closes that window; `learnFromRoll` is guarded on the
- * id, so the two routes cannot teach the same name twice.
+ * What makes the group subscription an optimisation rather than the source: a watch key fires
+ * on CHANGE, so a roll open before this addon started fires no handler at all. `learnFromRoll`
+ * is guarded on the id, so the two routes cannot teach one name twice.
  */
 function sweep() {
   const learned = collectSeen();
   learnFromGroup(woc.world.group);
   describeMarked(tooltipRoot());
-  // Only on a change. A repaint resolves and sorts every id the codex knows, and sorting
-  // eight hundred names through `localeCompare` is not free, so a sweep that found nothing must
-  // not schedule one.
+  // Only on a change: a repaint sorts eight hundred names through `localeCompare`.
   if (learned) {
     schedulePaint();
   }
 }
-
-woc.keys.bind('toggle', () => {
-  frame.toggle();
-});
 
 woc.onSettingsChange(() => {
   schedulePaint();
@@ -1993,24 +1640,17 @@ woc.world.on('group', (group) => {
   learnFromGroup(group);
 });
 
-// Answered with everything known: a subscriber asks precisely because it started after
-// the batch went out.
-woc.bus.on(woc.bus.anySender, ASK_TOPIC, () => {
-  publishAll();
-});
+/** Every ask answered with everything known, since a subscriber asks because it started late. */
+const publication = woc.bus.publish(ITEMS_TOPIC, everythingKnown);
+
+// The older ask topic, answered beside the derived one. Drop next release.
+woc.bus.on(woc.bus.anySender, LEGACY_ASK_TOPIC, publication.announce);
 
 woc.setInterval(sweep, SWEEP_MS);
 
-woc.onDispose(() => {
-  running.on = false;
-});
-
 /**
- * Read the table, then say what can be drawn from it. The art manifest is preloaded
- * separately and not awaited before the first paint: the codex is readable without it and
- * only the art count depends on it. A failed read is not a reason to show nothing either,
- * which is why `loaded` is set on both paths: the panel then says the table could not be
- * read rather than sitting empty claiming to know nothing.
+ * The art manifest is not awaited: only the art count depends on it. `loaded` is set on both
+ * paths, so a failed read says so rather than sitting empty claiming to know nothing.
  */
 async function boot() {
   const file = await woc.data(TABLE_FILE);
@@ -2024,7 +1664,7 @@ async function boot() {
   woc.log(
     `lorebind: ${String(listed.length)} items from the game's own table at ${readVersion(file)}`,
   );
-  publishAll();
+  publication.announce();
 }
 
 boot()

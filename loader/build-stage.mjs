@@ -11,7 +11,7 @@
 // import per `addons/*/stage.ts` and esbuild has no glob, so a committed list
 // would be a file every new addon has to remember to edit, and forgetting would
 // look exactly like a scenario that does not work. Discovering them also means
-// `pnpm stage` picks up a scenario written while it was running, on the next
+// `pnpm run stage` picks up a scenario written while it was running, on the next
 // build, with nothing to wire up.
 
 import { readdirSync, statSync } from 'node:fs';

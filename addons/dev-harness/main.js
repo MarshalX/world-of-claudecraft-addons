@@ -2,14 +2,13 @@
 
 // Dev Harness: run every part of the addon API against the real game and say what worked.
 //
-// This is an ordinary addon. It is fetched over the marketplace path, evaluated as a
-// function body with `woc` in scope, and has no access to anything the loader does not
-// publish: if a surface can be checked from here, it can be checked by anyone's addon. The
-// unit suite tests the loader's modules in isolation, and the two failures it cannot see
-// are the ones this catches: something in the live game that is not the shape the fakes
-// assume, and a surface that was never wired to the object an addon is handed.
+// An ordinary addon with no access to anything the loader does not publish, which is what
+// makes it worth having: if a surface can be checked from here, it can be checked by
+// anyone's addon. It catches the two failures a unit suite cannot, a live game that is
+// not the shape the fakes assume and a surface never wired to the object an addon is
+// handed.
 //
-// It never touches the game's state. Everything here reads, renders into the loader's own
+// It never touches the game's state: everything here reads, renders into the loader's own
 // root, or plays a sound.
 
 const CHECK_TIMEOUT_MS = 3000;
@@ -32,6 +31,43 @@ const ANCHOR_TICK_MS = 200;
 const DECIMALS_YARDS = 1;
 /** How many distinct wire contradictions to name before the note gets unreadable. */
 const MAX_CONTRADICTIONS = 3;
+/**
+ * A frame is 16 ms, so past this is a document with no loop rather than a slow one, and
+ * the report must not sit on "running the checks" waiting for one.
+ */
+const PAINT_WAIT_MS = 250;
+/** How many rows the list probe draws, and how many it holds while drawing them. */
+const LIST_BUDGET = 2;
+const LIST_ROWS = 3;
+/**
+ * What the formatting check puts through. The two that look like typos are the cases
+ * worth having: 59.5 reads as `60` rather than `1m`, since the minute branch is chosen on
+ * the raw value and the ceiling lands after it, and 3720 is an hour and two minutes.
+ */
+const FMT_INPUT = {
+  seconds: 45,
+  nearlyAMinute: 59.5,
+  minutes: 90,
+  anHour: 3720,
+  one: 1,
+  many: 4,
+  pair: 2,
+  /** Read as a figure and never as an absence, which is the case below that says so. */
+  zero: 0,
+};
+
+/** A quarter turn, which is where the sign convention is either right or backwards. */
+const QUARTER_TURN_DEGREES = 90;
+
+/** Straight ahead, a right turn and a left one, which are the three a reader can check. */
+const COMPASS_CASES = [
+  ['ahead', FMT_INPUT.zero, '↑'],
+  ['to the right', QUARTER_TURN_DEGREES, '→'],
+  ['to the left', -QUARTER_TURN_DEGREES, '←'],
+];
+/** How far east of the player the geometry probe measures, and what counts as agreement. */
+const PROBE_YARDS = 10;
+const PROBE_TOLERANCE = 0.01;
 
 /**
  * The three squares the tile demonstration drains: label, ability, class, school. The last
@@ -124,16 +160,9 @@ const EPOCH_FLOOR_MS = 1_577_836_800_000;
 const MAX_FRAME_DT_MS = 250;
 
 /**
- * When this addon loaded, on the clock that measures an interval.
- *
- * There are two, both published, and picking the wrong one is silent. `woc.now()` is
- * monotonic milliseconds counted from this page load, so a difference between two readings
- * is a duration. `woc.wallClock()` is epoch milliseconds, and it is the one for anything
- * stored or compared against an absolute stamp the server sent. A stored `woc.now()`
- * reading reads as being in the future on the next page load.
- *
- * Nothing is withheld here: `Date` is not one of the shadowed globals below.
- * `woc.wallClock()` exists so an addon has one clock to reach for.
+ * The clock that measures an INTERVAL, and picking the wrong one of the two is silent:
+ * `now()` is monotonic from this page load, `wallClock()` is epoch and is the one for
+ * anything stored. A stored `now()` reading looks like the future on the next load.
  */
 const started = woc.now();
 
@@ -165,22 +194,18 @@ woc.onFrame(() => {
 })();
 
 /**
- * What the combat records have actually been seen carrying.
+ * Whether the GAME still matches what the published types claim, which only a live session
+ * can answer: these records pass through the loader untouched, so no fake can catch a
+ * drift. Everything else in this file asks whether a surface reached the addon.
  *
- * Everything else in this file asks whether a surface reached the object an addon is
- * handed. This asks whether the game still matches what the published types claim about
- * it, which only a live session can answer: these records pass through the loader
- * untouched, so no fake can catch a drift.
+ * Three claims, each of which fails silently in an addon that believed it. `evade` always
+ * lands at 0, so a meter counts it as an outcome and never as damage. `absorbed` is absent
+ * rather than 0, which is all that separates a heal a shield devoured from one that
+ * overhealed. `abilityId` is a string whenever it is anything, since an addon builds an
+ * icon URL from it.
  *
- * The three claims watched here fail silently in an addon that believed them. `evade`
- * always lands at 0, so a meter can count it as an outcome and never as damage.
- * `absorbed` is absent rather than 0, which is the whole of what separates a heal a shield
- * devoured from a heal that overhealed. And `abilityId` is a string whenever it is
- * anything, because an addon builds an icon URL out of it.
- *
- * Deliberately not watched: whether a non-null `abilityId` only ever rides a player's own
- * hit. Its source can have left interest scope by the time this runs, so the check would
- * report a failure of the roster as a failure of the wire.
+ * NOT watched: whether a non-null `abilityId` only rides a player's own hit. Its source
+ * can have left interest scope, so the check would report the roster as the wire.
  */
 const records = {
   damage: 0,
@@ -700,16 +725,12 @@ function sheetLive() {
 }
 
 /**
- * The square timer, and the half of it a unit suite cannot reach.
+ * A suite can assert the classes the kit writes and not that the sheet declaring them
+ * exists, since CSS text does not survive that environment: a class renamed on one side
+ * of the seam passes every test and draws nothing. Here it is measurable.
  *
- * A test can assert the classes the kit writes on the element. It cannot assert that the
- * sheet declaring those classes exists, because CSS text does not survive into that
- * environment, so a class renamed on one side of that seam passes every test and draws
- * nothing. In a real page it is measurable.
- *
- * The probe is attached and taken away again in the same call: a style cannot be computed
- * for an element outside the document, and every rule in the kit is scoped under the
- * loader's own root.
+ * Attached and taken away in the same call, because a style cannot be computed for an
+ * element outside the document and every kit rule is scoped under the loader's root.
  */
 function checkTile() {
   if (typeof woc.ui.tile !== 'function') {
@@ -743,16 +764,12 @@ function checkTile() {
 }
 
 /**
- * The settings-pane surfaces, checked for the thing a unit suite cannot see.
+ * Whether the loader wired these to the object an addon is handed at all: a builder that
+ * never reached `woc.ui` typechecks everywhere and throws only here.
  *
- * Every one of these is built here and taken away again in the same call. What is asked is
- * not whether a checkbox works, which its own suite covers, but whether the loader wired
- * these to the object an addon is handed at all: a builder that never reached `woc.ui`
- * typechecks everywhere and throws only here.
- *
- * The setter is checked rather than the change event, because it is the half an addon gets
- * wrong: `set` must move the control without calling back, or a pane that saves on change
- * writes the value it was just given straight back.
+ * The SETTER is checked rather than the change event: `set` must move the control without
+ * calling back, or a pane that saves on change writes the value it was just given
+ * straight back.
  */
 function checkFields() {
   const { field, tabs } = woc.ui;
@@ -794,6 +811,108 @@ function checkFields() {
     return result('fields', false, `set() called back ${String(reported)} time(s)`);
   }
   return result('fields', true, 'four fields and a tab strip, none of them calling back on set');
+}
+
+/** Which of the two a reorder did, for the note a failure carries. */
+function keptWord(kept) {
+  if (kept) {
+    return 'kept';
+  }
+  return 'rebuilt';
+}
+
+/**
+ * A row that survives a sync has to be the SAME row, since an addon holds measured state
+ * on it and a rebuilt row draws identically until the moment those measurements matter.
+ * A row past the budget comes OUT of the parent and stays alive, so `size` counts it
+ * while the DOM does not.
+ */
+function checkList() {
+  if (typeof woc.ui.list !== 'function') {
+    return result('list', false, 'ui.list is not callable');
+  }
+  const parent = document.createElement('div');
+  const built = [];
+  const gone = [];
+  const rows = woc.ui.list({
+    parent,
+    key: (item) => item.id,
+    create: (item) => {
+      built.push(item.id);
+      const el = document.createElement('div');
+      el.dataset.probe = item.id;
+      return { el, destroy: () => gone.push(item.id) };
+    },
+    shown: (_item, index) => index < LIST_BUDGET,
+  });
+  const order = () => [...parent.children].map((el) => el.getAttribute('data-probe')).join(',');
+
+  rows.sync([{ id: 'a' }, { id: 'b' }]);
+  const first = rows.get('a');
+  rows.sync([{ id: 'b' }, { id: 'a' }]);
+  const reordered = order();
+  const kept = rows.get('a') === first;
+  rows.sync([{ id: 'b' }, { id: 'a' }, { id: 'c' }]);
+  const cut = { drawn: order(), held: rows.size, walked: rows.values().length };
+  rows.destroy();
+
+  if (built.join(',') !== 'a,b,c') {
+    return result('list', false, `created ${built.join(',') || 'nothing'}, expected a,b,c once`);
+  }
+  if (!kept || reordered !== 'b,a') {
+    const held = keptWord(kept);
+    return result('list', false, `a reorder gave "${reordered}" and ${held} the row`);
+  }
+  if (cut.drawn !== 'b,a' || cut.held !== LIST_ROWS) {
+    return result('list', false, `past the budget: drew "${cut.drawn}", held ${String(cut.held)}`);
+  }
+  // The row it is NOT drawing has to be in the walk: a fade wants the pin that is off
+  // the list exactly as much as the ones on it.
+  if (cut.walked !== LIST_ROWS) {
+    return result('list', false, `values() walked ${String(cut.walked)} of ${String(cut.held)}`);
+  }
+  // Held order rather than drawn order: a reorder moves elements and never the rows.
+  if (gone.join(',') !== 'a,b,c') {
+    return result('list', false, `destroy tore down ${gone.join(',') || 'nothing'}`);
+  }
+  return result(
+    'list',
+    true,
+    'keyed, reordered without rebuilding, and walked a row it did not draw',
+  );
+}
+
+/**
+ * Every one writes a CLASS and never an inline style, which is the whole argument: an
+ * inline style outranks every selector a stylesheet can spell, so one that reached for
+ * `style` would look right on a desktop and silently drop the coarse-pointer floor.
+ */
+function checkLayout() {
+  const { column, row, line, show } = woc.ui;
+  if ([column, row, line, show].some((one) => typeof one !== 'function')) {
+    return result('layout', false, 'one of ui.column, ui.row, ui.line or ui.show is not callable');
+  }
+  const col = column({ className: 'harness-probe' });
+  const strip = row({ wrap: true, align: 'baseline', parent: col });
+  const note = line({ tone: 'muted', parent: col });
+  const styled = [col, strip, note].filter((el) => el.getAttribute('style') !== null);
+
+  show(note, false);
+  const hidden = note.className;
+  show(note, true);
+  const shownAgain = note.className;
+  col.remove();
+
+  if (styled.length > 0) {
+    return result('layout', false, `${String(styled.length)} of them wrote an inline style`);
+  }
+  if (strip.parentElement !== col || note.parentElement !== col) {
+    return result('layout', false, 'parent did not append');
+  }
+  if (hidden === shownAgain) {
+    return result('layout', false, `show() left the class at "${shownAgain}" either way`);
+  }
+  return result('layout', true, `classes only, hidden as "${hidden}"`);
 }
 
 function checkAnchor() {
@@ -1010,16 +1129,10 @@ function checkClocks() {
 }
 
 /**
- * The loader's shared frame loop, and the teardown half of it.
- *
- * A count of zero is not a failure: an addon's first pass runs before any frame has, and
- * this document may have no animation loop running. What is a failure is a delta outside
- * the range the API documents, and a handler that keeps being called after its teardown
- * ran.
- *
- * There is deliberately no "is it callable" arm here, unlike `checkData` and
- * `checkProject`: both subscriptions are made at load, so a missing `onFrame` takes the
- * whole addon down before any check runs.
+ * A count of zero is not a failure: this document may have no animation loop running. A
+ * failure is a delta outside the documented range, or a handler still called after its
+ * teardown. No "is it callable" arm, unlike `checkData`: the subscription is made at load,
+ * so a missing `onFrame` takes the addon down before any check runs.
  */
 function checkFrames() {
   if (strayFrames > 0) {
@@ -1081,6 +1194,48 @@ function titleCase(id) {
 }
 
 /**
+ * `titleCase` above is the ORACLE rather than a duplicate: the published member has to
+ * agree with the hand-written one, or a migrated addon draws different words. Everything
+ * rounds UP, since a countdown reading 0 while the thing runs is the one error a timer
+ * must not make.
+ */
+function checkFmt() {
+  const { fmt } = woc;
+  if (typeof fmt?.duration !== 'function') {
+    return result('fmt', false, 'woc.fmt is not on the object an addon is handed');
+  }
+  const wrong = [];
+  const same = (what, got, want) => {
+    if (got !== want) {
+      wrong.push(`${what} gave "${String(got)}", expected "${want}"`);
+    }
+  };
+  const { seconds, nearlyAMinute, minutes, anHour, one, many, pair, zero } = FMT_INPUT;
+  same('seconds', fmt.duration(seconds), '45');
+  same('just under a minute', fmt.duration(nearlyAMinute), '60');
+  same('over a minute', fmt.duration(minutes), '2m');
+  same('coarse', fmt.duration(anHour, 'coarse'), '1h 2m');
+  same('titleCase', fmt.titleCase('aimed_shot'), titleCase('aimed_shot'));
+  same('one', fmt.count(one, 'item'), '1 item');
+  same('several', fmt.count(many, 'item'), '4 items');
+  same('irregular plural', fmt.count(pair, 'wolf', 'wolves'), '2 wolves');
+  for (const [what, degrees, want] of COMPASS_CASES) {
+    same(what, fmt.compass(degrees), want);
+  }
+  // A reading nobody has yet is nothing; a reading of zero is a reading. Checked as a
+  // pair, because a falsy test satisfies the first half and breaks the second.
+  same('absent duration', fmt.duration(null), '');
+  same('absent bearing', fmt.compass(null), '');
+  same('unusable duration', fmt.duration(Number.NaN), '');
+  same('unusable bearing', fmt.compass(Number.NaN), '');
+  same('zero seconds', fmt.duration(zero), '0');
+  if (wrong.length > 0) {
+    return result('fmt', false, wrong.join('; '));
+  }
+  return result('fmt', true, 'duration, titleCase, count and compass all as written by hand');
+}
+
+/**
  * The spellbook, and the id-to-name bridge it exists for.
  *
  * The round trip is the point, so that is what is asserted: every ability has to come back
@@ -1123,6 +1278,204 @@ function checkAbilities() {
 }
 
 /**
+ * The derived half answers with no world at all: an id nobody has comes back title-cased
+ * under `known: false`. The mark stays the addon's, so what is checked is that the FACT
+ * arrives rather than that anything was drawn.
+ */
+function checkDescribe() {
+  const book = woc.world.abilities;
+  if (typeof book?.describe !== 'function') {
+    return result('describe', false, 'world.abilities.describe is not callable');
+  }
+  const made = book.describe('\0_not_an_ability');
+  if (made.known !== false || made.school !== null) {
+    return result('describe', false, `an id nobody has came back known: ${String(made.known)}`);
+  }
+  const [first] = book.known;
+  if (first === undefined) {
+    return result(
+      'describe',
+      true,
+      'derived names disclosed, no spellbook yet to check a real one',
+    );
+  }
+  const real = book.describe(first.id);
+  if (real.known !== true || real.name !== first.name) {
+    return result(
+      'describe',
+      false,
+      `${first.id} described as "${real.name}", known ${String(real.known)}`,
+    );
+  }
+  return result('describe', true, `"${first.name}" read off the spellbook, a made-up id disclosed`);
+}
+
+/**
+ * Only answerable while there is a player, and checked against the player's OWN position,
+ * where the answers are known without a second source. A null from either while a player
+ * is live means the surface is reading a position the loader does not have.
+ */
+function checkGeometry() {
+  const { world } = woc;
+  if (typeof world.distanceTo !== 'function' || typeof world.bearingTo !== 'function') {
+    return result('geometry', false, 'world.distanceTo or world.bearingTo is not callable');
+  }
+  const here = world.player?.pos ?? null;
+  if (here === null) {
+    return result('geometry', true, 'no player, so nothing to measure from yet');
+  }
+  const under = world.distanceTo({ x: here.x, z: here.z });
+  const away = world.distanceTo({ x: here.x + PROBE_YARDS, z: here.z });
+  if (under === null || away === null) {
+    return result('geometry', false, 'answered null with a live player');
+  }
+  if (Math.abs(away - under - PROBE_YARDS) > PROBE_TOLERANCE) {
+    return result(
+      'geometry',
+      false,
+      `${String(PROBE_YARDS)} yards east measured ${away.toFixed(DECIMALS_YARDS)}`,
+    );
+  }
+  const bearing = world.bearingTo({ x: here.x + PROBE_YARDS, z: here.z });
+  if (bearing === null || !Number.isFinite(bearing)) {
+    return result('geometry', false, 'bearingTo answered nothing for a point beside the player');
+  }
+  return result(
+    'geometry',
+    true,
+    `${away.toFixed(DECIMALS_YARDS)} yards east, bearing ${String(Math.round(bearing))} (${woc.fmt.compass(bearing)})`,
+  );
+}
+
+/**
+ * NOBODY RECEIVES THEIR OWN MESSAGES, so a self round trip is unobservable by design and
+ * an arriving answer cannot be checked here. What can: both halves reachable, the two
+ * controls handed back, and following your own topic hearing nothing.
+ */
+function checkPublish() {
+  const { bus } = woc;
+  if (typeof bus?.publish !== 'function' || typeof bus.follow !== 'function') {
+    return result('publish', false, 'bus.publish or bus.follow is not callable');
+  }
+  let heard = 0;
+  let asked = 0;
+  // Reads none of this addon's own state, deliberately: a producer runs during the call
+  // that registers it, while the body is still being evaluated.
+  const publication = bus.publish('harness-probe', () => {
+    asked += 1;
+    return PROBE_VALUE;
+  });
+  const announced = asked;
+  const unfollow = bus.follow('harness-probe', () => {
+    heard += 1;
+  });
+  publication.announce();
+  const total = asked;
+  unfollow();
+  publication.stop();
+
+  if (typeof publication.announce !== 'function' || typeof publication.stop !== 'function') {
+    return result('publish', false, 'publish() did not hand back announce and stop');
+  }
+  if (announced !== 1) {
+    return result('publish', false, `publish() ran its producer ${String(announced)} times`);
+  }
+  if (total !== announced + 1) {
+    return result(
+      'publish',
+      false,
+      `announce() ran the producer ${String(total - announced)} times`,
+    );
+  }
+  if (heard > 0) {
+    return result('publish', false, `an addon followed itself ${String(heard)} time(s)`);
+  }
+  return result('publish', true, 'announces once when registered, and again on demand');
+}
+
+/** What two requests before one frame have to have produced. See `checkPaint`. */
+function paintOutcome(painted) {
+  if (painted === 1) {
+    return result('paint', true, 'two requests before a frame drew once');
+  }
+  if (painted === 0 && framesTicked === 0) {
+    return result('paint', true, 'requested, no frame has run in this document yet');
+  }
+  return result('paint', false, `two requests drew ${String(painted)} time(s)`);
+}
+
+/**
+ * `woc.paint`, which is the coalesced repaint three addons wrote byte for byte.
+ *
+ * Two requests before a frame have to produce ONE paint, which is the whole feature.
+ *
+ * IT WAITS ON `onFrame`, NOT ON `requestAnimationFrame`: a repaint rides the LOADER'S
+ * shared loop, and in a document where that loop is driven by something other than the
+ * browser, rAF fires while no loader frame has run at all.
+ *
+ * A loop that has not ticked is a stated skip rather than a failure, told apart by the
+ * frame counter `frames` reads, so this cannot pass by having waited in the wrong place.
+ */
+function checkPaint() {
+  return new Promise((resolve) => {
+    if (typeof woc.paint !== 'function') {
+      resolve(result('paint', false, 'woc.paint is not callable'));
+      return;
+    }
+    let painted = 0;
+    const request = woc.paint(() => {
+      painted += 1;
+    });
+    // Before the watch, so the seat on the loop is taken ahead of it and the paint runs
+    // first within one frame.
+    request();
+    request();
+    const finish = () => {
+      off();
+      woc.clearTimeout(deadline);
+      resolve(paintOutcome(painted));
+    };
+    const off = woc.onFrame(() => {
+      if (painted > 0) {
+        finish();
+      }
+    });
+    const deadline = woc.setTimeout(finish, PAINT_WAIT_MS);
+  });
+}
+
+/**
+ * The `probe` id is claimed by nothing else, so a registration under it can only have come
+ * from the frame, which is what makes this a check of the member rather than of the
+ * keybind surface under it.
+ *
+ * The release is half the contract: the bind belongs to the FRAME, so destroying one takes
+ * it with it, or a rebuild would leave a key pointing at a panel that is gone.
+ */
+function checkToggleKey() {
+  const combo = woc.keys.combo('probe');
+  if (combo === null) {
+    return result('toggle key', false, 'combo("probe") is null for a declared bind');
+  }
+  const claimed = () => woc.keys.conflicts(combo).addons.includes(`${woc.addon.fqid}:probe`);
+  if (claimed()) {
+    return result('toggle key', false, `${combo} was already claimed before any frame asked`);
+  }
+  const probe = woc.ui.frame({ id: 'toggle-probe', title: 'Probe', toggleKey: 'probe' });
+  const bound = claimed();
+  probe.destroy();
+  const released = !claimed();
+
+  if (!bound) {
+    return result('toggle key', false, `a frame declaring toggleKey did not claim ${combo}`);
+  }
+  if (!released) {
+    return result('toggle key', false, `${combo} stayed bound after its frame was destroyed`);
+  }
+  return result('toggle key', true, `a frame took ${combo} and gave it back when destroyed`);
+}
+
+/**
  * The checks that describe the live world, in report order.
  *
  * Separated from the rest because their answers change while the player plays, and because
@@ -1134,6 +1487,8 @@ function checkAbilities() {
 const LIVE_CHECKS = [
   checkWorld,
   checkAbilities,
+  checkDescribe,
+  checkGeometry,
   checkCombat,
   checkCombatRecords,
   checkMobTargeting,
@@ -1158,13 +1513,18 @@ const STATIC_CHECKS = [
   checkIdentity,
   checkGame,
   checkSettings,
+  checkFmt,
   checkKeys,
+  checkToggleKey,
   checkWorldKeys,
   checkIcons,
   checkTile,
+  checkList,
+  checkLayout,
   checkFields,
   checkAnchor,
   checkBus,
+  checkPublish,
   checkNet,
   checkClocks,
   checkShadowedGlobals,
@@ -1207,6 +1567,7 @@ async function runSlowChecks() {
     checkData(),
     checkSound(),
     checkTimers(),
+    checkPaint(),
     checkSkillArt(),
   ]);
 }
@@ -1580,17 +1941,14 @@ function dispelsWrongWay(aura) {
 }
 
 /**
- * The polarity predicates, against the query that has to agree with them.
+ * `harmful` is a function rather than a field because the loader hands over the game's own
+ * aura objects, so there is nowhere to put a computed flag. That leaves two ways to ask
+ * one question, and a filter that drifted from the predicate would leave one addon
+ * highlighting what the next calls a benefit.
  *
- * `harmful` is a function rather than a field on the aura because the loader hands over the
- * game's own aura objects rather than copies, so there is nowhere to put a computed flag.
- * That leaves two ways to ask the same question, and they have to answer alike: a filter
- * that drifted from the predicate would leave one addon highlighting an effect the next one
- * calls a benefit.
- *
- * `dispellable` is checked as an implication rather than against a list of abilities.
- * Whatever can be taken off an ally is harmful and whatever can be stripped off an enemy is
- * a benefit, which holds for every effect in the game and needs no fight to check.
+ * `dispellable` is checked as an IMPLICATION rather than against a list of abilities:
+ * whatever comes off an ally is harmful and whatever is stripped off an enemy is a
+ * benefit, which holds for every effect and needs no fight to check.
  */
 function checkAuraPolarity() {
   const { world } = woc;
@@ -1715,15 +2073,11 @@ function checkMobTargeting() {
 }
 
 /**
- * The two entity fields added in game 0.35.0.
+ * Both ride `dynamicFields`, so both are real on every entity including your own player.
  *
- * Both are ordinary and both ride `dynamicFields`, so both are real on every entity
- * including your own player. `helmHidden` is a boolean only players ever set.
- *
- * The reading worth having is the COUNT of others carrying a ranged power, because that
- * is the half the shape walk cannot reach: it visits the local player alone, so it can
- * prove the field is a number and can say nothing about whether the entity path fills it.
- * A session standing near a hunter answers that.
+ * The reading worth having is the COUNT of OTHERS carrying a ranged power, which is the
+ * half the shape walk cannot reach: it visits the local player alone, so it can prove the
+ * field is a number and say nothing about whether the entity path fills it.
  */
 function checkEntityStats() {
   const { player } = woc.world;
@@ -2106,14 +2460,11 @@ function plateText() {
 }
 
 /**
- * Two anchors, because the two halves fail differently.
+ * Two anchors, because the halves fail differently: the following one takes a function
+ * and tracks what it is pointed at, while the pinned one is a fixed point captured where
+ * you stood, which is the only way to watch the culling work.
  *
- * The following one takes a function, so it tracks whatever it is pointed at with no loop
- * in this addon. The pinned one is a fixed point captured where you stood, which is the
- * only way to see the culling work: walk away and it shrinks into the distance, turn around
- * and it goes.
- *
- * The labels are rewritten on a slow timer and the positions are not: an addon that moved
+ * The labels are rewritten on a slow timer and the positions are NOT: an addon moving
  * these itself would be running a second frame loop beside the loader's.
  */
 function startAnchors() {
@@ -2296,6 +2647,8 @@ function openReport() {
   refresh();
 }
 
+// Bound by hand rather than through `toggleKey`, on the member's own advice: this key
+// does more than toggle. `checkToggleKey` exercises it against `probe` instead.
 woc.keys.bind('toggle', () => {
   win.toggle();
   woc.sound.play('ui_click');

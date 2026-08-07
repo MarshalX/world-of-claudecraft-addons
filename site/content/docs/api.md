@@ -87,6 +87,20 @@ woc.world.player.prevPos;                   // last tick, which the game interpo
 
 Those are the same numbers the game's own coordinate readout floors for display. `prevPos` is there because the client renders between ticks: comparing it against `pos` tells you which way something is actually moving, which a single sample cannot.
 
+### How far, and which way
+
+```js
+const away = woc.world.distanceTo(node);   // yards from the player, or null
+const turn = woc.world.bearingTo(node);    // degrees to turn, or null
+const arrow = woc.fmt.compass(turn);       // one of the eight arrows
+```
+
+Both take any `{ x, z }`, so a gathering node out of a table, a quest objective and another entity's `pos` all go in the same way, and both measure from the player because that is the only end of the line an addon ever wants the answer for.
+
+`world.distanceTo` ignores height on purpose. It is the distance you would WALK, and it is what the game's own gates measure, so a node on a ledge above you is as far away as its footprint is. `world.bearingTo` is what you have to TURN, clockwise, from where you are facing: 0 is straight ahead and 90 is to your right, in the range -180 up to but not including 180. That is the convention `fmt.compass` renders, so the two compose without a sign fix in between.
+
+Both answer null before world entry, and `bearingTo` answers null again when the player's facing is not a finite number. That is a real state rather than a defensive one, and the right response to it is to draw nothing: an arrow is read as a direction to walk in, and one drawn from a facing nobody has is confidently wrong rather than merely absent.
+
 ### Your character sheet
 
 ```js
@@ -211,10 +225,15 @@ const info = woc.world.abilities.byName(event.ability);
 const url = info && woc.ui.icon.ability(info.id, woc.world.player.templateId);
 
 // a cooldown map gave you an id; get something worth showing a player
-const label = woc.world.abilities.byId(id)?.name ?? id;
+const said = woc.world.abilities.describe(id);
+label.textContent = said.known ? said.name : `${said.name}?`;
 ```
 
 It covers YOUR OWN known kit, so an ability a mob casts is not in it and `byName` answers null. It is empty rather than absent before world entry, and its `cost`, `castTime` and `cooldown` are resolved after your talents rather than the ability's base figures.
+
+`abilities.describe` is the third question, and the one with a right answer for an id that is not yours. `byId` returns null there, which leaves every caller title-casing the id itself, so the loader does it once and says that it did: `known: false` means the name was DERIVED from the id rather than looked up. For this game that is a guess that is often wrong, since `arcane_shot` derives to "Arcane Shot" for the ability every screen in the game calls Fell Shot. It never returns null and never throws, including on the landing page, where everything comes back derived.
+
+The mark is deliberately not baked into the name, because the same string does not only go into a text node. Append your own `?` where a player reads it and pass the bare `name` to an `aria-label` or a tooltip title, where a mark glued to a name reads as part of the name. `school` is null for the same reason `known` is false: nothing but your own spellbook carries one.
 
 `world.combat` is the one reading here the game does not send. There is no combat flag for you on the wire, so the loader answers from the best signal available and tells you which one it used:
 
@@ -300,6 +319,22 @@ Keep the `title` even so. It is not drawn, but it is the frame's accessible name
 **A bare frame can be invisible, and that is what the unlock mode is for.** An overlay whose content is a list of timers has no pixels at all while nothing is running, which is exactly when a player wants to position it. Pressing `Alt+U`, or flipping "Unlock frames" at the top of the manager's Installed pane, outlines and labels every addon frame, gives an empty one a minimum size, and makes the whole outline draggable. Turning it off puts everything back.
 
 You get that for free: it is one mode on the loader's root, so any frame you create takes part without asking. It is also why you should not build your own idle placeholder before trying it.
+
+### The key that shows and hides it
+
+`toggleKey` names a keybind from your manifest that toggles the frame, which is the three lines twelve addons wrote for themselves:
+
+```js
+const panel = woc.ui.frame({ id: 'main', title: 'Meter', toggleKey: 'toggle' });
+```
+
+The id has to be one you declared. The loader warns through your own log and binds nothing when it is not, rather than refusing to build the frame: a panel that vanished over a typo in a keybind id is a worse failure than a key that does nothing. The bind is released when the frame is DESTROYED as well as when your addon is disabled, which is what makes it safe for an addon whose layout is a setting: throwing one frame away and building another under the same key leaves exactly one binding, whichever order those happen in.
+
+Bind it yourself with `woc.keys.bind` when the key does more than toggle, or when one key should reach several frames at once. Three addons here do, and what they ran into is worth knowing before you reach for the option: **showing a panel is usually also a redraw, and `toggleKey` has nowhere to hang one.**
+
+Wayfarer toggles and then redraws immediately, because the pins it draws over the world are refreshed on a timer and somebody who has just hidden the panel should not watch them hang there until the next tick. The combat meter toggles and then repaints, because a hidden panel goes on tallying and stops drawing, so what is on screen when it comes back is whatever was there when it left. Foretell has a different reason again: its anchored layout draws into the world and builds no frame at all, so half the time there is no frame for a frame option to toggle.
+
+Take `toggleKey` when the key means exactly "show or hide this", which is most of the time, and write the three lines when showing has to do something as well.
 
 ### What your frame takes away from the player
 
@@ -407,6 +442,42 @@ A tile's border takes the same `school`, `tone` and `quality` axes a bar has, wi
 `label` is never drawn. It is how the tile is announced, as one image named for everything it says, since there is nowhere to put a name on a square that is all art. A tile without one is hidden from assistive technology rather than announced as a bare number.
 
 Cooldown Bars offers both under a `layout` setting, which is worth reading as the worked example: the two widgets take the same `{el, update, destroy}`, so everything between the builder and the screen is written once and only two things branch. A charge count goes in a bar's figure and in a tile's corner, and a tile's countdown loses its decimal because 40 pixels will not hold "119.4s".
+
+### The boxes a panel is made of
+
+`ui.column`, `ui.row` and `ui.line` are the three elements every panel here turned out to be assembled from, and `ui.show` is the one way to hide any of them.
+
+```js
+const pane = woc.ui.column({ parent: frame.body, gap: 4 });
+const strip = woc.ui.row({ parent: pane, wrap: true, align: 'baseline' });
+const note = woc.ui.line({ parent: pane, tone: 'muted' });
+
+woc.ui.show(note, rows.size === 0);
+```
+
+Each returns a plain `HTMLElement` you fill yourself, so this is a shorthand for the box rather than a widget with a lifecycle: there is nothing to destroy, and `className` puts your own class alongside the kit's so your CSS still reaches it. The kit's own are `woc-layout-column`, `woc-layout-row` and `woc-layout-line`, spelled out here because they are not the bare words: `.woc-row` already means an installed addon's row in the manager, and the duplicate selector failed the build.
+
+**They write a class rather than a style attribute, and that is the whole reason they exist.** An inline style outranks every selector a stylesheet can spell, so a panel laid out in style writes silently opts out of rules the loader is holding for you, and the tap-target floor is the one that costs a player something: satchel wrote 13px onto two fields and lorebind wrote 26px onto its quality chips, and both were opting out of an accessibility rule on a phone without being told. **Change the padding, never the font size or the height.** `gap` is the one number these take, and even it is written as the `--woc-gap` custom property rather than as `el.style.gap`, so the declaration stays in the loader's sheet where a later rule can still reach it. They also carry `flex-shrink: 0`, so a screenful of rows in a scrolling frame scrolls rather than squeezing every row until it clips its own second line.
+
+`gap` defaults to the spacing of the density the element is drawn in, so a column in a comfortable frame and the same column in a compact one are spaced like the frames around them. `align` defaults to `center`; reach for `baseline` where a small label sits beside a bigger figure, since centring those lines up neither of them against the sentence underneath. `tone: 'muted'` on a line is the smaller, dimmer note a panel puts under its figures, in the game's own secondary colour at the size the game writes its own captions at.
+
+`ui.show` does two things and both are needed. It toggles the class the loader's sheet hides, and it sets the `hidden` attribute, without which an element taken off the screen stays in the accessibility tree announcing figures nobody can see. A class rather than a `display` write, so nothing has to remember what the element was displayed as before it went: put back a `flex` that was never there and a kit bar draws its detail beside the figure instead of under it. It takes anything, including elements of your own.
+
+### A set of rows that changes
+
+`ui.list` is the reconciler eleven addons had already written: a Map keyed by whatever makes two rows the same row, a pass that destroys what left, a pass that builds what arrived, a paint over all of it, and a move to each row's place that writes nothing when the row is already there.
+
+<!-- include: site/content/examples/list.js#list -->
+
+You describe one row and hand it the whole set on every change. `key` is what makes two items across two syncs the same item, so it decides what the player sees hold still: key on the thing itself, never on its position in the array, or every reorder throws away the row that moved and builds a new one where it landed. `create` returns whatever you want to hold, which is usually the widget and sometimes an object with the widget and whatever you measured, and `update` is handed that back for every item on every sync, new rows included. A new row is therefore drawn by the same code that redraws an old one, and there is nowhere for the two to drift apart.
+
+`sync` takes the set you want KEPT, in the order you want it, and a sync that changes nothing writes nothing to the document. That is what makes calling it from a frame loop or a repaint the intended use rather than something to be careful about.
+
+**`shown` is how you hold more than you draw, and it is worth reaching for rather than slicing.** Pass the whole set to `sync` and answer false for the rows that should not be on screen: the element comes out of the parent and the row stays alive with everything it had measured. A cooldown whose real length you learned by watching it, dropped off the bottom of a top-ten list and rebuilt when it comes back, has to baseline from the middle of the cooldown it is already in and draws a fill that is confidently wrong. That is the difference between a missing row and a wrong one.
+
+The two indices are different, which is the one thing here that catches people out. The index `update` and `shown` are given is the item's position in the array you passed. The place a shown row is drawn at is its rank among the shown rows alone, so hiding the third of five leaves the fourth drawn third, with no gap where the hidden one was.
+
+Omit `parent` and nothing is inserted and nothing is ordered, which is what a world pin needs: each one carries its own `ui.anchor3d` and the loader is already putting it where it goes. `element` is for when what `create` returned is not itself an element and does not carry an `el`. `get`, `size` and `clear` are there for the moments in between, and `destroy` is done for you when your addon is disabled.
 
 ### Your own settings pane
 
@@ -573,6 +644,29 @@ Three more things shape what you can build on it. You never receive your own mes
 
 A throw in your handler is logged against your addon and does not stop the message reaching anyone else. Everything you publish stays in this page and never reaches the network, but treat it as readable by every other installed addon.
 
+### A value one addon holds and another wants
+
+`emit` and `on` are a push: they reach whoever is listening at the moment you send. That is the wrong shape for a table, because the addon that wants it usually starts second and there is no reply on this bus to ask for a copy. What five addons wrote instead is a three-part dance, and `publish` and `follow` are that dance with the parts named.
+
+```js
+// the publisher
+const prices = woc.bus.publish('prices', () => table ?? null);
+prices.announce();                          // when your own value moves
+
+// the follower, in another addon
+woc.bus.follow('prices', (payload, from) => {
+  if (Array.isArray(payload)) draw(payload, from);
+});
+```
+
+`publish` answers `prices:ask` from any sender by emitting `prices` with whatever `produce` returns, and hands you `announce` for the other direction. `produce` runs once per ask rather than once per listener, so a publisher with nothing to say yet returns null instead of tracking whether it is ready. `follow` subscribes to the topic from any sender and emits the ask once, so a publisher that started first still reaches you.
+
+**Silence is the ordinary case.** Nobody may be publishing, and there is no timeout that would tell you the difference between "not installed" and "not ready". Render without an answer, upgrade if one arrives, and never treat quiet as an error. Say `companions` in your manifest if you want the manager to point a player at the addon that would fill it in.
+
+`follow` listens to ANY sender deliberately. A hardcoded fqid is right only on the official marketplace: the same addon installed from a fork publishes under another name, and a subscriber that named the source silently stops working for everyone not on it. Read `from` if you want to say who answered.
+
+The topic names are content rather than API. The loader ships none, because a loader that shipped `item` and `zone` would own a protocol it has no way to keep true, so the names the addons here already agree on are written down in [Patterns](/docs/patterns) instead. Read that list before inventing a name, and treat one on it as taken.
+
 ## data
 
 A JSON file shipped in your own addon directory, for a table that has no business being pasted into your source.
@@ -593,12 +687,39 @@ There is deliberately **no base URL**. Nothing in your addon performs the reques
 
 The value is `unknown`, for the same reason `storage.get` is: nothing validates the shape. The loader checks the file parses as JSON at install and nothing more. You get the **same object** on every call, so treat it as read-only.
 
+## fmt
+
+The four strings every addon was writing for itself. Pure functions that draw nothing, so they are safe to call from a frame handler and from your first line alike, and every addon that uses them spells a duration the same way.
+
+```js
+woc.fmt.duration(94);             // '2m', the single-unit form a bar's corner holds
+woc.fmt.duration(94, 'coarse');   // '1m 34s', the two-unit form a list row wants
+woc.fmt.titleCase('aimed_shot');  // 'Aimed Shot'
+woc.fmt.count(4, 'item');         // '4 items', and '1 item' for one
+woc.fmt.compass(-90);             // the arrow for a turn to your left
+```
+
+**`fmt.duration` always rounds up**, and that is the decision worth knowing rather than the formatting. A timer that reads 0 while the thing is still running is the one error a countdown must not make, so 0.2 seconds left reads as `1`. Two consequences look like bugs and are not. `59.5` reads as `60` rather than `1m`, because the minute branch is chosen on the raw value and the rounding happens after it. And a negative is not clamped, so `duration(-5)` is `-5`: only you know whether a figure that has passed zero has its own word on your panel, and inventing a floor here would change what a player reads on the addon that does not clamp.
+
+`timer` is the default: one unit, no decimal, and no unit mark under a minute, which is what a row of counting figures reads best as. `coarse` is the two-unit form, `2d 3h` through `1h 4m` and `4m 12s` down to `45s`.
+
+**Before you swap your own duration formatting for this one, work out the largest value your input can reach.** The rounding will agree; the SHAPE may not. `coarse` carries four tiers and a hand-written one usually carries two or three, so the two agree everywhere below whatever ceiling that body was written for and disagree above it. A body with no day tier reads `72h 0m` where this reads `3d 0h`, and a body with no hour tier reads in minutes forever. Nothing about that is a rounding error and no test over ordinary values will show it.
+
+The disagreement therefore lands exactly where your inputs get large, which is the case you tested least. Two shapes of input make it certain rather than theoretical: a persisted timestamp has no ceiling at all, so the day tier is reached on the second day anybody uses your addon, and a duration that comes from game content has whatever ceiling the content currently gives it, which a release is free to raise. If the wider shape is not what you want on those, that is a reason to keep your own formatting and say so, not a reason to clamp the input.
+
+**`fmt.titleCase` is a last resort and belongs on screen as one.** Ids and display names have diverged across abilities, items and mob templates alike, so it answers "Arcane Shot" for the ability every screen in the game calls Fell Shot. Reach for it only after every route to a carried name has come back empty, and say on screen that you did.
+
+**For an ABILITY id, do not call it at all.** `world.abilities.describe` is the route: it looks the id up in your spellbook, falls back to this same derivation only when that comes back empty, and tells you in `known` which of the two you got. Calling `titleCase` on an ability id throws away the lookup and the disclosure both. What is left for `titleCase` is everything with no index behind it: a gathering node, a quest objective, a key out of a table your own addon ships.
+
+`fmt.count` takes `plural` for an irregular noun. `fmt.compass` is eight arrows in eight 45-degree sectors with the forward arrow straight ahead, in the same convention `world.bearingTo` answers in, so the two compose. A bearing from outside the range is normalised rather than refused, and anything that is not a finite number answers the forward arrow rather than putting `undefined` in a text node.
+
 ## The rest of woc
 
 ```js
 woc.settings['max-rows']        // your declared settings, hydrated before line one
 woc.onSettingsChange(rebuild);
 woc.onDispose(() => observer.disconnect());
+woc.paint(draw, { frame })      // returns the function you call to ask for a redraw
 woc.addon                       // your own id, name and version
 woc.game                        // channel and version of the deployment
 woc.now()                       // monotonic ms, for measuring an interval
@@ -610,3 +731,49 @@ woc.wallClock()                 // epoch ms, for anything you store
 There are two clocks and picking the wrong one fails silently. `woc.now` is monotonic milliseconds, counted from this page load, and is right for a cast bar, a swing timer or a rate. `woc.wallClock` is epoch milliseconds, the same reading `Date.now` gives, and is right for the two things that cross a page load: a timestamp you are going to store, and a comparison against a stamp the server sent absolute, such as `GroupInfo.lockouts`. [Patterns](/docs/patterns) has the trap in full.
 
 `woc.setTimeout`, `woc.setInterval` and `woc.requestAnimationFrame` are the timer half, and their cancel functions pair with them as you would expect. Use them rather than the page's: [Patterns](/docs/patterns) covers why, and what `woc.onDispose` is for.
+
+### Your settings are already the type you declared
+
+`woc.settings` is hydrated before your first line runs and is total over what your manifest declares. Every declared setting is present, of its declared type, finite if it is a number, clamped into the `min` and `max` you gave it, and one of the options a `select` still offers. A stored value that is none of those falls back to your declared default, and so does a missing one. A player's stored value is theirs to edit and an older version of your addon may have written a different shape, so all of it is treated as untrusted input on the way in.
+
+So `woc.settings['max-rows']` is a number you can do arithmetic with, and this is dead code:
+
+```js
+// Every line of this is unreachable. Delete it.
+const rows = typeof woc.settings['max-rows'] === 'number' ? woc.settings['max-rows'] : 10;
+```
+
+It is worth stating plainly because fifteen of the sixteen addons in this marketplace wrote that guard, in 64 places, and every single fallback was byte-identical to the default the manifest already declared. Not one of them could ever fire. Read the setting and use it.
+
+The one case worth checking is the opposite one: an id you did NOT declare reads as `undefined`, whatever you expected it to be. That is a bug in your manifest rather than a value to defend against, and the fix is to declare it. `woc.onSettingsChange` hands you the same object again after the player changes anything, with the same guarantees.
+
+There is exactly one way a number reaches you outside its own range, and it is your own doing: the clamp is applied to what was STORED, while your `default` is taken as written. Declare a default outside your `min` and `max` and that is what the first run reads. Nothing rejects it, so keep the three numbers in step.
+
+Brackets always work, so `woc.settings['max-rows']` is the spelling to reach for: a hyphenated id cannot be dotted at all, and most ids in these manifests are hyphenated. A one-word id may be dotted, and if you read the addons in this marketplace you will see that it always is. That is not a second convention to learn, it is this repository's own linter: Biome's `useLiteralKeys` rejects a bracket read whose key is a valid identifier, so `woc.settings.layout` is what passes here. Your addon is linted by whatever you point at it, and brackets everywhere never breaks.
+
+### Redrawing when something changed
+
+`woc.paint` is a repaint that runs at most once a frame however many times you ask for it. It returns the function you call to ask.
+
+```js
+const repaint = woc.paint(draw, { frame });
+
+woc.world.on('inventory', repaint);
+woc.net.onEvent('damage', repaint);
+```
+
+Anything that changes what a panel says calls it, and the panel is drawn once on the next frame however many things changed. Without it the shape is a boolean beside a `requestAnimationFrame`, which is what three addons wrote and what the fourth would have.
+
+**Pass your `frame` and a hidden panel stops drawing.** A request made while that frame is hidden is held rather than performed: nothing is drawn while nobody is looking, and one repaint runs on the first frame after the panel comes back, so it returns current rather than stale. However many requests arrived while it was away, that is still one repaint. That is a guard addons were writing around their own redraw and can now delete.
+
+**What that costs is one boolean read per frame for as long as a repaint is owed**, and it is worth saying rather than rounding to nothing. A frame publishes `visible` and no change event, so looking once a frame is the only way to notice the panel returning. A panel closed and never reopened holds a seat on the loop for the rest of the session; a panel with nothing owed holds nothing. The trade is deliberate: a boolean per frame buys a panel that is correct the instant it reappears, which is the moment somebody is looking hardest.
+
+**`{ frame }` is only safe when your handler ONLY paints**, and this is the way to get it wrong that nothing reports. A handler that also does bookkeeping the addon needs done whether or not anybody is looking stops doing it while the panel is closed, and a panel is closed for most of a session. Nothing throws, the suite passes, and the record is simply missing when something reads it later.
+
+The two addons that use it split on exactly that line, and both are right, which is what shows the question is about the handler rather than about the addon. Ledgerline passes its frame, because everything its draw touches is inside the panel, the badge on the title bar included: a closed frame has no title bar to wear one. Satchel deliberately does not, because its draw opens by writing that character's bags, bank and mail into storage for another pane to read later, so a repaint held until somebody opens the panel would be a session that recorded nothing.
+
+If your handler does both, split the bookkeeping out and give this the drawing, or leave the frame out and let the repaint run.
+
+It rides the loop the loader already runs, so it is one browser callback for the whole loader, and it stops when your addon is disabled without you writing that. Asking after that does nothing. While the loader is frozen nothing is drawn and requests coalesce exactly as they do behind a hidden frame, so one repaint runs when it resumes.
+
+It is not the answer for a figure that moves on its own. A countdown wants `woc.setInterval`, and a bar animating every frame wants `woc.onFrame`. This is for a panel that changes when something happens.

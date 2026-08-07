@@ -1,9 +1,9 @@
 {
   "id": "dev-harness",
   "name": "Dev Harness",
-  "version": "1.4.0",
+  "version": "1.4.1",
   "apiVersion": 1,
-  "apiMinor": 2,
+  "apiMinor": 4,
   "author": "MarshalX",
   "description": "Exercises every part of the addon API and reports what worked, repainting as the world moves, so a loader change can be checked in the game rather than only in a test.",
   "entry": "main.js",
@@ -21,6 +21,11 @@
       "id": "run",
       "label": "Run the checks again",
       "default": "Alt+Shift+KeyH"
+    },
+    {
+      "id": "probe",
+      "label": "Toggle the frame the toggleKey check builds",
+      "default": "Alt+Shift+KeyJ"
     }
   ],
   "settings": [

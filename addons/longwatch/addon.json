@@ -1,15 +1,15 @@
 {
   "id": "longwatch",
   "name": "Longwatch",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "apiVersion": 1,
-  "apiMinor": 2,
+  "apiMinor": 4,
   "author": "MarshalX",
   "description": "The rare spawns, where they live and when they are due back. Carries the roster the wire cannot answer for, counts each rare down from the kill that dropped it, and keeps the countdown across a logout. Pins the rares in your own zone into the world and calls out a sighting with a banner and a cue.",
   "entry": "main.js",
   "preview": {
     "file": "preview.png",
-    "alt": "On the left, Rares list, a two-column list of the nineteen rare spawns Longwatch carries. Grix the Tunnelking is up and drawn loudest; Old Cragmaw is due back; ten more count down from 44 seconds to 5h 49m, each row a draining bar behind the name, the zone and the distance in yards, with the ones nobody has killed reading Unseen at the bottom. The list scrolls inside the panel. On the right, An alert, a banner across the middle of the view, set in the gold display serif the game uses for its own warnings, reading MOGGER IS UP over a quieter second line naming Eastbrook Vale. It is drawn over a soft dark scrim that fades out on every side, and there is nothing else on screen: the panel is shut, and the alert is what reaches you anyway."
+    "alt": "On the left, Rares list, a two-column list of rare spawns, a timer bar on every row On the right, An alert, a banner over an empty screen announcing that a rare is up"
   },
   "data": ["rares.json"],
   "homepage": "https://github.com/MarshalX/world-of-claudecraft-addons",

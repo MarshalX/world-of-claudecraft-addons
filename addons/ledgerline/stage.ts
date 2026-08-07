@@ -1,26 +1,18 @@
 // Ledgerline on the stage: a ledger somebody has been keeping for three days.
 //
-// The state worth photographing cannot be walked into. The server keeps no price history, so the
-// only history that exists is the one this addon wrote down while its player browsed, and a
-// panel with anything in it belongs to somebody who has stood at the Merchant on several
-// different days. A scenario states those days: three browses, with `stage.elapse` putting the
-// first two in the past.
+// The state worth photographing cannot be walked into, since the only history that exists is
+// what this addon wrote down while its player browsed. So the scenario states three browses,
+// with `stage.elapse` putting the first two in the past.
 //
-// Every item id here ships painted art, taken from the deployed `/ui/items/mapping.json`, so a
-// missing icon in a shot is a real defect rather than a fixture naming a file that never
-// existed. `silverleaf_herb` is in the list on purpose: its art is filed under "Sheenleaf Herb",
-// one of the 21 ids in 303 where the art name and the game's own display name disagree, and it
-// is the case the label under every row is hedging about.
+// Every id here ships painted art, from the deployed `/ui/items/mapping.json`, so a missing icon
+// in a shot is a real defect rather than a fixture naming a file that never existed.
+// `silverleaf_herb` is in on purpose: its art is filed under "Sheenleaf Herb", which is the case
+// the label under every row is hedging about.
 //
-// The others section is sorted the way the server sorts it, by display name and then by the
-// stack's total price. The undercut check reads exactly that ordering to find the cheapest
-// competing listing without knowing what anything is called, so a fixture in any other order
-// would be a page the server could not have sent.
-//
-// The three verdicts are all on screen at once, which is the point of the Yours panel. The
-// copper ore is undercut by both readings, total and per item; the pristine hide is the cheapest
-// on the page; and nobody else is selling goldleaf on the page that was read, which reads as
-// "not on this page" rather than as "you are the cheapest".
+// The others section is sorted the way the SERVER sorts it, by display name then stack total.
+// The undercut check reads exactly that ordering, so a fixture in any other order would be a
+// page the server could not have sent. All three verdicts are on screen at once, which is the
+// point of the Yours panel.
 
 import { inSeries } from '../../loader/src/shared/sequence.ts';
 import type { Scenario, Stage, WorldDraft } from '../../stage/src/stage.ts';
@@ -29,11 +21,7 @@ const SILVER = 100;
 const HOUR_MS = 60 * 60 * 1000;
 const DAY_MS = 24 * HOUR_MS;
 
-/**
- * The Merchant's own terms, which are the game's real ones. The suite deliberately uses figures
- * that are not these, so that an addon which wrote either down could not agree with its fixture
- * by accident. A photograph wants the opposite: what a player actually reads at the counter.
- */
+/** The game's REAL terms. The suite uses other figures on purpose; a photograph wants these. */
 const CUT_PCT = 5;
 const MAX_LISTINGS = 12;
 
@@ -66,13 +54,9 @@ function sale(itemId: string, count: number, unit: number, buyerName: string): S
 }
 
 /**
- * The pending sale ledger, browse by browse, which is a QUEUE rather than a table: it grows as
- * sales land and empties the moment the player collects.
- *
- * The collect between the second browse and the third is what makes this fixture worth having.
- * The first three sales are gone from the wire by the time the shot is taken and are still on
- * screen, which is the only state that shows what the Sold pane is for: a record that survives a
- * drain nothing announces. Two of them are copper ore, so that pane has a line to draw as well.
+ * A QUEUE rather than a table: it grows as sales land and empties when the player collects. The
+ * collect between the second browse and the third is the point: three sales are gone from the
+ * wire by the time the shot is taken and still on screen, which is what the Sold pane is for.
  */
 const SOLD: readonly (readonly Sale[])[] = [
   [sale('copper_ore', 20, 50, 'Doradine'), sale('rough_hide', 10, 88, 'Karrek')],
@@ -100,13 +84,9 @@ interface Stack {
 }
 
 /**
- * One item as the market carried it, browse by browse.
- *
- * `units` is a price per item and the wire carries the stack total, which is the arithmetic this
- * addon exists to get right: the rows below are built by multiplying, exactly as a seller does.
- *
- * A browse with no unit price is a browse where nobody had any: `goldleaf_herb` runs out before
- * the last one, which leaves the player holding the only listing of it.
+ * `units` is per item and the wire carries the stack TOTAL, which is the arithmetic this addon
+ * exists to get right, so the rows are built by multiplying. A browse with no unit price is one
+ * where nobody had any: goldleaf runs out, leaving the player the only listing of it.
  */
 interface Stall {
   item: string;
@@ -117,11 +97,8 @@ interface Stall {
 }
 
 /**
- * The book, in display-name order.
- *
- * Nine items over three days, chosen so the trend column has something to say: copper
- * ore and spider silk are falling, iron ore and pristine hide are climbing, and the
- * herbs are roughly where they were.
+ * The book in display-name order: nine items over three days, chosen so the trend has something
+ * to say in both directions.
  */
 const STALLS: readonly Stall[] = [
   {
@@ -211,13 +188,9 @@ const STALLS: readonly Stall[] = [
 ];
 
 /**
- * What this player is selling, posted six hours before the shot.
- *
- * All three verdicts at once, which is what makes the Yours panel worth photographing.
- * The ore and the silk are beaten on the total AND on the price per item, so neither row
- * is arguable; the two hides and the iron are under everybody; and the only other
- * goldleaf seller ran out, so the page carries nothing at all to compare that one
- * against, which is the verdict this addon is careful about.
+ * All three verdicts at once. The ore and the silk are beaten on the total AND per item, so
+ * neither is arguable; the hides and the iron are under everybody; and the only other goldleaf
+ * seller ran out, so that row has nothing to compare against, which is the careful verdict.
  */
 const MINE: readonly { id: number; item: string; count: number; price: number }[] = [
   { id: 9001, item: 'copper_ore', count: 20, price: 20 * 45 },
@@ -278,11 +251,8 @@ function myRows(browse: number): Listing[] {
 }
 
 /**
- * Everyone else's rows, in the order the server sends them.
- *
- * By display name and then by the stack's total, computed rather than typed, because
- * the undercut check reads that ordering and a fixture that drifted out of it would
- * quietly describe a page the server never sends.
+ * By display name then stack total, COMPUTED rather than typed: the undercut check reads that
+ * ordering, and a fixture drifting out of it describes a page the server never sends.
  */
 function otherRows(browse: number): Listing[] {
   const rows: Listing[] = [];
@@ -327,19 +297,11 @@ function atCounter(draft: WorldDraft, browse: number): void {
 const OVER_CAP = 14;
 
 /**
- * The same counter after more has sold than the Merchant will itemize.
- *
- * The two rows are sales the third browse had not seen, because that is what an omission
- * MEANS: fourteen sales landed behind the two already recorded and pushed them out, so the
- * rows still on the wire are the newest and not the ones already written down. The dropped
- * gold rides the collection total, which is both what the game does (a dropped row never
- * drops its copper) and what makes the page move at all, since the loader's market signature
- * reads that total and not the ledger behind it.
- *
- * The pane says twelve rather than fourteen, and that is the point of the scenario. Two of
- * the fourteen the server dropped were read before they went, so the number worth showing a
- * player is how many sales of theirs are missing from THIS record, which is a figure only
- * something keeping its own position in the queue can work out.
+ * More sold than the Merchant will itemize. The two rows are sales the third browse had not
+ * seen, which is what an omission MEANS: fourteen landed behind the recorded two and pushed them
+ * out. The dropped gold rides the collection total, as the game does it, and that total is also
+ * what moves the page. The pane says twelve rather than fourteen, because two of the dropped
+ * rows were read before they went, and only a kept position can work that out.
  */
 function overCapped(draft: WorldDraft): void {
   const rows = [
@@ -365,11 +327,8 @@ function noCounter(draft: WorldDraft): void {
 }
 
 /**
- * The session as it stood before the addon ran a line: at the counter, three days ago.
- *
- * In `world` rather than in `run` because a player who logs in at the Merchant is
- * reading a page before this addon has drawn anything, and the first thing it does with
- * its stored ledger is fold that page into it.
+ * In `world` rather than `run`: a player who logs in at the Merchant is reading a page before
+ * this addon has drawn anything, and folding that page in is the first thing it does.
  */
 function atTheMerchant(draft: WorldDraft): void {
   draft.set(draft.world, 'marketCollectPending', true);
@@ -394,6 +353,10 @@ function pause(ms: number): Promise<void> {
 async function drawn(stage: Stage): Promise<void> {
   stage.poll();
   await pause(SETTLE_MS);
+  // The repaint rides `woc.paint`, which runs on the loader's own frame loop, and on the stage
+  // that loop is driven by hand rather than by the browser. Without this the panel holds what
+  // it read and draws none of it.
+  stage.frame();
 }
 
 /** How long to wait for the item art manifest, which every label on screen comes from. */
@@ -407,11 +370,14 @@ const ART_POLL_MS = 50;
  * a name, and not what it looks like on a machine that has finished loading. Waited on the fact
  * rather than on a delay, and the first row is enough because one manifest answers for every row.
  */
-function artLanded(): Promise<void> {
+function artLanded(stage: Stage): Promise<void> {
   const wanted = (STALLS[0] as Stall).name;
   return new Promise((resolve) => {
     let waited = 0;
     const look = (): void => {
+      // A frame per look, for the reason `drawn` runs one: the manifest landing asks for a
+      // repaint and nothing on the stage performs one unless a scenario says so.
+      stage.frame();
       const label = document.querySelector('[data-list="prices"] .woc-bar-label')?.textContent;
       if (label === wanted || waited >= ART_MS) {
         resolve();
@@ -437,7 +403,7 @@ async function browsedForDays(stage: Stage): Promise<void> {
     atCounter(stage, at);
     await drawn(stage);
   });
-  await artLanded();
+  await artLanded(stage);
 }
 
 /**
@@ -453,15 +419,10 @@ function openTab(label: string): void {
 }
 
 /**
- * The panel as a player who has widened it holds it. The addon opens at 400 by 480, which spends
- * nearly half its height on chrome that cannot scroll: the tab strip, the status strip, the
- * sentence under it, the search field and the note. A shot at the opening size is four rows of
- * ledger under all of that. This is a size the frame is genuinely draggable to.
- *
- * The width is also what makes three panes fit in one picture. `pnpm shots` lays a sheet out in a
- * 1440px viewport and each pane carries 24px of its own on each side with 16px between them, so
- * three of these come to 1424 and a wider box is silently cropped at the right edge. Found by
- * looking at the capture: the third panel's prices were simply not in it.
+ * A size the frame is genuinely draggable to: at its opening 400 by 480 nearly half the height is
+ * chrome that cannot scroll. The WIDTH is also what fits three panes in one sheet: the capture
+ * viewport is 1440 and each pane carries 24px a side with 16px between, so three of these come
+ * to 1424 and anything wider is silently cropped at the right edge.
  */
 const WIDENED = { x: 80, y: 140, w: 416, h: 620 };
 
@@ -471,7 +432,7 @@ const SCENARIOS: readonly Scenario[] = [
     label: 'The ledger, three days in',
     preview: true,
     caption: 'The ledger',
-    alt: "the Prices tab of a panel headed Ledgerline (to collect), with a strip over the list reading at the Merchant, page 1 of 1, a 5 percent cut, 6 of 12 listing slots used and 33 silver 6 copper and 2 items waiting to be collected. Under a search field, seven item rows fenced off by a rule at each end, each carrying the game's own art, its price as coins (a disc per unit, gold, silver or copper, with the empty units left out) and a chart across the bottom of the row: Copper Ore, low 44 copper over a median of 48 and 3 visits; Ghostly Essence, low 7 silver 80; Healing Potion, low 2 silver 45; Iron Ore, low 1 silver 5; Pristine Hide, low 14 silver; Rough Hide, low 84 copper; and Sheenleaf Herb, low 1 silver 8, its chart cut off by the scrolling list. Every figure is one vote per visit to the counter rather than one per listing, and each chart has one point per visit: copper ore falls across the three days and iron ore and pristine hide climb. A footer reads 9 items recorded, keeping 30 days.",
+    alt: 'recorded prices over their own trends',
     frames: { ledger: { box: WIDENED, visible: true } },
     world: atTheMerchant,
     run: browsedForDays,
@@ -481,12 +442,13 @@ const SCENARIOS: readonly Scenario[] = [
     label: 'Your own listings',
     preview: true,
     caption: 'Your listings',
-    alt: "the Yours tab of the same panel, with the same strip over six listings of the player's own, each asking a price in the game's own coins. Copper Ore asking 9 silver and Spider Silk asking 6 silver 20 are washed red and read undercut, because a cheaper listing of each leads its block on the page that was read. Goldleaf Herb asking 17 silver reads not on this page, which is the panel refusing to call it uncontested: nobody else was selling any, and an item missing from a page is not an item nobody is selling. Iron Ore at 26 silver, Pristine Hide at 15 silver and Rough Hide at 8 silver 60 read cheapest on this page. Every row also gives the price per item, carries that item's own price chart across the bottom of it, and says the listing was first seen by you 6 hours ago, which is this addon's own record rather than an expiry, since no listing on the wire carries one. Under a rule, a footer reads that the verdicts are judged from the page you are reading now, which is not the whole market.",
+    alt: 'undercuts washed red',
     frames: { ledger: { box: WIDENED, visible: true } },
     world: atTheMerchant,
     run: async (stage) => {
       await browsedForDays(stage);
       openTab('Yours');
+      stage.frame();
       await pause(SETTLE_MS);
     },
   },
@@ -495,12 +457,13 @@ const SCENARIOS: readonly Scenario[] = [
     label: 'What it actually sold for',
     preview: true,
     caption: 'What sold',
-    alt: "the Sold tab of the same panel, over the same strip, listing four items the player has actually sold. Each row gives what a buyer paid per item, in the game's own coins, over a chart of the same: Copper Ore paid 48 copper, over 2 sales, 40 sold and 18 silver 24 copper after the cut, last read moments ago, and it is the only row carrying a chart, because two sales are the fewest that can be a line; Iron Ore paid 1 silver 28, 1 sale of 20 and 24 silver 32 after the cut, last read moments ago; Spider Silk paid 66 copper, 1 sale of 10 and 6 silver 27 after the cut, last read 6 hours ago; and Rough Hide paid 88 copper, 1 sale of 10 and 8 silver 36 after the cut, last read 3 days ago. Three of those five sales were collected before the picture was taken and are gone from the Merchant entirely, which is the state this pane exists for: the ledger it reads is emptied the moment a player collects, so a sale is only ever recorded once and never read back. None of these figures is on the Prices tab, because what was paid and what is being asked are two series and neither is folded into the other. A footer reads 4 items sold, keeping 30 days.",
+    alt: 'what a buyer paid, per item',
     frames: { ledger: { box: WIDENED, visible: true } },
     world: atTheMerchant,
     run: async (stage) => {
       await browsedForDays(stage);
       openTab('Sold');
+      stage.frame();
       await pause(SETTLE_MS);
     },
   },
@@ -518,6 +481,7 @@ const SCENARIOS: readonly Scenario[] = [
       overCapped(stage);
       await drawn(stage);
       openTab('Sold');
+      stage.frame();
       await pause(SETTLE_MS);
     },
   },

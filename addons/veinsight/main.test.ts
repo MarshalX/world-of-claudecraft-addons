@@ -2,15 +2,9 @@
 
 // Veinsight, run through the real loader.
 //
-// The decision this addon exists for is a join, and every section below is about one half of
-// it. The game sends no entity for a gathering node and never will, so the table is the
-// addon's; the game sends the respawn timers and nothing else, so the state is the game's; and
-// the two meet on a node id string. The first real case stands the player on an authored
-// coordinate out of the shipped file and demands the row, the distance and the pin all agree.
-//
-// The fixtures are built from the shipped `nodes.json`, never from a stub. Every coordinate
-// named below was read out of that file, and the case about a bad row doctors the real file
-// rather than inventing a small one.
+// The addon is a join: the table is the addon's, the respawn timers are the game's, and the two
+// meet on a node id string. The fixtures are built from the shipped `nodes.json` and never from
+// a stub, so every coordinate below was read out of that file.
 //
 // Three things this suite deliberately cannot see, and does not pretend to:
 //
@@ -42,8 +36,15 @@ const CHARACTER = 'Claudemoon/Marshal';
 const CHANNEL = 'pbe';
 const STORE_KEY = 'heights';
 const DATA_FILE = 'nodes.json';
-/** The minor `woc.data`, `world.nodeCooldowns` and `ui.project` all landed in. */
-const NEEDS_MINOR = 2;
+/**
+ * The highest minor anything this addon calls arrived in. `woc.data`,
+ * `world.nodeCooldowns` and `ui.project` are 2; `ui.list`, `fmt.duration`,
+ * `fmt.compass`, `world.distanceTo`, `world.bearingTo` and `bus.follow` are 4.
+ *
+ * A frame's own `toggleKey` is 4 as well and is deliberately NOT on that list: the toggle
+ * is bound by hand, for the reason written above the bind in `main.js`.
+ */
+const NEEDS_MINOR = 4;
 
 const PLAYER_ID = PLAYER_ENTITY.id;
 /** The redraw's period, so advancing this much runs exactly one of them. */
@@ -187,7 +188,6 @@ function storedHeights(storage: FakeStorage): unknown {
   return dumped[`${characterNamespace(FQID)}/${perCharacterKey(CHANNEL, CHARACTER, STORE_KEY)}`];
 }
 
-/** One row of the table, as this suite has to reach into it. */
 interface TableRow {
   id: string;
   [field: string]: unknown;
@@ -222,7 +222,6 @@ function bagsFrom(carried: readonly Bag[] | null | undefined): Bag[] | null {
 }
 
 interface StartOpts {
-  /** Where the player is standing. Defaults to ORE_1's own authored coordinate. */
   at?: { x: number; z: number };
   /** Which way they are facing, in radians, 0 being +Z. */
   facing?: number;
@@ -230,7 +229,6 @@ interface StartOpts {
   bags?: readonly Bag[] | null;
   /** Node id to seconds left on YOUR timer. A node with no entry is ready. */
   cooling?: Record<string, number>;
-  /** The table text, for the cases about a table that is not the shipped one. */
   table?: string;
 }
 
@@ -242,11 +240,9 @@ interface VeinsightHarness extends SharedHarness {
   faceTo: (radians: number) => void;
   /** Put a mob in the world, at a height nothing else in a case uses. */
   stand: (id: number, x: number, z: number, y?: number) => void;
-  /** Take it away again, which is what walking out of interest scope looks like. */
   despawn: (id: number) => void;
   /** Put something in the bags, which is what the tool gate reads. */
   carry: (...itemIds: readonly string[]) => void;
-  /** Start or clear one node's timer, as the snapshot does. */
   cool: (nodeId: string, seconds: number) => void;
   ready: (nodeId: string) => void;
   /** A completed harvest off the socket, which is what measures a node's height. */
@@ -1067,6 +1063,29 @@ describe('the bearing arrow', () => {
     });
 
     expect(h.detailOf(WOOD_2.id)).toContain('←');
+  });
+
+  // All EIGHT, because four of them is a table nobody has read the other half of, and the
+  // failure this section exists for is a table written the other way round: that one agrees
+  // at ahead and behind and disagrees at every sector in between.
+  //
+  // The player stands 40 yards due south of the node, which puts it at a bearing of exactly
+  // 0, and then turns left through a full circle 45 degrees at a time. Turning your body
+  // left moves the world right, so the arrow steps clockwise through the table.
+  it('steps through all eight sectors as the player turns', async () => {
+    const h = await run({ 'list-length': 20 }, undefined, {
+      at: { x: WOOD_2.x, z: WOOD_2.z - 40 },
+      facing: 0,
+    });
+    const eighth = Math.PI / 4;
+    const clockwise = ['↑', '↗', '→', '↘', '↓', '↙', '←', '↖'];
+
+    for (const [step, arrow] of clockwise.entries()) {
+      h.faceTo(step * eighth);
+      h.tick();
+
+      expect(h.detailOf(WOOD_2.id)).toContain(arrow);
+    }
   });
 
   it('turns the arrow with the player rather than with the world', async () => {

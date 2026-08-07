@@ -61,7 +61,7 @@ function textOf(selector: string): string {
   return document.querySelector(selector)?.textContent ?? '';
 }
 
-/** One damage event, with only the fields a caller cares about spelled out. */
+/** The fields a case cares about; `hit()` fills the rest. */
 interface Hit {
   amount?: number;
   ability?: string | null;
@@ -73,7 +73,7 @@ interface Hit {
   school?: string;
 }
 
-/** One heal2 event, with only the fields a caller cares about spelled out. */
+/** The fields a case cares about; `heal()` fills the rest. */
 interface Heal {
   amount?: number;
   ability?: string;
@@ -123,7 +123,6 @@ function rowFor(label: string): Element | null {
   return document.querySelector(`[data-ability="${label}"]`);
 }
 
-/** Point at a row and read back what the tooltip says about it. */
 function hover(label: string): string {
   rowFor(label)?.dispatchEvent(new Event('pointerenter'));
   return document.getElementById('woc-tooltip')?.textContent ?? '';
@@ -206,6 +205,9 @@ async function run(opts: RunOpts = {}): Promise<MeterHarness> {
   await Promise.resolve();
   await Promise.resolve();
   await Promise.resolve();
+  // The panel's first draw is a `woc.paint` request made while it was still hidden, so
+  // the loop is what performs it once the restore has put it on screen.
+  harness.frames.tick();
 
   return {
     ...harness,
@@ -240,6 +242,10 @@ async function run(opts: RunOpts = {}): Promise<MeterHarness> {
     tick: (ms = REPAINT_MS) => {
       harness.advance(ms);
       vi.advanceTimersByTime(ms);
+      // The panel draws through `woc.paint`, so the interval only ASKS for a repaint
+      // and the loop is what performs it. Arrangement rather than assertion: a real
+      // browser runs a frame here without being told to.
+      harness.frames.tick();
     },
     fight: () => textOf('.woc-meter-total'),
     outcomes: () => textOf('.woc-meter-outcomes'),
@@ -256,11 +262,13 @@ async function run(opts: RunOpts = {}): Promise<MeterHarness> {
         (el) => el.textContent === label,
       );
       (button as HTMLButtonElement | undefined)?.click();
+      harness.frames.tick();
     },
     // The addon's own default bind, pressed at the dispatcher: the same path a
     // player takes, rather than a call to the frame the addon happens to hold.
     togglePanel: () => {
       harness.press('Alt+KeyD');
+      harness.frames.tick();
     },
   };
 }
@@ -349,19 +357,13 @@ describe('its manifest', () => {
     ]);
   });
 
-  // `closable` on a frame is a minor 2 member, and reading `Heal2Event.overheal` raises this to
-  // 4, because that field was published at 4. The minor is the smallest one carrying EVERY
-  // published member the addon reads, and a field on an event record is such a member: it is
-  // what moved API_MINOR to 4 in the first place.
+  // The smallest minor carrying EVERY published member this addon reads. `closable` is minor 2;
+  // `Heal2Event.overheal`, `woc.ui.list`, `woc.paint` and `FrameOpts.toggleKey` are minor 4.
+  // A FIELD on an event record counts as much as a function does, whether or not the loader
+  // implements anything for it: nothing promises an event reaches an addon verbatim, and
+  // under-declaring fails silently as a zero where over-declaring fails with a message.
   //
-  // An earlier version said 2, reasoning that the loader implements nothing for this field
-  // (`net/hub.ts` publishes each decoded event verbatim), so any loader hands it over and
-  // declaring 4 would only exclude players. The observation is true and the conclusion does not
-  // follow. Passthrough is an implementation choice the published types never promise, so an
-  // addon relying on it is relying on something nothing keeps true; if the loader ever projects
-  // events, an addon declaring 2 reads undefined and reports zero overhealing, which is a wrong
-  // answer that looks like a real one. Declaring 4 fails the other way, cleanly, with a message
-  // naming the fix. That trade is the one this repo takes everywhere else.
+  // `woc.fmt.duration` is offered and refused; the reason is on the function in main.js.
   it('declares the API minor it actually needs', () => {
     expect(manifest().apiMinor).toBe(4);
   });
@@ -875,11 +877,10 @@ describe('the healing table', () => {
   });
 });
 
-// A pet's damage is the owner's, and until game 0.35.0 no owner ever received it: the server
-// compared raw entity ids when deciding who a combat record went to, so a pet matched nobody
-// and matching `sourceId` against your own id was accidentally right. The server resolves each
-// side to its controller now, those records arrive, and the old comparison threw every one of
-// them away, which is a hunter, warlock or mage reading materially under the truth.
+// A pet's damage is the owner's. Since game 0.35.0 the server resolves each side to its
+// controller before deciding who a combat record reaches, so an owner receives their own pet's
+// events: matching a raw `sourceId` against your own id undercounts a hunter, warlock or mage
+// by everything their pet did, silently.
 //
 // `ownerId` is the only thing separating a pet from any other mob in the zone, so the second
 // case below is as load-bearing as the first: fold in every owned entity and the meter becomes
@@ -1203,6 +1204,7 @@ describe('when a fight ends', () => {
     h.tick();
 
     h.press('Alt+Shift+KeyD');
+    h.frames.tick();
 
     expect(h.fight()).toContain('0 damage');
     expect(h.labels()).toEqual([]);

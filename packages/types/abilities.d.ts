@@ -90,7 +90,23 @@ export interface AbilityInfo {
 }
 
 /**
- * Your spellbook: the abilities you know, and two ways to look one up.
+ * What `describe` answers: a label for an ability id, and where it came from.
+ *
+ * `known: false` means the name was derived from the id and is very likely
+ * wrong, because ids and display names have diverged. The guess mark is yours to
+ * add: the same string also reaches an `aria-label` and a tooltip title, where a
+ * glued-on `?` reads as part of the name. Added in API minor 4.
+ */
+export interface AbilityDescription {
+  /** The game's own display name where you know the ability, derived from the id where you do not. */
+  name: string;
+  /** Null where you do not know the ability. */
+  school: string | null;
+  known: boolean;
+}
+
+/**
+ * Your spellbook: the abilities you know, and three ways to look one up.
  *
  * This is the ONLY bridge between an ability's id and its display name, and you
  * need it because the two have diverged and nothing else connects them. Skill
@@ -104,8 +120,12 @@ export interface AbilityInfo {
  * const url = info && woc.ui.icon.ability(info.id, woc.world.player.templateId);
  *
  * // a cooldown map gave you an id; get something readable
- * const label = woc.world.abilities.byId(id)?.name ?? id;
+ * const label = woc.world.abilities.describe(id).name;
  * ```
+ *
+ * `describe` is the third of the three, and the one that always answers: `byId`
+ * is null for an id that is not yours, where `describe` derives a name and marks
+ * it as derived.
  *
  * TWO LIMITS WORTH KNOWING. It covers YOUR OWN known kit, so an ability a mob
  * casts is not in here and `byName` answers null for it. And it is empty until
@@ -122,4 +142,11 @@ export interface AbilityIndex {
   byId: (id: string) => AbilityInfo | null;
   /** Null for a name that is not one of yours, which includes every mob ability. */
   byName: (name: string) => AbilityInfo | null;
+  /**
+   * Something readable for any ability id, never null and never throwing.
+   *
+   * On the landing page every id comes back derived. Read `known` before you
+   * present the name. Added in API minor 4.
+   */
+  describe: (id: string) => AbilityDescription;
 }

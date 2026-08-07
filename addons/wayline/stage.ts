@@ -148,11 +148,9 @@ async function eightMinutes(stage: Stage): Promise<void> {
   await wait(REDRAW_MS);
 }
 
-const GRIND_ALT =
-  'a Level 12 row filled to 61 percent, reading 6,240 of the 10,100 the game asks for. Under it three figures: a rate of 9,200 xp/hr measured over the last ten minutes of play, 27 kills left at the average award of the eight in that window, and 25m to go at that pace. A Rested row below them holds 0.8 levels, 16 bubbles, banked against a cap of one and a half levels.';
+const GRIND_ALT = 'a level bar over a rate, kills left and time left.';
 
-const CAPPED_ALT =
-  "the same panel on a character at the cap. The level row is full and reads max, with 90,379 earned past level 20 underneath, because the experience bar the game draws is frozen at 0 for the rest of that character's life. The three figures now count toward virtual 24 instead, and a Virtual 23 row at the bottom holds 13,587 of the 30,879 that level asks for, worked out here from the lifetime total the game does publish. The Rested row reads 0.0 levels, which is not an oversight: the pool stops filling at the cap.";
+const CAPPED_ALT = 'the same panel at the cap, with a derived virtual level added.';
 
 const SCENARIOS: readonly Scenario[] = [
   {

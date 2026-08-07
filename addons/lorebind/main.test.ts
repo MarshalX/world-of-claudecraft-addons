@@ -130,8 +130,13 @@ const UNKNOWN_ID = 'lorebind_not_in_the_table';
 
 const FQID = 'official/lorebind';
 
-/** `woc.data` landed at minor 2 and the kit's item quality axis at 3. */
-const NEEDS_MINOR = 3;
+/**
+ * `woc.data` landed at minor 2 and the kit's item quality axis at 3. The grid is a `ui.list`
+ * now, the counting lines are `ui.line`, the strips are `ui.row`, the repaint is `woc.paint`,
+ * the count is `fmt.count`, the name service is `bus.publish` and the key is the frame's own
+ * `toggleKey`: all of them minor 4, so the claim tracks the newest member rather than the oldest.
+ */
+const NEEDS_MINOR = 4;
 
 /** The row `mountAddon` would build, for the one case that mounts the addon by hand. */
 function installedRow(): InstalledAddon {
@@ -297,6 +302,11 @@ async function start(options: StartOptions = {}): Promise<Harness> {
     harness.shared.world.watcher.poll();
     await flush(MICROTASKS);
     vi.advanceTimersToNextFrame();
+    // The repaint is `woc.paint`, which runs on the LOADER'S one frame loop rather than on an
+    // animation frame of the addon's own, so a settle has to step that loop as well as the
+    // clock. The fake runs the real loop over a clock a suite drives, so nothing here is a
+    // stand-in for the coalescing: one tick is one frame, however many repaints were asked for.
+    harness.frames.tick();
     await flush(MICROTASKS);
   };
   await settle();
@@ -566,24 +576,21 @@ describe('its manifest', () => {
     expect(parseManifest(MANIFEST_TEXT).permissions).toEqual(['world.read', 'ui', 'keys']);
   });
 
-  // `woc.data` for the table needs 2 and the kit's item quality axis needs 3. An older loader
-  // strips an unknown option rather than refusing it, so without this the addon would install
-  // on a loader with no tiers and draw a grid of identical grey squares, which is the one
-  // thing this window is for.
-  it('declares the minor its quality colours need', () => {
+  // An older loader strips an unknown option rather than refusing it, so a claim that is too
+  // low installs and then draws wrongly rather than failing: at 3 this addon would have got a
+  // grid of identical grey squares, and at 4 it would get a panel with no rows in it at all.
+  // See NEEDS_MINOR for what is being claimed.
+  it('declares the minor the members it calls arrived in', () => {
     expect(parseManifest(MANIFEST_TEXT).apiMinor).toBe(NEEDS_MINOR);
   });
 });
 
 describe('the shipped table', () => {
-  // Neither the count nor the version is pinned to a literal, and that is a
-  // correction rather than a relaxation. Both were, and a content release moved
-  // both: game 0.35.0 took the table from 815 rows to 831 and nine cases in this
-  // file went red for a fact none of them was about. `items.json` is a generated
-  // artifact this addon's own `generate.mjs` owns, so asserting the output the
-  // generator is responsible for is the thing `AGENTS.md` says not to do. What is
-  // asserted instead is what would stop the generator: a header that lost its
-  // stamp, and a table whose ids stopped being a key.
+  // Neither the count nor the version is pinned to a literal: content moves both, and
+  // `items.json` is a generated artifact this addon's own `generate.mjs` owns, so asserting
+  // the output the generator is responsible for is what `AGENTS.md` says not to do. What is
+  // asserted instead is what would STOP the generator: a header with no stamp, and a table
+  // whose ids are not a key.
   it('stamps the game version it was derived from', () => {
     expect(readHeader().gameVersion).toMatch(/^\d+\.\d+\.\d+$/);
   });

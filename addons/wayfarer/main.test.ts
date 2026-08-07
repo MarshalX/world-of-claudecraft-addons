@@ -29,8 +29,19 @@ import SOURCE from './main.js?raw';
 
 const MANIFEST_JSON: unknown = JSON.parse(MANIFEST_TEXT);
 const DATA_FILE = 'atlas.json';
-/** The minor `woc.data`, `ui.project`, `woc.onFrame` and `world.stations` all need. */
-const NEEDS_MINOR = 2;
+/**
+ * The highest minor anything this addon CALLS arrived in.
+ *
+ * `woc.data`, `ui.project`, `woc.onFrame` and `world.stations` are 2. Six members are 4:
+ * `ui.list` holds the rows and the pins, `ui.show` is what takes a crowded pin off screen,
+ * `world.distanceTo` and `world.bearingTo` measure and point every row, `fmt.titleCase`
+ * names a crafting station, and `bus.publish` answers the zone ask.
+ *
+ * `FrameOpts.toggleKey` is deliberately NOT on that list. It would have been the seventh,
+ * and this addon declined it: its toggle also forces a redraw, so the bind is written by
+ * hand. See the note above `keys.bind` in `main.js`.
+ */
+const NEEDS_MINOR = 4;
 const PLAYER_ID = PLAYER_ENTITY.id;
 /** The redraw's period, so advancing this much runs exactly one of them. */
 const TICK_MS = 1000;
@@ -922,6 +933,13 @@ describe('the world pins', () => {
   // on top of every other one and exactly one survives the thinning. That is a blunt
   // fixture and it is the right one: it proves the overlap decision runs at all and
   // that it keeps one rather than none.
+  //
+  // Read off the class rather than off an inline `display`, because `woc.ui.show` is
+  // what hides a pin now and it deliberately writes neither: an inline style outranks
+  // every selector a stylesheet can spell, so the loader hides with a class its own
+  // sheet carries and with the `hidden` attribute that keeps a pin nobody can see out
+  // of the accessibility tree. Both are asserted, since a pin that went off screen
+  // without the attribute would still be announced.
   it('hides a pin that has landed on top of a nearer one', async () => {
     const h = await run();
     const drawn = h.pinned().length;
@@ -929,10 +947,10 @@ describe('the world pins', () => {
 
     h.frame();
 
-    const visible = [...document.querySelectorAll<HTMLElement>('.woc-wf-pin')].filter(
-      (el) => el.style.display !== 'none',
-    );
+    const pins = [...document.querySelectorAll<HTMLElement>('.woc-wf-pin')];
+    const visible = pins.filter((el) => !el.classList.contains('woc-hidden'));
     expect(visible).toHaveLength(1);
+    expect(pins.filter((el) => el.hasAttribute('hidden'))).toHaveLength(drawn - 1);
   });
 });
 
@@ -971,6 +989,18 @@ describe('which way each row points', () => {
 
   it('points left at a place off the player s left shoulder', async () => {
     expect(await aimedFrom(EASTBROOK_HUB.x - 40, EASTBROOK_HUB.z, 0)).toBeCloseTo(-90);
+  });
+
+  // The fourth quarter, which the three above leave open and which is the one a
+  // half-turn can be wrong in without any of them noticing: a bearing convention with
+  // the wrong sign still reads 0 straight ahead and still reads a half turn behind,
+  // so only the two shoulders separate them and only this says which half turn it is.
+  // Straight behind is -180 rather than 180, which is the end of the range the reading
+  // is expressed in and therefore the value a normalisation has to agree on.
+  it('points back at a place behind the player', async () => {
+    // The same spot the first case stands on, turned the other way: the hub is now
+    // squarely behind rather than squarely ahead.
+    expect(await aimedFrom(EASTBROOK_HUB.x, EASTBROOK_HUB.z + 40, 0)).toBeCloseTo(-180);
   });
 
   it('turns with the player rather than with the world', async () => {

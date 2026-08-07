@@ -1,7 +1,7 @@
 {
   "id": "combat-meter",
   "name": "Combat Meter",
-  "version": "1.4.0",
+  "version": "1.4.1",
   "apiVersion": 1,
   "apiMinor": 4,
   "author": "MarshalX",
@@ -9,7 +9,7 @@
   "entry": "main.js",
   "preview": {
     "file": "preview.png",
-    "alt": "The Combat Meter panel on its Damage tab, reading 5,850 damage (195.7/s) in 30s. Six rows (Aimed Shot 1,596, Fell Shot 1,334, Grizzle: Melee 1,086, Volley 827, Auto Shot 643, Serpent Sting 364) each show total, share and damage per second, over a second line of hits, crit rate, average and biggest hit. The third row is the swings the player pet Grizzle landed, folded into the total and labelled with the pet name. The fill behind each row is tinted by damage school, red for physical, blue for arcane and green for nature, and the four rows from the player own spellbook carry the art the game ships for that ability while Auto Shot and the pet row carry none. A summary line reads hit 88%, miss 6%, dodge 6%."
+    "alt": "The Combat Meter panel on its Damage tab: one fight broken down per ability, six rows tinted by damage school under a total with a per-second rate, above the player attack table."
   },
   "homepage": "https://github.com/MarshalX/world-of-claudecraft-addons",
   "tags": ["combat"],

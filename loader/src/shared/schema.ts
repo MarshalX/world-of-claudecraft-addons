@@ -108,7 +108,16 @@ export const SettingDecl = z.discriminatedUnion('type', [
     .refine((s) => s.min === undefined || s.max === undefined || s.min <= s.max, {
       message: 'min must not exceed max',
       path: ['min'],
-    }),
+    })
+    // values.ts clamps a STORED number, so this is the only other route by which
+    // one reaches an addon outside its declared range. Refused rather than
+    // clamped: `{ default: 100, max: 40 }` is a manifest to fix, and CI catches
+    // it before anything is published.
+    .refine(
+      (s) =>
+        (s.min === undefined || s.default >= s.min) && (s.max === undefined || s.default <= s.max),
+      { message: 'default must be within min and max', path: ['default'] },
+    ),
   z.object({
     id: AddonId,
     type: z.literal('string'),

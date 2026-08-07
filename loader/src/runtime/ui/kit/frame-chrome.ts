@@ -137,6 +137,13 @@ interface FrameOpts {
   resizable?: boolean;
   /** Whether it starts on screen. Ignored when a saved visibility is restored. */
   visible?: boolean;
+  /**
+   * A keybind id from the addon's own manifest that shows and hides this frame.
+   *
+   * Warns and binds nothing for an id the manifest does not declare, rather than
+   * refusing to build the frame. See kit/frame-toggle.ts.
+   */
+  toggleKey?: string;
   /** Added to the frame element, so an addon can style its own. */
   className?: string;
   /** How tightly the loader's own chrome is drawn. Defaults to 'comfortable'. */

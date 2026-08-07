@@ -365,10 +365,6 @@ async function settleFrames(): Promise<void> {
   await Promise.resolve();
 }
 
-/**
- * Every entity the world holds, and the aura arrays they are actually carrying. `live` holds the
- * very arrays the entities carry, so an effect landing mutates what the game would be mutating.
- */
 /** The roster the loader reads, or null for a player standing on their own. */
 function partyOf(grouped: boolean, members: MemberRow[]) {
   if (!grouped) {
@@ -377,6 +373,10 @@ function partyOf(grouped: boolean, members: MemberRow[]) {
   return { leader: ME, raid: false, members };
 }
 
+/**
+ * Every entity the world holds, and the aura arrays they are actually carrying. `live` holds the
+ * very arrays the entities carry, so an effect landing mutates what the game would be mutating.
+ */
 function buildWorld(grouped: boolean, self: SelfSpec) {
   const live = new Map<number, FullAura[]>();
   const entities = new Map<number, unknown>();
@@ -510,10 +510,13 @@ describe('its manifest', () => {
     expect(manifest().permissions).toEqual(['world.read', 'ui', 'sound', 'keys']);
   });
 
-  // `world.dispellable` and `woc.onFrame` are both minor 2. A manifest that claims
-  // less than it calls loads against a loader that has neither and throws.
-  it('declares the minor the removal rule arrived in', () => {
-    expect(manifest().apiMinor).toBe(2);
+  // The published members this addon reads, and the minor each arrived at:
+  // `world.dispellable` and `woc.onFrame` at 2, then `ui.list` (with `shown`),
+  // `fmt.duration` and a frame's own `toggleKey` at 4. A manifest that claims less than
+  // it calls loads against a loader that has none of them and throws, so the number is
+  // the highest of them rather than the one the addon shipped with.
+  it('declares the minor the members it calls arrived in', () => {
+    expect(manifest().apiMinor).toBe(4);
   });
 });
 

@@ -59,14 +59,9 @@ const TABLE_FILE = 'nodes.json';
 const PROSPECTOR = 820;
 
 /**
- * Where this is photographed from, south and east of the ore.
- *
- * South so the veins are in front of the camera. East is the half that is not obvious and is the
- * whole reason the three pins are legible: the cluster runs away from the camera rather than
- * across it, six yards of x against eight of z, so from anywhere on its own axis the three tiles
- * land within forty pixels of each other and overlap. From the east the nearest vein is also the
- * westernmost, so the perspective divide pulls it wide of the far one. Standing an equal distance
- * west collapses all three onto one point.
+ * South and east of the ore. South so the veins are in front of the camera; EAST is the half
+ * that is not obvious and is why the three pins are legible, since from anywhere on the
+ * cluster's own axis the tiles overlap and standing west collapses all three onto one point.
  */
 const STANDPOINT = { x: -60, y: 5, z: -25 };
 
@@ -88,25 +83,19 @@ const HARVESTED = { id: 'ore_eastbrook_2', x: -73, z: -49, y: 5.6 };
 const PROSPECTOR_POS = { x: -71, y: 6.2, z: -51.5 };
 
 /**
- * What was already on this character's own timers when the addon woke up, in seconds: the stand
- * cut a minute ago is halfway back, and the vein cut before that is nearly ready and goes warm.
+ * What was already on this character's timers when the addon woke up, in seconds.
  *
- * The third timer is not here on purpose. It belongs to the vein mined during the scenario, and a
- * harvest is what starts one.
- *
- * The nearly-ready one is a vein rather than a second wood stand because of where the two sit:
- * the reach that keeps the pins legible (see CIRCUIT) stops at thirty-three yards and
- * `wood_eastbrook_1` falls three hundredths of a yard outside it.
+ * The third is absent ON PURPOSE: it belongs to the vein mined during the scenario, and a
+ * harvest is what starts one. The nearly-ready one is a vein because `wood_eastbrook_1` falls
+ * three hundredths of a yard outside the reach that keeps the pins legible.
  */
 const COOLING: ReadonlyArray<readonly [string, number]> = [
   ['wood_eastbrook_2', 61],
   ['ore_eastbrook_3', 9],
 ];
 
-/**
- * What is left on the vein just taken, out of the game's own 240. Not a round number and not the
- * full length, because both are readings a player only ever catches for one tick: a picture of
- * either is a picture of the moment the timer started rather than of a circuit being walked.
+/** Neither round nor the full 240: both are readings a player catches for one tick, so either
+ * pictures the moment a timer started rather than a circuit being walked.
  */
 const LEFT_ON_THE_VEIN = 83;
 
@@ -304,7 +293,7 @@ const SCENARIOS: readonly Scenario[] = [
     label: 'Half way round a circuit',
     preview: true,
     caption: 'The circuit',
-    alt: "a panel headed Veinsight, with three pins standing out in the world below it. The panel lists the four gathering nodes in range in Eastbrook Vale, nearest first, under a note reading Timers are yours alone, nobody else can take a node off you, which is the line the panel is free to draw because nothing is being held back: everything in reach is on screen. Each row is a draining bar carrying what the node is, the zone, the distance in yards and an arrow for the way to turn to reach it: a wood stand 19 yards behind at 1m 1s, an ore vein 27 yards off to the upper left at 1m 23s, another ore vein 30 yards straight ahead reading Yours rather than a time, and a third at 33 yards with 9 seconds left, drawn in a warm amber because it is nearly back. Below the panel, one pin over each of the three ore veins: a square tile on a thin pillar in the game's own grey for ore, each standing at its own height on the slope. The left one is dimmed and reads 83s, since it is the vein just harvested and still coming back; the middle reads Yours; the right is dimmed and reads 9s. The pillars are drawn three different ways to say how the ground under each pin was arrived at, which is the one thing on screen that is never a fact: solid where this character's own harvest measured it, dashed where somebody standing beside it gave it away, and dotted where nothing better was known and the pin sits at the player's own height.",
+    alt: 'a panel of gathering nodes in range, with pins in the world',
     settings: CIRCUIT,
     data: { [TABLE_FILE]: JSON.stringify(TABLE) },
     frames: { nodes: PANEL },
@@ -320,7 +309,7 @@ const SCENARIOS: readonly Scenario[] = [
     label: 'What no tool of yours opens',
     preview: true,
     caption: 'The tool gate',
-    alt: "a panel headed Veinsight, with three pins standing out in the world below it. The panel lists the four gathering nodes in range in Eastbrook Vale, nearest first, under a note reading Timers are yours alone, nobody else can take a node off you. Three of the four rows are herb patches, at 25, 32 and 40 yards, and where a countdown would be each one reads Tool: this character carries a pick and an axe and no sickle, so no amount of waiting will open any of them, and the panel says which of the two reasons a node is unavailable for rather than leaving an empty timer to be read as a bug. The fourth row is a wood stand 57 yards off to the right reading Yours, meaning it is standing there now and the axe in these bags opens it, which is what makes the other three mean something rather than reading as a panel that simply says Tool. Below the panel, one pin over each of the three herb patches, a square tile on a thin pillar in the game's own green for herbs. Every pillar here is dotted, unlike the circuit picture beside it, because a dotted pillar means the ground under the pin was never measured and the tile is hanging at the player's own height: nobody has harvested this run and nobody is standing on it, and a height is something a harvest leaves behind.",
+    alt: 'the same panel, three nodes reading Tool rather than a time',
     settings: HERB_REACH,
     data: { [TABLE_FILE]: JSON.stringify(TABLE) },
     frames: { nodes: PANEL },

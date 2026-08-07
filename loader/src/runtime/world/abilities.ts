@@ -18,12 +18,19 @@
 // sim's string rather than a localized one, which is exactly why the join works:
 // combat events carry that same string whatever locale the client renders in.
 
+import { titleCase } from '../../shared/fmt.ts';
 import { fieldNumber, fieldString, fieldValue } from '../net/frames.ts';
+
+function guessFromId(id: string): AbilityDescription {
+  return { name: titleCase(id), school: null, known: false };
+}
 
 const EMPTY: AbilityIndex = Object.freeze({
   known: Object.freeze([]),
   byId: () => null,
   byName: () => null,
+  // The derived path, which is what makes `describe` answer before world entry.
+  describe: guessFromId,
 });
 
 /**
@@ -159,6 +166,13 @@ function toAbility(entry: unknown): AbilityInfo | null {
   return info;
 }
 
+function describeOne(info: AbilityInfo | undefined, id: string): AbilityDescription {
+  if (info === undefined) {
+    return guessFromId(id);
+  }
+  return { name: info.name, school: info.school, known: true };
+}
+
 function buildIndex(entries: readonly unknown[]): AbilityIndex {
   const known: AbilityInfo[] = [];
   const ids = new Map<string, AbilityInfo>();
@@ -177,6 +191,7 @@ function buildIndex(entries: readonly unknown[]): AbilityIndex {
     known,
     byId: (id) => ids.get(id) ?? null,
     byName: (name) => names.get(name) ?? null,
+    describe: (id) => describeOne(ids.get(id), id),
   };
 }
 
@@ -228,11 +243,25 @@ export interface AbilityInfo {
   threatMult?: number;
 }
 
-/** What `byId` and `byName` answer from, rebuilt only when the set really changes. */
+/**
+ * A label for an ability id, and whether it was looked up or guessed.
+ *
+ * The guess mark stays the caller's: the same string reaches an `aria-label` and
+ * a tooltip title, where a glued-on `?` reads as part of the name.
+ */
+export interface AbilityDescription {
+  name: string;
+  /** Null for an ability the player does not know. */
+  school: string | null;
+  known: boolean;
+}
+
+/** What `byId`, `byName` and `describe` answer from, rebuilt only when the set really changes. */
 export interface AbilityIndex {
   readonly known: readonly AbilityInfo[];
   byId: (id: string) => AbilityInfo | null;
   byName: (name: string) => AbilityInfo | null;
+  describe: (id: string) => AbilityDescription;
 }
 
 /**

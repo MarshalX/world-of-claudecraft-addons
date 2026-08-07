@@ -2,72 +2,26 @@
 
 // Longwatch: the rare spawns, where they live, and when they are due back.
 //
-// The roster is carried by the addon because nothing on the wire says a mob is rare: an
-// entity record holds a kind, a template id, a name and a level, while the elite, rare
-// and boss flags live in the client's own bundled content. So matching is on
-// `templateId` against a table the addon brought with it.
-//
-// The respawn length is in that table for the same reason. `src/sim/respawn_policy.ts`
-// gives a self-scheduled mob a base of 25 seconds times its own multiplier, and
-// `rare: true` with no multiplier defaults to 4, so the shipped range is 100 seconds to
-// six hours. That is why the countdown has to survive a logout.
-//
-// The roster is a generated file: `rares.json`, declared as `data` in the manifest,
-// fetched by the loader at install, read back through `woc.data` and rebuilt by
-// `generate.mjs` beside it from a game checkout. Never hand-edit it. What each field
-// means and where the generator read it from is on `readRare`, beside the code that
-// checks it, since `woc.data` hands back `unknown`.
-//
-// Five of the game's 24 rare templates are absent, for two reasons. Four have no camp
-// and so nowhere to be waited for: `fallen_captain_aldren`, `corrupted_priest_malric`
-// and `deathstalker_voss` are summoned by the Nythraxis crypt encounter, and
-// `wildheart_beastmaster` is a miniboss inside a dungeon instance, so a countdown for
-// any of them would be a number with nothing behind it. The fifth, `drakemaw_broodlord`,
-// stands outside the four zones below: it holds four separate camps in The Drakelands,
-// which is one rare with four points and an x-bounded zone, and neither is a shape this
-// addon has. A player standing there resolves to no zone at all.
-//
-// Nothing names the five anywhere: `CAMPS` says which rares have a home and `ZONES` says
-// which of those this addon can place, so the roster follows a content change with no
-// edit here, and `generate.mjs` prints what it left out and why on every run.
+// Nothing on the wire says a mob is rare, so matching is on `templateId` against
+// `rares.json`, which `generate.mjs` writes from a game checkout. Never hand-edit it.
 //
 // The zone match is done from position, never from `world.zone`, which is localized
-// display text rather than an id: comparing it against a string in this file would work
-// on an English client and match nothing on any other. `zoneAt` resolves a point against
-// rectangles the way the game does.
+// display text: a string compare here would work on an English client and nowhere else.
 //
-// Four things report the set changing: `world.on('entities')` for a rare walking into
-// interest scope, `net.onEvent('death')` for one being killed, `world.on('characterKey')`
-// for the player becoming somebody else, and a settings change for the filter moving.
-// The countdowns move on a once-a-second timer that stands down while the panel is
-// hidden.
-//
-// Every stamp is `woc.wallClock()` rather than `woc.now()`. The monotonic clock is right
-// for measuring an interval inside one session and wrong for a stamp that has to mean
-// the same thing after a reload: it restarts from near zero on every page load, so a
-// kill stamped with it reads as having happened in the future on the next session.
+// Every stamp is `woc.wallClock()` rather than `woc.now()`. The monotonic clock restarts
+// on every page load, so a kill stamped with it reads as being in the future next
+// session.
 
-/**
- * The panel's opening box, and how far the player may take it in. Wide enough for two
- * columns and short enough that nineteen rows do not reach the bottom of the screen: the
- * roster is a reference list read a line at a time. The minimums are well under both,
- * because the opening size is otherwise the floor as well.
- */
+/** The opening box. The minimums are well under it, since the opening size is the floor. */
 const FRAME_WIDTH = 460;
 const FRAME_HEIGHT = 300;
 const MIN_WIDTH = 210;
 const MIN_HEIGHT = 110;
 
-/**
- * The narrowest a column may get before there is one fewer of them. `auto-fill` rather
- * than a fixed two, because a fixed count answers a drag by squeezing: at the minimum
- * width two columns would be 100px each, which is a name and no room for the countdown.
- */
+/** The narrowest a column may get. `auto-fill` rather than a fixed count, which squeezes. */
 const COLUMN_MIN = 205;
 
 const MS_PER_SECOND = 1000;
-const SECONDS_PER_MINUTE = 60;
-const SECONDS_PER_HOUR = 3600;
 /** Under this much left, a row goes warm: the rare is about to be back. */
 const NEARLY_BACK = 60;
 /** How far a world pin floats above its point, in screen pixels. */
@@ -92,25 +46,14 @@ const RANK_DUE = 0;
 const EVERY_ZONE = 'Every zone';
 const CURRENT_ZONE = 'The zone I am in';
 
-/** The `sort` setting's answers. */
-const SOONEST = 'Soonest back';
+/** The `sort` setting's answers that are tested by name. Soonest back is the fall-through. */
 const BY_NAME = 'Name';
 const BY_DISTANCE = 'Distance';
 
 /**
- * The four zone rectangles that hold a rare, from `ZONES` in `src/sim/data.ts`.
- *
- * Half-open on both axes, which is the game's own test: `zMin <= z < zMax` and
- * `xMin <= x < xMax`. None of these four declares an x range, so all four take the world
- * strip's default of -180 to 180. That default is load-bearing: Farshore Isle shares
- * Eastbrook's z band and sits at x 180 to 540, so a test on z alone would report a player
- * standing on Farshore as standing in Eastbrook Vale.
- *
- * Only four of the game's fourteen zones are here. A position in any of the other ten
- * resolves to null, which is the true answer to the question this table is asked.
- *
- * `name` is this addon's own label for its own table, and is never compared against
- * `world.zone`.
+ * The four zone rectangles that hold a rare, from `ZONES` in `src/sim/data.ts`. Half-open
+ * on both axes, and the x bounds are load-bearing: Farshore shares Eastbrook's z band, so
+ * a test on z alone puts a player standing there in Eastbrook Vale.
  */
 const ZONES = [
   { id: 'eastbrook_vale', name: 'Eastbrook Vale', zMin: -180, zMax: 180 },
@@ -125,23 +68,13 @@ const STRIP_MAX_X = 180;
 /** The zone ids a roster row is allowed to name, which is these four and no others. */
 const ZONE_IDS = new Set(ZONES.map((zone) => zone.id));
 
-/**
- * The roster, empty until the data file lands. An addon's first line runs at
- * document-start and `woc.data` is a promise, so every session begins without one.
- * Nothing is special-cased for it: no template id matches an empty map, so the world and
- * death handlers are no-ops and a draw with no rows draws nothing.
- */
+/** Empty until the data file lands, which no handler special-cases: nothing matches. */
 let rares = [];
 
 /** The roster by template id, which is the shape every lookup here wants. */
 let byTemplate = new Map();
 
-/**
- * What this character knows about each rare, filled in as the roster lands. `entityId` is
- * in-session only, since an entity id is reissued between sessions. `seenAt` and
- * `killedAt` are wall-clock stamps and are persisted, because they are the two things a
- * countdown cannot be rebuilt without.
- */
+/** `entityId` is in-session only: an entity id is reissued. The two stamps persist. */
 const watch = new Map();
 
 /**
@@ -194,11 +127,7 @@ function readRoster(file) {
   return listed;
 }
 
-/**
- * Take the roster on, dropping any row that did not check out. A bad row is skipped with
- * a warning naming its position rather than treated as a reason to throw the rest of the
- * file away: eighteen rares and one named gap beats a blank panel.
- */
+/** A bad row is skipped with a warning: one named gap beats a blank panel. */
 function adopt(listed) {
   const kept = [];
   for (const [at, row] of listed.entries()) {
@@ -216,27 +145,15 @@ function adopt(listed) {
   }
 }
 
-/** Template id to the kit row drawing it, for the rows currently in the list. */
-const rows = new Map();
-/** Template id to its world pin, for the rares in the zone the player is standing in. */
-const pins = new Map();
-
 /**
  * Whether the roster has been walked once with anything in it.
  *
- * The first walk that finds a populated roster is world entry, or the moment the player
- * enabled this addon, and every rare already in range arrives in that one walk. Keyed on
- * there being something to walk and something to match against rather than on the first
- * call, since an addon's first line runs at document-start with no world and the roster
- * arrives later still.
+ * Keyed on there being something to walk rather than on the first call, since the first
+ * line runs at document-start with no world and the roster lands later still.
  */
 let firstRoster = true;
 
-/**
- * The grid. Built once, because nothing here can change its shape. Rows go across and
- * then down, which is what a grid does with DOM order and is the order `place` writes:
- * the sort is a ranking, and column-major would put second place under first.
- */
+/** Rows go across and then down: the sort is a ranking, so column-major would misread. */
 const list = document.createElement('div');
 list.className = 'woc-lw-list';
 list.style.display = 'grid';
@@ -244,17 +161,8 @@ list.style.gridTemplateColumns = `repeat(auto-fill, minmax(${String(COLUMN_MIN)}
 list.style.gap = '3px 6px';
 
 /**
- * The panel.
- *
- * Compact rather than comfortable: this is a readout glanced at between pulls, where the
- * tap-target floor would make the title bar the loudest thing on it. Not bare, because a
- * roster of nineteen rows is a panel, and a player has to be able to find it while every
- * row says "Unseen".
- *
- * Resizable with a height, which is the pair that makes it scroll. A frame with no height
- * is sized by its content, and nineteen rows is a column down the whole screen with no
- * way to shorten it; an explicit height leaves the loader's own body element to shrink,
- * and that element already carries `overflow: auto`.
+ * The panel. Resizable WITH a height, which is the pair that makes it scroll: a frame with
+ * no height is sized by its content, and nineteen rows reach down the whole screen.
  */
 const frame = woc.ui.frame({
   id: 'rares',
@@ -270,25 +178,9 @@ const frame = woc.ui.frame({
 });
 frame.body.appendChild(list);
 
-function settingText(id, fallback) {
-  const value = woc.settings[id];
-  if (typeof value === 'string' && value.length > 0) {
-    return value;
-  }
-  return fallback;
-}
-
-function settingFlag(id, fallback) {
-  const value = woc.settings[id];
-  if (typeof value === 'boolean') {
-    return value;
-  }
-  return fallback;
-}
-
 /** Whether the countdowns are worth writing down. */
 function keepsTimers() {
-  return settingFlag('keep-timers', true);
+  return woc.settings['keep-timers'];
 }
 
 /**
@@ -317,20 +209,7 @@ function zoneName(zoneId) {
   return ZONES.find((zone) => zone.id === zoneId)?.name ?? zoneId;
 }
 
-/** Yards from the player to a rare's camp, or null before world entry. */
-function distanceTo(rare) {
-  const { player } = woc.world;
-  if (player === null || player === undefined) {
-    return null;
-  }
-  return Math.hypot(player.pos.x - rare.x, player.pos.z - rare.z);
-}
-
-/**
- * Seconds until a rare is due back, or null when nothing this character saw says. It goes
- * negative once the respawn window has passed, and the display names that rather than
- * clamping it: "due back now" and "still counting" are different answers.
- */
+/** Goes NEGATIVE past the respawn window rather than clamping: the display names that. */
 function remainingFor(rare) {
   const row = watch.get(rare.id);
   if (row.killedAt === null) {
@@ -354,22 +233,12 @@ function stateOf(rare) {
   return 'due';
 }
 
-/** `6h 0m`, `4m 30s`, `45s`. Rounded up, so nothing reads 0 while it is still counting. */
-function countdown(seconds) {
-  const whole = Math.ceil(seconds);
-  if (whole >= SECONDS_PER_HOUR) {
-    const hours = Math.floor(whole / SECONDS_PER_HOUR);
-    const minutes = Math.floor((whole % SECONDS_PER_HOUR) / SECONDS_PER_MINUTE);
-    return `${String(hours)}h ${String(minutes)}m`;
-  }
-  if (whole >= SECONDS_PER_MINUTE) {
-    const minutes = Math.floor(whole / SECONDS_PER_MINUTE);
-    return `${String(minutes)}m ${String(whole % SECONDS_PER_MINUTE)}s`;
-  }
-  return `${String(whole)}s`;
-}
-
-/** The right-hand figure: a countdown, or the word for a state that has no clock. */
+/**
+ * The right-hand figure: a countdown, or the word for a state that has no clock.
+ *
+ * Bounded by one respawn, 21,600 seconds at the longest in `rares.json`, so this stops a
+ * tier under the days `sightingLine` reaches.
+ */
 function figure(rare) {
   const state = stateOf(rare);
   if (state === 'up') {
@@ -381,14 +250,10 @@ function figure(rare) {
   if (state === 'unseen') {
     return 'Unseen';
   }
-  return countdown(remainingFor(rare));
+  return woc.fmt.duration(remainingFor(rare), 'coarse');
 }
 
-/**
- * How full the row is. A rare standing there is drawn full, which is the opposite sense
- * to a timer and is deliberate: a loud full bar means "go now", and the only other row
- * that reaches full is one whose respawn has just started.
- */
+/** A rare that is up draws FULL, the opposite sense to a timer: a full bar means go now. */
 function fillOf(rare) {
   const state = stateOf(rare);
   if (state === 'up') {
@@ -417,7 +282,7 @@ function toneFor(rare) {
 
 /** The quieter second line: where it lives, and how far off it is. */
 function detailOf(rare) {
-  const away = distanceTo(rare);
+  const away = woc.world.distanceTo(rare);
   if (away === null) {
     return zoneName(rare.zone);
   }
@@ -432,33 +297,31 @@ function since(stampMs) {
   return (woc.wallClock() - stampMs) / MS_PER_SECOND;
 }
 
-/** The tooltip's last line: when this character last laid eyes on it. */
+/**
+ * The tooltip's last line: when this character last laid eyes on it.
+ *
+ * UNBOUNDED: `seenAt` is a persisted stamp, so this is the one figure here that reaches
+ * `fmt.duration`'s day tier.
+ */
 function sightingLine(rare) {
   const elapsed = since(watch.get(rare.id).seenAt);
   if (elapsed === null) {
     return { text: 'You have never seen this one', tone: 'muted' };
   }
-  return { text: `Last seen ${countdown(elapsed)} ago`, tone: 'muted' };
+  return { text: `Last seen ${woc.fmt.duration(elapsed, 'coarse')} ago`, tone: 'muted' };
 }
 
-/**
- * What a row says under the pointer. A function rather than a string, since the distance
- * changes as the player rides and the sighting line changes every second.
- */
+/** A function rather than a string: the distance and the sighting line both move. */
 function rowTooltip(rare) {
   const lines = [
     `${zoneName(rare.zone)}, camp at ${String(rare.x)}, ${String(rare.z)}`,
-    { text: `Back ${countdown(rare.respawn)} after it dies`, tone: 'muted' },
+    { text: `Back ${woc.fmt.duration(rare.respawn, 'coarse')} after it dies`, tone: 'muted' },
     sightingLine(rare),
   ];
   return { title: rare.name, icon: woc.ui.icon.mob(rare.id), lines };
 }
 
-/**
- * One row. `ui.icon.mob` rather than `ui.icon.ability`: this is a mob template id and the
- * portrait directory is keyed by exactly that, while skill art is filed under a class. A
- * rare with no painted portrait leaves the slot hidden, which the kit does on its own.
- */
+/** `ui.icon.mob` rather than `ability`: the portrait directory is keyed by template id. */
 function createRow(rare) {
   const bar = woc.ui.bar({
     label: rare.name,
@@ -513,20 +376,39 @@ function createPin(rare) {
     offset: { y: -PIN_LIFT },
   });
   anchor.el.appendChild(tile.el);
-  return { tile, anchor };
+  return {
+    tile,
+    anchor,
+    destroy: () => {
+      tile.destroy();
+      anchor.destroy();
+    },
+  };
 }
 
-function dropPin(id, pin) {
-  pin.tile.destroy();
-  pin.anchor.destroy();
-  pins.delete(id);
-}
+/** Keyed on the rare rather than its position, so a row holds still through a re-sort. */
+const rows = woc.ui.list({
+  parent: list,
+  key: (rare) => rare.id,
+  create: createRow,
+  update: (bar, rare) => {
+    bar.update({
+      fraction: fillOf(rare),
+      value: figure(rare),
+      detail: detailOf(rare),
+      tone: toneFor(rare),
+    });
+  },
+});
 
-function clearPins() {
-  for (const [id, pin] of pins) {
-    dropPin(id, pin);
-  }
-}
+/** No `parent`: each pin carries its own `ui.anchor3d`, which already places it. */
+const pins = woc.ui.list({
+  key: (rare) => rare.id,
+  create: createPin,
+  update: (pin, rare) => {
+    pin.tile.update({ fraction: fillOf(rare), value: figure(rare), tone: toneFor(rare) });
+  },
+});
 
 /** Whether a rare passes the zone filter. `here` is resolved once by the caller. */
 function passes(rare, choice, here) {
@@ -560,29 +442,21 @@ function order(entries, choice) {
     return [...entries].sort((a, b) => a.name.localeCompare(b.name));
   }
   if (choice === BY_DISTANCE) {
-    return [...entries].sort((a, b) => (distanceTo(a) ?? 0) - (distanceTo(b) ?? 0));
+    return [...entries].sort(
+      (a, b) => (woc.world.distanceTo(a) ?? 0) - (woc.world.distanceTo(b) ?? 0),
+    );
   }
   return [...entries].sort((a, b) => dueRank(a) - dueRank(b));
 }
 
-/**
- * Every rare worth a row right now, in the order the player asked for. Recomputed on
- * every frame the panel is up, which is affordable because this roster is a fixed
- * nineteen and cannot grow. What it buys is the zone filter following the player across a
- * border with nothing having to watch the border.
+/** Recomputed per draw, which is what makes the zone filter follow the player over a
+ * border with nothing watching the border. Affordable: the roster is fixed at nineteen.
  */
 function wanted() {
-  const choice = settingText('zones', EVERY_ZONE);
+  const choice = woc.settings.zones;
   const here = currentZone();
   const shown = rares.filter((rare) => passes(rare, choice, here));
-  return order(shown, settingText('sort', SOONEST));
-}
-
-/** Put a row at its position, and only when it is not already there. */
-function place(el, at) {
-  if (list.children[at] !== el) {
-    list.insertBefore(el, list.children[at] ?? null);
-  }
+  return order(shown, woc.settings.sort);
 }
 
 /** The rares to pin into the world: the ones in the zone the player is standing in. */
@@ -597,77 +471,27 @@ function pinnable(entries) {
   return entries.filter((rare) => rare.zone === here);
 }
 
-function syncPins(entries) {
-  const shown = new Set(pinnable(entries).map((rare) => rare.id));
-  for (const [id, pin] of pins) {
-    if (!shown.has(id)) {
-      dropPin(id, pin);
-    }
-  }
-  for (const id of shown) {
-    if (!pins.has(id)) {
-      pins.set(id, createPin(byTemplate.get(id)));
-    }
-  }
-}
-
-function paint(entries) {
-  for (const [at, rare] of entries.entries()) {
-    const bar = rows.get(rare.id);
-    bar.update({
-      fraction: fillOf(rare),
-      value: figure(rare),
-      detail: detailOf(rare),
-      tone: toneFor(rare),
-    });
-    place(bar.el, at);
-  }
-  for (const [id, pin] of pins) {
-    const rare = byTemplate.get(id);
-    pin.tile.update({ fraction: fillOf(rare), value: figure(rare), tone: toneFor(rare) });
-  }
-}
-
-/** Bring the rows and the pins in line with what should be shown, and draw them. */
 function sync(entries) {
-  const shown = new Set(entries.map((rare) => rare.id));
-  for (const [id, bar] of rows) {
-    if (!shown.has(id)) {
-      bar.destroy();
-      rows.delete(id);
-    }
-  }
-  for (const rare of entries) {
-    if (!rows.has(rare.id)) {
-      rows.set(rare.id, createRow(rare));
-    }
-  }
-  syncPins(entries);
-  paint(entries);
+  rows.sync(entries);
+  pins.sync(pinnable(entries));
 }
 
-/**
- * Draw the panel, or take the pins out of the world when it is not up. The pins are
- * anchors the loader holds over the world rather than children of the frame, so hiding
- * the frame does not hide them and nothing else would.
+/** The pins are anchors over the world rather than children of the frame, so hiding the
+ * frame does not take them down and nothing else would.
  */
 function redraw() {
   if (frame.visible) {
     sync(wanted());
   } else if (pins.size > 0) {
-    clearPins();
+    pins.clear();
   }
 }
 
 /**
  * Write the stamps down, once the character they belong to is known.
  *
- * A per-character write rejects before world entry, because its value was decided when it
- * was called: held instead, it would store something computed before anyone knew whose it
- * was against whichever character the player then picked. Nothing here can produce a
- * stamp before world entry anyway, so the await is a guard rather than a delay.
- *
- * The entity id is left out: it is this session's id for the thing standing there.
+ * A per-character write REJECTS before world entry, so the await is a guard rather than a
+ * delay. The entity id is left out: it is this session's id for the thing standing there.
  */
 async function save() {
   if (!keepsTimers()) {
@@ -698,11 +522,8 @@ function stampOf(value) {
   return null;
 }
 
-/**
- * Take one stored record back, and only over a rare nothing has been learned about. A
- * per-character read waits for the character, so it settles at world entry, which is when
- * a death event could already have landed. What this session observed is newer than
- * anything on disk, so the restore fills gaps and never overwrites one.
+/** Fills gaps and never overwrites: a death can land before the read settles, and what
+ * this session observed is newer than anything on disk.
  */
 function reclaim(id, record) {
   const row = watch.get(id);
@@ -738,17 +559,14 @@ function load() {
 
 /** A rare has come into range. Loud, because that is the whole point of the addon. */
 function announce(rare) {
-  if (firstRoster || !settingFlag('alert', true)) {
+  if (firstRoster || !woc.settings.alert) {
     return;
   }
   woc.ui.banner(`${rare.name} is up`, { kind: 'info', detail: zoneName(rare.zone) });
   woc.sound.play(SIGHTING_CUE);
 }
 
-/**
- * A rare is standing in interest scope. The kill stamp is cleared, because whatever the
- * arithmetic said, the rare is demonstrably there.
- */
+/** The kill stamp is cleared: whatever the arithmetic said, the rare is demonstrably there. */
 function arrived(entity, rare) {
   const row = watch.get(rare.id);
   row.seenAt = woc.wallClock();
@@ -761,11 +579,7 @@ function arrived(entity, rare) {
   persist();
 }
 
-/**
- * Walk interest scope for anything on the roster. A corpse is skipped: an entity that has
- * died stays in the roster for a while and is not a rare that is up. The kill itself is
- * heard on the death event, which is what stamps the moment.
- */
+/** A corpse is skipped: a dead entity lingers in scope and is not a rare that is up. */
 function scan() {
   const present = new Set();
   const { entities } = woc.world;
@@ -789,13 +603,11 @@ function scan() {
   redraw();
 }
 
-// The set of things in interest scope changes here, which is the only signal a rare
-// walking into range produces. The countdowns move on the timer below.
+// The only signal a rare walking into range produces.
 woc.world.on('entities', scan);
 
-// The one event that starts a countdown. The record carries an entity id and nothing
-// else identifying, so the template is read off the entity while the corpse is still in
-// the roster, which it is at the moment the event lands.
+// The record identifies nothing but an entity id, so the template is read off the corpse,
+// which is still in scope at the moment the event lands.
 woc.net.onEvent('death', (event) => {
   const entity = woc.world.entities.get(event.entityId);
   if (entity === undefined) {
@@ -815,20 +627,14 @@ woc.net.onEvent('death', (event) => {
 /**
  * The player has become somebody else without the page reloading.
  *
- * The game clones and removes its HUD on a character switch rather than reloading, so
- * nothing an addon can see forces it to start again. Everything in `watch` belongs to
- * whoever was playing a moment ago: left in place it would draw the previous character's
- * countdowns, and the next kill would write that character's stamps back out under this
- * one's key, which is the only failure here that outlives the session.
+ * The game clones and removes its HUD on a switch rather than reloading, so nothing forces
+ * an addon to start again. Left in place, the next kill would write the previous
+ * character's stamps out under this one's key, which outlives the session.
  *
- * `firstRoster` goes back up with it, since everything already in the new character's
- * interest scope arrives in one walk they did not ride up to.
- *
- * Not yet verified against a real switch. No suite reproduces the game cloning and
- * removing its HUD, so the tests behind this drive `world.characterKey` by renaming the
- * player and prove only that a change of key clears what memory held. A live session
- * still has to confirm that a switch moves that key once rather than through an
- * intermediate reading with no character in it.
+ * NOT YET VERIFIED against a real switch: no suite reproduces the HUD clone, so the tests
+ * only prove that a change of key clears what memory held. A live session still has to
+ * confirm the key moves once rather than through an intermediate reading with no
+ * character in it.
  */
 woc.world.on('characterKey', () => {
   for (const row of watch.values()) {
@@ -841,14 +647,14 @@ woc.world.on('characterKey', () => {
   redraw();
 });
 
-// Once a second. Every figure on this panel moves at most once a second: a countdown is
-// written in whole seconds, a fill over a six hour respawn moves a pixel a minute, and
-// the pins position themselves, since `ui.anchor3d` rides the loader's own frame loop.
-// What it costs is up to a second of lag on the zone filter following the player over a
-// border, and on the pins leaving the world when the panel does; the keybind below
-// answers the second one on the path a player takes most.
+// Once a second, which is as often as any figure here moves. The cost is up to a second
+// of lag on the zone filter and on the pins leaving the world; the keybind answers the
+// second on the path a player takes most.
 woc.setInterval(redraw, MS_PER_SECOND);
 
+// Bound by hand rather than with the frame's own `toggleKey`, DECLINED because this key
+// does two things: `toggleKey` only toggles, and the pins are anchors over the world that
+// nothing else takes down. No visibility callback on `FrameOpts` to hang the redraw on.
 woc.keys.bind('toggle', () => {
   frame.toggle();
   // Now, rather than up to a second from now: somebody who just hid the panel should not
@@ -857,22 +663,16 @@ woc.keys.bind('toggle', () => {
 });
 
 woc.onSettingsChange(() => {
-  // A filter or a sort change is answered by the next draw. Turning the countdowns back
-  // on part-way through a session is not, so the read is offered again: it fills only
-  // what is still blank, so it cannot undo anything this session has learned.
+  // Turning the countdowns back on mid-session needs the read offered again. It fills
+  // only what is blank, so it cannot undo what this session learned.
   load();
   redraw();
 });
 
 /**
- * Read the roster in, then do the two things that needed one: the stored stamps are
- * reclaimed onto rows that exist, and the first walk of interest scope happens with
- * something to match against. Both are no-ops before the roster lands, which is what makes
- * it safe for every handler above to be wired first, and that order matters: subscribing
- * after an await would miss whatever arrived during it.
- *
- * `load()` rather than `await restore()`, since a per-character read waits for the
- * character and would hold the first draw on the landing page until somebody logged in.
+ * Every handler above is wired BEFORE this await: subscribing after one would miss
+ * whatever landed during it. `load()` rather than `await restore()`, since a per-character
+ * read waits for the character and would hold the first draw on the landing page.
  */
 async function boot() {
   const listed = readRoster(await woc.data(ROSTER_FILE));

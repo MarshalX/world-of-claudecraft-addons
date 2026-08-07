@@ -19,6 +19,7 @@ import {
 } from '../frame/interactive.ts';
 import { buildChrome, type Chrome, type FrameChrome, type FrameOpts } from './frame-chrome.ts';
 import type { FrameState, FrameStateStore } from './frame-state.ts';
+import type { FrameToggles } from './frame-toggle.ts';
 import { createVisibility } from './frame-visibility.ts';
 
 /** What a frame with no width of its own opens at. */
@@ -58,6 +59,8 @@ interface FrameDeps {
   opts: FrameOpts;
   /** Null when the addon did not ask to save, or storage is unavailable. */
   store: FrameStateStore | null;
+  /** The addon's toggle keybinds. Absent where it has no keybind surface at all. */
+  toggles?: FrameToggles;
   viewport: () => Viewport;
   /** For the window resize listener, so a Node test can drive it. */
   window: Pick<EventTarget, 'addEventListener' | 'removeEventListener'>;
@@ -154,27 +157,17 @@ interface FrameMechanics {
 }
 
 /**
- * Give a non-resizable frame the width the addon declared, if it declared one.
+ * Write a non-resizable frame its declared WIDTH. A resizable one is given its box by
+ * `frame/interactive.ts` and never arrives here.
  *
- * A resizable frame is given its box outright by `frame/interactive.ts` and does not come
- * through here. A non-resizable one is shrink-to-fit by default, and a shrink-to-fit element
- * is sized by its content in BOTH directions, which is wrong in both. Too wide: it has no
- * ceiling, so the panel is as wide as the longest line its content will not break, and wayfarer
- * declared 300 and drew at 693 the first time one of its own lines was a sentence, with the
- * world pins it sits beside hidden underneath it. Too narrow, which a ceiling alone does not
- * fix: the width follows the content, so it MOVES. Veinsight's header gains a clause while the
- * player is harvesting and the whole panel steps out and back with it, rows reflowing, under
- * the eye of someone doing the thing that caused it. Reported from a live session.
+ * Shrink-to-fit sizes an element by its content in both directions, and both are wrong: with
+ * no ceiling the panel is as wide as its longest unbreakable line, and without a floor the
+ * width MOVES as the content changes, stepping the panel in and out while it is being read.
+ * Written whether or not the addon named a width, since an addon that never considered its
+ * width is exactly the one whose panel would otherwise move.
  *
- * So `width` is a width, and it is written whether the addon named one or took the default:
- * an addon that never thought about its width is exactly the one whose panel would otherwise
- * move, so making the answer depend on whether the field was present would leave the failure
- * with the authors least likely to have anticipated it.
- *
- * There is deliberately no equivalent for the HEIGHT. A readout's line count changes with what
- * it is reporting, and a bounded frame would clip itself rather than grow, which is a worse
- * failure than a box that gets taller: nothing on screen says the row you wanted is below the
- * fold. A frame that needs a fixed height asks to be resizable and states its bounds.
+ * No equivalent for the HEIGHT, deliberately: a bounded frame clips rather than grows, and
+ * nothing on screen says a row is below the fold. Ask to be resizable and state bounds instead.
  */
 function applyWidth(el: HTMLElement, size: Viewport, resizable: boolean): void {
   if (!resizable) {
@@ -277,22 +270,33 @@ function restoreSaved(deps: FrameDeps, size: Viewport, frame: FrameMechanics): v
 }
 
 /**
- * Build a frame and put it on screen.
- *
- * A saved position arrives asynchronously, so the frame opens at its default
- * placement and moves once storage answers. Waiting for storage first would mean
- * an addon's frame does not exist for the first few hundred milliseconds, and
- * `woc.ui.frame()` is expected to return something an addon can write into on
- * the next line.
+ * Released from the frame's OWN destroy, not only from the addon's disposal bag:
+ * the bag drains on disable, and an addon may destroy a frame by hand mid-session.
+ */
+function claimToggle(deps: FrameDeps, toggle: () => void): Teardown {
+  const { toggleKey } = deps.opts;
+  if (toggleKey === undefined || deps.toggles === undefined) {
+    return () => undefined;
+  }
+  return deps.toggles.claim(toggleKey, deps.opts.id, toggle);
+}
+
+/**
+ * A saved position arrives asynchronously, so the frame opens at its default placement
+ * and moves once storage answers: `ui.frame()` has to return something writable at once.
  */
 function createAddonFrame(deps: FrameDeps): AddonFrame {
   const chrome = buildChrome(deps);
   const size = defaultSize(deps.chrome, deps.opts);
   const frame = mountFrame(deps, chrome, size);
   restoreSaved(deps, size, frame);
-  // A z-index from the moment it exists, so the newest window is in front rather
-  // than under everything that has been clicked so far this session.
+  // A z-index from the moment it exists, or a new window opens under every clicked one.
   deps.raise?.(chrome.el);
+
+  const toggle = (): void => {
+    frame.setVisible(!frame.isVisible());
+  };
+  const releaseToggle = claimToggle(deps, toggle);
 
   return {
     el: chrome.el,
@@ -308,16 +312,17 @@ function createAddonFrame(deps: FrameDeps): AddonFrame {
     hide: () => {
       frame.setVisible(false);
     },
-    toggle: () => {
-      frame.setVisible(!frame.isVisible());
-    },
+    toggle,
 
     setTitle: (title) => {
       chrome.title.textContent = title;
       chrome.el.setAttribute('aria-label', title);
     },
 
-    destroy: frame.destroy,
+    destroy: () => {
+      releaseToggle();
+      frame.destroy();
+    },
   };
 }
 

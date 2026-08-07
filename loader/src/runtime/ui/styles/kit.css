@@ -32,8 +32,31 @@
   flex: 1;
 }
 
+/* The one way anything the loader draws goes off screen: `ui.show`, and the frame
+ * visibility state machine in kit/frame-visibility.ts.
+ *
+ * !important, and this is the third rule in the loader that carries it for the
+ * SAME reason the reduced-motion floor below and the freeze in chrome.css do.
+ * Addon code sets inline styles as a matter of course, and an inline style
+ * outranks every selector a stylesheet can spell, so without this a hide utility
+ * loses to the element it is pointed at: `lorebind` gives its item grid an inline
+ * `display: grid`, and its empty band stayed on screen through both `hidden` and
+ * this class. A hide a stylesheet can step over is a bug; one that ADDON CODE
+ * steps over is a promise the loader cannot keep, and `ui.show` is nothing but
+ * that promise.
+ *
+ * The alternative was to have `ui.show` clear the inline display instead, and it
+ * is worse: the display an element was built with is the addon's own (grid here,
+ * flex elsewhere, unset often), so clearing it means remembering it to put it
+ * back, which is the WeakMap `ui.show` exists to delete. A class that only ever
+ * adds `display: none` needs no memory of anything.
+ *
+ * What this does NOT beat is an inline `!important`, which nothing can. That is
+ * an addon deliberately overriding the loader on its own element, and it is not
+ * a case worth defending against. */
 #woc-addons .woc-hidden {
-  display: none;
+  /* biome-ignore lint/complexity/noImportantStyles: a hide utility's whole job is to win, and the thing it has to beat is the inline display addon code writes, which is the case !important exists for. See the note above. */
+  display: none !important;
 }
 
 #woc-toasts {

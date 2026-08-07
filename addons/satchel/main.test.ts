@@ -32,11 +32,6 @@
 // it draws with nobody publishing, it takes an answer from a fork's fqid rather than only from
 // the official one, and its ask goes out after its subscriptions. They also pin the order: a
 // publisher outranks the art name, because the art name is provenance for a picture.
-//
-// The accessible name of an empty square is asserted on the attribute, never on its value. A
-// tile put back to unnamed has no `aria-label` at all, and one named the empty string has an
-// empty one; both read as `''` through a `?? ''`, so a helper written that way passes whichever
-// the addon does.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ANY_SENDER } from '../../loader/src/runtime/bus/hub.ts';
@@ -670,6 +665,11 @@ async function start(options: StartOptions = {}): Promise<SatchelHarness> {
     harness.shared.world.watcher.poll();
     await flush(MICROTASKS);
     vi.advanceTimersToNextFrame();
+    // The repaint is `woc.paint`, which runs on the LOADER'S one frame loop rather than on an
+    // animation frame of the addon's own, so a settle has to step that loop as well as the
+    // clock. The fake runs the real loop over a clock a suite drives, so the coalescing under
+    // test is the loader's own: one tick is one frame, however many repaints were asked for.
+    harness.frames.tick();
     await flush(MICROTASKS);
   };
   await settle();
@@ -1567,12 +1567,9 @@ describe('the bag grid', () => {
   });
 
   // A tile's accessible name is otherwise only ever written, so a square reused from an occupied
-  // one would go on announcing what used to be in it.
-  //
-  // Asserted on the attribute and not on its value. `label: null` puts the tile back to unnamed:
-  // no `aria-label` at all, and `aria-hidden` back on. `label: ''` reaches the same place by a
-  // different road and says "this is called the empty string". Both read as `''` through
-  // `getAttribute(...) ?? ''`.
+  // one announces the item it last held. Asserted on the ATTRIBUTE rather than its value:
+  // `label: null` is unnamed, `label: ''` is a name that is blank, and both read as `''`
+  // through `getAttribute(...) ?? ''`.
   it('takes the name off a square a stack has left rather than blanking it', async () => {
     const h = await start({ carry: { inventory: cells('ore', 20, 2) } });
     await h.settle();
@@ -1625,12 +1622,16 @@ describe('its layout', () => {
     expect(gridEl('bank')?.style.display).toBe('grid');
   });
 
-  // A hidden grid is hidden BOTH ways: `hidden` is a UA rule at the lowest priority
-  // there is, so an inline display would beat it and the element would stay on screen.
+  // A hidden grid is hidden BOTH ways, and the two halves answer different readers: `hidden`
+  // is what takes it out of the accessibility tree, and the class is what takes it off the
+  // screen. `hidden` alone cannot do the second job, since it is a UA rule at the lowest
+  // priority there is and this grid carries an inline `display: grid` that beats it outright.
+  // The class is the loader's `woc-hidden`, which carries !important for that exact reason;
+  // a suite cannot read the rule, so what is checked here is that both marks are on.
   it('hides a grid there is nothing to draw in', async () => {
     await start({ world: false });
 
-    expect(gridEl('bags')?.style.display).toBe('none');
+    expect(gridEl('bags')?.classList.contains('woc-hidden')).toBe(true);
     expect(gridEl('bags')?.hidden).toBe(true);
   });
 
@@ -1654,10 +1655,8 @@ describe('its layout', () => {
   });
 
   // Comfortable is the game's own desktop scale, and this panel sits open beside the game's
-  // windows rather than being glanced at mid-fight, so it is not one of the surfaces compact
-  // is for. It was compact, on the reasoning compact used to carry, and the two size constants
-  // above were derived from that density's metrics: this is what stops a change of mind from
-  // going back without those being re-measured.
+  // windows rather than being glanced at mid-fight. The two size constants above are measured
+  // against this density, so moving to compact means re-measuring them.
   it('draws at the game’s own scale rather than tighter than it', async () => {
     await start();
 
@@ -2161,6 +2160,7 @@ describe('the name on a square', () => {
     shared.shared.world.watcher.poll();
     await flush(MICROTASKS);
     vi.advanceTimersToNextFrame();
+    shared.frames.tick();
     await flush(MICROTASKS);
 
     expect(preload).toHaveBeenCalledTimes(1);
@@ -2182,11 +2182,13 @@ describe('asking to be caught up', () => {
     const asks: string[] = [];
     const off = shared.shared.bus.subscribe({
       from: ANY_SENDER,
-      topic: 'item:ask',
+      // `items:ask`, which `woc.bus.follow` derives from the topic it follows, rather than the
+      // `item:ask` this protocol shipped with. The publisher answers both.
+      topic: 'items:ask',
       owner: PUBLISHER,
       handler: (message) => {
         asks.push(message.from);
-        shared.shared.bus.emit(PUBLISHER, 'item', { id: 'ore', name: 'Copper Ore' });
+        shared.shared.bus.emit(PUBLISHER, 'items', [{ id: 'ore', name: 'Copper Ore' }]);
       },
       onError: () => undefined,
     });
@@ -2200,6 +2202,7 @@ describe('asking to be caught up', () => {
     shared.shared.world.watcher.poll();
     await flush(MICROTASKS);
     vi.advanceTimersToNextFrame();
+    shared.frames.tick();
 
     expect(asks).toEqual([FQID]);
     expect(nameAt(0)).toBe('Copper Ore, 20');

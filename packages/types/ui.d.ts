@@ -11,6 +11,8 @@ import type {
 } from './ui-anchor.js';
 import type { FieldBuilders, MenuItem, Tabs, TabsOpts, TooltipInput } from './ui-controls.js';
 import type { Frame, FrameOpts } from './ui-frame.js';
+import type { LineOpts, RowOpts, StackOpts } from './ui-layout.js';
+import type { Destroyable, List, ListOpts } from './ui-list.js';
 import type { Bar, BarOpts, Tile, TileOpts } from './ui-timers.js';
 
 export interface ToastOpts {
@@ -224,6 +226,88 @@ export interface UiApi {
    * changing and move `fraction` from a frame loop.
    */
   tile: (opts?: TileOpts) => Tile;
+  /**
+   * A keyed list of rows: created, updated, ordered and destroyed as your data
+   * moves. Added in API minor 4.
+   *
+   * The other half of drawing a screenful of bars or tiles. Give it what makes two
+   * items the same item across two reads and how to build one, then hand it the set
+   * you want on screen: `sync([...])` destroys what left, builds what arrived,
+   * paints everything and puts the elements in that order, writing nothing to the
+   * document where nothing moved. So it is meant to be called from a frame loop.
+   *
+   * ```js
+   * const rows = woc.ui.list({
+   *   parent: panel,
+   *   key: (timer) => timer.abilityId,
+   *   create: () => woc.ui.bar(),
+   *   update: (bar, timer) => bar.update({ fraction: timer.left / timer.total }),
+   * });
+   * rows.sync(running);
+   * ```
+   *
+   * Without a `parent` nothing is inserted and nothing is ordered, and the list is
+   * the lifecycle alone. That is the form a set of world pins wants, since each pin
+   * is already placed by its own `ui.anchor3d`.
+   */
+  list: <T, H extends Destroyable>(opts: ListOpts<T, H>) => List<T, H>;
+  /**
+   * A flex column: a pane, and most of what goes inside one. Added in API minor 4.
+   *
+   * ```js
+   * const pane = woc.ui.column({ parent: frame.body, gap: 4 });
+   * ```
+   *
+   * These three write a CLASS rather than a style attribute, which is the whole
+   * reason they exist. An inline style outranks every selector a stylesheet can
+   * spell, so a panel laid out in style writes silently opts out of rules the
+   * loader holds for you, the tap-target floor on a touch screen among them. They
+   * also carry `flex-shrink: 0`, so a screenful of them in a scrolling frame is a
+   * list that scrolls rather than forty rows squeezed until each clips its own
+   * second line.
+   */
+  column: (opts?: StackOpts) => HTMLElement;
+  /**
+   * The same across: the strip of chips, figures or controls a panel puts under
+   * its title or over its list. Added in API minor 4.
+   *
+   * ```js
+   * const strip = woc.ui.row({ parent: pane, wrap: true, align: 'baseline' });
+   * ```
+   */
+  row: (opts?: RowOpts) => HTMLElement;
+  /**
+   * A sentence the panel says on its own line. Added in API minor 4.
+   *
+   * `tone: 'muted'` is the smaller, dimmer note that goes under a figure, drawn in
+   * the game's own secondary text colour at the size the game writes its own
+   * captions at.
+   */
+  line: (opts?: LineOpts) => HTMLElement;
+  /**
+   * On screen or not. Added in API minor 4.
+   *
+   * Both halves, and both are needed. `hidden` alone does NOT take a kit element off
+   * the screen: it is a user-agent rule at the lowest priority there is, and the
+   * loader's own sheet is unlayered and more specific, so it outranks it. The class
+   * alone would leave the element in the accessibility tree announcing figures
+   * nobody can see.
+   *
+   * A class rather than a `display` write, so nothing has to remember what the
+   * element was displayed as before it went: `display` is `flex` for some things
+   * and unset for others, and putting back a `flex` that was never there draws a
+   * kit bar's detail beside its figure instead of under it.
+   *
+   * It works on an element you gave an inline `display` of your own, which is the
+   * one case a class would normally lose: the rule behind it is `!important` so
+   * that you never have to know how hiding is implemented in order to hide
+   * something. The only thing it does not beat is an inline `!important`, which is
+   * you overriding the loader deliberately.
+   *
+   * Anything the loader drew: a column, a row, a line, `bar.el`, `tile.el`, or an
+   * element of your own.
+   */
+  show: (el: Element, shown: boolean) => void;
   /** Where the game's own art lives, so no addon writes a path. */
   icon: IconUrls;
   /**

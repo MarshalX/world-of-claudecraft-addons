@@ -2,27 +2,15 @@
 
 // Longwatch, run through the real loader.
 //
-// The claim the addon exists for is that the wire cannot say what is rare: an entity carries a
-// kind, a template id, a name and a level, and nothing else. So every case below drives the
-// world with ordinary mob entities that carry no flag of any kind, and the addon is only ever
-// allowed to recognise one by its `templateId`.
+// The wire cannot say what is rare, so every case drives the world with ordinary mob entities
+// carrying no flag of any kind and the addon may only recognise one by its `templateId`.
 //
-// The case that matters most is the last section. A rare killed, logged out on, and come back
-// to has to show what is actually left rather than starting again, and the only honest way to
-// test that is to run two addons over one storage with the clock moved between them.
-// Everything about the per-character write exists for that case: the stamps are wall clock
-// because `woc.now()` restarts on a reload, and they are written through `storage.character`
-// behind `world.ready` because a write made before world entry would land on whichever
-// character the player then picked.
+// THE TWO CLOCKS ARE DRIVEN SEPARATELY, which is what makes a four hour countdown cheap:
+// `setWallClock` moves what `woc.wallClock()` answers, advancing the fake timers runs the
+// once-a-second redraw, and neither moves the other.
 //
-// The two clocks are driven separately, which is what makes a four hour countdown cheap to
-// test. `setWallClock` moves what `woc.wallClock()` answers; advancing the fake timers by one
-// second runs the once-a-second redraw. Neither moves the other, so a case jumps four hours and
-// then redraws exactly once.
-//
-// The roster is a file. `rares.json` is seeded into the harness the way the host's install-time
-// cache holds it, raw text keyed by the declared path, because the addon reads it with
-// `woc.data` on its first line.
+// `rares.json` is seeded as raw text keyed by the declared path, the way the host's
+// install-time cache holds it, because the addon reads it with `woc.data` on its first line.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { validateManifest } from '../../loader/src/shared/schema.ts';
@@ -43,10 +31,16 @@ const FQID = 'official/longwatch';
 const CHARACTER = 'Claudemoon/Marshal';
 const CHANNEL = 'pbe';
 const STORE_KEY = 'sightings';
-/** The data file the roster lives in, which the manifest has to declare. */
 const ROSTER_FILE = 'rares.json';
-/** The minor `woc.data` needs. An older loader strips the field and starves the addon. */
-const NEEDS_MINOR = 2;
+/**
+ * The highest minor anything this addon calls arrived in. `woc.data` is 2; `ui.list`,
+ * `fmt.duration` and `world.distanceTo` are 4. An older loader strips an unknown manifest key rather than refusing it, so a
+ * manifest claiming less than it calls installs, starts, and throws on the first read.
+ *
+ * A frame's own `toggleKey` is 4 as well and is deliberately NOT on that list: the toggle
+ * is bound by hand, for the reason written above the bind in `main.js`.
+ */
+const NEEDS_MINOR = 4;
 
 const PLAYER_ID = PLAYER_ENTITY.id;
 /** What the harness's wall clock starts at, and therefore what every case starts at. */
@@ -71,7 +65,6 @@ const GONE_RARE = 'made_up_rare';
 /** The alt. `world.characterKey` is the realm and this, so changing it is the switch. */
 const OTHER_CHARACTER = 'Marshalt';
 
-/** Entity ids for the mobs a case puts in interest scope. */
 const GREYJAW_ID = 700;
 const VOSKAR_ID = 701;
 
@@ -126,7 +119,6 @@ interface LongwatchHarness extends SharedHarness {
   spawn: (id: number, templateId: string, name?: string) => Fake;
   /** Kill one: the corpse goes dead, and the death record lands. */
   kill: (id: number, templateId: string) => void;
-  /** Take one out of interest scope, which is what walking away looks like. */
   despawn: (id: number) => void;
   /** Walk the player somewhere. Copied, because the game mutates `pos` in place. */
   walkTo: (x: number, z: number) => void;
@@ -140,13 +132,10 @@ interface LongwatchHarness extends SharedHarness {
   clockTo: (ms: number) => void;
   /** The template ids with a row up, in the order they are drawn. */
   drawn: () => string[];
-  /** The template ids pinned into the world. */
   pinned: () => string[];
-  /** One row's right-hand figure. */
   figureOf: (templateId: string) => string;
   /** One row's fill, as a percentage. A number, because the clock drifts. */
   fillOf: (templateId: string) => number;
-  /** One row's second line. */
   detailOf: (templateId: string) => string;
   /** Every class on one row, so a tone can be read off it. */
   classesOf: (templateId: string) => string[];
@@ -331,10 +320,9 @@ describe('its manifest', () => {
     ]);
   });
 
-  // `data` is what puts the roster in its own file, and `apiMinor` 2 is what the surface reading
-  // it needs. An older loader strips an unknown manifest key rather than refusing it, so without
-  // the minor this addon would install on a loader with no `woc.data`, start, and find that its
-  // only content file does not exist.
+  // `data` is what puts the roster in its own file, and the minor is what says which loader
+  // can read it. Without it this addon would install on a loader with no `woc.data`, start,
+  // and find that its only content file does not exist.
   it('declares the roster file and the minor that reads it', () => {
     expect(manifest().data).toEqual([ROSTER_FILE]);
     expect(manifest().apiMinor).toBe(NEEDS_MINOR);

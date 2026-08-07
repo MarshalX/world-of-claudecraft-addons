@@ -182,19 +182,6 @@ interface Panel {
 }
 
 /**
- * One sentence describing the whole picture, out of one per panel.
- *
- * A single panel keeps its own alt untouched, which is what every preview was
- * before sheets existed. Several are joined with their position and their
- * caption, so the description walks the image in the order somebody looking at
- * it would.
- *
- * Composed rather than written once per sheet because the alt lives on the
- * SCENARIO, beside the fixture that produces that panel, so the two are edited
- * together. The cost is that each panel's sentence has to read as a clause
- * rather than as a paragraph, which is why the shipped ones start lowercase.
- */
-/**
  * What comes before one panel's own sentence.
  *
  * The comma after the position is there whether or not a caption follows it: "On
@@ -208,6 +195,19 @@ function leadOf(place: string, caption: string | undefined): string {
   return `${place}, ${caption},`;
 }
 
+/**
+ * One sentence describing the whole picture, out of one per panel.
+ *
+ * A single panel keeps its own alt untouched, which is what every preview was
+ * before sheets existed. Several are joined with their position and their
+ * caption, so the description walks the image in the order somebody looking at
+ * it would.
+ *
+ * Composed rather than written once per sheet because the alt lives on the
+ * SCENARIO, beside the fixture that produces that panel, so the two are edited
+ * together. The cost is that each panel's sentence has to read as a clause
+ * rather than as a paragraph, which is why the shipped ones start lowercase.
+ */
 function previewAlt(panels: readonly Panel[]): string {
   const [only] = panels;
   if (panels.length === 1 && only !== undefined) {
@@ -268,7 +268,7 @@ function renderManifest(manifest: Record<string, unknown>): string {
 /**
  * The game a preview is a picture OF, which is LIVE and not the stage's default.
  *
- * `pnpm stage` proxies to pbe, where drift shows up first, and that is right for
+ * `pnpm run stage` proxies to pbe, where drift shows up first, and that is right for
  * a person watching an addon react to a game that has not shipped yet. A preview
  * is the opposite kind of artifact: it is committed, it is what a player reads in
  * Browse, and the player is on live. So this joins `pnpm cues`, `pnpm icons`,

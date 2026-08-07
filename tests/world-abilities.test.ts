@@ -106,6 +106,50 @@ describe('the ability projection', () => {
   });
 });
 
+describe('the ability description', () => {
+  it('answers the game own name for an ability the player knows', () => {
+    const read = createAbilityReader();
+
+    // A derived name would answer "Arcane Shot" here, which the id cannot betray.
+    expect(read(world([resolved()])).describe('arcane_shot')).toEqual({
+      name: 'Fell Shot',
+      school: 'arcane',
+      known: true,
+    });
+  });
+
+  it('derives a name from the id for an ability the player does not know', () => {
+    const read = createAbilityReader();
+
+    expect(read(world([resolved()])).describe('mortal_strike')).toEqual({
+      name: 'Mortal Strike',
+      school: null,
+      known: false,
+    });
+  });
+
+  /** The mark belongs to the caller: this same string goes into an `aria-label`. */
+  it('leaves the guess unmarked in the name itself', () => {
+    const read = createAbilityReader();
+    const guess = read(world([resolved()])).describe('mortal_strike');
+
+    expect(guess.name).not.toContain('?');
+    expect(guess.known).toBe(false);
+  });
+
+  it('derives rather than throwing on the landing page, where the book is empty', () => {
+    const read = createAbilityReader();
+
+    // An addon's first line runs at document-start, with no world at all.
+    expect(emptyAbilities().describe('aimed_shot')).toEqual({
+      name: 'Aimed Shot',
+      school: null,
+      known: false,
+    });
+    expect(read(world(undefined)).describe('aimed_shot').known).toBe(false);
+  });
+});
+
 describe('the ability memo', () => {
   /**
    * The reason the reader is stateful at all.

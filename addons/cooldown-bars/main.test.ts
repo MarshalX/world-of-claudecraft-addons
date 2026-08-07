@@ -54,6 +54,23 @@ const FELL_SHOT = 6;
  * find no pool here.
  */
 const POOL = 2;
+/**
+ * Enough cooldowns to fill the bar budget, which the manifest defaults to eight.
+ *
+ * Every id is a real hunter ability and none of them is in the fake spellbook below, so
+ * each raises a MEASURED row: what they are is irrelevant to the case they exist for,
+ * which is that a ninth row has nowhere to be drawn.
+ */
+const CROWD = [
+  'multi_shot',
+  'counter_shot',
+  'rapid_fire',
+  'aimed_shot',
+  'concussive_shot',
+  'freezing_trap',
+  'disengage',
+  'feign_death',
+];
 
 const teardown: Array<() => void> = [];
 
@@ -477,9 +494,9 @@ describe('a cooldown that is reset or re-armed', () => {
     expect(h.leftOf('combustion')).toBe('30.0s');
   });
 
-  // The reachable failure, now only for the residue: first seen part-way down, then re-armed
-  // to its full length by a shared cooldown. A bar that keeps its first total has a
-  // denominator smaller than what is left, and reads full for the whole difference.
+  // The failure a MEASURED row can reach: first seen part-way down, then re-armed to its
+  // full length by a shared cooldown. A bar that keeps its first total has a denominator
+  // smaller than what is left, and reads full for the whole difference.
   it('rebaselines when the remaining time goes back up', async () => {
     const h = await run();
     // Found mid-cooldown, which is what happens when the addon loads during one
@@ -544,6 +561,48 @@ describe('a cooldown that is reset or re-armed', () => {
     h.frame();
 
     expect(h.fillOf('bestial_wrath')).toBe('33.33%');
+  });
+
+  // The same re-arm, on a row nobody can see.
+  //
+  // The bar budget cuts the LIST and not the reading: a row past it is taken out of the
+  // panel and kept, so it goes on watching its own cooldown. That is what this pins, and
+  // it is the one thing here a player could not work out from the screen.
+  //
+  // Watching matters because a measured row learns its length from a remaining that goes
+  // UP, and the increase is the only signal there is. A row that stopped following while
+  // it was cut would come back with whatever it happened to be at as its total, which is
+  // 100% of a cooldown that is ten seconds in: not a missing bar but a confident and
+  // wrong one, with nothing on screen saying it is a guess.
+  //
+  // So the re-arm to 180 has to be seen while the row is off the bottom of the list, and
+  // the drain to 170 has to happen before it comes back, or a row that only caught up on
+  // its way back into view would pass this too.
+  it('keeps following a cooldown that is past the bar budget', async () => {
+    const h = await run();
+    // Eight soonest, none of them in the fake spellbook, so every row here is measured.
+    for (const [at, abilityId] of CROWD.entries()) {
+      h.cooldown(abilityId, 10 + at);
+    }
+    h.cooldown('system_unstuck', 100);
+    h.poll();
+    expect(h.drawn()).toHaveLength(CROWD.length);
+    expect(h.drawn()).not.toContain('system_unstuck');
+
+    // Re-armed and then drained again, both while it is cut.
+    h.cooldown('system_unstuck', 180);
+    h.frame();
+    h.cooldown('system_unstuck', 170);
+    h.frame();
+
+    // The crowd finishes, so the row comes back into view.
+    for (const abilityId of CROWD) {
+      h.cooldown(abilityId, 0);
+    }
+    h.poll();
+
+    expect(h.drawn()).toEqual(['system_unstuck']);
+    expect(h.fillOf('system_unstuck')).toBe('94.44%');
   });
 });
 
@@ -1013,8 +1072,8 @@ describe('the tooltip on a timer', () => {
 // `appendChild` on an element already in the document moves it, which is a removal and an
 // insertion, and the browser drops an element's hover state on the removal. Doing that to
 // every row on every animation frame strands the tooltip on whatever the pointer was over.
-// The kit no longer lets that orphan a tooltip; this is the other half, which is not handing
-// it the problem sixty times a second.
+// The kit takes a tooltip down when its anchor leaves the document; this is the other
+// half, which is not handing it that problem sixty times a second.
 describe('how rows are placed', () => {
   it('leaves a row alone when its position has not changed', async () => {
     const h = await run();

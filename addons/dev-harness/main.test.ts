@@ -77,10 +77,14 @@ describe('its manifest', () => {
     expect(types).toEqual(['boolean', 'number', 'select', 'string']);
   });
 
+  // `probe` is declared and never bound by hand, which is what makes the toggleKey
+  // check mean anything: a registration under that id can only have come from the
+  // frame that named it, so the check is about the member rather than about the
+  // keybind surface underneath it.
   it('declares the keybinds it binds', () => {
     const ids = (manifest().keybinds ?? []).map((bind) => bind.id).sort();
 
-    expect(ids).toEqual(['run', 'toggle']);
+    expect(ids).toEqual(['probe', 'run', 'toggle']);
   });
 
   // The declaration is what makes `woc.data` answerable at all: the host fetches
@@ -187,7 +191,7 @@ describe('what it reports without a game', () => {
   it('passes every check', async () => {
     await run();
 
-    expect(await report()).toContain('38 of 38 checks passed');
+    expect(await report()).toContain('46 of 46 checks passed');
   });
 
   it('names no check as failed', async () => {
@@ -196,11 +200,41 @@ describe('what it reports without a game', () => {
     expect(await report()).not.toContain('FAIL');
   });
 
+  // The one check whose real work needs a frame, driven so that it does it.
+  //
+  // `woc.paint` rides the LOADER'S loop rather than `requestAnimationFrame`, and that loop
+  // is hand-driven here, so with nothing ticking it the check honestly reports that no
+  // frame has run and asserts nothing. That is the right answer for a document with no
+  // loop and it is useless as a gate, which is what this case exists to be: ticking while
+  // the report settles is what a browser does continuously, and it is what makes the
+  // coalescing claim, two requests and one draw, something a broken loader fails here
+  // rather than in somebody's game.
+  it('coalesces two repaint requests into one draw, once a frame runs', async () => {
+    const { harness } = await run();
+
+    await expect
+      .poll(() => {
+        harness.frames.tick();
+        return document.body.textContent ?? '';
+      })
+      .toMatch(/checks passed/);
+
+    expect(document.body.textContent).toContain('two requests before a frame drew once');
+  });
+
   // Named individually as well as counted, so a rename or a dropped check shows
   // up as a failure here rather than as a total that quietly went down by one.
   it.each([
     'identity',
     'settings',
+    'fmt',
+    'list',
+    'layout',
+    'describe',
+    'geometry',
+    'publish',
+    'paint',
+    'toggle key',
     'storage',
     'character storage',
     'data',

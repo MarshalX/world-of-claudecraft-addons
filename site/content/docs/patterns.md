@@ -18,6 +18,24 @@ An addon written the other way round has one of two bugs. Redraw only in the han
 
 The same shape applies to anything that animates: subscribe for the change, animate from the read.
 
+## The guard you are about to write around a setting cannot fire
+
+This one is measured rather than argued. Fifteen of the sixteen addons in this marketplace shipped a helper like this, and between them called it 64 times:
+
+```js
+// Dead code. Every one of the 64 call sites resolved to the manifest default.
+function settingNumber(id, fallback) {
+  const value = woc.settings[id];
+  return typeof value === 'number' ? value : fallback;
+}
+```
+
+Not one of those fallbacks could ever be reached. The loader hydrates `woc.settings` from your manifest before your first line runs and the result is total over what you declared: present, of the declared type, finite if it is a number, clamped into your declared range, and one of the options a `select` still offers, with your own default standing in wherever storage held something that was none of those. So `woc.settings['max-rows']` is a number you can divide by.
+
+Fifteen authors wrote it anyway, which is the interesting part: nothing on the surface says the coercion happened, and defensive code around an unknown-shaped read is the correct instinct everywhere else on this API. It is wrong here, and only here, because this is the one input the loader has already validated against a schema you wrote.
+
+Read the setting. The case actually worth a check is the opposite one, an id your manifest does not declare, which reads `undefined` and is a bug in the manifest rather than a value to defend against.
+
 ## A field can be declared, readable, and never sent
 
 The game builds every entity with defaults and fills in whatever the snapshot carried. A field the server never sends is therefore **present, of the right type, and holding that default for the entire session**. Nothing throws. Nothing warns.
@@ -60,15 +78,30 @@ The same holds for anything else you keep out of the world: `prevPos`, an aura l
 
 ## Redrawing a list moves every row in it
 
-`appendChild` on an element that is already in the document does not leave it where it is. It removes it and inserts it again. So the obvious way to redraw a sorted list, appending every row in order, moves every row on every repaint even when nothing has changed position.
+`appendChild` on an element that is already in the document does not leave it where it is. It removes it and inserts it again. So the obvious way to redraw a sorted list moves every row on every repaint, including the ones that did not move:
+
+```js
+// Removes and re-inserts all forty rows to correct the order of two of them.
+for (const row of sorted) parent.appendChild(row.el);
+```
 
 The churn is the smaller cost. The one that bites is that **a browser drops an element's hover state when it is removed, and fires no leave event for it**. Anything attached to that row on hover is then stranded: as far as the browser is concerned the pointer was never over it, so moving away produces nothing.
 
-Place a row only when it is not already in that slot:
+`woc.ui.list` is the answer, and this is the failure it was built out of. Eleven addons had each written the same reconcile pass by hand, and the part every one of them wrote identically was the lifecycle: destroy what left, build what arrived, paint everything, and move a row only when it is not already in that slot. Describe one row, hand `sync` the whole set in the order you want it, and a sync that changes nothing writes nothing to the document at all.
 
-<!-- include: addons/cooldown-bars/main.js#place -->
+Two things about it are judgement rather than API, which is why they are here as well as on [the API page](/docs/api).
 
-The loader now takes a tooltip down when the pointer moves anywhere its anchor is not. The pattern still holds: an element you move is an element that loses whatever the browser was tracking about it, and you are paying for the move either way.
+**Key on the thing, never on where it sits.** `key: (item) => item.id` is what lets a row survive a reorder. Keying on the array index recreates every row that moved, which is the bug above wearing a different hat.
+
+**Hold more than you draw, with `shown`, rather than slicing before you sync.** A cooldown display keeps every running cooldown and draws the ten soonest ready. Slice first and the eleventh row is destroyed, so when it comes back it is a new row with nothing measured: an addon that learned a cooldown's real length by watching it now has to baseline from the middle of the cooldown it is already in, and it draws a fill that is confidently wrong. Pass everything to `sync` and answer false from `shown` instead, and the row stays alive off screen with what it measured. That is the difference between a missing row and a wrong one.
+
+Cooldown Bars does both, and its whole list is now the declaration:
+
+<!-- include: addons/cooldown-bars/main.js#list -->
+
+`sync` then takes every running cooldown, soonest ready first, and `shown` decides how many of them are on screen.
+
+The loader now takes a tooltip down when the pointer moves anywhere its anchor is not, so the stranded tooltip above is handled for you. The fact underneath it has not changed: an element you move is an element that loses whatever the browser was tracking about it, and the cheapest move is the one you do not make.
 
 ## Reuse the kit before styling your own
 
@@ -122,6 +155,8 @@ An addon that reads another addon's bus topic has to work with no publisher at a
 
 The convention that works: emit `<topic>:ask` once, render immediately without an answer, upgrade the display if answers arrive, and never treat silence as an error. A publisher answers an ask by emitting its topic as usual.
 
+`woc.bus.publish` and `woc.bus.follow` are those two halves with the parts named, and they are what to reach for rather than writing the dance again. `follow` emits the ask for you, once, and `publish` answers it by calling your `produce`. Everything below is what those two put on the wire, which is also what an addon written before they existed is already speaking.
+
 Subscribe with `woc.bus.anySender` unless you genuinely mean one specific installation. Naming `official/lorebind` is correct only on the official marketplace: the same addon installed from a fork publishes under a different fqid, and a subscriber that hardcoded the source silently stops working for everyone not on it.
 
 If you want to say in your manifest that you work better with another addon, that is `companions`. It is a note the manager draws, not a dependency: it gates nothing and waits for nothing.
@@ -138,16 +173,21 @@ There is no namespace on the bus and no registry the loader enforces. A topic is
 | `zone:ask` | anyone | nothing |
 | `item` | `lorebind` | one item record |
 | `items` | `lorebind` | an array of them, the whole table at once |
-| `item:ask` | anyone | nothing |
+| `items:ask` | anyone | nothing |
+| `item:ask` | anyone | nothing, and see below: this is the older spelling |
 | `alert` | `emberwatch` | `{ ruleId, unit, auraId, state }` |
 
 **`zone`** is one shape in every state, never an object-or-null. `place` is `'zone'`, `'instance'`, `'nowhere'` or `'unknown'`, and `id`, `name` and `levelRange` are all null unless it is `'zone'`. The four are worth telling apart: `'instance'` means the player is in a dungeon, an arena or a delve, where a zone filter has nothing to say; `'nowhere'` means a point the publisher's rectangles do not cover; `'unknown'` means it cannot answer yet, which is every session's first seconds and is not a fact about where anybody is standing. A consumer that reads only `typeof payload.id === 'string'` and ignores the rest is correct and will stay correct. `levelRange` is `{ min, max }`.
 
 **`item`** carries `{ id, name, source }` plus whichever of `quality`, `kind`, `slot`, `sellValue`, `itemLevel` and `requiredLevel` the publisher actually knows. Fields are absent rather than null when unknown, because an item table is learned a piece at a time. **`items`** is the batch form and is what an ask is answered with: a publisher holding a whole table sends it as one message rather than one emit per row. Subscribe to both. A consumer subscribed to `item` alone hears its own catch-up answered and takes nothing out of it, which looks exactly like a publisher that is not installed.
 
+**The item protocol has two ask names for one release, and this is the only place that says so.** It was written before `publish` and `follow` existed and it named its ask `item:ask` while what an ask actually triggers is a re-emit of `items`. `follow('items', ...)` derives `items:ask` from the topic, so the two names now both mean the same request. `lorebind` answers both: `items:ask` because that is what `publish` listens for, and `item:ask` with one extra line, kept so that an addon speaking the shipped protocol does not go quiet on the release that migrated it. Use `items:ask`. Do not build anything new on `item:ask`, and expect it to go one release later.
+
+The incremental `item` topic has no ask half at all and never did. It is a push, one row at a time as the publisher learns them, so `follow` is the wrong tool for it and a plain `on` with `bus.anySender` is the right one.
+
 **`alert`** fires on an aura rule matching. `state` is `'active'` when the rule is met and `'cleared'` when it stops being met, so a consumer can pair them; `unit` is a unit key rather than an entity id.
 
-If you are adding a topic, prefer a noun for the fact and `<noun>:ask` for the catch-up, publish one shape in every state rather than a payload that vanishes, and add the row here in the same change.
+If you are adding a topic, prefer a noun for the fact and let `publish` and `follow` name the ask, publish one shape in every state rather than a payload that vanishes, and add the row here in the same change. The loader ships no topic constants and will not: these names are content, and a loader that owned them would own a protocol it has no way to keep true. This table is the registry, and it is editorial rather than enforced.
 
 ## The global cooldown's length is computable, and the obvious version is wrong
 
@@ -239,9 +279,29 @@ And death clears the whole ladder, as does an arena or match reset. Drop everyth
 
 **Join it for anything that has to move smoothly**: a sweep, a bar's fill, a decay curve, an anchor following a point. The loader positions every `ui.anchor3d` after your handler has run, so a point you move here is followed in the same frame rather than the next one.
 
-**Do not join it for a panel whose figures change once a second.** Wayline is the worked example and it is deliberately on `woc.setInterval(paint, 1000)`: every figure on that panel moves at most once a second, so joining a 60Hz loop would rewrite six identical strings sixty times a second to display nothing new. "The loader runs one loop" is not an instruction to put everything in it.
+**Do not join it for a panel whose figures change once a second.** Wayline is the worked example, and it is deliberately on a one-second `woc.setInterval` calling its own draw function: every figure on that panel moves at most once a second, so joining a 60Hz loop would rewrite six identical strings sixty times a second to display nothing new. `woc.paint` would be the wrong answer there too, for the opposite reason: nothing HAPPENS to ask it for a repaint, the figures simply move with the clock. "The loader runs one loop" is not an instruction to put everything in it.
 
 **Keep it running while your frames are hidden**, unless you have a reason not to. `onFrame` does not stand down when your UI is not on screen, which is deliberate: a timer whose window is closed still has to know how much of an 18 second window has elapsed when the window opens again. If your handler is expensive, check whether the frame is visible inside it rather than unsubscribing.
+
+## A panel that changes when something happens is not an animation
+
+The panels above are the minority. Most addon UI does not move on its own at all: it changes when a bag changed, when a fight ended, when a price came in over the bus. Joining the frame loop for that means asking every frame whether anything happened, and the answer is no sixty times a second.
+
+`woc.paint` is the other shape. It hands you a function to CALL when something changed, and draws once on the next frame however many times it was called:
+
+```js
+const repaint = woc.paint(draw, { frame });
+woc.world.on('inventory', repaint);
+woc.bus.follow('prices', (payload) => { prices = payload; repaint(); });
+```
+
+Three addons wrote this by hand before it existed, byte for byte: a boolean, a `requestAnimationFrame` armed only when the boolean was clear, and the boolean cleared inside the callback. What none of them wrote is the half that `{ frame }` buys, and one of them wrote a piece of it: a request made while that frame is hidden is held rather than performed, and one repaint runs on the first frame after the panel comes back. So a hidden panel stops drawing and is still correct the instant it returns.
+
+That is not free, and the cost is worth knowing rather than assuming: a repaint owed to a hidden panel keeps a seat on the loader's loop, because a frame publishes `visible` and no change event, so the only way to notice the panel returning is to look once a frame. It is a boolean read, and a panel with nothing owed keeps no seat at all, but a panel closed and never reopened holds one for the rest of the session.
+
+The distinction is worth holding on to, because the three primitives are not interchangeable and the wrong one is invisible in review. Something moving continuously is `woc.onFrame`. A figure that moves on its own clock, like a countdown, is `woc.setInterval`. A panel that changes when the world does is `woc.paint`.
+
+**And `{ frame }` is a fourth decision, about the HANDLER rather than the panel.** Pass it only when the handler does nothing but draw. If it also records something the addon needs whether or not anybody is looking, a closed panel records nothing for the rest of the session and nothing anywhere says so: no throw, no warning, just a table that turns out to be empty when something reads it. Split the recording out and give `paint` the drawing. [The API page](/docs/api) has the two shipped addons that decided this opposite ways and were both right.
 
 ## An aura's icon comes from the caster's class, or from nowhere
 

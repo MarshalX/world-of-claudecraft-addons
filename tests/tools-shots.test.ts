@@ -186,7 +186,7 @@ describe('which game a capture is a picture of', () => {
   // The default is LIVE and not the stage's pbe, and this pins the difference
   // rather than the value: a preview is a committed artifact of what a player
   // reads in Browse, and the player is on live. Pbe is normally AHEAD, which is
-  // why `pnpm stage` points there, but at game 0.34.0 the two swapped and pbe
+  // why `pnpm run stage` points there, but at game 0.34.0 the two swapped and pbe
   // served a release BEHIND live. Inheriting the stage's default that week would
   // have recaptured `cooldown-bars` without art it already had.
   it('defaults to live rather than to the stage host', () => {

@@ -13,16 +13,7 @@ import { unlessFrozen } from '../freeze.ts';
 import type { Unsubscribe } from '../net/bus.ts';
 import type { AbilityIndex } from '../world/abilities.ts';
 import type { ArenaStandings } from '../world/arena.ts';
-import {
-  type AuraQuery,
-  filterAuras,
-  filterPartyAuras,
-  isDispellable,
-  isHarmful,
-  NO_ROWS,
-  NONE,
-  type PartyAuraQuery,
-} from '../world/auras.ts';
+import type { AuraQuery, PartyAuraQuery } from '../world/auras.ts';
 import type { BankState } from '../world/bank.ts';
 import type { CharacterInfo, ProfessionInfo, TalentInfo } from '../world/character.ts';
 import type { CombatState } from '../world/combat.ts';
@@ -49,89 +40,20 @@ import type { MailState } from '../world/mail.ts';
 import type { MarketState } from '../world/market.ts';
 import type { MatchInfo } from '../world/match.ts';
 import { isWorldKey, WORLD_KEYS, type WorldKey } from '../world/signature.ts';
-import { NO_THREAT, type ThreatTable } from '../world/threat.ts';
-import { resolveUnit, type UnitContext, type UnitToken } from '../world/units.ts';
+import type { ThreatTable } from '../world/threat.ts';
+import type { UnitToken } from '../world/units.ts';
 import type { WorldValues } from '../world/values.ts';
 import { contentReads } from './world-content.ts';
+import { geometryReads, lookups } from './world-lookups.ts';
 import {
   derivedReads,
   economyReads,
-  emptyEntities,
   fromBackend,
   gameReads,
   groundReads,
   selfReads,
   socialReads,
 } from './world-reads.ts';
-
-/** Null before world entry, which is the one case `mine` cannot be answered in. */
-function playerIdOf(ctx: UnitContext): number | null {
-  if (ctx.player === null) {
-    return null;
-  }
-  return ctx.player.id;
-}
-
-/**
- * Everything that takes an argument: resolving a unit, and filtering its auras.
- *
- * These are lookups OVER the reads above rather than reads of their own, which
- * is why they are not world keys and cannot be subscribed to. Watch the key the
- * answer comes from (`target`, `party`, `auras`) and re-resolve in the handler.
- */
-function lookups(hub: WorldHub) {
-  const context = (): UnitContext => {
-    const backend = hub.backend();
-    return {
-      player: backend?.player ?? null,
-      target: backend?.target ?? null,
-      entities: backend?.entities ?? emptyEntities(),
-      party: backend?.party ?? null,
-    };
-  };
-
-  return {
-    unit: (token: string): Entity | null => resolveUnit(token, context()),
-
-    aurasOn: (token: string, query: AuraQuery = {}): readonly Aura[] => {
-      const ctx = context();
-      const unit = resolveUnit(token, ctx);
-      if (unit === null) {
-        return NONE;
-      }
-      return filterAuras(unit.auras, query, playerIdOf(ctx));
-    },
-
-    threat: (entityId: number): ThreatTable => {
-      const backend = hub.backend();
-      if (backend === null) {
-        return NO_THREAT;
-      }
-      return backend.threat(entityId);
-    },
-
-    corpseLoot: (entityId: number): CorpseView | null => {
-      const backend = hub.backend();
-      if (backend === null) {
-        return null;
-      }
-      return backend.corpseLoot(entityId);
-    },
-
-    partyAuras: (pid: number, query: PartyAuraQuery = {}): readonly PartyMemberAura[] => {
-      const party = hub.backend()?.party;
-      if (party === undefined || party === null) {
-        return NO_ROWS;
-      }
-      const row = party.members.find((member) => member.pid === pid);
-      return filterPartyAuras(row?.auras, query);
-    },
-
-    harmful: (aura: Aura | PartyMemberAura): boolean => isHarmful(aura),
-
-    dispellable: (aura: Aura, offensive = false): boolean => isDispellable(aura, offensive),
-  };
-}
 
 /** Subscribing, plus the two escape hatches. Everything that is not a state read. */
 function controls(hub: WorldHub, bag: DisposalBag) {
@@ -388,6 +310,17 @@ export interface WorldApi {
   /** Whether an effect can be removed. Full auras only; a party row cannot answer. */
   dispellable: (aura: Aura, offensive?: boolean) => boolean;
 
+  /** Flat yards from the player to a point, ignoring height. Null before world entry. */
+  distanceTo: (at: { x: number; z: number }) => number | null;
+
+  /**
+   * Degrees CLOCKWISE from where the player is looking, -180 <= turn < 180.
+   *
+   * Null before world entry, and null for a facing that is not finite. Composes
+   * with `fmt.compass`, which takes this convention.
+   */
+  bearingTo: (at: { x: number; z: number }) => number | null;
+
   /**
    * The game's own recipe table, copied and frozen.
    *
@@ -424,7 +357,7 @@ export function createWorld(hub: WorldHub, bag: DisposalBag): WorldApi {
     ),
     mergeLive(
       mergeLive(economyReads(hub), contentReads(hub)),
-      mergeLive(lookups(hub), controls(hub, bag)),
+      mergeLive(mergeLive(lookups(hub), geometryReads(hub)), controls(hub, bag)),
     ),
   );
 }

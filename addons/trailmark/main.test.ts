@@ -2,27 +2,15 @@
 
 // Trailmark, run through the real loader.
 //
-// The decision this addon exists for is objective-to-location resolution, so that is what most
-// of this suite is about, and every case drives it through the shipped `quests.json` rather than
-// a stub. A case that wants a broken row builds it by doctoring the real file, so a case about a
-// bad entry stays a case about this table with one field wrong.
+// Every case drives objective-to-location resolution through the shipped `quests.json` rather
+// than a stub, and a case about a bad row doctors the real file.
 //
-// The first section is asserted with an empty world. The player stands at the origin in
-// Eastbrook Vale, `world.entities` holds nobody but them, and the quest log names an objective
-// whose only location is 1100 yards north in The Veiled Hollow. The row still names that zone
-// and that distance, because the answer comes off a shipped table and never off interest scope.
-// An addon that resolved from entities would draw nothing here and would look perfectly correct
-// standing next to the mob.
+// The first section runs with an EMPTY WORLD on purpose: the answer comes off the table and
+// never off interest scope, so an addon resolving from entities would draw nothing here and
+// look perfectly correct standing next to the mob.
 //
-// The second claim is the learned denominator. `QuestProgress.resolvedCounts` is on the wire and
-// off the published type, so the required count is learned from the `questProgress` event
-// instead, held per character, and until then the shipped definition count is drawn as a lower
-// bound with a plus on it. Both halves are asserted, including that the plus goes away the
-// moment the server says a figure and that a stored figure survives a page load.
-//
-// The two clocks are driven separately, as in the longwatch suite: `advance` moves the monotonic
-// clock a page load throws away, `setWallClock` moves the one it does not, and advancing the
-// fake timers by a second runs the addon's own redraw.
+// The two clocks are driven separately, as in the longwatch suite: `advance` moves the
+// monotonic clock a page load throws away and `setWallClock` moves the one it does not.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { validateManifest } from '../../loader/src/shared/schema.ts';
@@ -48,8 +36,15 @@ const CHARACTER = 'Claudemoon/Marshal';
 const CHANNEL = 'pbe';
 const STORE_KEY = 'trail';
 const TABLE_FILE = 'quests.json';
-/** The minor `woc.data`, `woc.onFrame`, `woc.wallClock` and `ui.project` need. */
-const NEEDS_MINOR = 2;
+/**
+ * The highest minor anything this addon calls arrived in. `woc.data`, `woc.onFrame`,
+ * `woc.wallClock` and `ui.project` are 2; `ui.list`, `world.distanceTo`, `world.bearingTo`
+ * and `fmt.compass` are 4.
+ *
+ * A frame's own `toggleKey` is 4 as well and is deliberately NOT on that list: the toggle
+ * is bound by hand, for the reason written above the bind in `main.js`.
+ */
+const NEEDS_MINOR = 4;
 
 const PLAYER_ID = PLAYER_ENTITY.id;
 /** What the harness's wall clock starts at, and therefore what every case starts at. */
@@ -79,8 +74,9 @@ const FORGE_ORDER = 'q_prof_workorder_forge';
 const TOOLWORKS_ORDER = 'q_prof_workorder_toolworks';
 const APOTHECARY_ORDER = 'q_prof_workorder_apothecary';
 
-/** The first objective of each, which is the only one any of them has. */
 const WOLVES_KEY = `${WOLVES}#0`;
+/** The nearer wolf camp's x. Standing at this x and a lower z is due south of it. */
+const WOLF_CAMP_X = 24;
 const BOARS_KEY = `${BOARS}#0`;
 const SUPPLIES_KEY = `${SUPPLIES}#0`;
 const HUNTSMAN_KEY = `${HUNTSMAN}#0`;
@@ -116,7 +112,6 @@ const PIN_BUDGET = 12;
 /** The alt. `world.characterKey` is the realm and this, so changing it is a switch. */
 const OTHER_CHARACTER = 'Marshalt';
 
-/** The frame's own id, which is its persistence key. */
 const FRAME_ID = 'objectives';
 
 interface FrameBox {
@@ -128,9 +123,7 @@ interface FrameBox {
 
 /** What a case wants that is not settings, storage or a quest log. */
 interface Extra {
-  /** A doctored table, for a case about the file being wrong. */
   table?: string;
-  /** A saved frame box, which is how a resize is driven. */
   saved?: FrameBox;
 }
 
@@ -240,7 +233,6 @@ interface TrailHarness extends SharedHarness {
   entities: ReadonlyMap<number, Fake>;
   /** Put a quest in the log, active, with the counts given. */
   accept: (progress: Progress) => void;
-  /** Take one out, which is what a turn-in does. */
   drop: (questId: string) => void;
   /** Deliver one `questProgress` record off the socket, exactly as it arrives. */
   progress: (event: Record<string, unknown>) => void;
@@ -895,6 +887,27 @@ describe('the bearing on a row', () => {
     h.tick();
 
     expect(h.detailOf(WOLVES_KEY)).toBe('Eastbrook Vale, 23 yd ←');
+  });
+
+  // All EIGHT, because three of them is a table nobody has read the other five entries
+  // of, and the failure this section exists for is a table written the other way round:
+  // that one agrees at ahead and behind and disagrees everywhere in between.
+  //
+  // The character stands due south of the nearer wolf camp, which puts it at a bearing
+  // of exactly 0, and then turns left through a full circle 45 degrees at a time.
+  // Turning your body left moves the world right, so the arrow steps clockwise.
+  it('steps through all eight sectors as the character turns', async () => {
+    const h = await run({}, undefined, [{ questId: WOLVES, counts: [0] }]);
+    h.walkTo(WOLF_CAMP_X, 0);
+    const eighth = Math.PI / 4;
+    const clockwise = ['↑', '↗', '→', '↘', '↓', '↙', '←', '↖'];
+
+    for (const [step, arrow] of clockwise.entries()) {
+      h.turnTo(step * eighth);
+      h.tick();
+
+      expect(h.detailOf(WOLVES_KEY)).toContain(arrow);
+    }
   });
 
   // A field the game stopped sending is the ordinary way this goes wrong, and an

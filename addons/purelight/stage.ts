@@ -203,7 +203,7 @@ const SCENARIOS: readonly Scenario[] = [
     id: 'skirmish',
     label: 'Both directions at once',
     preview: true,
-    alt: 'a strip of five square tiles, each with a countdown over the art and the name of whoever is carrying the effect under it. Bewitch on Bragg first at 15 seconds, a polymorph and the only control on the strip, which is what puts it ahead of everything else whatever is left on it. Then Blackrot on Marshal at 16 seconds and Hex of Anguish on Sunna at 10, both damage over time, both bordered in the shadow school and both carrying the art the game files under the ability that applied them. Then Temporal Exhaustion on Karrek at 10m, a green nature border around no picture at all, because its aura id is not an ability id and there is no file for it anywhere. Last, Frostveil on Emberlash, the enemy mage, at 41 seconds, which is on the strip for the opposite reason: it is a benefit on a hostile unit, so it can be stripped away rather than lifted off.',
+    alt: 'a strip of five square tiles, each a countdown over the art with the name of whoever carries the effect under it. The borders colour by school, and one tile has no art at all.',
     world: aSkirmish,
     run: midFight,
   },

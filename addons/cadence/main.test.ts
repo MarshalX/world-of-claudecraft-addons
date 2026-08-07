@@ -67,7 +67,6 @@ interface CadenceHarness extends SharedHarness {
   fillOf: (key: string) => string;
   /** One row's right-hand figure. */
   valueOf: (key: string) => string;
-  /** One row's label. */
   labelOf: (key: string) => string;
   /** The latency band's width, or '' when it is not drawn. */
   bandWidth: () => string;
@@ -90,10 +89,14 @@ function textIn(key: string, selector: string): string {
 
 /**
  * Whether something is really on screen. Both halves, because `[hidden]` is a UA rule at the
- * lowest priority there is and an inline `display: flex` beats it.
+ * lowest priority there is and the loader's own unlayered sheet beats it outright: measured
+ * on the stage, the strip with the attribute alone still computes `display: flex`.
+ *
+ * The class is the half that actually hides it. Every `.css` import resolves to '' under
+ * Vitest, so the rule behind it cannot be seen from here.
  */
 function shown(el: HTMLElement): boolean {
-  return !el.hidden && el.style.display !== 'none';
+  return !(el.hidden || el.classList.contains('woc-hidden'));
 }
 
 /**
@@ -220,11 +223,11 @@ describe('its manifest', () => {
     ]);
   });
 
-  // `woc.onFrame` is a minor-2 member and the strip is drawn from it, so a
-  // manifest still declaring 1 would be refused by a loader that implements
-  // exactly what this addon asks for.
-  it('declares the minor its frame loop needs', () => {
-    expect(parseManifest(MANIFEST_TEXT).apiMinor).toBe(2);
+  // The smallest minor carrying every member the file reads: `woc.ui.column`,
+  // `woc.ui.row` and `woc.ui.show` for the strip and its pips, `woc.fmt.titleCase`
+  // for the cast label, and `toggleKey` on the frame options.
+  it('declares the minor every member it reads is carried by', () => {
+    expect(parseManifest(MANIFEST_TEXT).apiMinor).toBe(4);
   });
 });
 
@@ -668,9 +671,9 @@ describe('the resource and the combo points', () => {
     expect(h.pips()).toEqual([true, false, false, false]);
   });
 
-  // The pips are a line of their own and the frame's height was stated for the rows alone, so
-  // on the one class that has them the strip stood taller than its own box and a bare frame
-  // clipped them. Every line divides the box now.
+  // The pips are a line of their own and the frame's height is stated for the rows alone, so
+  // every line has to divide the box: on the one class that has them the strip would stand
+  // taller than its own box and a bare frame clips.
   it('makes room for the pips out of the box the rows had', async () => {
     const h = await run();
     expect(rowFor('swing')?.style.height).toBe('14px');
@@ -702,13 +705,15 @@ describe('hiding it out of combat', () => {
     expect(shown(h.strip())).toBe(false);
   });
 
-  // The half a suite is the only place to catch: the strip is an inline flex
-  // line, so the attribute on its own leaves it on screen.
-  it('hides it by the display as well as by the attribute', async () => {
+  // The half a suite is the only place to catch: the strip is a flex column drawn
+  // by a loader rule, so the attribute on its own leaves it on screen. Measured on
+  // the stage, where `.woc-cadence` computes `display: flex` at 62px with the
+  // attribute set and `display: none` at 0px once the class goes on.
+  it('hides it by the class as well as by the attribute', async () => {
     const h = await run({ 'hide-out-of-combat': true });
 
     expect(h.strip().hidden).toBe(true);
-    expect(h.strip().style.display).toBe('none');
+    expect(h.strip().classList.contains('woc-hidden')).toBe(true);
   });
 
   it('comes back when a mob puts the player on its hate table', async () => {
@@ -923,10 +928,10 @@ describe('changing a setting under it', () => {
 });
 
 describe('disabling it', () => {
-  // The frame handler is the loader's to unsubscribe now, which is most of why
-  // the addon is on the shared tick: the loop keeps scheduling itself for as long
-  // as anything is subscribed, so a handler left behind is a browser callback
-  // running against DOM that has already gone.
+  // The frame handler is the loader's to unsubscribe, which is most of why the addon
+  // is on the shared tick: the loop keeps scheduling itself for as long as anything
+  // is subscribed, so a handler left behind is a browser callback running against
+  // DOM that has already gone.
   it('leaves no frame, no keybind, and nothing on the shared loop', async () => {
     const h = await run();
     h.self({ swingTimer: 2 });

@@ -2,137 +2,56 @@
 
 // Facemark: the nameplate the game does not draw.
 //
-// One plate per unit near you: its name, its level, a health bar, a cast bar, the
-// effects on it, a threat edge and its raid mark. The game draws its own plates, and
-// this one carries everything after the health bar.
+// Plates sit on `ui.anchor3d({ unit, over: 'head' })`, the renderer's own point for that
+// unit, which folds in model height, mount lift and scale. None of the three is on the
+// wire, so a fixed offset above `entity.pos` would be right for one creature size only and
+// there must be no offset setting. That point resolves to nothing past roughly eighty
+// yards, where the game draws no model, so the draw distance caps below that rather than
+// above it.
 //
-// The plate is placed over the model rather than at a height this file picked.
-// `ui.anchor3d({ unit, over: 'head' })` is the point the game's own nameplate uses, and
-// the loader takes it off the renderer's view of that unit: the model's height, the lift
-// a mount adds, and the scale actually applied. None of the three is on the wire, so a
-// fixed offset above `entity.pos` would be right for one creature size only. There is no
-// offset setting and there must not be one, since its correct value is always zero.
+// Four things a plate cannot say. An effect a mob applied has no art anywhere, since the
+// game composites aura icons at run time; a player's resolves through the caster's class.
+// A cast bar cannot be tinted, because the wire carries no school for a cast. A mob
+// ability's name is worked out from its id, as is an ACTIVITY sentinel like crafting, so
+// both end in a question mark. And nothing on the wire says a mob is rare, elite or a
+// boss: a roster of template ids would decorate a few and silently miss the rest.
 //
-// The head point resolves to nothing for a unit the game is drawing no model for, which
-// is anything past roughly eighty yards, so a plate hides where the game would draw no
-// nameplate. The draw distance setting caps below that rather than above it: asking for
-// ninety yards would not reach further, only make the setting stop meaning anything past
-// its own middle.
+// Two loops. Every frame: health and the cast bar. Ten times a second: which units have a
+// plate, the effect strip, the threat edge, the mark and the fade, none of which any watch
+// key reports. `world.on('entities')` reports membership only, which is why the sampler is
+// under it.
 //
-// The plates are the display, so nothing else owns their on and off state. It is this
-// file's own and is stored account-wide, since it is a preference about the player
-// rather than a layout belonging to one character. The keybind is the whole control, and
-// turning the plates off toasts the chord that brings them back, because a world overlay
-// that has just gone leaves nothing on screen to find again.
-//
-// Four things a plate cannot say, all limits of the wire or of the client:
-//
-//  - An effect a mob applied has no icon anywhere. Every aura icon in the game is
-//    composited on a canvas at run time from a bundled table and no aura art is served.
-//    A player's is recoverable: the applying ability id is the aura's own id and the
-//    caster's class is on their entity, so `ui.icon.ability(aura.id, caster.templateId)`
-//    resolves. A control aura is the same ability with a tail on the id (`_slow`,
-//    `_stun`, `_root`: see `AURA_SUFFIXES`), so the tail comes off and those resolve
-//    too. Everything else gets its school colour and a countdown.
-//  - A cast bar cannot be tinted. The entity wire writes the ability, the two times and
-//    the channel flag and nothing else, and the school lives only in a bundled table.
-//    Guessing one from the ability id would claim a damage type nothing sent.
-//  - A mob ability's name is worked out from its id. `world.abilities` bridges an id to
-//    the game's own name for your spellbook and nothing else, so `flame_pillar` reads as
-//    Flame Pillar, which is wrong wherever the game's name has moved away from the id. A
-//    cast can also name an ACTIVITY rather than an ability: gathering, fishing and the
-//    crafting family ride the same cast machinery, and that set grows with the game. Those
-//    resolve for nobody, so a plate over someone crafting reads Crafting. A label worked
-//    out either way ends in a question mark.
-//  - Nothing says a mob is rare, elite or a boss. An entity record carries kind, template
-//    id, name and level, and the client resolves the rest from a bundled table that does
-//    not travel. So no plate decorates one, rather than decorating the few a roster of
-//    template ids would cover and silently missing the rest.
-//
-// Neutral is the one inference in the styling. The wire carries one boolean, `hostile`,
-// so hostile and friendly are facts and neutral is what is left. The colours are the
-// game's own, and its plates say nothing special about a neutral either.
-//
-// Two loops, split by how fast the reading moves. Every anchor already shares one loop
-// with every `woc.onFrame` handler and writes nothing unless its point moved on screen,
-// so the placement of forty plates is bounded whatever this file does.
-//
-//  - Every frame: health and the cast bar, off the entity the loader already holds. Both
-//    are continuous and neither allocates, since the kit drops a write that repeats what
-//    a row already says.
-//  - Ten times a second: which units have a plate at all, the effect strip, the threat
-//    edge, the raid mark and the distance fade. None of these is watchable, because
-//    `world.on('entities')` reports membership: an effect landing on a mob that was
-//    already nearby, a mark being placed on it, or its threat moving fires no handler.
-//    The entity subscription is still worth having, since it is what makes a unit
-//    walking into range get a plate at once.
-//
-// The cap is by distance from the player rather than by depth from the camera. Depth is
-// the right sort for deciding which of two overlapping things is in front and the wrong
-// one for deciding which twelve of forty units get a plate, since the answer would
-// change as the camera turned. `ui.project` is still read once per drawn plate, for the
-// distance fade and for whether the point can be drawn at all; null means do not draw,
-// including for a point closer than the near plane, which a raw projection reports as
-// finite nonsense.
+// The cap is by distance from the player, never by depth from the camera: depth would
+// change which twelve of forty units get a plate as the player turned.
 
-/** How often the readings nothing reports a change for are re-taken. */
 const SLOW_MS = 100;
-/** Effects on one plate. Four is what fits under a plate without becoming the plate. */
+/** Effects on one plate. More than four and the strip becomes the plate. */
 const MAX_AURAS = 4;
-const DEFAULT_MAX_PLATES = 12;
-/** Every default here is the manifest's own: the loader hydrates from that record, so a
- * fallback that disagreed would be read only when the setting was unreadable, and would
- * then draw a different display from the one the player configured. */
-const DEFAULT_DISTANCE = 60;
-const DEFAULT_SCALE = 1;
 const PLATE_WIDTH = 132;
 const PLATE_FONT = 12;
-/**
- * One effect tile, in pixels. Four of these plus their gaps are the plate's own width,
- * which is what makes the strip read as belonging to the plate over it. It is also the
- * floor the kit's countdown is legible at: the figure is 14px whatever the tile, and the
- * tile clips, so a 20px tile draws "9.4s" with both ends cut off.
- */
+/** Four of these plus gaps make the plate's width. Under 30 the kit's 14px countdown clips. */
 const TILE_PX = 30;
-/**
- * The gap between the rows of a plate. Without it a cast bar sits flush under a health
- * bar and the pair reads as one two-tone block, while the thing a player has to do
- * mid-fight is tell "how much is left" from "what is about to land". Small enough that
- * the plate is still one object, which is why it is here rather than a margin per row.
- */
+/** Without a gap a cast bar under a health bar reads as one two-tone block. */
 const ROW_GAP = 3;
-/**
- * What the bars are drawn on. The kit draws a bar's fill and no track, which is right
- * inside a panel, since the panel is the track. A plate has no panel, so the empty part
- * of a health bar would be whatever terrain is behind it. Dark and translucent, so a
- * plate is still something you see the world through.
- */
+/** The kit draws no track, and a plate has no panel, so an untracked bar's empty part is terrain. */
 const BAR_BACKDROP = 'rgb(6 6 10 / 55%)';
 const PERCENT = 100;
 const DECIMALS = 1;
-/** Above this a tile's countdown drops its decimal. Seconds are enough that far out. */
+/** Above this a tile's countdown drops its decimal: "12.4" is wider than the tile. */
 const TILE_WHOLE_FROM = 10;
 /** Where the game stops drawing a model, and therefore where a head point stops. */
 const MODEL_RANGE_YARDS = 80;
-/** Nothing fades nearer than this. Past it a plate dims toward MIN_FADE. */
+/** Nothing fades nearer than this. */
 const FADE_FROM_YARDS = 25;
-/** How faint the furthest plate is drawn. Not zero: a faded plate is still a reading. */
+/** Not zero: a faded plate is still a reading. */
 const MIN_FADE = 0.35;
-/** Your threat as a share of the top row's. 1 means you ARE the top row. */
+/** A share of the top row's, so 1 means you ARE the top row. */
 const THREAT_TOP = 1;
 const THREAT_CLOSE = 0.8;
 /**
- * What the game appends to an ability id when an effect is not the ability itself.
- *
- * A dot's aura is its ability's id, which is what makes its art resolvable. Every control
- * or modifier aura is not: the game builds those as `${ability.id}_slow`, `_stun`,
- * `_root` and thirteen more, so asking for art under the whole thing can only 404. Read
- * off the game's own emit sites in `sim/combat/effect_dispatch.ts`.
- *
- * Stripping one is correct by construction rather than by heuristic, since the id was
- * built by concatenation. Three real ability ids nonetheless end in one of these
- * (`brain_freeze`, `dismiss_pet`, `revive_pet`), which is why the spellbook is asked
- * first: an id the game itself names is an ability id and is left alone.
+ * The game builds a control aura's id as `${ability.id}_slow`, so art under the whole id
+ * can only 404. Three real ability ids end in one of these (`brain_freeze`, `dismiss_pet`,
+ * `revive_pet`), which is why the spellbook is asked before any tail comes off.
  */
 const AURA_SUFFIXES = [
   '_absorb',
@@ -152,39 +71,25 @@ const AURA_SUFFIXES = [
   '_ap',
   '_as',
 ];
-/** What a worked-out ability name is marked with. See the header. */
 const GUESS_MARK = '?';
-/** Where the on and off state is kept, account-wide. A preference, not a layout. */
+/** Account-wide: a preference about the player, not a layout belonging to a character. */
 const SHOWN_KEY = 'shown';
-/** How long the toggle's confirmation stays up: long enough to read a chord off it. */
+/** Long enough to read a chord off the toast. */
 const TOAST_MS = 6000;
-/** The readable part of a KeyboardEvent code, so 'KeyF' reads as 'F'. */
 const CODE_PREFIX = /^(?:Key|Digit|Arrow)/;
 
-/**
- * The name colours, which are the game's own, so a plate from this addon reads the same
- * way as the one under it. There is no third colour because the game has no third
- * colour: a neutral mob is drawn plain.
- */
+/** The game's own, so a plate reads like the one under it. It has no neutral colour either. */
 const HOSTILE_NAME = 'rgb(255 85 85)';
 const FRIENDLY_NAME = 'rgb(127 184 255)';
 const NEUTRAL_NAME = 'rgb(230 230 230)';
 
-/**
- * The threat edge, drawn down the left of a plate. The top colour is the game's own
- * threat-plate red; the other two are the kit's warn and calm, so an edge and a bar in
- * the same display are the same vocabulary.
- */
+/** The game's threat red, then the kit's warn and calm, so an edge and a bar share a vocabulary. */
 const EDGE_NONE = 'transparent';
 const EDGE_TOP = 'rgb(192 57 43)';
 const EDGE_CLOSE = 'rgb(200 168 56)';
 const EDGE_CALM = 'rgb(120 160 255 / 60%)';
 
-/**
- * The eight raid marks, in the game's own index order and its own colours. Written
- * rather than drawn, which is the same limit an aura icon has: the mark art is
- * composited on a canvas from the client's own recipe, so there is no file to point at.
- */
+/** The game's own index order. Written rather than drawn: mark art is composited, so there is no file. */
 const MARK_NAMES = ['Star', 'Circle', 'Diamond', 'Triangle', 'Moon', 'Square', 'Cross', 'Skull'];
 const MARK_COLOURS = [
   'rgb(255 226 58)',
@@ -199,54 +104,21 @@ const MARK_COLOURS = [
 
 const plates = new Map();
 
-/**
- * The units that should have a plate right now, rebuilt by the slow pass. Module scope
- * and reused rather than returned, so a pass over forty entities ten times a second
- * allocates nothing.
- */
+/** Reused rather than returned, so a pass over forty entities allocates nothing. */
 const wanted = [];
 
-/**
- * Whether the plates are drawn at all. True until storage says otherwise, which settles
- * a microtask later: nothing is drawn before world entry, so there is no flash to avoid
- * by holding the first pass behind a read.
- */
+/** True until storage says otherwise: nothing draws before world entry, so there is no flash. */
 let shown = true;
 
-function settingNumber(id, fallback) {
-  const value = woc.settings[id];
-  if (typeof value === 'number' && Number.isFinite(value)) {
-    return value;
-  }
-  return fallback;
-}
-
-function settingFlag(id, fallback) {
-  const value = woc.settings[id];
-  if (typeof value === 'boolean') {
-    return value;
-  }
-  return fallback;
-}
-
-function settingText(id, fallback) {
-  const value = woc.settings[id];
-  if (typeof value === 'string' && value !== '') {
-    return value;
-  }
-  return fallback;
-}
-
-/** How far a unit may be and still get a plate. See the header for the ceiling. */
 function drawDistance() {
-  return settingNumber('draw-distance', DEFAULT_DISTANCE);
+  return woc.settings['draw-distance'];
 }
 
 function plateScale() {
-  return settingNumber('scale', DEFAULT_SCALE);
+  return woc.settings.scale;
 }
 
-/** An element with its inline styles, since an addon ships no stylesheet. */
+/** Inline styles because an addon ships no stylesheet. */
 function box(tag, className, styles) {
   const el = document.createElement(tag);
   el.className = className;
@@ -258,17 +130,11 @@ function percent(fraction) {
   return `${String(Math.round(fraction * PERCENT))}%`;
 }
 
-/** '4.2s'. One decimal, which is what a countdown a player reads mid-fight wants. */
 function seconds(left) {
   return `${Math.max(left, 0).toFixed(DECIMALS)}s`;
 }
 
-/**
- * The same countdown for a tile, which has a thirtieth of the room a bar has. No unit,
- * since a countdown on an effect icon is seconds and nothing else, and the suffix is a
- * character wide that a stack count needs. A figure of ten or more loses its decimal,
- * because "12.4" is a character wider than the tile can hold.
- */
+/** No unit suffix: that character is the width a stack count needs. */
 function tileClock(left) {
   const safe = Math.max(left, 0);
   if (safe >= TILE_WHOLE_FROM) {
@@ -277,19 +143,7 @@ function tileClock(left) {
   return safe.toFixed(DECIMALS);
 }
 
-/** 'flame_pillar' reads as 'Flame Pillar'. The FALLBACK, not the name: see the header. */
-function readable(abilityId) {
-  return abilityId
-    .split('_')
-    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-    .join(' ');
-}
-
-/**
- * How much health is left, or null when there is nothing to divide by. `maxHp` is 0 on
- * anything that does not have health, and a fraction that is not a real number reaches a
- * style property as a dropped declaration, which reads as a bar stuck where it was.
- */
+/** Null rather than NaN: a non-finite fraction reaches a style property as a bar stuck where it was. */
 function healthFraction(entity) {
   const max = Number(entity.maxHp);
   const hp = Number(entity.hp);
@@ -299,11 +153,7 @@ function healthFraction(entity) {
   return Math.min(Math.max(hp / max, 0), 1);
 }
 
-/**
- * What a dead unit's figure says. `dead` stays true through both halves of dying, so
- * without `ghost` a player lying where they fell and one who has released read
- * identically, and only one of the two can be picked up.
- */
+/** `dead` stays true through both halves of dying, so only `ghost` tells a corpse from a release. */
 function deadWord(entity) {
   if (entity.ghost === true) {
     return 'ghost';
@@ -321,8 +171,7 @@ function healthText(entity, fraction) {
   return percent(fraction);
 }
 
-/** Hostile and friendly are read; neutral is what is left, since the wire carries one
- * boolean. */
+/** The wire carries one boolean, so neutral is what is left rather than a fact. */
 function standing(entity) {
   if (entity.hostile === true) {
     return 'hostile';
@@ -344,7 +193,6 @@ function nameColour(entity) {
   return NEUTRAL_NAME;
 }
 
-/** A name for anything, including something the server sent without one. */
 function nameOf(entity) {
   const { name } = entity;
   if (typeof name === 'string' && name !== '') {
@@ -361,17 +209,13 @@ function levelText(entity) {
   return String(level);
 }
 
-/** Flat distance between two positions, in yards. Height is in it: a plate is a plate. */
 function distanceBetween(a, b) {
   return Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z);
 }
 
-/**
- * Whether the player asked to see this kind of unit. Anything unrecognised is the hostile
- * set, which costs least when a setting arrives from a future manifest.
- */
+/** An unrecognised mode falls back to hostiles, which costs least on a setting from a future manifest. */
 function askedFor(entity) {
-  const mode = settingText('show', 'hostile');
+  const mode = woc.settings.show;
   if (mode === 'everything') {
     return true;
   }
@@ -388,10 +232,7 @@ function castOf(casts, id) {
   return casts.get(id) ?? null;
 }
 
-/**
- * Whether a full-health unit is quiet enough to hide. The setting is about clutter, and
- * a boss winding up a mechanic at full health is not clutter, so a cast keeps its plate.
- */
+/** A boss winding up at full health is not clutter, so a cast keeps its plate. */
 function quiet(entity, cast) {
   if (cast !== null) {
     return false;
@@ -400,11 +241,7 @@ function quiet(entity, cast) {
   return fraction !== null && fraction >= 1;
 }
 
-/**
- * The unconditional half of the filter: a thing with health, in range, that is not you.
- * A corpse is left out, since a plate over one says nothing a player can act on and the
- * game already draws its own prompt there. An object has no health to draw.
- */
+/** A corpse is out because the game draws its own prompt there, and an object has no health. */
 function platable(entity, player, range) {
   if (entity.id === player.id || entity.kind === 'object' || entity.dead === true) {
     return false;
@@ -415,14 +252,11 @@ function platable(entity, player, range) {
   return distanceBetween(entity.pos, player.pos) <= range;
 }
 
-/**
- * Every unit that should have a plate, nearest first, capped. Nothing is projected here:
- * the set must not depend on where the camera is pointing.
- */
+/** Nothing is projected here: which units get a plate must not depend on where the camera points. */
 function collect(player, casts) {
   wanted.length = 0;
   const range = drawDistance();
-  const hideFull = settingFlag('hide-full', false);
+  const hideFull = woc.settings['hide-full'];
   for (const [id, entity] of woc.world.entities) {
     if (platable(entity, player, range) && askedFor(entity)) {
       const cast = castOf(casts, id);
@@ -432,15 +266,11 @@ function collect(player, casts) {
     }
   }
   wanted.sort((a, b) => a.away - b.away);
-  const cap = Math.round(settingNumber('max-plates', DEFAULT_MAX_PLATES));
+  const cap = Math.round(woc.settings['max-plates']);
   wanted.length = Math.min(wanted.length, cap);
 }
 
-/**
- * The ability an effect was applied by, which is what art is filed under. The aura's own
- * id wherever the game names one, since an id it can name is an ability id by definition.
- * Otherwise the tail comes off: see `AURA_SUFFIXES`.
- */
+/** Art is filed under the applying ability. An id the spellbook names is one already. */
 function artId(auraId) {
   if (woc.world.abilities.byId(auraId) !== null) {
     return auraId;
@@ -456,12 +286,7 @@ function artId(auraId) {
   return base;
 }
 
-/**
- * Skill art for one effect, or null. An aura carries the id of the ability that applied
- * it, so a player's aura resolves through their class and a mob's resolves through
- * nothing. `sourceId` is 0 when the game did not say, which finds no caster and answers
- * null like any other miss.
- */
+/** Art is filed per player class, so a mob's aura resolves through nothing. `sourceId` is 0 for unsaid. */
 function auraIcon(aura) {
   if (typeof aura.id !== 'string') {
     return null;
@@ -473,13 +298,11 @@ function auraIcon(aura) {
   return woc.ui.icon.ability(artId(aura.id), caster.templateId);
 }
 
-/** Whether you applied this one, which is what puts it at the front of the strip. */
 function appliedByPlayer(aura) {
   const { player } = woc.world;
   return player !== null && aura.sourceId === player.id;
 }
 
-/** Yours first, then whatever is going away soonest. */
 function beforeAura(a, b) {
   const mine = appliedByPlayer(a);
   if (mine !== appliedByPlayer(b)) {
@@ -488,11 +311,7 @@ function beforeAura(a, b) {
   return a.remaining < b.remaining;
 }
 
-/**
- * Put one effect in its place in the strip, or drop it. Written in place rather than
- * through sort or splice: this runs per effect per plate ten times a second, and a strip
- * capped at four is small enough that an insertion costs less than a sort's array.
- */
+/** In place rather than a sort: this runs per effect per plate ten times a second. */
 function insertAura(out, aura) {
   let at = out.length;
   while (at > 0 && beforeAura(aura, out[at - 1])) {
@@ -508,14 +327,7 @@ function insertAura(out, aura) {
   out[at] = aura;
 }
 
-/**
- * The effects worth a tile, into the array the plate already owns.
- *
- * Harmful only, which is one rule for every unit: on a hostile it is what you and your
- * group have put on it, and on a friendly it is what is being done to them.
- * `world.harmful` is the game's own rule, and an aura's `value` cannot stand in for it
- * because a damage-over-time's per-tick figure is positive exactly as a heal's is.
- */
+/** `world.harmful` is the game's own rule; `value` cannot stand in, since a dot's tick is positive too. */
 function selectAuras(entity, out) {
   out.length = 0;
   const { auras } = entity;
@@ -529,7 +341,6 @@ function selectAuras(entity, out) {
   }
 }
 
-/** How much of an effect is left, or 0 when nothing said how long it was. */
 function auraFraction(aura) {
   if (!(Number.isFinite(aura.duration) && aura.duration > 0)) {
     return 0;
@@ -537,25 +348,21 @@ function auraFraction(aura) {
   return aura.remaining / aura.duration;
 }
 
-/** A tile is announced by this, since a square whose whole face is art has no room. */
+/** A square whose whole face is art has no room for a name, so this is what announces it. */
 function auraLabel(aura) {
   if (typeof aura.name === 'string' && aura.name !== '') {
     return aura.name;
   }
-  return readable(String(aura.id));
+  return woc.fmt.titleCase(String(aura.id));
 }
 
-/**
- * What to call an ability, and whether the name had to be worked out. One lookup
- * answering both, since they have one source: `world.abilities` covers your spellbook, so
- * every mob mechanic comes back marked.
- */
+/** The mark stays ours: this label also reaches an accessible name, where a glued-on `?` reads as part of it. */
 function describe(abilityId) {
-  const known = woc.world.abilities.byId(abilityId) ?? null;
-  if (known === null) {
-    return { label: `${readable(abilityId)}${GUESS_MARK}`, guessed: true };
+  const found = woc.world.abilities.describe(abilityId);
+  if (found.known) {
+    return { label: found.name, guessed: false };
   }
-  return { label: known.name, guessed: false };
+  return { label: `${found.name}${GUESS_MARK}`, guessed: true };
 }
 
 function buildHead() {
@@ -578,11 +385,8 @@ function buildHead() {
 }
 
 /**
- * One plate: an anchor the loader keeps over the unit, and everything inside it. The
- * anchor centres its content on the point, so the plate needs no placement of its own.
- * The scale is on the inner element, because the anchor's own transform is the loader's
- * and writing over it would move every plate half its width. The origin is the bottom,
- * so a bigger plate grows up off the model rather than down into it.
+ * The scale goes on the inner element: the anchor's transform is the loader's, and writing
+ * over it moves the plate off its point. Bottom origin, so a bigger plate grows off the model.
  */
 function createPlate(entity) {
   const anchor = woc.ui.anchor3d({ unit: entity.id, over: 'head' }, { className: 'woc-fm-anchor' });
@@ -637,7 +441,6 @@ function clearPlates() {
   }
 }
 
-/** One tile, built the first time the strip needs that many. */
 function tileAt(entry, at) {
   const held = entry.tiles[at];
   if (held !== undefined) {
@@ -650,11 +453,7 @@ function tileAt(entry, at) {
   return tile;
 }
 
-/**
- * Draw one effect in one slot. The identity half (the name, the art, the school) is
- * written only when the slot changes hands, since building an icon URL and reaching for
- * the caster is the expensive part.
- */
+/** Name, art and school are written only when the slot changes hands: resolving art is the expensive half. */
 function paintTile(entry, at, aura) {
   const tile = tileAt(entry, at);
   if (entry.slots[at] !== aura.id) {
@@ -669,7 +468,7 @@ function paintTile(entry, at, aura) {
   tile.el.style.display = '';
 }
 
-/** A slot with nothing in it goes back to being unnamed, or it goes on announcing. */
+/** Unnamed again, or the slot goes on announcing an effect that has gone. */
 function hideTile(entry, at) {
   const tile = entry.tiles[at];
   if (tile === undefined) {
@@ -681,7 +480,7 @@ function hideTile(entry, at) {
 }
 
 function paintStrip(entry, entity) {
-  if (settingFlag('auras', true)) {
+  if (woc.settings.auras) {
     selectAuras(entity, entry.auras);
   } else {
     entry.auras.length = 0;
@@ -694,11 +493,7 @@ function paintStrip(entry, entity) {
   }
 }
 
-/**
- * Your share of this mob's hate table, or null. A mob only, because that is the only
- * thing that keeps one: on a player the table is empty, and an edge drawn from it would
- * be a permanent nothing dressed as a reading.
- */
+/** A mob only: a player keeps no hate table, so an edge from it would be a permanent nothing. */
 function threatShare(entity) {
   if (entity.hostile !== true) {
     return null;
@@ -740,12 +535,7 @@ function paintMark(entry, id, markers) {
   entry.mark.style.display = '';
 }
 
-/**
- * How faint a plate is, from the camera's own distance. `ui.project` is the only thing
- * that can answer this: depth is yards along the direction the camera is looking, so it
- * stays right while the player swings it. Null means the point cannot be drawn, and the
- * loader has already hidden the anchor for it.
- */
+/** Depth, not distance, so the fade holds while the camera swings. Null means the point cannot be drawn. */
 function fadeFor(id) {
   const at = woc.ui.project({ unit: id, over: 'head' });
   if (at === null) {
@@ -758,7 +548,7 @@ function fadeFor(id) {
   return Math.max(1 - past * (1 - MIN_FADE), MIN_FADE);
 }
 
-/** Size the plate, and only when the setting moved: a transform write is a repaint. */
+/** Only when the setting moved: a transform write is a repaint. */
 function paintScale(entry) {
   const scale = plateScale();
   if (entry.scale === scale) {
@@ -768,7 +558,6 @@ function paintScale(entry) {
   entry.plate.style.transform = `scale(${String(scale)})`;
 }
 
-/** Everything on a plate that no watch key reports. Ten times a second. */
 function paintSlow(entry, entity, markers) {
   entry.name.textContent = nameOf(entity);
   entry.name.style.color = nameColour(entity);
@@ -780,7 +569,6 @@ function paintSlow(entry, entity, markers) {
   entry.plate.style.opacity = String(fadeFor(entity.id));
 }
 
-/** The health bar: a fill, and a figure that says dead rather than nothing. */
 function paintHealth(entry, entity) {
   const fraction = healthFraction(entity);
   entry.health.update({
@@ -790,7 +578,7 @@ function paintHealth(entry, entity) {
   });
 }
 
-/** How much of the cast is LEFT, which is the sense the kit draws a fill in. */
+/** LEFT rather than elapsed, which is the sense the kit draws a fill in. */
 function castFraction(cast) {
   if (!(Number.isFinite(cast.total) && cast.total > 0)) {
     return 0;
@@ -798,13 +586,9 @@ function castFraction(cast) {
   return cast.remaining / cast.total;
 }
 
-/**
- * The cast bar, drawn in the plain fill whatever it is. No school and no tone: nothing
- * on the wire says a cast's school, and a tone would put urgency on every mob mechanic in
- * the fight at once. The label is written only when the ability changes.
- */
+/** No school, since nothing on the wire says one, and no tone, which would mark every mob cast urgent. */
 function paintCast(entry, cast) {
-  if (cast === null || !settingFlag('casts', true)) {
+  if (cast === null || !woc.settings.casts) {
     entry.cast.el.style.display = 'none';
     entry.ability = '';
     return;
@@ -817,11 +601,7 @@ function paintCast(entry, cast) {
   entry.cast.el.style.display = '';
 }
 
-/**
- * Bring the plates in line with what is around you, and draw everything slow.
- * `world.markers` is read once here rather than once per plate, since the loader builds
- * that map on every read.
- */
+/** `world.markers` is read once rather than per plate: the loader builds that map on every read. */
 function slowPass() {
   const { player } = woc.world;
   if (player === null || !shown) {
@@ -846,11 +626,7 @@ function slowPass() {
   }
 }
 
-/**
- * The two figures that move continuously, off the entity the loader already holds. A
- * plate whose unit has left interest scope is hidden rather than destroyed here: the slow
- * pass owns which plates exist.
- */
+/** A plate whose unit has gone is hidden rather than destroyed: the slow pass owns which plates exist. */
 function fastPass() {
   const { casts } = woc.world;
   for (const [id, entry] of plates) {
@@ -864,13 +640,11 @@ function fastPass() {
   }
 }
 
-/** 'Alt+Shift+KeyF' reads as 'Alt+Shift+F', which is what a player's keyboard says. */
 function comboLabel(combo) {
   const at = combo.lastIndexOf('+');
   return `${combo.slice(0, at + 1)}${combo.slice(at + 1).replace(CODE_PREFIX, '')}`;
 }
 
-/** The sentence naming the chord, or nothing at all when there is no chord to name. */
 function wayBack() {
   const combo = woc.keys.combo('toggle');
   if (combo === null) {
@@ -879,12 +653,7 @@ function wayBack() {
   return ` Press ${comboLabel(combo)} to bring them back.`;
 }
 
-/**
- * Say what just happened, and for the off case say how to undo it. The two are not
- * symmetrical because the states are not: plates coming back are their own confirmation,
- * and plates going away leave a screen that looks like an addon that has stopped
- * working. The chord is read live, so a player who rebound it is told their own key.
- */
+/** Only the off case names the chord: plates going away leave nothing on screen to find again. */
 function announce() {
   if (shown) {
     woc.ui.toast('Facemark: plates on.', { timeout: TOAST_MS });
@@ -899,11 +668,7 @@ function remember() {
   });
 }
 
-/**
- * Take the stored answer back. Account-wide, so it settles without waiting for a
- * character, and a value of the wrong kind is left alone rather than coerced: a stored
- * answer nobody can read is not a request to turn the display off.
- */
+/** A stored value of the wrong kind is left alone: it is not a request to turn the display off. */
 async function restore() {
   const stored = await woc.storage.get(SHOWN_KEY, true);
   if (typeof stored === 'boolean') {
@@ -912,9 +677,7 @@ async function restore() {
   }
 }
 
-// The set of units in scope is the one thing here a key reports, and it is what makes a
-// unit walking round a corner get a plate at once rather than a tenth of a second later.
-// Everything the key does not report is why there is a sampler underneath it.
+// Membership is the one thing a key reports, so a unit walking into range gets a plate at once.
 woc.world.on('entities', () => {
   slowPass();
 });
@@ -927,6 +690,7 @@ woc.onFrame(() => {
   }
 });
 
+// Not `toggleKey`: there is no frame, and this chord also writes the setting and toasts.
 woc.keys.bind('toggle', () => {
   shown = !shown;
   remember();
@@ -938,11 +702,7 @@ restore().catch((err) => {
   woc.warn('could not read whether the plates are shown', err);
 });
 
-/**
- * Take every plate down and let the next pass build them again. A plate's shape is
- * decided when it is built and the filters decide which units have one at all, so a
- * settings change is a different display rather than a repaint of this one.
- */
+/** A plate's shape is fixed when it is built, so a settings change is a rebuild rather than a repaint. */
 woc.onSettingsChange(() => {
   clearPlates();
   slowPass();

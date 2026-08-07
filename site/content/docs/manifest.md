@@ -58,6 +58,8 @@ Declare them and the manager builds the form, the keybind editor, and the confli
 
 Both are hydrated before your first line runs, so `woc.settings['max-rows']` is there immediately rather than arriving later. Changes reach you through `woc.onSettingsChange`, and a rebind moves your live binding for you.
 
+**What you declare here is what you get, so your addon does not check.** The loader coerces every stored value against this declaration before your code sees it: a number is a finite number clamped into the `min` and `max` above, a boolean is a boolean, a `select` is one of the options you still offer, and anything that is none of those falls back to the `default` on this line. `woc.settings['max-rows']` is therefore a number between 3 and 40 on your first line and on every line after it, and a `typeof` guard with a fallback beside it can never fire. [The API page](/docs/api) has the worked version, and the count of how many addons wrote that guard anyway.
+
 You can only bind an id you declared. That is what makes the editor able to list your keys before your addon has run.
 
 A `label` is read in two places, not one. The manager puts it beside the control, and an addon published through the official marketplace gets [its own page](/addons) on this site where every setting and every default binding is printed from this same declaration. So a label is player-facing text rather than a note to yourself: write it as the sentence a checkbox deserves, and the page and the pane cannot disagree about what the setting does.

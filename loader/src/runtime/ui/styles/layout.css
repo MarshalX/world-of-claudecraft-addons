@@ -1,0 +1,86 @@
+/* The layout vocabulary an addon assembles a panel out of: ui/kit/layout.ts.
+ *
+ * `flex-shrink: 0` on all three, like `.woc-bar` in bar.css: a screenful of these
+ * sits in a column flex container, where a flex item shrinks by default until its
+ * own `overflow: hidden` eats the second line.
+ *
+ * Nothing here sets a font size or a height. An addon that hand-sizes a kit control
+ * outranks the coarse-pointer floor in touch.css; a class cannot.
+ *
+ * `woc-layout-*` and not the bare words: `.woc-row` is the manager's installed-addon
+ * row in panes.css.
+ */
+
+/* Comfortable is the var() fallback of 6px below, which is kit.css's own frame gap.
+   Declaring it would mean a second `#woc-addons` rule, which the build refuses. */
+#woc-addons .woc-density-compact,
+#woc-addons .woc-density-bare {
+  --woc-layout-gap: 4px;
+}
+
+/* `--woc-gap` is re-declared rather than only read, so a caller's inline value does
+   not inherit into a nested row. */
+#woc-addons .woc-layout-column {
+  --woc-gap: var(--woc-layout-gap, 6px);
+  display: flex;
+  flex-direction: column;
+  gap: var(--woc-gap);
+  flex-shrink: 0;
+  /* A flex item's floor is its content, so without this a long column pushes the
+     frame open instead of scrolling inside it. */
+  min-height: 0;
+}
+
+/* TWO gaps: a wrapping strip sits far apart across the line and close together when
+   it wraps, or two rows read as two strips. `--woc-wrap-gap` defaults to `--woc-gap`
+   on the element, so one number still spaces both axes. The shorthand takes them in
+   CSS's order, row then column. */
+#woc-addons .woc-layout-row {
+  --woc-gap: var(--woc-layout-gap, 6px);
+  --woc-wrap-gap: var(--woc-gap);
+  display: flex;
+  flex-direction: row;
+  gap: var(--woc-wrap-gap) var(--woc-gap);
+  flex-shrink: 0;
+  /* Without this a row of chips pushes the panel wider than it declared instead of
+     wrapping inside it. */
+  min-width: 0;
+}
+
+/* The base rule sets no alignment on purpose: ui/kit/layout.ts writes one of these on
+   every row, so the default lives in one place. Each carries the row class too, so it
+   weighs (1,2,0). */
+#woc-addons .woc-layout-row.woc-layout-row-start {
+  align-items: flex-start;
+}
+
+#woc-addons .woc-layout-row.woc-layout-row-end {
+  align-items: flex-end;
+}
+
+#woc-addons .woc-layout-row.woc-layout-row-center {
+  align-items: center;
+}
+
+/* A small label beside a bigger figure: centring lines up neither of them. */
+#woc-addons .woc-layout-row.woc-layout-row-baseline {
+  align-items: baseline;
+}
+
+#woc-addons .woc-layout-row.woc-layout-row-wrap {
+  flex-wrap: wrap;
+}
+
+/* `block` and not flex: text in a flex box is one item per word-run. */
+#woc-addons .woc-layout-line {
+  display: block;
+  flex-shrink: 0;
+  line-height: 1.35;
+}
+
+/* `muted` carries the 12px, which is the game's own desktop caption scale. An inline
+   size would outrank the density rules. No touch floor: a caption is not a tap target. */
+#woc-addons .woc-layout-line.woc-layout-line-muted {
+  font-size: 12px;
+  color: var(--color-text-muted, rgb(153 141 106));
+}

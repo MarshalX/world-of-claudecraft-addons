@@ -580,6 +580,31 @@ export interface WorldApi {
   dispellable: (aura: Aura, offensive?: boolean) => boolean;
 
   /**
+   * Flat distance from the player to a point, in yards, IGNORING HEIGHT.
+   *
+   * The distance you would walk, which is what the game's own range gates
+   * measure. Null before the world is up, where your first line runs. Added in
+   * API minor 4.
+   */
+  distanceTo: (at: { x: number; z: number }) => number | null;
+
+  /**
+   * Which way to turn to face a point: degrees CLOCKWISE from where you are
+   * looking, with -180 <= turn < 180. 0 is straight ahead, 90 is to your right.
+   *
+   * Null before the world is up, and null for a facing that is not finite, which
+   * is a real state rather than a defensive one. `fmt.compass` takes this
+   * convention and this null, so the two compose:
+   *
+   * ```js
+   * const arrow = woc.fmt.compass(woc.world.bearingTo(node));
+   * ```
+   *
+   * Added in API minor 4.
+   */
+  bearingTo: (at: { x: number; z: number }) => number | null;
+
+  /**
    * The game's own recipe table, copied and frozen.
    *
    * A COPY: the game renders its own crafting window from the original, so a

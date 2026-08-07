@@ -1,15 +1,15 @@
 {
   "id": "veinsight",
   "name": "Veinsight",
-  "version": "1.1.2",
+  "version": "1.1.3",
   "apiVersion": 1,
-  "apiMinor": 2,
+  "apiMinor": 4,
   "author": "MarshalX",
   "description": "Every ore vein, wood stand and herb patch in the world, pinned where it stands and listed nearest first with a distance, a bearing and your own respawn timer. Says which ones no tool in your bags can open.",
   "entry": "main.js",
   "preview": {
     "file": "preview.png",
-    "alt": "On the left, The circuit, a panel headed Veinsight, with three pins standing out in the world below it. The panel lists the four gathering nodes in range in Eastbrook Vale, nearest first, under a note reading Timers are yours alone, nobody else can take a node off you, which is the line the panel is free to draw because nothing is being held back: everything in reach is on screen. Each row is a draining bar carrying what the node is, the zone, the distance in yards and an arrow for the way to turn to reach it: a wood stand 19 yards behind at 1m 1s, an ore vein 27 yards off to the upper left at 1m 23s, another ore vein 30 yards straight ahead reading Yours rather than a time, and a third at 33 yards with 9 seconds left, drawn in a warm amber because it is nearly back. Below the panel, one pin over each of the three ore veins: a square tile on a thin pillar in the game's own grey for ore, each standing at its own height on the slope. The left one is dimmed and reads 83s, since it is the vein just harvested and still coming back; the middle reads Yours; the right is dimmed and reads 9s. The pillars are drawn three different ways to say how the ground under each pin was arrived at, which is the one thing on screen that is never a fact: solid where this character's own harvest measured it, dashed where somebody standing beside it gave it away, and dotted where nothing better was known and the pin sits at the player's own height. On the right, The tool gate, a panel headed Veinsight, with three pins standing out in the world below it. The panel lists the four gathering nodes in range in Eastbrook Vale, nearest first, under a note reading Timers are yours alone, nobody else can take a node off you. Three of the four rows are herb patches, at 25, 32 and 40 yards, and where a countdown would be each one reads Tool: this character carries a pick and an axe and no sickle, so no amount of waiting will open any of them, and the panel says which of the two reasons a node is unavailable for rather than leaving an empty timer to be read as a bug. The fourth row is a wood stand 57 yards off to the right reading Yours, meaning it is standing there now and the axe in these bags opens it, which is what makes the other three mean something rather than reading as a panel that simply says Tool. Below the panel, one pin over each of the three herb patches, a square tile on a thin pillar in the game's own green for herbs. Every pillar here is dotted, unlike the circuit picture beside it, because a dotted pillar means the ground under the pin was never measured and the tile is hanging at the player's own height: nobody has harvested this run and nobody is standing on it, and a height is something a harvest leaves behind."
+    "alt": "On the left, The circuit, a panel of gathering nodes in range, with pins in the world On the right, The tool gate, the same panel, three nodes reading Tool rather than a time"
   },
   "data": ["nodes.json"],
   "homepage": "https://github.com/MarshalX/world-of-claudecraft-addons",

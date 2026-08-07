@@ -9,18 +9,20 @@
 
 import type { AddonInfo, GameInfo, Unsubscribe } from './addon.js';
 import type { BusApi } from './bus.js';
+import type { FmtApi } from './fmt.js';
 import type { KeysApi } from './keys.js';
 import type { NetApi } from './net.js';
 import type { SoundApi } from './sound.js';
 import type { StorageApi } from './storage.js';
 import type { UiApi } from './ui.js';
+import type { Frame } from './ui-frame.js';
 import type { WorldApi } from './world.js';
 
 declare global {
   const woc: WocApi;
 }
 
-export type { AbilityIndex, AbilityInfo } from './abilities.js';
+export type { AbilityDescription, AbilityIndex, AbilityInfo } from './abilities.js';
 export type { AddonInfo, GameInfo, Unsubscribe } from './addon.js';
 export type {
   ArenaFormat,
@@ -28,7 +30,7 @@ export type {
   ArenaStanding,
   ArenaStandings,
 } from './arena.js';
-export type { BusApi, BusMessage } from './bus.js';
+export type { BusApi, BusMessage, Publication } from './bus.js';
 export type {
   CharacterInfo,
   CraftingIdentity,
@@ -81,6 +83,7 @@ export type {
   FinderRole,
   RoleNeeds,
 } from './finder.js';
+export type { FmtApi } from './fmt.js';
 export type {
   EncounterInfo,
   GroupInfo,
@@ -150,6 +153,8 @@ export type {
   TooltipTone,
 } from './ui-controls.js';
 export type { Frame, FrameBox, FrameDensity, FrameOpts } from './ui-frame.js';
+export type { LineOpts, LineTone, RowAlign, RowOpts, StackOpts } from './ui-layout.js';
+export type { Destroyable, List, ListOpts } from './ui-list.js';
 export type {
   Bar,
   BarOpts,
@@ -211,6 +216,12 @@ export interface WocApi {
   readonly storage: StorageApi;
   /** Publish and subscribe between addons, in this page. */
   readonly bus: BusApi;
+  /**
+   * Durations, ids as words, counted nouns and arrows.
+   *
+   * Pure string formatting, nothing drawn. Added in API minor 4.
+   */
+  readonly fmt: FmtApi;
 
   /**
    * A JSON file shipped in your own addon directory.
@@ -233,7 +244,17 @@ export interface WocApi {
    */
   data: (name: string) => Promise<unknown>;
 
-  /** Settings declared in addon.json, hydrated before your code runs. */
+  /**
+   * Settings declared in addon.json, hydrated before your first line runs.
+   *
+   * TOTAL over what your manifest declares: every declared setting is present, of
+   * its declared type, finite if it is a number, clamped into its declared range,
+   * and one of the options a `select` still offers, falling back to your declared
+   * default otherwise. So a `typeof` guard with a fallback beside it is dead code.
+   *
+   * An id you did NOT declare reads as `undefined`, which is a bug in your
+   * manifest rather than a value to defend against.
+   */
   readonly settings: Readonly<Record<string, unknown>>;
   onSettingsChange: (handler: (settings: Readonly<Record<string, unknown>>) => void) => Unsubscribe;
 
@@ -285,4 +306,26 @@ export interface WocApi {
    * strings. Added in API minor 2.
    */
   onFrame: (handler: (dt: number) => void) => Unsubscribe;
+
+  /**
+   * A repaint that runs at most once a frame, however many times you ask.
+   *
+   * Returns the function you call to ask.
+   *
+   *     const repaint = woc.paint(draw, { frame });
+   *     woc.world.on('bagChanged', repaint);
+   *
+   * With `frame`, a request made while it is hidden is HELD rather than dropped:
+   * one repaint runs when the panel comes back, so it returns current, not stale.
+   *
+   * That costs one boolean read per frame for as long as a repaint is owed, so a
+   * panel closed and never reopened holds a seat on the loop.
+   *
+   * Only pass `frame` when the handler ONLY paints. Bookkeeping inside one stops
+   * while the panel is closed, and nothing reports that.
+   *
+   * A figure that moves on its own wants `woc.setInterval`; a bar animating every
+   * frame wants `woc.onFrame`. Added in API minor 4.
+   */
+  paint: (handler: () => void, opts?: { frame?: Frame }) => () => void;
 }

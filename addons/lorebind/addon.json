@@ -1,15 +1,15 @@
 {
   "id": "lorebind",
   "name": "Lorebind",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "apiVersion": 1,
-  "apiMinor": 3,
+  "apiMinor": 4,
   "author": "MarshalX",
   "description": "A browser for every item in the game, and the name service every other addon subscribes to.",
   "entry": "main.js",
   "preview": {
     "file": "preview.png",
-    "alt": "the Lorebind window browsing every epic piece of armor in the game. Under the title a row of tabs reads All, Armor, Weapon, Food, Quest, Other, with Armor open. Under that, six quality chips, each written in the game's own colour for its tier: grey Poor, white Common, green Uncommon, blue Rare, purple Epic and orange Legendary, with Epic alone lit in its own colour and outlined in it, and the other five dimmed. Then three labelled controls, Search, Slot and Sort: a search box reading name, id, kind or slot, and two dropdowns of the loader's own reading Any slot and Name, with an unticked box reading Only what I have seen under them. The body of the window is the game's own item art in a grid nine squares across and three and a bit rows deep, scrolling, every square edged in the purple the game paints an epic item with and carrying the same soft purple glow it gives that tier in a bag: rings, hoods, gauntlets, breastplates, legguards, boots, belts and helms. The third square of the first row, a hood, is ringed in gold, and the record under the grid is its: a larger copy of the same art beside Ashstalker Cowl written in that same purple, then a column of facts one to a line, the way the game's own item tooltip reads: Epic leather armor, helmet; 168 Armor; plus 8 Agility, plus 8 Stamina and plus 18 Warfare in green; Item level 31; Requires level 20; Ashstalker Kit; Soulbound; Honor price 900; and last, quieter than the rest, ashstalker_cowl and from the table. Two lines close the panel: Showing 120 of 156 items, narrow it to see the rest; and 831 named from the table, 1 from a roll, 1 by nothing, Seen 8."
+    "alt": "the Lorebind window browsing the game's epic armor: a grid of item art, each square edged in the game's own colour for its tier, with one item's record open under it"
   },
   "data": ["items.json"],
   "homepage": "https://github.com/MarshalX/world-of-claudecraft-addons",

@@ -84,8 +84,17 @@ function coerceSetting(decl: SettingDecl, stored: unknown): SettingValue | null 
   return coerceString(stored);
 }
 
-/** The value a setting takes when storage holds nothing usable for it. */
+/**
+ * The value a setting takes when storage holds nothing usable for it.
+ *
+ * Clamping a number default looks redundant against the schema's own refine and
+ * is not: this module is total over whatever declaration it is handed, including
+ * ones from a marketplace running an older validator.
+ */
 function defaultValue(decl: SettingDecl): SettingValue {
+  if (decl.type === 'number') {
+    return clampNumber(decl.default, decl);
+  }
   return decl.default;
 }
 

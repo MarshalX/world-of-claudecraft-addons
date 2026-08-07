@@ -1,24 +1,18 @@
 // Satchel on the stage: an account somebody has been playing for three days.
 //
-// The state worth photographing cannot be walked into, which is the same reason ledgerline's
-// scenarios are shaped the way they are. Every pane here is drawn from a record this addon wrote
-// down while its player was logged in, and the panes that matter are the ones about a character
-// who is not logged in now. So a scenario is a sequence of logins: Bruk three days ago, Sena
-// yesterday, Marshal now, with `stage.elapse` putting the first two in the past.
+// Every pane is drawn from a record this addon wrote while its player was logged in, and the
+// panes that matter are about a character who is NOT logged in now, so a scenario is a sequence
+// of logins with `stage.elapse` putting the first two in the past. The switch is the real one:
+// writing a fixture straight into storage would photograph a record shape rather than the
+// recorder, which is the half that can actually be wrong.
 //
-// The switch is the real one. The game clones and removes its HUD rather than reloading, so a
-// character change inside one page load is an ordinary event and `world.characterKey` moves with
-// it. Writing a fixture straight into storage would photograph a record shape rather than the
-// recorder, which is the half that has actually been wrong before.
-//
-// Only a reading taken at the counter is recorded, so a scenario that wants an alt's bank has to
-// stand that alt at one. Bruk never does, which is the ordinary case and is what the roster's
+// Only a reading taken AT the counter is recorded, so a scenario wanting an alt's bank has to
+// stand that alt at one. Bruk never does, which is the ordinary case and what the roster's
 // per-store ages are there to say.
 //
-// Every item id ships painted art, taken from the deployed `/ui/items/mapping.json`, so a blank
-// square in a shot is a real defect rather than a fixture naming a file that never existed.
-// `silverleaf_herb` is in on purpose: its art is filed under "Sheenleaf Herb", one of the 21 ids
-// in 303 where the art name and the game's own display name disagree.
+// Every id ships painted art, from the deployed `/ui/items/mapping.json`, so a blank square in a
+// shot is a real defect rather than a fixture naming a file that never existed.
+// `silverleaf_herb` is in on purpose: its art is filed under "Sheenleaf Herb".
 
 import { inSeries } from '../../loader/src/shared/sequence.ts';
 import type { FrameState, Scenario, Stage, WorldDraft } from '../../stage/src/stage.ts';
@@ -107,10 +101,8 @@ const BRUK: Session = {
 };
 
 /**
- * Sena, yesterday: the alt who actually banks.
- *
- * Her bank is the pane the game cannot draw at all once she is logged out, and it is
- * recorded because this session stands her at a banker.
+ * The alt who banks. Her bank is the pane the game cannot draw once she is logged out, and it is
+ * recorded only because this session stands her at one.
  */
 const SENA: Session = {
   name: 'Sena',
@@ -152,9 +144,8 @@ const SENA: Session = {
 };
 
 /**
- * The mailbox Marshal is standing at. Two unread, which is what the title badge counts, and two
- * of the letters carry a parcel: an attachment is an item the character owns and cannot see, so
- * the index counts it exactly like a bag cell.
+ * Two unread, which is what the title badge counts, and two parcels: an attachment is an item the
+ * character owns and cannot see, so the index counts it like a bag cell.
  */
 const LETTERS: Letter[] = [
   {
@@ -203,13 +194,9 @@ const LETTERS: Letter[] = [
 ];
 
 /**
- * Marshal, now: the character in play, at a banker and a mailbox at once. Not a state a player is
- * often in, and it is the one worth photographing: it puts a live reading behind all three detail
- * panes at the same time.
- *
- * `mosshide_vest` is worn and in the bags, which is the spare mark; the ores are split across
- * cells, which is the split mark; and the bank holds copper ore the bags hold too, which is the
- * carried mark. All three come from ids alone.
+ * The character in play, at a banker and a mailbox at once, which puts a live reading behind all
+ * three detail panes. The vest is worn and carried (spare), the ores are split across cells
+ * (split), and the bank holds ore the bags hold too (carried). All three come from ids alone.
  */
 const MARSHAL: Session = {
   name: 'Marshal',
@@ -318,13 +305,16 @@ function pause(ms: number): Promise<void> {
 /**
  * Let the addon's storage round trip and its queued repaint land.
  *
- * A real timer rather than a count of microtasks: the records are read back with one
- * `storage.keys()` and then a `get` per character, so start-up is several promise hops
- * deep, and every repaint after it rides a real animation frame here.
+ * A real timer rather than a turn count: the records are read with one `storage.keys()` and a
+ * `get` per character, so start-up is several promise hops deep.
  */
 async function drawn(stage: Stage): Promise<void> {
   stage.poll();
   await pause(SETTLE_MS);
+  // The repaint rides `woc.paint`, which runs on the loader's own frame loop, and on the stage
+  // that loop is driven by hand rather than by the browser. Without this the panel holds
+  // everything it read and draws none of it.
+  stage.frame();
 }
 
 /** How long to let a session's art finish before the next one paints over it. */
@@ -332,16 +322,10 @@ const IMAGES_MS = 8000;
 const IMAGES_POLL_MS = 60;
 
 /**
- * Hold a character switch until this character's art has finished loading.
- *
- * A bag cell is reused rather than rebuilt, so logging in as somebody else points the same square
- * at a different item: `src` is reassigned, the browser cancels the request in flight, and the
- * abandoned request lands as `net::ERR_ABORTED`. On screen that is invisible and correct. To
- * `pnpm shots` it is a failed request, and that tool is right to refuse to photograph one: a
- * transport failure and an item the game ships no art for produce the same collapsed slot.
- *
- * So the scenario waits rather than the tool relaxing. A player switching characters genuinely
- * does leave a beat between logins.
+ * Hold a switch until this character's art has loaded. A bag cell is REUSED, so logging in as
+ * somebody else reassigns `src` and the cancelled request lands as `net::ERR_ABORTED`, which
+ * `pnpm shots` is right to refuse to photograph: a transport failure and an item with no art
+ * produce the same collapsed slot. A player switching characters leaves a beat too.
  */
 function imagesSettled(): Promise<void> {
   return new Promise((resolve) => {
@@ -382,7 +366,7 @@ async function playedForDays(stage: Stage): Promise<void> {
     await drawn(stage);
     await imagesSettled();
   });
-  await artLanded();
+  await artLanded(stage);
 }
 
 /** How long to wait for the item art manifest, which every label on screen comes from. */
@@ -390,10 +374,8 @@ const ART_MS = 5000;
 const ART_POLL_MS = 50;
 
 /**
- * The one label in this fixture that proves the manifest landed. `silverleaf_herb` files its art
- * under "Sheenleaf Herb", one of the 21 ids in 303 where the art name and the game's display name
- * disagree. That divergence is what makes it usable as a signal: every other row reads the same
- * either way, so waiting on a label that merely looks like a name would resolve immediately.
+ * The one label that PROVES the manifest landed: `silverleaf_herb` files its art under "Sheenleaf
+ * Herb", so it reads differently either way where every other row reads the same.
  */
 const ART_PROOF = 'Sheenleaf Herb';
 
@@ -402,10 +384,13 @@ const ART_PROOF = 'Sheenleaf Herb';
  * `ui.icon.itemArtName` answers null until the manifest is read, so a picture taken before it
  * lands is a panel of ids read back as words.
  */
-function artLanded(): Promise<void> {
+function artLanded(stage: Stage): Promise<void> {
   return new Promise((resolve) => {
     let waited = 0;
     const look = (): void => {
+      // A frame per look, for the reason `drawn` runs one: the manifest landing asks for a
+      // repaint and nothing on the stage performs one unless a scenario says so.
+      stage.frame();
       const labels = [...document.querySelectorAll('[data-list="items"] .woc-bar-label')];
       if (labels.some((el) => el.textContent === ART_PROOF) || waited >= ART_MS) {
         resolve();
@@ -433,22 +418,17 @@ function openTab(label: string): void {
 async function onTab(stage: Stage, label: string): Promise<void> {
   await playedForDays(stage);
   openTab(label);
+  stage.frame();
   await pause(SETTLE_MS);
 }
 
-/**
- * The panel as a player who has widened it holds it. The addon opens at 340 by 420, which is a
- * bag grid six squares across under five tabs: a picture of the chrome. This is a size the frame
- * is genuinely draggable to.
- */
+/** A size the frame is genuinely draggable to: at its opening 340 by 420 the shot is chrome. */
 const WIDENED = { x: 80, y: 120, w: 420, h: 560 };
 
 /**
- * The box both preview panels are seeded with, which is shorter than the one above. One height
- * rather than two: a sheet lays its panes out in a row and centres them against each other, so
- * two panels of different heights read as one that has slipped. The height to match on is the
- * grid's, since a list pane is full at any height and a bag grid is only as tall as its cell
- * ceiling.
+ * ONE height for both preview panels: a sheet centres its panes against each other, so two of
+ * different heights read as one that has slipped. Matched on the GRID's, since a list pane is
+ * full at any height and a bag grid is only as tall as its cell ceiling.
  */
 const SHEET_BOX = { x: 80, y: 120, w: 420, h: 440 };
 
@@ -467,7 +447,7 @@ const SCENARIOS: readonly Scenario[] = [
     label: 'Every item on the account',
     preview: true,
     caption: 'Everything you own',
-    alt: "the Items tab of a panel headed Satchel (2 unread), over a search field reading every character, every store. Nine rows, one per item rather than one per stack, each with the game's own art, a total on the right and a faint line under it naming who holds them: Bristly Boar Hide 16, Marshal 9, Bruk 7; Chime Dust 35, Marshal 4, Sena 31; Chime Essence 6, Sena 6; Chunk Of Ore 6, Marshal 6; Copper Ore 181, Marshal 87, Bruk 54, +1 more; Game Meat 30, Marshal 18, Bruk 12; Ghostly Essence 6, Marshal 4, Sena 2; Glyphsteel Bar 9, Marshal 6, Sena 3; and Goldleaf Herb 66, Marshal 46, Sena 20, the last of them cut off by the scrolling list. Each row is washed to a width that is its share of the largest pile, so Copper Ore fills its row and Chime Essence is a stub. Marshal's 87 copper ore is three stacks in the bags and one in the bank counted as one figure, and Sena and Bruk are not logged in: their rows come from what was recorded the last time they were played. A footer reads KINDS 26, COPIES 747.",
+    alt: 'one row an item, pooled across every character',
     frames: framed(SHEET_BOX),
     world: asBruk,
     run: (stage) => onTab(stage, 'Items'),
@@ -477,7 +457,7 @@ const SCENARIOS: readonly Scenario[] = [
     label: 'The bags, live',
     preview: true,
     caption: 'One character, live',
-    alt: "the Bags tab of the same panel, showing the character who is logged in. A selector reads Marshal (here), a slot bar reads 24 / 52 with 28 free, and a strip under it reads Live, MARKED 3 split 1 worn, SOCKETS 4 / 4, over a Carrying row drawn in the game's own coins: 1462 gold, 38 silver, 4 copper. Below that a grid of 52 squares eleven across, 24 of them holding the game's item art with a stack count in the corner (three of copper ore at 20, 20 and 7, two of iron ore at 20 and 16, hides, potions, herbs, cloth and meat) and the remaining 28 drawn as faint dashed outlines. Four squares are outlined warm: the three copper ore stacks, which are one item split over more than one cell, and a spare of the vest the character is wearing.",
+    alt: 'the bags of the character in play, as a grid of squares',
     frames: framed(SHEET_BOX),
     world: asBruk,
     run: (stage) => onTab(stage, 'Bags'),
@@ -517,6 +497,7 @@ const SCENARIOS: readonly Scenario[] = [
         picker.value = 'Sena';
         picker.dispatchEvent(new Event('change', { bubbles: true }));
       }
+      stage.frame();
       await pause(SETTLE_MS);
     },
   },

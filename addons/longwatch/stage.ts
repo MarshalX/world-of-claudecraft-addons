@@ -45,11 +45,9 @@ const STANDING_NAME = 'Grix the Tunnelking';
 const STANDING_POS = { x: -95, y: 5, z: -78 };
 
 /**
- * What this character has killed, and how long ago in seconds. Spread across all four zones and
- * all five respawn lengths the roster carries, so the countdown column reads from seconds to
- * hours and the sort has something to do. `old_cragmaw` is past its own 180 seconds on purpose:
- * due back and not yet seen back is a state of its own. Seven rares are left out, because a
- * roster is mostly rares nobody has met and "Unseen" is what most of it says.
+ * What this character has killed, and how long ago. Spread across all four zones and all five
+ * respawn lengths so the countdown column reads from seconds to hours. `old_cragmaw` is past
+ * its own 180 seconds on purpose: due back and not yet seen back is a state of its own.
  */
 const KILLS: readonly { id: string; ago: number }[] = [
   { id: 'sister_nhalia', ago: 9000 },
@@ -93,10 +91,8 @@ function aRareHunter(draft: WorldDraft): void {
 }
 
 /**
- * Kill one rare, the way the wire reports one. The corpse exists only for the length of the
- * record: the addon reads the template off the entity the death names, because the record carries
- * an entity id and nothing else identifying, and then the body is taken back out. Never polled
- * between the two, so this is not a spawn the addon ever saw.
+ * The corpse exists only for the length of the record, since the addon reads the template off
+ * the entity a death names. NEVER POLLED between the two, so this is not a spawn it ever saw.
  */
 function bury(stage: Stage, templateId: string, id: number): void {
   stage.mob(id, { templateId, name: templateId, dead: true });
@@ -104,10 +100,8 @@ function bury(stage: Stage, templateId: string, id: number): void {
   stage.entities.delete(id);
 }
 
-/**
- * Play the afternoon out, oldest kill first, ending at now. The wall clock walks forward through
- * the kills rather than each one being stamped and then pushed back, because a stamp is taken
- * from the clock as it stands.
+/** The wall clock WALKS FORWARD through the kills rather than each being stamped and pushed
+ * back, since a stamp is taken from the clock as it stands.
  */
 function killEverything(stage: Stage): void {
   let at = KILLS[0]?.ago ?? 0;
@@ -191,7 +185,7 @@ const SCENARIOS: readonly Scenario[] = [
     label: 'An afternoon of rares',
     preview: true,
     caption: 'Rares list',
-    alt: 'a two-column list of the nineteen rare spawns Longwatch carries. Grix the Tunnelking is up and drawn loudest; Old Cragmaw is due back; ten more count down from 44 seconds to 5h 49m, each row a draining bar behind the name, the zone and the distance in yards, with the ones nobody has killed reading Unseen at the bottom. The list scrolls inside the panel.',
+    alt: 'a two-column list of rare spawns, a timer bar on every row',
     data: { [ROSTER_FILE]: JSON.stringify(ROSTER) },
     world: aRareHunter,
     run: async (stage) => {
@@ -208,7 +202,7 @@ const SCENARIOS: readonly Scenario[] = [
     label: 'A rare walks into range',
     preview: true,
     caption: 'An alert',
-    alt: 'a banner across the middle of the view, set in the gold display serif the game uses for its own warnings, reading MOGGER IS UP over a quieter second line naming Eastbrook Vale. It is drawn over a soft dark scrim that fades out on every side, and there is nothing else on screen: the panel is shut, and the alert is what reaches you anyway.',
+    alt: 'a banner over an empty screen announcing that a rare is up',
     data: { [ROSTER_FILE]: JSON.stringify(ROSTER) },
     frames: { rares: ALERT_PANEL },
     world: atMoggersCamp,

@@ -87,7 +87,14 @@ const SOLD_KEY = perCharacterKey('pbe', 'Claudemoon/Marshal', 'sold');
 /** How long a write is held before it lands, and how long one trip lasts. */
 const WRITE_HOLD_MS = 2000;
 const VISIT_WINDOW_MS = 10 * 60 * 1000;
-const ASK_TOPIC = 'item:ask';
+/**
+ * The ask a follower sends, which `woc.bus.follow` derives from the topic it follows.
+ *
+ * `items:ask` rather than the `item:ask` this protocol shipped with. The publisher answers
+ * both, so nothing between these addons moved; what a fork publishing the old protocol sees is
+ * an ask under the new name. See the note on the topics in `main.js`.
+ */
+const ASK_TOPIC = 'items:ask';
 /** A fork's fqid on purpose: a consumer that named the official one would miss it. */
 const PUBLISHER = 'someone/lorebind';
 
@@ -447,6 +454,11 @@ async function start(options: StartOptions = {}): Promise<LedgerHarness> {
     harness.shared.world.watcher.poll();
     await flush(MICROTASKS);
     vi.advanceTimersToNextFrame();
+    // The repaint is `woc.paint`, which runs on the LOADER'S one frame loop rather than on an
+    // animation frame of the addon's own, so a settle has to step that loop as well as the
+    // clock. The fake runs the real loop over a clock a suite drives, so the coalescing under
+    // test is the loader's own: one tick is one frame, however many repaints were asked for.
+    harness.frames.tick();
     await flush(MICROTASKS);
   };
   await settle();
@@ -1167,6 +1179,8 @@ describe('the reconnect blip', () => {
 
     await vi.advanceTimersByTimeAsync(RESYNC_GRACE_MS);
     vi.advanceTimersToNextFrame();
+    // The grace expiring asks for a repaint, and the loader's frame loop is what performs one.
+    h.frames.tick();
     await flush(MICROTASKS);
 
     expect(statFor('where')).toBe('no counter');
@@ -1412,6 +1426,35 @@ describe('the undercut check', () => {
     expect(detailOf('mine', '1')).toContain('cheapest on this page');
   });
 
+  // A row survives for as long as its listing keeps turning up, and the page under it is
+  // replaced on every flip, so a tooltip is asked for its content long after the reading that
+  // built the row. One that answered from the page it was BUILT with reports a verdict the
+  // panel has already stopped drawing: the row here says undercut in its own detail line while
+  // its tooltip still names nobody. Keying the list on the listing id makes a row live longer,
+  // which makes this worse rather than causing it.
+  it('answers a tooltip from the page being read now, not the one that built the row', async () => {
+    const h = await start();
+    h.send({
+      market: page([
+        listing({ id: 1, itemId: 'ore', price: 400, mine: true }),
+        listing({ id: 2, itemId: 'ore', price: 500 }),
+      ]),
+    });
+    await h.settle();
+    expect(tipOn('mine', '1')).toContain('Yours is the cheapest');
+
+    h.send({
+      market: page([
+        listing({ id: 2, itemId: 'ore', price: 300, sellerName: 'Rival' }),
+        listing({ id: 1, itemId: 'ore', price: 400, mine: true }),
+      ]),
+    });
+    await h.settle();
+
+    expect(keysIn('mine')).toEqual(['1']);
+    expect(tipOn('mine', '1')).toContain('Rival');
+  });
+
   // Absence is not evidence. Under a search, most of the book is not on the page.
   it('refuses to call a listing cheapest when its item is not on the page', async () => {
     const h = await start();
@@ -1627,15 +1670,12 @@ describe('the bus', () => {
     expect(labelOf('prices', 'ore')).toBe('Copper Ore');
   });
 
-  // Delivery is synchronous, so a publisher answering the ask does so inside the emit call. An
-  // addon that asked before subscribing would miss its own answer, and that failure looks
-  // exactly like a publisher that was not installed. The only way to see it is to stand in for
-  // the publisher and answer the ask, which needs the bus wired up before the addon is
-  // evaluated, so this case builds the services itself rather than using `start`.
-  //
-  // The answer is the BATCH, because that is the message the publisher in the catalogue sends
-  // here: a stand-in answering with a single record would leave this green while the real pair
-  // never exchanged a name.
+  // Delivery is synchronous, so a publisher answers inside the emit call: an addon that asked
+  // before subscribing misses its own answer, and that failure looks exactly like a publisher
+  // nobody installed. Seeing it needs the bus wired up before the addon is evaluated, which is
+  // why this builds the services itself rather than using `start`. The answer is the BATCH,
+  // since a stand-in answering with a single record leaves this green while the real pair never
+  // exchange a name.
   it('asks for a catch-up after subscribing, so a synchronous answer reaches it', async () => {
     const player = liveEntity({ set: { name: PLAYER_ENTITY.name, templateId: 'hunter' } });
     const state: MarketState = {

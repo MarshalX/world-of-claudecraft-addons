@@ -15,6 +15,7 @@ import { DisposalBag } from '../loader/src/runtime/disposal.ts';
 import { createAnchors } from '../loader/src/runtime/ui/kit/anchor3d.ts';
 import { createBanner } from '../loader/src/runtime/ui/kit/banner.ts';
 import { createFrameRoster } from '../loader/src/runtime/ui/kit/frame-roster.ts';
+import { createFrameToggles } from '../loader/src/runtime/ui/kit/frame-toggle.ts';
 import { createIconUrls } from '../loader/src/runtime/ui/kit/icons.ts';
 import { createGameInjector } from '../loader/src/runtime/ui/kit/injections.ts';
 import { createItemArt } from '../loader/src/runtime/ui/kit/item-art.ts';
@@ -121,6 +122,16 @@ function open() {
 
   const bag = new DisposalBag();
   const onError = vi.fn();
+  const onWarn = vi.fn();
+  // A keybind surface that declares nothing, which is this suite's subject: it is
+  // about the per-addon binding rather than about the keys. What `toggleKey` does
+  // with a real one is tests/ui-frame-toggle.test.ts.
+  const toggles = createFrameToggles({
+    bind: (id) => {
+      throw new Error(`no keybind declared with id '${id}'`);
+    },
+    warn: onWarn,
+  });
   const ui = createUi({
     doc: document,
     kit,
@@ -128,10 +139,11 @@ function open() {
     bag,
     onError,
     frameStore: null,
+    toggles,
     viewport: () => VIEW,
     window: globalThis,
   });
-  return { bag, kit, ui, onError };
+  return { bag, kit, ui, onError, onWarn };
 }
 
 describe('creating surfaces', () => {

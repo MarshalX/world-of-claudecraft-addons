@@ -91,6 +91,18 @@ export interface FrameOpts {
   save?: boolean;
   /** Whether it starts on screen. A restored `save` visibility wins over this. */
   visible?: boolean;
+  /**
+   * A keybind id from your manifest that shows and hides this frame. Since apiMinor 4.
+   *
+   * The id has to be one you declared; the loader warns through your own log and
+   * binds nothing if it is not, rather than failing to build the frame. The bind
+   * is released when the frame is DESTROYED as well as at disable, so rebuilding
+   * a frame under the same key leaves you with exactly one binding either way.
+   *
+   * Bind it yourself with `woc.keys.bind` when the key does more than toggle, or
+   * when one key should reach several frames at once.
+   */
+  toggleKey?: string;
   /** Added to the frame element, so you can style your own. */
   className?: string;
   /**
