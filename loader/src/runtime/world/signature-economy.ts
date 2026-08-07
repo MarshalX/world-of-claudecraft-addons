@@ -89,6 +89,22 @@ function readMark(message: unknown): string {
  * The query echo is in because a fresh join silently resets the server's own
  * query while the window's controls survive, and an addon watching the echo is
  * the only thing that can see that happen.
+ *
+ * `collectionSales` and `collectionSalesOmitted` are NOT read here, and an addon
+ * still sees every sale. That works by COINCIDENCE rather than by design, and the
+ * coincidence is worth stating because it is the kind that stops being true
+ * quietly: a sale is also the moment its listing leaves the book, so the id list
+ * above changes on the same snapshot that appends the row. The ledger is
+ * therefore covered by the signature of something else.
+ *
+ * Two things would break it, and neither would raise. A HOUSE sale, or any future
+ * sale that does not retire a listing, would append a row while the ids stand
+ * still. And a collect DRAINS the array, which is only caught because
+ * `collectionCopper` goes to 0 in the same breath; a partial collect that left the
+ * copper alone would empty the rows unnoticed. Add both fields here rather than
+ * widening the id list if either becomes possible. They are cheap to hash, and
+ * the only reason they are absent is that the array is capped at 50 and the
+ * counter beside it already summarises the overflow.
  */
 function marketSignature(state: unknown): string {
   const away = closed(state);

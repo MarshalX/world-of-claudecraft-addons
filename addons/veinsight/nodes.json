@@ -1,5 +1,5 @@
 {
-  "gameVersion": "0.34.0",
+  "gameVersion": "0.35.0",
   "respawnSeconds": {
     "ore": 240,
     "wood": 240,
@@ -280,8 +280,8 @@
       "id": "herb_eastbrook_4",
       "zone": "eastbrook_vale",
       "type": "herb",
-      "x": 23,
-      "z": -99,
+      "x": 6,
+      "z": -69,
       "level": 4,
       "tier": 1
     },
@@ -379,7 +379,7 @@
       "id": "herb_mirefen_1",
       "zone": "mirefen_marsh",
       "type": "herb",
-      "x": 29,
+      "x": 26,
       "z": 395,
       "level": 10,
       "tier": 1
@@ -388,8 +388,8 @@
       "id": "herb_mirefen_2",
       "zone": "mirefen_marsh",
       "type": "herb",
-      "x": -66,
-      "z": 458,
+      "x": -68,
+      "z": 459,
       "level": 10,
       "tier": 1
     },
@@ -505,8 +505,8 @@
       "id": "herb_mirefen_t2",
       "zone": "mirefen_marsh",
       "type": "herb",
-      "x": 34,
-      "z": 406,
+      "x": 23,
+      "z": 416,
       "level": 10,
       "tier": 2
     },
@@ -748,8 +748,8 @@
       "id": "ore_frostveil_2",
       "zone": "frostveil",
       "type": "ore",
-      "x": 16,
-      "z": 1574,
+      "x": 22,
+      "z": 1564,
       "level": 19,
       "tier": 1
     },
@@ -829,8 +829,8 @@
       "id": "herb_amberfall_1",
       "zone": "amberfall",
       "type": "herb",
-      "x": -342,
-      "z": 2110,
+      "x": -339,
+      "z": 2105,
       "level": 19,
       "tier": 1
     },
@@ -847,8 +847,8 @@
       "id": "ore_willowfen_1",
       "zone": "willowfen",
       "type": "ore",
-      "x": -318,
-      "z": 336,
+      "x": -304,
+      "z": 324,
       "level": 20,
       "tier": 1
     },
@@ -874,8 +874,8 @@
       "id": "wood_willowfen_2",
       "zone": "willowfen",
       "type": "wood",
-      "x": -392,
-      "z": 322,
+      "x": -398,
+      "z": 319,
       "level": 20,
       "tier": 1
     },
@@ -964,8 +964,8 @@
       "id": "wood_willowfen_6",
       "zone": "willowfen",
       "type": "wood",
-      "x": -417,
-      "z": 580,
+      "x": -411,
+      "z": 582,
       "level": 20,
       "tier": 1
     },
@@ -1126,8 +1126,8 @@
       "id": "ore_galecrest_2",
       "zone": "galecrest",
       "type": "ore",
-      "x": 466,
-      "z": 374,
+      "x": 430,
+      "z": 379,
       "level": 20,
       "tier": 1
     },
@@ -1153,8 +1153,8 @@
       "id": "herb_galecrest_1",
       "zone": "galecrest",
       "type": "herb",
-      "x": 448,
-      "z": 400,
+      "x": 436,
+      "z": 394,
       "level": 20,
       "tier": 1
     },
@@ -1162,8 +1162,8 @@
       "id": "herb_galecrest_2",
       "zone": "galecrest",
       "type": "herb",
-      "x": 406,
-      "z": 412,
+      "x": 405,
+      "z": 407,
       "level": 20,
       "tier": 1
     },
@@ -1279,8 +1279,8 @@
       "id": "ore_palmreach_1",
       "zone": "palmreach",
       "type": "ore",
-      "x": -262,
-      "z": 794,
+      "x": -263,
+      "z": 795,
       "level": 20,
       "tier": 1
     },
@@ -1361,7 +1361,7 @@
       "zone": "evergarden",
       "type": "wood",
       "x": 290,
-      "z": 772,
+      "z": 780,
       "level": 20,
       "tier": 1
     },
@@ -1405,8 +1405,8 @@
       "id": "wood_farshore_isle_1",
       "zone": "farshore_isle",
       "type": "wood",
-      "x": 259,
-      "z": 96,
+      "x": 269,
+      "z": 83,
       "level": 5,
       "tier": 1
     },
@@ -1433,7 +1433,7 @@
       "zone": "farshore_isle",
       "type": "herb",
       "x": 291,
-      "z": 122,
+      "z": 104,
       "level": 5,
       "tier": 1
     },
@@ -1504,8 +1504,8 @@
       "id": "wood_farshore_isle_6",
       "zone": "farshore_isle",
       "type": "wood",
-      "x": 210,
-      "z": -24,
+      "x": 207,
+      "z": -18,
       "level": 5,
       "tier": 1
     },
@@ -1522,8 +1522,8 @@
       "id": "herb_farshore_isle_4",
       "zone": "farshore_isle",
       "type": "herb",
-      "x": 358,
-      "z": 138,
+      "x": 366,
+      "z": 128,
       "level": 5,
       "tier": 1
     },

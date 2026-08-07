@@ -17,9 +17,12 @@
 //
 // LIVE ONLY, like the cue generator, because the published types describe what most
 // players are running. The channels diverge in BOTH directions, so this is a choice
-// rather than an accident: measured across all three, pbe carried 318 ids to live's 237
-// while live carried `judgement`, which pbe had already dropped, and pbe2 matched live
-// exactly. Unioning them would autocomplete names most players' games have no file for.
+// rather than an accident: measured across all three on 2026-07-30, pbe carried 318 ids
+// to live's 237 while live carried `judgement`, which pbe had already dropped, and pbe2
+// matched live exactly. Unioning them would autocomplete names most players' games have
+// no file for. That reading is DATED on purpose. The divergence is what the argument
+// rests on and it keeps; the counts move every release, and live is at 327 as of game
+// 0.35.0. Re-measure before quoting a number, rather than trusting the one above.
 //
 // Narrowing to live costs autocomplete and nothing else. The RUNTIME reads the manifest
 // from whichever host the player is actually on (`ui/kit/skill-art.ts`), so an addon on

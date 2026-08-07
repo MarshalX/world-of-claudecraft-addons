@@ -14,9 +14,14 @@
 // once created and a buy takes the whole stack. That is what lets the signature
 // in `signature-economy.ts` be an id list rather than a digest of every field.
 //
-// The server keeps NO price history and no sold-price record. This page is the
-// only economic data the game will ever hand an addon, so a price series is
-// something an addon BUILDS by recording the pages its player browses.
+// The server keeps NO price history of the BOOK. Nothing says what an item has
+// sold for in general, so a price series is still something an addon BUILDS by
+// recording the pages its player browses.
+//
+// The one exception is the player's OWN sales: `collectionSales` is a real
+// sold-price record, and it is the only one the game keeps. It is also transient
+// (capped, and drained on collect), so an addon that wants a history of its own
+// sales has to copy rows out before the player collects them.
 
 import type { InvSlot } from './game-types.ts';
 import type { PublicItemInstance } from './items.ts';
@@ -36,6 +41,17 @@ interface MarketListing {
   house: boolean;
   /** Present only on an instanced listing, trimmed to the public fields. */
   instance?: PublicItemInstance;
+}
+
+/** One completed sale of yours, waiting to be collected. */
+interface MarketSaleRecord {
+  itemId: string;
+  count: number;
+  /** GROSS buyout the buyer paid for the whole stack, before the cut. */
+  price: number;
+  /** NET copper this sale added to the collection, after the cut. */
+  proceeds: number;
+  buyerName: string;
 }
 
 interface MarketInfo {
@@ -58,6 +74,14 @@ interface MarketInfo {
   collectionCopper: number;
   /** Returned or expired goods waiting at the Merchant. */
   collectionItems: readonly InvSlot[];
+  /**
+   * The itemized ledger behind `collectionCopper`, oldest first. Capped at 50,
+   * and DRAINED when the player collects, so it is a pickup queue rather than a
+   * history.
+   */
+  collectionSales: readonly MarketSaleRecord[];
+  /** How many older rows the cap dropped. Their copper is still in the total. */
+  collectionSalesOmitted: number;
   /** The Merchant's cut on a sale, as a percentage. */
   cutPct: number;
   /** Per-seller active-listing cap. */
@@ -74,4 +98,4 @@ interface MarketInfo {
  */
 type MarketState = ProximityState<MarketInfo>;
 
-export type { MarketInfo, MarketListing, MarketState };
+export type { MarketInfo, MarketListing, MarketSaleRecord, MarketState };

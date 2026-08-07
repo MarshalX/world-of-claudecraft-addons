@@ -90,6 +90,25 @@ export interface Heal2Event extends PersonalEvent {
   /** The applying aura's ability id, on both the tick and the application. */
   abilityId?: string;
   /**
+   * How much of this heal was lost to the target's missing-health clamp.
+   * Absent when none of it was, and never 0.
+   *
+   * This is the number the `absorbed` note above reasons around without having:
+   * an `amount: 0` carrying no `absorbed` was overhealing, and this says how
+   * much. It is computed AFTER absorb consumption, so `absorbed` and `overheal`
+   * describe different lost healing and adding them double-counts nothing.
+   *
+   * IT REPORTS PARTIAL OVERHEALING ONLY, and a total built on it is wrong.
+   * Every emit site still fires only when some healing actually landed, so a
+   * tick that overheals COMPLETELY emits no record at all: there is nothing to
+   * carry the field, and the healing it wasted is invisible. An "overheal
+   * percentage" summed from this field therefore counts the partial waste
+   * against a total that excludes the full waste, and reads lower than the
+   * truth by an amount that grows the longer the target sits at full health.
+   * Present it as "overhealing seen on landed heals", not as a percentage.
+   */
+  overheal?: number;
+  /**
    * This record carries NO healing and exists only to drive a sound.
    *
    * Ignore it in anything that counts, and do so ON THIS FLAG: `amount` is
@@ -102,10 +121,11 @@ export interface Heal2Event extends PersonalEvent {
 /**
  * An effect arriving on or leaving an entity.
  *
- * It NAMES the effect and cannot identify it: there is no id on this record at
- * all, and 101 of them in a recorded session carried no kind either. The name is
- * a display name, the same string a damage record carries. To know which aura,
- * read the entity's own aura list, which carries ids, stacks and durations.
+ * `name` is a DISPLAY NAME, the same string a damage record carries. The four
+ * attribution fields below can identify the effect instead, but only on some
+ * records: test each one for presence rather than assuming it. To know which
+ * aura is on an entity right now, read that entity's own aura list, which
+ * carries ids, stacks and durations on every entry.
  */
 export interface AuraEvent extends PersonalEvent {
   type: 'aura';
@@ -114,6 +134,28 @@ export interface AuraEvent extends PersonalEvent {
   gained: boolean;
   /** What the effect does. Not present in any observed record. */
   auraKind?: string;
+  /**
+   * Who applied it.
+   *
+   * Present on the same records as `abilityId` and absent on the same ones, so
+   * the note there describes this field too.
+   */
+  sourceId?: number;
+  /**
+   * The aura's stable content ID, and the ONLY route to a mob ability's id.
+   */
+  abilityId?: string;
+  /** Stack count at application. Absent on the bare emits, not 0. */
+  stacks?: number;
+  /**
+   * This gain DISPLACED a same-id same-name aura already on the target: a
+   * re-application rather than a fresh one.
+   *
+   * No fade is emitted for the aura it replaced, so a duration tracker counting
+   * gains against fades needs this to avoid double-counting. Nothing on the
+   * record could previously distinguish the two.
+   */
+  refresh?: boolean;
 }
 
 export interface DeathEvent extends PersonalEvent {
@@ -125,15 +167,27 @@ export interface DeathEvent extends PersonalEvent {
 /**
  * A cast beginning. NOT emitted for a mob.
  *
- * It fires for a player cast, a pet, gathering and fishing, and for nothing
- * else: a mob's mechanic sets its cast state directly, so a boss warning built
- * on this receives silence and cannot tell that from a boss that never casts.
- * Watch `world.casts` for anything but your own casting.
+ * It fires for a player's cast, a pet's cast, and for the timed ACTIVITIES the
+ * game runs through the same cast machinery. A mob's mechanic sets its cast
+ * state directly instead, so a boss warning built on this receives silence and
+ * cannot tell that from a boss that never casts. Watch `world.casts` for
+ * anything but your own casting.
  */
 export interface CastStartEvent extends PersonalEvent {
   type: 'castStart';
   entityId: number;
-  /** An ability ID here, unlike the display name a damage record carries. */
+  /**
+   * An ability ID, unlike the display name a damage record carries, OR an
+   * activity sentinel.
+   *
+   * The sentinel is a fixed marker naming the activity rather than any ability:
+   * gathering and fishing were the first two, and the crafting family
+   * (crafting, disenchanting, enchanting, salvaging, tool recharge) followed.
+   * THE SET GROWS WITH THE GAME, so match the ones you care about by name and
+   * let an unrecognised value fall through as an ability id rather than
+   * enumerating the sentinels and assuming the list is complete. A sentinel
+   * never resolves in `world.abilities` and never has icon art.
+   */
   ability: string;
   /** Cast length in seconds. */
   time: number;

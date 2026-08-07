@@ -1,5 +1,5 @@
 {
-  "gameVersion": "0.34.0",
+  "gameVersion": "0.35.0",
   "source": "src/sim/data.ts, src/sim/quest_targets.ts, src/sim/types.ts, src/sim/content/*.ts",
   "zones": [
     {
@@ -417,7 +417,7 @@
         {
           "type": "kill",
           "count": 4,
-          "label": "Webwood Spider culled",
+          "label": "Sableweb Lurker culled",
           "mob": "webwood_spider"
         }
       ]
@@ -474,7 +474,7 @@
         {
           "type": "kill",
           "count": 5,
-          "label": "Webwood Spider culled",
+          "label": "Sableweb Lurker culled",
           "mob": "webwood_spider"
         }
       ],
@@ -504,7 +504,7 @@
         {
           "type": "kill",
           "count": 5,
-          "label": "Tunnel Rat exterminated",
+          "label": "Deeprock Digger exterminated",
           "mob": "tunnel_rat"
         }
       ],
@@ -4151,6 +4151,30 @@
       "radius": 9
     },
     {
+      "mob": "shoal_scuttler",
+      "x": 410,
+      "z": 400,
+      "radius": 9
+    },
+    {
+      "mob": "shoal_scuttler",
+      "x": 440,
+      "z": 460,
+      "radius": 8
+    },
+    {
+      "mob": "gale_wisp",
+      "x": 330,
+      "z": 565,
+      "radius": 9
+    },
+    {
+      "mob": "gale_wisp",
+      "x": 355,
+      "z": 585,
+      "radius": 8
+    },
+    {
       "mob": "hedge_knight",
       "x": 276,
       "z": 886,
@@ -4422,7 +4446,7 @@
     },
     {
       "item": "scorched_supply_crate",
-      "positions": [[372, 1968], [360, 2014], [348, 2046], [332, 2094]]
+      "positions": [[372, 1968], [355, 2013], [348, 2046], [332, 2094]]
     },
     {
       "item": "wyrmwatch_warning_banner",
@@ -5113,8 +5137,8 @@
     {
       "type": "herb",
       "item": "silverleaf_herb",
-      "x": 23,
-      "z": -99
+      "x": 6,
+      "z": -69
     },
     {
       "type": "herb",
@@ -5179,14 +5203,14 @@
     {
       "type": "herb",
       "item": "goldleaf_herb",
-      "x": 29,
+      "x": 26,
       "z": 395
     },
     {
       "type": "herb",
       "item": "goldleaf_herb",
-      "x": -66,
-      "z": 458
+      "x": -68,
+      "z": 459
     },
     {
       "type": "herb",
@@ -5263,8 +5287,8 @@
     {
       "type": "herb",
       "item": "goldleaf_herb",
-      "x": 34,
-      "z": 406
+      "x": 23,
+      "z": 416
     },
     {
       "type": "herb",
@@ -5425,8 +5449,8 @@
     {
       "type": "ore",
       "item": "thorium_ore",
-      "x": 16,
-      "z": 1574
+      "x": 22,
+      "z": 1564
     },
     {
       "type": "wood",
@@ -5479,8 +5503,8 @@
     {
       "type": "herb",
       "item": "sunpetal_herb",
-      "x": -342,
-      "z": 2110
+      "x": -339,
+      "z": 2105
     },
     {
       "type": "herb",
@@ -5491,8 +5515,8 @@
     {
       "type": "ore",
       "item": "thorium_ore",
-      "x": -318,
-      "z": 336
+      "x": -304,
+      "z": 324
     },
     {
       "type": "ore",
@@ -5509,8 +5533,8 @@
     {
       "type": "wood",
       "item": "elderwood_log",
-      "x": -392,
-      "z": 322
+      "x": -398,
+      "z": 319
     },
     {
       "type": "herb",
@@ -5569,8 +5593,8 @@
     {
       "type": "wood",
       "item": "elderwood_log",
-      "x": -417,
-      "z": 580
+      "x": -411,
+      "z": 582
     },
     {
       "type": "herb",
@@ -5677,8 +5701,8 @@
     {
       "type": "ore",
       "item": "thorium_ore",
-      "x": 466,
-      "z": 374
+      "x": 430,
+      "z": 379
     },
     {
       "type": "wood",
@@ -5695,14 +5719,14 @@
     {
       "type": "herb",
       "item": "sunpetal_herb",
-      "x": 448,
-      "z": 400
+      "x": 436,
+      "z": 394
     },
     {
       "type": "herb",
       "item": "sunpetal_herb",
-      "x": 406,
-      "z": 412
+      "x": 405,
+      "z": 407
     },
     {
       "type": "ore",
@@ -5779,8 +5803,8 @@
     {
       "type": "ore",
       "item": "thorium_ore",
-      "x": -262,
-      "z": 794
+      "x": -263,
+      "z": 795
     },
     {
       "type": "ore",
@@ -5834,7 +5858,7 @@
       "type": "wood",
       "item": "elderwood_log",
       "x": 290,
-      "z": 772
+      "z": 780
     },
     {
       "type": "herb",
@@ -5863,8 +5887,8 @@
     {
       "type": "wood",
       "item": "ashwood_log",
-      "x": 259,
-      "z": 96
+      "x": 269,
+      "z": 83
     },
     {
       "type": "wood",
@@ -5882,7 +5906,7 @@
       "type": "herb",
       "item": "goldleaf_herb",
       "x": 291,
-      "z": 122
+      "z": 104
     },
     {
       "type": "ore",
@@ -5929,8 +5953,8 @@
     {
       "type": "wood",
       "item": "ashwood_log",
-      "x": 210,
-      "z": -24
+      "x": 207,
+      "z": -18
     },
     {
       "type": "herb",
@@ -5941,8 +5965,8 @@
     {
       "type": "herb",
       "item": "goldleaf_herb",
-      "x": 358,
-      "z": 138
+      "x": 366,
+      "z": 128
     },
     {
       "type": "herb",

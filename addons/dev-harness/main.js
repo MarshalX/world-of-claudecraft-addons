@@ -182,7 +182,15 @@ woc.onFrame(() => {
  * hit. Its source can have left interest scope by the time this runs, so the check would
  * report a failure of the roster as a failure of the wire.
  */
-const records = { damage: 0, heals: 0, withAbilityId: 0, resolved: 0 };
+const records = {
+  damage: 0,
+  heals: 0,
+  withAbilityId: 0,
+  resolved: 0,
+  overhealed: 0,
+  auras: 0,
+  aurasAttributed: 0,
+};
 /** The distinct contradictions seen, named. A count alone does not say what broke. */
 const contradictions = [];
 
@@ -233,6 +241,60 @@ woc.net.onEvent('heal2', (event) => {
   // from a heal that overhealed. Both land at `amount: 0` and nothing else parts them.
   if (event.absorbed === 0 || event.absorbed === null) {
     contradiction(`a heal carried absorbed ${String(event.absorbed)}, which is meant to be absent`);
+  }
+  noteOverheal(event);
+});
+
+/**
+ * Overhealing, which is published as absent-or-positive and as PARTIAL ONLY.
+ *
+ * The absence rule is the same one `absorbed` carries and fails the same silent way: a 0
+ * here would make "no overhealing" and "some overhealing" the same reading. The partial
+ * rule cannot be checked from this side at all, because a fully overhealing tick emits no
+ * record for a watcher to see, which is exactly why it is documented rather than asserted.
+ */
+function noteOverheal(event) {
+  if (event.overheal === undefined) {
+    return;
+  }
+  if (typeof event.overheal !== 'number' || event.overheal <= 0) {
+    contradiction(`a heal carried overheal ${String(event.overheal)}, meant to be absent or > 0`);
+    return;
+  }
+  records.overhealed += 1;
+}
+
+/**
+ * The aura attribution added in game 0.35.0, and the only route to a MOB ability's id.
+ *
+ * Two claims worth a live session. All four fields ride the same emit path, so `sourceId`
+ * and `abilityId` arrive together or not at all; an addon that tested one and read the
+ * other would be right until that stopped holding. And `refresh` marks a re-application
+ * that emits no fade, so a duration tracker counting gains against fades needs it: a
+ * `refresh` on a record that is not a gain would break that counting silently.
+ */
+function lonelyField(hasSource) {
+  if (hasSource) {
+    return 'sourceId';
+  }
+  return 'abilityId';
+}
+
+woc.net.onEvent('aura', (event) => {
+  records.auras += 1;
+  const hasSource = event.sourceId !== undefined;
+  const hasAbility = event.abilityId !== undefined;
+  if (hasSource !== hasAbility) {
+    contradiction(`an aura carried ${lonelyField(hasSource)} without the other`);
+  }
+  if (hasAbility && (typeof event.abilityId !== 'string' || event.abilityId.length === 0)) {
+    contradiction(`an aura abilityId arrived as ${typeOf(event.abilityId)}`);
+  }
+  if (event.refresh !== undefined && event.gained !== true) {
+    contradiction('an aura marked refresh on a record that was not a gain');
+  }
+  if (hasAbility) {
+    records.aurasAttributed += 1;
   }
 });
 
@@ -600,9 +662,10 @@ function checkWorldKeys() {
 
 /**
  * A mob's cast is readable even though no event announces it. `net.onEvent('castStart')`
- * fires for a player cast, a pet, gathering and fishing and nothing else, so `world.casts`
- * is the only way to see a boss cast. What this can check without a fight is that the
- * derivation runs over the live roster and agrees with the cast fields on the entities.
+ * fires for a player cast, a pet's cast and the game's timed activities, and never for a
+ * mob, so `world.casts` is the only way to see a boss cast. What this can check without a
+ * fight is that the derivation runs over the live roster and agrees with the cast fields on
+ * the entities.
  */
 function checkCasts() {
   const { casts } = woc.world;
@@ -1074,6 +1137,7 @@ const LIVE_CHECKS = [
   checkCombat,
   checkCombatRecords,
   checkMobTargeting,
+  checkEntityStats,
   checkUnits,
   checkAuraQueries,
   checkAuraPolarity,
@@ -1082,6 +1146,7 @@ const LIVE_CHECKS = [
   checkCharacterKey,
   checkContent,
   checkCounters,
+  checkSaleLedger,
   checkGroup,
   checkCasts,
   checkProject,
@@ -1603,15 +1668,17 @@ function checkCombatRecords() {
   if (contradictions.length > 0) {
     return result('combat records', false, contradictions.join('; '));
   }
-  if (records.damage === 0 && records.heals === 0) {
+  if (records.damage === 0 && records.heals === 0 && records.auras === 0) {
     return result('combat records', true, 'nothing has landed yet, so there is nothing to check');
   }
   const seen = `${String(records.damage)} damage and ${String(records.heals)} heal records`;
   const ids = `${String(records.withAbilityId)} carried an abilityId`;
+  const over = `${String(records.overhealed)} heals reported overheal`;
+  const auras = `${String(records.auras)} aura records, ${String(records.aurasAttributed)} attributed`;
   return result(
     'combat records',
     true,
-    `${seen} match the types, ${ids} (${String(records.resolved)} of them in your spellbook)`,
+    `${seen} match the types, ${ids} (${String(records.resolved)} in your spellbook), ${over}, ${auras}`,
   );
 }
 
@@ -1644,6 +1711,72 @@ function checkMobTargeting() {
     'mob targeting',
     true,
     `${mobs.length} mobs, ${aggroed.length} attacking, ${withThreat.length} with a hate table`,
+  );
+}
+
+/**
+ * The two entity fields added in game 0.35.0.
+ *
+ * Both are ordinary and both ride `dynamicFields`, so both are real on every entity
+ * including your own player. `helmHidden` is a boolean only players ever set.
+ *
+ * The reading worth having is the COUNT of others carrying a ranged power, because that
+ * is the half the shape walk cannot reach: it visits the local player alone, so it can
+ * prove the field is a number and can say nothing about whether the entity path fills it.
+ * A session standing near a hunter answers that.
+ */
+function checkEntityStats() {
+  const { player } = woc.world;
+  if (player === null) {
+    return result('entity stats', true, 'no player yet, so there is nothing to read');
+  }
+  if (typeof player.helmHidden !== 'boolean') {
+    return result('entity stats', false, `helmHidden is ${typeOf(player.helmHidden)}`);
+  }
+  if (typeof player.rangedPower !== 'number') {
+    return result('entity stats', false, `rangedPower is ${typeOf(player.rangedPower)}`);
+  }
+  const armed = [...woc.world.entities.values()].filter((e) => (e.rangedPower ?? 0) > 0);
+  const hidden = [...woc.world.entities.values()].filter((e) => e.helmHidden === true);
+  return result(
+    'entity stats',
+    true,
+    `yours ${String(player.rangedPower)}, ${armed.length} others carry ranged power, ${hidden.length} hide a helm`,
+  );
+}
+
+/**
+ * The sold-price ledger, which is the only record of a completed sale the game keeps.
+ *
+ * Gated on standing at the Merchant, so it is vacuous the rest of the time. What it checks
+ * when it can is the pair that has to reconcile: rows are capped, and the overflow count is
+ * what explains a `collectionCopper` the rows do not add up to.
+ */
+function checkSaleLedger() {
+  const { market } = woc.world;
+  if (market.status !== 'near') {
+    return result('sale ledger', true, 'not at the Merchant, so there is no page to read');
+  }
+  const { collectionSales: sales, collectionSalesOmitted: omitted } = market.info;
+  if (!Array.isArray(sales)) {
+    return result('sale ledger', false, `collectionSales is ${typeOf(sales)}`);
+  }
+  if (typeof omitted !== 'number') {
+    return result('sale ledger', false, `collectionSalesOmitted is ${typeOf(omitted)}`);
+  }
+  const proceeds = sales.reduce((sum, row) => sum + row.proceeds, 0);
+  if (omitted === 0 && sales.length > 0 && proceeds !== market.info.collectionCopper) {
+    return result(
+      'sale ledger',
+      false,
+      `${String(proceeds)} in rows, none omitted, but the` +
+        ` counter holds ${String(market.info.collectionCopper)}`,
+    );
+  }
+  return result(
+    'sale ledger',
+    true,
+    `${String(sales.length)} sales waiting, ${String(omitted)} dropped by the cap`,
   );
 }
 

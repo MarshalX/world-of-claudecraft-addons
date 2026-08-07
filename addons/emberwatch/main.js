@@ -4,10 +4,18 @@
 // cue and a banner when it happens.
 //
 // The model is the aura list and never the aura event. The `aura` event carries a display
-// name, a gained flag and a target and no id at all, so an engine built on it would
-// confuse two abilities that share a name and could not express "the one I applied".
-// Everything here reads `world.aurasOn(unit, query)` and `world.partyAuras(pid, query)`,
-// which carry ids, sources, stacks and durations. Nothing subscribes to an event.
+// name, a gained flag and a target, and an id, a source and a stack count only on the
+// application path: roughly thirty other emit sites stay bare, expiries and dispels among
+// them, so a fade usually says nothing even where the gain that matched it said plenty.
+// An engine built on it would therefore be exact on one record and, on the next, unable to
+// tell two abilities that share a name apart or to express "the one I applied". Everything
+// here reads `world.aurasOn(unit, query)` and `world.partyAuras(pid, query)`, which carry
+// ids, sources, stacks and durations on every row. Nothing subscribes to an event.
+//
+// The one thing the event says that a list cannot is `refresh`, marking a gain that
+// displaced a same-id same-name aura, which a tracker counting gains against fades needs.
+// This engine counts neither: it reads the remaining off the list every frame, so a
+// re-application is already visible as a remaining that went back up.
 //
 // The clock is `woc.onFrame`, and the two aura watch keys are deliberately not
 // subscribed, because three of the four conditions this engine tests are invisible to

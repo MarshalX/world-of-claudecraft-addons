@@ -54,13 +54,25 @@ export interface WorldQuests {
  * What a cast bar says, on any entity rather than only on you.
  *
  * Read this rather than listening for a cast event. `net.onEvent('castStart')`
- * fires for a PLAYER cast, a pet, gathering and fishing, and for nothing else: a
- * mob's mechanic sets its cast state directly, so a boss mod built on the event
- * receives silence and has no way to tell that from a boss that never casts.
- * `world.casts` and `world.on('casts', ...)` are the surface that closes that gap.
+ * fires for a PLAYER cast, a pet's cast, and the timed ACTIVITIES the game runs
+ * through the same machinery, and never for a mob: a mob's mechanic sets its cast
+ * state directly, so a boss mod built on the event receives silence and has no way
+ * to tell that from a boss that never casts. `world.casts` and
+ * `world.on('casts', ...)` are the surface that closes that gap.
  */
 export interface EntityCast {
-  /** The ability id being cast. */
+  /**
+   * An ability ID, or an ACTIVITY SENTINEL.
+   *
+   * The sentinel is a fixed marker naming a timed activity rather than any
+   * ability, and the set grows with the game, so match the ones you care about
+   * by name and let anything else fall through as an ability id.
+   * `CastStartEvent.ability` carries the full note and the current members.
+   *
+   * Neither resolves in `world.abilities` here, and for two different reasons: a
+   * sentinel is not an ability at all, and the casts worth watching on this
+   * surface are mobs', whose abilities are never in your spellbook.
+   */
   ability: string;
   /** Seconds left, against `total`. */
   remaining: number;

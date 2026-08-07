@@ -37,12 +37,57 @@ const DAY_MS = 24 * HOUR_MS;
 const CUT_PCT = 5;
 const MAX_LISTINGS = 12;
 
-/** Sale proceeds and returned goods waiting to be collected, which drive the badge. */
-const WAITING_COPPER = 62 * SILVER;
+/** Returned goods waiting to be collected, which drive the badge along with the proceeds. */
 const WAITING_ITEMS = [
   { itemId: 'homespun_cloth', count: 4 },
   { itemId: 'boar_hide', count: 1 },
 ];
+
+/** One completed sale of the player's own, as the Merchant's pending ledger carries it. */
+interface Sale {
+  itemId: string;
+  count: number;
+  /** The GROSS buyout the buyer paid for the whole stack. */
+  price: number;
+  /** The NET copper it added to the collection, after the Merchant's cut. */
+  proceeds: number;
+  buyerName: string;
+}
+
+function sale(itemId: string, count: number, unit: number, buyerName: string): Sale {
+  const price = count * unit;
+  return {
+    itemId,
+    count,
+    price,
+    proceeds: Math.floor(price * (1 - CUT_PCT / 100)),
+    buyerName,
+  };
+}
+
+/**
+ * The pending sale ledger, browse by browse, which is a QUEUE rather than a table: it grows as
+ * sales land and empties the moment the player collects.
+ *
+ * The collect between the second browse and the third is what makes this fixture worth having.
+ * The first three sales are gone from the wire by the time the shot is taken and are still on
+ * screen, which is the only state that shows what the Sold pane is for: a record that survives a
+ * drain nothing announces. Two of them are copper ore, so that pane has a line to draw as well.
+ */
+const SOLD: readonly (readonly Sale[])[] = [
+  [sale('copper_ore', 20, 50, 'Doradine'), sale('rough_hide', 10, 88, 'Karrek')],
+  [
+    sale('copper_ore', 20, 50, 'Doradine'),
+    sale('rough_hide', 10, 88, 'Karrek'),
+    sale('spider_silk', 10, 66, 'Anserra'),
+  ],
+  [sale('iron_ore', 20, 128, 'Bragg'), sale('copper_ore', 20, 46, 'Vessken')],
+];
+
+/** What the Merchant is holding, which is exactly what the rows above add up to. */
+function waitingCopper(browse: number): number {
+  return (SOLD[browse] ?? []).reduce((total, row) => total + row.proceeds, 0);
+}
 
 /** One stack on the counter: how many, and what the seller wants over the going rate. */
 interface Stack {
@@ -263,8 +308,10 @@ function pageFor(browse: number): Record<string, unknown> {
     rarity: '',
     page: 0,
     pageCount: 1,
-    collectionCopper: WAITING_COPPER,
+    collectionCopper: waitingCopper(browse),
     collectionItems: WAITING_ITEMS,
+    collectionSales: SOLD[browse] ?? [],
+    collectionSalesOmitted: 0,
     cutPct: CUT_PCT,
     maxListings: MAX_LISTINGS,
     myListingCount: listings.filter((row) => row.mine).length,
@@ -274,6 +321,42 @@ function pageFor(browse: number): Record<string, unknown> {
 /** Stand at the Merchant, reading a page. The wire name, which is what the loader reads. */
 function atCounter(draft: WorldDraft, browse: number): void {
   draft.set(draft.world, 'marketInfo', pageFor(browse));
+}
+
+/** How many sales the Merchant's own cap dropped out of the ledger in `overCapped`. */
+const OVER_CAP = 14;
+
+/**
+ * The same counter after more has sold than the Merchant will itemize.
+ *
+ * The two rows are sales the third browse had not seen, because that is what an omission
+ * MEANS: fourteen sales landed behind the two already recorded and pushed them out, so the
+ * rows still on the wire are the newest and not the ones already written down. The dropped
+ * gold rides the collection total, which is both what the game does (a dropped row never
+ * drops its copper) and what makes the page move at all, since the loader's market signature
+ * reads that total and not the ledger behind it.
+ *
+ * The pane says twelve rather than fourteen, and that is the point of the scenario. Two of
+ * the fourteen the server dropped were read before they went, so the number worth showing a
+ * player is how many sales of theirs are missing from THIS record, which is a figure only
+ * something keeping its own position in the queue can work out.
+ */
+function overCapped(draft: WorldDraft): void {
+  const rows = [
+    sale('ghostly_essence', 1, 810, 'Emberlash'),
+    sale('healing_potion', 5, 255, 'Ilvane'),
+  ];
+  // Everything the Merchant is holding: what the third browse already showed, then the sales
+  // that dropped out unread, then the two rows still on the wire. A dropped row's gold stays
+  // in the total, so the rows and the total deliberately do not reconcile.
+  const unread = (OVER_CAP - (SOLD[2]?.length ?? 0)) * 4 * SILVER;
+  const showing = rows.reduce((total, row) => total + row.proceeds, 0);
+  draft.set(draft.world, 'marketInfo', {
+    ...pageFor(2),
+    collectionCopper: waitingCopper(2) + unread + showing,
+    collectionSales: rows,
+    collectionSalesOmitted: OVER_CAP,
+  });
 }
 
 /** Walk away, which is a null page and NOT an empty market. */
@@ -374,8 +457,13 @@ function openTab(label: string): void {
  * nearly half its height on chrome that cannot scroll: the tab strip, the status strip, the
  * sentence under it, the search field and the note. A shot at the opening size is four rows of
  * ledger under all of that. This is a size the frame is genuinely draggable to.
+ *
+ * The width is also what makes three panes fit in one picture. `pnpm shots` lays a sheet out in a
+ * 1440px viewport and each pane carries 24px of its own on each side with 16px between them, so
+ * three of these come to 1424 and a wider box is silently cropped at the right edge. Found by
+ * looking at the capture: the third panel's prices were simply not in it.
  */
-const WIDENED = { x: 80, y: 140, w: 440, h: 620 };
+const WIDENED = { x: 80, y: 140, w: 416, h: 620 };
 
 const SCENARIOS: readonly Scenario[] = [
   {
@@ -383,7 +471,7 @@ const SCENARIOS: readonly Scenario[] = [
     label: 'The ledger, three days in',
     preview: true,
     caption: 'The ledger',
-    alt: "the Prices tab of a panel headed Ledgerline (to collect), with a strip over the list reading at the Merchant, page 1 of 1, a 5 percent cut, 6 of 12 listing slots used and 62 silver and 2 items waiting to be collected. Under a search field, six item rows fenced off by a rule at each end, each carrying the game's own art, its price as coins (a disc per unit, gold, silver or copper, with the empty units left out) and a chart across the bottom of the row: Copper Ore, low 44 copper over a median of 48 and 3 visits; Ghostly Essence, low 7 silver 80; Healing Potion, low 2 silver 45; Iron Ore, low 1 silver 5; Pristine Hide, low 14 silver; and Rough Hide, low 84 copper, its chart cut off by the scrolling list. Every figure is one vote per visit to the counter rather than one per listing, and each chart has one point per visit: copper ore falls across the three days and iron ore and pristine hide climb. A footer reads 9 items recorded, keeping 30 days.",
+    alt: "the Prices tab of a panel headed Ledgerline (to collect), with a strip over the list reading at the Merchant, page 1 of 1, a 5 percent cut, 6 of 12 listing slots used and 33 silver 6 copper and 2 items waiting to be collected. Under a search field, seven item rows fenced off by a rule at each end, each carrying the game's own art, its price as coins (a disc per unit, gold, silver or copper, with the empty units left out) and a chart across the bottom of the row: Copper Ore, low 44 copper over a median of 48 and 3 visits; Ghostly Essence, low 7 silver 80; Healing Potion, low 2 silver 45; Iron Ore, low 1 silver 5; Pristine Hide, low 14 silver; Rough Hide, low 84 copper; and Sheenleaf Herb, low 1 silver 8, its chart cut off by the scrolling list. Every figure is one vote per visit to the counter rather than one per listing, and each chart has one point per visit: copper ore falls across the three days and iron ore and pristine hide climb. A footer reads 9 items recorded, keeping 30 days.",
     frames: { ledger: { box: WIDENED, visible: true } },
     world: atTheMerchant,
     run: browsedForDays,
@@ -399,6 +487,37 @@ const SCENARIOS: readonly Scenario[] = [
     run: async (stage) => {
       await browsedForDays(stage);
       openTab('Yours');
+      await pause(SETTLE_MS);
+    },
+  },
+  {
+    id: 'sold',
+    label: 'What it actually sold for',
+    preview: true,
+    caption: 'What sold',
+    alt: "the Sold tab of the same panel, over the same strip, listing four items the player has actually sold. Each row gives what a buyer paid per item, in the game's own coins, over a chart of the same: Copper Ore paid 48 copper, over 2 sales, 40 sold and 18 silver 24 copper after the cut, last read moments ago, and it is the only row carrying a chart, because two sales are the fewest that can be a line; Iron Ore paid 1 silver 28, 1 sale of 20 and 24 silver 32 after the cut, last read moments ago; Spider Silk paid 66 copper, 1 sale of 10 and 6 silver 27 after the cut, last read 6 hours ago; and Rough Hide paid 88 copper, 1 sale of 10 and 8 silver 36 after the cut, last read 3 days ago. Three of those five sales were collected before the picture was taken and are gone from the Merchant entirely, which is the state this pane exists for: the ledger it reads is emptied the moment a player collects, so a sale is only ever recorded once and never read back. None of these figures is on the Prices tab, because what was paid and what is being asked are two series and neither is folded into the other. A footer reads 4 items sold, keeping 30 days.",
+    frames: { ledger: { box: WIDENED, visible: true } },
+    world: atTheMerchant,
+    run: async (stage) => {
+      await browsedForDays(stage);
+      openTab('Sold');
+      await pause(SETTLE_MS);
+    },
+  },
+  {
+    // The Merchant's own ledger holds fifty rows and counts what it dropped past that, and their
+    // gold is still inside the total those rows are explaining. So a record read off it is
+    // incomplete by a known amount, and the pane says by how much rather than presenting a short
+    // list as a whole one. Worth looking at rather than photographing: the normal state is none.
+    id: 'omitted',
+    label: 'More sold than the Merchant will itemize',
+    frames: { ledger: { box: WIDENED, visible: true } },
+    world: atTheMerchant,
+    run: async (stage) => {
+      await browsedForDays(stage);
+      overCapped(stage);
+      await drawn(stage);
+      openTab('Sold');
       await pause(SETTLE_MS);
     },
   },

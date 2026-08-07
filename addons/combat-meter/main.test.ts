@@ -25,6 +25,14 @@ const MANIFEST_JSON: unknown = JSON.parse(MANIFEST_TEXT);
 const PLAYER_ID = PLAYER_ENTITY.id;
 const MOB_ID = 9;
 const OTHER_ID = PLAYER_ID + 1;
+/** The player's own wolf, which nothing but `ownerId` tells from any other mob. */
+const PET_ID = 670;
+/** The pet's name, which is what a pet row is prefixed with. */
+const PET_NAME = 'Grizzle';
+/** Somebody else's pet, which the server delivers and this meter must refuse. */
+const STRANGER_PET_ID = 671;
+/** A pet whose entity has already left the snapshot, so nothing can resolve its owner. */
+const GHOST_PET_ID = 672;
 /** The addon's own repaint interval, so a suite can reach the next drawn number. */
 const REPAINT_MS = 500;
 const SECOND = 1000;
@@ -74,6 +82,7 @@ interface Heal {
   crit?: boolean;
   cueOnly?: boolean;
   absorbed?: number;
+  overheal?: number;
 }
 
 interface MeterHarness extends SharedHarness {
@@ -114,6 +123,12 @@ function rowFor(label: string): Element | null {
   return document.querySelector(`[data-ability="${label}"]`);
 }
 
+/** Point at a row and read back what the tooltip says about it. */
+function hover(label: string): string {
+  rowFor(label)?.dispatchEvent(new Event('pointerenter'));
+  return document.getElementById('woc-tooltip')?.textContent ?? '';
+}
+
 /** The width the kit wrote on a row's fill, which is the share made visible. */
 function fillWidthOf(label: string): string {
   const fill = rowFor(label)?.querySelector('.woc-bar-fill');
@@ -151,6 +166,15 @@ const KNOWN = [
   },
 ];
 
+/**
+ * A pet, which is a mob-kind entity carrying an owner. Nothing else on the wire separates
+ * one from any other mob in the zone, which is exactly why the meter has to read this field
+ * rather than guessing from a name or a template.
+ */
+function pet(id: number, name: string, ownerId: number): Record<string, unknown> {
+  return liveEntity({ set: { id, name, kind: 'mob', templateId: 'wolf', ownerId } });
+}
+
 interface RunOpts {
   /** Stored settings, seeded before the body runs, as the loader would hydrate them. */
   settings?: Record<string, unknown>;
@@ -164,6 +188,11 @@ interface RunOpts {
 async function run(opts: RunOpts = {}): Promise<MeterHarness> {
   const player = liveEntity({ set: { templateId: 'priest' } });
   const entities = new Map([[PLAYER_ID, player]]);
+  // Two pets in scope, told apart by nothing but who owns them, which is the whole of what
+  // the server checks before it decides whose meter a record belongs on. Both are here in
+  // every case so that a fixture cannot pass by having only ever seen the friendly one.
+  entities.set(PET_ID, pet(PET_ID, PET_NAME, PLAYER_ID));
+  entities.set(STRANGER_PET_ID, pet(STRANGER_PET_ID, 'Snarl', OTHER_ID));
   const world = { entities, player, known: KNOWN };
   const harness = await mountAddon({
     manifest: MANIFEST_TEXT,
@@ -204,6 +233,7 @@ async function run(opts: RunOpts = {}): Promise<MeterHarness> {
         crit: heal.crit ?? false,
         cueOnly: heal.cueOnly,
         absorbed: heal.absorbed,
+        overheal: heal.overheal,
       };
       harness.inbound(eventsFrame([event]));
     },
@@ -239,12 +269,6 @@ async function run(opts: RunOpts = {}): Promise<MeterHarness> {
 // owns which tab is marked, and the tooltip, which is a function so a row reports the tally as
 // it is now rather than as it was when the row was built.
 describe('what it takes from the kit', () => {
-  function hover(label: string): string {
-    const bar = document.querySelector(`[data-ability="${label}"]`);
-    bar?.dispatchEvent(new Event('pointerenter'));
-    return document.getElementById('woc-tooltip')?.textContent ?? '';
-  }
-
   it('draws its tabs with the loader strip rather than its own buttons', async () => {
     await run();
 
@@ -325,12 +349,21 @@ describe('its manifest', () => {
     ]);
   });
 
-  // `closable` on a frame is a minor 2 member, so the manifest has to say 2 or the panel loses
-  // its close button on a loader that implements 1: an unknown option is ignored rather than
-  // refused. Not higher either, since a minor this addon does not use would refuse it outright
-  // on loaders that could run it perfectly well.
+  // `closable` on a frame is a minor 2 member, and reading `Heal2Event.overheal` raises this to
+  // 4, because that field was published at 4. The minor is the smallest one carrying EVERY
+  // published member the addon reads, and a field on an event record is such a member: it is
+  // what moved API_MINOR to 4 in the first place.
+  //
+  // An earlier version said 2, reasoning that the loader implements nothing for this field
+  // (`net/hub.ts` publishes each decoded event verbatim), so any loader hands it over and
+  // declaring 4 would only exclude players. The observation is true and the conclusion does not
+  // follow. Passthrough is an implementation choice the published types never promise, so an
+  // addon relying on it is relying on something nothing keeps true; if the loader ever projects
+  // events, an addon declaring 2 reads undefined and reports zero overhealing, which is a wrong
+  // answer that looks like a real one. Declaring 4 fails the other way, cleanly, with a message
+  // naming the fix. That trade is the one this repo takes everywhere else.
   it('declares the API minor it actually needs', () => {
-    expect(manifest().apiMinor).toBe(2);
+    expect(manifest().apiMinor).toBe(4);
   });
 });
 
@@ -504,9 +537,10 @@ describe('the ability breakdown', () => {
     h.hit({ ability: 'Multi Shot', amount: 250 });
     h.tick(SECOND);
 
-    // 750 of 1000 over the one second elapsed.
-    expect(h.figureOf('Aimed Shot')).toBe('750  75%  750.0');
-    expect(h.figureOf('Multi Shot')).toBe('250  25%  250.0');
+    // 750 of 1000 over the one second elapsed. The third figure carries its unit, because
+    // three bare numbers in a row leave the reader to work out which one is a rate.
+    expect(h.figureOf('Aimed Shot')).toBe('750  75%  750.0/s');
+    expect(h.figureOf('Multi Shot')).toBe('250  25%  250.0/s');
   });
 
   // The four figures the game shows nowhere. Crit rate is the one worth having:
@@ -552,7 +586,7 @@ describe('the ability breakdown', () => {
     h.hit({ amount: 0, absorbed: 400 });
     h.tick();
 
-    expect(h.figureOf('Aimed Shot')).toBe('0  0%  0.0');
+    expect(h.figureOf('Aimed Shot')).toBe('0  0%  0.0/s');
     expect(fillWidthOf('Aimed Shot')).toBe('0.00%');
   });
 });
@@ -838,6 +872,258 @@ describe('the healing table', () => {
     h.tick(4 * SECOND);
 
     expect(h.fight()).not.toContain('last fight');
+  });
+});
+
+// A pet's damage is the owner's, and until game 0.35.0 no owner ever received it: the server
+// compared raw entity ids when deciding who a combat record went to, so a pet matched nobody
+// and matching `sourceId` against your own id was accidentally right. The server resolves each
+// side to its controller now, those records arrive, and the old comparison threw every one of
+// them away, which is a hunter, warlock or mage reading materially under the truth.
+//
+// `ownerId` is the only thing separating a pet from any other mob in the zone, so the second
+// case below is as load-bearing as the first: fold in every owned entity and the meter becomes
+// a zone-wide damage display.
+describe('what your pet did', () => {
+  it('counts a hit your own pet dealt', async () => {
+    const h = await run();
+
+    h.hit({ by: PET_ID, amount: 400, ability: null });
+    h.tick();
+
+    expect(h.fight()).toContain('400 damage');
+  });
+
+  // The row says whose it was, which folding silently could not. Its own melee lands in the
+  // same bucket as your auto-attack otherwise, and a player cannot tell what the pet added.
+  // `{pet}: {ability}` is the game's own spelling for this in its breakdown.
+  it('labels a pet row with the pet name', async () => {
+    const h = await run();
+
+    h.hit({ by: PET_ID, amount: 400, ability: null });
+    h.tick();
+
+    expect(h.labels()).toEqual([`${PET_NAME}: Melee`]);
+  });
+
+  // The half that keeps it YOUR meter. A stranger's pet is delivered by the same change that
+  // delivers yours, and it resolves to a principal who is not you.
+  it('ignores a hit somebody else pet dealt', async () => {
+    const h = await run();
+
+    h.hit({ by: STRANGER_PET_ID, amount: 400, ability: null });
+    h.tick();
+
+    expect(h.fight()).toContain('0 damage');
+    expect(h.labels()).toEqual([]);
+  });
+
+  // A pet whose entity has already gone from the snapshot has no owner to look up. The server
+  // falls back to the raw id in the same case, so the record degrades to the pre-0.35.0
+  // reading rather than throwing on a lookup that answered nothing.
+  it('drops a pet event whose entity is gone rather than throwing', async () => {
+    const h = await run();
+
+    expect(() => h.hit({ by: GHOST_PET_ID, amount: 400, ability: null })).not.toThrow();
+    h.tick();
+
+    expect(h.fight()).toContain('0 damage');
+    expect(h.labels()).toEqual([]);
+  });
+
+  // A pet's swing rolls against the PET'S hit rating, not yours. Counting it here would blend
+  // two attack tables into one figure and leave neither readable, which is the same reason
+  // damage taken has never entered this line.
+  it('keeps a pet swing out of your attack table', async () => {
+    const h = await run();
+
+    h.hit({ amount: 100 });
+    h.hit({ by: PET_ID, amount: 0, kind: 'miss', ability: null });
+    h.tick();
+
+    expect(h.outcomes()).toBe('hit 100%');
+  });
+
+  // Damage taken by your pet is damage you should see, and the server delivers it on exactly
+  // that basis. Here the prefix names who it landed ON, since the ability is the attacker's.
+  it('attributes damage taken by your pet', async () => {
+    const h = await run();
+
+    h.hit({ by: MOB_ID, at: PET_ID, amount: 250, ability: 'Cleave' });
+    h.tick();
+    h.openTab('Taken');
+
+    expect(h.labels()).toEqual([`${PET_NAME}: Cleave`]);
+    expect(h.fight()).toContain('250 taken');
+  });
+
+  it('ignores damage taken by somebody else pet', async () => {
+    const h = await run();
+
+    h.hit({ by: MOB_ID, at: STRANGER_PET_ID, amount: 250, ability: 'Cleave' });
+    h.tick();
+    h.openTab('Taken');
+
+    expect(h.labels()).toEqual([]);
+  });
+
+  // Demon Heal is the inversion: it carries the OWNER as `sourceId` and targets the pet, so it
+  // was already attributed to you before any of this. The row must therefore stay unprefixed,
+  // because the caster is you and the prefix names the caster on this tab.
+  it('files a heal you cast on your pet under your own name', async () => {
+    const h = await run();
+
+    h.heal({ at: PET_ID, amount: 300, ability: 'Demon Heal' });
+    h.tick();
+    h.openTab('Healing');
+
+    expect(h.labels()).toEqual(['Demon Heal']);
+    expect(h.fight()).toContain('300 healing');
+  });
+
+  // No art for any pet ability by any route: they are in no spellbook, so `byName` can only
+  // answer null, and a swing carries no name at all. The tooltip is where a row can say why
+  // its icon slot is empty, and for a pet the reason is not "not in your spellbook".
+  it('draws no art for a pet row and names the pet in its tooltip', async () => {
+    const h = await run();
+
+    h.hit({ by: PET_ID, amount: 400, ability: 'Bite' });
+    h.tick();
+
+    const icon = rowFor(`${PET_NAME}: Bite`)?.querySelector('img.woc-bar-icon');
+    expect(icon?.hasAttribute('src')).toBe(false);
+    expect(hover(`${PET_NAME}: Bite`)).toContain(`your pet ${PET_NAME}`);
+  });
+
+  // The pet's rows and yours are separate tallies against one total, which is what makes the
+  // share column answer "how much of my output was the pet".
+  it('adds the pet to your total while keeping the rows apart', async () => {
+    const h = await run();
+
+    h.hit({ amount: 750, ability: 'Aimed Shot' });
+    h.hit({ by: PET_ID, amount: 250, ability: null });
+    h.tick(SECOND);
+
+    expect(h.fight()).toContain('1,000 damage');
+    expect(h.figureOf('Aimed Shot')).toBe('750  75%  750.0/s');
+    expect(h.figureOf(`${PET_NAME}: Melee`)).toBe('250  25%  250.0/s');
+  });
+});
+
+// The rate was already the third column of every row and nothing on screen said so, and the
+// summary line left the player to divide a total by a duration themselves. Both are display
+// changes rather than measurement changes: the two meters already agree on the denominator,
+// since ours ends a fight at `lastEventAt` and the game's at `Math.max(1, lastActivity -
+// startedAt)`, floor included.
+describe('stating the rate', () => {
+  it('states the rate on the summary line, beside the total and the duration', async () => {
+    const h = await run();
+
+    h.hit({ amount: 1000 });
+    h.tick(4 * SECOND);
+    h.hit({ amount: 1000 });
+    h.tick(SECOND);
+
+    expect(h.fight()).toBe('2,000 damage (400.0/s) in 5s');
+  });
+
+  // The floor the game applies to the same figure. A burst inside one second would otherwise
+  // divide by a fraction and report a rate nobody sustained for any part of it.
+  it('floors the duration at a second rather than reporting a burst rate', async () => {
+    const h = await run();
+
+    h.hit({ amount: 900 });
+    h.tick(REPAINT_MS);
+
+    expect(h.fight()).toBe('900 damage (900.0/s) in 1s');
+  });
+
+  // It serves all three tabs, so the noun changes and the rate has to stay right.
+  it('states the rate on the healing and taken tabs too', async () => {
+    const h = await run();
+    h.heal({ amount: 400 });
+    h.hit({ by: OTHER_ID, at: PLAYER_ID, amount: 800 });
+    h.tick(2 * SECOND);
+
+    h.openTab('Healing');
+    expect(h.fight()).toContain('400 healing (200.0/s)');
+    h.openTab('Taken');
+
+    expect(h.fight()).toContain('800 taken (400.0/s)');
+  });
+
+  // A closed fight's rate is frozen with everything else, or it would keep falling against a
+  // clock nobody started, which is the reading the duration freeze already exists to prevent.
+  it('freezes the rate when the fight closes', async () => {
+    const h = await run();
+    h.hit({ amount: 1000 });
+
+    h.tick(6 * SECOND);
+    const frozen = h.fight();
+    h.tick(60 * SECOND);
+
+    expect(h.fight()).toBe(frozen);
+    expect(frozen).toContain('(1,000.0/s)');
+  });
+});
+
+// `overheal` is new on `heal2` in game 0.35.0 and is PARTIAL ONLY: every emit site still fires
+// only when some healing landed, so a tick that overhealed completely sent no record at all
+// and nothing here can see it. What ships is therefore a floor, marked as one, and no
+// percentage anywhere: a percentage would divide by a total missing exactly the same ticks.
+describe('overhealing', () => {
+  it('reports overhealing on the row it was wasted from', async () => {
+    const h = await run();
+
+    h.heal({ amount: 300, overheal: 200 });
+    h.tick();
+    h.openTab('Healing');
+
+    expect(h.detailOf('Mend Wounds')).toContain('200+ overhealed');
+  });
+
+  // The `+` is the whole of the honesty, so it is asserted rather than left to the phrasing.
+  it('marks the figure as a floor rather than a total', async () => {
+    const h = await run();
+
+    h.heal({ amount: 300, overheal: 200 });
+    h.heal({ amount: 100, overheal: 40 });
+    h.tick();
+    h.openTab('Healing');
+
+    expect(h.detailOf('Mend Wounds')).toContain('240+ overhealed');
+    expect(h.detailOf('Mend Wounds')).not.toMatch(/\d+% overheal/);
+  });
+
+  it('says in the tooltip what the figure cannot see', async () => {
+    const h = await run();
+
+    h.heal({ amount: 300, overheal: 200 });
+    h.tick();
+    h.openTab('Healing');
+
+    expect(hover('Mend Wounds')).toContain('a fully wasted tick sends nothing');
+  });
+
+  // Absent rather than zero, so a heal that wasted none must not draw the clause at all.
+  it('says nothing about overhealing on a heal that wasted none', async () => {
+    const h = await run();
+
+    h.heal({ amount: 300 });
+    h.tick();
+    h.openTab('Healing');
+
+    expect(h.detailOf('Mend Wounds')).not.toContain('overhealed');
+  });
+
+  // It rides `heal2` alone, so a damage row can never grow the clause however the field moves.
+  it('never reports overhealing on a damage row', async () => {
+    const h = await run();
+
+    h.hit({ amount: 300 });
+    h.tick();
+
+    expect(h.detailOf('Aimed Shot')).not.toContain('overhealed');
   });
 });
 

@@ -2,11 +2,12 @@
 
 // Foretell: a bar for every cast in the fight, including the ones nothing announces.
 //
-// `net.onEvent('castStart')` fires for a player cast, a pet, gathering and fishing and
-// for nothing else: a mob's mechanic assigns its cast state directly on the entity, so
-// an event-driven display is silent for every mob in the game and cannot tell that from
-// a boss that never casts. `world.casts` is built from that entity state instead, and is
-// the only source read here.
+// `net.onEvent('castStart')` fires for a player's cast, a pet's cast and the timed
+// activities the game runs through the same cast machinery, and for no mob at all: a
+// mob's mechanic assigns its cast state directly on the entity, so an event-driven
+// display is silent for every mob in the game and cannot tell that from a boss that
+// never casts. `world.casts` is built from that entity state instead, and is the only
+// source read here.
 //
 // The map is rebuilt on every read from live entity fields, so there is nothing to hold:
 // `castsNow` reads it again rather than keeping the one the last handler was handed.
@@ -18,12 +19,17 @@
 // loader positions anchors after the handler, so a bar this file moves is followed in
 // the same frame rather than one behind the camera.
 //
-// `EntityCast.ability` is an id, unlike the display name a damage record carries.
-// `world.abilities` turns one into the other for your own kit only, so anything else
-// falls back to a title-cased id and is marked with a question mark. The mark is on the
-// label rather than in a footnote, because it has to survive the anchored layout, where
-// an anchor takes no pointer events and there is nothing to hover. The row's tooltip
-// carries the long version in the list.
+// `EntityCast.ability` is an id rather than the display name a damage record carries, or
+// it is an activity sentinel: a fixed marker naming what the unit is DOING rather than
+// any ability, from a set that grows with the game, so a nearby player crafting or
+// fishing gets a bar as well. `world.abilities` turns an id into a name for your own kit
+// only and a sentinel resolves there for nobody, so anything else falls back to a
+// title-cased id and is marked with a question mark. A bar over a crafter is the honest
+// answer rather than a gap to filter: the unit is casting, and an exclusion list of
+// sentinels would need editing every time the game adds one. The mark is on the label
+// rather than in a footnote, because it has to survive the anchored layout, where an
+// anchor takes no pointer events and there is nothing to hover. The row's tooltip carries
+// the long version in the list.
 //
 // The school is usually unknown and is left unknown. An `EntityCast` carries none and
 // the only place to recover one is your spellbook, so a mob's cast is drawn untinted
@@ -233,7 +239,7 @@ function guessLines(id) {
     title: `${readable(row.ability)}${GUESS_MARK}`,
     lines: [
       {
-        text: `Worked out from the ability id \`${row.ability}\`. The game publishes an ability's own name only for your own spellbook, so this is a guess and is wrong wherever the two have diverged.`,
+        text: `Worked out from the cast id \`${row.ability}\`. The game publishes an ability's own name only for your own spellbook, and a cast that names an activity such as crafting or fishing names no ability at all, so this is a guess and is wrong wherever a name has moved away from its id.`,
         tone: 'muted',
       },
       {

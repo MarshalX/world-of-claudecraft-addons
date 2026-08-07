@@ -1,14 +1,35 @@
 /// <reference types="@woc-addons/types" />
 
-// Ledgerline: a price history for a market that keeps none.
+// Ledgerline: a price history for a market that keeps almost none.
 //
-// The server keeps nothing. There is no history table, no sold-price record and no query
-// for either, and a listing simply exists until somebody buys it or it expires. So a price
-// history is not something this addon reads, it is something this addon is: every page the
-// player browses at the Merchant is written down, and the ledger is exactly as complete as
-// the browsing behind it. Nothing here can act either, since there is no send API, so
-// every figure below is a record of what the player saw and the panes say so wherever a
-// reader might take a row for a button.
+// The server keeps no history OF THE BOOK. There is no table of what an item generally goes
+// for, no query for one, and a listing simply exists until somebody buys it or it expires.
+// So a market price history is not something this addon reads, it is something this addon
+// is: every page the player browses at the Merchant is written down, and the ledger is
+// exactly as complete as the browsing behind it. Nothing here can act either, since there is
+// no send API, so every figure below is a record of what the player saw and the panes say so
+// wherever a reader might take a row for a button.
+//
+// The player's OWN completed sales are the one real sold-price record the game keeps, and it
+// is a pickup queue rather than an archive. `collectionSales` itemizes the gold waiting on
+// the Merchant's Collect tab, one row per sale, capped at fifty with the overflow counted in
+// `collectionSalesOmitted`, and EMPTIED the moment the player collects. Nothing about it
+// survives that, so the Sold pane is a copy taken before the drain rather than a query, and
+// it is still only your sales: nothing says what anybody else sold anything for.
+//
+// A sale row carries no id and no clock, so the only identity it has is its POSITION in the
+// queue, and `foldSales` is built on that: row `i` is `collectionSalesOmitted + i` sales into
+// this collection, and that total only rises until a collect resets it to nothing. The two
+// failures worth naming are the ones that destroy a record silently. Counting a row twice
+// inflates a series that exists to be ground truth, and reading the drain as an empty market
+// deletes everything. The stamp is when this addon drained the row, never when the sale
+// happened, and every line that shows one says so.
+//
+// What was PAID and what is being ASKED are two series and are never folded into one. A
+// listing price is what a seller wanted and a sale row is what a buyer handed over, and
+// merging them would give a fuller curve made of two different facts, with the sold half
+// stamped at whatever moment the page happened to be read. The one place they meet is a
+// labelled line on a price row's tooltip, which is there so a reader can see the gap.
 //
 // Only `near` is ever recorded, which is the single worst bug this feature can have.
 // `world.market` is three-state: `near` carries the page, `away` means the player is not
@@ -65,9 +86,11 @@
 // rewritten and a player flipping pages would otherwise write on every flip.
 //
 // Storage is per account rather than per character, because a market is a realm rather
-// than a character: a price your alt saw is a price you saw. Every stamp comes from
-// `woc.wallClock()`, never `woc.now()`, because a monotonic reading stored in one session
-// and read in the next is a moment in the future with nothing to indicate it.
+// than a character: a price your alt saw is a price you saw. The sale record is the
+// opposite call for the opposite reason, and shares it with the listing stamps: the
+// Merchant keeps a collection per SELLER, so a completed sale is one character's. Every
+// stamp comes from `woc.wallClock()`, never `woc.now()`, because a monotonic reading stored
+// in one session and read in the next is a moment in the future with nothing to indicate it.
 
 /** The whole price history for one market, in ONE key. See `ledgerKey`. */
 const LEDGER_PREFIX = 'ledger';
@@ -75,6 +98,8 @@ const LEDGER_PREFIX = 'ledger';
 const NO_REALM = 'offline';
 /** Where the first-seen stamps for the player's OWN listings live. One small key. */
 const MINE_KEY = 'mine-seen';
+/** Where the sales drained off the Merchant's pending ledger live, and how far it was read. */
+const SOLD_KEY = 'sold';
 
 /** The topic registry's item record, its batch form, and the ask a late subscriber sends. */
 const ITEM_TOPIC = 'item';
@@ -110,6 +135,15 @@ const DEFAULT_HISTORY_DAYS = 30;
  */
 const MAX_ITEMS = 400;
 const MAX_VISITS = 30;
+
+/**
+ * How many drained sales are kept, across every item.
+ *
+ * One ceiling over the whole record rather than one per item, because a player who sells ore
+ * every day and a sword once a year should not lose the sword to the ore. The oldest go
+ * first, and "oldest" is by the stamp this addon put on it, which is when it drained the row.
+ */
+const MAX_SALES = 400;
 
 /**
  * How long a trip to the counter lasts, for the purpose of being one reading.
@@ -192,6 +226,21 @@ const series = new Map();
 const saving = cell(false);
 /** Listing id to the first time this addon saw one of the player's OWN listings. */
 const mineSeen = new Map();
+/** Item id to the sales of it drained off the Merchant's ledger. See `emptySold`. */
+const sold = new Map();
+
+/**
+ * How far into the Merchant's CURRENT pending ledger this addon has read.
+ *
+ * `read` is a count of sales into this collection rather than an index into the array the
+ * wire carries, because the array is a window over that count: the oldest rows drop out of
+ * it into `collectionSalesOmitted` and the whole thing empties on a collect. `anchor` is the
+ * last row read, which is what catches the one case the count alone cannot: a collect and
+ * exactly as many fresh sales between two readings leaves the count where it was. `lost` is
+ * cumulative and belongs to the record rather than to the cycle, because it is the answer to
+ * how complete the record is.
+ */
+const cycle = { read: 0, anchor: '', lost: 0 };
 
 /** Set once the stored ledger has been read, or once reading it has failed. */
 const loaded = cell(false);
@@ -776,6 +825,250 @@ function firstSeen(row) {
   return held.seen;
 }
 
+/** One item's completed sales, oldest first, in the order they were drained. */
+function emptySold(itemId) {
+  return { itemId, at: 0, sales: [] };
+}
+
+/**
+ * One row of the Merchant's ledger as something comparable. Everything it carries, because
+ * the whole of it is what says this is the same row: two sales of one ore to one buyer at
+ * one price are genuinely indistinguishable, and this is never used to tell those apart.
+ * It answers only whether the row at a given POSITION is still the one that was read there.
+ */
+function saleMark(row) {
+  if (typeof row !== 'object' || row === null) {
+    return '';
+  }
+  const count = numberOr(row.count, 0);
+  const price = numberOr(row.price, 0);
+  const proceeds = numberOr(row.proceeds, 0);
+  return `${text(row.itemId)}|${String(count)}|${String(price)}|${String(proceeds)}|${text(row.buyerName)}`;
+}
+
+/**
+ * How many sales into this collection the record already covers, given what the wire holds.
+ *
+ * Zero on a queue this addon has not read: one that is SHORTER than where it left off has
+ * been collected and started again, and one whose row at that position is not the row that
+ * was read there is a different queue that happens to be the same length.
+ */
+function alreadyRead(rows, omitted) {
+  if (cycle.read === 0 || omitted + rows.length < cycle.read) {
+    return 0;
+  }
+  const at = cycle.read - 1 - omitted;
+  if (at < 0) {
+    // The cap has dropped the row this addon last read, so there is nothing left to check
+    // against. The count is all there is, and what it skips past is counted as lost.
+    return cycle.read;
+  }
+  if (saleMark(rows[at]) !== cycle.anchor) {
+    return 0;
+  }
+  return cycle.read;
+}
+
+/**
+ * Write one drained row down. Nothing is filtered on the amounts: a 1-copper listing against
+ * the Merchant's cut nets zero and still leaves a row, and the game's own Collect tab reads
+ * the ledger specifically so that sale is not stranded unshown.
+ */
+function recordSale(row, now) {
+  const itemId = text(row?.itemId);
+  if (itemId === '') {
+    return;
+  }
+  const count = Math.max(1, Math.round(numberOr(row.count, 1)));
+  const price = Math.max(0, numberOr(row.price, 0));
+  const record = sold.get(itemId) ?? emptySold(itemId);
+  record.sales.push({
+    at: now,
+    count,
+    price,
+    proceeds: Math.max(0, numberOr(row.proceeds, 0)),
+    buyer: text(row.buyerName),
+    unit: Math.round(unitPrice(price, count)),
+  });
+  record.at = now;
+  sold.set(itemId, record);
+}
+
+/**
+ * Take everything new out of the Merchant's pending ledger, and answer whether anything moved.
+ *
+ * An ABSENT field is not an empty queue, which is the guard the first line is: a server that
+ * predates the ledger sends neither field, and reading that as a collect would reset the
+ * position on every page and count every waiting sale again the next time a real one arrived.
+ */
+function foldSales(info, now) {
+  const rows = info.collectionSales;
+  if (!Array.isArray(rows)) {
+    return false;
+  }
+  const omitted = Math.max(0, Math.round(numberOr(info.collectionSalesOmitted, 0)));
+  const read = alreadyRead(rows, omitted);
+  // Sales that happened and were dropped before this addon could read them, which is not the
+  // server's own figure and must not be presented as it. `collectionSalesOmitted` counts what
+  // the cap dropped, some of which was read and kept here before it went; what a player wants
+  // is how many of their sales are missing from THIS record, and only a position in the queue
+  // can answer that. The game's own Collect tab quotes a THIRD number, its field plus every
+  // row whose item a content edit has retired, since it cannot name one.
+  const missed = Math.max(0, omitted - read);
+  cycle.lost += missed;
+  const fresh = rows.slice(Math.max(read, omitted) - omitted);
+  for (const row of fresh) {
+    recordSale(row, now);
+  }
+  const total = omitted + rows.length;
+  // The POSITION moving is a change too, and not only the rows: a collect leaves nothing to
+  // record and still has to be written down, or a reload would read the queue from where the
+  // collected one left off. The rows are counted separately from it because a queue read at
+  // the length it left off at moves neither the position nor the omission count and is still
+  // a queue of sales nobody has written down.
+  const moved = missed > 0 || fresh.length > 0 || cycle.read !== total;
+  cycle.read = total;
+  cycle.anchor = saleMark(rows.at(-1));
+  return moved;
+}
+
+/** Everything the panel says about one item's sales, from the rows that were drained. */
+function soldStats(record) {
+  const units = record.sales.map((entry) => entry.unit).sort((a, b) => a - b);
+  const newest = record.sales.at(-1);
+  return {
+    low: units[0] ?? 0,
+    high: units.at(-1) ?? 0,
+    median: median(units, Math.floor(units.length / 2)),
+    at: newest?.at ?? record.at,
+    sales: record.sales.length,
+    items: record.sales.reduce((total, entry) => total + entry.count, 0),
+    gross: record.sales.reduce((total, entry) => total + entry.price, 0),
+    net: record.sales.reduce((total, entry) => total + entry.proceeds, 0),
+  };
+}
+
+/** What each sale fetched per item, in the order they were drained, which is what a line is. */
+function soldTrend(record) {
+  return record.sales.map((entry) => entry.unit);
+}
+
+/**
+ * The cutoff the sale record is held to: the retention setting, raised where the ceiling on
+ * the whole record bites first. One reading of every stamp rather than a sort per item,
+ * because the ceiling is over the record and not over any one item's share of it.
+ */
+function soldCutoff(now) {
+  const stamps = [...sold.values()].flatMap((record) => record.sales.map((entry) => entry.at));
+  stamps.sort((a, b) => a - b);
+  const over = stamps.length - MAX_SALES;
+  if (over <= 0) {
+    return cutoffAt(now);
+  }
+  return Math.max(cutoffAt(now), stamps[over] ?? 0);
+}
+
+/** Hold the sale record to its cutoff, dropping an item that has nothing left. */
+function trimSold(cutoff) {
+  const emptied = [];
+  for (const [itemId, record] of sold) {
+    record.sales = record.sales.filter((entry) => entry.at >= cutoff);
+    record.at = record.sales.at(-1)?.at ?? 0;
+    if (record.sales.length === 0) {
+      emptied.push(itemId);
+    }
+  }
+  for (const itemId of emptied) {
+    sold.delete(itemId);
+  }
+}
+
+/** One stored sale, checked, because a player can edit what is in storage. */
+function parseSale(value) {
+  if (!Array.isArray(value)) {
+    return null;
+  }
+  const at = numberOr(value[0], 0) * MS_PER_SECOND;
+  const count = Math.max(1, Math.round(numberOr(value[1], 1)));
+  const price = numberOr(value[2], -1);
+  const proceeds = numberOr(value[3], -1);
+  if (at <= 0 || price < 0 || proceeds < 0) {
+    return null;
+  }
+  return { at, count, price, proceeds, buyer: text(value[4]), unit: Math.round(price / count) };
+}
+
+/**
+ * One sale as it is stored: when, how many, gross, net, who bought it. An array for the same
+ * economy the visits are stored with, and the seconds for the same reason.
+ */
+function storedSale(entry) {
+  return [
+    Math.round(entry.at / MS_PER_SECOND),
+    entry.count,
+    entry.price,
+    entry.proceeds,
+    entry.buyer,
+  ];
+}
+
+/** One item's stored sales, oldest first, or null where none of them survived the check. */
+function parseSoldRecord(itemId, value) {
+  if (!Array.isArray(value)) {
+    return null;
+  }
+  const record = emptySold(itemId);
+  for (const entry of value) {
+    const parsed = parseSale(entry);
+    if (parsed !== null) {
+      record.sales.push(parsed);
+    }
+  }
+  if (record.sales.length === 0) {
+    return null;
+  }
+  record.sales.sort((a, b) => a.at - b.at);
+  record.at = record.sales.at(-1)?.at ?? 0;
+  return record;
+}
+
+/** Every item's stored sales, as records, dropping anything that is not one. */
+function parseSold(value) {
+  const held = new Map();
+  if (typeof value !== 'object' || value === null) {
+    return held;
+  }
+  for (const [itemId, entries] of Object.entries(value)) {
+    const record = parseSoldRecord(itemId, entries);
+    if (itemId !== '' && record !== null) {
+      held.set(itemId, record);
+    }
+  }
+  return held;
+}
+
+/** The sale record and the position in the queue, which are written and read as one value. */
+function storedSold() {
+  const sales = {};
+  for (const [itemId, record] of sold) {
+    sales[itemId] = record.sales.map(storedSale);
+  }
+  return { sales, read: cycle.read, anchor: cycle.anchor, lost: cycle.lost };
+}
+
+/**
+ * Where this addon left off, written down with the sales themselves.
+ *
+ * The position has to survive a reload, and that is not obvious. A player who reads a page,
+ * closes the tab and comes back before collecting meets the SAME uncollected rows, and a
+ * position that started at nothing would record every one of them a second time.
+ */
+function keepSold() {
+  woc.storage.character.set(SOLD_KEY, storedSold()).catch((err) => {
+    woc.warn('ledgerline: the sale record could not be saved', err);
+  });
+}
+
 /**
  * Everything the panel says about one item, from its visits.
  *
@@ -900,6 +1193,14 @@ function countedVisits(count) {
   return `${String(count)} visits`;
 }
 
+/** A completed sale of the player's own, drained off the Merchant's pending ledger. */
+function countedSales(count) {
+  if (count === 1) {
+    return '1 sale';
+  }
+  return `${String(count)} sales`;
+}
+
 /**
  * The realm in play, off the loader's own character key. `characterKey` is `realm/name` and
  * is null until both are known, which is exactly the moment this addon can say which market
@@ -995,8 +1296,59 @@ function onNear(info) {
   live.page = page;
   if (loaded.on) {
     recordPage(page);
+    recordSales(info, now);
   }
   checkUndercut(page);
+}
+
+/**
+ * Drain the Merchant's pending ledger into the record and write it down.
+ *
+ * Off the raw payload rather than off the captured page, because a capture is the shape the
+ * price series is folded from and holds what a page SAID about an item. A queue that has to
+ * be read exactly once before it is emptied is a different kind of thing and is kept apart
+ * from the moment it arrives.
+ */
+function recordSales(info, now) {
+  if (foldSales(info, now)) {
+    trimSold(soldCutoff(now));
+    keepSold();
+  }
+}
+
+/** Drain whatever the Merchant is showing right now, where there is a page to read it off. */
+function readSales() {
+  const state = woc.world.market;
+  if (loaded.on && state.status === 'near' && state.info !== null) {
+    recordSales(state.info, woc.wallClock());
+  }
+}
+
+/** Start over on the pending ledger: one that was collected, or one never read. */
+function resetCycle() {
+  cycle.read = 0;
+  cycle.anchor = '';
+}
+
+/**
+ * The collection badge moved, which is the one signal about the pending ledger that reaches
+ * this addon with no page in front of it.
+ *
+ * A FALL means everything waiting has been taken, so the queue is empty whether or not a page
+ * says so, and the next sale starts a new one. Belt and braces rather than the route the
+ * drain normally takes: a sale is a listing leaving the book and the loader's own market
+ * signature is an id list, so every sale moves the page as well. What this adds is that the
+ * badge is ungated by proximity and the page is not, so a collect is still noticed by a
+ * player who walked off immediately afterwards.
+ */
+function onCollectPending() {
+  if (woc.world.marketCollectPending === true) {
+    readSales();
+  } else if (loaded.on && cycle.read > 0) {
+    resetCycle();
+    keepSold();
+  }
+  schedulePaint();
 }
 
 /** Fold one page into the ledger and write it down. */
@@ -1072,6 +1424,25 @@ async function loadOwn() {
 }
 
 /**
+ * Read the sale record and the position back, which are one value for one reason: they are
+ * only true together. A record read without the position would count every uncollected sale
+ * again, and a position read without the record would skip sales it has no rows for.
+ */
+async function loadSold() {
+  const stored = await woc.storage.character.get(SOLD_KEY, null);
+  if (!(running.on && typeof stored === 'object' && stored !== null)) {
+    return;
+  }
+  cycle.read = Math.max(0, Math.round(numberOr(stored.read, 0)));
+  cycle.anchor = text(stored.anchor);
+  cycle.lost = Math.max(0, Math.round(numberOr(stored.lost, 0)));
+  for (const [itemId, record] of parseSold(stored.sales)) {
+    sold.set(itemId, record);
+  }
+  trimSold(soldCutoff(woc.wallClock()));
+}
+
+/**
  * Read what is stored for whoever is playing, then draw.
  *
  * The read waits for a character, and both halves of the store are the reason: the ledger
@@ -1090,6 +1461,9 @@ async function startLedger() {
     }),
     loadOwn().catch((err) => {
       woc.warn('ledgerline: the stored listing stamps could not be read', err);
+    }),
+    loadSold().catch((err) => {
+      woc.warn('ledgerline: the stored sale record could not be read', err);
     }),
   ]);
   if (!running.on) {
@@ -1126,6 +1500,11 @@ function characterChanged() {
     loadedFor.ledger = '';
     series.clear();
     mineSeen.clear();
+    // The sale record and the position in the queue are the other character's, and the
+    // Merchant keeps a collection per seller, so there is nothing to carry over at all.
+    sold.clear();
+    resetCycle();
+    cycle.lost = 0;
     live.page = null;
     draw();
   }
@@ -1396,6 +1775,7 @@ frame.body.style.flex = '1 1 auto';
 const panes = new Map([
   ['prices', fills(column('woc-ledgerline-pane'))],
   ['mine', fills(column('woc-ledgerline-pane'))],
+  ['sold', fills(column('woc-ledgerline-pane'))],
 ]);
 for (const [name, pane] of panes) {
   pane.dataset.pane = name;
@@ -1411,6 +1791,9 @@ const tabs = woc.ui.tabs({
   tabs: [
     { id: 'prices', label: 'Prices' },
     { id: 'mine', label: 'Yours' },
+    // What was PAID, which is why it is a pane of its own rather than more figures on the
+    // first one. See the header.
+    { id: 'sold', label: 'Sold' },
   ],
   onSelect: (id) => {
     showPane(id);
@@ -1459,12 +1842,20 @@ panes.get('mine')?.appendChild(mineList);
 rule(panes.get('mine'));
 const mineNote = line(panes.get('mine'), 'mine-note');
 
+const soldTop = rule(panes.get('sold'));
+const soldList = scrolls(column('woc-ledgerline-list'));
+soldList.dataset.list = 'sold';
+panes.get('sold')?.appendChild(soldList);
+rule(panes.get('sold'));
+const soldNote = line(panes.get('sold'), 'sold-note');
+
 showPane(tabs.active());
 
-/** The two lists by name, and what is on screen in each. */
+/** The three lists by name, and what is on screen in each. */
 const lists = new Map([
   ['prices', priceList],
   ['mine', mineList],
+  ['sold', soldList],
 ]);
 /**
  * The rule that opens each list, which is the one that comes and goes. The footer rule is
@@ -1475,11 +1866,13 @@ const lists = new Map([
 const listTops = new Map([
   ['prices', priceTop],
   ['mine', mineTop],
+  ['sold', soldTop],
 ]);
 /** A repaint reuses a row rather than replacing it: a re-inserted element loses hover. */
 const listRows = new Map([
   ['prices', new Map()],
   ['mine', new Map()],
+  ['sold', new Map()],
 ]);
 
 function place(list, el, at) {
@@ -1623,31 +2016,52 @@ function queryNote(stats) {
   };
 }
 
+/**
+ * What the item actually SOLD for, on a tooltip about what it is being asked for.
+ *
+ * The one place the two series meet, and it is a labelled sentence rather than a figure
+ * folded into the ones above it: an ask is what a seller wanted and a sale is what a buyer
+ * handed over, so a single number made of both would be true of neither. Nothing at all where
+ * the player has never sold one, since a line saying so is a line spent on an absence.
+ */
+function paidLine(itemId) {
+  const record = sold.get(itemId);
+  if (record === undefined) {
+    return null;
+  }
+  const stats = soldStats(record);
+  return {
+    text: `You have sold ${countedSales(stats.sales)} of this, at a median of ${money(Math.round(stats.median))} each. That is what was paid; the figures above are what was asked.`,
+    tone: 'muted',
+  };
+}
+
 function priceTip(itemId) {
   const record = series.get(itemId);
   if (record === undefined) {
     return { title: itemId, lines: ['This item is no longer in the ledger.'] };
   }
   const stats = statsFor(record);
-  return {
-    title: nameOf(itemId),
-    icon: woc.ui.icon.item(itemId),
-    lines: [
-      `Low ${money(Math.round(stats.low))} each, median ${money(Math.round(stats.median))}, high ${money(Math.round(stats.high))}.`,
-      `Latest ${money(Math.round(stats.latest))} each, read ${agoText(stats.at)}.`,
-      `${countedVisits(stats.visits)} to the counter, and the low of each is one point of the line.`,
-      {
-        text: 'Every figure here is one vote per visit rather than one per listing, so a busy day does not outweigh a quiet one. Several pages read in one trip are one visit.',
-        tone: 'muted',
-      },
-      queryNote(stats),
-      {
-        text: 'Prices are per item: a listing sells its whole stack for one price, and this divides by the count.',
-        tone: 'muted',
-      },
-      nameNote(itemId),
-    ],
-  };
+  const lines = [
+    `Low ${money(Math.round(stats.low))} each, median ${money(Math.round(stats.median))}, high ${money(Math.round(stats.high))}.`,
+    `Latest ${money(Math.round(stats.latest))} each, read ${agoText(stats.at)}.`,
+    `${countedVisits(stats.visits)} to the counter, and the low of each is one point of the line.`,
+    {
+      text: 'Every figure here is one vote per visit rather than one per listing, so a busy day does not outweigh a quiet one. Several pages read in one trip are one visit.',
+      tone: 'muted',
+    },
+    queryNote(stats),
+    {
+      text: 'Prices are per item: a listing sells its whole stack for one price, and this divides by the count.',
+      tone: 'muted',
+    },
+  ];
+  const paid = paidLine(itemId);
+  if (paid !== null) {
+    lines.push(paid);
+  }
+  lines.push(nameNote(itemId));
+  return { title: nameOf(itemId), icon: woc.ui.icon.item(itemId), lines };
 }
 
 function pricesNoteText(matching) {
@@ -1808,6 +2222,88 @@ function mineNoteText() {
   return `Read ${agoText(live.page.at)}, at the Merchant. Your listings and everyone else's may have moved since.`;
 }
 
+/**
+ * One item's sales, ordered by what sold most recently.
+ *
+ * The headline is the GROSS per item, because that is the figure comparable with the asks on
+ * the Prices tab and with a listing the player is about to post. The net is on the detail
+ * line and labelled: the two differ by the Merchant's cut, and summing the wrong one
+ * overstates a player's income by the whole of it.
+ */
+function soldEntry(record) {
+  const stats = soldStats(record);
+  return {
+    key: record.itemId,
+    trend: soldTrend(record),
+    update: {
+      label: nameOf(record.itemId),
+      icon: woc.ui.icon.item(record.itemId),
+      value: { copper: Math.round(stats.median), prefix: 'paid' },
+      detail: `${countedSales(stats.sales)}, ${String(stats.items)} sold, ${money(stats.net)} after the cut, last read ${agoText(stats.at)}`,
+    },
+  };
+}
+
+function soldTip(itemId) {
+  const record = sold.get(itemId);
+  if (record === undefined) {
+    return { title: itemId, lines: ['Nothing of this item is in the sale record.'] };
+  }
+  const stats = soldStats(record);
+  return {
+    title: nameOf(itemId),
+    icon: woc.ui.icon.item(itemId),
+    lines: [
+      `Paid ${money(Math.round(stats.low))} to ${money(Math.round(stats.high))} each, over ${countedSales(stats.sales)}.`,
+      `${String(stats.items)} sold for ${money(stats.gross)}, which came to ${money(stats.net)} after the Merchant's cut.`,
+      {
+        text: 'These are your own completed sales. The market keeps no record of what anybody else sold anything for, so nothing here is a market rate.',
+        tone: 'muted',
+      },
+      {
+        text: 'A sale is stamped when this addon read it rather than when it happened: the Merchant itemizes the gold waiting to be collected and that ledger carries no clock, so several sales read in one go share a stamp.',
+        tone: 'muted',
+      },
+      {
+        text: 'What was paid, which is a different fact from the asking prices on the Prices tab. Neither is folded into the other.',
+        tone: 'muted',
+      },
+      nameNote(itemId),
+    ],
+  };
+}
+
+/**
+ * What the sale record can and cannot claim, which is mostly about the gap in it.
+ *
+ * The Merchant's own ledger holds fifty rows and counts what it dropped past that, and this
+ * addon adds anything that got past it between two readings. Silence would present a short
+ * list as a complete one, which is the thing the server's own counter exists to prevent.
+ */
+function missingText() {
+  if (cycle.lost <= 0) {
+    return '';
+  }
+  return ` At least ${countedSales(cycle.lost)} of yours went before this could read them, so what is here does not add up to what you have earned.`;
+}
+
+function soldNoteText() {
+  const missing = missingText();
+  if (!loaded.on) {
+    return 'Reading the stored sale record.';
+  }
+  if (sold.size === 0) {
+    return `Nothing recorded yet. The Merchant itemizes your completed sales while their gold waits to be collected, and this copies each one down before you collect it.${missing}`;
+  }
+  return `${countedItems(sold.size)} sold, keeping ${String(historyDays())} days.${missing}`;
+}
+
+function paintSold() {
+  const records = [...sold.values()].sort((a, b) => b.at - a.at);
+  syncList('sold', records.slice(0, MAX_ROWS).map(soldEntry), soldTip);
+  say(soldNote, soldNoteText());
+}
+
 function paintMine() {
   const { page } = live;
   if (page === null) {
@@ -1935,6 +2431,7 @@ function draw() {
   paintStatus();
   paintPrices();
   paintMine();
+  paintSold();
   paintTitle();
 }
 
@@ -1958,9 +2455,7 @@ function schedulePaint() {
 // and the badge streams everywhere, which is what makes a title badge work with the pane
 // closed and in another zone entirely.
 woc.world.on('market', onMarket);
-woc.world.on('marketCollectPending', () => {
-  schedulePaint();
-});
+woc.world.on('marketCollectPending', onCollectPending);
 
 // The character is what says which market this is a history OF, and a player can change
 // it without reloading the page. See `characterChanged`.
@@ -1994,6 +2489,14 @@ woc.onSettingsChange(() => {
     // Written down rather than left in memory: a retention the player shortened has to
     // survive the reload, or the next session reads back everything they cut.
     keep();
+  }
+  // The sale record answers to the same setting, since a sale is a price and the label says
+  // price history. The position in the queue is untouched: what is kept is a question about
+  // the record, and where this addon has read to is a question about the Merchant.
+  const held = sold.size;
+  trimSold(soldCutoff(woc.wallClock()));
+  if (sold.size !== held) {
+    keepSold();
   }
   alerted.on = false;
   draw();

@@ -293,7 +293,15 @@ export interface Entity {
    * to it. `world.unit('pet')` is this lookup done for you.
    */
   ownerId: number | null;
-  /** The ability id being cast, or null. */
+  /**
+   * The ability ID being cast, an ACTIVITY SENTINEL, or null when not casting.
+   *
+   * The sentinel is a fixed marker naming a timed activity rather than any
+   * ability, and the set grows with the game, so let an unrecognised value fall
+   * through as an ability id rather than enumerating them.
+   * `CastStartEvent.ability` carries the full note and the current members, and
+   * `world.casts` is this same reading with the three cast fields shaped.
+   */
   castingAbility: string | null;
   /** Seconds left on the cast, against `castTotal`. Both 0 when not casting. */
   castRemaining: number;
@@ -369,6 +377,23 @@ export interface Entity {
    * speed, so it is a reliable answer to "is that player mounted".
    */
   mountKey: string;
+  /**
+   * The player turned their helm off in the paperdoll, so the composed body
+   * renders without it.
+   *
+   * A cosmetic preference and nothing more: the helm is still equipped and its
+   * stats still apply. Only players ever set it, and it is false everywhere
+   * else rather than absent.
+   */
+  helmHidden: boolean;
+
+  /**
+   * Ranged attack power, the hunter stat. 0 on anything that has none.
+   *
+   * Unlike the self-only block below, this rides every entity's record, so it
+   * is real on your own player and on a hunter standing next to you alike.
+   */
+  rangedPower: number;
 
   // Yours alone: the server sends these on the SELF record and nowhere else, so
   // on any other entity they hold an inert default rather than a real value.

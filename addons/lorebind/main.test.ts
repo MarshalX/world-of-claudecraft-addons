@@ -22,8 +22,8 @@
 // has, which turns a labelled guess into an unlabelled answer one hop away.
 //
 // A null icon is not evidence an id is fake. Every weapon is art-less, filed under a model name
-// the game does not serve, and at game 0.34.0 that is all 134 of the items with no art out of
-// 815. It reads in that direction only: an item can ship ahead of its art. `a weapon draws as
+// the game does not serve, and at game 0.35.0 that is all 134 of the items with no art. It
+// reads in that direction only: an item can ship ahead of its art. `a weapon draws as
 // text` pins that such an id is still a complete, readable row that says why it has no picture:
 // a hidden icon slot makes "no file exists" look exactly like "this item does not exist".
 //
@@ -60,14 +60,31 @@ interface TableRow {
   quality?: string;
   slot?: string;
   armorType?: string;
+  heroicOf?: string;
+  uniqueEquipped?: true;
   itemLevel?: number;
   stats?: Record<string, number>;
+  pvpOffenseRating?: number;
+  pvpDefenseRating?: number;
   weapon?: { min: number; max: number; speed: number };
   requiredLevel?: number;
   sellValue?: number;
+  priceHonor?: number;
 }
 
-const TABLE: readonly TableRow[] = (JSON.parse(TABLE_TEXT) as { items: TableRow[] }).items;
+interface TableFile {
+  gameVersion: string;
+  fields: string;
+  items: TableRow[];
+}
+
+function readHeader(): TableFile {
+  return JSON.parse(TABLE_TEXT) as TableFile;
+}
+
+const TABLE: readonly TableRow[] = readHeader().items;
+/** How many rows the shipped file holds, which is what every count on screen is against. */
+const TABLE_SIZE = TABLE.length;
 
 function rowFor(id: string): TableRow {
   const found = TABLE.find((row) => row.id === id);
@@ -94,6 +111,19 @@ const NO_QUALITY = rowFor('amberfall_sap_bucket');
  * a sell price, an item level and a level gate, which is what a subscriber ranks a bag by.
  */
 const PRICED = rowFor('abyssal_loop');
+
+/**
+ * Three more, for the facts game 0.35.0 made worth drawing.
+ *
+ * A Warfare piece, because the honor gear is the only place the two PvP ratings and the honor
+ * price appear at all. A heroic upgrade variant, because it is one of the 63 rows sharing a
+ * display name with another row and nothing but its base id ties the pair together. And a
+ * legendary heroic variant, which is the only row in the table that is BOTH: unique-equipped
+ * with its base, so the wear rule counts the two of them as one item.
+ */
+const WARFARE = rowFor('furyforged_warhelm');
+const HEROIC = rowFor('heroic_direfang_quiver');
+const UNIQUE = rowFor('heroic_kingsbane_last_oath');
 
 /** An id the shipped table does not carry, which is what a roll and the art file teach. */
 const UNKNOWN_ID = 'lorebind_not_in_the_table';
@@ -444,10 +474,10 @@ function search(value: string): void {
 }
 
 /**
- * Narrow to one id, which is how a codex of 815 rows is actually read. Every case about one item
- * goes through here rather than reaching into an unfiltered list: the list is capped,
- * deliberately and visibly, so an assertion against the whole of it would be an assertion about
- * alphabetical position.
+ * Narrow to one id, which is how a codex of eight hundred-odd rows is actually read. Every case
+ * about one item goes through here rather than reaching into an unfiltered list: the list is
+ * capped, deliberately and visibly, so an assertion against the whole of it would be an
+ * assertion about alphabetical position.
  */
 async function only(h: Harness, needle: string): Promise<void> {
   search(needle);
@@ -497,6 +527,29 @@ function roll(itemId: string, itemName: string, quality: string): Roll {
   return { rollId: 1, itemId, itemName, quality };
 }
 
+/**
+ * A table of one row, stating the two Warfare ratings at DIFFERENT values.
+ *
+ * Written rather than picked out of the shipped file because no shipped row does: all 47 carry
+ * the pair twice over at one value, so the rule the game applies to them is invisible in the
+ * content. This is the one fixture here that is not a real item, and it is one because the case
+ * is about arithmetic rather than about the game's table.
+ */
+const LOPSIDED_WARFARE = JSON.stringify({
+  gameVersion: '0.0.0',
+  items: [
+    {
+      id: 'lopsided_warfare_ring',
+      name: 'Lopsided Warfare Ring',
+      kind: 'armor',
+      quality: 'epic',
+      slot: 'ring',
+      pvpOffenseRating: 11,
+      pvpDefenseRating: 4,
+    },
+  ],
+});
+
 describe('its manifest', () => {
   it('validates against the shared schema', () => {
     expect(validateManifest(MANIFEST_JSON).ok).toBe(true);
@@ -523,15 +576,26 @@ describe('its manifest', () => {
 });
 
 describe('the shipped table', () => {
-  // The count is the claim the addon's own coverage line makes, so a table that
-  // silently lost rows would leave the panel confidently reporting a smaller
-  // number as if it were the whole game.
-  it('carries the whole of the game item table', () => {
-    expect(TABLE).toHaveLength(815);
+  // Neither the count nor the version is pinned to a literal, and that is a
+  // correction rather than a relaxation. Both were, and a content release moved
+  // both: game 0.35.0 took the table from 815 rows to 831 and nine cases in this
+  // file went red for a fact none of them was about. `items.json` is a generated
+  // artifact this addon's own `generate.mjs` owns, so asserting the output the
+  // generator is responsible for is the thing `AGENTS.md` says not to do. What is
+  // asserted instead is what would stop the generator: a header that lost its
+  // stamp, and a table whose ids stopped being a key.
+  it('stamps the game version it was derived from', () => {
+    expect(readHeader().gameVersion).toMatch(/^\d+\.\d+\.\d+$/);
   });
 
-  it('stamps the game version it was derived from', () => {
-    expect((JSON.parse(TABLE_TEXT) as { gameVersion: string }).gameVersion).toBe('0.34.0');
+  // The id is the Map key the whole addon is built on, so a duplicate would not
+  // fail anywhere: the second row would quietly replace the first and one item
+  // would read with another's stats. The count rides along because a table that
+  // lost rows on its way through the reader is the other silent failure, and it
+  // is checked against the file rather than against a number typed here.
+  it('keys every row by an id of its own', () => {
+    expect(TABLE.length).toBeGreaterThan(0);
+    expect(new Set(TABLE.map((row) => row.id)).size).toBe(TABLE.length);
   });
 
   // Absent is not poor. 96 of the game's items declare no quality at all, and a
@@ -730,6 +794,90 @@ describe('the record under the grid', () => {
     expect(said).toContain('Acolyte Circlet');
     expect(said).toContain('renamed');
   });
+
+  // The game keeps Warfare as two ratings and draws ONE line, the smaller of them, in its
+  // tooltip and in its compare arrows alike. Forty-seven items carry the pair and every one of
+  // them carries it twice over at the same value, so nothing in the shipped table can tell a
+  // min from a max, a sum or an average: that is what the case below is for, and this one pins
+  // that the line is drawn at all and reads the way the game's does.
+  it('draws the Warfare pair as the single line the game draws', async () => {
+    const h = await start();
+    await h.tick();
+    await open(h, WARFARE.id);
+
+    const rating = Math.min(WARFARE.pvpOffenseRating ?? 0, WARFARE.pvpDefenseRating ?? 0);
+
+    expect(rating).toBeGreaterThan(0);
+    expect(blockLines('stat')).toContain(`+${String(rating)} Warfare`);
+  });
+
+  // The rule rather than the value, which needs a table of its own: no shipped row states the
+  // two ratings differently, so a version taking the offense rating alone, or the larger of the
+  // two, passes every case built on real content. It would over-report the moment content
+  // separated them, which is the thing the game's own `Math.min` exists to prevent.
+  it('takes the smaller of the two Warfare ratings, not the first or the larger', async () => {
+    const h = await start({ table: LOPSIDED_WARFARE });
+    await h.tick();
+    await open(h, 'lopsided_warfare_ring');
+
+    expect(blockLines('stat')).toContain('+4 Warfare');
+  });
+
+  // An honor price is not on the game's tooltip and is in this table on purpose: it is the only
+  // price a Warfare piece has, since the honor gear declares no `buyValue` at all, and a codex
+  // that draws a sell price and nothing else says the item cannot be bought.
+  it('draws what a Quartermaster charges for a piece a vendor does not sell', async () => {
+    const h = await start();
+    await h.tick();
+    await open(h, WARFARE.id);
+
+    expect(WARFARE.priceHonor).toBeGreaterThan(0);
+    expect(blockLines('gate')).toContain(`Honor price: ${String(WARFARE.priceHonor)}`);
+  });
+
+  // 63 pairs of rows in the table read as the same name, because the game resolves a heroic
+  // variant's display name to its base's unchanged and says so in as many words. The tag is the
+  // game's own answer to that and is the ONLY thing on either row that differs in words, so a
+  // player searching "Direfang Quiver" can tell which of the two squares is which.
+  it('marks a heroic variant the way the game does rather than renaming it', async () => {
+    const h = await start();
+    await h.tick();
+    await open(h, HEROIC.id);
+
+    const base = rowFor(HEROIC.heroicOf ?? '');
+
+    expect(HEROIC.name).toBe(base.name);
+    expect(recordPart('name')).toBe(base.name);
+    expect(recordPart('kind')).toContain('[HEROIC]');
+    expect(cellName(HEROIC.id)).toContain('[HEROIC]');
+  });
+
+  // Unique-equipped is keyed on the item FAMILY rather than on the id: a heroic variant and its
+  // base are one item for the wear rule, so a character wearing Thronebane cannot also wear the
+  // heroic one. Both halves are on the record because neither is recoverable without the other:
+  // the tag alone reads as "one of these", and the base id alone says nothing about wearing.
+  it('says a legendary is unique-equipped and which item it counts as', async () => {
+    const h = await start();
+    await h.tick();
+    await open(h, UNIQUE.id);
+
+    expect(UNIQUE.uniqueEquipped).toBe(true);
+    expect(blockLines('gate')).toContain('Unique-Equipped, so one worn copy per item');
+    expect(blockLines('gate')).toContain(`Heroic upgrade of ${String(UNIQUE.heroicOf)}`);
+  });
+
+  // The other side of it, which is what keeps the tag meaningful: the table states the flag on
+  // six rows and the addon must not infer it for a seventh. An epic Warfare piece is the row a
+  // version deriving "unique" from anything but the flag would get wrong.
+  it('says nothing about wearing for an item the game does not restrict', async () => {
+    const h = await start();
+    await h.tick();
+    await open(h, WARFARE.id);
+
+    expect(WARFARE.uniqueEquipped).toBeUndefined();
+    expect(blockLines('gate').join(' ')).not.toContain('Unique-Equipped');
+    expect(recordPart('kind')).not.toContain('[HEROIC]');
+  });
 });
 
 describe('the coverage line', () => {
@@ -739,7 +887,7 @@ describe('the coverage line', () => {
 
     const said = lineFor('coverage');
 
-    expect(said).toContain('815 named from the table');
+    expect(said).toContain(`${String(TABLE_SIZE)} named from the table`);
     expect(said).toContain('1 from a roll');
   });
 
@@ -802,7 +950,7 @@ describe('the coverage line', () => {
 
     const said = tipOver(document.querySelector('[data-role="coverage"]'));
 
-    expect(said).toContain('814 of 815 ship no art');
+    expect(said).toContain(`${String(TABLE_SIZE - 1)} of ${String(TABLE_SIZE)} ship no art`);
     expect(said).toContain('weapon art is filed under a model name');
   });
 });
@@ -908,7 +1056,7 @@ describe('the filters', () => {
 // The panel is the smaller half of this addon. The bus is what `satchel` and `ledgerline`
 // read to name an item, so the payload shape is the part that has to hold still.
 describe('what it puts on the bus', () => {
-  it('publishes the whole table as one batch rather than 815 messages', async () => {
+  it('publishes the whole table as one batch rather than one message per row', async () => {
     const h = await start();
     await h.settle();
 
@@ -916,7 +1064,7 @@ describe('what it puts on the bus', () => {
 
     expect(batches).toHaveLength(1);
     expect(h.sent.filter((message) => message.topic === 'item')).toHaveLength(0);
-    expect(batches[0]?.payload).toHaveLength(815);
+    expect(batches[0]?.payload).toHaveLength(TABLE_SIZE);
   });
 
   it('publishes the documented payload shape', async () => {
@@ -943,6 +1091,24 @@ describe('what it puts on the bus', () => {
 
     expect(field(publishedFor(h.sent, PRICED.id) ?? {}, 'sellValue')).toBe(PRICED.sellValue);
     expect(PRICED.sellValue).toBe(5000);
+  });
+
+  // A subscriber naming an id out of a bag gets the base item's name for a heroic variant,
+  // because that IS the game's name for it, so 63 pairs arrive as one name twice. The base id is
+  // the only thing that separates them, it rides no wire payload, and the alternative left to a
+  // subscriber is reading an id prefix, which is the guess this addon exists to make
+  // unnecessary. `uniqueEquipped` is deliberately not published beside it: nothing draws
+  // equipment yet, and a field with no reader is a promise kept for nobody.
+  it('publishes the base id a heroic variant shares its name with', async () => {
+    const h = await start();
+    await h.settle();
+
+    const record = publishedFor(h.sent, HEROIC.id) ?? {};
+
+    expect(field(record, 'name')).toBe(rowFor(HEROIC.heroicOf ?? '').name);
+    expect(field(record, 'heroicOf')).toBe(HEROIC.heroicOf);
+    expect(publishedFor(h.sent, WARFARE.id)).not.toHaveProperty('heroicOf');
+    expect(publishedFor(h.sent, UNIQUE.id)).not.toHaveProperty('uniqueEquipped');
   });
 
   it('publishes the two levels an item is ranked and gated by', async () => {
@@ -1033,7 +1199,7 @@ describe('what it puts on the bus', () => {
 
     expect(cellName(UNKNOWN_ID)).toContain('Gilded Censer');
     expect(publishedFor(h.sent, UNKNOWN_ID)).toBeUndefined();
-    expect(h.sent[0]?.payload).toHaveLength(815);
+    expect(h.sent[0]?.payload).toHaveLength(TABLE_SIZE);
   });
 
   // The unnamed half of the same refusal. An id the codex can prove exists and
@@ -1047,7 +1213,7 @@ describe('what it puts on the bus', () => {
     await h.settle();
 
     expect(publishedFor(h.sent, UNKNOWN_ID)).toBeUndefined();
-    expect(h.sent[0]?.payload).toHaveLength(815);
+    expect(h.sent[0]?.payload).toHaveLength(TABLE_SIZE);
   });
 
   // A publisher that only emitted on change tells an addon that started later
@@ -1060,7 +1226,7 @@ describe('what it puts on the bus', () => {
 
     expect(h.sent).toHaveLength(1);
     expect(h.sent[0]?.topic).toBe('items');
-    expect(h.sent[0]?.payload).toHaveLength(815);
+    expect(h.sent[0]?.payload).toHaveLength(TABLE_SIZE);
   });
 
   it('stamps from rather than letting the addon claim a sender', async () => {
@@ -1163,7 +1329,7 @@ describe('the search', () => {
     await h.tick();
 
     expect(drawnIds()).toHaveLength(24);
-    expect(lineFor('status')).toContain('Showing 24 of 815 items');
+    expect(lineFor('status')).toContain(`Showing 24 of ${String(TABLE_SIZE)} items`);
   });
 });
 

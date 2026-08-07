@@ -34,7 +34,7 @@ woc.world.on('cooldowns', (cooldowns) => {
 const player = woc.world.player; // Entity | null, null before world entry
 ```
 
-One of these is worth knowing about before you go looking for it. `net.onEvent('castStart')` fires for a PLAYER cast, a pet, gathering and fishing, and for nothing else: a mob's mechanic sets its cast state directly, so a boss mod built on that event receives silence and cannot tell it from a boss that never casts. `world.casts` and `world.on('casts', ...)` are what to read instead, and the declaration says so where autocomplete will show you.
+One of these is worth knowing about before you go looking for it. `net.onEvent('castStart')` fires for a PLAYER cast, a pet's cast and the timed activities the game runs through the same machinery, and never for a mob: a mob's mechanic sets its cast state directly, so a boss mod built on that event receives silence and cannot tell it from a boss that never casts. `world.casts` and `world.on('casts', ...)` are what to read instead, and the declaration says so where autocomplete will show you.
 
 The world types describe a repository this package does not depend on and cannot compile against, so they are a careful claim rather than a derivation. The loader checks them against the running game once per session and reports anything that has moved. What is declared is deliberately narrower than what the game carries: an entity has hundreds of mostly server-internal fields, and promising those would be promising state a client does not have. Anything left out is still reachable through `world.raw`, which is `unknown` because the game promises nothing about it.
 

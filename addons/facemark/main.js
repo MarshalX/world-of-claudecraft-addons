@@ -40,7 +40,10 @@
 //  - A mob ability's name is worked out from its id. `world.abilities` bridges an id to
 //    the game's own name for your spellbook and nothing else, so `flame_pillar` reads as
 //    Flame Pillar, which is wrong wherever the game's name has moved away from the id. A
-//    label worked out that way ends in a question mark.
+//    cast can also name an ACTIVITY rather than an ability: gathering, fishing and the
+//    crafting family ride the same cast machinery, and that set grows with the game. Those
+//    resolve for nobody, so a plate over someone crafting reads Crafting. A label worked
+//    out either way ends in a question mark.
 //  - Nothing says a mob is rare, elite or a boss. An entity record carries kind, template
 //    id, name and level, and the client resolves the rest from a bundled table that does
 //    not travel. So no plate decorates one, rather than decorating the few a roster of

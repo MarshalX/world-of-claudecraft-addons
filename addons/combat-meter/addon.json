@@ -1,15 +1,15 @@
 {
   "id": "combat-meter",
   "name": "Combat Meter",
-  "version": "1.3.0",
+  "version": "1.4.0",
   "apiVersion": 1,
-  "apiMinor": 2,
+  "apiMinor": 4,
   "author": "MarshalX",
-  "description": "What your damage and healing are made of: a row per ability with crit rate, average and biggest hit, plus your real miss and dodge rates and what is hitting you.",
+  "description": "What your damage and healing are made of: a row per ability, your pet's included, with per-second rates, crit rate, average and biggest hit, plus your real miss and dodge rates and what is hitting you.",
   "entry": "main.js",
   "preview": {
     "file": "preview.png",
-    "alt": "The Combat Meter panel on its Damage tab, reading 5,088 damage in 30s. Six ability rows (Aimed Shot 1,596, Fell Shot 1,334, Volley 827, Auto Shot 643, Serpent Sting 364, Raptor Strike 324) each show total, share and damage per second, over a second line of hits, crit rate, average and biggest hit. The fill behind each row is tinted by damage school, red for physical, blue for arcane and green for nature, and every row but Auto Shot carries the art the game ships for that ability. A summary line reads hit 89%, miss 5%, dodge 5%."
+    "alt": "The Combat Meter panel on its Damage tab, reading 5,850 damage (195.7/s) in 30s. Six rows (Aimed Shot 1,596, Fell Shot 1,334, Grizzle: Melee 1,086, Volley 827, Auto Shot 643, Serpent Sting 364) each show total, share and damage per second, over a second line of hits, crit rate, average and biggest hit. The third row is the swings the player pet Grizzle landed, folded into the total and labelled with the pet name. The fill behind each row is tinted by damage school, red for physical, blue for arcane and green for nature, and the four rows from the player own spellbook carry the art the game ships for that ability while Auto Shot and the pet row carry none. A summary line reads hit 88%, miss 6%, dodge 6%."
   },
   "homepage": "https://github.com/MarshalX/world-of-claudecraft-addons",
   "tags": ["combat"],

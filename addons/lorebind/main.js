@@ -7,7 +7,7 @@
 // what a PLAYER opens, and the question they open it with is not "what is id X" but one of
 // "what does this thing I am holding do for me", "what else is there at my level for this
 // slot", and "how much of the game have I actually seen". So the window is a BROWSER of the
-// game's 815 items rather than a lookup box: art in a grid, filtered by kind, by quality, by
+// game's whole item table rather than a lookup box: art in a grid, filtered by kind, by quality, by
 // slot and by whether this character has ever laid eyes on it, with one item's full record
 // under it: its armour or its damage, its stats, what it takes to equip it and what a vendor
 // pays for it, in the game's own words and in the game's own order.
@@ -18,7 +18,7 @@
 // read where the game asks them to glance.
 //
 // An item id resolves to no name anywhere on this API and never will. The game's item
-// table is 815 definitions bundled into the play entry chunk, referenced by no object the
+// table is bundled into the play entry chunk, referenced by no object the
 // loader can reach. `world.equipment` hands over ids, `world.inventory` hands over ids,
 // and a recipe's reagents are ids, so every panel in the catalogue that wants to say what
 // an item is has the same problem. This is where it is solved once.
@@ -27,9 +27,10 @@
 // `resolve` is the only place that decides it, and it has three sources in this order:
 //
 //   1. The embedded table, `items.json`. It is the game's own item table reduced to what its
-//      own tooltip draws, derived from the `ITEMS` merge at version 0.34.0, so for every id
-//      it covers it is right by construction. A NAME is the part of it the bus publishes and
-//      the part every other addon needs; everything else in the row is for the window.
+//      own tooltip draws, derived from the `ITEMS` merge at the game version its own header
+//      stamps, so for every id it covers it is right by construction. A NAME is the part of it
+//      the bus publishes and the part every other addon needs; everything else in the row is
+//      for the window.
 //   2. A name off a loot roll. `LootRoll.itemName` and `LootRollGroupStatus.itemName` are
 //      the same server-side table spelled out on the wire, so they are equal in authority
 //      to the file, and rank second only because coverage arrives one drop at a time.
@@ -48,14 +49,21 @@
 // the wire has one and no ItemDef has one either: the game works it out from where the item
 // DROPS, which is a second index over the whole of content. So `generate.mjs` calls the
 // game's own `itemLevel` and `requiredLevelFor` rather than copying a rule that would be
-// right on the day it was written, and 436 of the 815 rows come back with a level: the rest
-// have no derivable source, which is a fact about vendor and starter stock rather than a gap.
+// right on the day it was written, and a little over half the rows come back with a level: the
+// rest have no derivable source, which is a fact about vendor and starter stock rather than a gap.
 // `Recipe.itemLevelBudget` is still not one, and the published type says so: it is the budget
 // the output was balanced against.
 //
 // The numbers are only ever as fresh as the file. Nothing re-reads them at run time, so an
-// item the game rebalanced after 0.34.0 reads here at its old stats until somebody regenerates
-// and the diff shows it, which is the same bargain the name itself is under.
+// item the game rebalanced reads here at its old stats until somebody regenerates and the diff
+// shows it, which is the same bargain the name itself is under. That is not hypothetical: the
+// line above said "after 0.34.0" and 0.35.0 is what arrived, retuning forty items at once, so
+// every WARFARE piece in the codex drew its old stats until the table was regenerated.
+//
+// NO COUNT OF THE TABLE IS WRITTEN DOWN ANYWHERE HERE, and that is a rule rather than an
+// oversight. The comments used to say 815 in seven places and the suite asserted it in six, and
+// a content release moved it in one commit; every count on screen is `table.size` at the moment
+// it is drawn, and the file's own header is the only place its version is recorded.
 //
 // Quality is trustworthy for two sources and no others. An id the table covers carries the
 // game's own quality and a roll sends one beside the name; an id named from its art file
@@ -66,8 +74,8 @@
 //
 // The bus is the product rather than the panel. `item` carries one record on every newly
 // learned id and `items` carries a batch, both carrying
-// `{ id, name, source }` plus `quality`, `kind`, `slot`, `sellValue`, `itemLevel` and
-// `requiredLevel` where the table states them, with anything unknown left out rather than
+// `{ id, name, source }` plus `quality`, `kind`, `slot`, `heroicOf`, `sellValue`, `itemLevel`
+// and `requiredLevel` where the table states them, with anything unknown left out rather than
 // sent empty or as a zero. `item:ask` is answered with everything known, which is what
 // lets an addon that started later catch up. `satchel` and `ledgerline` are the readers
 // today. An art-sourced name is never put on the bus: publishing it would launder a guess
@@ -264,9 +272,35 @@ const RATING_NAME = {
   hitRating: 'Hit Rating',
 };
 
+/**
+ * The Warfare pair, which the game stores as two numbers and DRAWS as one.
+ *
+ * `Math.min` of the two is the rating, in the game's own tooltip and in its compare arrows
+ * alike, so this addon takes the min rather than inventing a second reading of the same pair.
+ * They are equal on all 47 items that carry them at game 0.35.0, which makes the min look like
+ * an identity and is not a reason to store one number: an item that raised one alone would then
+ * read as having raised both.
+ */
+const WARFARE_KEYS = ['pvpOffenseRating', 'pvpDefenseRating'];
+const WARFARE_NAME = 'Warfare';
+
+/**
+ * The tag the game appends to a heroic variant's quality line, in its own words.
+ *
+ * It is the ONLY thing on screen that tells two identically named rows apart: the game resolves
+ * a variant's display name to its base's unchanged, so 63 pairs in the table read as one name
+ * twice over, and `itemDisplayName` is explicit that the tag rather than the name is where the
+ * distinction lives. Written the game's way, in capitals and in brackets, because a player who
+ * has read one on a drop is looking for the same mark here.
+ */
+const HEROIC_TAG = '[HEROIC]';
+
 /** Every plain number the file may carry, checked by type and kept as it stands. */
 const NUMBER_FIELDS = [
   'itemLevel',
+  'pvpOffenseRating',
+  'pvpDefenseRating',
+  'priceHonor',
   'spellPower',
   'critRating',
   'hasteRating',
@@ -292,8 +326,17 @@ const NUMBER_FIELDS = [
  * against the vendor floor both have to be told. It is copper, the unit every price on the
  * wire is already in. The two levels ride along because they are the orders a consumer ranks
  * items in, and neither is derivable from anything else it holds.
+ *
+ * `heroicOf` is here for the same reason and is the newest of them: a subscriber holding an id
+ * out of a bag or a mail gets the base item's name from this bus, because that is the name the
+ * game itself uses for a variant, and 63 pairs in the table therefore arrive as one name twice.
+ * The base id is the only thing that tells them apart, it is in no wire payload, and the id
+ * prefix a reader would otherwise guess from is exactly the kind of guess this addon exists to
+ * make unnecessary. `uniqueEquipped` deliberately does NOT ride along: it is a rule about what a
+ * character may WEAR, no consumer today draws equipment, and a published flag with no reader is
+ * a promise to keep for nothing.
  */
-const PUBLISHED_TEXT = ['quality', 'kind', 'slot'];
+const PUBLISHED_TEXT = ['quality', 'kind', 'slot', 'heroicOf'];
 const PUBLISHED_NUMBERS = ['sellValue', 'itemLevel', 'requiredLevel'];
 
 /** How long the game says a sat-down consumable takes, `CONSUME_DURATION` in its own sim. */
@@ -426,7 +469,7 @@ function readRow(value) {
   if (QUALITIES.includes(quality)) {
     row.quality = quality;
   }
-  copyText(row, value, ['slot', 'armorType', 'set']);
+  copyText(row, value, ['slot', 'armorType', 'set', 'heroicOf']);
   copyNumbers(row, value, NUMBER_FIELDS);
   readDetail(row, value);
   return row;
@@ -471,6 +514,9 @@ function readDetail(row, value) {
   }
   if (value.soulbound === true) {
     row.soulbound = true;
+  }
+  if (value.uniqueEquipped === true) {
+    row.uniqueEquipped = true;
   }
 }
 
@@ -663,9 +709,9 @@ function publishItem(itemId) {
 }
 
 /**
- * Put everything known on the bus as one message. The table is 815 rows, delivery is
- * synchronous inside this call, and 815 separate emits would be 815 allocations and 815
- * repaints in every subscriber to say what one array says.
+ * Put everything known on the bus as one message. The table is eight hundred-odd rows, delivery
+ * is synchronous inside this call, and one emit per row would be one allocation and one repaint
+ * per row in every subscriber to say what one array says.
  *
  * It walks every id the codex has heard of and lets `record` refuse, rather than walking
  * only the ids it expects to be publishable: with the ids filtered here, `record`'s
@@ -985,7 +1031,7 @@ function kindLine(row) {
   if (text(row.slot) !== '') {
     parts.push(readableSlot(row.slot));
   }
-  return parts.join(', ');
+  return [parts.join(', '), heroicTag(row)].filter(filled).join(' ');
 }
 
 /**
@@ -1009,6 +1055,23 @@ function qualityAndKind(row) {
     return `${capitalized(kind)}, quality unknown`;
   }
   return 'Kind and quality both unknown';
+}
+
+/**
+ * The heroic mark, on the kind line and nowhere else, which is where the game puts it.
+ *
+ * Not appended to the NAME, however tempting that is for a grid where two squares carry the same
+ * word: the game's own display name for a variant is its base's, unchanged and deliberately so,
+ * and an addon that spelled a different name than the game does would be wrong in the one place
+ * this addon claims to be right. The kind line is what a square's accessible name and its
+ * tooltip and the record all read from, so all three tell the two apart; the picture does not,
+ * and cannot, since a variant is filed under its base's art.
+ */
+function heroicTag(row) {
+  if (text(row.heroicOf) === '') {
+    return '';
+  }
+  return HEROIC_TAG;
 }
 
 /**
@@ -1092,7 +1155,19 @@ function armorLine(row) {
   return `${String(armor)} Armor, ${String(block)} Block`;
 }
 
-/** Every stat the item carries, one per entry: the attributes first, then the four affixes. */
+/**
+ * The one Warfare number, from the pair the table stores, or nothing.
+ *
+ * `Math.min` because that is what the game does with them, in the tooltip and in the compare
+ * arrows alike. A pair where only one side is stated therefore reads as nothing, which is the
+ * game's answer too: its own `?? 0` makes the min zero, and it draws no line for a zero.
+ */
+function warfareRating(row) {
+  const [offense, defense] = WARFARE_KEYS.map((key) => row[key] ?? 0);
+  return Math.min(offense, defense);
+}
+
+/** Every stat the item carries, one per entry: the attributes, then Warfare, then the affixes. */
 function statLines(row) {
   const parts = [];
   for (const key of STAT_ORDER) {
@@ -1100,6 +1175,10 @@ function statLines(row) {
     if (value !== undefined && key !== 'armor') {
       parts.push(`+${String(value)} ${STAT_NAME[key]}`);
     }
+  }
+  const warfare = warfareRating(row);
+  if (warfare > 0) {
+    parts.push(`+${String(warfare)} ${WARFARE_NAME}`);
   }
   for (const [key, name] of Object.entries(RATING_NAME)) {
     if (row[key] !== undefined) {
@@ -1167,11 +1246,37 @@ function gateLines(row) {
   if (row.set !== undefined) {
     parts.push(row.set);
   }
-  if (row.soulbound === true) {
-    parts.push('Soulbound');
-  }
+  parts.push(...wearLines(row));
   if (row.sellValue !== undefined) {
     parts.push(`Sell price: ${woc.ui.money(row.sellValue)}`);
+  }
+  if (row.priceHonor !== undefined) {
+    parts.push(`Honor price: ${String(row.priceHonor)}`);
+  }
+  return parts;
+}
+
+/**
+ * The three facts about WEARING one, which the game keeps together and this addon does too.
+ *
+ * Unique-equipped is a fact about a FAMILY rather than about an id, and the family is the one
+ * thing on a heroic variant a player cannot see: the rule keys on the base id, so Thronebane and
+ * heroic Thronebane are one item for it and both rows read "Thronebane, Last Oath of Thornpeak".
+ * That is why the base id is spelled out rather than the base NAME, which is by definition the
+ * same word already on screen. The tag itself is the game's own derivation asked of the game in
+ * `generate.mjs` rather than re-decided here from the quality, so a release that stops spelling
+ * the rule that way shows up as a diff in the table instead of as a line this addon still draws.
+ */
+function wearLines(row) {
+  const parts = [];
+  if (row.uniqueEquipped === true) {
+    parts.push('Unique-Equipped, so one worn copy per item');
+  }
+  if (text(row.heroicOf) !== '') {
+    parts.push(`Heroic upgrade of ${row.heroicOf}`);
+  }
+  if (row.soulbound === true) {
+    parts.push('Soulbound');
   }
   return parts;
 }
@@ -1409,7 +1514,7 @@ findStrip.appendChild(sortField.el);
  * Everything else here narrows a table every player installs identically. This one asks what
  * this character has actually laid eyes on: worn, carried, banked, posted, looted or read off
  * a recipe. It is the closest thing the codex has to a collection, and it is the reason the
- * counting line says how many of the 815 have been seen at all.
+ * counting line says how many of the table's rows have been seen at all.
  */
 const seenField = woc.ui.field.checkbox({
   label: 'Only what I have seen',
@@ -1719,7 +1824,7 @@ function statusText(found, drawn) {
  * Four figures for the names rather than one total, because a name off the table and a name
  * off an art file are not the same kind of fact, and this addon's whole claim is that it says
  * which. The seen count rides the same line because it answers the other question a player
- * opens this with, and both are about the same 815 things.
+ * opens this with, and both are about the same set of things.
  */
 function coverageText(counts) {
   const parts = [`${String(counts.table)} named from the table`];
@@ -1869,8 +1974,8 @@ function sweep() {
   learnFromGroup(woc.world.group);
   describeMarked(tooltipRoot());
   // Only on a change. A repaint resolves and sorts every id the codex knows, and sorting
-  // 815 names through `localeCompare` is not free, so a sweep that found nothing must not
-  // schedule one.
+  // eight hundred names through `localeCompare` is not free, so a sweep that found nothing must
+  // not schedule one.
   if (learned) {
     schedulePaint();
   }

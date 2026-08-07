@@ -62,12 +62,13 @@ export interface NetApi {
    * game emits far more kinds than are described there, and describing some took
    * none of the others away.
    *
-   * `castStart` does NOT cover a mob. It is emitted for a player cast, a pet,
-   * gathering and fishing, and nothing else: every mob mechanic that shows a cast
-   * bar sets its cast state directly, and that state reaches you only on the
-   * per-entity snapshot. So a boss mod written on this event receives silence, and
-   * has no way to tell that from a boss that never casts. Read `world.casts`, or
-   * subscribe with `world.on('casts', ...)`, for anything but your own casting.
+   * `castStart` does NOT cover a mob. It is emitted for a player cast, a pet's
+   * cast and the timed activities the game runs through the same machinery, and
+   * never for a mob: every mob mechanic that shows a cast bar sets its cast state
+   * directly, and that state reaches you only on the per-entity snapshot. So a
+   * boss mod written on this event receives silence, and has no way to tell that
+   * from a boss that never casts. Read `world.casts`, or subscribe with
+   * `world.on('casts', ...)`, for anything but your own casting.
    */
   onEvent: <K extends EventKind>(
     kind: K,

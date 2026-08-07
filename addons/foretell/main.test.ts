@@ -280,10 +280,11 @@ describe('its manifest', () => {
   });
 });
 
-// `net.onEvent('castStart')` fires for a player cast, a pet, gathering and fishing. A mob's
-// mechanic sets its cast state directly on the entity and announces nothing, so a boss mod
-// built on the event is silent for every mob in the game. Nothing here delivers an event; the
-// world is driven exactly the way the game drives it.
+// `net.onEvent('castStart')` fires for a player's cast, a pet's cast and the timed activities
+// the game runs through the same cast machinery. A mob's mechanic sets its cast state directly
+// on the entity and announces nothing, so a boss mod built on the event is silent for every mob
+// in the game. Nothing here delivers an event; the world is driven exactly the way the game
+// drives it.
 describe('a boss with a scripted cast', () => {
   it('shows a bar, with no cast event anywhere', async () => {
     const h = await run();
@@ -392,6 +393,27 @@ describe('the filters', () => {
     h.poll();
 
     expect(h.drawn()).toEqual([HEALER]);
+  });
+
+  // A cast id is sometimes an ACTIVITY sentinel rather than an ability: the game runs
+  // gathering, fishing and the crafting family through the same cast machinery, and the set
+  // grows with the game. A nearby crafter therefore gets a bar, title-cased and marked as
+  // worked out, which is what the unit is actually doing. The case is here to fail if anyone
+  // adds an exclusion list of sentinels, since such a list is stale the day the game adds one.
+  it('draws an activity cast rather than treating it as a non-cast', async () => {
+    const h = await run({ friendly: true });
+    const crafter = h.caster(HEALER, {
+      kind: 'player',
+      hostile: false,
+      templateId: 'hunter',
+      name: 'Tinker',
+    });
+
+    h.casts(crafter, { ability: 'crafting', remaining: 3 });
+    h.poll();
+
+    expect(h.drawn()).toEqual([HEALER]);
+    expect(h.labelOf(HEALER)).toBe('Crafting?');
   });
 
   it('draws a channel by default', async () => {

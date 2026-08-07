@@ -21,9 +21,14 @@
 // moment you are NOT at the counter. Read those for an indicator; read the gated
 // ones for a pane.
 //
-// There is no price history anywhere and there never was: the server keeps no
-// record of a completed sale and offers no query for one. A price series is
+// There is no price history OF THE BOOK and there never was: nothing says what
+// an item generally sells for, and there is no query for it. A price series is
 // something your addon BUILDS, by recording each page its player browses.
+//
+// Your own completed sales are the one exception, in `MarketInfo.collectionSales`
+// below. They are a real sold-price record and they are the only one the game
+// keeps, but they are a pickup queue rather than an archive: capped, and emptied
+// the moment the player collects. Copy them out if you want to keep them.
 
 import type { PublicItemInstance } from './entity.js';
 import type { InvSlot } from './world.js';
@@ -65,6 +70,23 @@ export interface MarketListing {
   instance?: PublicItemInstance;
 }
 
+/**
+ * One of your own completed sales, still waiting to be collected.
+ *
+ * `price` is what the buyer paid and `proceeds` is what you actually get, so the
+ * two differ by the Merchant's cut and summing the wrong one overstates your
+ * income by `cutPct`.
+ */
+export interface MarketSaleRecord {
+  itemId: string;
+  count: number;
+  /** GROSS buyout the buyer paid for the whole stack. */
+  price: number;
+  /** NET copper this added to `collectionCopper`, after the cut. */
+  proceeds: number;
+  buyerName: string;
+}
+
 /** One browsed page of the Merchant's book, plus what is waiting for you there. */
 export interface MarketInfo {
   /** Your own listings first, then one page of everyone else's. */
@@ -86,6 +108,20 @@ export interface MarketInfo {
   collectionCopper: number;
   /** Returned or expired goods waiting at the Merchant. */
   collectionItems: readonly InvSlot[];
+  /**
+   * The itemized ledger behind `collectionCopper`: one row per sale of yours
+   * still awaiting pickup, oldest first, and empty when nothing has sold since
+   * the last collect.
+   */
+  collectionSales: readonly MarketSaleRecord[];
+  /**
+   * How many older sales the cap dropped from `collectionSales`.
+   *
+   * Their gold IS in `collectionCopper`, so the rows and the total will not
+   * reconcile whenever this is above 0. Say how many are missing rather than
+   * showing a short list that does not add up.
+   */
+  collectionSalesOmitted: number;
   /** The Merchant's cut on a sale, as a percentage. */
   cutPct: number;
   /** Per-seller active-listing cap. */

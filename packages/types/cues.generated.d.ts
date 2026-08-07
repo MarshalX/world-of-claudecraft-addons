@@ -209,6 +209,7 @@ export type KnownCue =
   | 'ui_cosmetic_unlock'
   | 'ui_craft_alchemy'
   | 'ui_craft_armorcrafting'
+  | 'ui_craft_cast'
   | 'ui_craft_cooking'
   | 'ui_craft_disenchant'
   | 'ui_craft_enchanting'

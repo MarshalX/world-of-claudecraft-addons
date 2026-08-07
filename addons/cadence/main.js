@@ -456,6 +456,14 @@ function readable(abilityId) {
  * The cast's label and school, looked up only when the ability changed.
  * `world.abilities` rebuilds a signature over the whole spellbook on every read, which is
  * wasteful sixty times a second for an answer that moves only when a cast starts.
+ *
+ * `castingAbility` carries an ability id or an activity sentinel: a fixed marker naming
+ * what you are DOING rather than any ability, from a set that grows with the game, and it
+ * is what the game runs gathering, fishing and the crafting family through. A sentinel
+ * resolves in no spellbook, so it takes the title-cased fallback and the lane reads
+ * "Crafting" while you craft. That is left alone deliberately: the game's own cast bar is
+ * drawing the same thing, and an exclusion list of sentinels would need editing every time
+ * the game adds one.
  */
 function castOf(me) {
   const abilityId = me.castingAbility;

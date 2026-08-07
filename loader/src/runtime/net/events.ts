@@ -50,15 +50,33 @@ interface Heal2Event extends PersonalEvent {
   abilityId?: string;
   /** Carries no healing. Consumers skip on this flag, never on the amount. */
   cueOnly?: boolean;
+  /**
+   * Healing lost to the missing-hp clamp, absent rather than 0, and computed
+   * after absorb so it never double-counts with `absorbed`.
+   *
+   * PARTIAL ONLY: every emit site still gates on `healed > 0`, so a tick that
+   * fully overheals emits no record at all and cannot be reported here.
+   */
+  overheal?: number;
 }
 
-/** Names an effect and cannot identify it: no id, and no kind in any observed record. */
+/**
+ * An effect arriving or leaving. The four attribution fields ride the
+ * `Sim.applyAura` path only, so every one of them is optional at the consumer.
+ */
 interface AuraEvent extends PersonalEvent {
   type: 'aura';
   targetId: number;
   name: string;
   gained: boolean;
   auraKind?: string;
+  /** The caster's entity id. */
+  sourceId?: number;
+  /** The aura's own id, and the only route to a MOB ability's id at event time. */
+  abilityId?: string;
+  stacks?: number;
+  /** A same-id same-name re-application, which emits no fade of its own. */
+  refresh?: boolean;
 }
 
 interface DeathEvent extends PersonalEvent {
@@ -67,11 +85,11 @@ interface DeathEvent extends PersonalEvent {
   killerId: number;
 }
 
-/** Player casts, pets, gathering and fishing only. A mob never emits one. */
+/** A player or pet cast, or an ACTIVITY sentinel. A mob never emits one. */
 interface CastStartEvent extends PersonalEvent {
   type: 'castStart';
   entityId: number;
-  /** An ID here, unlike the display name on a damage record. */
+  /** An ID here, unlike the display name on a damage record, or a sentinel. */
   ability: string;
   time: number;
   gatherNodeType?: string;

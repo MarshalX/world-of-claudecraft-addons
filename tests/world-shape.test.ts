@@ -138,6 +138,8 @@ describe('the shape table', () => {
       offhandItemId: true,
       weaponSkinId: true,
       mountKey: true,
+      helmHidden: true,
+      rangedPower: true,
       cooldowns: true,
       gcdRemaining: true,
       autoAttack: true,

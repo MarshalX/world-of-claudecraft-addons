@@ -503,6 +503,21 @@ describe('the cast bar', () => {
     expect(h.labelOf('cast')).toBe('Summon Water Elemental');
   });
 
+  // `castingAbility` also carries an ACTIVITY sentinel, which is what the game runs
+  // gathering, fishing and the crafting family through, and the set grows with the game. The
+  // lane draws it like any other cast, because the game's own cast bar is drawing the same
+  // thing. The case is here to fail if anyone adds an exclusion list of sentinels, since such
+  // a list is stale the day the game adds one.
+  it('draws an activity cast the same way', async () => {
+    const h = await run();
+
+    h.self({ castingAbility: 'crafting', castRemaining: 3, castTotal: 4 });
+    h.frame();
+
+    expect(h.labelOf('cast')).toBe('Crafting');
+    expect(h.fillOf('cast')).toBe('75.00%');
+  });
+
   it('drains as the cast completes', async () => {
     const h = await run();
     h.self({ castingAbility: 'arcane_shot', castRemaining: 2, castTotal: 2 });

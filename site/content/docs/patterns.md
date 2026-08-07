@@ -82,7 +82,7 @@ The combat meter hand-rolled inline button styles first, and the two addons ende
 
 ## An event's ability is a name, not an id
 
-An event's `ability` field is a display **name**, not an ability id. Every `damage` and `heal2` emit fills it from `ability.name`; only `castStart` and `spellfx` carry `ability.id`. The declared type is `string | null` for both, so nothing tells you which you have.
+An event's `ability` field is a display **name**, not an ability id. Every `damage` and `heal2` emit fills it from `ability.name`. `spellfx` carries an id, and `castStart` carries an id **or an activity sentinel**: a fixed marker naming a timed activity rather than any ability, such as `gathering` or `crafting`. The set grows with the game, so match the sentinels you care about by name and let anything you do not recognise fall through as an ability id, rather than enumerating them and assuming your list is complete. A sentinel never resolves in `world.abilities` and never has icon art. The declared type is `string | null` for both, so nothing tells you which you have.
 
 This shipped a bug: the meter built an icon URL from the field and asked the game for `Measured Shot.webp`. An id is only safe to assume where the field is a map **key**, as in `cooldowns` and `abilityCharges`, or where the emit site says `.id`.
 
@@ -96,7 +96,7 @@ Healing has its own version of the same trap:
 
 So it is a labelled fallback and never the item's name. Showing it beside the game's own tooltip is worse than showing nothing, because it looks like an answer. Nothing on this API can give you an item's real name: the item table is bundled into the game's own chunk and is not served. The one authoritative spelling that reaches a client is `itemName` on a loot roll.
 
-`woc.ui.icon.item(id)` is a different matter and is exact. The game serves a manifest of which item ids ship a file, so the builder returns null once it knows there is none rather than handing you a URL that 404s. Two things have no file and never will: a WEAPON, because weapon art is filed under a model name through a table the game does not serve at all, and an item whose art has not been commissioned yet. That is 235 of the game's 797 items today, 134 of them weapons.
+`woc.ui.icon.item(id)` is a different matter and is exact. The game serves a manifest of which item ids ship a file, so the builder returns null once it knows there is none rather than handing you a URL that 404s. Two things have no file and never will: a WEAPON, because weapon art is filed under a model name through a table the game does not serve at all, and an item whose art has not been commissioned yet. That was 235 of the game's 797 items when it was last counted, 134 of them weapons. Read those as dated: the counts move with every content release, and the second category empties and refills as art catches up with content.
 
 Until the manifest has been read the answer stays optimistic, so the first grid you draw is never worse off than it was before the manifest existed. `await woc.ui.icon.preloadItems()` first when a flash of broken images on the first paint would be worse than a frame's delay. It is one request for every item in the game.
 

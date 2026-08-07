@@ -88,11 +88,11 @@ const SOURCE_NOTE =
 /** The objective types `questObjectiveAreas` knows how to place, plus `craft`. */
 const KNOWN_OBJECTIVE_TYPES = new Set(['kill', 'collect', 'interact', 'craft', 'gather', 'escort']);
 
-/** Roughly what the tables carried at game 0.34.0, so a thin parse cannot pass quietly. */
+/** Roughly what the tables carried at game 0.35.0, so a thin parse cannot pass quietly. */
 const EXPECTED = Object.freeze({
   zones: 14,
   quests: 202,
-  camps: 203,
+  camps: 207,
   objects: 43,
   npcs: 86,
   nodes: 156,

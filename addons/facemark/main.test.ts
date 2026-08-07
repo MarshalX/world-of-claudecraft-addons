@@ -656,6 +656,23 @@ describe('what a plate says about a cast', () => {
     expect(h.castClassesOf(DUELIST).some((name) => name.startsWith('woc-bar-school-'))).toBe(false);
   });
 
+  // A cast id is sometimes an ACTIVITY sentinel rather than an ability: gathering, fishing and
+  // the crafting family all ride the same cast machinery, and the set grows with the game. The
+  // plate draws it like any other cast, marked as worked out, which is what the unit is doing.
+  // The case is here to fail if anyone adds an exclusion list of sentinels, since such a list
+  // is stale the day the game adds one.
+  it('draws a bar for an activity cast rather than hiding it', async () => {
+    const h = await run();
+    const crafter = h.unit(DUELIST, { kind: 'player', hostile: true, templateId: 'hunter' });
+    h.casts(crafter, { ability: 'crafting', remaining: 3, total: 4 });
+
+    h.poll();
+    h.frame();
+
+    expect(h.castShown(DUELIST)).toBe(true);
+    expect(h.castLabelOf(DUELIST)).toBe('Crafting?');
+  });
+
   it('takes the bar away when the cast ends', async () => {
     const h = await run();
     const boss = h.unit(BOSS);

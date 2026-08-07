@@ -78,6 +78,12 @@ const LEDGER_KEY = 'ledger/pbe/Claudemoon';
 /** The stamps are one character's, so the loader's own per-character key holds them. */
 const MINE_KEY = perCharacterKey('pbe', 'Claudemoon/Marshal', 'mine-seen');
 
+/**
+ * The sale record, which is per character for the same reason the stamps are: the Merchant
+ * keeps a collection per SELLER, so a completed sale is one character's and not the realm's.
+ */
+const SOLD_KEY = perCharacterKey('pbe', 'Claudemoon/Marshal', 'sold');
+
 /** How long a write is held before it lands, and how long one trip lasts. */
 const WRITE_HOLD_MS = 2000;
 const VISIT_WINDOW_MS = 10 * 60 * 1000;
@@ -125,6 +131,21 @@ interface Listing {
   house: boolean;
 }
 
+/**
+ * One completed sale of the player's own, as the Merchant's pending ledger carries it. No id
+ * and no clock: the rows are identified by their POSITION in a queue that only ever grows
+ * until a collect empties it, which is the whole reason the addon needs a position of its own.
+ */
+interface Sale {
+  itemId: string;
+  count: number;
+  /** GROSS buyout the buyer paid for the whole stack. */
+  price: number;
+  /** NET copper it added to the collection, after the Merchant's cut. */
+  proceeds: number;
+  buyerName: string;
+}
+
 interface MarketPayload {
   listings: Listing[];
   totalCount: number;
@@ -138,6 +159,9 @@ interface MarketPayload {
   pageCount: number;
   collectionCopper: number;
   collectionItems: Array<{ itemId: string; count: number }>;
+  /** Optional, because a server that predates game 0.35.0 sends neither of these at all. */
+  collectionSales?: Sale[];
+  collectionSalesOmitted?: number;
   cutPct: number;
   maxListings: number;
   myListingCount: number;
@@ -168,6 +192,19 @@ interface StoredStamp {
   seen: number;
 }
 
+/** One drained sale as it lands in storage: when, how many, gross, net, who bought it. */
+type StoredSale = [number, number, number, number, string];
+
+interface StoredSold {
+  sales: Record<string, StoredSale[]>;
+  /** How far into the CURRENT pending ledger the addon has read. */
+  read: number;
+  /** The last row it read, so a queue it has not seen before is not mistaken for that one. */
+  anchor: string;
+  /** Sales that happened and were dropped before the addon could read them. */
+  lost: number;
+}
+
 function listing(patch: Partial<Listing> = {}): Listing {
   return {
     id: 1,
@@ -179,6 +216,10 @@ function listing(patch: Partial<Listing> = {}): Listing {
     house: false,
     ...patch,
   };
+}
+
+function sale(patch: Partial<Sale> = {}): Sale {
+  return { itemId: 'ore', count: 1, price: 500, proceeds: 465, buyerName: 'Bragg', ...patch };
 }
 
 function marketPayload(patch: Partial<MarketPayload> = {}): MarketPayload {
@@ -202,14 +243,34 @@ function marketPayload(patch: Partial<MarketPayload> = {}): MarketPayload {
   };
 }
 
-/** A page with the given rows, with the server's own myListingCount kept in step. */
-function page(rows: Listing[], patch: Partial<MarketPayload> = {}): MarketPayload {
-  return marketPayload({
+/** What the server derives from the rows it is sending, kept in step with them. */
+function pageOf(rows: Listing[]): Partial<MarketPayload> {
+  return {
     listings: rows,
     totalCount: rows.length,
     myListingCount: rows.filter((row) => row.mine).length,
+  };
+}
+
+/** A page as game 0.35.0 sends one, carrying the pending sale ledger even when it is empty. */
+function page(rows: Listing[], patch: Partial<MarketPayload> = {}): MarketPayload {
+  return marketPayload({
+    ...pageOf(rows),
+    collectionSales: [],
+    collectionSalesOmitted: 0,
     ...patch,
   });
+}
+
+/**
+ * The same page from a server that predates the ledger, which sends NEITHER field.
+ *
+ * Built without them rather than built and stripped, because an absent key and a key holding
+ * undefined are the same thing to a reader asking `Array.isArray` and different to one asking
+ * `in`, and only the first of the two is what an older wire actually does.
+ */
+function olderPage(rows: Listing[], patch: Partial<MarketPayload> = {}): MarketPayload {
+  return marketPayload({ ...pageOf(rows), ...patch });
 }
 
 interface StartOptions {
@@ -454,6 +515,30 @@ function storedStamps(h: LedgerHarness): StoredStamp[] {
   return (h.hub.dump()[`${CHARACTER_NAMESPACE}/${MINE_KEY}`] as StoredStamp[] | undefined) ?? [];
 }
 
+/** What nothing written down looks like, so every reading below is of the same shape. */
+const NO_SOLD: StoredSold = { sales: {}, read: 0, anchor: '', lost: 0 };
+
+function storedSold(h: LedgerHarness): StoredSold {
+  return (h.hub.dump()[`${CHARACTER_NAMESPACE}/${SOLD_KEY}`] as StoredSold | undefined) ?? NO_SOLD;
+}
+
+/** One item's drained sales, oldest first, or none where nothing of it has sold. */
+function salesFor(h: LedgerHarness, itemId: string): StoredSale[] {
+  return storedSold(h).sales[itemId] ?? [];
+}
+
+function lostSales(h: LedgerHarness): number {
+  return storedSold(h).lost;
+}
+
+/** Open one of the panel's tabs, clicked at the DOM the way a player reaches it. */
+function openTab(label: string): void {
+  const button = [...document.querySelectorAll('#woc-addons .woc-tab')].find(
+    (el) => el.textContent === label,
+  );
+  (button as HTMLButtonElement | undefined)?.click();
+}
+
 function seedLedger(storage: FakeStorage, items: Record<string, StoredVisit[]>): void {
   storage.remote(NAMESPACE, LEDGER_KEY, { items });
 }
@@ -461,6 +546,16 @@ function seedLedger(storage: FakeStorage, items: Record<string, StoredVisit[]>):
 /** One stored visit, in the units the store holds: seconds, and copper per item. */
 function visit(at: number, low: number, high = low, query = ''): StoredVisit {
   return [Math.round(at / 1000), low, high, query];
+}
+
+function seedSold(storage: FakeStorage, held: Partial<StoredSold>): void {
+  storage.remote(CHARACTER_NAMESPACE, SOLD_KEY, {
+    sales: {},
+    read: 0,
+    anchor: '',
+    lost: 0,
+    ...held,
+  });
 }
 
 describe('its manifest', () => {
@@ -739,6 +834,303 @@ describe('when a listing was first seen', () => {
     const tip = tipOn('mine', '4');
     expect(tip).toContain('First seen by you');
     expect(tip).toContain('no listing carries an expiry');
+  });
+});
+
+/**
+ * The Merchant's pending sale ledger, which is the one real sold-price record the game keeps and
+ * is a queue rather than a table: rows are appended as sales land, the oldest drop past a cap of
+ * fifty into `collectionSalesOmitted`, and the WHOLE THING EMPTIES when the player collects.
+ *
+ * So every case here is about the same question, which is whether a row is the same row. A sale
+ * carries no id and no clock, and the page it rides is re-read on every browse, so the only
+ * identity available is the position in the queue: row `i` is `collectionSalesOmitted + i` sales
+ * into this collection, and that total only rises until a collect resets it.
+ *
+ * The two failures the cases below have teeth against are the two that destroy a player's record
+ * silently. Counting a row twice inflates a series that is supposed to be ground truth, and
+ * reading the drain as an authoritative empty deletes everything ever recorded.
+ */
+describe('what the Merchant says has sold', () => {
+  it('records a completed sale of the player own', async () => {
+    const h = await start();
+    h.send({
+      market: page([], {
+        collectionCopper: 465,
+        collectionSales: [sale({ itemId: 'ore', count: 2, price: 900, proceeds: 837 })],
+      }),
+    });
+    await h.settle();
+
+    // The gross the buyer paid and the net after the cut, both kept: summing the wrong one
+    // overstates a player's income by the whole of `cutPct`.
+    expect(salesFor(h, 'ore')).toEqual([[WALL_CLOCK_MS / 1000, 2, 900, 837, 'Bragg']]);
+  });
+
+  // The page is re-read on every browse and a row carries no id, so a reading that compared
+  // contents would count one sale once per page the player flipped through while it waited.
+  it('records a sale once however many times the ledger is read', async () => {
+    const h = await start();
+    const sold = [sale({ itemId: 'ore', price: 900, proceeds: 837 })];
+    h.send({
+      market: page([listing({ id: 1 })], { collectionCopper: 837, collectionSales: sold }),
+    });
+    await h.settle();
+    h.send({
+      market: page([listing({ id: 2 })], { collectionCopper: 837, collectionSales: sold }),
+    });
+    await h.settle();
+    h.send({
+      market: page([listing({ id: 3 })], { collectionCopper: 837, collectionSales: sold }),
+    });
+    await h.settle();
+
+    expect(salesFor(h, 'ore')).toHaveLength(1);
+  });
+
+  // The drain. This is the failure worth the most: the rows vanish at a moment the player chose
+  // and nothing announces, so an addon that mirrored the wire would erase its own history the
+  // first time its player pressed Collect.
+  it('keeps a recorded sale after the player collects and the ledger empties', async () => {
+    const h = await start();
+    h.send({
+      market: page([], { collectionCopper: 837, collectionSales: [sale({ price: 900 })] }),
+    });
+    await h.settle();
+    h.send({ market: page([], { collectionCopper: 0, collectionSales: [] }) });
+    await h.settle();
+
+    expect(salesFor(h, 'ore')).toHaveLength(1);
+  });
+
+  it('records the next sale after a collect, even one identical to the last', async () => {
+    const h = await start();
+    h.send({ market: page([], { collectionCopper: 465, collectionSales: [sale()] }) });
+    await h.settle();
+    h.send({ market: page([], { collectionCopper: 0, collectionSales: [] }) });
+    await h.settle();
+    h.setWallClock(WALL_CLOCK_MS + HOUR_MS);
+    h.send({ market: page([], { collectionCopper: 465, collectionSales: [sale()] }) });
+    await h.settle();
+
+    expect(salesFor(h, 'ore')).toHaveLength(2);
+  });
+
+  /**
+   * A collect and exactly as many fresh sales between two readings leaves the queue the same
+   * LENGTH it was, so a position alone would skip every one of them. The last row read is
+   * checked as well, which is what says this is a different queue rather than the same one.
+   */
+  it('notices a queue it has not read before, even at the length it left off at', async () => {
+    const h = await start();
+    h.send({
+      market: page([], {
+        collectionCopper: 930,
+        collectionSales: [sale({ price: 500 }), sale({ price: 400 })],
+      }),
+    });
+    await h.settle();
+    h.setWallClock(WALL_CLOCK_MS + HOUR_MS);
+    h.send({
+      market: page([], {
+        collectionCopper: 1400,
+        collectionSales: [sale({ price: 700 }), sale({ price: 800 })],
+      }),
+    });
+    await h.settle();
+
+    expect(salesFor(h, 'ore').map((row) => row[2])).toEqual([500, 400, 700, 800]);
+  });
+
+  // The cap is the server's, at fifty rows, and the gold of a dropped row is still in the total
+  // the rows are explaining. Saying how many are missing is the only thing that makes the two
+  // reconcile; swallowing it presents a short list as a complete one.
+  it('counts the sales the Merchant own cap dropped before it could read them', async () => {
+    const h = await start();
+    h.send({
+      market: page([], {
+        collectionCopper: 5000,
+        collectionSales: [sale({ price: 100 }), sale({ price: 200 })],
+        collectionSalesOmitted: 7,
+      }),
+    });
+    await h.settle();
+
+    expect(lostSales(h)).toBe(7);
+    expect(salesFor(h, 'ore')).toHaveLength(2);
+  });
+
+  /**
+   * The server's own counter is not the answer, and this is the case that shows why. It counts
+   * what ITS cap dropped, some of which this addon had already read and kept; what a player
+   * needs is how many of their sales are missing from THIS record, which is a smaller number
+   * and only something holding a position in the queue can work it out.
+   */
+  it('leaves out the dropped sales it had already written down', async () => {
+    const h = await start();
+    h.send({
+      market: page([], {
+        collectionCopper: 930,
+        collectionSales: [sale({ price: 500 }), sale({ price: 400 })],
+      }),
+    });
+    await h.settle();
+    h.send({
+      market: page([], {
+        collectionCopper: 9000,
+        collectionSales: [sale({ price: 700 }), sale({ price: 800 })],
+        collectionSalesOmitted: 14,
+      }),
+    });
+    await h.settle();
+
+    expect(lostSales(h)).toBe(12);
+    expect(salesFor(h, 'ore')).toHaveLength(4);
+  });
+
+  /**
+   * A 1-copper listing against the Merchant's cut nets nothing, and the sale still leaves a row.
+   * The game's own Collect tab reads the ledger specifically so that row is not stranded unshown,
+   * and a consumer that filtered on `proceeds > 0` would drop the one sale nobody can explain.
+   */
+  it('records a sale whose proceeds floored to nothing', async () => {
+    const h = await start();
+    h.send({
+      market: page([], {
+        collectionCopper: 0,
+        collectionSales: [sale({ itemId: 'pebble', count: 1, price: 1, proceeds: 0 })],
+      }),
+    });
+    await h.settle();
+
+    expect(salesFor(h, 'pebble')).toHaveLength(1);
+  });
+
+  /**
+   * A server predating the ledger sends no field at all, and an absent field is NOT an empty
+   * queue. Reading one as the other would reset the position on every page and count every
+   * waiting sale again the next time a real ledger arrived.
+   */
+  it('does not read a missing ledger as a collect', async () => {
+    const h = await start();
+    const sold = [sale({ price: 900 })];
+    h.send({
+      market: page([listing({ id: 1 })], { collectionCopper: 837, collectionSales: sold }),
+    });
+    await h.settle();
+    h.send({ market: olderPage([listing({ id: 2 })], { collectionCopper: 837 }) });
+    await h.settle();
+    h.send({
+      market: page([listing({ id: 3 })], { collectionCopper: 837, collectionSales: sold }),
+    });
+    await h.settle();
+
+    expect(salesFor(h, 'ore')).toHaveLength(1);
+  });
+
+  it('keeps recorded sales while the player is nowhere near the Merchant', async () => {
+    const h = await start();
+    h.send({ market: page([], { collectionCopper: 465, collectionSales: [sale()] }) });
+    await h.settle();
+    h.send({ market: null });
+    await h.settle();
+
+    expect(salesFor(h, 'ore')).toHaveLength(1);
+  });
+
+  it('reads a stored sale record back in the next session', async () => {
+    const storage = createFakeStorage();
+    seedSold(storage, {
+      sales: { ore: [[WALL_CLOCK_MS / 1000 - 3600, 1, 900, 837, 'Bragg']] },
+      lost: 3,
+    });
+    const h = await start({ storage });
+    openTab('Sold');
+    await h.settle();
+
+    expect(keysIn('sold')).toEqual(['ore']);
+    expect(lineFor('sold-note')).toContain('3');
+  });
+});
+
+/**
+ * The same record, on screen, where the two things it must not do are blur and swallow.
+ *
+ * The sold series is kept apart from the browsed one and the panel says which is which,
+ * because an ask is what a seller wanted and a sale is what a buyer handed over. And the
+ * Merchant's cap means the record is incomplete by a known amount, which is exactly the
+ * figure a pane showing a short list has to carry.
+ */
+describe('what the sale record says', () => {
+  it('says how many sales it never saw rather than drawing a list that does not add up', async () => {
+    const h = await start();
+    h.send({
+      market: page([], {
+        collectionCopper: 5000,
+        collectionSales: [sale()],
+        collectionSalesOmitted: 7,
+      }),
+    });
+    await h.settle();
+    openTab('Sold');
+    await h.settle();
+
+    expect(lineFor('sold-note')).toContain('7');
+  });
+
+  /**
+   * The separation, which is the whole reason there is a second series at all. A listing price is
+   * what a seller ASKED and a sale row is what a buyer PAID, and folding one into the other gives
+   * a fuller curve made of two different facts. Neither figure below moves the other.
+   */
+  it('keeps what was paid out of the series of what was asked', async () => {
+    const h = await start();
+    h.send({
+      market: page([listing({ id: 1, itemId: 'ore', count: 1, price: 500 })], {
+        collectionCopper: 837,
+        collectionSales: [sale({ itemId: 'ore', count: 1, price: 900, proceeds: 837 })],
+      }),
+    });
+    await h.settle();
+    await saved();
+
+    expect(visitsFor(h, 'ore')).toEqual([visit(WALL_CLOCK_MS, 500)]);
+    expect(salesFor(h, 'ore').map((row) => row[2])).toEqual([900]);
+  });
+
+  it('says on a price row what the item actually fetched, labelled as a different fact', async () => {
+    const h = await start();
+    h.send({
+      market: page([listing({ id: 1, itemId: 'ore', count: 1, price: 500 })], {
+        collectionCopper: 837,
+        collectionSales: [sale({ itemId: 'ore', count: 1, price: 900, proceeds: 837 })],
+      }),
+    });
+    await h.settle();
+
+    const tip = tipOn('prices', 'ore');
+    expect(tip).toContain('what was paid');
+    expect(tip).toContain('what was asked');
+  });
+
+  it('says a sale is stamped when it was read rather than when it happened', async () => {
+    const h = await start();
+    h.send({ market: page([], { collectionCopper: 465, collectionSales: [sale()] }) });
+    await h.settle();
+    openTab('Sold');
+    await h.settle();
+
+    expect(tipOn('sold', 'ore')).toContain('carries no clock');
+  });
+
+  it('says the record is the player own sales and nobody else', async () => {
+    const h = await start();
+    h.send({ market: page([], { collectionCopper: 465, collectionSales: [sale()] }) });
+    await h.settle();
+    openTab('Sold');
+    await h.settle();
+
+    expect(tipOn('sold', 'ore')).toContain('your own');
   });
 });
 

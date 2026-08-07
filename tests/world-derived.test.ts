@@ -1,8 +1,8 @@
 // The three readings the loader computes rather than reads.
 //
 // `casts` carries the weight here. A mob's cast never emits a `castStart` event:
-// the event fires for a player cast, a pet, gathering and fishing, and the mob
-// path assigns cast state directly instead. That state reaches the client only on
+// the event fires for a player cast, a pet's cast and the game's timed activities,
+// and the mob path assigns cast state directly instead. That state reaches the client only on
 // the per-entity wire, so this derivation is the ONLY way an addon can see a boss
 // cast at all, and the tests below are written against the fields the wire
 // actually carries (`cast`, `castRem`, `castTot`, `chan`) as the client names them

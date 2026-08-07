@@ -1,8 +1,8 @@
 // Lorebind on the stage: the codex asked about the den the group is standing in.
 //
-// The table is the shipped `items.json`, imported rather than restated. It is 815 rows and the
-// whole of what this addon is, so a fixture inventing an item would photograph the one thing
-// that cannot be wrong.
+// The table is the shipped `items.json`, imported rather than restated. It is the whole of what
+// this addon is, so a fixture inventing an item would photograph the one thing that cannot be
+// wrong.
 //
 // THE PICTURE IS THE SOURCE RANKING, which is why the search is narrowed to one word rather
 // than left open on the whole table. Four of the five rows come from a different source, and
@@ -70,14 +70,16 @@ const INVENTORY = [
 const EQUIPMENT = { feet: 'sableweb_slippers', chest: 'mosshide_vest' };
 
 /**
- * The panel, at the size it opens.
+ * The panel, at the size it opens: eight pixels under the addon's own 460 by 660.
  *
- * Eight pixels under the addon's own 460 by 660, which is what lands the grid on exactly six rows
- * of squares rather than six and a sliver. The grid is the only part of the panel that grows, so
- * a taller box is more grid and a shorter one is less; the sliver is honest in a running window,
- * where it says there is more to scroll, and is a ragged edge in a photograph of one.
  * Seeded rather than left alone because the box is also the POSITION, and a frame the loader
- * placed for itself lands wherever the viewport centred it.
+ * placed for itself lands wherever the viewport centred it. The number is a size for every
+ * scenario rather than a frame around any one of them: the grid is the only part of the panel
+ * that grows, so it takes whatever the record under it leaves, and a scenario that opens a
+ * fuller record is fewer rows of squares at the same height. That is why nothing here tries to
+ * land the grid on a whole row. It was tuned to once, and game 0.35.0 gave the piece in the
+ * preview a set name, a Warfare rating and an honor price, which is three more lines of record
+ * and exactly one row of squares fewer.
  */
 const PANEL = { box: { x: 120, y: 100, w: 460, h: 652 }, visible: true };
 
@@ -177,7 +179,7 @@ function pick(itemId: string): void {
  *
  * The addon reads its file, publishes what it learned and then repaints on an animation frame,
  * so start-up is several promise hops and one real frame deep. Waited on the rows appearing
- * rather than on a count of microtask turns, since the file is 815 rows of real JSON.
+ * rather than on a count of microtask turns, since the file is eight hundred-odd rows of real JSON.
  */
 async function drawn(stage: Stage): Promise<void> {
   stage.poll();
@@ -215,10 +217,10 @@ const SABLE_HITS = 5;
 const PICKED = 'ashstalker_cowl';
 
 const BROWSE_ALT =
-  "the Lorebind window browsing every epic piece of armor in the game. Under the title a row of tabs reads All, Armor, Weapon, Food, Quest, Other, with Armor open. Under that, six quality chips, each written in the game's own colour for its tier: grey Poor, white Common, green Uncommon, blue Rare, purple Epic and orange Legendary, with Epic alone lit in its own colour and the other five dimmed. Then a search box reading name, id, kind or slot and two dropdowns of the loader's own, Any slot and Name, with an unticked box reading Only what I have seen under them. The body of the window is the game's own item art in a grid nine squares across and four and a bit rows deep, scrolling, every square edged in the purple the game paints an epic item with and carrying the same soft purple glow it gives that tier in a bag: rings, hoods, gauntlets, breastplates, legguards, boots and belts. The third square of the first row is ringed in gold, and the record under the grid is its: a larger copy of the same art beside Ashstalker Cowl written in that same purple, then a column of facts one to a line, the way the game's own item tooltip reads: Epic leather armor, helmet; 150 Armor; plus 5 Agility and plus 5 Stamina in green; Item level 28; Requires level 20; Soulbound; and last, quieter than the rest, ashstalker_cowl and from the table. Two lines close the panel: Showing 120 of 147 items, narrow it to see the rest; and 815 named from the table, 1 from a roll, 1 by nothing, Seen 8.";
+  "the Lorebind window browsing every epic piece of armor in the game. Under the title a row of tabs reads All, Armor, Weapon, Food, Quest, Other, with Armor open. Under that, six quality chips, each written in the game's own colour for its tier: grey Poor, white Common, green Uncommon, blue Rare, purple Epic and orange Legendary, with Epic alone lit in its own colour and outlined in it, and the other five dimmed. Then three labelled controls, Search, Slot and Sort: a search box reading name, id, kind or slot, and two dropdowns of the loader's own reading Any slot and Name, with an unticked box reading Only what I have seen under them. The body of the window is the game's own item art in a grid nine squares across and three and a bit rows deep, scrolling, every square edged in the purple the game paints an epic item with and carrying the same soft purple glow it gives that tier in a bag: rings, hoods, gauntlets, breastplates, legguards, boots, belts and helms. The third square of the first row, a hood, is ringed in gold, and the record under the grid is its: a larger copy of the same art beside Ashstalker Cowl written in that same purple, then a column of facts one to a line, the way the game's own item tooltip reads: Epic leather armor, helmet; 168 Armor; plus 8 Agility, plus 8 Stamina and plus 18 Warfare in green; Item level 31; Requires level 20; Ashstalker Kit; Soulbound; Honor price 900; and last, quieter than the rest, ashstalker_cowl and from the table. Two lines close the panel: Showing 120 of 156 items, narrow it to see the rest; and 831 named from the table, 1 from a roll, 1 by nothing, Seen 8.";
 
 const SABLE_ALT =
-  'the Lorebind window with sable typed in its search box, holding five squares. Three carry the game own art and two carry two letters in place of it, because the game ships no picture for either. The record under the grid reads Sableweb Wraps in green, then Uncommon and nothing else, then sableweb_wraps and from a loot roll: an item the shipped table has never heard of, spelled out by the roll the group is answering, which is why it has a name and a tier and not one number. The counting line reads Names, 815 from the table, 1 from loot rolls, 1 named by nothing.';
+  'the Lorebind window with sable typed in its search box, holding five squares. Three carry the game own art and two carry two letters in place of it, because the game ships no picture for either. The record under the grid reads Sableweb Wraps in green, then Uncommon and nothing else, then sableweb_wraps and from a loot roll: an item the shipped table has never heard of, spelled out by the roll the group is answering, which is why it has a name and a tier and not one number. The counting line under it reads 831 named from the table, 1 from a roll, 1 by nothing.';
 
 const SCENARIOS: readonly Scenario[] = [
   {

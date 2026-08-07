@@ -212,7 +212,7 @@ export interface Entity {
    * nothing else distinguishes a hunter's companion from the wolf next to it.
    */
   ownerId: number | null;
-  /** The ability id being cast, or null. */
+  /** An ability id, an activity sentinel, or null. Sentinels are not abilities. */
   castingAbility: string | null;
   /** Seconds left on the cast, against `castTotal`. Both 0 when not casting. */
   castRemaining: number;
@@ -288,6 +288,14 @@ export interface Entity {
    * speed, so it is a reliable answer to "is that player mounted".
    */
   mountKey: string;
+  /** The paperdoll eye toggle: the composed body renders without its kit helm. */
+  helmHidden: boolean;
+
+  /**
+   * Ranged attack power. Rides `dynamicFields`, so unlike the self-only block
+   * below it is real on every entity, your own player included.
+   */
+  rangedPower: number;
 
   // Yours alone: the server sends these on the SELF record and nowhere else, so
   // on any other entity they hold an inert default rather than a real value.

@@ -92,6 +92,8 @@ const SHAPE: Record<keyof Entity, FieldSpec> = {
   offhandItemId: { kind: 'string', nullable: true },
   weaponSkinId: { kind: 'string', nullable: true },
   mountKey: { kind: 'string' },
+  helmHidden: { kind: 'boolean' },
+  rangedPower: { kind: 'number' },
 
   cooldowns: { kind: 'map' },
   gcdRemaining: { kind: 'number' },

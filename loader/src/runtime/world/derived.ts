@@ -7,8 +7,8 @@
 // question an addon asks does not match the way the game happens to store it.
 //
 // `casts` is the important one. A mob's cast never emits a `castStart` event: the
-// event fires for a player cast, a pet, gathering and fishing, and every mob
-// mechanic that shows a bar assigns its cast state directly instead. That state
+// event fires for a player cast, a pet's cast and the game's timed activities, and
+// every mob mechanic that shows a bar assigns its cast state directly instead. That state
 // reaches the client on the per-entity wire (`cast`, `castRem`, `castTot`,
 // `chan`) and nowhere else, so a boss mod subscribing to the event gets silence
 // and cannot tell it from a boss that never casts. This is the read that closes
@@ -52,7 +52,7 @@ function toHazard(kind: HazardKind, entry: unknown): Hazard | null {
 
 /** What a cast bar on any entity says, self or not. */
 export interface EntityCast {
-  /** The ability id being cast. */
+  /** An ability id, or an activity sentinel. A sentinel is not an ability. */
   ability: string;
   /** Seconds left, against `total`. */
   remaining: number;
