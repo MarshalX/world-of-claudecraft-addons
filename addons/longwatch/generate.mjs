@@ -106,6 +106,13 @@ const SOURCE_NOTE =
  * row that `readRare` would drop at run time, in front of a player, with a warning
  * only they would see. All three lists move together or none of them do, so gaining a
  * zone is one edit in each of the three and the roster follows on the next run.
+ *
+ * FOUR OF THE GAME'S FOURTEEN, and adding the other ten buys nothing today. Nine hold
+ * no rare at all. The tenth, the Drakelands, holds `drakemaw_broodlord` at FOUR camps
+ * on a 100 second respawn, which is four spawns that are up most of the time rather
+ * than the one point and one countdown a row here is, so admitting the zone without
+ * redesigning the roster row would add ten dead options to the setting and still list
+ * nothing. Measured against game 0.35.1.
  */
 const KNOWN_ZONES = new Set([
   'eastbrook_vale',

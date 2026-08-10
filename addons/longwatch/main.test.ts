@@ -119,6 +119,19 @@ interface LongwatchHarness extends SharedHarness {
   spawn: (id: number, templateId: string, name?: string) => Fake;
   /** Kill one: the corpse goes dead, and the death record lands. */
   kill: (id: number, templateId: string) => void;
+  /**
+   * Kill one out of earshot: the corpse goes dead and NO death record lands, which is what
+   * a kill outside the event radius or before this session looks like from here.
+   */
+  killQuietly: (id: number, templateId: string) => void;
+  /** Put a body in scope that this character never saw standing. */
+  body: (id: number, templateId: string) => Fake;
+  /**
+   * The loot lock on a corpse, as the game's own client mirrors it: `Infinity` while the
+   * tapper still owns the pool, `0` once it has lapsed. Absent is a corpse with no loot
+   * record at all, which is not a corpse `world.corpses` carries.
+   */
+  lock: (id: number, ffaTimer: number) => void;
   despawn: (id: number) => void;
   /** Walk the player somewhere. Copied, because the game mutates `pos` in place. */
   walkTo: (x: number, z: number) => void;
@@ -247,6 +260,35 @@ async function start(
         eventsFrame([{ type: 'death', entityId: id, killerId: PLAYER_ID, templateId }]),
       );
     },
+    killQuietly: (id) => {
+      const corpse = entities.get(id);
+      if (corpse !== undefined) {
+        setField(corpse, 'dead', true);
+        setField(corpse, 'loot', null);
+      }
+    },
+    // `loot` is stated rather than left alone, and it is the one field here that has to be.
+    // `tests/fakes/entity.ts` builds a field of kind `object` as `{}` whatever the shape
+    // table says about it being nullable, so every fixture entity arrives carrying a loot
+    // record and therefore reads as a corpse `world.corpses` knows the lock of. The game
+    // sends one for a mob that rolled loot and nobody has taken, and null for everything
+    // else, which is what a case about reading no lock has to be driving.
+    body: (id, templateId) => {
+      const corpse = mob(id, templateId, templateId);
+      setField(corpse, 'dead', true);
+      setField(corpse, 'loot', null);
+      entities.set(id, corpse);
+      return corpse;
+    },
+    lock: (id, ffaTimer) => {
+      const corpse = entities.get(id);
+      if (corpse !== undefined) {
+        // `world.corpses` carries an entity only where the wire shipped a loot record, which
+        // is the same branch of the game's death path that arms the lock.
+        setField(corpse, 'loot', { copper: 120, items: [] });
+        setField(corpse, 'lootFfaTimer', ffaTimer);
+      }
+    },
     despawn: (id) => {
       entities.delete(id);
     },
@@ -372,8 +414,10 @@ describe('the roster it reads', () => {
 });
 
 // The roster is the addon's whole reason to exist, so what it carries is asserted rather than
-// assumed. Nineteen of the game's twenty-three rare templates: the four left out are the three
-// the Nythraxis crypt summons and the Wildheart dungeon miniboss, none of which has a camp.
+// assumed. Nineteen of the game's twenty-four rare templates, and both reasons for leaving one
+// out are in `generate.mjs`: four have no camp to be waited for (three summoned by the Nythraxis
+// crypt, one miniboss inside a dungeon), and one stands in a zone this addon does not resolve
+// positions against.
 describe('the roster it carries', () => {
   it('lists a row per rare it knows about', async () => {
     const h = await run();
@@ -516,11 +560,16 @@ describe('the countdown after a kill', () => {
   // Past the window and still nobody has seen it. "Due" and "still counting" are
   // different answers to a player deciding whether to ride over there, so the
   // countdown is named rather than clamped at zero.
+  //
+  // The corpse is walked away from first. A body still in scope past the window is the one
+  // thing that can disprove "due", and it has a case of its own below.
   it('reads as due once the window has passed', async () => {
     const h = await run();
     h.spawn(GREYJAW_ID, GREYJAW);
     h.poll();
     h.kill(GREYJAW_ID, GREYJAW);
+    h.despawn(GREYJAW_ID);
+    h.poll();
 
     h.clockTo(200_000);
 
@@ -553,6 +602,201 @@ describe('the countdown after a kill', () => {
     h.tick();
 
     expect(h.figureOf(GREYJAW)).toBe('Unseen');
+  });
+});
+
+// What a body proves, which is most of what a player ever gets to see. A slain mob is not
+// removed from the world: it lies where it fell for the whole respawn window and stands up
+// again under the same entity id. The death RECORD only reaches a player inside the event
+// radius, so a rare killed by somebody else, or before this session started, leaves a corpse
+// and nothing else. That bounds the return without fixing it.
+describe('a body it finds with no kill to go with it', () => {
+  it('reads the ceiling off the moment the body was found', async () => {
+    const h = await run();
+
+    h.body(VOSKAR_ID, VOSKAR);
+    h.poll();
+
+    // Six hours from finding it, and marked as a ceiling rather than drawn as a countdown.
+    expect(h.figureOf(VOSKAR)).toBe('≤ 6h 0m');
+  });
+
+  // The bound is anchored to the sighting rather than re-taken every time the body is looked
+  // at again. Re-taking it would restart a six hour ceiling once a second for as long as the
+  // player stood over the corpse, which is a display that never moves.
+  it('holds the ceiling still while the body is watched', async () => {
+    const h = await run();
+    h.body(VOSKAR_ID, VOSKAR);
+    h.poll();
+
+    h.clockTo(7_200_000);
+
+    expect(h.figureOf(VOSKAR)).toBe('≤ 4h 0m');
+  });
+
+  // The one thing that can disprove the arithmetic. Whatever the ceiling says, a body in
+  // scope is a rare that has not come back, and "Due" would send the player to an empty camp.
+  it('says the body is still there rather than due when the ceiling runs out', async () => {
+    const h = await run();
+    h.body(GREYJAW_ID, GREYJAW);
+    h.poll();
+
+    h.clockTo(200_000);
+
+    expect(h.figureOf(GREYJAW)).toBe('Down');
+    expect(h.classesOf(GREYJAW)).toContain('woc-bar-default');
+  });
+
+  // A window with no floor could close at any moment across its whole length, and a row
+  // that is warm for six hours has stopped telling anybody anything.
+  it('stays cool for a window it has no floor for', async () => {
+    const h = await run();
+    h.body(VOSKAR_ID, VOSKAR);
+    h.poll();
+
+    h.clockTo(10_800_000);
+
+    expect(h.classesOf(VOSKAR)).toContain('woc-bar-default');
+  });
+
+  // The floor: seen standing at one moment and dead at another, the rare cannot be back
+  // before the first of those plus its respawn. The gap between the two sightings is exactly
+  // how wide the window is, so the player rides away between them.
+  it('warms once the last sighting says it could be back', async () => {
+    const h = await run();
+    h.spawn(VOSKAR_ID, VOSKAR);
+    h.poll();
+    h.despawn(VOSKAR_ID);
+    h.poll();
+
+    // Five hours later they ride past again and find a body. The kill happened somewhere in
+    // those five hours, so the rare is back between one and six hours from now.
+    h.clockTo(18_000_000);
+    h.body(VOSKAR_ID + 1, VOSKAR);
+    h.poll();
+    expect(h.figureOf(VOSKAR)).toBe('≤ 6h 0m');
+    expect(h.classesOf(VOSKAR)).toContain('woc-bar-default');
+
+    h.clockTo(18_000_000 + 3_600_000);
+
+    expect(h.figureOf(VOSKAR)).toBe('≤ 5h 0m');
+    expect(h.classesOf(VOSKAR)).toContain('woc-bar-warn');
+  });
+
+  // The floor is taken every pass rather than at the arrival, so watching a rare for an hour
+  // and then losing it is an hour better than glimpsing it once.
+  it('floors the window at the last pass that saw it standing', async () => {
+    const h = await run();
+    h.spawn(VOSKAR_ID, VOSKAR);
+    h.poll();
+    h.clockTo(3_600_000);
+    h.despawn(VOSKAR_ID);
+    h.poll();
+
+    h.body(VOSKAR_ID + 1, VOSKAR);
+    h.poll();
+
+    // Five and a half hours after the body was found, which is the one stretch the two
+    // readings disagree over: floored at the last pass the rare cannot be back for another
+    // half hour, floored at the arrival it could have been back for the last half hour.
+    h.clockTo(3_600_000 + 19_800_000);
+
+    expect(h.classesOf(VOSKAR)).toContain('woc-bar-default');
+  });
+
+  // A rare that falls in view keeps its entity id and its place in the entity SET, so nothing
+  // `world.on('entities')` can see happens at all. The once-a-second pass is what catches it,
+  // and without it the row reads "Up" over a corpse until the body leaves range.
+  it('notices a rare falling in view with no set change', async () => {
+    const h = await run();
+    h.spawn(VOSKAR_ID, VOSKAR);
+    h.poll();
+    h.killQuietly(VOSKAR_ID, VOSKAR);
+
+    h.poll();
+    expect(h.figureOf(VOSKAR)).toBe('Up');
+
+    h.tick();
+
+    expect(h.figureOf(VOSKAR)).toBe('≤ 6h 0m');
+  });
+
+  // A kill this character watched is a measurement, and it beats a bound rather than being
+  // averaged with one.
+  it('drops the bound for a kill it watches happen', async () => {
+    const h = await run();
+    h.body(GREYJAW_ID, GREYJAW);
+    h.poll();
+    expect(h.figureOf(GREYJAW)).toBe('≤ 1m 40s');
+
+    h.despawn(GREYJAW_ID);
+    h.spawn(GREYJAW_ID + 1, GREYJAW);
+    h.poll();
+    h.kill(GREYJAW_ID + 1, GREYJAW);
+    h.tick();
+
+    expect(h.figureOf(GREYJAW)).toBe('1m 40s');
+  });
+
+  // The body found before is a body of a life that has since ended: the rare stood up,
+  // somebody else killed it, and the corpse in front of the player now is a different death.
+  it('starts a fresh bound for a body found after the old one ran out', async () => {
+    const h = await run();
+    h.body(GREYJAW_ID, GREYJAW);
+    h.poll();
+    h.despawn(GREYJAW_ID);
+    h.poll();
+
+    h.clockTo(600_000);
+    h.body(GREYJAW_ID + 1, GREYJAW);
+    h.poll();
+
+    expect(h.figureOf(GREYJAW)).toBe('≤ 1m 40s');
+  });
+});
+
+// The corpse's own loot lock, which the game arms at the kill and lets lapse a minute later.
+// A corpse still holding it died inside that minute, which is the one reading that turns a
+// six hour window into a one minute one.
+describe('the loot lock on a body', () => {
+  it('floors the window a minute back when the lock still holds', async () => {
+    const h = await run();
+    h.body(VOSKAR_ID, VOSKAR);
+    h.lock(VOSKAR_ID, Number.POSITIVE_INFINITY);
+
+    h.poll();
+    await settle();
+
+    const stored = storedSightings(h.storage) as Record<string, { aliveAt: number }>;
+    expect(stored[VOSKAR]?.aliveAt).toBe(NOW - 60_000);
+  });
+
+  // A lapsed lock says only that the kill was more than a minute ago, which is what the
+  // ceiling already said. Reading a floor out of it would invent one.
+  it('reads no floor out of a lock that has lapsed', async () => {
+    const h = await run();
+    h.body(VOSKAR_ID, VOSKAR);
+    h.lock(VOSKAR_ID, 0);
+
+    h.poll();
+    await settle();
+
+    const stored = storedSightings(h.storage) as Record<string, { aliveAt: number | null }>;
+    expect(stored[VOSKAR]?.aliveAt).toBeNull();
+  });
+
+  // A corpse the wire shipped no loot record for is not in `world.corpses` at all, and the
+  // loader reads an unreadable lock as HELD. Concluding from that would be this addon
+  // claiming a fresh kill every time it walks past an already looted body.
+  it('reads no floor off a body carrying no loot record', async () => {
+    const h = await run();
+    h.body(VOSKAR_ID, VOSKAR);
+
+    h.poll();
+    await settle();
+
+    const stored = storedSightings(h.storage) as Record<string, { aliveAt: number | null }>;
+    expect(stored[VOSKAR]?.aliveAt).toBeNull();
   });
 });
 
@@ -644,7 +888,7 @@ describe('a countdown across a logout', () => {
     // Asserted on the KEYS rather than by searching the text for the id: a wall-clock
     // stamp is thirteen digits and will contain almost any three of them by accident.
     const stored = storedSightings(h.storage) as Record<string, Record<string, unknown>>;
-    expect(Object.keys(stored[GREYJAW] ?? {})).toEqual(['seenAt', 'killedAt']);
+    expect(Object.keys(stored[GREYJAW] ?? {})).toEqual(['seenAt', 'killedAt', 'downAt', 'aliveAt']);
   });
 
   it('writes nothing when the player switched the memory off', async () => {

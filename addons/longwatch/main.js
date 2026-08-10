@@ -11,6 +11,16 @@
 // Every stamp is `woc.wallClock()` rather than `woc.now()`. The monotonic clock restarts
 // on every page load, so a kill stamped with it reads as being in the future next
 // session.
+//
+// A body is evidence, and it is the only evidence most sightings ever produce. A slain mob
+// is NOT removed from the world: it lies where it fell for the whole respawn window and
+// then stands up again reusing the same entity id, so walking up to a rare's corpse proves
+// it is down without saying when it died. That bounds the return rather than fixing it:
+// the kill happened at or before the moment the body was found, so the rare is back no
+// later than that moment plus its respawn, and no sooner than the last time it was seen
+// standing plus the same. `windowOf` is that pair, and the row says which of the two
+// readings it is drawing, because a bound presented as a countdown is a lie about how much
+// is known.
 
 /** The opening box. The minimums are well under it, since the opening size is the floor. */
 const FRAME_WIDTH = 460;
@@ -30,6 +40,18 @@ const PIN_LIFT = 28;
 const PIN_SIZE = 40;
 /** The game's own "something rare turned up" chime. */
 const SIGHTING_CUE = 'ui_gather_rare';
+/**
+ * How long a tapped corpse stays owner-locked, which is the game's `LOOT_FFA_DELAY`.
+ *
+ * The lock is armed at the kill, so a corpse still holding it died inside this window. It
+ * is the one reading that narrows a found body to a minute rather than to a respawn, and
+ * it is worth nothing on a corpse nobody could loot, which is why it is read off
+ * `world.corpses` (a corpse with a loot record) rather than off the `lootable` flag, which
+ * every door and ground pickup in the game also carries.
+ */
+const LOCK_SECONDS = 60;
+/** What marks a figure as a ceiling rather than a measurement. */
+const AT_MOST = '≤ ';
 /** The one per-character key. Everything this addon remembers is inside it. */
 const STORE_KEY = 'sightings';
 /** The data file the roster lives in, declared as `data` in the manifest. */
@@ -54,6 +76,12 @@ const BY_DISTANCE = 'Distance';
  * The four zone rectangles that hold a rare, from `ZONES` in `src/sim/data.ts`. Half-open
  * on both axes, and the x bounds are load-bearing: Farshore shares Eastbrook's z band, so
  * a test on z alone puts a player standing there in Eastbrook Vale.
+ *
+ * Four of the game's FOURTEEN, and the narrowness is a decision rather than drift. Nine of
+ * the other ten hold no rare, and the tenth holds one that this roster's shape cannot say
+ * anything true about; `generate.mjs` carries the measurement. A position anywhere in those
+ * ten resolves to null here, which is what the zone filter and the pins read as "nowhere
+ * this addon knows about".
  */
 const ZONES = [
   { id: 'eastbrook_vale', name: 'Eastbrook Vale', zMin: -180, zMax: 180 },
@@ -74,7 +102,21 @@ let rares = [];
 /** The roster by template id, which is the shape every lookup here wants. */
 let byTemplate = new Map();
 
-/** `entityId` is in-session only: an entity id is reissued. The two stamps persist. */
+/**
+ * What is known about each rare. The two entity ids are in-session only, since an entity id
+ * is reissued; the four stamps persist.
+ *
+ *  - `entityId` is the live rare standing there now, and `corpseId` its body. They are
+ *    never both set: the game revives a corpse in place under the same id.
+ *  - `seenAt` is the last sighting, and is the tooltip's line rather than an input to any
+ *    arithmetic. It stays an honest answer to "when did YOU last look at this thing".
+ *  - `killedAt` is a kill this character watched happen, and is the only exact reading.
+ *  - `downAt` is the EARLIEST moment a body was found since the rare was last seen alive,
+ *    which is the ceiling. A later sighting of the same body cannot improve it, so it is
+ *    written once and left alone.
+ *  - `aliveAt` is the latest moment the rare can be PROVEN to have still been alive, which
+ *    is the floor. A sighting sets it; an owner-locked corpse raises it to a minute ago.
+ */
 const watch = new Map();
 
 /**
@@ -141,9 +183,24 @@ function adopt(listed) {
   rares = kept;
   byTemplate = new Map(kept.map((rare) => [rare.id, rare]));
   for (const rare of kept) {
-    watch.set(rare.id, { seenAt: null, killedAt: null, entityId: null });
+    watch.set(rare.id, blank());
   }
 }
+
+/** What is known about a rare nobody has ever laid eyes on. */
+function blank() {
+  return {
+    entityId: null,
+    corpseId: null,
+    seenAt: null,
+    killedAt: null,
+    downAt: null,
+    aliveAt: null,
+  };
+}
+
+/** The stamps that persist, which is everything but the two entity ids. */
+const STAMPS = ['seenAt', 'killedAt', 'downAt', 'aliveAt'];
 
 /**
  * Whether the roster has been walked once with anything in it.
@@ -209,26 +266,78 @@ function zoneName(zoneId) {
   return ZONES.find((zone) => zone.id === zoneId)?.name ?? zoneId;
 }
 
-/** Goes NEGATIVE past the respawn window rather than clamping: the display names that. */
-function remainingFor(rare) {
-  const row = watch.get(rare.id);
-  if (row.killedAt === null) {
+/** How long ago a stamp was, in seconds, or null for a stamp there is none of. */
+function since(stampMs) {
+  if (stampMs === null) {
     return null;
   }
-  return rare.respawn - (woc.wallClock() - row.killedAt) / MS_PER_SECOND;
+  return (woc.wallClock() - stampMs) / MS_PER_SECOND;
 }
 
-/** One of 'up', 'down', 'due' or 'unseen'. Everything drawn is derived from this. */
+/**
+ * Seconds from a stamp to the respawn it starts, going NEGATIVE past the window rather than
+ * clamping, since a row that has run out has to be able to say so.
+ */
+function leftFrom(rare, stampMs) {
+  const elapsed = since(stampMs);
+  if (elapsed === null) {
+    return null;
+  }
+  return rare.respawn - elapsed;
+}
+
+/** Seconds until it is certainly back, for a kill this character watched. Null otherwise. */
+function measuredFor(rare) {
+  return leftFrom(rare, watch.get(rare.id).killedAt);
+}
+
+/**
+ * The window a found body bounds the return to, or null when no body was ever found.
+ *
+ * `latest` is the ceiling and is what the row draws. `earliest` is null whenever nothing
+ * proves when the rare was last alive, which is the ordinary case for a body walked into
+ * cold, and a null floor means "any moment now" rather than a floor of zero.
+ */
+function windowOf(rare) {
+  const row = watch.get(rare.id);
+  const latest = leftFrom(rare, row.downAt);
+  if (latest === null) {
+    return null;
+  }
+  return { latest, earliest: leftFrom(rare, row.aliveAt) };
+}
+
+/** Seconds until it is back at the latest, measured where it can be and bounded where not. */
+function leftFor(rare) {
+  return measuredFor(rare) ?? windowOf(rare)?.latest ?? null;
+}
+
+/**
+ * One of 'up', 'down', 'window', 'body', 'due' or 'unseen'. Everything drawn comes from
+ * this, and the split that matters is 'down' against 'window': the first is counted from a
+ * kill and the second is bounded by a body.
+ *
+ * 'body' is the state where the arithmetic has run out and the corpse is still lying there,
+ * so the rare is provably NOT back whatever the clock says. It outranks 'due' rather than
+ * the other way around, because a body in scope is an observation and 'due' is a deduction.
+ */
 function stateOf(rare) {
-  if (watch.get(rare.id).entityId !== null) {
+  const row = watch.get(rare.id);
+  if (row.entityId !== null) {
     return 'up';
   }
-  const left = remainingFor(rare);
+  const left = leftFor(rare);
   if (left === null) {
     return 'unseen';
   }
+  if (left > 0 && measuredFor(rare) === null) {
+    return 'window';
+  }
   if (left > 0) {
     return 'down';
+  }
+  if (row.corpseId !== null) {
+    return 'body';
   }
   return 'due';
 }
@@ -244,13 +353,20 @@ function figure(rare) {
   if (state === 'up') {
     return 'Up';
   }
+  if (state === 'body') {
+    return 'Down';
+  }
   if (state === 'due') {
     return 'Due';
   }
   if (state === 'unseen') {
     return 'Unseen';
   }
-  return woc.fmt.duration(remainingFor(rare), 'coarse');
+  const left = woc.fmt.duration(leftFor(rare), 'coarse');
+  if (state === 'window') {
+    return `${AT_MOST}${left}`;
+  }
+  return left;
 }
 
 /** A rare that is up draws FULL, the opposite sense to a timer: a full bar means go now. */
@@ -259,10 +375,25 @@ function fillOf(rare) {
   if (state === 'up') {
     return FULL;
   }
-  if (state === 'down') {
-    return remainingFor(rare) / rare.respawn;
+  if (state === 'down' || state === 'window') {
+    return leftFor(rare) / rare.respawn;
   }
   return EMPTY;
+}
+
+/**
+ * Whether a bounded rare could already be standing there.
+ *
+ * A window with no floor is deliberately NOT warm. The honest reading of a body walked into
+ * cold is that the rare could be back at any moment over the whole respawn, and a row that
+ * is warm for six hours has stopped saying anything.
+ */
+function couldBeBack(rare) {
+  const bounds = windowOf(rare);
+  if (bounds === null || bounds.earliest === null) {
+    return false;
+  }
+  return bounds.earliest <= 0 || bounds.latest <= NEARLY_BACK;
 }
 
 /** Loudest for a rare that is up, warm for one that is back or nearly back. */
@@ -271,10 +402,17 @@ function toneFor(rare) {
   if (state === 'up') {
     return 'danger';
   }
+  // A body in scope is proof it is not back, whatever any of the arithmetic says.
+  if (state === 'body') {
+    return 'default';
+  }
   if (state === 'due') {
     return 'warn';
   }
-  if (state === 'down' && remainingFor(rare) <= NEARLY_BACK) {
+  if (state === 'down' && leftFor(rare) <= NEARLY_BACK) {
+    return 'warn';
+  }
+  if (state === 'window' && couldBeBack(rare)) {
     return 'warn';
   }
   return 'default';
@@ -289,36 +427,78 @@ function detailOf(rare) {
   return `${zoneName(rare.zone)}, ${String(Math.round(away))} yd`;
 }
 
-/** How long ago a stamp was, in seconds, or null for a stamp there is none of. */
-function since(stampMs) {
-  if (stampMs === null) {
-    return null;
-  }
-  return (woc.wallClock() - stampMs) / MS_PER_SECOND;
-}
-
 /**
- * The tooltip's last line: when this character last laid eyes on it.
+ * The tooltip's last line: when this character last laid eyes on it STANDING.
+ *
+ * A body is deliberately not a sighting here, since "last seen" beside a countdown reads as
+ * when it was last up. The never-seen wording is narrowed where a body was found instead, or
+ * the line would contradict the one above it, which says the reading came from that body.
  *
  * UNBOUNDED: `seenAt` is a persisted stamp, so this is the one figure here that reaches
  * `fmt.duration`'s day tier.
  */
 function sightingLine(rare) {
-  const elapsed = since(watch.get(rare.id).seenAt);
+  const row = watch.get(rare.id);
+  const elapsed = since(row.seenAt);
+  if (elapsed === null && row.downAt !== null) {
+    return { text: 'You have never seen this one standing', tone: 'muted' };
+  }
   if (elapsed === null) {
     return { text: 'You have never seen this one', tone: 'muted' };
   }
   return { text: `Last seen ${woc.fmt.duration(elapsed, 'coarse')} ago`, tone: 'muted' };
 }
 
-/** A function rather than a string: the distance and the sighting line both move. */
+/**
+ * The window a bound gives, spelled out. Two readings a player has to be able to tell
+ * apart: with a floor this is a stretch of time the rare turns up inside, and without one
+ * the ceiling is all there is and the rare could already be standing there.
+ */
+function windowLine(rare) {
+  const bounds = windowOf(rare);
+  const ceiling = `Back within ${woc.fmt.duration(Math.max(bounds.latest, 0), 'coarse')}`;
+  if (bounds.earliest === null || bounds.earliest <= 0) {
+    return { text: `${ceiling}, from finding its body`, tone: 'muted' };
+  }
+  return {
+    text: `${ceiling}, no sooner than ${woc.fmt.duration(bounds.earliest, 'coarse')}`,
+    tone: 'muted',
+  };
+}
+
+/**
+ * Where the figure beside the name came from, which a bounded row cannot leave unsaid.
+ *
+ * Null for the two states with nothing to explain: a rare standing in front of the player,
+ * and one nobody has ever seen.
+ */
+function readingLine(rare) {
+  const state = stateOf(rare);
+  if (state === 'body') {
+    return { text: 'Its body is still lying there', tone: 'muted' };
+  }
+  if (state === 'window') {
+    return windowLine(rare);
+  }
+  if (state === 'down' || state === 'due') {
+    return { text: 'Counted from the kill you watched', tone: 'muted' };
+  }
+  return null;
+}
+
+/** A function rather than a string: the distance, the reading and the sighting all move. */
 function rowTooltip(rare) {
   const lines = [
     `${zoneName(rare.zone)}, camp at ${String(rare.x)}, ${String(rare.z)}`,
     { text: `Back ${woc.fmt.duration(rare.respawn, 'coarse')} after it dies`, tone: 'muted' },
+    readingLine(rare),
     sightingLine(rare),
   ];
-  return { title: rare.name, icon: woc.ui.icon.mob(rare.id), lines };
+  return {
+    title: rare.name,
+    icon: woc.ui.icon.mob(rare.id),
+    lines: lines.filter((line) => line !== null),
+  };
 }
 
 /** `ui.icon.mob` rather than `ability`: the portrait directory is keyed by template id. */
@@ -421,20 +601,23 @@ function passes(rare, choice, here) {
   return zoneName(rare.zone) === choice;
 }
 
-/** Up first, then soonest back, with the ones nobody has killed at the bottom. */
+/**
+ * Up first, then soonest back, with the ones nobody has killed at the bottom.
+ *
+ * A bounded row is ranked by its ceiling, which puts it later in the list than a measured
+ * row that will genuinely be back at the same time. That is the right way round: the list
+ * is where a player decides what to walk to, and what is known beats what is guessed at.
+ */
 function dueRank(rare) {
   const state = stateOf(rare);
   if (state === 'up') {
     return RANK_UP;
   }
-  if (state === 'due') {
-    return RANK_DUE;
-  }
-  const left = remainingFor(rare);
+  const left = leftFor(rare);
   if (left === null) {
     return Number.POSITIVE_INFINITY;
   }
-  return left;
+  return Math.max(left, RANK_DUE);
 }
 
 function order(entries, choice) {
@@ -500,8 +683,9 @@ async function save() {
   await woc.world.ready;
   const pairs = [];
   for (const [id, row] of watch) {
-    if (row.seenAt !== null || row.killedAt !== null) {
-      pairs.push([id, { seenAt: row.seenAt, killedAt: row.killedAt }]);
+    const stamps = STAMPS.filter((stamp) => row[stamp] !== null);
+    if (stamps.length > 0) {
+      pairs.push([id, Object.fromEntries(STAMPS.map((stamp) => [stamp, row[stamp]]))]);
     }
   }
   await woc.storage.character.set(STORE_KEY, Object.fromEntries(pairs));
@@ -527,14 +711,15 @@ function stampOf(value) {
  */
 function reclaim(id, record) {
   const row = watch.get(id);
-  if (row === undefined || row.seenAt !== null || row.killedAt !== null) {
+  if (row === undefined || STAMPS.some((stamp) => row[stamp] !== null)) {
     return;
   }
   if (typeof record !== 'object' || record === null) {
     return;
   }
-  row.seenAt = stampOf(record.seenAt);
-  row.killedAt = stampOf(record.killedAt);
+  for (const stamp of STAMPS) {
+    row[stamp] = stampOf(record[stamp]);
+  }
 }
 
 async function restore() {
@@ -566,32 +751,118 @@ function announce(rare) {
   woc.sound.play(SIGHTING_CUE);
 }
 
-/** The kill stamp is cleared: whatever the arithmetic said, the rare is demonstrably there. */
+/**
+ * Every reading a kill or a body left behind, dropped.
+ *
+ * Called where the rare is demonstrably standing there, so whatever the arithmetic said
+ * about it is spent. Both bounds go with the kill stamp, or a body found before this one
+ * would go on bounding a rare that has already come back.
+ */
+function forgetDeath(row) {
+  row.killedAt = null;
+  row.downAt = null;
+}
+
 function arrived(entity, rare) {
   const row = watch.get(rare.id);
   row.seenAt = woc.wallClock();
+  // Every pass rather than only the first, so a rare watched for an hour and then found
+  // dead is floored an hour later than one merely glimpsed. It is the same stamp `seenAt`
+  // takes and is kept apart from it because that one is an answer to a question the player
+  // asked, and this one is an input to arithmetic a lock reading can also move.
+  row.aliveAt = woc.wallClock();
+  row.corpseId = null;
   if (row.entityId === entity.id) {
     return;
   }
   row.entityId = entity.id;
-  row.killedAt = null;
+  forgetDeath(row);
   announce(rare);
   persist();
 }
 
-/** A corpse is skipped: a dead entity lingers in scope and is not a rare that is up. */
+/**
+ * Raise the floor from the corpse's own loot lock, which is armed at the kill and lapses a
+ * minute later. Still held means the kill was inside that minute, which turns a six hour
+ * window into a one minute one.
+ *
+ * Read off `world.corpses` rather than the entity, because the lock is only meaningful on a
+ * corpse that went through a loot roll and that map is exactly those. An unreadable timer
+ * is taken as HELD by the loader, which would be a claim rather than a reading, so nothing
+ * is concluded from a corpse the map does not carry.
+ */
+function readLock(entity, row) {
+  const view = woc.world.corpses.get(entity.id);
+  if (view === undefined || view.ffa) {
+    return;
+  }
+  const floor = woc.wallClock() - LOCK_SECONDS * MS_PER_SECOND;
+  if (row.aliveAt === null || row.aliveAt < floor) {
+    row.aliveAt = floor;
+  }
+}
+
+/**
+ * Whether a body needs a bound written for it, which is where THIS death is not the one the
+ * stamps already describe.
+ *
+ * A spent ceiling is the test. A bound whose window has run out cannot be about the body in
+ * front of the player, since that body would have stood up, so the rare came back and died
+ * again unwatched and the old reading is about a life that has ended. A bound still running
+ * is left exactly where it is: the first sighting of a body is the tightest ceiling any
+ * later sighting of it could give.
+ */
+function needsBound(rare, row) {
+  return row.downAt === null || leftFrom(rare, row.downAt) <= 0;
+}
+
+/**
+ * A body found. The kill stamp wins where there is one, since that is a measurement and
+ * this is a bound.
+ *
+ * The lock is read once, at the sighting that writes the bound. Holding a body in view does
+ * narrow the floor by a second a second until the lock lapses, and that is deliberately
+ * given up: it is at most a minute off a window measured in hours, and taking it would mean
+ * a storage write every second for as long as the player stands over the corpse.
+ */
+function foundBody(entity, rare) {
+  const row = watch.get(rare.id);
+  const known = row.corpseId === entity.id;
+  row.corpseId = entity.id;
+  if (known || row.killedAt !== null || !needsBound(rare, row)) {
+    return;
+  }
+  if (row.downAt !== null) {
+    // Only reached for a SPENT bound, so whatever proved this rare alive proved it about a
+    // life that has since ended. Kept where the bound is new, which is the ordinary case of
+    // watching a rare and then finding its body: that sighting is the floor.
+    row.aliveAt = null;
+  }
+  row.downAt = woc.wallClock();
+  readLock(entity, row);
+  persist();
+}
+
+/** Which rares are standing and which are lying there, in one pass over the entity set. */
 function scan() {
-  const present = new Set();
+  const standing = new Set();
+  const fallen = new Set();
   const { entities } = woc.world;
   for (const entity of entities.values()) {
     const rare = byTemplate.get(entity.templateId);
-    if (rare !== undefined && entity.dead !== true) {
-      present.add(rare.id);
+    if (rare !== undefined && entity.dead === true) {
+      fallen.add(rare.id);
+      foundBody(entity, rare);
+    } else if (rare !== undefined) {
+      standing.add(rare.id);
       arrived(entity, rare);
     }
   }
   for (const [id, row] of watch) {
-    if (row.entityId !== null && !present.has(id)) {
+    if (row.corpseId !== null && !fallen.has(id)) {
+      row.corpseId = null;
+    }
+    if (row.entityId !== null && !standing.has(id)) {
       row.seenAt = woc.wallClock();
       row.entityId = null;
       persist();
@@ -603,7 +874,10 @@ function scan() {
   redraw();
 }
 
-// The only signal a rare walking into range produces.
+// A rare walking into range changes the entity SET, so this is the prompt signal for one
+// arriving or leaving. It is not enough on its own: a rare dying in front of the player
+// keeps its entity id and its place in the set, so the transition to a body is invisible
+// here and is caught by the once-a-second pass instead.
 woc.world.on('entities', scan);
 
 // The record identifies nothing but an entity id, so the template is read off the corpse,
@@ -620,6 +894,10 @@ woc.net.onEvent('death', (event) => {
   const row = watch.get(rare.id);
   row.killedAt = woc.wallClock();
   row.entityId = null;
+  // A measurement, so the bounds this character had are spent. Left in place they would
+  // outlive the kill they were guessing at and go on narrowing nothing.
+  row.downAt = null;
+  row.aliveAt = null;
   persist();
   redraw();
 });
@@ -637,20 +915,23 @@ woc.net.onEvent('death', (event) => {
  * character in it.
  */
 woc.world.on('characterKey', () => {
-  for (const row of watch.values()) {
-    row.seenAt = null;
-    row.killedAt = null;
-    row.entityId = null;
+  // Replaced rather than cleared field by field, so a stamp added later cannot be the one
+  // somebody forgets to blank here and carry from one character onto another's key.
+  for (const id of [...watch.keys()]) {
+    watch.set(id, blank());
   }
   firstRoster = true;
   load();
   redraw();
 });
 
-// Once a second, which is as often as any figure here moves. The cost is up to a second
-// of lag on the zone filter and on the pins leaving the world; the keybind answers the
-// second on the path a player takes most.
-woc.setInterval(redraw, MS_PER_SECOND);
+// Once a second, which is as often as any figure here moves, and a full re-read rather than
+// a redraw: a rare dying or standing up in view is a field change on an entity that was
+// already in the set, which `world.on('entities')` cannot see. The cost is one pass over
+// the entities in interest scope. The lag it leaves is up to a second on the zone filter
+// and on the pins leaving the world; the keybind answers the second on the path a player
+// takes most.
+woc.setInterval(scan, MS_PER_SECOND);
 
 // Bound by hand rather than with the frame's own `toggleKey`, DECLINED because this key
 // does two things: `toggleKey` only toggles, and the pins are anchors over the world that

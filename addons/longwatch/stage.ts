@@ -63,6 +63,23 @@ const KILLS: readonly { id: string; ago: number }[] = [
   { id: 'grubjaw', ago: 20 },
 ];
 
+/**
+ * The body this character rode up on rather than watched fall, and where it lies.
+ *
+ * Wraithbinder rather than one of the short ones because the whole of what the row says is a
+ * ceiling, and a three hour ceiling is still a ceiling by the end of the afternoon the rest of
+ * the panel describes; a hundred second one would have run out and be drawing a different state.
+ *
+ * `loot` is stated null, and it is the one field here that has to be: the shared fixture builds
+ * a nullable object field as `{}`, so a body left alone arrives carrying a loot record and reads
+ * as a corpse whose owner lock the addon can date the kill from. Looted long ago is what a body
+ * found by a passer-by almost always is.
+ */
+const FOUND_RARE = 'wraithbinder_maldrec';
+const FOUND_NAME = 'Wraithbinder Maldrec';
+const FOUND_ID = 790;
+const FOUND_POS = { x: 88, y: 5, z: 92 };
+
 /** Long enough for the roster read, the frame restore and the stored reads. */
 const SETTLE_MS = 60;
 /** Longer than the panel's own once-a-second redraw, so it draws where it stands. */
@@ -217,6 +234,33 @@ const SCENARIOS: readonly Scenario[] = [
     settings: { zones: 'The zone I am in' },
     data: { [ROSTER_FILE]: JSON.stringify(ROSTER) },
     world: aRareHunter,
+    run: async (stage) => {
+      await panelUp(stage);
+      killEverything(stage);
+      await wait(REDRAW_WAIT_MS);
+    },
+  },
+  {
+    // A body, which is what most of a player's evidence actually is: the death record only
+    // reaches a player standing close enough to see the fight, so a rare somebody else killed
+    // leaves a corpse and nothing to time it from. The row is a ceiling and says so.
+    //
+    // The body is stated in `world` rather than in `run` because it was already lying there
+    // when this character logged in, which is what makes it a body found rather than a kill
+    // watched.
+    id: 'found-body',
+    label: 'A body you rode up on',
+    data: { [ROSTER_FILE]: JSON.stringify(ROSTER) },
+    world: (draft) => {
+      aRareHunter(draft);
+      draft.mob(FOUND_ID, {
+        templateId: FOUND_RARE,
+        name: FOUND_NAME,
+        pos: FOUND_POS,
+        dead: true,
+        loot: null,
+      });
+    },
     run: async (stage) => {
       await panelUp(stage);
       killEverything(stage);
