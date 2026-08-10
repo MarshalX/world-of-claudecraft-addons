@@ -43,6 +43,7 @@ import { ANY_SENDER } from '../../loader/src/runtime/bus/hub.ts';
 import { loadAddon } from '../../loader/src/runtime/loader.ts';
 import type { InstalledAddon } from '../../loader/src/shared/protocol.ts';
 import { validateManifest } from '../../loader/src/shared/schema.ts';
+import { inSeries } from '../../loader/src/shared/sequence.ts';
 import {
   addonNamespace,
   characterNamespace,
@@ -58,6 +59,7 @@ import {
 } from '../../tests/fakes/shared-services.ts';
 import { createFakeStorage, type FakeStorage } from '../../tests/fakes/storage.ts';
 import MANIFEST_TEXT from './addon.json?raw';
+import FLOORS_TEXT from './floors.json?raw';
 // biome-ignore lint/correctness/noUnresolvedImports: Vite's ?raw suffix is a loader directive a static resolver does not model, and an addon file is a function BODY with no exports at all. Same reason as the satchel suite.
 import SOURCE from './main.js?raw';
 
@@ -280,6 +282,14 @@ function olderPage(rows: Listing[], patch: Partial<MarketPayload> = {}): MarketP
   return marketPayload({ ...pageOf(rows), ...patch });
 }
 
+/** The one file this addon ships, or nothing, which is the failed-fetch case. */
+function floorsFor(floors: string | null | undefined): Record<string, string> {
+  if (floors === null) {
+    return {};
+  }
+  return { 'floors.json': floors ?? FLOORS_TEXT };
+}
+
 interface StartOptions {
   settings?: Record<string, unknown>;
   storage?: FakeStorage;
@@ -288,6 +298,8 @@ interface StartOptions {
   world?: boolean;
   /** Start with no entity decoded, which is what `unknown` actually is. */
   empty?: boolean;
+  /** `null` is the player whose floor table never arrived. Anything else replaces the real one. */
+  floors?: string | null;
 }
 
 interface LedgerHarness extends SharedHarness {
@@ -337,6 +349,11 @@ function flush(times: number): Promise<void> {
 
 const MICROTASKS = 24;
 
+/** Code point order, since `useArraySortCompare` refuses the implicit one. */
+function byText(a: string, b: string): number {
+  return a.localeCompare(b);
+}
+
 function rowIn(list: string, key: string): HTMLElement | null {
   return document.querySelector(`[data-list="${list}"] [data-row="${key}"]`);
 }
@@ -370,19 +387,10 @@ function detailOf(list: string, key: string): string {
   return partOf(rowIn(list, key), '.woc-bar-detail');
 }
 
-/**
- * The trend line's points, as pairs, or none where the line is not drawn. Read off the polyline
- * rather than off a count on screen, because the line is the only place the addon says what its
- * series looks like over time and a hidden one is a real answer: two readings is the fewest that
- * can be a line.
- */
-function sparkPoints(list: string, key: string): string[] {
-  const spark = rowIn(list, key)?.querySelector('.woc-ledgerline-spark polyline');
-  const points = spark?.getAttribute('points') ?? '';
-  if (points === '') {
-    return [];
-  }
-  return points.split(' ');
+/** The width the kit painted a row's fill at, which is the one magnitude every pane now draws. */
+function fillOf(list: string, key: string): string {
+  const fill = rowIn(list, key)?.querySelector<HTMLElement>('.woc-bar-fill');
+  return fill?.style.width ?? '';
 }
 
 function lineFor(role: string): string {
@@ -402,6 +410,11 @@ function tipOver(el: Element | null): string {
 
 function tipOn(list: string, key: string): string {
   return tipOver(rowIn(list, key));
+}
+
+/** The tooltip the header strip carries, which is where the page number and the cut moved. */
+function tipOnStrip(): string {
+  return tipOver(document.querySelector('[data-role="status"]'));
 }
 
 function frameTitle(): string {
@@ -442,6 +455,10 @@ async function start(options: StartOptions = {}): Promise<LedgerHarness> {
     source: SOURCE,
     settings: options.settings ?? {},
     storage,
+    // The REAL table by default, so a fixture priced under a real vendor floor is a deal for the
+    // reason a player's would be. `floors: null` is the addon without it, which is what a player
+    // whose fetch failed has: every estimate still works and nothing is certain any more.
+    data: floorsFor(options.floors),
   };
   if (options.world !== false) {
     input.game = Promise.resolve({ world: fakeWorld(state, player, options.empty === true) });
@@ -575,14 +592,22 @@ describe('its manifest', () => {
     expect(validateManifest(MANIFEST_JSON).ok).toBe(true);
   });
 
-  it('asks for the world, the socket, a frame, a store and a key', () => {
+  it('asks for the world, the socket, a frame, a sound, a store and a key', () => {
     expect(parseManifest(MANIFEST_TEXT).permissions).toEqual([
       'world.read',
       'net.read',
       'ui',
+      'sound',
       'storage',
       'keys',
     ]);
+  });
+
+  // The floors table is what makes a vendor-backed deal certain rather than estimated, and it
+  // is only reachable because the manifest declares it: `woc.data` checks its argument against
+  // this list, so an undeclared file is refused rather than fetched.
+  it('declares the vendor floor table it ships', () => {
+    expect(parseManifest(MANIFEST_TEXT).data).toEqual(['floors.json']);
   });
 
   // The topic it consumes comes from a publisher the loader cannot require, so the
@@ -845,7 +870,9 @@ describe('when a listing was first seen', () => {
 
     const tip = tipOn('mine', '4');
     expect(tip).toContain('First seen by you');
-    expect(tip).toContain('no listing carries an expiry');
+    // Shorter than it was, and the promise is the same one: no listing carries an expiry, so a
+    // stamp presented without saying whose reckoning it is would read as one.
+    expect(tip).toContain("by this addon's own reckoning");
   });
 });
 
@@ -1121,8 +1148,7 @@ describe('what the sale record says', () => {
     await h.settle();
 
     const tip = tipOn('prices', 'ore');
-    expect(tip).toContain('what was paid');
-    expect(tip).toContain('what was asked');
+    expect(tip).toContain('what was PAID rather than asked');
   });
 
   it('says a sale is stamped when it was read rather than when it happened', async () => {
@@ -1132,9 +1158,12 @@ describe('what the sale record says', () => {
     openTab('Sold');
     await h.settle();
 
-    expect(tipOn('sold', 'ore')).toContain('carries no clock');
+    expect(tipOn('sold', 'ore')).toContain('rather than when it sold');
   });
 
+  // Said ONCE, under the list, rather than on every row's tooltip. It is the one thing a reader
+  // could get wrong about this tab and it is true of every row on it, which is exactly the kind
+  // of line that belongs in a footer: a tooltip is for what is true of the row being pointed at.
   it('says the record is the player own sales and nobody else', async () => {
     const h = await start();
     h.send({ market: page([], { collectionCopper: 465, collectionSales: [sale()] }) });
@@ -1142,7 +1171,7 @@ describe('what the sale record says', () => {
     openTab('Sold');
     await h.settle();
 
-    expect(tipOn('sold', 'ore')).toContain('your own');
+    expect(lineFor('sold-note')).toContain('your own sales');
   });
 });
 
@@ -1278,7 +1307,7 @@ describe('what it says when there is no page', () => {
     await h.settle();
 
     expect(lineFor('status-line')).toContain('ore');
-    expect(lineFor('status-line')).toContain('rather than all of it');
+    expect(lineFor('status-line')).toContain('part of the book, not all of it');
   });
 });
 
@@ -1295,33 +1324,46 @@ describe('the unit price', () => {
     });
     await h.settle();
 
-    // 100 copper each against 2000 copper each: the same total, ten times apart per item.
+    // 100 copper each against 2000 copper each: the same total, ten times apart per item. The
+    // row's own figure and its median both carry the per-item basis, which is where a reader
+    // meets it; the tooltip no longer reports the dearest ask, which was the top of the SPREAD
+    // sitting beside three figures taken over lows and comparable with none of them.
     expect(figureOf('prices', 'ore')).toBe('low 1 silver');
-    expect(tipOn('prices', 'ore')).toContain('high 20s');
+    expect(detailOf('prices', 'ore')).toContain('median 1s');
   });
 
+  // The FIGURE carries this now rather than a paragraph under it. A stack of 20 at 2000 copper
+  // is 100 each, and the tooltip saying "Low 1s each" states the per-item basis in the place a
+  // reader is already looking; a paragraph explaining that a total divides by a count was the
+  // same sentence on every row of every session.
   it('says the figures are per item rather than per listing', async () => {
     const h = await start();
     h.send({ market: page([listing({ id: 1, itemId: 'ore', count: 20, price: 2000 })]) });
     await h.settle();
 
-    expect(tipOn('prices', 'ore')).toContain('divides by the count');
+    expect(tipOn('prices', 'ore')).toContain('1s each');
   });
 
   // Copper as the game writes it. Printing every unit turns an ore at forty-four copper into
   // `0g 0s 44c`, which is three leading zeroes per row of a ledger whose content is small prices.
   it('drops a unit of money that is empty', async () => {
     const h = await start();
+    // TWO visits, so the tooltip prints its long form and the text renderer is exercised as well
+    // as the coin one: a round gold amount is where an empty unit shows up as `1g 0s 0c`.
+    h.send({ market: page([listing({ id: 1, itemId: 'ore', count: 1, price: 10_000 })]) });
+    await h.settle();
+    h.setWallClock(WALL_CLOCK_MS + HOUR_MS);
     h.send({
       market: page([
-        listing({ id: 1, itemId: 'ore', count: 1, price: 44 }),
-        listing({ id: 2, itemId: 'ore', count: 1, price: 10_000 }),
+        listing({ id: 2, itemId: 'ore', count: 1, price: 44 }),
+        listing({ id: 3, itemId: 'ore', count: 1, price: 20_000 }),
       ]),
     });
     await h.settle();
 
+    expect(tipOn('prices', 'ore')).toContain('median 50s 22c');
+    expect(tipOn('prices', 'ore')).not.toContain('0g');
     expect(figureOf('prices', 'ore')).toBe('low 44 copper');
-    expect(tipOn('prices', 'ore')).toContain('high 1g');
   });
 
   // One vote per visit. A median over every listing is weighted by how many people happened to
@@ -1353,44 +1395,54 @@ describe('the unit price', () => {
 // A page carries several asks for one item and they all land with the same stamp, so a line
 // drawn per listing zigzags between the cheapest and the dearest ask of a single visit at
 // whatever amplitude the sellers happened to disagree by. Those two readings are the same moment.
-describe('the trend line', () => {
-  it('draws nothing from a single visit, however many asks were on the counter', async () => {
+/**
+ * What a price row draws behind itself, which is nothing.
+ *
+ * There was a fill here for one session: where the latest reading sat inside everything the item
+ * had ever been seen at. It reads as a magnitude and is not one. A market price mostly does not
+ * move (a listing lives 48 sim-hours and a thin book reprices slowly), so the range is empty on
+ * nearly every item and the fill lands on the same half-width for every row on screen. Deals and
+ * Sold keep theirs because a share of the best profit and a share of what you earned are real
+ * shares; a price is not a share of anything.
+ */
+describe('the price row', () => {
+  it('draws no fill, because a price is not a share of anything', async () => {
     const h = await start();
-    h.send({
-      market: page([
-        listing({ id: 1, itemId: 'ore', price: 100 }),
-        listing({ id: 2, itemId: 'ore', price: 400 }),
-        listing({ id: 3, itemId: 'ore', price: 900 }),
-      ]),
-    });
-    await h.settle();
-
-    expect(sparkPoints('prices', 'ore')).toEqual([]);
-  });
-
-  it('draws one point per visit, at the cheapest ask of each', async () => {
-    const h = await start();
-    h.send({
-      market: page([
-        listing({ id: 1, itemId: 'ore', price: 100 }),
-        listing({ id: 2, itemId: 'ore', price: 400 }),
-      ]),
-    });
+    h.send({ market: page([listing({ id: 1, itemId: 'ore', price: 900 })]) });
     await h.settle();
     h.setWallClock(WALL_CLOCK_MS + HOUR_MS);
-    h.send({
-      market: page([
-        listing({ id: 3, itemId: 'ore', price: 300 }),
-        listing({ id: 4, itemId: 'ore', price: 800 }),
-      ]),
-    });
+    h.send({ market: page([listing({ id: 2, itemId: 'ore', price: 100 })]) });
     await h.settle();
 
-    // Four readings, two visits, so two points: 100 then 300. A line per listing would
-    // be four, and would fall between the two visits it is meant to show rising.
-    expect(sparkPoints('prices', 'ore')).toHaveLength(2);
-    expect(tipOn('prices', 'ore')).toContain('2 visits');
-    expect(tipOn('prices', 'ore')).toContain('Latest 3s');
+    // The kit always paints a fill element; what a price row never does is give it a width.
+    expect(fillOf('prices', 'ore')).toBe('0.00%');
+  });
+
+  // Four figures saying one number is what a thin book produces, and it was the ordinary case
+  // rather than the odd one: most items are read at the same cheapest ask every visit.
+  it('says a price that has not moved once rather than four times', async () => {
+    const h = await start();
+    h.send({ market: page([listing({ id: 1, itemId: 'ore', price: 500 })]) });
+    await h.settle();
+    h.setWallClock(WALL_CLOCK_MS + HOUR_MS);
+    h.send({ market: page([listing({ id: 2, itemId: 'ore', price: 500 })]) });
+    await h.settle();
+
+    const tip = tipOn('prices', 'ore');
+    expect(tip).toContain('5s each, unchanged over 2 visits');
+    expect(tip).not.toContain('median');
+  });
+
+  it('draws the low, the median and the latest once the price has moved', async () => {
+    const h = await start();
+    h.send({ market: page([listing({ id: 1, itemId: 'ore', price: 900 })]) });
+    await h.settle();
+    h.setWallClock(WALL_CLOCK_MS + HOUR_MS);
+    h.send({ market: page([listing({ id: 2, itemId: 'ore', price: 100 })]) });
+    await h.settle();
+
+    const tip = tipOn('prices', 'ore');
+    expect(tip).toContain('Low 1s each, median 5s, latest 1s');
   });
 });
 
@@ -1441,7 +1493,10 @@ describe('the undercut check', () => {
       ]),
     });
     await h.settle();
-    expect(tipOn('mine', '1')).toContain('Yours is the cheapest');
+    // The rival LINE is what moves with the page, and it is the assertion for that reason: the
+    // verdict word lives on the row, and repeating it in the tooltip was the tooltip restating
+    // the thing the player is pointing at.
+    expect(tipOn('mine', '1')).toContain('Cheapest competing listing: 5s');
 
     h.send({
       market: page([
@@ -1540,7 +1595,10 @@ describe('the Merchant terms', () => {
     h.send({ market: page([listing({ id: 1, itemId: 'ore', price: 1000, mine: true })]) });
     await h.settle();
 
-    expect(statFor('cut')).toBe(`${String(CUT_PCT)}%`);
+    // The cut left the header strip: it is a constant a player learns once, and the strip is
+    // three figures now rather than five. It is still READ off every page, and still said, in
+    // the tooltip the strip carries and on the row where it changes an amount.
+    expect(tipOnStrip()).toContain(`${String(CUT_PCT)}%`);
     // 7 percent of 1000 copper is 70, so 930 lands.
     expect(tipOn('mine', '1')).toContain('nets 9s 30c');
   });
@@ -1606,8 +1664,10 @@ describe('the bus', () => {
     h.publish({ id: 'ore', name: 'Copper Ore' }, PUBLISHER);
     await h.settle();
 
+    // The label IS the guarantee. The tooltip used to carry a "Name published by <fqid>" line as
+    // well, which was the addon telling the player how it works, once per hover, on every row
+    // that worked correctly.
     expect(labelOf('prices', 'ore')).toBe('Copper Ore');
-    expect(tipOn('prices', 'ore')).toContain(PUBLISHER);
   });
 
   it('ignores a payload that is not an item record', async () => {
@@ -1742,12 +1802,17 @@ describe('the panel', () => {
     expect(tipOn('prices', 'ore')).toContain('2 different searches');
   });
 
-  it('says nothing here can act on a listing', async () => {
+  // There was a line here on every listing's tooltip saying the panel cannot cancel or relist.
+  // It is gone, and nothing is lost: read-only is enforced by there being no send API at all,
+  // disclosed by the manifest's permissions, and evidenced by the panel having no control on it.
+  // A sentence repeated on every hover was not what was holding the promise up. What IS worth
+  // pinning is that no button ever appears beside a listing.
+  it('offers no control on a listing of its own', async () => {
     const h = await start();
     h.send({ market: page([listing({ id: 4, itemId: 'ore', mine: true })]) });
     await h.settle();
 
-    expect(tipOn('mine', '4')).toContain('not a control');
+    expect(rowIn('mine', '4')?.querySelector('button')).toBe(null);
   });
 
   it('toggles with its keybind', async () => {
@@ -1761,5 +1826,513 @@ describe('the panel', () => {
 
     h.press('Alt+KeyL');
     expect(frame?.classList.contains('woc-hidden')).toBe(false);
+  });
+});
+
+/**
+ * The deal scan, which is the one thing here that tells a player to act.
+ *
+ * Every figure is asserted in COPPER rather than as a discount, because a percentage is the
+ * ranking that looks right and is wrong: nine tenths off a three copper item is twenty seven
+ * copper and belongs under a four percent shave on a stack worth gold. The suite's cut is 7
+ * percent rather than the game's 5, so a resale figure computed against a hardcoded cut fails
+ * here rather than agreeing with a fixture that shares its mistake.
+ *
+ * The item ids are REAL ones, because the vendor floor is read from the shipped table and a
+ * made-up id has no floor: `copper_ore` is 4 copper a unit and `iron_ore` is 8, at game 0.35.1.
+ *
+ * Two of these cases exist because of how the addon is wired rather than because of what it
+ * shows. The baseline case pins that a visit is left out of the median it is judged against,
+ * which is not a preference: `foldPage` writes the live page into the series BEFORE anything
+ * reads it, so the naive median contains the very listing being called cheap and the panel
+ * invents a bargain out of one stranger's price. The accumulation case pins that paging does not
+ * erase what the last page found, which is the difference between a scanner and a page viewer.
+ */
+describe('the deal scan', () => {
+  it('reports a stack under the vendor floor at what the vendor would clear', async () => {
+    const h = await start({ settings: { 'min-profit': 0 } });
+    // 20 copper ore for 60 copper the lot. A vendor pays 4 each, so 80 for 20, so 20 clear.
+    h.send({ market: page([listing({ id: 1, itemId: 'copper_ore', count: 20, price: 60 })]) });
+    await h.settle();
+
+    expect(keysIn('deals')).toEqual(['1']);
+    expect(figureOf('deals', '1')).toContain('20 copper');
+    expect(detailOf('deals', '1')).toContain('vendor floor');
+  });
+
+  // The flag exists to REFUSE a claim. No shipped item carries it beside a sell value today, so
+  // the table is replaced here rather than hunting for one: the case this guards is content
+  // giving a vendor-refused item a price, and that is exactly what this fixture is.
+  it('promises no vendor sale for an item a vendor refuses to buy', async () => {
+    const refused = JSON.stringify({
+      gameVersion: '0.0.0-test',
+      items: [{ id: 'copper_ore', sellValue: 4, noVendorSell: true }],
+    });
+    const h = await start({ floors: refused, settings: { 'min-profit': 0 } });
+    h.send({ market: page([listing({ id: 1, itemId: 'copper_ore', count: 20, price: 60 })]) });
+    await h.settle();
+
+    expect(keysIn('deals')).toEqual([]);
+  });
+
+  // A player whose fetch failed keeps every estimate and loses every certainty. The panel must
+  // not quietly fall back to calling an estimate certain, which is the failure that would look
+  // like the feature working.
+  it('claims nothing certain when the floor table never arrived', async () => {
+    const h = await start({ floors: null, settings: { 'min-profit': 0 } });
+    h.send({ market: page([listing({ id: 1, itemId: 'copper_ore', count: 20, price: 60 })]) });
+    await h.settle();
+
+    expect(keysIn('deals')).toEqual([]);
+  });
+
+  it('anchors a resale on the next cheapest ask, with the cut taken off', async () => {
+    const h = await start({ settings: { 'min-profit': 0 } });
+    // The cheapest is 10 iron ore for 200. The next ask is 40 each, so a resale grosses 400 and
+    // clears 372 at the suite's 7 percent, so 172 over what the stack cost.
+    h.send({
+      market: page([
+        listing({ id: 1, itemId: 'iron_ore', count: 10, price: 200 }),
+        listing({ id: 2, itemId: 'iron_ore', count: 10, price: 400, sellerName: 'Rival' }),
+        listing({ id: 3, itemId: 'iron_ore', count: 10, price: 500 }),
+      ]),
+    });
+    await h.settle();
+
+    expect(figureOf('deals', '1')).toContain('1 silver, 72 copper');
+    // The count is the confidence, and it is the whole of it: two rivals stand behind the price
+    // this was worked out against, which a reader can weigh without learning a grading word.
+    expect(detailOf('deals', '1')).toContain('2 rivals');
+  });
+
+  // Only the cheapest listing of an item can be one, and it falls out of the arithmetic: to sell
+  // you have to be the cheapest, so what you can ask is set by whoever is left after you buy.
+  it('offers the cheapest listing of an item and not the ones above it', async () => {
+    const h = await start({ settings: { 'min-profit': 0 } });
+    h.send({
+      market: page([
+        listing({ id: 1, itemId: 'iron_ore', count: 10, price: 200 }),
+        listing({ id: 2, itemId: 'iron_ore', count: 10, price: 400 }),
+        listing({ id: 3, itemId: 'iron_ore', count: 10, price: 500 }),
+      ]),
+    });
+    await h.settle();
+
+    expect(keysIn('deals')).toEqual(['1']);
+  });
+
+  // The Merchant's own stock never depletes and never expires, so it is a price the item can be
+  // had at forever. Anchoring a resale above one is planning to undercut a counter that will
+  // still be open tomorrow.
+  it('will not anchor above the standing stock the Merchant always has', async () => {
+    const h = await start({ settings: { 'min-profit': 0 } });
+    h.send({
+      market: page([
+        listing({ id: 1, itemId: 'iron_ore', count: 10, price: 200 }),
+        listing({ id: 2, itemId: 'iron_ore', count: 10, price: 900, sellerName: 'Rival' }),
+        // 25 each forever, which caps the resale at 250 gross, 232 after the cut, 32 clear.
+        listing({ id: 3, itemId: 'iron_ore', count: 4, price: 100, house: true }),
+      ]),
+    });
+    await h.settle();
+
+    expect(figureOf('deals', '1')).toContain('32 copper');
+  });
+
+  // The cap on an anchor happens to cover most of this already, since a house row's own price
+  // is its own ceiling. The rule is separate from the arithmetic and is pinned separately: the
+  // stock never depletes, so buying it moves no price and reselling it competes with a counter
+  // that is still open tomorrow. The table is replaced to make the guard reachable at all.
+  it('never offers the standing stock itself as something to buy', async () => {
+    const rich = JSON.stringify({
+      gameVersion: '0.0.0-test',
+      items: [{ id: 'iron_ore', sellValue: 100 }],
+    });
+    const h = await start({ floors: rich, settings: { 'min-profit': 0 } });
+    h.send({
+      market: page([listing({ id: 3, itemId: 'iron_ore', count: 10, price: 100, house: true })]),
+    });
+    await h.settle();
+
+    expect(keysIn('deals')).toEqual([]);
+  });
+
+  it('leaves the visit it is recording out of the baseline it judges against', async () => {
+    const h = await start({ settings: { 'min-profit': 0 } });
+    // Three earlier visits, at 20, 40 and 60 a unit, each its own trip. The SPREAD is what makes
+    // this test able to fail: a median over three points absorbs one outlier whatever you do, so
+    // a fixture with three equal readings would pass against the bug it is here to catch.
+    const earlier = [200, 400, 600];
+    await inSeries(earlier.entries(), async ([at, total]) => {
+      h.setWallClock(WALL_CLOCK_MS + at * (VISIT_WINDOW_MS + HOUR_MS));
+      h.send({ market: page([listing({ id: 9, itemId: 'iron_ore', count: 10, price: total })]) });
+      await h.settle();
+      h.send({ market: null });
+      await h.settle();
+    });
+    h.setWallClock(WALL_CLOCK_MS + earlier.length * (VISIT_WINDOW_MS + HOUR_MS));
+
+    // Now the only listing in the book is a cheap one, so this visit records a low of 10. The
+    // baseline is the median of 20, 40 and 60, which is 40. Counting this visit as well would
+    // make it the median of 10, 20, 40 and 60, which is 30, and the row would report 179 instead.
+    h.send({ market: page([listing({ id: 1, itemId: 'iron_ore', count: 10, price: 100 })]) });
+    await h.settle();
+
+    // 40 each over ten is 400 gross, 372 after the suite's cut, 272 over the 100 the stack cost.
+    expect(figureOf('deals', '1')).toContain('2 silver, 72 copper');
+    expect(detailOf('deals', '1')).toContain('3 visits');
+  });
+
+  it('keeps what an earlier page found while the player reads the next one', async () => {
+    const h = await start({ settings: { 'min-profit': 0 } });
+    h.send({
+      market: page([listing({ id: 1, itemId: 'copper_ore', count: 20, price: 60 })], {
+        page: 0,
+        pageCount: 2,
+      }),
+    });
+    await h.settle();
+    h.send({
+      market: page([listing({ id: 2, itemId: 'iron_ore', count: 20, price: 100 })], {
+        page: 1,
+        pageCount: 2,
+      }),
+    });
+    await h.settle();
+
+    expect([...keysIn('deals')].sort(byText)).toEqual(['1', '2']);
+  });
+
+  // A visit is a scan and walking away ends it. The buffer is a photograph of a book that moves,
+  // so carrying it off the counter would present an hour-old page as what is on sale now.
+  it('forgets the scan when the player walks away', async () => {
+    const h = await start({ settings: { 'min-profit': 0 } });
+    h.send({ market: page([listing({ id: 1, itemId: 'copper_ore', count: 20, price: 60 })]) });
+    await h.settle();
+    h.send({ market: null });
+    await h.settle();
+
+    expect(keysIn('deals')).toEqual([]);
+    expect(lineFor('deals-note')).toContain('standing at the Merchant');
+  });
+
+  it('ranks by what a stack clears rather than by how deep the discount is', async () => {
+    const h = await start({ settings: { 'min-profit': 0 } });
+    h.send({
+      market: page([
+        // A tenth of the going rate, and worth 33 copper.
+        listing({ id: 1, itemId: 'copper_ore', count: 10, price: 5 }),
+        listing({ id: 2, itemId: 'copper_ore', count: 10, price: 50 }),
+        // A fifth off, and worth several silver.
+        listing({ id: 3, itemId: 'iron_ore', count: 20, price: 800 }),
+        listing({ id: 4, itemId: 'iron_ore', count: 20, price: 1000 }),
+      ]),
+    });
+    await h.settle();
+
+    expect(keysIn('deals')).toEqual(['3', '1']);
+  });
+
+  it('holds back anything under the profit floor the player set', async () => {
+    const h = await start({ settings: { 'min-profit': 1000 } });
+    h.send({ market: page([listing({ id: 1, itemId: 'copper_ore', count: 20, price: 60 })]) });
+    await h.settle();
+
+    expect(keysIn('deals')).toEqual([]);
+    expect(lineFor('deals-note')).toContain('clears');
+  });
+
+  // The coverage line is the honest limit on everything in the pane, so it says what was read
+  // rather than presenting a page as the market.
+  it('says how much of the book it has actually read', async () => {
+    const h = await start({ settings: { 'min-profit': 0 } });
+    h.send({
+      market: page([listing({ id: 1, itemId: 'copper_ore', count: 20, price: 60 })], {
+        page: 0,
+        pageCount: 9,
+      }),
+    });
+    await h.settle();
+
+    // Under the list rather than in the tooltip: it is true of every row in the pane and it is
+    // the honest limit on all of them, so it belongs where it is read without hovering anything.
+    expect(lineFor('deals-note')).toContain('1 of 9 pages');
+  });
+});
+
+/**
+ * Staleness in the scan buffer, which is its own describe because the failure it causes is not
+ * an absent row but a WRONG one.
+ *
+ * A resale is priced against the cheapest thing in hand, so a listing that was bought an hour ago
+ * and is still in the buffer goes on setting the price the live page is judged against. It makes
+ * an ordinary listing look like a bargain, and it beats the correct anchor rather than merely
+ * sitting beside it, so nothing on screen says the figure came from a listing that is gone.
+ */
+describe('the scan buffer over time', () => {
+  it('stops anchoring on a listing this trip has not seen for a visit', async () => {
+    const h = await start({ settings: { 'min-profit': 0 } });
+    // A cheap iron listing, read once and never again.
+    h.send({ market: page([listing({ id: 5, itemId: 'iron_ore', count: 10, price: 100 })]) });
+    await h.settle();
+
+    // Long enough that one trip through the book has ended, and the book has moved on: the cheap
+    // row is gone and two dearer ones are what is there now.
+    h.setWallClock(WALL_CLOCK_MS + VISIT_WINDOW_MS + HOUR_MS);
+    h.send({
+      market: page([
+        listing({ id: 6, itemId: 'iron_ore', count: 10, price: 300 }),
+        listing({ id: 7, itemId: 'iron_ore', count: 10, price: 600 }),
+      ]),
+    });
+    await h.settle();
+
+    // The 300 stack is anchored on the 600 one beside it: 60 each grosses 600 and clears 558 at
+    // the suite's cut, so 258 over. Anchored on the vanished 100 stack it would be a loss and no
+    // row at all, and anchoring the OTHER way round is the bug: a buffer still holding the cheap
+    // row would price nothing against it, since 10 each is under both.
+    expect(keysIn('deals')).toEqual(['6']);
+    expect(figureOf('deals', '6')).toContain('2 silver, 58 copper');
+    expect(detailOf('deals', '6')).toContain('1 rival');
+  });
+});
+
+/**
+ * Heroic variants, which are the reason a book can show two rows with one name.
+ *
+ * A heroic upgrade is a separate item id with its own price and its own recorded series, and the
+ * game gives the pair one display name. Untagged, the panel draws two rows called the same thing
+ * at prices a long way apart, and reads as though it is reporting one item twice and disagreeing
+ * with itself. This is a correctness case rather than a cosmetic one: on a deal row the profit is
+ * right and the player cannot tell which of the two listings earns it.
+ */
+describe('two items with one name', () => {
+  it('tags the heroic one, so the pair can be told apart', async () => {
+    const h = await start({ settings: { 'min-profit': 0 } });
+    h.publish({ id: 'tuskblade', name: 'Wildheart Tuskblade', source: 'table' });
+    h.publish({
+      id: 'tuskblade_heroic',
+      name: 'Wildheart Tuskblade',
+      source: 'table',
+      heroicOf: 'tuskblade',
+    });
+    h.send({
+      market: page([
+        listing({ id: 1, itemId: 'tuskblade', price: 400 }),
+        listing({ id: 2, itemId: 'tuskblade_heroic', price: 9000 }),
+      ]),
+    });
+    await h.settle();
+
+    expect(labelOf('prices', 'tuskblade')).toBe('Wildheart Tuskblade');
+    expect(labelOf('prices', 'tuskblade_heroic')).toBe('Wildheart Tuskblade [HEROIC]');
+  });
+
+  // Nothing in the loader can separate the pair: `ui.icon.itemArtName` answers one name for both,
+  // because they share the art. Without a publisher the rows fall back to the raw ids, which do
+  // differ, so the failure is ugly and truthful rather than tidy and wrong.
+  it('falls back to ids when nobody has published the pair', async () => {
+    const h = await start({ settings: { 'min-profit': 0 } });
+    h.send({
+      market: page([
+        listing({ id: 1, itemId: 'tuskblade', price: 400 }),
+        listing({ id: 2, itemId: 'tuskblade_heroic', price: 9000 }),
+      ]),
+    });
+    await h.settle();
+
+    expect(labelOf('prices', 'tuskblade')).toBe('tuskblade');
+    expect(labelOf('prices', 'tuskblade_heroic')).toBe('tuskblade_heroic');
+  });
+});
+
+/**
+ * The filter echo, whose unset value is a WORD rather than a blank.
+ *
+ * `defaultMarketQuery` in the game's own sim fills the five enum axes with the string `all`, and
+ * only `search` is empty when nothing is chosen. Read literally, a player who has filtered
+ * nothing gets "Searching all, all, all, all, all" across the top of the panel, and a query
+ * signature that is never empty, so the ledger records every reading as having come from a
+ * search and no entry ever reports having read the whole book.
+ */
+describe('an unset filter', () => {
+  it('reads the game own word for nothing chosen as nothing chosen', async () => {
+    const h = await start();
+    h.send({
+      market: page([listing({ id: 1, itemId: 'ore', price: 500 })], {
+        filter: '',
+        itemType: 'all',
+        subtype: 'all',
+        armorClass: 'all',
+        primaryStat: 'all',
+        rarity: 'all',
+      }),
+    });
+    await h.settle();
+
+    expect(lineFor('status-line')).toBe('');
+    expect(tipOnStrip()).toContain('the whole book');
+  });
+
+  it('still names the axes a player did choose', async () => {
+    const h = await start();
+    h.send({
+      market: page([listing({ id: 1, itemId: 'ore', price: 500 })], {
+        filter: 'ore',
+        itemType: 'weapon',
+        subtype: 'all',
+        armorClass: 'all',
+        primaryStat: 'all',
+        rarity: 'all',
+      }),
+    });
+    await h.settle();
+
+    const said = lineFor('status-line');
+    expect(said).toContain('Searching ore, weapon:');
+    // The four unset axes are gone. Matched on the repeat rather than on the word, because the
+    // sentence legitimately ends by saying this is not all of the book.
+    expect(said).not.toContain('all, all');
+  });
+});
+
+/**
+ * What a resale can actually fetch, which is the half of a deal that is an estimate.
+ *
+ * Two failures live here and both overstate, which is the direction that costs a player money.
+ * The first is forgetting that the player's OWN listings are competition: a buyer takes the
+ * cheapest copy on the counter and does not care whose it is, so a player who has just bought a
+ * cheap copy and relisted it must not then be told to buy another and sell it at a price their
+ * own listing already undercuts. The second is choosing between two estimates of the same
+ * quantity by taking the better one, which systematically believes whichever source is most
+ * optimistic: on a thin item that is one stranger's asking price, and it sorts to the top of the
+ * list ahead of every well-evidenced row on it.
+ */
+describe('what a resale is priced against', () => {
+  it('counts the player own listing as competition', async () => {
+    const h = await start({ settings: { 'min-profit': 0 } });
+    h.send({
+      market: page([
+        // The player already bought a cheap one and relisted it just under the going rate.
+        listing({ id: 1, itemId: 'ore', price: 900, mine: true }),
+        listing({ id: 2, itemId: 'ore', price: 1000 }),
+        // One stranger asking a wild price, which is the only other listing there is.
+        listing({ id: 3, itemId: 'ore', price: 5000 }),
+      ]),
+    });
+    await h.settle();
+
+    // Nothing to do. Buying at 1000 to sell against the player's own 900 is a loss, and the
+    // 5000 ask is not reachable while that 900 is on the counter.
+    expect(keysIn('deals')).toEqual([]);
+  });
+
+  it('never offers a listing of the player own as something to buy', async () => {
+    const h = await start({ settings: { 'min-profit': 0 } });
+    h.send({
+      market: page([
+        listing({ id: 1, itemId: 'ore', price: 100, mine: true }),
+        listing({ id: 2, itemId: 'ore', price: 5000 }),
+      ]),
+    });
+    await h.settle();
+
+    expect(keysIn('deals')).toEqual([]);
+  });
+
+  it('prices a resale at the cheaper of what the page says and what it has recorded', async () => {
+    const h = await start({ settings: { 'min-profit': 0 } });
+    // Three earlier visits, at 10, 12 and 14 a unit, so the recorded median is 12.
+    const earlier = [1000, 1200, 1400];
+    await inSeries(earlier.entries(), async ([at, price]) => {
+      h.setWallClock(WALL_CLOCK_MS + at * (VISIT_WINDOW_MS + HOUR_MS));
+      h.send({ market: page([listing({ id: 90 + at, itemId: 'ore', count: 100, price })]) });
+      await h.settle();
+      h.send({ market: null });
+      await h.settle();
+    });
+    h.setWallClock(WALL_CLOCK_MS + earlier.length * (VISIT_WINDOW_MS + HOUR_MS));
+
+    h.send({
+      market: page([
+        listing({ id: 1, itemId: 'ore', count: 100, price: 1000 }),
+        // One stranger at five times the going rate, and the only rival on the page.
+        listing({ id: 2, itemId: 'ore', count: 100, price: 5000 }),
+      ]),
+    });
+    await h.settle();
+
+    // 12 each over 100 grosses 1200 and clears 1116 at the suite's cut, so 116 over the 1000 the
+    // stack cost. Believing the lone 5000 ask instead would report 3650, thirty times as much.
+    expect(figureOf('deals', '1')).toContain('1 silver, 16 copper');
+    expect(detailOf('deals', '1')).toContain('3 visits');
+  });
+});
+
+/**
+ * The one thing this pane can say that no figure on it can: that the listing standing between a
+ * resale and a sale belongs to the player.
+ *
+ * It is the answer to "why is this worth so little", and there is nowhere else to read it: the
+ * game's own window shows the player's listing among the rest with nothing to say it is what is
+ * holding the price down.
+ */
+describe('when the competition is your own', () => {
+  it('says so, and says what cancelling would leave', async () => {
+    const h = await start({ settings: { 'min-profit': 0 } });
+    h.send({
+      market: page([
+        listing({ id: 1, itemId: 'ore', count: 10, price: 3000, mine: true }),
+        listing({ id: 2, itemId: 'ore', count: 10, price: 1000 }),
+        listing({ id: 3, itemId: 'ore', count: 10, price: 9000 }),
+      ]),
+    });
+    await h.settle();
+
+    // Buying the 1000 stack and selling against the player's own 3000 clears 1790 at the suite's
+    // cut, and the 9000 ask is not reachable while that listing of theirs is up.
+    expect(figureOf('deals', '2')).toContain('17 silver, 90 copper');
+    expect(tipOn('deals', '2')).toContain('YOUR OWN');
+    expect(tipOn('deals', '2')).toContain('Cancelling it');
+  });
+});
+
+/**
+ * A stack posted at one item's price, which is the commonest real underpricing there is and the
+ * only one that says nothing about what the item is worth.
+ *
+ * Measured against the DEAREST estimate rather than the anchor a resale is priced at. Those are
+ * different questions: the anchor is deliberately the most cautious price any source will stand
+ * behind, and a typo measured against it stops looking like a typo the moment a cheaper source
+ * wins, which is exactly when the row most needs to say what happened.
+ */
+describe('a stack priced as one', () => {
+  it('is named even when the resale is anchored somewhere cheaper', async () => {
+    const h = await start({ settings: { 'min-profit': 0 } });
+    // Three visits at 100 a unit, so the recorded median is well under what the page is asking.
+    const earlier = [10_000, 10_000, 10_000];
+    await inSeries(earlier.entries(), async ([at, price]) => {
+      h.setWallClock(WALL_CLOCK_MS + at * (VISIT_WINDOW_MS + HOUR_MS));
+      h.send({ market: page([listing({ id: 90 + at, itemId: 'ore', count: 100, price })]) });
+      await h.settle();
+      h.send({ market: null });
+      await h.settle();
+    });
+    h.setWallClock(WALL_CLOCK_MS + earlier.length * (VISIT_WINDOW_MS + HOUR_MS));
+
+    h.send({
+      market: page([
+        // A hundred ore for the price of one, which is what a seller typing the unit price into
+        // the total field produces.
+        listing({ id: 1, itemId: 'ore', count: 100, price: 300 }),
+        listing({ id: 2, itemId: 'ore', count: 100, price: 30_000 }),
+      ]),
+    });
+    await h.settle();
+
+    // The resale is anchored on the recorded 100 each, which is the cheaper of the two, while the
+    // typo is judged against the 300 the page is asking for one.
+    expect(detailOf('deals', '1')).toContain('stack priced as one');
+    expect(detailOf('deals', '1')).toContain('3 visits');
   });
 });

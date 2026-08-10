@@ -16,6 +16,7 @@
 
 import { inSeries } from '../../loader/src/shared/sequence.ts';
 import type { Scenario, Stage, WorldDraft } from '../../stage/src/stage.ts';
+import FLOORS from './floors.json' with { type: 'json' };
 
 const SILVER = 100;
 const HOUR_MS = 60 * 60 * 1000;
@@ -321,6 +322,99 @@ function overCapped(draft: WorldDraft): void {
   });
 }
 
+/**
+ * What a scan finds, on top of the book the three browses already recorded.
+ *
+ * Every row here is a REAL underpricing of one of the four kinds the panel can tell apart, and
+ * each is priced against the shipped floor table at game 0.35.1 rather than against a figure
+ * chosen to look good:
+ *
+ *   The iron is the fat-finger: twenty ore posted for the price of ONE, which is what happens
+ *   when a seller types the unit price into the total field. It is the top row because it clears
+ *   the most, and the panel names the cause rather than calling it a bargain.
+ *   The potions are the case where two answers disagree and the smaller one is the true one: a
+ *   vendor pays 32 each whatever happens, and the resale looks like 245 each until the Merchant's
+ *   own shelf caps it at the 170 a vendor charges for one.
+ *   The hide is an ordinary undercut, firm because three visits stand behind the median.
+ *   The silk is the same shape with two visits behind it, so it is drawn and called thin.
+ */
+const UNDERPRICED: readonly Listing[] = [
+  {
+    id: 7001,
+    sellerName: 'Torvald',
+    itemId: 'iron_ore',
+    count: 20,
+    price: 132,
+    mine: false,
+    house: false,
+  },
+  {
+    id: 7002,
+    sellerName: 'Nessa',
+    itemId: 'healing_potion',
+    count: 5,
+    price: 100,
+    mine: false,
+    house: false,
+  },
+  {
+    id: 7003,
+    sellerName: 'Grimmet',
+    itemId: 'pristine_hide',
+    count: 1,
+    price: 700,
+    mine: false,
+    house: false,
+  },
+  {
+    id: 7004,
+    sellerName: 'Ilvane',
+    itemId: 'spider_silk',
+    count: 10,
+    price: 40,
+    mine: false,
+    house: false,
+  },
+  {
+    id: 7005,
+    sellerName: 'Doradine',
+    itemId: 'rough_hide',
+    count: 10,
+    price: 300,
+    mine: false,
+    house: false,
+  },
+  {
+    id: 7006,
+    sellerName: 'Vessken',
+    itemId: 'ghostly_essence',
+    count: 1,
+    price: 200,
+    mine: false,
+    house: false,
+  },
+];
+
+/** The wire field a page carries its rows under, so reading it needs no literal key. */
+const LISTINGS_FIELD = 'listings';
+
+/** The computed access `noPropertyAccessFromIndexSignature` asks for. See STYLE.md. */
+function rowsOn(payload: Record<string, unknown>, field: string): Listing[] {
+  return (payload[field] ?? []) as Listing[];
+}
+
+/**
+ * The page a scan is looking at: the third browse's book with the underpriced rows folded in and
+ * re-sorted, because the server sorts by display name then stack total and a fixture in any other
+ * order is a page it could not have sent.
+ */
+function scanPage(): Record<string, unknown> {
+  const base = pageFor(2);
+  const listings = [...rowsOn(base, LISTINGS_FIELD), ...UNDERPRICED];
+  listings.sort((a, b) => a.itemId.localeCompare(b.itemId) || a.price - b.price);
+  return { ...base, listings, totalCount: listings.length };
+}
+
 /** Walk away, which is a null page and NOT an empty market. */
 function noCounter(draft: WorldDraft): void {
   draft.set(draft.world, 'marketInfo', null);
@@ -334,6 +428,15 @@ function atTheMerchant(draft: WorldDraft): void {
   draft.set(draft.world, 'marketCollectPending', true);
   atCounter(draft, 0);
 }
+
+/**
+ * The shipped floor table, on EVERY scenario rather than only the one that draws a deal.
+ *
+ * A scenario without it is a player whose fetch failed, which is a real state and is not the one
+ * any of these picture: the two certain signals go quiet, and the panel that results looks like
+ * the ordinary one with a couple of rows missing.
+ */
+const FLOOR_DATA = { 'floors.json': JSON.stringify(FLOORS) };
 
 const SETTLE_MS = 60;
 
@@ -370,15 +473,18 @@ const ART_POLL_MS = 50;
  * a name, and not what it looks like on a machine that has finished loading. Waited on the fact
  * rather than on a delay, and the first row is enough because one manifest answers for every row.
  */
-function artLanded(stage: Stage): Promise<void> {
-  const wanted = (STALLS[0] as Stall).name;
+function artLanded(
+  stage: Stage,
+  list = 'prices',
+  wanted = (STALLS[0] as Stall).name,
+): Promise<void> {
   return new Promise((resolve) => {
     let waited = 0;
     const look = (): void => {
       // A frame per look, for the reason `drawn` runs one: the manifest landing asks for a
       // repaint and nothing on the stage performs one unless a scenario says so.
       stage.frame();
-      const label = document.querySelector('[data-list="prices"] .woc-bar-label')?.textContent;
+      const label = document.querySelector(`[data-list="${list}"] .woc-bar-label`)?.textContent;
       if (label === wanted || waited >= ART_MS) {
         resolve();
         return;
@@ -403,7 +509,6 @@ async function browsedForDays(stage: Stage): Promise<void> {
     atCounter(stage, at);
     await drawn(stage);
   });
-  await artLanded(stage);
 }
 
 /**
@@ -419,23 +524,62 @@ function openTab(label: string): void {
 }
 
 /**
- * A size the frame is genuinely draggable to: at its opening 400 by 480 nearly half the height is
- * chrome that cannot scroll. The WIDTH is also what fits three panes in one sheet: the capture
- * viewport is 1440 and each pane carries 24px a side with 16px between, so three of these come
- * to 1424 and anything wider is silently cropped at the right edge.
+ * A size the frame is genuinely draggable to. The WIDTH is what fits three panes in one sheet:
+ * the capture viewport is 1440 and each pane carries 24px a side with 16px between, so three of
+ * these come to 1424 and anything wider is silently cropped at the right edge.
+ *
+ * The HEIGHT came down from 620 when the rows lost the 16px lane they were each carrying for a
+ * trend line. A box is not allowed to shrink to fit a thin fixture, since the picture has to be
+ * the panel a player gets on install, but a box sized around rows half this tall is a panel with
+ * a third of itself empty, which reads as an addon that found nothing. It is set by the FULLEST
+ * pane rather than the emptiest: the ledger is nine rows over a search field, and a box that
+ * clips the ninth reads as broken in a Browse thumbnail, where a little air under six deal rows
+ * does not.
  */
-const WIDENED = { x: 80, y: 140, w: 416, h: 620 };
+const WIDENED = { x: 80, y: 140, w: 416, h: 515 };
 
+/**
+ * THREE panes fit the sheet and a fourth does not: the capture viewport is 1440, each pane
+ * carries 24px a side and they sit 16px apart, so `3 * (416 + 48) + 2 * 16` is 1424 and a fourth
+ * would be cropped at the right edge with nothing to report it. Deals took the third slot from
+ * Sold, because what a player decides on in Browse is whether an addon will find them money.
+ */
 const SCENARIOS: readonly Scenario[] = [
+  {
+    id: 'deals',
+    label: 'A scan that found something',
+    preview: true,
+    caption: 'What to buy',
+    alt: 'underpriced listings ranked by what each clears',
+    data: FLOOR_DATA,
+    frames: { ledger: { box: WIDENED, visible: true } },
+    world: atTheMerchant,
+    run: async (stage) => {
+      await browsedForDays(stage);
+      // The scan itself, which is a page read AFTER the history exists: a deal is a listing
+      // judged against everything already written down, so a scenario that showed one with no
+      // ledger behind it would be picturing a state the panel cannot reason from.
+      stage.set(stage.world, 'marketInfo', scanPage());
+      await drawn(stage);
+      await artLanded(stage, 'deals', 'Iron Ore x20');
+    },
+  },
   {
     id: 'prices',
     label: 'The ledger, three days in',
     preview: true,
     caption: 'The ledger',
-    alt: 'recorded prices over their own trends',
+    alt: 'every price recorded, each against its own range',
+    data: FLOOR_DATA,
     frames: { ledger: { box: WIDENED, visible: true } },
     world: atTheMerchant,
-    run: browsedForDays,
+    run: async (stage) => {
+      await browsedForDays(stage);
+      // ASKED for, because the panel opens on Deals while the player is at a counter. Without
+      // this the scenario photographs the Deals pane under a caption that says The ledger.
+      openTab('Prices');
+      await artLanded(stage);
+    },
   },
   {
     id: 'mine',
@@ -443,11 +587,16 @@ const SCENARIOS: readonly Scenario[] = [
     preview: true,
     caption: 'Your listings',
     alt: 'undercuts washed red',
+    data: FLOOR_DATA,
     frames: { ledger: { box: WIDENED, visible: true } },
     world: atTheMerchant,
     run: async (stage) => {
       await browsedForDays(stage);
+      // The TAB first, then the art wait on the list that tab shows. Waiting on Prices from here
+      // costs the whole five second timeout, because the panel opens on Deals at a counter and a
+      // pane it has switched away from is not what this shot is of.
       openTab('Yours');
+      await artLanded(stage, 'mine');
       stage.frame();
       await pause(SETTLE_MS);
     },
@@ -455,14 +604,13 @@ const SCENARIOS: readonly Scenario[] = [
   {
     id: 'sold',
     label: 'What it actually sold for',
-    preview: true,
-    caption: 'What sold',
-    alt: 'what a buyer paid, per item',
+    data: FLOOR_DATA,
     frames: { ledger: { box: WIDENED, visible: true } },
     world: atTheMerchant,
     run: async (stage) => {
       await browsedForDays(stage);
       openTab('Sold');
+      await artLanded(stage, 'sold');
       stage.frame();
       await pause(SETTLE_MS);
     },
@@ -474,6 +622,7 @@ const SCENARIOS: readonly Scenario[] = [
     // list as a whole one. Worth looking at rather than photographing: the normal state is none.
     id: 'omitted',
     label: 'More sold than the Merchant will itemize',
+    data: FLOOR_DATA,
     frames: { ledger: { box: WIDENED, visible: true } },
     world: atTheMerchant,
     run: async (stage) => {
@@ -491,6 +640,7 @@ const SCENARIOS: readonly Scenario[] = [
     // standing in a town are different facts and the panel says which.
     id: 'away',
     label: 'Walked away from the Merchant',
+    data: FLOOR_DATA,
     frames: { ledger: { box: WIDENED, visible: true } },
     world: atTheMerchant,
     run: async (stage) => {
@@ -504,6 +654,7 @@ const SCENARIOS: readonly Scenario[] = [
     // day they install this and is the state nobody thinks to photograph.
     id: 'empty',
     label: 'Before the first page is read',
+    data: FLOOR_DATA,
     frames: { ledger: { box: WIDENED, visible: true } },
     world: noCounter,
     run: drawn,
@@ -515,6 +666,7 @@ const SCENARIOS: readonly Scenario[] = [
     // rather than photographing.
     id: 'resync',
     label: 'The reconnect blip',
+    data: FLOOR_DATA,
     frames: { ledger: { box: WIDENED, visible: true } },
     world: atTheMerchant,
     run: async (stage) => {

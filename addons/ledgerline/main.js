@@ -116,6 +116,38 @@ const WRITE_HOLD_MS = 2 * MS_PER_SECOND;
 /** How many item rows are drawn before the pane asks the player to narrow it. */
 const MAX_ROWS = 40;
 
+/** The vendor floor table this addon ships. Declared on the manifest, so `woc.data` will serve it. */
+const FLOORS_FILE = 'floors.json';
+
+/**
+ * Every listing seen at ONE visit to the counter, which is what makes a scan a scan.
+ *
+ * A page replaces the last one on the wire, so without this the panel forgets page 2 the moment
+ * the player reaches page 3 and a deal can only ever be found on the page being looked at. The
+ * ceiling is on listings rather than items because the book is paged 50 rows at a time and a
+ * player working a filter reads a few hundred; the oldest reading goes first, since the book
+ * moves under a scan and the stalest row is the one most likely to be gone.
+ */
+const MAX_SCAN = 1500;
+
+/**
+ * How many OTHER listings of an item have to be in hand before their second-cheapest is treated
+ * as a price rather than as one stranger's opinion, and how many prior visits before a recorded
+ * median is. Three of either is where a figure stops being a coin flip; two is drawn and said to
+ * be thin; one is not a comparison at all and fires nothing.
+ */
+const FIRM_RIVALS = 3;
+const FIRM_VISITS = 3;
+const THIN_EVIDENCE = 2;
+
+/**
+ * How close a stack's TOTAL has to sit to a plausible unit price before the cheapness is
+ * reported as a typo rather than as a bargain. A tenth: the fat-finger this catches is a whole
+ * stack posted at one item's price, which lands within rounding of the anchor rather than near
+ * it.
+ */
+const STACK_SLIP = 0.1;
+
 /** What the kit's layout boxes are spaced at here: a pane's rows, and a stat's two words. */
 const PANE_GAP = 4;
 const STAT_GAP = 4;
@@ -137,19 +169,17 @@ const MIN_WIDTH = 320;
 const CHROME_HEIGHT = 240;
 const ROW_HEIGHT = 48;
 
-/** The sparkline, which is the one thing on screen the kit has no widget for. */
-const SVG_NS = 'http://www.w3.org/2000/svg';
-const SPARK_WIDTH = 140;
-const SPARK_HEIGHT = 16;
-const SPARK_PAD = 2;
 /**
- * Two visits is the fewest that can be a line. One draws NOTHING rather than a dot: a mark on an
- * empty box reads as a flat price, and the reading count beside it already says it was seen once.
+ * The filter axes the server echoes, in the game's own field names rather than ones of ours.
+ *
+ * `filter` is free text and is empty when unset. The other five are ENUMS whose unset value is
+ * the word `all`, which is not a filter and must never be read as one: taken literally, a player
+ * who has filtered nothing gets "Searching all, all, all, all, all" across the top of the panel.
  */
-const MIN_SPARK_POINTS = 2;
-
-/** The filter axes the server echoes, in the game's own field names rather than ones of ours. */
 const QUERY_FIELDS = ['filter', 'itemType', 'subtype', 'armorClass', 'primaryStat', 'rarity'];
+
+/** What the five enum axes carry when nothing is chosen. `defaultMarketQuery` in the game's sim. */
+const NO_FILTER = 'all';
 
 /** What a query with nothing set is called, so a series can say which it came from. */
 const NO_QUERY = 'the whole book';
@@ -163,6 +193,28 @@ function cell(value) {
 const names = new Map();
 /** Item id to its recorded series. See `emptySeries`. */
 const series = new Map();
+/** Item id to `{ sellValue?, buyValue?, noVendorSell? }`, off the shipped table. See `readFloors`. */
+const floors = new Map();
+/** Which game the floor table was read from, because a price is a claim about a version. */
+const floorsFrom = { version: '' };
+/**
+ * Listing id to what was seen of it at this visit to the counter. MEMORY ONLY, and deliberately:
+ * it is a photograph of a book that moves, so a persisted one would be presented as current an
+ * hour after it stopped being true.
+ */
+const scan = new Map();
+/** Query signature to which pages of it have been read this visit, and how big it said it was. */
+const covered = new Map();
+/** Listing ids already announced this visit, so paging back over one is not a second toast. */
+const announced = new Set();
+/**
+ * What each pane last DREW, for the tooltips to read.
+ *
+ * A tooltip's content function runs when the pointer arrives, which is after the paint that put
+ * the row there, so it cannot recompute from the buffer without risking answering about a
+ * different reading than the one under the pointer.
+ */
+const shown = { deals: new Map() };
 /** Whether a write is already waiting on its timer. See `keep`. */
 const saving = cell(false);
 /** Listing id to the first time this addon saw one of the player's OWN listings. */
@@ -215,6 +267,23 @@ function alerting() {
   return woc.settings['undercut-alert'];
 }
 
+function minProfit() {
+  return woc.settings['min-profit'];
+}
+
+/** Zero announces nothing, which is what the setting's own label promises. */
+function announceOver() {
+  return woc.settings['alert-profit'];
+}
+
+function announcingAloud() {
+  return woc.settings['alert-sound'];
+}
+
+function dealsFirst() {
+  return woc.settings['deals-first'];
+}
+
 function text(value) {
   if (typeof value === 'string') {
     return value;
@@ -240,6 +309,27 @@ function fieldText(source, name) {
     return '';
   }
   return text(source[name]);
+}
+
+/** One filter axis, with the game's own "nothing chosen" spelling read as nothing chosen. */
+function axisText(source, name) {
+  const value = fieldText(source, name);
+  if (value === NO_FILTER) {
+    return '';
+  }
+  return value;
+}
+
+/**
+ * The lines that had something to say.
+ *
+ * Every note builder answers null for the ordinary case, so a tooltip is assembled by listing
+ * every line it COULD carry and letting the ones with nothing to add drop out. That is what
+ * keeps a tooltip at two lines on a row where nothing is unusual and at five on one where four
+ * things are.
+ */
+function spoken(lines) {
+  return lines.filter((note) => note !== null);
 }
 
 /** Copper as TEXT, for the tooltip lines and the strip. A bar's figure takes the amount. */
@@ -276,6 +366,30 @@ function agoText(at) {
   return unitAgo(Math.floor(ms / DAY_MS), 'day');
 }
 
+/**
+ * The same age as `agoText`, in the fewest characters that still say it.
+ *
+ * A row's second line is read by the column it sits in rather than as a sentence, so "6 hours
+ * ago" is five words where "6h" is the fact. The long form stays, for the tooltips, where the
+ * line IS a sentence.
+ */
+function briefAgo(at) {
+  if (!Number.isFinite(at) || at <= 0) {
+    return 'never';
+  }
+  const ms = Math.max(0, woc.wallClock() - at);
+  if (ms < MINUTE_MS) {
+    return 'now';
+  }
+  if (ms < HOUR_MS) {
+    return `${String(Math.floor(ms / MINUTE_MS))}m`;
+  }
+  if (ms < DAY_MS) {
+    return `${String(Math.floor(ms / HOUR_MS))}h`;
+  }
+  return `${String(Math.floor(ms / DAY_MS))}d`;
+}
+
 /** What somebody published about an id, or null while nobody has. */
 function known(itemId) {
   return names.get(itemId) ?? null;
@@ -290,11 +404,34 @@ function artName(itemId) {
 }
 
 /**
+ * The tag a heroic variant wears, which is `lorebind`'s own so that two addons naming one item
+ * name it the same way.
+ */
+const HEROIC_TAG = '[HEROIC]';
+
+/**
  * Never blank. A publisher outranks the loader here, which inverts the usual order: what the
  * loader has is an art file's name and says so in its own documentation.
+ *
+ * THE TAG IS NOT DECORATION. A heroic upgrade is a separate item with a separate id, a separate
+ * price and a separate series, and the game gives the pair ONE display name: 63 of them at game
+ * 0.35.1. Untagged, a book with both in it draws two rows called Wildheart Tuskblade at prices a
+ * long way apart, and there is nothing on screen to say why, so the panel reads as though it is
+ * reporting one item twice and disagreeing with itself. Worse on a deal row, where the profit is
+ * true and the player cannot tell which of the two listings it was worked out for.
+ *
+ * It rides on `heroicOf`, which `lorebind` publishes, so an installed publisher is what makes
+ * the pair separable at all: `ui.icon.itemArtName` has one name for both. Without one the rows
+ * fall back to the raw ids, which differ, so the failure degrades into something ugly and
+ * truthful rather than into something tidy and wrong.
  */
 function nameOf(itemId) {
-  return known(itemId)?.name ?? artName(itemId) ?? itemId;
+  const record = known(itemId);
+  const name = record?.name ?? artName(itemId) ?? itemId;
+  if (record?.heroicOf === undefined || record.heroicOf === '') {
+    return name;
+  }
+  return `${name} ${HEROIC_TAG}`;
 }
 
 /**
@@ -310,7 +447,116 @@ function parseItem(payload) {
   if (itemId === '' || name === '') {
     return null;
   }
-  return { id: itemId, name, quality: text(payload.quality), kind: text(payload.kind) };
+  return {
+    id: itemId,
+    name,
+    quality: text(payload.quality),
+    kind: text(payload.kind),
+    // The id this one upgrades, which is the ONLY thing separating two rows that carry the same
+    // display name. See `nameOf`.
+    heroicOf: text(payload.heroicOf),
+    // A publisher's floor OUTRANKS the shipped table, because a running lorebind may have been
+    // regenerated against a newer game than this addon's own file was.
+    sellValue: positiveOr(payload.sellValue, null),
+  };
+}
+
+/** A price somebody else stated, or the fallback. Zero is not a floor and neither is a negative. */
+function positiveOr(value, fallback) {
+  const parsed = Number(value);
+  if (Number.isFinite(parsed) && parsed > 0) {
+    return Math.round(parsed);
+  }
+  return fallback;
+}
+
+/**
+ * One row of the shipped table, checked. `woc.data` hands back `unknown`: the loader proves the
+ * file is JSON when it fetches it and says nothing about what is inside.
+ */
+function readFloor(value) {
+  if (typeof value !== 'object' || value === null) {
+    return null;
+  }
+  const itemId = text(value.id);
+  if (itemId === '') {
+    return null;
+  }
+  return {
+    id: itemId,
+    sellValue: positiveOr(value.sellValue, null),
+    buyValue: positiveOr(value.buyValue, null),
+    noVendorSell: value.noVendorSell === true,
+  };
+}
+
+/**
+ * The table, or null. A failure here costs the two CERTAIN signals and nothing else, so it is
+ * reported and the addon carries on: everything the ledger itself does is unaffected.
+ */
+function readFloors(value) {
+  if (typeof value !== 'object' || value === null || !Array.isArray(value.items)) {
+    return null;
+  }
+  const rows = [];
+  for (const entry of value.items) {
+    const row = readFloor(entry);
+    if (row !== null) {
+      rows.push(row);
+    }
+  }
+  if (rows.length === 0) {
+    return null;
+  }
+  return { version: text(value.gameVersion), rows };
+}
+
+/**
+ * What a vendor pays per unit, or null where nothing can be claimed.
+ *
+ * Null covers three different facts that must not be told apart by the caller, because all three
+ * mean the same thing to a trader: no table row, a row with no `sellValue`, and a row the vendor
+ * refuses outright. The last is why `noVendorSell` is in the file at all: without it the two
+ * hundred items a vendor will not touch would each be offered as a guaranteed sale.
+ */
+function vendorFloor(itemId) {
+  const held = floors.get(itemId);
+  if (held === undefined || held.noVendorSell) {
+    return null;
+  }
+  const published = known(itemId)?.sellValue ?? null;
+  return published ?? held.sellValue;
+}
+
+/**
+ * The lowest price at which the item is available FOREVER, per unit, or null.
+ *
+ * Two sources and they are the same fact: the Merchant's own standing stock, which never
+ * depletes and never expires, and the vendor's shop price. An ask above either can never sell,
+ * because the buyer walks to a counter that will still be selling it tomorrow. The house rows
+ * arrive on the page, so that half needs no table.
+ */
+function everCeiling(itemId, page) {
+  const shop = floors.get(itemId)?.buyValue ?? null;
+  const house = housePrice(itemId, page);
+  if (shop === null) {
+    return house;
+  }
+  if (house === null) {
+    return shop;
+  }
+  return Math.min(shop, house);
+}
+
+/** The Merchant's own standing stock for an item on this page, per unit, or null. */
+function housePrice(itemId, page) {
+  let low = null;
+  for (const row of page.others) {
+    if (row.house && row.itemId === itemId && (low === null || row.unit < low)) {
+      low = row.unit;
+    }
+  }
+  return low;
 }
 
 function remember(payload, from) {
@@ -378,7 +624,7 @@ function makeRow(row) {
  * joining six blanks: it is stored on every visit of every item.
  */
 function querySignature(info) {
-  const parts = QUERY_FIELDS.map((name) => fieldText(info, name));
+  const parts = QUERY_FIELDS.map((name) => axisText(info, name));
   if (parts.every((part) => part === '')) {
     return '';
   }
@@ -387,7 +633,7 @@ function querySignature(info) {
 
 /** The same query, as something a tooltip can say. */
 function queryLabel(info) {
-  const parts = QUERY_FIELDS.map((name) => fieldText(info, name)).filter((part) => part !== '');
+  const parts = QUERY_FIELDS.map((name) => axisText(info, name)).filter((part) => part !== '');
   if (parts.length === 0) {
     return NO_QUERY;
   }
@@ -799,11 +1045,6 @@ function soldStats(record) {
   };
 }
 
-/** What each sale fetched per item, in the order they were drained, which is what a line is. */
-function soldTrend(record) {
-  return record.sales.map((entry) => entry.unit);
-}
-
 /**
  * The retention setting, raised where the whole-record ceiling bites first. One reading of every
  * stamp rather than a sort per item, since the ceiling is over the record.
@@ -943,9 +1184,337 @@ function median(units, middle) {
   return ((units[middle - 1] ?? 0) + (units[middle] ?? 0)) / 2;
 }
 
-/** The cheapest ask at each visit, oldest first, which is what a trend is. */
-function trendOf(record) {
-  return record.visits.map((visit) => visit.low);
+/**
+ * Every listing on this page into the visit's buffer, and what the page said about its own size.
+ *
+ * A row is never edited once it exists, so re-seeing one moves nothing but the stamp. Deliberate:
+ * a price that appeared to change would be the wire surprising us, and overwriting it here is how
+ * that would go unnoticed.
+ */
+function foldScan(page) {
+  // YOUR OWN LISTINGS TOO. They are not something to buy, and `buyableDeal` refuses them, but
+  // they are absolutely competition: a buyer takes the cheapest copy on the counter and does not
+  // care whose it is. Left out, the panel prices a resale against strangers alone, so a player
+  // who has just bought a cheap copy and relisted it is told to buy another and sell it at a
+  // price their own listing is already undercutting. That is the case this fold exists for.
+  for (const row of [...page.mine, ...page.others]) {
+    if (row.itemId !== '') {
+      rememberOffer(row, page);
+    }
+  }
+  noteCoverage(page);
+  dropStale(page.at);
+  trimScan();
+}
+
+/**
+ * Forget a listing this trip has stopped seeing.
+ *
+ * Walking away is not the only way a reading goes stale, and it is not the common one: a player
+ * can stand at the counter for an hour, and a row read at the start of it may have been bought
+ * long since. Worse, a stale row is not merely absent from the display, it ANCHORS one: the
+ * cheapest thing in the buffer is what a resale is priced against, so yesterday's cheap listing
+ * makes today's ordinary one look like a bargain and quietly beats the live page it should be
+ * losing to. The same window a visit is folded over, for the same reason: it is how long one
+ * trip through the book lasts.
+ */
+function dropStale(now) {
+  const cutoff = now - VISIT_WINDOW_MS;
+  for (const [id, row] of scan) {
+    if (row.lastSeen < cutoff) {
+      scan.delete(id);
+    }
+  }
+}
+
+/** One listing into the buffer. A row is never edited, so re-seeing one moves the stamp alone. */
+function rememberOffer(row, page) {
+  const held = scan.get(row.id);
+  if (held === undefined) {
+    scan.set(row.id, { ...row, firstSeen: page.at, lastSeen: page.at, query: page.queryText });
+    return;
+  }
+  held.lastSeen = page.at;
+}
+
+/** How much of each query has been read this visit, which is the honest limit on every figure. */
+function noteCoverage(page) {
+  const held = covered.get(page.query) ?? { label: page.queryText, pages: new Set() };
+  held.pages.add(page.page);
+  held.pageCount = page.pageCount;
+  held.totalCount = page.totalCount;
+  covered.set(page.query, held);
+}
+
+/** The stalest reading goes first: the book moves under a scan, so the oldest row is the likeliest gone. */
+function trimScan() {
+  if (scan.size <= MAX_SCAN) {
+    return;
+  }
+  const order = [...scan.values()].sort((a, b) => a.lastSeen - b.lastSeen);
+  for (const row of order.slice(0, scan.size - MAX_SCAN)) {
+    scan.delete(row.id);
+  }
+}
+
+/** A visit is a scan, and walking away ends it. See `MAX_SCAN` for why none of this is stored. */
+function clearScan() {
+  scan.clear();
+  covered.clear();
+  announced.clear();
+}
+
+/** Pages read against pages there are, over every query this visit. Both are drawn, never a ratio. */
+function coverageNow() {
+  let read = 0;
+  let total = 0;
+  for (const held of covered.values()) {
+    read += held.pages.size;
+    total += Math.max(held.pages.size, held.pageCount);
+  }
+  return { read, total, queries: covered.size, listings: scan.size };
+}
+
+/** Everything seen this visit for one item, cheapest first, the Merchant's own stock left out. */
+function offersOf(itemId) {
+  const rows = [];
+  for (const row of scan.values()) {
+    if (row.itemId === itemId && !row.house) {
+      rows.push(row);
+    }
+  }
+  return rows.sort((a, b) => a.unit - b.unit);
+}
+
+/**
+ * What a resale could fetch per unit against the listings themselves, or null.
+ *
+ * The cheapest OTHER offer, which is the whole rule: to sell you have to be the cheapest, so what
+ * you can ask is set by whoever is still there once you have bought this one. It follows that
+ * only the cheapest listing of an item can ever be a buy, and that falls out of the arithmetic
+ * rather than needing a test of its own.
+ */
+function rivalAnchor(row) {
+  const others = offersOf(row.itemId).filter((other) => other.id !== row.id);
+  const [cheapest] = others;
+  if (cheapest === undefined) {
+    return null;
+  }
+  return { unit: cheapest.unit, evidence: others.length, mine: cheapest.mine === true };
+}
+
+/**
+ * The recorded median, EXCLUDING the visit being folded right now.
+ *
+ * `foldPage` writes the live page into the series before anything reads it, so a median over
+ * every visit includes the very row being judged: one cheap listing drags down the baseline it
+ * is then found to be under, and the panel reports a bargain it invented. The last visit is
+ * therefore dropped, and two priors are the fewest that can be a comparison at all.
+ */
+function recordedAnchor(itemId) {
+  const record = series.get(itemId);
+  if (record === undefined) {
+    return null;
+  }
+  const prior = record.visits.slice(0, -1);
+  if (prior.length < THIN_EVIDENCE) {
+    return null;
+  }
+  const lows = prior.map((visit) => visit.low).sort((a, b) => a - b);
+  return { unit: median(lows, Math.floor(lows.length / 2)), evidence: prior.length };
+}
+
+/** No anchor may sit above a price the item can be bought at forever. See `everCeiling`. */
+function cappedAnchor(anchor, ceiling) {
+  if (anchor === null || ceiling === null) {
+    return anchor;
+  }
+  return { ...anchor, unit: Math.min(anchor.unit, ceiling) };
+}
+
+/** What the stack clears if it is bought here and sold at `unit`, after the Merchant's cut. */
+function resaleProfit(row, unit, cutPct) {
+  return Math.floor(unit * row.count * (1 - cutPct / PERCENT)) - row.price;
+}
+
+function confidenceOf(evidence, firm) {
+  if (evidence >= firm) {
+    return 'firm';
+  }
+  return 'thin';
+}
+
+/**
+ * Whether the whole stack was priced as though it were a single item.
+ *
+ * Worth naming on the row rather than leaving as a bargain, because it tells the player the
+ * cheapness is somebody's typo and not a trap, and a typo is the one kind of underpricing that
+ * says nothing at all about what the item is worth.
+ */
+function stackSlip(row, unit) {
+  if (row.count <= 1 || unit <= 0) {
+    return false;
+  }
+  return Math.abs(row.price - unit) <= unit * STACK_SLIP;
+}
+
+/**
+ * What ONE of these normally costs, which is not the same question the resale anchor answers.
+ *
+ * The resale anchor is deliberately the most cautious price any source will stand behind, and
+ * measuring a typo against it hides the typo: a stack of twenty posted at one item's price stops
+ * looking like one the moment a cheaper anchor is chosen, and the row loses the label naming the
+ * only kind of underpricing that says nothing about what the item is worth. The DEAREST estimate
+ * is the right reference here for the same reason the cheapest is right there.
+ */
+function typicalUnit(options) {
+  return options.reduce((top, option) => Math.max(top, option.typical ?? option.unit), 0);
+}
+
+/** Every way this listing could make money, each with what it would clear. */
+function optionsFor(row, page) {
+  const ceiling = everCeiling(row.itemId, page);
+  const options = [];
+  const floor = vendorFloor(row.itemId);
+  if (floor !== null) {
+    // No cut: a vendor is not the Merchant, and the payout is a flat price per unit.
+    const profit = floor * row.count - row.price;
+    if (profit > 0) {
+      options.push({ signal: 'vendor', unit: floor, profit, confidence: 'certain', evidence: 0 });
+    }
+  }
+  for (const arm of resaleArms(row, page, ceiling)) {
+    options.push(arm);
+  }
+  return options;
+}
+
+/**
+ * ONE resale arm: the CHEAPEST price either source says the item can be had for.
+ *
+ * Both arms are estimates of the same thing, what somebody will actually pay, so where both fire
+ * they are not alternatives to choose the better of. Taking the richer one systematically picks
+ * whichever source is currently most optimistic, and on a thin item that is one stranger's
+ * asking price: a lone rival at fifty gold against a recorded median of nine turns a nine gold
+ * item into a thirty-eight gold profit, which then sorts to the top of the list ahead of every
+ * well-evidenced row on it. The lower of the two is what the item can be sold for today.
+ *
+ * The vendor floor is not in here and must not be: it is a CERTAINTY rather than an estimate of
+ * the same quantity, and it is carried beside the figure rather than averaged into it.
+ */
+function resaleArms(row, page, ceiling) {
+  const arms = [
+    resaleOption('page', cappedAnchor(rivalAnchor(row), ceiling), row, page),
+    resaleOption('history', cappedAnchor(recordedAnchor(row.itemId), ceiling), row, page),
+  ].filter((arm) => arm !== null);
+  const cautious = arms.reduce(lowerAnchor, arms[0] ?? null);
+  if (cautious === null) {
+    return [];
+  }
+  // The dearest estimate rides along on the arm that won. It is not a price this addon will
+  // recommend anything at, which is why it is not an option of its own; it is what one of these
+  // NORMALLY costs, and `stackSlip` needs that to recognise a whole stack posted at one item's
+  // price. Measured against the cautious anchor instead, a typo stops looking like one exactly
+  // when a cheaper source wins, which is when the row most needs to say what happened.
+  return [{ ...cautious, typical: arms.reduce((top, arm) => Math.max(top, arm.unit), 0) }];
+}
+
+/** Whichever of two anchors asks less for the item. */
+function lowerAnchor(held, arm) {
+  if (held === null || arm.unit < held.unit) {
+    return arm;
+  }
+  return held;
+}
+
+/** How much evidence each resale anchor needs before it stops being called thin. */
+const FIRM_FOR = new Map([
+  ['page', FIRM_RIVALS],
+  ['history', FIRM_VISITS],
+]);
+
+/**
+ * One resale arm, or null. The two differ only in where the anchor came from and what backs it,
+ * so they share this: a second copy of the cut arithmetic is a second place it can be wrong.
+ */
+function resaleOption(signal, anchor, row, page) {
+  if (anchor === null) {
+    return null;
+  }
+  const profit = resaleProfit(row, anchor.unit, page.cutPct);
+  if (profit <= 0) {
+    return null;
+  }
+  return {
+    signal,
+    unit: anchor.unit,
+    profit,
+    confidence: confidenceOf(anchor.evidence, FIRM_FOR.get(signal) ?? FIRM_VISITS),
+    evidence: anchor.evidence,
+    mine: anchor.mine === true,
+  };
+}
+
+/** Whichever of two ways to make money on one listing makes more of it. */
+function richer(top, option) {
+  if (option.profit > top.profit) {
+    return option;
+  }
+  return top;
+}
+
+/**
+ * What this listing is worth doing something about, or null.
+ *
+ * The BEST expected profit decides the row, and the vendor floor rides beside it rather than
+ * replacing it: a stack that clears 20 copper at a vendor and 5 silver on a resale is a 5 silver
+ * row that also cannot lose money, and reporting the 20 would bury it under rows worth less.
+ */
+function dealFor(row, page) {
+  const options = optionsFor(row, page);
+  if (options.length === 0) {
+    return null;
+  }
+  const best = options.reduce(richer);
+  const guaranteed = options.find((option) => option.signal === 'vendor')?.profit ?? 0;
+  return {
+    key: String(row.id),
+    row,
+    signal: best.signal,
+    unit: best.unit,
+    profit: best.profit,
+    confidence: best.confidence,
+    evidence: best.evidence,
+    againstMine: best.mine === true,
+    guaranteed,
+    stack: stackSlip(row, typicalUnit(options)),
+  };
+}
+
+/**
+ * A deal on a listing somebody could actually corner, or null.
+ *
+ * The Merchant's own stock is never one: it never depletes, so buying it moves no price and
+ * reselling it competes with a counter that will still be selling tomorrow.
+ */
+function buyableDeal(row, page) {
+  if (row.house || row.mine) {
+    return null;
+  }
+  return dealFor(row, page);
+}
+
+/** Everything in the buffer worth buying, best first. */
+function dealsNow(page) {
+  const floorCopper = minProfit();
+  const rows = [];
+  for (const row of scan.values()) {
+    const deal = buyableDeal(row, page);
+    if (deal !== null && deal.profit >= floorCopper) {
+      rows.push(deal);
+    }
+  }
+  return rows.sort((a, b) => b.profit - a.profit || a.key.localeCompare(b.key));
 }
 
 /**
@@ -1062,20 +1631,57 @@ function onAway() {
   }
   resyncing.on = false;
   live.status = 'away';
+  clearScan();
 }
 
 function onNear(info) {
   const now = woc.wallClock();
   lastRead.reconnects = reconnectCount();
   resyncing.on = false;
+  const arriving = live.status !== 'near';
   live.status = 'near';
+  if (arriving && dealsFirst()) {
+    // On ARRIVING rather than on every page, or a player who switched to Prices at the counter
+    // would be dragged back to Deals by the next snapshot.
+    tabs.select('deals');
+    showPane('deals');
+  }
   const page = capture(info, now);
   live.page = page;
   if (loaded.on) {
     recordPage(page);
     recordSales(info, now);
   }
+  // AFTER the fold, because the recorded anchor is the one that has to exclude the visit being
+  // written; before it, `recordedAnchor` would be dropping a visit that is not there yet.
+  foldScan(page);
+  announceDeals(page);
   checkUndercut(page);
+}
+
+/**
+ * One toast for what this page just put in front of the player, on the CROSSING rather than the
+ * state: paging back and forth over one good listing is one announcement, not a stream of them.
+ * Silent by default, because a notifier that fires on every page is one that gets switched off.
+ */
+function announceDeals(page) {
+  const over = announceOver();
+  if (over <= 0) {
+    return;
+  }
+  const fresh = dealsNow(page).filter((deal) => deal.profit >= over && !announced.has(deal.key));
+  const [best] = fresh;
+  if (best === undefined) {
+    return;
+  }
+  for (const deal of fresh) {
+    announced.add(deal.key);
+  }
+  const what = `${nameOf(best.row.itemId)} clears ${money(best.profit)}`;
+  woc.ui.toast(`Ledgerline: ${what}, ${woc.fmt.count(fresh.length, 'deal')} on this page.`);
+  if (announcingAloud()) {
+    woc.sound.play('ui_coin');
+  }
 }
 
 /**
@@ -1378,80 +1984,9 @@ function setStat(chip, value) {
 }
 
 /**
- * The one thing on screen the kit has no widget for. It SPANS the row, stretched by
- * `preserveAspectRatio="none"`, or a fixed box draws the series into the left third and reads
- * as a chart that was cut off. `non-scaling-stroke` is what that costs and is not optional: a
- * stretched viewBox scales the axes differently, so a plain stroke comes out thick on the
- * verticals. The filled area is there because a hairline in a row of text reads as an underline.
- */
-function buildSpark() {
-  const el = document.createElementNS(SVG_NS, 'svg');
-  el.setAttribute('class', 'woc-ledgerline-spark');
-  el.setAttribute('viewBox', `0 0 ${String(SPARK_WIDTH)} ${String(SPARK_HEIGHT)}`);
-  el.setAttribute('preserveAspectRatio', 'none');
-  el.setAttribute('aria-hidden', 'true');
-  // A strip along the bottom of the row's own box rather than the whole background: a line free
-  // to cross the box strikes the text through. Inert, or it eats the row's hover.
-  el.style.position = 'absolute';
-  el.style.left = '0';
-  el.style.bottom = '0';
-  // An `svg` with no width sizes itself from its viewBox, so the offsets alone draw a 140px
-  // chart in the corner of a 400px row.
-  el.style.width = '100%';
-  el.style.height = `${String(SPARK_HEIGHT)}px`;
-  el.style.pointerEvents = 'none';
-  el.style.opacity = '0.6';
-  const area = document.createElementNS(SVG_NS, 'polygon');
-  area.setAttribute('fill', 'currentColor');
-  area.setAttribute('opacity', '0.1');
-  const path = document.createElementNS(SVG_NS, 'polyline');
-  path.setAttribute('fill', 'none');
-  path.setAttribute('stroke', 'currentColor');
-  path.setAttribute('stroke-width', '1.5');
-  path.setAttribute('vector-effect', 'non-scaling-stroke');
-  path.setAttribute('stroke-linejoin', 'round');
-  el.append(area, path);
-  return { el, area, path };
-}
-
-/** Where one reading sits in the box, with a flat series drawn down the middle. */
-function sparkPoint(value, at, span, range) {
-  const x = at * span;
-  const top = SPARK_HEIGHT - SPARK_PAD;
-  if (range.high <= range.low) {
-    return `${x.toFixed(1)},${(SPARK_HEIGHT / 2).toFixed(1)}`;
-  }
-  const share = (value - range.low) / (range.high - range.low);
-  const y = top - share * (SPARK_HEIGHT - SPARK_PAD * 2);
-  return `${x.toFixed(1)},${y.toFixed(1)}`;
-}
-
-/** The same line, closed along the bottom, which is what makes it read as a chart. */
-function areaPoints(points) {
-  const last = SPARK_WIDTH.toFixed(1);
-  const floor = SPARK_HEIGHT.toFixed(1);
-  return `0.0,${floor} ${points.join(' ')} ${last},${floor}`;
-}
-
-function paintSpark(spark, values) {
-  const enough = values.length >= MIN_SPARK_POINTS;
-  spark.el.style.display = 'none';
-  if (!enough) {
-    return;
-  }
-  spark.el.style.display = 'block';
-  const range = { low: Math.min(...values), high: Math.max(...values) };
-  // Edge to edge: a pad on the x axis is a gap at each end of a line meant to fill the row.
-  const span = SPARK_WIDTH / (values.length - 1);
-  const points = values.map((value, at) => sparkPoint(value, at, span, range));
-  spark.path.setAttribute('points', points.join(' '));
-  spark.area.setAttribute('points', areaPoints(points));
-}
-
-/**
- * A frame rather than a window, since the player TOGGLES it: the two differ by the ARIA role.
- * Both size bounds are stated, because a frame that states neither takes its opening size as its
- * floor and a bound cannot be restated once the frame is built.
+ * The panel. COMPACT rather than the game's own scale: this is a table of figures a player
+ * glances at while working the Merchant's window beside it, and at the comfortable scale a
+ * screenful is five rows. The kit's own controls and tabs follow the density for free.
  */
 const frame = woc.ui.frame({
   id: 'ledger',
@@ -1459,7 +1994,7 @@ const frame = woc.ui.frame({
   toggleKey: 'toggle',
   width: FRAME_WIDTH,
   height: FRAME_HEIGHT,
-  density: 'comfortable',
+  density: 'compact',
   closable: true,
   save: true,
   resizable: true,
@@ -1476,6 +2011,7 @@ frame.body.style.minHeight = '0';
 frame.body.style.flex = '1 1 auto';
 
 const panes = new Map([
+  ['deals', fills(column('woc-ledgerline-pane'))],
   ['prices', fills(column('woc-ledgerline-pane'))],
   ['mine', fills(column('woc-ledgerline-pane'))],
   ['sold', fills(column('woc-ledgerline-pane'))],
@@ -1492,6 +2028,9 @@ function showPane(active) {
 
 const tabs = woc.ui.tabs({
   tabs: [
+    // First, and the default while the player is standing at the counter: it is the only pane
+    // that says what to DO, and the other three are all archives of one kind or another.
+    { id: 'deals', label: 'Deals' },
     { id: 'prices', label: 'Prices' },
     { id: 'mine', label: 'Yours' },
     // What was PAID, which is a different series from what is asked. See the header.
@@ -1506,13 +2045,24 @@ fixed(tabs.el);
 frame.body.appendChild(tabs.el);
 
 /** The shared strip, above both panes: where the player is and what the server said. */
+/**
+ * THREE figures, where there were five.
+ *
+ * Page and cut left. The page number is on the game's own market window, three inches to the
+ * left of this panel and larger, and the cut is a constant a player learns once; both are still
+ * read off every page, and both are still said, in the tooltip on the title where a fact that
+ * matters twice a year belongs. What is left is the state this panel is in, how much of the
+ * seller's cap is spent, and what is waiting to be collected, which is the one figure here that
+ * asks the player to go and do something.
+ */
 const statusStrip = strip(frame.body, 'status');
 const whereStat = stat(statusStrip, 'where', 'At');
-const pageStat = stat(statusStrip, 'page', 'Page');
-const cutStat = stat(statusStrip, 'cut', 'Cut');
 const capStat = stat(statusStrip, 'cap', 'Listings');
 const collectStat = stat(statusStrip, 'collect', 'Waiting');
 const statusLine = line(frame.body, 'status-line');
+// Where the page number and the cut went. On the strip rather than on the title bar, because the
+// strip is this addon's own element and is the place those two figures used to be.
+woc.ui.tooltip(statusStrip, () => stripTip());
 
 for (const pane of panes.values()) {
   frame.body.appendChild(pane);
@@ -1529,6 +2079,13 @@ const searchField = woc.ui.field.text({
 });
 fixed(searchField.el);
 panes.get('prices')?.appendChild(searchField.el);
+
+const dealTop = rule(panes.get('deals'));
+const dealList = scrolls(column('woc-ledgerline-list'));
+dealList.dataset.list = 'deals';
+panes.get('deals')?.appendChild(dealList);
+rule(panes.get('deals'));
+const dealNote = line(panes.get('deals'), 'deals-note');
 
 const priceTop = rule(panes.get('prices'));
 const priceList = scrolls(column('woc-ledgerline-list'));
@@ -1555,12 +2112,14 @@ showPane(tabs.active());
 
 /** The three lists by name, and what is on screen in each. */
 const lists = new Map([
+  ['deals', dealList],
   ['prices', priceList],
   ['mine', mineList],
   ['sold', soldList],
 ]);
 /** Drawn only where there are rows, or an empty pane puts two rules together. */
 const listTops = new Map([
+  ['deals', dealTop],
   ['prices', priceTop],
   ['mine', mineTop],
   ['sold', soldTop],
@@ -1576,45 +2135,34 @@ function rowsIn(list, tip) {
     key: (entry) => entry.key,
     create: (entry) => buildRow(entry.key, tip),
     update: (row, entry) => {
-      row.bar.update(entry.update);
-      paintSpark(row.spark, entry.trend);
+      row.update(entry.update);
     },
   });
 }
 
 const listRows = new Map([
+  ['deals', rowsIn(dealList, dealTip)],
   ['prices', rowsIn(priceList, priceTip)],
   ['mine', rowsIn(mineList, mineTip)],
   ['sold', rowsIn(soldList, soldTip)],
 ]);
 
 /**
- * The kit's bar, standing on its item's trend: the chart is the row's BACKGROUND rather than a
- * band under it, so it costs no height, and a full-width box between rows would read as a
- * divider that happens to slope. No kit fill on a price row: a fill's width means a share of
- * something, and one item's price is not a share of another's. See `ownEntry` for the exception.
+ * ONE bar and nothing around it.
+ *
+ * There was a wrapper here, holding the bar over a 16px lane for a trend line drawn as the row's
+ * background. It cost every row in every pane that lane whether or not anything was drawn in it,
+ * which on a panel that is four lists of rows is most of the panel's height, and the line itself
+ * answered nothing quantitative: no stated range, an opacity that read as a stray sloped
+ * divider, and it crossed the boundary between rows. What the line was for, where today's price
+ * sits against its own record, is a `fraction` now, which the kit already draws and which costs
+ * no height at all.
  */
 function buildRow(key, tip) {
-  const el = woc.ui.column({ className: 'woc-ledgerline-row', gap: 0 });
-  el.dataset.row = key;
-  el.style.position = 'relative';
-  // The strip the chart sits in, kept even by a row with no chart: rows that changed height as
-  // a second reading landed would make the list twitch while a page is being read.
-  el.style.paddingBottom = `${String(SPARK_HEIGHT)}px`;
   const bar = woc.ui.bar({ className: 'woc-ledgerline-bar' });
-  const spark = buildSpark();
-  // The chart first, so the text paints over it: both are positioned and neither has a z-index.
-  el.append(spark.el, bar.el);
-  woc.ui.tooltip(el, () => tip(key));
-  // The list put the wrapper in and takes it out; this owes the widget inside it.
-  return {
-    el,
-    bar,
-    spark,
-    destroy: () => {
-      bar.destroy();
-    },
-  };
+  bar.el.dataset.row = key;
+  woc.ui.tooltip(bar.el, () => tip(key));
+  return bar;
 }
 
 /**
@@ -1662,23 +2210,37 @@ function priceEntry(record) {
   const stats = statsFor(record);
   return {
     key: record.itemId,
-    trend: trendOf(record),
     update: {
       label: nameOf(record.itemId),
       icon: woc.ui.icon.item(record.itemId),
+      quality: qualityOf(record.itemId),
+      // NO FILL, and the reason is the one the row builder used to give for having none: a fill
+      // is a SHARE of something, and one item's price is not a share of another's. A fill of
+      // "where today sits inside this item's own range" looked like the exception and is not,
+      // because a market price mostly does not move: a listing lives 48 hours and a thin book
+      // reprices slowly, so the range is empty and every row on screen draws the same half fill.
+      // A magnitude that is identical on every row is not a magnitude. Deals and Sold keep
+      // theirs, because a share of the best profit and a share of what you earned are real
+      // shares; this pane's magnitude is the price itself, in the figure at the end of the row.
       // Labelled: a bare figure at the end of a row reads as the price, and this is the
       // cheapest per item anybody has been seen asking.
       value: { copper: Math.round(stats.low), prefix: 'low' },
-      detail: `median ${money(Math.round(stats.median))}, ${woc.fmt.count(stats.visits, 'visit')}, last ${agoText(stats.at)}`,
+      detail: `median ${money(Math.round(stats.median))}, ${woc.fmt.count(stats.visits, 'visit')}, ${briefAgo(stats.at)}`,
     },
   };
 }
 
 /** Where a name came from, said plainly, because two of the three are not the item's. */
+/**
+ * Null where the name is trustworthy, which is nearly always.
+ *
+ * It used to answer "Name published by lorebind" on every row that had one, and a line that is
+ * on every tooltip is not a tooltip line: it is the addon telling the player how it works, once
+ * per hover, forever. What is left is the two cases that are a WARNING about this item.
+ */
 function nameNote(itemId) {
-  const record = known(itemId);
-  if (record !== null) {
-    return { text: `Name published by ${record.from}.`, tone: 'muted' };
+  if (known(itemId) !== null) {
+    return null;
   }
   if (artName(itemId) !== null) {
     return {
@@ -1689,12 +2251,13 @@ function nameNote(itemId) {
   return { text: 'No addon has published a name for this id.', tone: 'muted' };
 }
 
+/** Null for the ordinary case. Readings from several searches cover different parts of the book. */
 function queryNote(stats) {
   if (stats.queries <= 1) {
-    return { text: 'Every reading came from one search.', tone: 'muted' };
+    return null;
   }
   return {
-    text: `Readings came from ${String(stats.queries)} different searches, so they cover different parts of the book.`,
+    text: `Read under ${String(stats.queries)} different searches, which cover different parts of the book.`,
     tone: 'warn',
   };
 }
@@ -1710,9 +2273,35 @@ function paidLine(itemId) {
   }
   const stats = soldStats(record);
   return {
-    text: `You have sold ${woc.fmt.count(stats.sales, 'sale')} of this, at a median of ${money(Math.round(stats.median))} each. That is what was paid; the figures above are what was asked.`,
+    text: `You sold ${woc.fmt.count(stats.sales, 'sale')} at a median of ${money(Math.round(stats.median))} each, which is what was PAID rather than asked.`,
     tone: 'muted',
   };
+}
+
+/**
+ * What this item has been going for, in ONE line.
+ *
+ * It was two, reporting a low, a median, a latest and a high. In a thin book that is the same
+ * number four times: a listing lives 48 hours, few items have more than a listing or two, and
+ * the cheapest ask simply does not move between visits, so the tooltip spent four figures saying
+ * one thing. Where it HAS moved the figures differ and are all drawn; where it has not, saying so
+ * once is the whole of what is known.
+ *
+ * The dearest ask is dropped either way. It is the top of the spread rather than of the trend,
+ * so it sits beside three figures it is not comparable with, and nobody buys at it.
+ */
+function priceLine(record, stats) {
+  const lows = record.visits.map((visit) => visit.low);
+  const seen = `over ${woc.fmt.count(stats.visits, 'visit')}, read ${agoText(stats.at)}`;
+  if (stats.visits < THIN_EVIDENCE) {
+    // "Unchanged" needs two readings to be a claim. One is just the price.
+    return `${money(Math.round(stats.low))} each, ${seen}.`;
+  }
+  if (Math.min(...lows) === Math.max(...lows)) {
+    return `${money(Math.round(stats.low))} each, unchanged ${seen}.`;
+  }
+  const range = `Low ${money(Math.round(stats.low))} each, median ${money(Math.round(stats.median))}`;
+  return `${range}, latest ${money(Math.round(stats.latest))}, ${seen}.`;
 }
 
 function priceTip(itemId) {
@@ -1721,26 +2310,225 @@ function priceTip(itemId) {
     return { title: itemId, lines: ['This item is no longer in the ledger.'] };
   }
   const stats = statsFor(record);
-  const lines = [
-    `Low ${money(Math.round(stats.low))} each, median ${money(Math.round(stats.median))}, high ${money(Math.round(stats.high))}.`,
-    `Latest ${money(Math.round(stats.latest))} each, read ${agoText(stats.at)}.`,
-    `${woc.fmt.count(stats.visits, 'visit')} to the counter, and the low of each is one point of the line.`,
-    {
-      text: 'Every figure here is one vote per visit rather than one per listing, so a busy day does not outweigh a quiet one. Several pages read in one trip are one visit.',
-      tone: 'muted',
+  const lines = [priceLine(record, stats), queryNote(stats), paidLine(itemId), nameNote(itemId)];
+  return { title: nameOf(itemId), icon: woc.ui.icon.item(itemId), lines: spoken(lines) };
+}
+
+/**
+ * What each signal ANCHORED on, in the words a TOOLTIP uses. The row says it in one token; see
+ * `evidenceWord`.
+ */
+const ANCHOR_WORD = new Map([
+  ['vendor', 'vendor pays'],
+  ['page', 'next ask'],
+  ['history', 'your median'],
+]);
+
+/**
+ * What stands behind a row's figure, counted rather than graded.
+ *
+ * This replaced the words thin, firm and certain, and the reason is what a real market looks
+ * like: most items have one or two listings, so "thin" was on every row of every screenful and a
+ * value that never varies is not information. A count varies, is shorter, and says the same
+ * thing without asking anybody to learn what the grade meant.
+ */
+function evidenceWord(deal) {
+  if (deal.signal === 'vendor') {
+    return 'vendor floor';
+  }
+  if (deal.signal === 'page') {
+    return woc.fmt.count(deal.evidence, 'rival');
+  }
+  return woc.fmt.count(deal.evidence, 'visit');
+}
+
+/** How many of an item a row is, where saying so adds anything. */
+function stackLabel(row) {
+  if (row.count <= 1) {
+    return nameOf(row.itemId);
+  }
+  return `${nameOf(row.itemId)} x${String(row.count)}`;
+}
+
+/**
+ * A fixed-shape clause rather than a sentence, which is the whole point: three fields in the
+ * same order on every row, so two rows can be compared by looking at one position rather than
+ * by reading both of them.
+ */
+/**
+ * What the stack costs, and what that figure rests on. Two fields, and no word that would be the
+ * same on every row.
+ *
+ * The RESALE price is not here on purpose. It was, and with the buy price and the profit already
+ * on the row it made a three-number second line under a two-number first one, which is a table
+ * nobody can read at a glance. The profit is the decision, the cost is whether the player can
+ * act on it, and the price the profit was worked out against is verification, which belongs
+ * under the pointer.
+ */
+function dealDetail(deal) {
+  const said = `buy ${money(deal.row.price)}, ${evidenceWord(deal)}`;
+  if (deal.stack) {
+    return `${said}, stack priced as one`;
+  }
+  return said;
+}
+
+/**
+ * The fill is the row's profit against the best on screen, which is a real share and is the one
+ * a ranked list wants: the eye reads the ordering off the widths without reading a figure.
+ */
+function dealEntry(deal, best) {
+  return {
+    key: deal.key,
+    update: {
+      label: stackLabel(deal.row),
+      icon: woc.ui.icon.item(deal.row.itemId),
+      quality: qualityOf(deal.row.itemId),
+      fraction: shareOf(deal.profit, best),
+      value: { copper: deal.profit, prefix: 'clears' },
+      detail: dealDetail(deal),
     },
-    queryNote(stats),
+  };
+}
+
+/** A row's profit against the best on screen. Zero where there is no best, which is no rows. */
+function shareOf(profit, best) {
+  if (best <= 0) {
+    return 0;
+  }
+  return profit / best;
+}
+
+/** A tier somebody published, or null. Nothing in the loader knows what tier an item is. */
+function qualityOf(itemId) {
+  const quality = known(itemId)?.quality ?? '';
+  if (quality === '') {
+    return null;
+  }
+  return quality;
+}
+
+/**
+ * Which game the floor table was read from, said rather than assumed.
+ *
+ * A vendor price is a claim about a VERSION: content re-prices, and a table stamped two releases
+ * back goes on answering with the old number and nothing on the wire disagrees with it.
+ */
+function floorVersion() {
+  if (floorsFrom.version === '') {
+    return 'an unnamed version';
+  }
+  return floorsFrom.version;
+}
+
+/** Where the anchor came from, at length, which is the half a three-field clause cannot carry. */
+function anchorLines(deal) {
+  if (deal.signal === 'vendor') {
+    return [
+      { text: 'A vendor pays that flatly, so this profit is not an estimate.', tone: 'good' },
+      { text: `Floor read from game ${floorVersion()}.`, tone: 'muted' },
+    ];
+  }
+  if (deal.signal === 'page') {
+    if (deal.againstMine) {
+      // The most useful thing this pane can say about a thin item, and the only place it can be
+      // said: the cheapest thing standing between this and a sale is the player's own listing.
+      return [
+        { text: 'The cheapest competing listing is YOUR OWN.', tone: 'warn' },
+        { text: 'Cancelling it would leave the next ask above this figure.', tone: 'muted' },
+      ];
+    }
+    return [{ text: 'It sells only if nobody undercuts you first.', tone: 'warn' }];
+  }
+  return [
+    { text: 'The median of your earlier visits, this one left out.', tone: 'muted' },
+    { text: 'A recorded price is what was asked, not what anybody paid.', tone: 'warn' },
+  ];
+}
+
+/** The guarantee, where there is one under an estimate that is worth more. */
+function guaranteeLine(deal) {
+  if (deal.guaranteed <= 0 || deal.signal === 'vendor') {
+    return [];
+  }
+  return [
     {
-      text: 'Prices are per item: a listing sells its whole stack for one price, and this divides by the count.',
-      tone: 'muted',
+      text: `A vendor would take it for ${money(deal.guaranteed)} clear, so this cannot lose.`,
+      tone: 'good',
     },
   ];
-  const paid = paidLine(itemId);
-  if (paid !== null) {
-    lines.push(paid);
+}
+
+function dealTip(key) {
+  const deal = shown.deals.get(key);
+  if (deal === undefined) {
+    return { title: 'Gone', lines: ['That listing is no longer in this reading.'] };
   }
-  lines.push(nameNote(itemId));
-  return { title: nameOf(itemId), icon: woc.ui.icon.item(itemId), lines };
+  const { row } = deal;
+  const anchor = ANCHOR_WORD.get(deal.signal) ?? deal.signal;
+  return {
+    title: stackLabel(row),
+    icon: woc.ui.icon.item(row.itemId),
+    lines: [
+      `${money(Math.round(row.unit))} each here, ${anchor} ${money(Math.round(deal.unit))}.`,
+      `${money(row.price)} the stack, from ${sellerOf(row)}, seen ${agoText(row.lastSeen)}.`,
+      ...anchorLines(deal),
+      ...guaranteeLine(deal),
+    ],
+  };
+}
+
+/** Who is asking. A blank name is a row the wire sent without one rather than an anonymous seller. */
+function sellerOf(row) {
+  if (row.seller === '') {
+    return 'a seller the page did not name';
+  }
+  return row.seller;
+}
+
+/** The honest limit on every figure in this pane, in one sentence, in one place. */
+function coverageText() {
+  const seen = coverageNow();
+  if (seen.read === 0) {
+    return 'Nothing has been read at this counter yet.';
+  }
+  const pages = `${String(seen.read)} of ${String(seen.total)} pages`;
+  const searches = woc.fmt.count(seen.queries, 'search');
+  return `${pages} read over ${searches}, so not the whole book.`;
+}
+
+function dealsNoteText(count) {
+  if (live.status !== 'near') {
+    return 'Deals are found while you are standing at the Merchant. Walk up to one and page through the book.';
+  }
+  if (count === 0) {
+    return `Nothing on what you have read clears ${money(minProfit())}. ${coverageText()}`;
+  }
+  return coverageText();
+}
+
+/** Nothing at all away from the counter: a deal is a listing somebody can still walk over and buy. */
+function dealsShowing() {
+  const { page } = live;
+  if (page === null || live.status !== 'near') {
+    return [];
+  }
+  return dealsNow(page);
+}
+
+/**
+ * The list, and the sentence under it. Ranked by what a stack clears, never by how deep the
+ * discount is: nine tenths off a three copper item is twenty seven copper.
+ */
+function paintDeals() {
+  const found = dealsShowing();
+  shown.deals = new Map(found.map((deal) => [deal.key, deal]));
+  const best = found[0]?.profit ?? 0;
+  syncList(
+    'deals',
+    found.slice(0, MAX_ROWS).map((deal) => dealEntry(deal, best)),
+  );
+  say(dealNote, dealsNoteText(found.length));
 }
 
 function pricesNoteText(matching) {
@@ -1752,7 +2540,7 @@ function pricesNoteText(matching) {
   }
   const held = `${woc.fmt.count(series.size, 'item')} recorded, keeping ${String(historyDays())} days.`;
   if (matching > MAX_ROWS) {
-    return `Showing ${String(MAX_ROWS)} of ${String(matching)} matching. ${held} Narrow it with the search above.`;
+    return `${String(MAX_ROWS)} of ${String(matching)} matching shown. ${held} Narrow it above.`;
   }
   return held;
 }
@@ -1766,15 +2554,6 @@ function paintPrices() {
   const matching = ledgerRows();
   syncList('prices', matching.slice(0, MAX_ROWS).map(priceEntry));
   say(priceNote, pricesNoteText(matching.length));
-}
-
-/** What the ledger says about the item one of the player's own listings is for. */
-function ownTrend(itemId) {
-  const record = series.get(itemId);
-  if (record === undefined) {
-    return [];
-  }
-  return trendOf(record);
 }
 
 const VERDICT_TEXT = new Map([
@@ -1799,22 +2578,37 @@ function washFor(tone) {
   return 1;
 }
 
+/**
+ * The stack, the unit price and the verdict, and nothing else.
+ *
+ * The stamp this used to carry ("first seen by you 6 hours ago") was the longest clause on the
+ * longest line in the panel, and it is this addon's own record of when it noticed the listing
+ * rather than anything the game says about it. That belongs under the pointer.
+ */
+function ownDetail(row, verdict) {
+  const said = `${String(row.count)} at ${money(Math.round(row.unit))} each`;
+  const verdictText = VERDICT_TEXT.get(verdict.state) ?? '';
+  if (verdictText === '') {
+    return said;
+  }
+  return `${said}, ${verdictText}`;
+}
+
 function ownEntry(row, page) {
   const verdict = verdictFor(row, page);
   const tone = VERDICT_TONE.get(verdict.state) ?? 'default';
-  const stamp = firstSeen(row);
   return {
     key: String(row.id),
-    trend: ownTrend(row.itemId),
     update: {
       label: nameOf(row.itemId),
       icon: woc.ui.icon.item(row.itemId),
+      quality: qualityOf(row.itemId),
       value: { copper: row.price, prefix: 'asking' },
       tone,
       // A wash rather than a measurement: the kit paints a tone on the FILL and nowhere else,
       // so a toned row with no fill is a verdict nobody can see. One width, so it reads as none.
       fraction: washFor(tone),
-      detail: `${String(row.count)} for ${money(Math.round(row.unit))} each, ${VERDICT_TEXT.get(verdict.state) ?? ''}, first seen by you ${agoText(stamp)}`,
+      detail: ownDetail(row, verdict),
     },
   };
 }
@@ -1843,13 +2637,10 @@ function verdictLine(verdict) {
       tone: 'warn',
     };
   }
-  if (verdict.state === 'undercut') {
-    return { text: 'Somebody is asking less than you are.', tone: 'danger' };
-  }
-  if (verdict.state === 'cheapest') {
-    return { text: 'Yours is the cheapest of the listings on this page.', tone: 'good' };
-  }
-  return { text: 'Nothing on this page to compare against.', tone: 'muted' };
+  // Undercut and cheapest are BOTH already on the row, in the word the detail line ends with and
+  // in the wash behind it, and the line above this one names the rival and its price. Saying
+  // either again is the tooltip repeating the thing the player is pointing at.
+  return null;
 }
 
 /**
@@ -1873,25 +2664,15 @@ function ownTip(page, id) {
   return {
     title: nameOf(row.itemId),
     icon: woc.ui.icon.item(row.itemId),
-    lines: [
+    lines: spoken([
       netLine(row, page),
       rivalLine(verdict),
       verdictLine(verdict),
       {
-        // Everything else on this row is the player's OWN price, so the line beside it reads
-        // as a history of what they have charged unless it says otherwise.
-        text: 'The line under the row is what the item has been going for, at the cheapest ask of each of your visits. It is not a record of your own price.',
+        text: `First seen by you ${agoText(firstSeen(row))}, by this addon's own reckoning.`,
         tone: 'muted',
       },
-      {
-        text: `First seen by you ${agoText(firstSeen(row))}. That is this addon's own record: no listing carries an expiry, so nothing here can say when it goes.`,
-        tone: 'muted',
-      },
-      {
-        text: 'Nothing here can cancel or relist. This is a record, not a control.',
-        tone: 'muted',
-      },
-    ],
+    ]),
   };
 }
 
@@ -1904,25 +2685,28 @@ function mineNoteText() {
   }
   if (live.status === 'near') {
     // The one thing no figure can say: what a verdict is drawn from and therefore cannot see.
-    return 'Judged from the page you are reading now, which is not the whole market.';
+    return 'Judged from this page alone, not the whole market.';
   }
-  return `Read ${agoText(live.page.at)}, at the Merchant. Your listings and everyone else's may have moved since.`;
+  return `Read ${agoText(live.page.at)}. Everyone's listings may have moved since.`;
 }
 
 /**
  * The headline is the GROSS per item, which is what compares with the asks on the Prices tab.
  * The net is on the detail line and labelled: summing the wrong one overstates by the cut.
  */
-function soldEntry(record) {
+function soldEntry(record, best) {
   const stats = soldStats(record);
   return {
     key: record.itemId,
-    trend: soldTrend(record),
     update: {
       label: nameOf(record.itemId),
       icon: woc.ui.icon.item(record.itemId),
+      quality: qualityOf(record.itemId),
+      fraction: shareOf(stats.net, best),
       value: { copper: Math.round(stats.median), prefix: 'paid' },
-      detail: `${woc.fmt.count(stats.sales, 'sale')}, ${String(stats.items)} sold, ${money(stats.net)} after the cut, last read ${agoText(stats.at)}`,
+      // "2 sales, 40 sold" rather than "2x, 40 sold": two counts side by side need one of them
+      // to say what it counts, or the pair reads as a quantity times a quantity.
+      detail: `${woc.fmt.count(stats.sales, 'sale')}, ${String(stats.items)} sold, ${money(stats.net)} net`,
     },
   };
 }
@@ -1936,23 +2720,18 @@ function soldTip(itemId) {
   return {
     title: nameOf(itemId),
     icon: woc.ui.icon.item(itemId),
-    lines: [
+    lines: spoken([
       `Paid ${money(Math.round(stats.low))} to ${money(Math.round(stats.high))} each, over ${woc.fmt.count(stats.sales, 'sale')}.`,
-      `${String(stats.items)} sold for ${money(stats.gross)}, which came to ${money(stats.net)} after the Merchant's cut.`,
+      `${String(stats.items)} sold for ${money(stats.gross)}, ${money(stats.net)} after the cut.`,
       {
-        text: 'These are your own completed sales. The market keeps no record of what anybody else sold anything for, so nothing here is a market rate.',
-        tone: 'muted',
-      },
-      {
-        text: 'A sale is stamped when this addon read it rather than when it happened: the Merchant itemizes the gold waiting to be collected and that ledger carries no clock, so several sales read in one go share a stamp.',
-        tone: 'muted',
-      },
-      {
-        text: 'What was paid, which is a different fact from the asking prices on the Prices tab. Neither is folded into the other.',
+        // The stamp and its caveat in ONE line, because a stamp with no caveat reads as when the
+        // sale happened: the Merchant's pending ledger carries no clock, so this is when this
+        // addon drained the row and several sales read in one go share it.
+        text: `Read ${agoText(stats.at)}, which is when this drained it rather than when it sold.`,
         tone: 'muted',
       },
       nameNote(itemId),
-    ],
+    ]),
   };
 }
 
@@ -1975,12 +2754,22 @@ function soldNoteText() {
   if (sold.size === 0) {
     return `Nothing recorded yet. The Merchant itemizes your completed sales while their gold waits to be collected, and this copies each one down before you collect it.${missing}`;
   }
-  return `${woc.fmt.count(sold.size, 'item')} sold, keeping ${String(historyDays())} days.${missing}`;
+  // "Your own" is the one thing a reader could get wrong here, and it belongs in the ONE line
+  // under the list rather than on every row's tooltip: the market keeps no record of what
+  // anybody else sold anything for, so nothing on this tab is a market rate.
+  return `${woc.fmt.count(sold.size, 'item')} of your own sales, keeping ${String(historyDays())} days.${missing}`;
 }
 
 function paintSold() {
   const records = [...sold.values()].sort((a, b) => b.at - a.at);
-  syncList('sold', records.slice(0, MAX_ROWS).map(soldEntry));
+  const drawn = records.slice(0, MAX_ROWS);
+  // The share is against the biggest EARNER on screen rather than the most recent, so the fill
+  // answers which item has actually been paying, which the newest-first ordering does not.
+  const best = drawn.reduce((top, record) => Math.max(top, soldStats(record).net), 0);
+  syncList(
+    'sold',
+    drawn.map((record) => soldEntry(record, best)),
+  );
   say(soldNote, soldNoteText());
 }
 
@@ -2036,7 +2825,7 @@ function statusText() {
   if (live.page === null || live.page.queryText === NO_QUERY) {
     return '';
   }
-  return `Searching ${live.page.queryText}, so this page is part of the book rather than all of it.`;
+  return `Searching ${live.page.queryText}: part of the book, not all of it.`;
 }
 
 function pageText(page) {
@@ -2077,11 +2866,25 @@ function collectText(page) {
 function paintStatus() {
   const { page } = live;
   setStat(whereStat, whereText());
-  setStat(pageStat, pageText(page));
-  setStat(cutStat, cutText(page));
   setStat(capStat, capText(page));
   setStat(collectStat, collectText(page));
   say(statusLine, statusText());
+}
+
+/** The two figures the strip no longer spends a line on. See `statusStrip`. */
+function stripTip() {
+  const { page } = live;
+  if (page === null) {
+    return { title: 'This counter', lines: ['No page has been read at a Merchant yet.'] };
+  }
+  return {
+    title: 'This counter',
+    lines: [
+      `Page ${pageText(page)} of the book, searching ${page.queryText}.`,
+      `The Merchant takes ${cutText(page)} of a sale, which every figure here has already had taken off.`,
+      { text: coverageText(), tone: 'muted' },
+    ],
+  };
 }
 
 /**
@@ -2098,6 +2901,7 @@ function paintTitle() {
 
 function draw() {
   paintStatus();
+  paintDeals();
   paintPrices();
   paintMine();
   paintSold();
@@ -2159,6 +2963,27 @@ woc.setInterval(() => {
   schedulePaint();
 }, AGE_TICK_MS);
 
+/**
+ * The vendor floors, which are the only prices here that come from anywhere but browsing.
+ *
+ * A failure costs the two CERTAIN signals and nothing else, so it is reported and the panel
+ * carries on: every figure the ledger itself draws is inferred from pages and is unaffected.
+ */
+async function learnFloors() {
+  const table = readFloors(await woc.data(FLOORS_FILE));
+  if (table === null) {
+    throw new Error(`${FLOORS_FILE} carries no "items" array of price rows`);
+  }
+  if (!running.on) {
+    return;
+  }
+  floorsFrom.version = table.version;
+  for (const row of table.rows) {
+    floors.set(row.id, row);
+  }
+  schedulePaint();
+}
+
 /** Both art answers are provisional until the manifest lands. It never rejects. */
 async function learnArt() {
   await woc.ui.icon.preloadItems();
@@ -2184,4 +3009,7 @@ begin().catch((err) => {
 });
 learnArt().catch((err) => {
   woc.warn('ledgerline: the item art manifest could not be read', err);
+});
+learnFloors().catch((err) => {
+  woc.warn('ledgerline: the vendor floors could not be read, so no deal is certain', err);
 });
