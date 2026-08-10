@@ -7,18 +7,21 @@
 //
 // The socket only. Everything it decides lives in stage-core.ts.
 //
-// Run `node loader/build-stage.mjs --watch` beside it (which `pnpm run stage` does)
-// and editing a scenario or a loader module rebuilds. Editing an addon's own
-// `main.js` needs no rebuild at all, since the page fetches it. A NEW
-// `addons/<id>/stage.ts` does need a restart, for the same reason the dev
-// watcher polls bodies and not the index: discovering files on a timer is a
-// rebuild per tick to report that nothing moved.
+// It bundles once itself, AFTER binding the port, so that the bind is what makes
+// two stage runs exclusive: `stage/stage.js` is one file every scenario shares,
+// and a build ahead of the bind rewrites it under whoever already holds the port.
+// Run `pnpm build:stage --watch` beside it to rebuild while editing a scenario or
+// a loader module. Editing an addon's own `main.js` needs no rebuild at all, since
+// the page fetches it. A NEW `addons/<id>/stage.ts` does need a restart, for the
+// same reason the dev watcher polls bodies and not the index: discovering files on
+// a timer is a rebuild per tick to report that nothing moved.
 
 import { readFile } from 'node:fs/promises';
 import { createServer } from 'node:http';
 import { join } from 'node:path';
 import process from 'node:process';
 import { fileURLToPath } from 'node:url';
+import { buildStage } from '../loader/build-stage.mjs';
 import { ROOT } from './manifests.ts';
 import { buildIndex, contentType, resolveFile } from './serve-core.ts';
 import {
@@ -145,7 +148,14 @@ function serveStage(host = gameHost()) {
 
   return new Promise((resolve, reject) => {
     server.once('error', (err) => {
-      reject(new Error(`could not listen on ${STAGE_HOST}:${String(STAGE_PORT)}: ${err.message}`));
+      // Named, because the overwhelmingly likely cause is the one this bind
+      // exists to refuse, and "EADDRINUSE" three layers down does not say so.
+      reject(
+        new Error(
+          `could not listen on ${STAGE_HOST}:${String(STAGE_PORT)}: ${err.message}. ` +
+            'Another `pnpm run stage` or `pnpm shots` is probably already running.',
+        ),
+      );
     });
     server.listen(STAGE_PORT, STAGE_HOST, () => {
       resolve(server);
@@ -155,7 +165,13 @@ function serveStage(host = gameHost()) {
 
 async function main() {
   const host = gameHost();
-  await serveStage(host);
+  const server = await serveStage(host);
+  try {
+    await buildStage();
+  } catch (err) {
+    server.close();
+    throw err;
+  }
   console.log(`stage: http://localhost:${String(STAGE_PORT)}/`);
   console.log(`stage: ${PROXY_PREFIXES.join(' and ')} proxied to ${host} for art and cues`);
   console.log('stage: press b on the page to hide the chrome before screenshotting');

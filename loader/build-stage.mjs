@@ -17,6 +17,7 @@
 import { readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { argv } from 'node:process';
+import { fileURLToPath } from 'node:url';
 import { build, context } from 'esbuild';
 
 const root = `${import.meta.dirname}/../`;
@@ -88,16 +89,38 @@ function options(dirs) {
   };
 }
 
-async function main() {
+/**
+ * Bundle once, for a caller that has already claimed the stage.
+ *
+ * Exported because both stage entry points now build AFTER binding the stage
+ * port rather than before it, which they cannot do from a `&&` in a script. The
+ * port is what makes two stage runs exclusive, and this writes the ONE
+ * `stage/stage.js` every scenario shares, so a build on the far side of that bind
+ * rewrites the bundle under a run already serving it. That presented as a 15
+ * second `waitForSelector`, which reads as a broken scenario rather than as a
+ * second run.
+ */
+async function buildStage() {
   const dirs = scenarioDirs();
+  await build(options(dirs));
+  console.log(`stage: bundled ${String(dirs.length)} scenario files into stage/stage.js`);
+}
+
+async function main() {
   if (argv.includes('--watch')) {
+    const dirs = scenarioDirs();
     const ctx = await context(options(dirs));
     await ctx.watch();
     console.log(`stage: watching, ${String(dirs.length)} scenario files`);
     return;
   }
-  await build(options(dirs));
-  console.log(`stage: bundled ${String(dirs.length)} scenario files into stage/stage.js`);
+  await buildStage();
 }
 
-await main();
+// Guarded now that this module is imported as well as run: an unconditional call
+// would build on the import, which is exactly the write the callers moved.
+if (argv[1] === fileURLToPath(import.meta.url)) {
+  await main();
+}
+
+export { buildStage };

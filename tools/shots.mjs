@@ -37,6 +37,7 @@ import { promisify } from 'node:util';
 // biome-ignore lint/correctness/noUnresolvedImports: playwright re-exports chromium from playwright-core through an exports map Biome's resolver does not follow. The named import is what the package documents and what runs: `chromium.launch()` is verified working above.
 import { chromium } from 'playwright';
 import sharp from 'sharp';
+import { buildStage } from '../loader/build-stage.mjs';
 import { inSeries } from '../loader/src/shared/sequence.ts';
 import { ADDONS_DIR, addonDirs, ROOT, readAddon } from './manifests.ts';
 import {
@@ -325,7 +326,14 @@ async function main() {
   // Its own server rather than a second terminal. The whole run is one command
   // somebody types a few times a year, and "start the stage first" is a step that
   // fails as a connection refused three layers down inside Playwright.
+  //
+  // The bind comes FIRST and the bundle second, which is the whole of what makes
+  // two captures exclusive. `stage/stage.js` is one file every scenario shares,
+  // so a build ahead of the bind, which is where a `&&` in the script put it,
+  // rewrites the bundle under a run already serving it and only then discovers
+  // the port is taken. Nothing requests the bundle until a page opens below.
   const server = await serveStage(hostFor(process.argv));
+  await buildStage();
   const browser = await chromium.launch();
   const failures = [];
   const written = [];
