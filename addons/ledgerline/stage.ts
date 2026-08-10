@@ -534,9 +534,10 @@ function openTab(label: string): void {
  * a third of itself empty, which reads as an addon that found nothing. It is set by the FULLEST
  * pane rather than the emptiest: the ledger is nine rows over a search field, and a box that
  * clips the ninth reads as broken in a Browse thumbnail, where a little air under six deal rows
- * does not.
+ * does not. It went up again for the Export and Import row, which sits under that pane's
+ * sentence and is the only chrome any pane carries that the others do not.
  */
-const WIDENED = { x: 80, y: 140, w: 416, h: 515 };
+const WIDENED = { x: 80, y: 140, w: 416, h: 560 };
 
 /**
  * THREE panes fit the sheet and a fourth does not: the capture viewport is 1440, each pane

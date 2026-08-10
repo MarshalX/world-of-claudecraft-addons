@@ -76,6 +76,8 @@ const CHARACTER_NAMESPACE = characterNamespace(FQID);
  * function body with no exports and a key both sides computed the same way would prove nothing.
  */
 const LEDGER_KEY = 'ledger/pbe/Claudemoon';
+/** Where this install's own id lives, which is the one account key that is not a ledger. */
+const INSTALL_KEY = 'install';
 
 /** The stamps are one character's, so the loader's own per-character key holds them. */
 const MINE_KEY = perCharacterKey('pbe', 'Claudemoon/Marshal', 'mine-seen');
@@ -183,12 +185,17 @@ interface MarketState {
 }
 
 /**
- * One recorded visit, as it lands in storage: when, cheapest, dearest, query. An array rather
- * than an object because the ledger is one value holding every item a player has browsed, and
- * field names repeated per visit would be most of the file. The time is in seconds for the same
- * reason.
+ * One recorded visit, as it lands in storage: when, cheapest, dearest, query, and when the trip
+ * BEGAN. An array rather than an object because the ledger is one value holding every item a
+ * player has browsed, and field names repeated per visit would be most of the file. The times are
+ * in seconds for the same reason.
+ *
+ * The fifth slot is APPENDED, which is the whole migration: a ledger written before it existed
+ * has nothing there, `parseVisit` supplies the only stamp it has, and no migration pass runs.
+ * `first` exists because `at` SLIDES, moving forward as a trip is paged through, so it cannot
+ * identify a visit across two copies of one ledger. The start does not move.
  */
-type StoredVisit = [number, number, number, string];
+type StoredVisit = [number, number, number, string, number?];
 
 interface StoredLedger {
   items: Record<string, StoredVisit[]>;
@@ -201,8 +208,16 @@ interface StoredStamp {
   seen: number;
 }
 
-/** One drained sale as it lands in storage: when, how many, gross, net, who bought it. */
-type StoredSale = [number, number, number, number, string];
+/**
+ * One drained sale as it lands in storage: when, how many, gross, net, who bought it, and which
+ * install drained it.
+ *
+ * The sixth slot is appended for the reason the fifth on a visit is, and it is what lets an
+ * import replace one device's rows without touching another's. A row written before it existed
+ * carries an empty origin, which can only mean this device: the store is local and nothing else
+ * has ever written to it.
+ */
+type StoredSale = [number, number, number, number, string, string?];
 
 interface StoredSold {
   sales: Record<string, StoredSale[]>;
@@ -505,6 +520,74 @@ async function start(options: StartOptions = {}): Promise<LedgerHarness> {
  * than made per page. Every assertion on the store goes through this, and one that forgot would
  * read the state before the page it just delivered.
  */
+/** The most recent toast on screen, which is where an import reports what it did. */
+function lastToast(): string {
+  return [...document.querySelectorAll('.woc-toast')].at(-1)?.textContent ?? '';
+}
+
+/** The button a player presses, by the label it carries. */
+function press(label: string): void {
+  const el = document.querySelector<HTMLButtonElement>(
+    `[data-role="transfer"] [data-action="${label}"]`,
+  );
+  if (el === null) {
+    throw new Error(`no ${label} button`);
+  }
+  el.click();
+}
+
+/**
+ * Press Export and read back what it wrote.
+ *
+ * Through the real button and the real blob, because the file is the contract: a suite that
+ * called an encoder directly would pass while the button wrote nothing, and the download is the
+ * only route a player has.
+ */
+async function exportFrom(): Promise<Record<string, unknown>> {
+  const blobs: Blob[] = [];
+  const make = URL.createObjectURL;
+  URL.createObjectURL = (blob: Blob): string => {
+    blobs.push(blob);
+    return 'blob:test';
+  };
+  URL.revokeObjectURL = (): void => undefined;
+  try {
+    press('export');
+  } finally {
+    URL.createObjectURL = make;
+  }
+  const written = blobs.at(-1);
+  if (written === undefined) {
+    throw new Error('Export wrote no file');
+  }
+  return JSON.parse(await written.text()) as Record<string, unknown>;
+}
+
+/**
+ * Press Import and hand it a file.
+ *
+ * The input is built inside the handler and clicked, so the fake stands in for the pick: the
+ * click is intercepted, `files` is defined on that instance, and `change` is dispatched, which is
+ * the sequence a real pick produces.
+ */
+async function importInto(payload: unknown): Promise<void> {
+  const text = JSON.stringify(payload);
+  const { click } = HTMLInputElement.prototype;
+  HTMLInputElement.prototype.click = function fake(this: HTMLInputElement): void {
+    Object.defineProperty(this, 'files', {
+      configurable: true,
+      value: [{ size: text.length, text: () => Promise.resolve(text) }],
+    });
+    this.dispatchEvent(new Event('change'));
+  };
+  try {
+    press('import');
+  } finally {
+    HTMLInputElement.prototype.click = click;
+  }
+  await flush(MICROTASKS);
+}
+
 async function saved(): Promise<void> {
   vi.advanceTimersByTime(WRITE_HOLD_MS);
   await flush(MICROTASKS);
@@ -572,9 +655,30 @@ function seedLedger(storage: FakeStorage, items: Record<string, StoredVisit[]>):
   storage.remote(NAMESPACE, LEDGER_KEY, { items });
 }
 
-/** One stored visit, in the units the store holds: seconds, and copper per item. */
-function visit(at: number, low: number, high = low, query = ''): StoredVisit {
-  return [Math.round(at / 1000), low, high, query];
+/**
+ * One stored visit, in the units the store holds: seconds, and copper per item.
+ *
+ * The two stamps are an OBJECT rather than two more parameters, because a visit already carries
+ * four positional values and a fifth and sixth loose number is a call nobody can read.
+ */
+function visit(at: number, low: number, high = low, said: VisitSaid = {}): StoredVisit {
+  return [
+    Math.round(at / 1000),
+    low,
+    high,
+    said.query ?? '',
+    Math.round((said.first ?? at) / 1000),
+  ];
+}
+
+interface VisitSaid {
+  query?: string;
+  first?: number;
+}
+
+/** The same visit as a ledger written before `first` existed holds it: four slots, no start. */
+function legacyVisit(at: number, low: number, high = low, query = ''): StoredVisit {
+  return [Math.round(at / 1000), low, high, query] as StoredVisit;
 }
 
 function seedSold(storage: FakeStorage, held: Partial<StoredSold>): void {
@@ -650,8 +754,10 @@ describe('what is written down', () => {
     await h.settle();
     await saved();
 
+    // The install id is the only other key, and it is one value for the life of the install
+    // rather than anything that grows with browsing.
     expect(storedItems(h)).toHaveLength(40);
-    expect(storedKeys(h)).toEqual([LEDGER_KEY]);
+    expect(storedKeys(h)).toEqual([INSTALL_KEY, LEDGER_KEY]);
   });
 
   // The spread of one page is not a price moving: those asks are the same moment. What
@@ -665,9 +771,13 @@ describe('what is written down', () => {
     await h.settle();
     await saved();
 
-    // One reading, holding the cheapest and the dearest ask of the whole trip, stamped
-    // when the player finished looking.
-    expect(visitsFor(h, 'ore')).toEqual([visit(WALL_CLOCK_MS + VISIT_WINDOW_MS / 2, 300, 500)]);
+    // One reading, holding the cheapest and the dearest ask of the whole trip, stamped when the
+    // player finished looking and carrying the moment they started. Both stamps matter and they
+    // are different: the end is what keeps four pages one visit, and the start is what lets two
+    // copies of this ledger agree that they hold the same reading.
+    expect(visitsFor(h, 'ore')).toEqual([
+      visit(WALL_CLOCK_MS + VISIT_WINDOW_MS / 2, 300, 500, { first: WALL_CLOCK_MS }),
+    ]);
   });
 
   it('starts a new reading once the player has been away for a while', async () => {
@@ -804,7 +914,7 @@ describe('what is written down', () => {
     await h.settle();
     await saved();
 
-    expect(storedKeys(h)).toEqual([LEDGER_KEY, 'ledger/pbe/Ashmere'].sort());
+    expect(storedKeys(h)).toEqual([INSTALL_KEY, LEDGER_KEY, 'ledger/pbe/Ashmere'].sort());
     expect(visitsFor(h, 'ore')).toEqual([visit(WALL_CLOCK_MS, 500)]);
     // Nothing of the first realm is on screen: the panel is the market in front of you.
     expect(figureOf('prices', 'ore')).toBe('low 9 silver');
@@ -902,8 +1012,11 @@ describe('what the Merchant says has sold', () => {
     await h.settle();
 
     // The gross the buyer paid and the net after the cut, both kept: summing the wrong one
-    // overstates a player's income by the whole of `cutPct`.
-    expect(salesFor(h, 'ore')).toEqual([[WALL_CLOCK_MS / 1000, 2, 900, 837, 'Bragg']]);
+    // overstates a player's income by the whole of `cutPct`. The sixth slot is which install
+    // drained the row, which is what lets an import replace one device's sales and no other's.
+    const rows = salesFor(h, 'ore');
+    expect(rows[0]?.slice(0, 5)).toEqual([WALL_CLOCK_MS / 1000, 2, 900, 837, 'Bragg']);
+    expect(rows[0]?.[5]).toMatch(/./);
   });
 
   // The page is re-read on every browse and a row carries no id, so a reading that compared
@@ -2334,5 +2447,247 @@ describe('a stack priced as one', () => {
     // typo is judged against the 300 the page is asking for one.
     expect(detailOf('deals', '1')).toContain('stack priced as one');
     expect(detailOf('deals', '1')).toContain('3 visits');
+  });
+});
+
+/**
+ * Carrying a ledger between machines, which is a MERGE and never a replace.
+ *
+ * Two properties decide whether this is safe to hand a player, and both are about repetition
+ * rather than about the happy path. Importing a device's own export must change nothing, because
+ * that is what somebody does when they are not sure whether the last import worked. And a file
+ * exported mid-trip and imported after more browsing must also change nothing, which is the hard
+ * one: `foldVisit` slides a visit's `at` forward as the trip is paged through, so the two copies
+ * of that reading disagree about when it happened and only the start they share can match them.
+ *
+ * The store carries `first` for exactly that, appended to a positional row so a ledger written
+ * before it existed reads with no migration pass. Those older readings are the one place the
+ * exact match cannot work, and they fall back to the same window rule the live fold applies.
+ */
+describe('carrying a ledger to another machine', () => {
+  it('adds nothing when a device imports its own export', async () => {
+    const h = await start();
+    h.send({
+      market: page([
+        listing({ id: 1, itemId: 'ore', price: 500 }),
+        listing({ id: 2, itemId: 'hide', price: 900 }),
+      ]),
+    });
+    await h.settle();
+    await saved();
+    const before = [visitsFor(h, 'ore'), visitsFor(h, 'hide')];
+
+    await importInto(await exportFrom());
+    await h.settle();
+    await saved();
+
+    expect([visitsFor(h, 'ore'), visitsFor(h, 'hide')]).toEqual(before);
+    expect(lastToast()).toContain('nothing new to add');
+  });
+
+  // The case a stamp alone cannot survive. The file is written at the top of the trip and the
+  // player keeps paging, which slides the visit's `at` forward and widens what it saw.
+  it('adds nothing when the file was written mid-trip', async () => {
+    const h = await start();
+    h.send({ market: page([listing({ id: 1, itemId: 'ore', price: 500 })]) });
+    await h.settle();
+    const file = await exportFrom();
+
+    h.setWallClock(WALL_CLOCK_MS + VISIT_WINDOW_MS / 2);
+    h.send({ market: page([listing({ id: 2, itemId: 'ore', price: 300 })]) });
+    await h.settle();
+    await saved();
+
+    await importInto(file);
+    await h.settle();
+    await saved();
+
+    // Still one reading, still holding the whole trip's spread. A second visit here would be the
+    // same trip counted twice, which is a second vote in every median drawn from it.
+    expect(visitsFor(h, 'ore')).toEqual([
+      visit(WALL_CLOCK_MS + VISIT_WINDOW_MS / 2, 300, 500, { first: WALL_CLOCK_MS }),
+    ]);
+  });
+
+  it('takes readings the other machine has and this one does not', async () => {
+    const h = await start();
+    h.send({ market: page([listing({ id: 1, itemId: 'ore', price: 500 })]) });
+    await h.settle();
+
+    await importInto({
+      ...(await exportFrom()),
+      device: 'another-machine',
+      ledger: {
+        queries: [''],
+        items: {
+          ore: [[WALL_CLOCK_MS / 1000 - 86_400, 300, 400, 0, WALL_CLOCK_MS / 1000 - 86_400]],
+          silk: [[WALL_CLOCK_MS / 1000 - 3600, 70, 90, 0, WALL_CLOCK_MS / 1000 - 3600]],
+        },
+      },
+    });
+    await h.settle();
+    await saved();
+
+    expect(visitsFor(h, 'ore')).toHaveLength(2);
+    expect(visitsFor(h, 'silk')).toHaveLength(1);
+    expect(lastToast()).toContain('added 2 readings');
+  });
+
+  // A file exported before the player shortened their retention, or simply left in a folder for
+  // two months, must not put back what the setting has since dropped.
+  it('drops readings the retention setting has already forgotten', async () => {
+    const h = await start({ settings: { 'history-days': 1 } });
+    h.send({ market: page([listing({ id: 1, itemId: 'ore', price: 500 })]) });
+    await h.settle();
+
+    await importInto({
+      ...(await exportFrom()),
+      ledger: {
+        queries: [''],
+        items: { ore: [[WALL_CLOCK_MS / 1000 - 30 * 86_400, 100, 100, 0, 0]] },
+      },
+    });
+    await h.settle();
+    await saved();
+
+    // Not kept, and not CLAIMED either. The prune that follows the merge would drop it from the
+    // store whatever happened, so the thing worth pinning is the count the player is told: an
+    // import that reports a reading it then threw away is an import nobody can verify.
+    expect(visitsFor(h, 'ore')).toHaveLength(1);
+    expect(lastToast()).toContain('nothing new to add');
+  });
+});
+
+/**
+ * A ledger written by a build that had never heard of any of this.
+ *
+ * Both stores grew by APPENDING to a positional row whose reader defaults every slot, so there is
+ * no migration pass, no version stamp in the store, and no moment where an upgrade could fail
+ * halfway. What there IS is a reading that has to be right: an old visit carries no start, so the
+ * only stamp available is one that has been sliding, and an old sale carries no origin, which can
+ * only mean this device, since nothing else has ever written to a local store.
+ */
+describe('a ledger from before any of this', () => {
+  it('reads a visit with no start, and gives it the only stamp there is', async () => {
+    const storage = createFakeStorage();
+    seedLedger(storage, { ore: [legacyVisit(WALL_CLOCK_MS - HOUR_MS, 400, 600)] });
+    const h = await start({ storage });
+
+    expect(tipOn('prices', 'ore')).toContain('4s each');
+    // Written back in the new shape, with the start filled from the stamp it had.
+    h.send({ market: page([listing({ id: 1, itemId: 'ore', price: 400 })]) });
+    await h.settle();
+    await saved();
+    expect(visitsFor(h, 'ore')[0]).toHaveLength(5);
+  });
+
+  /**
+   * Two old readings must stay two.
+   *
+   * The fallback is what stops this: with no start recorded, every legacy visit would share one
+   * value, and a merge matching on it would fold the whole of an item's history into whichever
+   * reading it happened to find first. That does not shorten the list, which is what makes it
+   * dangerous, it WIDENS one row to cover every other and moves its stamp, so the item comes out
+   * with a plausible spread that no visit ever saw.
+   */
+  it('keeps two old readings apart when its own export comes back', async () => {
+    const storage = createFakeStorage();
+    seedLedger(storage, {
+      ore: [
+        legacyVisit(WALL_CLOCK_MS - 2 * HOUR_MS, 400, 600),
+        legacyVisit(WALL_CLOCK_MS - HOUR_MS, 100, 200),
+      ],
+    });
+    const h = await start({ storage });
+
+    await importInto(await exportFrom());
+    await h.settle();
+    await saved();
+
+    // Both rows survive, each keeping its own spread and its own stamp, and each written back
+    // with a start filled from the stamp it already had. One row covering 100 to 600 is the
+    // failure this guards, and it would look like an ordinary reading.
+    expect(visitsFor(h, 'ore')).toEqual([
+      visit(WALL_CLOCK_MS - 2 * HOUR_MS, 400, 600),
+      visit(WALL_CLOCK_MS - HOUR_MS, 100, 200),
+    ]);
+  });
+
+  // The case the exact match cannot cover, because the stamp it would match on has moved. It
+  // falls back to the window rule the live fold uses, so the reading is merged rather than doubled.
+  it('does not double an old reading when its own export comes back', async () => {
+    const storage = createFakeStorage();
+    seedLedger(storage, { ore: [legacyVisit(WALL_CLOCK_MS, 400, 600)] });
+    const h = await start({ storage });
+    const file = await exportFrom();
+
+    h.setWallClock(WALL_CLOCK_MS + VISIT_WINDOW_MS / 2);
+    h.send({ market: page([listing({ id: 1, itemId: 'ore', price: 300 })]) });
+    await h.settle();
+    await importInto(file);
+    await h.settle();
+    await saved();
+
+    expect(visitsFor(h, 'ore')).toHaveLength(1);
+  });
+});
+
+/**
+ * What an import refuses, and why each refusal names both sides.
+ *
+ * A market is per realm and the two channels serve different content, so merging one into another
+ * is a corruption that nothing afterwards can find: the prices are plausible, they are simply not
+ * this market's. The sale record is gated separately because the Merchant keeps a collection per
+ * seller, so it belongs to a character rather than to a realm.
+ */
+describe('what an import will not take', () => {
+  it('refuses a file from another realm, and says which', async () => {
+    const h = await start();
+    h.send({ market: page([listing({ id: 1, itemId: 'ore', price: 500 })]) });
+    await h.settle();
+
+    await importInto({ ...(await exportFrom()), realm: 'Ashmere' });
+    await h.settle();
+
+    expect(lastToast()).toContain('Ashmere');
+    expect(lastToast()).toContain('per realm');
+  });
+
+  it('refuses a file from another channel', async () => {
+    const h = await start();
+    await h.settle();
+
+    await importInto({ ...(await exportFrom()), channel: 'live' });
+    await h.settle();
+
+    expect(lastToast()).toContain('different content');
+  });
+
+  it('refuses a shape it does not know how to read', async () => {
+    const h = await start();
+    await h.settle();
+
+    await importInto({ file: 'ledgerline', v: 99 });
+    await h.settle();
+
+    expect(lastToast()).toContain('version 99');
+  });
+
+  // The ledger still merges. Only the sales are left alone, and the report says so rather than
+  // reporting a partial success as a whole one.
+  it('leaves another character sales alone while taking their prices', async () => {
+    const h = await start();
+    h.send({
+      market: page([listing({ id: 1, itemId: 'ore', price: 500 })], {
+        collectionCopper: 465,
+        collectionSales: [sale()],
+      }),
+    });
+    await h.settle();
+
+    await importInto({ ...(await exportFrom()), character: 'pbe/Someone-Else' });
+    await h.settle();
+
+    expect(lastToast()).toContain('belong to another character');
   });
 });

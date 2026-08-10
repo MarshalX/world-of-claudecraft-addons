@@ -45,6 +45,22 @@
 // expiry, so it never appears beside the word "expires". The cut and the cap are read off every
 // page rather than written down, so a release that moves either is followed for free.
 //
+// IT TRAVELS AS A FILE, and the file MERGES. A visit carries two stamps rather than one: `at`
+// slides forward as a trip is paged through, which is what keeps four pages one reading, and
+// `first` is the moment the trip began and never moves, which is the only thing two copies of a
+// ledger can agree on. Identity is `(first, query)`, so importing a device's own export adds
+// nothing, and a file written mid-trip and imported after more browsing adds nothing either. A
+// matched visit is widened rather than overwritten, so importing A then B leaves what importing
+// B then A does. Both new fields are APPENDED to their positional rows and defaulted by their
+// readers, so a store written before any of this reads with no migration pass at all.
+//
+// THE SALE RECORD CANNOT BE DEDUPED and is partitioned instead. A `MarketSaleRecord` has no id
+// and no clock, and several sales drained in one go share the stamp this addon gives them, so two
+// identical rows are indistinguishable from one row copied twice. Each row remembers which
+// install drained it, an import keeps whichever side holds more of an origin's rows, and the one
+// imprecision that survives is stated rather than hidden: two devices that both drained the same
+// pending ledger record that sale twice, because nothing in the payload can prove they did not.
+//
 // It is ALL ONE KEY. A namespace is a prefix on one flat GM store, so a key per item costs
 // `storage.keys()` a scan of everything the loader holds, a bridge round trip each on the way in
 // and a cross-tab watcher left behind for each. Writes are held and coalesced.
@@ -118,6 +134,43 @@ const MAX_ROWS = 40;
 
 /** The vendor floor table this addon ships. Declared on the manifest, so `woc.data` will serve it. */
 const FLOORS_FILE = 'floors.json';
+
+/** Where this install's own id is kept, so an exported file can say which device wrote it. */
+const INSTALL_KEY = 'install';
+
+/** A kilobyte, for stating a file ceiling in the unit a person reads it in. */
+const BYTES_PER_KB = 1024;
+
+/** `2026-08-10`, the leading date of an ISO stamp, for naming a file. */
+const DATE_LENGTH = 10;
+
+/** Digits and letters, and the slice of one random fraction that is not `0.`. */
+const BASE_36 = 36;
+const RANDOM_START = 2;
+const RANDOM_END = 10;
+
+/**
+ * The shape number an exported file carries.
+ *
+ * Read before anything else and refused when it is not understood, which is the opposite of how
+ * the STORE is versioned: a store is this addon's own and grows by appending to positional rows
+ * that its reader defaults, while a file is written by a build that may be newer than the one
+ * reading it, and guessing at a shape somebody else wrote is how a merge corrupts a ledger.
+ */
+const FILE_VERSION = 1;
+
+/** What an exported file calls itself, so a player can tell two of them apart in a folder. */
+const FILE_PREFIX = 'ledgerline';
+
+/**
+ * The most a file may be before it is refused unread.
+ *
+ * A full ledger at every ceiling this addon keeps is around a third of a megabyte, so this is
+ * several times the largest honest file and still small enough that a mistaken pick (a video, a
+ * disk image) fails immediately rather than locking the tab up in `JSON.parse`.
+ */
+const MAX_IMPORT_MB = 4;
+const MAX_IMPORT_BYTES = MAX_IMPORT_MB * BYTES_PER_KB * BYTES_PER_KB;
 
 /**
  * Every listing seen at ONE visit to the counter, which is what makes a scan a scan.
@@ -197,6 +250,14 @@ const series = new Map();
 const floors = new Map();
 /** Which game the floor table was read from, because a price is a claim about a version. */
 const floorsFrom = { version: '' };
+/**
+ * This install's own id, which is what lets a sale record say which device drained it.
+ *
+ * Account-wide rather than per character, because it identifies the STORE rather than the player.
+ * If a userscript manager is syncing values then two machines share this id, and that is correct
+ * rather than a flaw: they share the store too, so there is nothing between them to import.
+ */
+const install = { id: '' };
 /**
  * Listing id to what was seen of it at this visit to the counter. MEMORY ONLY, and deliberately:
  * it is a photograph of a book that moves, so a persisted one would be presented as current an
@@ -708,11 +769,30 @@ function parseVisit(value) {
   if (at <= 0 || low < 0 || high < low) {
     return null;
   }
-  return { at, low, high, query: text(value[3]) };
+  // `first` is APPENDED, so a ledger written before it existed reads with no migration pass at
+  // all: the slot is empty and the reader supplies the only value it can, which is the stamp it
+  // does have. That reading is an inference rather than a record, which is why `mergeVisits`
+  // keeps the fold rule as a fallback instead of trusting identity alone.
+  const first = numberOr(value[4], 0) * MS_PER_SECOND;
+  return { at, low, high, query: text(value[3]), first: startedAt(first, at) };
+}
+
+/** The recorded start, or the only stamp a ledger written before `first` existed can offer. */
+function startedAt(first, at) {
+  if (first > 0) {
+    return first;
+  }
+  return at;
 }
 
 function storedVisit(visit) {
-  return [Math.round(visit.at / MS_PER_SECOND), visit.low, visit.high, visit.query];
+  return [
+    Math.round(visit.at / MS_PER_SECOND),
+    visit.low,
+    visit.high,
+    visit.query,
+    Math.round(visit.first / MS_PER_SECOND),
+  ];
 }
 
 function parseSeries(itemId, value) {
@@ -827,7 +907,16 @@ function foldVisit(record, ask, page) {
     last.at = page.at;
     return;
   }
-  record.visits.push({ at: page.at, low: ask.low, high: ask.high, query: page.query });
+  // `at` slides as the trip goes on, which is what keeps four pages one visit; `first` is the
+  // moment the trip started and never moves, which is what gives the visit an identity two
+  // devices can agree on. See `mergeVisits`.
+  record.visits.push({
+    at: page.at,
+    first: page.at,
+    low: ask.low,
+    high: ask.high,
+    query: page.query,
+  });
 }
 
 /** Write one page into the ledger, and answer whether anything moved. */
@@ -992,6 +1081,7 @@ function recordSale(row, now) {
     price,
     proceeds: Math.max(0, numberOr(row.proceeds, 0)),
     buyer: text(row.buyerName),
+    origin: install.id,
     unit: Math.round(unitPrice(price, count)),
   });
   record.at = now;
@@ -1086,7 +1176,17 @@ function parseSale(value) {
   if (at <= 0 || price < 0 || proceeds < 0) {
     return null;
   }
-  return { at, count, price, proceeds, buyer: text(value[4]), unit: Math.round(price / count) };
+  // APPENDED like `first` above. An empty origin is a row drained before origins existed, which
+  // can only have been this device: the store is local and nothing else has ever written to it.
+  return {
+    at,
+    count,
+    price,
+    proceeds,
+    buyer: text(value[4]),
+    origin: text(value[5]),
+    unit: Math.round(price / count),
+  };
 }
 
 /** An array in seconds, for the economy the visits are stored with. */
@@ -1097,6 +1197,7 @@ function storedSale(entry) {
     entry.price,
     entry.proceeds,
     entry.buyer,
+    entry.origin,
   ];
 }
 
@@ -1118,6 +1219,124 @@ function parseSoldRecord(itemId, value) {
   record.sales.sort((a, b) => a.at - b.at);
   record.at = record.sales.at(-1)?.at ?? 0;
   return record;
+}
+
+/**
+ * Which held visit an incoming one IS, or null for one this ledger has never seen.
+ *
+ * Two rules, and the order is the whole of the delta guarantee. `first` is the moment a trip
+ * began and never moves, so two copies of one reading agree on it however much paging happened
+ * afterwards: that is what makes re-importing a device's own file add nothing. The fold rule
+ * behind it is for readings recorded before `first` existed, whose inferred start moved with the
+ * trip, and it is the same rule `foldVisit` applies live, so a match here is a match the addon
+ * would have made anyway had both readings arrived on one device.
+ */
+function matchVisit(visits, visit) {
+  const exact = visits.find((held) => held.query === visit.query && held.first === visit.first);
+  if (exact !== undefined) {
+    return exact;
+  }
+  const near = visits.find(
+    (held) => held.query === visit.query && Math.abs(held.at - visit.at) <= VISIT_WINDOW_MS,
+  );
+  return near ?? null;
+}
+
+/**
+ * Fold one incoming visit into a record, and answer whether it was new.
+ *
+ * A matched visit is WIDENED rather than overwritten, which is what makes the merge order-free:
+ * the two copies are readings of one trip, so the union of what each saw is the trip, and
+ * importing A then B leaves exactly what importing B then A does.
+ */
+function absorbVisit(record, visit) {
+  const held = matchVisit(record.visits, visit);
+  if (held === null) {
+    record.visits.push({ ...visit });
+    return true;
+  }
+  held.low = Math.min(held.low, visit.low);
+  held.high = Math.max(held.high, visit.high);
+  held.at = Math.max(held.at, visit.at);
+  held.first = Math.min(held.first, visit.first);
+  return false;
+}
+
+/**
+ * Merge a whole incoming ledger into the one in memory, and say what it did.
+ *
+ * The retention cutoff is applied to what ARRIVES as well as to what is kept, or a file exported
+ * two months ago would put back the readings the player's own setting has since dropped.
+ */
+function mergeLedger(incoming, cutoff) {
+  let added = 0;
+  let repeated = 0;
+  for (const [itemId, record] of incoming) {
+    const held = series.get(itemId) ?? emptySeries(itemId);
+    for (const visit of record.visits.filter((entry) => entry.at >= cutoff)) {
+      if (absorbVisit(held, visit)) {
+        added += 1;
+      } else {
+        repeated += 1;
+      }
+    }
+    if (held.visits.length > 0) {
+      held.visits = prunedVisits(held.visits, cutoff);
+      held.at = held.visits.at(-1)?.at ?? held.at;
+      series.set(itemId, held);
+    }
+  }
+  forget(overflowIds());
+  return { added, repeated, items: incoming.size };
+}
+
+/**
+ * Merge an incoming sale record, per ORIGIN and per item, keeping whichever side holds more.
+ *
+ * A `MarketSaleRecord` carries no id and no clock, and several sales drained in one go share the
+ * stamp this addon gives them, so two rows identical in every field are indistinguishable from
+ * one row copied twice. Nothing content-based can dedup them. What CAN be relied on is that one
+ * device's log for one item only ever grows: it is appended to as the Merchant's queue is
+ * drained and never edited. So the longer of two copies is a superset of the shorter, keeping it
+ * loses nothing, and re-importing an older file changes nothing at all.
+ *
+ * The imprecision that survives is real rather than hidden: if two devices both stood at the
+ * Merchant and drained the same pending ledger, that sale is on record twice under two origins,
+ * because nothing in the payload can prove it was not two sales.
+ */
+function mergeSold(incoming) {
+  let added = 0;
+  for (const [itemId, record] of incoming) {
+    const held = sold.get(itemId) ?? emptySold(itemId);
+    const kept = byOrigin(held.sales);
+    for (const [origin, rows] of byOrigin(record.sales)) {
+      const have = kept.get(origin)?.length ?? 0;
+      if (rows.length > have) {
+        added += rows.length - have;
+        kept.set(origin, rows);
+      }
+    }
+    held.sales = [...kept.values()].flat().sort((a, b) => a.at - b.at);
+    held.at = held.sales.at(-1)?.at ?? held.at;
+    if (held.sales.length > 0) {
+      sold.set(itemId, held);
+    }
+  }
+  return added;
+}
+
+/** One item's sales split by the device that drained each, oldest first within a device. */
+function byOrigin(sales) {
+  const split = new Map();
+  for (const entry of sales) {
+    const rows = split.get(entry.origin) ?? [];
+    rows.push(entry);
+    split.set(entry.origin, rows);
+  }
+  for (const rows of split.values()) {
+    rows.sort((a, b) => a.at - b.at);
+  }
+  return split;
 }
 
 /** Every item's stored sales, as records, dropping anything that is not one. */
@@ -2087,12 +2306,313 @@ panes.get('deals')?.appendChild(dealList);
 rule(panes.get('deals'));
 const dealNote = line(panes.get('deals'), 'deals-note');
 
+/**
+ * The whole ledger as a file, with the query strings interned.
+ *
+ * A query is stored on every visit and is the same handful of strings over and over, so it is
+ * most of an uncompressed archive: interning takes a full ledger from around 489 kB to 332 kB
+ * without dropping a single reading. Dropping readings is the alternative and it is not one,
+ * because a digest of lows and medians cannot be MERGED, and a file that cannot merge cannot be
+ * imported twice without duplicating everything it carries.
+ */
+function exportedLedger() {
+  const queries = [];
+  const items = {};
+  for (const [itemId, record] of series) {
+    items[itemId] = record.visits.map((visit) => internedVisit(visit, queries));
+  }
+  return { queries, items };
+}
+
+/** One visit, with its query replaced by an index into the table being built beside it. */
+function internedVisit(visit, queries) {
+  return [
+    Math.round(visit.at / MS_PER_SECOND),
+    visit.low,
+    visit.high,
+    queryIndex(visit.query, queries),
+    Math.round(visit.first / MS_PER_SECOND),
+  ];
+}
+
+/** Where this query sits in the table, adding it if this is the first visit to carry it. */
+function queryIndex(query, queries) {
+  const at = queries.indexOf(query);
+  if (at >= 0) {
+    return at;
+  }
+  return queries.push(query) - 1;
+}
+
+/** The sale record as a file section, which is per character where the ledger is per realm. */
+function exportedSold() {
+  const items = {};
+  for (const [itemId, record] of sold) {
+    items[itemId] = record.sales.map(storedSale);
+  }
+  return items;
+}
+
+/**
+ * Everything this addon would hand another device, and the four facts that say whose it is.
+ *
+ * The channel and the realm are a GATE rather than a label: a market is per realm and the two
+ * channels serve different content, so merging one into another is a corruption nothing
+ * afterwards can find. The character gates the sale half alone, since the Merchant keeps a
+ * collection per seller.
+ */
+function exportedFile() {
+  return {
+    file: FILE_PREFIX,
+    v: FILE_VERSION,
+    channel: woc.game.channel,
+    realm: realmNow(),
+    character: text(woc.world.characterKey),
+    device: install.id,
+    at: Math.round(woc.wallClock() / MS_PER_SECOND),
+    ledger: exportedLedger(),
+    sold: exportedSold(),
+  };
+}
+
+/** One interned visit back into the shape the store and the merge both use. */
+function importedVisit(value, queries) {
+  if (!Array.isArray(value)) {
+    return null;
+  }
+  const query = queries[Math.round(numberOr(value[3], -1))] ?? '';
+  return parseVisit([value[0], value[1], value[2], query, value[4]]);
+}
+
+/** The ledger half of a file, as records, dropping anything that is not one. */
+function importedLedger(payload) {
+  const held = new Map();
+  const queries = readQueries(payload);
+  const items = readField(payload, 'items');
+  if (typeof items !== 'object' || items === null) {
+    return held;
+  }
+  for (const [itemId, rows] of Object.entries(items)) {
+    const record = importedSeries(itemId, rows, queries);
+    if (record !== null) {
+      held.set(itemId, record);
+    }
+  }
+  return held;
+}
+
+function readField(payload, name) {
+  if (typeof payload !== 'object' || payload === null) {
+    return null;
+  }
+  return payload[name];
+}
+
+function readQueries(payload) {
+  const table = readField(payload, 'queries');
+  if (!Array.isArray(table)) {
+    return [];
+  }
+  return table.map(text);
+}
+
+function importedSeries(itemId, rows, queries) {
+  if (itemId === '' || !Array.isArray(rows)) {
+    return null;
+  }
+  const record = emptySeries(itemId);
+  for (const row of rows) {
+    const visit = importedVisit(row, queries);
+    if (visit !== null) {
+      record.visits.push(visit);
+    }
+  }
+  if (record.visits.length === 0) {
+    return null;
+  }
+  return record;
+}
+
+/**
+ * Why this file cannot be merged, or null.
+ *
+ * Every branch NAMES both sides. A refusal that only says no leaves a player holding a file they
+ * believe in with no way to find out what is wrong with it.
+ */
+function refusal(payload) {
+  if (readField(payload, 'file') !== FILE_PREFIX) {
+    return 'that is not a Ledgerline export.';
+  }
+  if (readField(payload, 'v') !== FILE_VERSION) {
+    return `that file is version ${text(String(readField(payload, 'v')))} and this build reads ${String(FILE_VERSION)}.`;
+  }
+  const channel = text(readField(payload, 'channel'));
+  if (channel !== woc.game.channel) {
+    return `that file is from ${channel || 'nowhere'} and you are on ${woc.game.channel}, which serves different content.`;
+  }
+  const realm = text(readField(payload, 'realm'));
+  if (realm !== realmNow()) {
+    return `that file is from ${realm || 'no realm'} and you are on ${realmNow() || 'no realm'}. A market is per realm.`;
+  }
+  return null;
+}
+
+/** A name a player can tell two of these apart by, in a folder, months later. */
+function fileName() {
+  const realm = realmNow() || NO_REALM;
+  const day = new Date(woc.wallClock()).toISOString().slice(0, DATE_LENGTH);
+  return `${FILE_PREFIX}-${woc.game.channel}-${realm}-${day}.json`;
+}
+
+/**
+ * Write the file out.
+ *
+ * A download rather than something to copy: a full ledger is a third of a megabyte, which is
+ * nothing as a file and unusable as a paste, and the only way to make it pasteable is to drop
+ * to a digest, which cannot be merged.
+ */
+function exportLedger() {
+  const written = JSON.stringify(exportedFile());
+  const url = URL.createObjectURL(new Blob([written], { type: 'application/json' }));
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = fileName();
+  link.click();
+  URL.revokeObjectURL(url);
+  const size = `${String(Math.round(written.length / BYTES_PER_KB))} kB`;
+  woc.ui.toast(`Ledgerline: wrote ${woc.fmt.count(series.size, 'item')}, ${size}.`);
+}
+
+/**
+ * Ask for a file and merge it.
+ *
+ * The input is built and thrown away per press rather than kept: a file input remembers its last
+ * pick and does not fire `change` when the same file is chosen twice, which is exactly what
+ * somebody re-syncing does.
+ */
+function askForFile() {
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.accept = 'application/json,.json';
+  input.addEventListener('change', () => {
+    const file = input.files?.[0];
+    if (file !== undefined) {
+      readFile(file).catch((err) => {
+        woc.warn('ledgerline: that file could not be read', err);
+        woc.ui.toast('Ledgerline: that file could not be read.', { kind: 'error' });
+      });
+    }
+  });
+  input.click();
+}
+
+async function readFile(file) {
+  if (file.size > MAX_IMPORT_BYTES) {
+    woc.ui.toast(`Ledgerline: that file is over ${String(MAX_IMPORT_MB)} MB.`, { kind: 'error' });
+    return;
+  }
+  const payload = JSON.parse(await file.text());
+  if (running.on) {
+    importFile(payload);
+  }
+}
+
+/**
+ * Merge a file, or say why not.
+ *
+ * DELTA, always. Every reading is matched against what is already held and only what is new is
+ * added, so importing the same file twice, or a device's own export, changes nothing and says so.
+ * Nothing here replaces anything.
+ */
+function importFile(payload) {
+  const refused = refusal(payload);
+  if (refused !== null) {
+    woc.ui.toast(`Ledgerline: ${refused}`, { kind: 'error' });
+    return;
+  }
+  if (!loaded.on) {
+    woc.ui.toast('Ledgerline: the stored ledger is still being read.', { kind: 'warn' });
+    return;
+  }
+  const now = woc.wallClock();
+  const read = mergeLedger(importedLedger(readField(payload, 'ledger')), cutoffAt(now));
+  const sales = mergeSoldFrom(payload, now);
+  keep();
+  schedulePaint();
+  woc.ui.toast(`Ledgerline: ${importReport(read, sales)}`);
+}
+
+/** The sale half, gated on the CHARACTER where the ledger is gated on the realm. */
+function mergeSoldFrom(payload, now) {
+  if (text(readField(payload, 'character')) !== text(woc.world.characterKey)) {
+    return null;
+  }
+  const added = mergeSold(parseSold(readField(payload, 'sold')));
+  if (added > 0) {
+    trimSold(soldCutoff(now));
+    keepSold();
+  }
+  return added;
+}
+
+/** What the import did, in the words a player needs to decide whether it worked. */
+function importReport(read, sales) {
+  const parts = [addedText(read)];
+  if (read.repeated > 0) {
+    parts.push(`${String(read.repeated)} already known`);
+  }
+  if (sales === null) {
+    parts.push('sales left alone, they belong to another character');
+  } else if (sales > 0) {
+    parts.push(`${woc.fmt.count(sales, 'sale')} of your own`);
+  }
+  return `${parts.join(', ')}.`;
+}
+
+function addedText(read) {
+  if (read.added === 0) {
+    return 'nothing new to add';
+  }
+  const items = woc.fmt.count(read.items, 'item');
+  return `added ${woc.fmt.count(read.added, 'reading')} across ${items}`;
+}
+
+/**
+ * The two controls that move a ledger between machines.
+ *
+ * Buttons rather than a menu, because `ui.menu` runs its handler AFTER the menu has closed and a
+ * file input clicked outside a user gesture is refused; the click on a button is the gesture.
+ */
+function controlRow(parent) {
+  const row = woc.ui.row({ parent, className: 'woc-ledgerline-controls', gap: STAT_GAP });
+  row.dataset.role = 'transfer';
+  return row;
+}
+
+function button(parent, label, onClick) {
+  const el = document.createElement('button');
+  el.type = 'button';
+  el.className = 'woc-btn';
+  el.textContent = label;
+  el.dataset.action = label.toLowerCase();
+  el.addEventListener('click', onClick);
+  parent.appendChild(el);
+  return el;
+}
+
 const priceTop = rule(panes.get('prices'));
 const priceList = scrolls(column('woc-ledgerline-list'));
 priceList.dataset.list = 'prices';
 panes.get('prices')?.appendChild(priceList);
 rule(panes.get('prices'));
 const priceNote = line(panes.get('prices'), 'prices-note');
+const transferRow = controlRow(panes.get('prices'));
+button(transferRow, 'Export', () => {
+  exportLedger();
+});
+button(transferRow, 'Import', () => {
+  askForFile();
+});
 
 const mineTop = rule(panes.get('mine'));
 const mineList = scrolls(column('woc-ledgerline-list'));
@@ -2964,6 +3484,35 @@ woc.setInterval(() => {
 }, AGE_TICK_MS);
 
 /**
+ * This install's id, made once and kept.
+ *
+ * `randomUUID` is only defined in a secure context, and a player on a plain http mirror of the
+ * game is in an insecure one, so the fallback is not decoration: without it that player's sale
+ * rows would carry no origin at all and an import could not tell theirs from a file's.
+ */
+function newInstallId() {
+  const uuid = globalThis.crypto?.randomUUID;
+  if (typeof uuid === 'function') {
+    return uuid.call(globalThis.crypto);
+  }
+  const noise = Math.random().toString(BASE_36).slice(RANDOM_START, RANDOM_END);
+  return `local-${String(woc.wallClock())}-${noise}`;
+}
+
+async function learnInstall() {
+  const stored = text(await woc.storage.get(INSTALL_KEY, ''));
+  if (!running.on) {
+    return;
+  }
+  if (stored !== '') {
+    install.id = stored;
+    return;
+  }
+  install.id = newInstallId();
+  await woc.storage.set(INSTALL_KEY, install.id);
+}
+
+/**
  * The vendor floors, which are the only prices here that come from anywhere but browsing.
  *
  * A failure costs the two CERTAIN signals and nothing else, so it is reported and the panel
@@ -3012,4 +3561,10 @@ learnArt().catch((err) => {
 });
 learnFloors().catch((err) => {
   woc.warn('ledgerline: the vendor floors could not be read, so no deal is certain', err);
+});
+learnInstall().catch((err) => {
+  woc.warn(
+    'ledgerline: this install could not be named, so an export cannot say where it came from',
+    err,
+  );
 });
