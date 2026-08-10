@@ -2,7 +2,7 @@
   "schema": 1,
   "name": "Official Marketplace",
   "maintainer": "MarshalX",
-  "generated": "2026-08-10T01:07:12.000Z",
+  "generated": "2026-08-10T01:10:29.000Z",
   "addons": [
     {
       "id": "cadence",
@@ -540,16 +540,19 @@
     {
       "id": "ledgerline",
       "name": "Ledgerline",
-      "version": "1.1.1",
+      "version": "1.2.0",
       "apiVersion": 1,
       "apiMinor": 4,
       "author": "MarshalX",
-      "description": "A price history for a market that keeps almost none: every page you read at the Merchant is written down, your own completed sales are copied out of its collect ledger before you empty it, and your listings are checked against the page for undercuts.",
+      "description": "A price history for a market that keeps almost none, and a scanner over it: every page you read at the Merchant is written down, each listing is judged against the vendor's floor, the page's own second-cheapest and your recorded prices, and what is worth buying is ranked by what you would clear on the resale.",
       "entry": "main.js",
       "preview": {
         "file": "preview.png",
-        "alt": "Panel 1 of 3, The ledger, recorded prices over their own trends Panel 2 of 3, Your listings, undercuts washed red Panel 3 of 3, What sold, what a buyer paid, per item"
+        "alt": "Panel 1 of 3, What to buy, underpriced listings ranked by what each clears Panel 2 of 3, The ledger, every price recorded, each against its own range Panel 3 of 3, Your listings, undercuts washed red"
       },
+      "data": [
+        "floors.json"
+      ],
       "companions": [
         "lorebind"
       ],
@@ -565,6 +568,7 @@
         "world.read",
         "net.read",
         "ui",
+        "sound",
         "storage",
         "keys"
       ],
@@ -594,6 +598,34 @@
           "id": "undercut-alert",
           "type": "boolean",
           "label": "Warn when one of your listings is no longer the cheapest",
+          "default": true
+        },
+        {
+          "id": "min-profit",
+          "type": "number",
+          "label": "Copper a listing must clear before it reaches the Deals list",
+          "default": 500,
+          "min": 0,
+          "max": 1000000
+        },
+        {
+          "id": "alert-profit",
+          "type": "number",
+          "label": "Copper a deal must clear before it is announced. 0 announces none",
+          "default": 0,
+          "min": 0,
+          "max": 1000000
+        },
+        {
+          "id": "alert-sound",
+          "type": "boolean",
+          "label": "Play a sound with a deal announcement",
+          "default": false
+        },
+        {
+          "id": "deals-first",
+          "type": "boolean",
+          "label": "Open on the Deals list while you are at the Merchant",
           "default": true
         }
       ],
