@@ -15,7 +15,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { WORLD_KEYS } from '../../loader/src/runtime/world/signature.ts';
 import { validateManifest } from '../../loader/src/shared/schema.ts';
-import { mountAddon, parseManifest } from '../../tests/fakes/addon.ts';
+import { type AddonHarness, mountAddon, parseManifest } from '../../tests/fakes/addon.ts';
 import { eventsFrame } from '../../tests/fakes/frames.ts';
 // The addon's own two files, read the way the loader reads text it ships: the raw suffix
 // rather than node:fs, so this suite needs no filesystem types and runs under happy-dom, whose
@@ -51,8 +51,30 @@ function manifest() {
 }
 
 /**
+ * The report text, once the harness has finished its run.
+ *
+ * Ticking while it settles is what a browser does continuously, and it is what makes the
+ * paint check do its real work rather than time out: `woc.paint` rides the LOADER'S loop
+ * rather than `requestAnimationFrame`, and that loop is hand-driven here, so with nothing
+ * ticking it the check waits out its own deadline and then honestly reports that no frame
+ * ran. Every case below would pay that wait, for an answer that asserts nothing.
+ */
+async function reportFrom(harness: AddonHarness): Promise<string> {
+  await expect
+    .poll(() => {
+      harness.frames.tick();
+      return document.body.textContent ?? '';
+    })
+    .toMatch(/checks passed/);
+  return document.body.textContent ?? '';
+}
+
+/**
  * The harness runs with NO game, which is the state it is most often started in:
  * an addon's first line executes at document-start, on the landing page.
+ *
+ * `report` is handed back bound to this harness rather than living on its own, so there is
+ * no way to await the report without the loop that settles it.
  */
 async function run() {
   const harness = await mountAddon({
@@ -61,7 +83,12 @@ async function run() {
     marketplace: MARKETPLACE,
   });
   teardown.push(harness.dispose);
-  return { addon: harness.addon, harness, hub: harness.hub };
+  return {
+    addon: harness.addon,
+    harness,
+    hub: harness.hub,
+    report: () => reportFrom(harness),
+  };
 }
 
 describe('its manifest', () => {
@@ -178,48 +205,28 @@ describe('the anchor demonstration', () => {
   });
 });
 
-/** The report text, once the harness has finished its run. */
-async function report(): Promise<string> {
-  await expect.poll(() => document.body.textContent ?? '').toMatch(/checks passed/);
-  return document.body.textContent ?? '';
-}
-
 // Every check has to pass here. There is no game in this environment and the harness knows it:
 // each check that reads the game reports the no-game case as a pass with a note rather than as
 // a failure, so anything red here is the loader's fault rather than the environment's.
 describe('what it reports without a game', () => {
   it('passes every check', async () => {
-    await run();
+    const { report } = await run();
 
     expect(await report()).toContain('46 of 46 checks passed');
   });
 
   it('names no check as failed', async () => {
-    await run();
+    const { report } = await run();
 
     expect(await report()).not.toContain('FAIL');
   });
 
-  // The one check whose real work needs a frame, driven so that it does it.
-  //
-  // `woc.paint` rides the LOADER'S loop rather than `requestAnimationFrame`, and that loop
-  // is hand-driven here, so with nothing ticking it the check honestly reports that no
-  // frame has run and asserts nothing. That is the right answer for a document with no
-  // loop and it is useless as a gate, which is what this case exists to be: ticking while
-  // the report settles is what a browser does continuously, and it is what makes the
-  // coalescing claim, two requests and one draw, something a broken loader fails here
-  // rather than in somebody's game.
+  // The claim the ticking in `reportFrom` buys: two requests and one draw is something a
+  // broken loader fails here rather than in somebody's game.
   it('coalesces two repaint requests into one draw, once a frame runs', async () => {
-    const { harness } = await run();
+    const { report } = await run();
 
-    await expect
-      .poll(() => {
-        harness.frames.tick();
-        return document.body.textContent ?? '';
-      })
-      .toMatch(/checks passed/);
-
-    expect(document.body.textContent).toContain('two requests before a frame drew once');
+    expect(await report()).toContain('two requests before a frame drew once');
   });
 
   // Named individually as well as counted, so a rename or a dropped check shows
@@ -258,7 +265,7 @@ describe('what it reports without a game', () => {
     'content',
     'counters',
   ])('passes the %s check', async (name) => {
-    await run();
+    const { report } = await run();
 
     expect(await report()).not.toContain(`FAIL  ${name}`);
   });
@@ -274,7 +281,7 @@ describe('what it reports without a game', () => {
 describe('watching the combat records', () => {
   /** Land some records, then press the button that re-runs everything. */
   async function afterRecords(list: readonly unknown[]): Promise<void> {
-    const { harness } = await run();
+    const { harness, report } = await run();
     await report();
     harness.inbound(eventsFrame(list));
     press('Run again');
@@ -350,13 +357,13 @@ describe('watching the combat records', () => {
 // bridge read, the parse, and the memo behind a second read.
 describe('the data file it ships', () => {
   it('refuses a name the manifest does not declare', async () => {
-    await run();
+    const { report } = await run();
 
     expect(await report()).toContain('undeclared names refused');
   });
 
   it('reads back what is on disk once the host has a copy', async () => {
-    const { harness } = await run();
+    const { harness, report } = await run();
     await report();
 
     harness.addonData(FQID, 'data.json', DATA_TEXT);
