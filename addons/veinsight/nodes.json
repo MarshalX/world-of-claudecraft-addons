@@ -1,9 +1,26 @@
 {
-  "gameVersion": "0.35.0",
+  "gameVersion": "0.35.1",
   "respawnSeconds": {
     "ore": 240,
     "wood": 240,
     "herb": 240
+  },
+  "professionByType": {
+    "ore": "mining",
+    "wood": "logging",
+    "herb": "herbalism"
+  },
+  "wieldByTier": {
+    "1": 0,
+    "2": 40,
+    "3": 70,
+    "4": 85,
+    "5": 100
+  },
+  "gain": {
+    "step": 25,
+    "reduced": 0.5,
+    "minimal": 0.25
   },
   "zones": [
     {
@@ -140,6 +157,114 @@
       "tier": 5
     }
   ],
+  "materials": {
+    "ore": {
+      "eastbrook_vale": "copper_ore",
+      "mirefen_marsh": "iron_ore",
+      "thornpeak_heights": "thorium_ore",
+      "veiled_hollow": "thorium_ore",
+      "drakelands": "thorium_ore",
+      "frostveil": "thorium_ore",
+      "amberfall": "thorium_ore",
+      "willowfen": "thorium_ore",
+      "nightbloom": "thorium_ore",
+      "wraithwood": "thorium_ore",
+      "galecrest": "thorium_ore",
+      "palmreach": "thorium_ore",
+      "evergarden": "thorium_ore",
+      "farshore_isle": "iron_ore"
+    },
+    "wood": {
+      "eastbrook_vale": "ironbark_log",
+      "mirefen_marsh": "ashwood_log",
+      "thornpeak_heights": "elderwood_log",
+      "veiled_hollow": "elderwood_log",
+      "drakelands": "elderwood_log",
+      "frostveil": "elderwood_log",
+      "amberfall": "elderwood_log",
+      "willowfen": "elderwood_log",
+      "nightbloom": "elderwood_log",
+      "wraithwood": "elderwood_log",
+      "galecrest": "elderwood_log",
+      "palmreach": "elderwood_log",
+      "evergarden": "elderwood_log",
+      "farshore_isle": "ashwood_log"
+    },
+    "herb": {
+      "eastbrook_vale": "silverleaf_herb",
+      "mirefen_marsh": "goldleaf_herb",
+      "thornpeak_heights": "sunpetal_herb",
+      "veiled_hollow": "sunpetal_herb",
+      "drakelands": "sunpetal_herb",
+      "frostveil": "sunpetal_herb",
+      "amberfall": "sunpetal_herb",
+      "willowfen": "sunpetal_herb",
+      "nightbloom": "sunpetal_herb",
+      "wraithwood": "sunpetal_herb",
+      "galecrest": "sunpetal_herb",
+      "palmreach": "sunpetal_herb",
+      "evergarden": "sunpetal_herb",
+      "farshore_isle": "goldleaf_herb"
+    }
+  },
+  "grades": {
+    "copper_ore": {
+      "fine": "fine_copper_ore",
+      "tier": 1
+    },
+    "ironbark_log": {
+      "fine": "fine_ironbark_log",
+      "tier": 1
+    },
+    "silverleaf_herb": {
+      "fine": "fine_silverleaf_herb",
+      "tier": 1
+    },
+    "iron_ore": {
+      "fine": "fine_iron_ore",
+      "tier": 2
+    },
+    "ashwood_log": {
+      "fine": "fine_ashwood_log",
+      "tier": 2
+    },
+    "goldleaf_herb": {
+      "fine": "fine_goldleaf_herb",
+      "tier": 2
+    },
+    "thorium_ore": {
+      "fine": "fine_thorium_ore",
+      "tier": 3
+    },
+    "elderwood_log": {
+      "fine": "fine_elderwood_log",
+      "tier": 3
+    },
+    "sunpetal_herb": {
+      "fine": "fine_sunpetal_herb",
+      "tier": 3
+    }
+  },
+  "itemNames": {
+    "ashwood_log": "Ashwood Log",
+    "copper_ore": "Copper Ore",
+    "elderwood_log": "Highpine Log",
+    "fine_ashwood_log": "Fine Ashwood Log",
+    "fine_copper_ore": "Fine Copper Ore",
+    "fine_elderwood_log": "Fine Highpine Log",
+    "fine_goldleaf_herb": "Fine Goldleaf Herb",
+    "fine_iron_ore": "Fine Iron Ore",
+    "fine_ironbark_log": "Fine Ironbark Log",
+    "fine_silverleaf_herb": "Fine Sheenleaf Herb",
+    "fine_sunpetal_herb": "Fine Sunpetal Herb",
+    "fine_thorium_ore": "Fine Osmium Ore",
+    "goldleaf_herb": "Goldleaf Herb",
+    "iron_ore": "Iron Ore",
+    "ironbark_log": "Ironbark Log",
+    "silverleaf_herb": "Sheenleaf Herb",
+    "sunpetal_herb": "Sunpetal Herb",
+    "thorium_ore": "Osmium Ore"
+  },
   "nodes": [
     {
       "id": "ore_eastbrook_1",

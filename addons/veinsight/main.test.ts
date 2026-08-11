@@ -74,6 +74,11 @@ const HERB_1 = { id: 'herb_eastbrook_1', x: -59, z: 91 };
 const OTHER_PLAYER = 777;
 /** The nearest tier-2 node in the game, and the only kind a tier-1 tool refuses. */
 const ORE_T2 = { id: 'ore_mirefen_t2', x: 36, z: 350 };
+/**
+ * A tier-1 vein in a zone whose material sits at rung 2, which is the case the fine grade
+ * has to refuse: the tool outclasses the material and the VEIN does not carry it.
+ */
+const ORE_MIREFEN_T1 = { id: 'ore_mirefen_3', x: 35, z: 345 };
 
 /**
  * Every eastbrook node within the default 150 yard draw distance, nearest first from ORE_1,
@@ -98,8 +103,30 @@ const NEAR_ORE_1 = [
 /** The tool ids the shipped table files under each type, at the tiers they cover. */
 const COPPER_PICK = 'copper_mining_pick';
 const IRON_PICK = 'iron_mining_pick';
+const MITHRIL_PICK = 'mithril_mining_pick';
 const SICKLE = 'gathering_sickle';
 const HANDAXE = 'handaxe';
+
+/**
+ * The wield ladder, out of the shipped table rather than written here.
+ *
+ * These five numbers are pinned by the GAME's own suite against its live gain curve, so a
+ * curve retune moves them, and a case asserting on 40 by hand would then be asserting that
+ * the addon still applies a rung the game has retired.
+ */
+const WIELD_BY_TIER = (JSON.parse(TABLE_TEXT) as { wieldByTier: { 2: number; 3: number } })
+  .wieldByTier;
+
+/** How much counter is one gain tier, out of the table for the reason the ladder is. */
+const GAIN_STEP = (JSON.parse(TABLE_TEXT) as { gain: { step: number } }).gain.step;
+/**
+ * How many gain tiers above a node's own you have to be before it pays nothing at all.
+ *
+ * Three, from the game's four-state curve: at, one below, two below, then zero. Written here
+ * rather than read, because it is the SHAPE of the curve rather than a tuning figure, and the
+ * table carries the two multipliers rather than the count of them.
+ */
+const GRAY_STEPS = 3;
 
 /** A full gathering kit at tier 1, which is what opens 138 of the game's 156 nodes. */
 const TIER_1_KIT = [
@@ -227,6 +254,14 @@ interface StartOpts {
   facing?: number;
   /** What is in the bags. Null is bags the loader cannot read, which is not empty. */
   bags?: readonly Bag[] | null;
+  /**
+   * Your gathering counters, by profession id.
+   *
+   * Absent is a character who has gathered nothing, which is a real zero and locks every
+   * tool above the first. Null is the sheet not having arrived at all, which is before
+   * world entry and is a different answer.
+   */
+  proficiency?: Record<string, number> | null;
   /** Node id to seconds left on YOUR timer. A node with no entry is ready. */
   cooling?: Record<string, number>;
   table?: string;
@@ -243,6 +278,8 @@ interface VeinsightHarness extends SharedHarness {
   despawn: (id: number) => void;
   /** Put something in the bags, which is what the tool gate reads. */
   carry: (...itemIds: readonly string[]) => void;
+  /** Move a gathering counter, which is what a harvest does and what a wield rung reads. */
+  learn: (professionId: string, value: number) => void;
   cool: (nodeId: string, seconds: number) => void;
   ready: (nodeId: string) => void;
   /** A completed harvest off the socket, which is what measures a node's height. */
@@ -273,6 +310,16 @@ interface VeinsightHarness extends SharedHarness {
   route: () => string[];
   /** One row's right-hand figure. */
   figureOf: (id: string) => string;
+  /**
+   * What the tooltip says over one row, or '' when nothing is described.
+   *
+   * The hidden check matters: there is one tooltip element for the whole loader and it
+   * stays in the document holding its last text, so reading `textContent` alone would
+   * report the previous row's answer for a row that has none.
+   */
+  tipOf: (id: string) => string;
+  /** The art on one row, which is what the harvest would actually hand you. */
+  iconOf: (id: string) => string;
   /** The same answer on the pin, which has a 40px square to say it in. */
   pinFigureOf: (id: string) => string;
   /** One row's fill, as a percentage. A number, because the arithmetic is real. */
@@ -328,12 +375,22 @@ async function start(
   const entities = new Map<number, Fake>([[PLAYER_ID, player]]);
   const cooldowns = new Map<string, number>(Object.entries(opts.cooling ?? {}));
   const bags = bagsFrom(opts.bags);
+  // A plain record, and a fresh one on every change rather than a mutated one: the loader's
+  // own watch signature counts the entries it holds, so a counter raised in place would be
+  // read back correctly and would notify nobody.
+  const gathering: { value: Record<string, number> | null } = { value: opts.proficiency ?? {} };
+  if (opts.proficiency === null) {
+    gathering.value = null;
+  }
   const world = {
     entities,
     player,
     known: [],
     inventory: bags,
     nodeCooldowns: cooldowns,
+    get gatheringProficiency() {
+      return gathering.value;
+    },
   };
   const harness = await mountAddon({
     manifest: MANIFEST_TEXT,
@@ -367,6 +424,9 @@ async function start(
       for (const itemId of itemIds) {
         bags?.push({ itemId, count: 1 });
       }
+    },
+    learn: (professionId, value) => {
+      gathering.value = { ...gathering.value, [professionId]: value };
     },
     cool: (nodeId, seconds) => {
       cooldowns.set(nodeId, seconds);
@@ -443,6 +503,15 @@ async function start(
     route: () =>
       [...document.querySelectorAll('.woc-vs-leg')].map((el) => el.getAttribute('data-to') ?? ''),
     figureOf: (id) => textIn(id, '.woc-bar-value'),
+    tipOf: (id) => {
+      rowFor(id)?.dispatchEvent(new Event('pointerenter'));
+      const tip = document.getElementById('woc-tooltip');
+      if (tip === null || tip.hidden) {
+        return '';
+      }
+      return tip.textContent ?? '';
+    },
+    iconOf: (id) => rowFor(id)?.querySelector('img')?.getAttribute('src') ?? '',
     pinFigureOf: (id) => stackFor(id)?.querySelector('.woc-tile-value')?.textContent ?? '',
     fillOf: (id) =>
       Number.parseFloat(rowFor(id)?.querySelector<HTMLElement>('.woc-bar-fill')?.style.width ?? ''),
@@ -688,7 +757,7 @@ describe('the tool gate', () => {
     const h = await run({ 'list-length': 20 }, undefined, { at: ORE_1, bags: null });
 
     expect(h.figureOf(ORE_1.id)).toBe('Yours');
-    expect(h.note()).toContain('bags cannot be read');
+    expect(h.note()).toContain('Your bags cannot be read');
   });
 
   it('refuses a tier the tools cannot cover', async () => {
@@ -700,10 +769,11 @@ describe('the tool gate', () => {
     expect(h.figureOf(ORE_T2.id)).toBe('Tool');
   });
 
-  it('opens that tier once a tool covering it is in the bags', async () => {
+  it('opens that tier once a tool covering it is carried AND wields', async () => {
     const h = await run({ 'draw-distance': 400, 'list-length': 20 }, undefined, {
       at: { x: ORE_T2.x, z: ORE_T2.z },
       bags: [{ itemId: IRON_PICK, count: 1 }],
+      proficiency: { mining: WIELD_BY_TIER[2] },
     });
 
     expect(h.figureOf(ORE_T2.id)).toBe('Yours');
@@ -736,12 +806,124 @@ describe('the tool gate', () => {
     const h = await run({ 'draw-distance': 400, 'list-length': 20 }, undefined, {
       at: { x: ORE_T2.x, z: ORE_T2.z },
       bags: [{ itemId: COPPER_PICK, count: 1 }],
+      proficiency: { mining: WIELD_BY_TIER[2] },
     });
 
     h.carry(IRON_PICK);
     h.poll();
 
     expect(h.figureOf(ORE_T2.id)).toBe('Yours');
+  });
+});
+
+/**
+ * The second half of the gate, and the half this addon spent three versions getting wrong.
+ *
+ * Owning a tool and being able to swing it are different facts: every tier above the first
+ * demands a gathering counter before the game's own harvest command will accept it. A panel
+ * reading ownership alone offers a mithril pick's owner every vein in the world and the
+ * server refuses them at all of them, while the game's own minimap draws the lock.
+ */
+describe('the wield gate', () => {
+  it('refuses a covering tool the counter cannot swing yet', async () => {
+    const h = await run({ 'draw-distance': 400, 'list-length': 20 }, undefined, {
+      at: { x: ORE_T2.x, z: ORE_T2.z },
+      bags: [{ itemId: IRON_PICK, count: 1 }],
+      proficiency: { mining: WIELD_BY_TIER[2] - 1 },
+    });
+
+    expect(h.figureOf(ORE_T2.id)).toBe('Skill');
+  });
+
+  // The case that motivated the whole rewrite: a tool three tiers up, bought or traded ahead,
+  // opens NOTHING at all. Under the old ownership scan every node in the game read as open.
+  it('leaves a tier-1 node shut to an unearned tier-3 pick', async () => {
+    const h = await run({ 'list-length': 20 }, undefined, {
+      at: ORE_1,
+      bags: [{ itemId: MITHRIL_PICK, count: 1 }],
+    });
+
+    expect(h.figureOf(ORE_1.id)).toBe('Skill');
+  });
+
+  // Two different situations and two different words. `Tool` is a trip to a vendor and
+  // `Skill` is a stretch of gathering with what is already in the bags, and only the second
+  // is something a player can act on where they are standing.
+  it('says Tool rather than Skill when nothing carried covers the tier', async () => {
+    const h = await run({ 'draw-distance': 400, 'list-length': 20 }, undefined, {
+      at: { x: ORE_T2.x, z: ORE_T2.z },
+      bags: [{ itemId: COPPER_PICK, count: 1 }],
+      proficiency: { mining: WIELD_BY_TIER[3] },
+    });
+
+    expect(h.figureOf(ORE_T2.id)).toBe('Tool');
+  });
+
+  // The rung named is the cheapest one that would put something ALREADY CARRIED to work.
+  // Naming the node's own tier instead would tell a player who carries only the tier-3 pick
+  // that 40 opens this, which unlocks nothing they own.
+  it('names the rung a tool in the bags would actually wield at', async () => {
+    const h = await run({ 'draw-distance': 400, 'list-length': 20 }, undefined, {
+      at: { x: ORE_T2.x, z: ORE_T2.z },
+      bags: [{ itemId: MITHRIL_PICK, count: 1 }],
+      proficiency: { mining: WIELD_BY_TIER[2] },
+    });
+
+    expect(h.figureOf(ORE_T2.id)).toBe('Skill');
+    expect(h.tipOf(ORE_T2.id)).toContain(`wields at ${String(WIELD_BY_TIER[3])} mining`);
+  });
+
+  // A harvest moves the counter, and crossing a rung opens every node of a tier at once with
+  // nothing else on screen moving to explain it.
+  it('redraws when the counter crosses a rung', async () => {
+    const h = await run({ 'draw-distance': 400, 'list-length': 20 }, undefined, {
+      at: { x: ORE_T2.x, z: ORE_T2.z },
+      bags: [{ itemId: IRON_PICK, count: 1 }],
+      proficiency: { mining: WIELD_BY_TIER[2] - 1 },
+    });
+    expect(h.figureOf(ORE_T2.id)).toBe('Skill');
+
+    h.learn('mining', WIELD_BY_TIER[2]);
+    h.poll();
+
+    expect(h.figureOf(ORE_T2.id)).toBe('Yours');
+  });
+
+  // FAIL CLOSED, which is the game's own direction: `coerceProficiency` reads an absent or
+  // malformed counter as zero, and zero locks every tool above the first. Guessing the other
+  // way would offer nodes the server refuses, which is the failure this whole gate is about.
+  // The sheet itself arrives with the player, so a drawn row always has a counter to read:
+  // this is the map inside it being unreadable, not the sheet being absent.
+  it('locks rather than opens when the counter map cannot be read', async () => {
+    const h = await run({ 'draw-distance': 400, 'list-length': 20 }, undefined, {
+      at: { x: ORE_T2.x, z: ORE_T2.z },
+      bags: [{ itemId: IRON_PICK, count: 1 }],
+      proficiency: null,
+    });
+
+    expect(h.figureOf(ORE_T2.id)).toBe('Skill');
+  });
+
+  // A sheet that HAS arrived carrying nothing for the profession is a real zero, which is what
+  // the game's own read coerces an absent counter to.
+  it('reads a sheet with no counter for the profession as zero', async () => {
+    const h = await run({ 'draw-distance': 400, 'list-length': 20 }, undefined, {
+      at: { x: ORE_T2.x, z: ORE_T2.z },
+      bags: [{ itemId: IRON_PICK, count: 1 }],
+      proficiency: { logging: WIELD_BY_TIER[3] },
+    });
+
+    expect(h.figureOf(ORE_T2.id)).toBe('Skill');
+  });
+
+  it('hides an unearned node when asked to', async () => {
+    const h = await run(
+      { 'draw-distance': 400, 'list-length': 20, 'above-tier': false },
+      undefined,
+      { at: { x: ORE_T2.x, z: ORE_T2.z }, bags: [{ itemId: IRON_PICK, count: 1 }] },
+    );
+
+    expect(h.drawn()).not.toContain(ORE_T2.id);
   });
 });
 
@@ -1171,5 +1353,122 @@ describe('the panel itself', () => {
     h.press('Alt+KeyV');
 
     expect(h.pinned()).toContain(ORE_1.id);
+  });
+});
+
+/**
+ * The second thing the counter buys once it is being read.
+ *
+ * A node pays proficiency against its own tier: every step of the counter is one gain tier,
+ * and a node three tiers below yours pays nothing at all. On a table of 138 tier-1 nodes out
+ * of 156 that means most of a circuit quietly stops teaching a gatherer past the third step,
+ * with nothing in the game saying so and nothing on screen changing when it happens.
+ */
+describe('what a node still teaches you', () => {
+  it('pays in full at a fresh counter', async () => {
+    const h = await run({ 'list-length': 20 }, undefined, { at: ORE_1, bags: TIER_1_KIT });
+
+    expect(h.tipOf(ORE_1.id)).toContain('raises your mining by 1');
+  });
+
+  it('halves it a gain tier up', async () => {
+    const h = await run({ 'list-length': 20 }, undefined, {
+      at: ORE_1,
+      bags: TIER_1_KIT,
+      proficiency: { mining: GAIN_STEP },
+    });
+
+    expect(h.tipOf(ORE_1.id)).toContain('raises your mining by 0.5');
+  });
+
+  it('says so when a node has stopped teaching you altogether', async () => {
+    const h = await run({ 'list-length': 20 }, undefined, {
+      at: ORE_1,
+      bags: TIER_1_KIT,
+      proficiency: { mining: GAIN_STEP * GRAY_STEPS },
+    });
+
+    expect(h.tipOf(ORE_1.id)).toContain('No longer raises your mining');
+  });
+
+  // Per profession, off the node's own type: a logger's counter says nothing about a vein.
+  it('scores each type against its own profession', async () => {
+    const h = await run({ 'list-length': 20 }, undefined, {
+      at: ORE_1,
+      bags: TIER_1_KIT,
+      proficiency: { mining: GAIN_STEP * GRAY_STEPS },
+    });
+
+    expect(h.tipOf(WOOD_2.id)).toContain('raises your logging by 1');
+  });
+});
+
+/**
+ * What one harvest actually hands you, which is a fact about the zone and your tool rather
+ * than about the node: the material is the zone's, and a tool STRICTLY above that material's
+ * own rung, at a vein of at least that rung, mints the fine grade instead.
+ *
+ * The names come out of the table because an id is not a name here: this zone's ore is
+ * `thorium_ore` two zones over and the game shows it as "Osmium Ore".
+ */
+describe('what a node yields you', () => {
+  it('names the zone material', async () => {
+    const h = await run({ 'list-length': 20 }, undefined, { at: ORE_1, bags: TIER_1_KIT });
+
+    expect(h.tipOf(ORE_1.id)).toContain('Yields Copper Ore');
+  });
+
+  it('names the fine grade when the tool outclasses the material', async () => {
+    const h = await run({ 'list-length': 20 }, undefined, {
+      at: ORE_1,
+      bags: [{ itemId: IRON_PICK, count: 1 }],
+      proficiency: { mining: WIELD_BY_TIER[2] },
+    });
+
+    expect(h.tipOf(ORE_1.id)).toContain('Yields Fine Copper Ore');
+  });
+
+  // BOTH arms of the rule, and this is the one a "better tool, better yield" reading misses:
+  // the vein has to carry the material's own rung. A tier-1 vein in a rung-2 zone stays plain
+  // however good the pick is, which is what keeps the base material gatherable at all.
+  it('keeps the plain grade at a vein below the material rung', async () => {
+    const h = await run({ 'draw-distance': 400, 'list-length': 20 }, undefined, {
+      at: ORE_MIREFEN_T1,
+      bags: [{ itemId: MITHRIL_PICK, count: 1 }],
+      proficiency: { mining: WIELD_BY_TIER[3] },
+    });
+
+    expect(h.tipOf(ORE_MIREFEN_T1.id)).toContain('Yields Iron Ore');
+  });
+
+  // The one answer here that can be short, disclosed where it can be short and nowhere else:
+  // a slotted quality effect adds a tier to the comparison and no addon can see one, so a
+  // tool sitting exactly ON the material's rung is the only tool whose answer it would flip.
+  it('discloses the one case a slotted effect would change', async () => {
+    const h = await run({ 'list-length': 20 }, undefined, { at: ORE_1, bags: TIER_1_KIT });
+
+    expect(h.tipOf(ORE_1.id)).toContain('slotted quality effect');
+  });
+
+  it('says nothing about an effect once the tool is past the rung', async () => {
+    const h = await run({ 'list-length': 20 }, undefined, {
+      at: ORE_1,
+      bags: [{ itemId: IRON_PICK, count: 1 }],
+      proficiency: { mining: WIELD_BY_TIER[2] },
+    });
+
+    expect(h.tipOf(ORE_1.id)).not.toContain('slotted quality effect');
+  });
+
+  // The art moves with the grade, so a tool good enough to mint the fine one changes the
+  // picture as well as the sentence.
+  it('draws the yield art on the row, at the grade it would actually hand you', async () => {
+    const h = await run({ 'list-length': 20 }, undefined, {
+      at: ORE_1,
+      bags: [{ itemId: IRON_PICK, count: 1 }],
+      proficiency: { mining: WIELD_BY_TIER[2] },
+    });
+
+    expect(h.iconOf(ORE_1.id)).toContain('fine_copper_ore');
   });
 });

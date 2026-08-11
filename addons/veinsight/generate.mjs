@@ -14,13 +14,28 @@
 //   package.json                          the version stamped into the output
 //   src/sim/content/gather_nodes.ts       GATHER_NODES, and GATHER_NODE_TYPES for
 //                                         the order the three types are listed in
-//   src/sim/content/items.ts              every item whose `use` is a gatherTool
+//   src/sim/content/items.ts              every item whose `use` is a gatherTool,
+//                                         and the display NAME of every yield
 //   src/sim/professions/gathering.ts      NODE_TYPE_BY_PROFESSION, which is what
 //                                         files a tool under the node type it opens,
-//                                         and NODE_HARVEST_TABLE for the respawn
-//                                         length of each type
+//                                         NODE_HARVEST_TABLE for the respawn length
+//                                         of each type, NODE_MATERIAL_TABLE for what
+//                                         a zone's node of each type yields, and
+//                                         GATHER_GAIN_TIER_STEP
+//   src/sim/professions/wield_gate.ts     WIELD_REQUIREMENT_BY_TIER, the proficiency
+//                                         each tool tier needs before it will swing
+//   src/sim/professions/wheel.ts          the two reduced-gain multipliers
+//   src/sim/professions/material_grades.ts  MATERIAL_GRADE_ROWS, the fine grade of
+//                                         each yield and the rung it sits at
 //   src/sim/data.ts                       the ZONES array, for the canonical order
 //   src/sim/content/*.ts                  every `ZoneDef` export, for id and name
+//
+// EVERY TUNING FIGURE IS READ RATHER THAN WRITTEN DOWN HERE, and the wield ladder
+// is the case that makes the rule worth restating. Its five thresholds are pinned
+// by the game's own suite against the live gain curve, which means a curve retune
+// moves them with nothing on the wire to announce it, exactly like the respawn
+// length that was 120 and is now 240. A hardcoded ladder here would go on locking
+// and unlocking nodes by the old numbers, and no test on either side would notice.
 //
 // It writes ONE file, `nodes.json` beside this script, and can write nothing else:
 // the destination is resolved from `import.meta.dirname` rather than from the
@@ -64,6 +79,9 @@ const GAME_PACKAGE_NAME = 'world-of-claudecraft';
 const NODES_FILE = 'src/sim/content/gather_nodes.ts';
 const ITEMS_FILE = 'src/sim/content/items.ts';
 const GATHERING_FILE = 'src/sim/professions/gathering.ts';
+const WIELD_FILE = 'src/sim/professions/wield_gate.ts';
+const WHEEL_FILE = 'src/sim/professions/wheel.ts';
+const GRADES_FILE = 'src/sim/professions/material_grades.ts';
 const DATA_FILE = 'src/sim/data.ts';
 const CONTENT_DIR = 'src/sim/content';
 
@@ -72,6 +90,13 @@ const EXPECTED_TYPES = 3;
 const EXPECTED_NODES = 156;
 const EXPECTED_ZONES = 14;
 const EXPECTED_TOOLS = 15;
+const EXPECTED_WIELD_RUNGS = 5;
+/** Three types across fourteen zones, which is every cell of the material matrix. */
+const EXPECTED_MATERIALS = 42;
+/** Nine yields with a fine grade: three zone rungs by three node types. */
+const EXPECTED_GRADES = 9;
+/** Each of those nine, plus the fine grade of each. */
+const EXPECTED_NAMES = 18;
 
 const INDENT = 2;
 const NOT_FOUND = -1;
@@ -97,6 +122,18 @@ const ITEM_ID_RE = /id:\s*'([\w]+)'/g;
 const PROFESSION_TYPE_RE = /^\s*(\w+):\s*'(\w+)',/gm;
 /** One `ore: { professionId: 'mining', respawnSeconds: N }` row of NODE_HARVEST_TABLE. */
 const RESPAWN_RE = /(\w+):\s*\{[^{}]*respawnSeconds:\s*(\d+)\s*\}/g;
+/** One `2: TIER2_TOOL_WIELD_PROFICIENCY,` row of the frozen wield ladder. */
+const WIELD_ROW_RE = /(\d+):\s*([A-Za-z0-9_]+),/g;
+/** A rung whose value is written as a number rather than as one of those identifiers. */
+const LITERAL_RUNG_RE = /^\d+$/;
+/** A rung's own threshold declaration, which is what those identifiers name. */
+const WIELD_CONST_RE = /export const (TIER\d_TOOL_WIELD_PROFICIENCY) = (\d+);/g;
+/** One `eastbrook_vale: { itemId: 'copper_ore', ... }` row of a material block. */
+const MATERIAL_ROW_RE = /(\w+):\s*\{\s*itemId:\s*'(\w+)'/g;
+/** One `copper_ore: { fineItemId: 'fine_copper_ore', gatherTier: 1 }` grade row. */
+const GRADE_ROW_RE = /(\w+):\s*\{\s*fineItemId:\s*'(\w+)',\s*gatherTier:\s*(\d+)\s*\}/g;
+/** An item's id and the display name written under it, which is the next member. */
+const ITEM_NAME_RE = /id:\s*'(\w+)',\s*name:\s*'([^']+)'/g;
 /** A bare identifier on its own line, which is how the ZONES array is written. */
 const ZONE_MEMBER_RE = /^\s*([A-Z][A-Z0-9_]*),\s*$/gm;
 /** A zone's own declaration, wherever in `src/sim/content` it happens to live. */
@@ -243,6 +280,28 @@ function stringsIn(arrayText) {
   return [...arrayText.matchAll(QUOTED_RE)].map((found) => found[ONE]);
 }
 
+/** A `name: { ... }` member of an object literal, as text. */
+function memberObject(objectText, name, where) {
+  const at = objectText.search(new RegExp(`\\b${name}:\\s*\\{`));
+  if (at === NOT_FOUND) {
+    fail(`${where}: no ${name} block`);
+  }
+  const open = objectText.indexOf('{', at);
+  return objectText.slice(open, matchEnd(objectText, open, where));
+}
+
+/** A `export const NAME = 0.5;` number, which is how every tuning knob is written. */
+function constantNumber(source, name, where) {
+  const found = firstCapture(
+    source,
+    new RegExp(`export const ${name} = (${NUMBER_PATTERN});`, 'g'),
+  );
+  if (found === null) {
+    return fail(`${where} no longer declares ${name}`);
+  }
+  return Number(found);
+}
+
 /** One node row, in the shape the shipped file carries it in. */
 function nodeFrom(objectText) {
   const pos = POS_RE.exec(objectText);
@@ -313,6 +372,159 @@ function readRespawnSeconds(source, types) {
     byType[type] = seconds;
   }
   return byType;
+}
+
+/**
+ * Node type to the gathering profession that works it, which is the direction the
+ * addon reads it in: a node knows its type and needs the profession to look a
+ * proficiency counter up under.
+ *
+ * Inverted from the game's own map rather than written out, so a profession
+ * renamed or a type re-filed arrives here rather than being missed. A type with no
+ * profession is a failure: without one there is no counter to read and the whole
+ * wield gate silently stops applying to that type.
+ */
+function readProfessionByType(typeByProfession, types) {
+  const byType = {};
+  for (const [professionId, type] of typeByProfession) {
+    byType[type] = professionId;
+  }
+  for (const type of types) {
+    if (byType[type] === undefined) {
+      fail(`${GATHERING_FILE}: NODE_TYPE_BY_PROFESSION names no profession for ${type}`);
+    }
+  }
+  return byType;
+}
+
+/**
+ * Tool tier to the gathering proficiency it takes to swing one (R22).
+ *
+ * REFUSED rather than defaulted, like the respawn map: this is the whole of the
+ * addon's wield gate, and a ladder read as empty would report every owned tool as
+ * usable, which is the exact state this table exists to correct.
+ *
+ * Two passes because the table's values are named constants rather than literals:
+ * the rungs are declared one per exported `TIER_N_..._PROFICIENCY` and the frozen
+ * object references them. A one-pass regex over the object would read five
+ * identifiers and no numbers.
+ */
+function readWieldLadder(source) {
+  const named = new Map();
+  for (const found of source.matchAll(WIELD_CONST_RE)) {
+    named.set(found[ONE], Number(found[2]));
+  }
+  const literal = objectAfter(source, 'export const WIELD_REQUIREMENT_BY_TIER', WIELD_FILE);
+  const byTier = {};
+  for (const [, tier, raw] of literal.matchAll(WIELD_ROW_RE)) {
+    let value = named.get(raw);
+    if (LITERAL_RUNG_RE.test(raw)) {
+      value = Number(raw);
+    }
+    if (value === undefined || Number.isNaN(value)) {
+      fail(`${WIELD_FILE}: WIELD_REQUIREMENT_BY_TIER rung ${tier} is ${raw}, not a number`);
+    }
+    byTier[tier] = value;
+  }
+  return byTier;
+}
+
+/**
+ * The proficiency-gain curve, which is what decides whether a node still teaches
+ * you anything: every `step` points of proficiency is one gain tier, scored
+ * against the node's own tier, and a node that many tiers below pays `reduced`,
+ * then `minimal`, then nothing.
+ *
+ * The two multipliers are the crafting wheel's, because gathering scores against
+ * the same four-state curve. Read from there rather than restated, for the reason
+ * every other figure here is read.
+ */
+function readGain(gatheringSource, wheelSource) {
+  return {
+    step: constantNumber(gatheringSource, 'GATHER_GAIN_TIER_STEP', GATHERING_FILE),
+    reduced: constantNumber(wheelSource, 'REDUCED_TIER_MULTIPLIER', WHEEL_FILE),
+    minimal: constantNumber(wheelSource, 'MINIMAL_TIER_MULTIPLIER', WHEEL_FILE),
+  };
+}
+
+/**
+ * What one harvest yields, as node type to zone to the base item id.
+ *
+ * The unit counts are deliberately NOT emitted. They are a function of the rarity
+ * roll alone, so they are the same number for every node of every type in every
+ * zone, which makes them a fact about gathering rather than about a node, and a
+ * panel of nodes has nowhere honest to put one.
+ */
+function readMaterials(source, types) {
+  const literal = objectAfter(source, 'export const NODE_MATERIAL_TABLE', GATHERING_FILE);
+  const byType = {};
+  for (const type of types) {
+    const block = memberObject(literal, type, GATHERING_FILE);
+    const byZone = {};
+    for (const row of block.matchAll(MATERIAL_ROW_RE)) {
+      byZone[row[ONE]] = row[2];
+    }
+    if (Object.keys(byZone).length === NONE) {
+      fail(`${GATHERING_FILE}: NODE_MATERIAL_TABLE lists no zone for ${type}`);
+    }
+    byType[type] = byZone;
+  }
+  return byType;
+}
+
+/**
+ * The fine grade of each yield and the zone rung it sits at, which together are
+ * the whole of the D8 upgrade rule: a tool STRICTLY above the rung, at a node of
+ * at least that rung, mints the fine id instead of the base one.
+ *
+ * The rung is keyed to the MATERIAL rather than to the node, and the game's own
+ * comment says why: a rule reading the node's tier would make fine Osmium farmable
+ * off a Thornpeak tier-1 vein with a tier-2 pick.
+ */
+function readGrades(source) {
+  const literal = objectAfter(source, 'const MATERIAL_GRADE_ROWS', GRADES_FILE);
+  const byBase = {};
+  for (const row of literal.matchAll(GRADE_ROW_RE)) {
+    byBase[row[ONE]] = { fine: row[2], tier: Number(row[3]) };
+  }
+  return byBase;
+}
+
+/**
+ * The game's own display name for every id a row can name, and it is not optional
+ * polish: an id is not a name here. `thorium_ore` is shown to players as "Osmium
+ * Ore", `silverleaf_herb` as "Sheenleaf Herb", and a table that title-cased the id
+ * would say "Thorium Ore" forever with no regeneration able to fix it.
+ */
+function readItemNames(source, ids) {
+  const declared = new Map();
+  for (const found of source.matchAll(ITEM_NAME_RE)) {
+    declared.set(found[ONE], found[2]);
+  }
+  const names = {};
+  for (const id of ids) {
+    const name = declared.get(id);
+    if (name === undefined) {
+      fail(`${ITEMS_FILE}: no item declares ${id}, which a yield names`);
+    }
+    names[id] = name;
+  }
+  return names;
+}
+
+/** Every id the yield lines can draw: each material and the fine grade of each. */
+function yieldIds(materials, grades) {
+  const ids = new Set();
+  for (const byZone of Object.values(materials)) {
+    for (const itemId of Object.values(byZone)) {
+      ids.add(itemId);
+      const row = grades[itemId];
+      if (row !== undefined) {
+        ids.add(row.fine);
+      }
+    }
+  }
+  return [...ids].sort();
 }
 
 /** The item id nearest above `before`, which is the item a `use` belongs to. */
@@ -404,6 +616,11 @@ function readZones(root, dataSource) {
   return zones;
 }
 
+/** How many zone rows the whole material matrix carries, across every type. */
+function countMaterials(materials) {
+  return Object.values(materials).reduce((sum, byZone) => sum + Object.keys(byZone).length, NONE);
+}
+
 /** Every count the shipped table is supposed to carry, so a thin parse cannot pass. */
 function checkCounts(table, types) {
   const counted = [
@@ -411,6 +628,10 @@ function checkCounts(table, types) {
     ['nodes', table.nodes.length, EXPECTED_NODES],
     ['zones', table.zones.length, EXPECTED_ZONES],
     ['gathering tools', table.tools.length, EXPECTED_TOOLS],
+    ['wield rungs', Object.keys(table.wieldByTier).length, EXPECTED_WIELD_RUNGS],
+    ['material rows', countMaterials(table.materials), EXPECTED_MATERIALS],
+    ['fine grades', Object.keys(table.grades).length, EXPECTED_GRADES],
+    ['item names', Object.keys(table.itemNames).length, EXPECTED_NAMES],
   ];
   for (const [what, got, want] of counted) {
     if (got !== want) {
@@ -419,6 +640,25 @@ function checkCounts(table, types) {
   }
   if (table.nodes.length === NONE || table.zones.length === NONE) {
     fail('read an empty table, which is a parse that stopped working rather than content');
+  }
+  checkLadderCovers(table);
+}
+
+/**
+ * Every tool the table offers has a rung on the ladder.
+ *
+ * A missing one is the quiet failure this whole gate has to avoid: the addon reads
+ * an absent requirement as no requirement, so a tier the ladder forgot would be
+ * reported as swingable by anyone carrying it, which is the pre-R22 behaviour the
+ * table exists to replace.
+ */
+function checkLadderCovers(table) {
+  for (const tool of table.tools) {
+    if (table.wieldByTier[String(tool.tier)] === undefined) {
+      fail(
+        `${WIELD_FILE}: no wield requirement for tier ${String(tool.tier)}, which ${tool.id} is`,
+      );
+    }
   }
 }
 
@@ -431,13 +671,21 @@ function build(root) {
   const nodeSource = readOrFail(join(root, NODES_FILE), 'the node table');
   const types = readTypes(nodeSource);
   const gatheringSource = readOrFail(join(root, GATHERING_FILE), 'the profession map');
+  const itemSource = readOrFail(join(root, ITEMS_FILE), 'the item table');
   const typeByProfession = readTypeByProfession(gatheringSource);
-  const tools = readTools(readOrFail(join(root, ITEMS_FILE), 'the item table'), typeByProfession);
+  const materials = readMaterials(gatheringSource, types);
+  const grades = readGrades(readOrFail(join(root, GRADES_FILE), 'the material grades'));
   const table = {
     gameVersion,
     respawnSeconds: readRespawnSeconds(gatheringSource, types),
+    professionByType: readProfessionByType(typeByProfession, types),
+    wieldByTier: readWieldLadder(readOrFail(join(root, WIELD_FILE), 'the wield ladder')),
+    gain: readGain(gatheringSource, readOrFail(join(root, WHEEL_FILE), 'the gain curve')),
     zones: readZones(root, readOrFail(join(root, DATA_FILE), 'the zone list')),
-    tools: sortTools(tools, types),
+    tools: sortTools(readTools(itemSource, typeByProfession), types),
+    materials,
+    grades,
+    itemNames: readItemNames(itemSource, yieldIds(materials, grades)),
     nodes: readNodes(nodeSource),
   };
   checkCounts(table, types);
