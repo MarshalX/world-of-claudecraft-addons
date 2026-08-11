@@ -347,8 +347,11 @@ function known(itemId) {
 }
 
 /**
- * Null for an id with no file, for art out of a generated batch, until the manifest lands, and
- * for every weapon, whose art is filed under a MODEL name through a table nothing serves.
+ * Null for an id with no file, for art out of a generated batch, and until the manifest lands.
+ *
+ * The batch case is almost all of them now: game 0.36.0 moved the catalogue into unnamed
+ * generated batches and left 39 curated entries carrying a name, so this answers for a handful
+ * of reagents and bags and nothing else. The picture is unaffected, since a batch id has a file.
  */
 function artName(itemId) {
   if (itemId === '') {
@@ -1877,8 +1880,9 @@ woc.ui.tooltip(worthStat.el, () =>
 
 /**
  * What to say about names, without saying anything is wrong. Both silences are ordinary:
- * the game ships no art name for a weapon and for plenty else besides, and the addon that
- * would publish one may not be installed, may be disabled, or may not have this id.
+ * the game's art manifest names only its 39 curated entries and says nothing about the rest
+ * of the catalogue, and the addon that would publish one may not be installed, may be
+ * disabled, or may not have this id.
  */
 function namingLine() {
   if (names.size === 0) {

@@ -1696,11 +1696,18 @@ function checkCharacter() {
   if (talents === null || professions === null) {
     return result('character', false, 'the sheet resolved but talents or professions did not');
   }
+  // An ARRAY is the assertion, never a non-empty one: the game elides the wire key
+  // entirely for anyone who has never slotted a tool effect, which is most players,
+  // so an empty list here is the ordinary reading rather than a failure to read.
+  if (!Array.isArray(professions.toolEffectSlots)) {
+    return result('character', false, 'professions.toolEffectSlots is not an array');
+  }
   return result(
     'character',
     true,
     `${String(character.deeds.size)} deeds, renown ${String(character.renown)}, ` +
-      `${String(Object.keys(talents.rows).length)} talent rows`,
+      `${String(Object.keys(talents.rows).length)} talent rows, ` +
+      `${String(professions.toolEffectSlots.length)} tool effects slotted`,
   );
 }
 

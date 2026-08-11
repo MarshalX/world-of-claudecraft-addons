@@ -6,8 +6,10 @@
 // A fight ends on an idle timeout, because `inCombat` is not on the wire, and its duration
 // is floored at a second or a burst divides by a fraction and reports a rate nobody hit.
 //
-// A pet's output is yours and `Entity.ownerId` is what says so, on a server that has resolved
-// each side to its controller since game 0.35.0. Its rows carry the game's own `{pet}: {ability}`.
+// A pet's output is yours. `damage.sourceOwnerId` says so from game 0.36.0 and `Entity.ownerId`
+// says so otherwise, and both are needed: the record's own owner is the only one that survives
+// the pet despawning with its dying owner, which is precisely when the last exchange lands.
+// Its rows carry the game's own `{pet}: {ability}`.
 //
 // Two limits: art covers your own spellbook alone, since an event carries a display name
 // and art is filed under the id, and the overhealing figure is a FLOOR rather than a total,
@@ -103,19 +105,50 @@ function ownedByPlayer(id, player) {
   return woc.world.entities.get(id)?.ownerId === player.id;
 }
 
-/** The pet's own name when the id is something you control, and null when it is you. */
-function petNameOf(id, player) {
+/**
+ * The same question about a damage record's SOURCE, using the owner the record carries.
+ *
+ * The snapshot lookup has one blind spot and it is the worst-placed one available: a pet
+ * despawns when its owner dies, so around a death the killing exchange's source is already
+ * gone from `world.entities` and every one of those records was silently dropped. Game
+ * 0.36.0 snapshots the owner onto the record at emit for exactly that, so the field is
+ * asked first and the lookup is what answers when it is absent.
+ *
+ * Still asked AGAINST the player: an owner id is an owner id, and a stranger's pet carries
+ * one too.
+ */
+function damageIsMine(event, player) {
+  if (event.sourceId === player.id) {
+    return true;
+  }
+  if (typeof event.sourceOwnerId === 'number') {
+    return event.sourceOwnerId === player.id;
+  }
+  return ownedByPlayer(event.sourceId, player);
+}
+
+/**
+ * The pet's own name when the id is something you control, and null when it is you.
+ *
+ * `recordOwner` is a damage record's `sourceOwnerId` where there is one, and it is what
+ * keeps a despawned pet's rows out of your own: the name is unrecoverable once the entity
+ * is gone, so those rows take the generic label rather than reading as your own casts.
+ */
+function petNameOf(id, player, recordOwner) {
   if (id === player.id) {
     return null;
   }
   const entity = woc.world.entities.get(id);
-  if (entity === undefined || entity.ownerId !== player.id) {
-    return null;
+  if (entity !== undefined && entity.ownerId === player.id) {
+    if (typeof entity.name === 'string' && entity.name.length > 0) {
+      return entity.name;
+    }
+    return PET_LABEL;
   }
-  if (typeof entity.name === 'string' && entity.name.length > 0) {
-    return entity.name;
+  if (recordOwner === player.id) {
+    return PET_LABEL;
   }
-  return PET_LABEL;
+  return null;
 }
 
 /** Absorbed rides only the events that had some, so an absent field is zero. */
@@ -138,8 +171,8 @@ function overhealOf(event) {
  * Which row an event belongs to, and whose it was. The prefix keeps a pet's melee out of
  * the bucket your own auto-attack lands in, and costs no art that was ever reachable.
  */
-function rowFor(event, id, player) {
-  const pet = petNameOf(id, player);
+function rowFor(event, id, player, recordOwner) {
+  const pet = petNameOf(id, player, recordOwner);
   if (pet === null) {
     return { label: labelOf(event), pet: null };
   }
@@ -249,7 +282,7 @@ woc.net.onEvent('damage', (event) => {
   if (player === null) {
     return;
   }
-  const mine = ownedByPlayer(event.sourceId, player);
+  const mine = damageIsMine(event, player);
   const atMe = ownedByPlayer(event.targetId, player);
   if (!(mine || atMe)) {
     return;
@@ -259,7 +292,7 @@ woc.net.onEvent('damage', (event) => {
   if (mine) {
     countOutcome(event, player);
     if (landed(event)) {
-      record('dealt', rowFor(event, event.sourceId, player), event);
+      record('dealt', rowFor(event, event.sourceId, player, event.sourceOwnerId), event);
     }
   }
   // Damage your pet took is damage you should see, and since game 0.35.0 the server delivers

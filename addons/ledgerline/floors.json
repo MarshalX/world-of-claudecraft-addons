@@ -1,5 +1,5 @@
 {
-  "gameVersion": "0.35.1",
+  "gameVersion": "0.36.0",
   "generatedFrom": ["src/sim/data.ts"],
   "fields": "the three item facts that decide what a market listing is worth against something other than another listing: sellValue, the flat per-unit copper a vendor pays, which is the only absolute price in the game; buyValue, the vendor shop price, present ONLY where some NPC actually stocks the id, which makes it a ceiling an ask above can never sell over; and noVendorSell, which voids the floor. An item the server refuses to list (quest, noMarketList, soulbound) is absent, as is one declaring none of the three. See src/sim/market.ts for the listing gate.",
   "items": [
@@ -134,6 +134,10 @@
     {
       "id": "bonechill_striders",
       "sellValue": 9500
+    },
+    {
+      "id": "boneglass_shiv",
+      "sellValue": 3000
     },
     {
       "id": "boneguard_breastplate",
@@ -492,6 +496,10 @@
     {
       "id": "duskthorn_mantle",
       "sellValue": 340
+    },
+    {
+      "id": "duskwhisper",
+      "sellValue": 9000
     },
     {
       "id": "eastbrook_arming_sword",
@@ -963,6 +971,10 @@
       "sellValue": 1100
     },
     {
+      "id": "heroic_duskwhisper",
+      "sellValue": 9000
+    },
+    {
       "id": "heroic_eelscale_leggings",
       "sellValue": 1100
     },
@@ -1391,6 +1403,10 @@
     {
       "id": "marrowlord_boneboots",
       "sellValue": 1050
+    },
+    {
+      "id": "marrowpoint",
+      "sellValue": 9000
     },
     {
       "id": "marrowtread_boots",
@@ -1903,6 +1919,10 @@
     {
       "id": "ridgestalker_treads",
       "sellValue": 600
+    },
+    {
+      "id": "rimefang",
+      "sellValue": 9000
     },
     {
       "id": "riptide_dirk",

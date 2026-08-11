@@ -70,6 +70,7 @@ const SHAPE: Record<keyof Entity, FieldSpec> = {
   castingAbility: { kind: 'string', nullable: true },
   castRemaining: { kind: 'number' },
   castTotal: { kind: 'number' },
+  castTargetId: { kind: 'number', nullable: true },
   channeling: { kind: 'boolean' },
   auras: { kind: 'array' },
 

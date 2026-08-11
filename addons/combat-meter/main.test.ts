@@ -71,6 +71,8 @@ interface Hit {
   crit?: boolean;
   absorbed?: number;
   school?: string;
+  /** The owner the RECORD carries, which game 0.36.0 snapshots at emit. */
+  owner?: number;
 }
 
 /** The fields a case cares about; `heal()` fills the rest. */
@@ -222,6 +224,7 @@ async function run(opts: RunOpts = {}): Promise<MeterHarness> {
         crit: hit.crit ?? false,
         school: hit.school ?? 'physical',
         absorbed: hit.absorbed,
+        sourceOwnerId: hit.owner,
       };
       harness.inbound(eventsFrame([event]));
     },
@@ -358,14 +361,17 @@ describe('its manifest', () => {
   });
 
   // The smallest minor carrying EVERY published member this addon reads. `closable` is minor 2;
-  // `Heal2Event.overheal`, `woc.ui.list`, `woc.paint` and `FrameOpts.toggleKey` are minor 4.
+  // `Heal2Event.overheal`, `woc.ui.list`, `woc.paint` and `FrameOpts.toggleKey` are minor 4;
+  // `DamageEvent.sourceOwnerId` is minor 5.
   // A FIELD on an event record counts as much as a function does, whether or not the loader
   // implements anything for it: nothing promises an event reaches an addon verbatim, and
   // under-declaring fails silently as a zero where over-declaring fails with a message.
+  // `sourceOwnerId` is the sharpest case of that: an older loader would pass it through
+  // unread, and the addon would go on dropping the pet damage this exists to keep.
   //
   // `woc.fmt.duration` is offered and refused; the reason is on the function in main.js.
   it('declares the API minor it actually needs', () => {
-    expect(manifest().apiMinor).toBe(4);
+    expect(manifest().apiMinor).toBe(5);
   });
 });
 
@@ -919,10 +925,10 @@ describe('what your pet did', () => {
     expect(h.labels()).toEqual([]);
   });
 
-  // A pet whose entity has already gone from the snapshot has no owner to look up. The server
-  // falls back to the raw id in the same case, so the record degrades to the pre-0.35.0
-  // reading rather than throwing on a lookup that answered nothing.
-  it('drops a pet event whose entity is gone rather than throwing', async () => {
+  // A pet whose entity has gone from the snapshot and whose record carries no owner either
+  // has nothing left to attribute from. It degrades rather than throwing on a lookup that
+  // answered nothing, which is what every pre-0.36.0 server produces.
+  it('drops a pet event whose entity is gone and whose record says nothing', async () => {
     const h = await run();
 
     expect(() => h.hit({ by: GHOST_PET_ID, amount: 400, ability: null })).not.toThrow();
@@ -930,6 +936,56 @@ describe('what your pet did', () => {
 
     expect(h.fight()).toContain('0 damage');
     expect(h.labels()).toEqual([]);
+  });
+
+  // The case the snapshot lookup structurally cannot answer, and the worst-placed one there
+  // is: a pet despawns when its owner dies, so the exchange that killed them is exactly the
+  // one whose source is already gone. Game 0.36.0 puts the owner on the record at emit.
+  it('counts a despawned pet hit from the owner the record carries', async () => {
+    const h = await run();
+
+    h.hit({ by: GHOST_PET_ID, owner: PLAYER_ID, amount: 400, ability: null });
+    h.tick();
+
+    expect(h.fight()).toContain('400 damage');
+  });
+
+  // The name is unrecoverable once the entity is gone, so the row takes the generic label.
+  // Reading it as your own cast would be worse than a vague name: it would put a pet's melee
+  // in the bucket your auto-attack lands in, which is the thing the prefix exists to prevent.
+  it('labels a despawned pet row generically rather than as your own', async () => {
+    const h = await run();
+
+    h.hit({ by: GHOST_PET_ID, owner: PLAYER_ID, amount: 400, ability: null });
+    h.tick();
+
+    expect(h.labels()).toEqual(['Pet: Melee']);
+  });
+
+  // The record's owner is asked AGAINST you, exactly as the snapshot lookup is. A stranger's
+  // pet carries an owner id too, and folding on the field's presence alone would turn the
+  // panel into a zone-wide display the moment 0.36.0 shipped.
+  it('ignores a despawned pet whose record names somebody else as owner', async () => {
+    const h = await run();
+
+    h.hit({ by: GHOST_PET_ID, owner: OTHER_ID, amount: 400, ability: null });
+    h.tick();
+
+    expect(h.fight()).toContain('0 damage');
+    expect(h.labels()).toEqual([]);
+  });
+
+  // The attack table is a separate decision from attribution and the record's owner must not
+  // change it: a pet's swing rolls against the PET's hit rating whether or not the snapshot
+  // still has the pet in it.
+  it('keeps a despawned pet swing out of your attack table', async () => {
+    const h = await run();
+
+    h.hit({ amount: 100 });
+    h.hit({ by: GHOST_PET_ID, owner: PLAYER_ID, amount: 0, kind: 'miss', ability: null });
+    h.tick();
+
+    expect(h.outcomes()).toBe('hit 100%');
   });
 
   // A pet's swing rolls against the PET'S hit rating, not yours. Counting it here would blend

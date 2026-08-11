@@ -24,11 +24,16 @@ import type { AddonStorageApi } from '../loader/src/runtime/api/storage.ts';
 import type { UiApi } from '../loader/src/runtime/api/ui.ts';
 import type { WorldApi } from '../loader/src/runtime/api/world.ts';
 import type { EventPayloads } from '../loader/src/runtime/net/events.ts';
+import type { ProfessionInfo, ToolEffectSlot } from '../loader/src/runtime/world/character.ts';
 import type { Entity } from '../loader/src/runtime/world/game-types.ts';
 import type { WorldKey } from '../loader/src/runtime/world/signature.ts';
 import type { WorldValues } from '../loader/src/runtime/world/values.ts';
 import type { AddonInfo, GameInfo } from '../packages/types/addon.js';
 import type { BusApi as PublicBusApi } from '../packages/types/bus.js';
+import type {
+  ProfessionInfo as PublicProfessionInfo,
+  ToolEffectSlot as PublicToolEffectSlot,
+} from '../packages/types/character.js';
 import type { Entity as PublicEntity } from '../packages/types/entity.js';
 import type { EventPayloads as PublicEventPayloads } from '../packages/types/events.js';
 import type { FmtApi as PublicFmtApi } from '../packages/types/fmt.js';
@@ -154,8 +159,29 @@ const publishedIsWorld: Assignable<PublicWorldApi, WorldApi> = true;
  */
 const entityIsPublished: Assignable<Entity, PublicEntity> = true;
 const publishedIsEntity: Assignable<PublicEntity, Entity> = true;
+/**
+ * Every field of an entity is required today, so a one-sided drop already fails
+ * one direction above. This is here for the day one arrives OPTIONAL, which is
+ * how every field the game has added to an existing EVENT has arrived.
+ */
+const entityFieldsAgree: SameFields<Entity, PublicEntity> = true;
 const valuesArePublished: Assignable<WorldValues, PublicWorldValues> = true;
 const publishedAreValues: Assignable<PublicWorldValues, WorldValues> = true;
+
+/**
+ * The professions sheet and the tool-effect row it now carries.
+ *
+ * `WorldApi` reaches `ProfessionInfo` structurally and would report a drop as an
+ * error deep inside a `world.professions` return type, naming the sheet rather
+ * than the row. Both shapes are compared directly for the reason the entity is:
+ * so the message names the thing that moved.
+ */
+const professionsArePublished: Assignable<ProfessionInfo, PublicProfessionInfo> = true;
+const publishedAreProfessions: Assignable<PublicProfessionInfo, ProfessionInfo> = true;
+const professionFieldsAgree: SameFields<ProfessionInfo, PublicProfessionInfo> = true;
+const toolSlotIsPublished: Assignable<ToolEffectSlot, PublicToolEffectSlot> = true;
+const publishedIsToolSlot: Assignable<PublicToolEffectSlot, ToolEffectSlot> = true;
+const toolSlotFieldsAgree: SameFields<ToolEffectSlot, PublicToolEffectSlot> = true;
 
 /**
  * The watchable keys against the runtime's own list.
@@ -268,6 +294,13 @@ describe('the published types', () => {
     expect([
       entityIsPublished,
       publishedIsEntity,
+      entityFieldsAgree,
+      professionsArePublished,
+      publishedAreProfessions,
+      professionFieldsAgree,
+      toolSlotIsPublished,
+      publishedIsToolSlot,
+      toolSlotFieldsAgree,
       valuesArePublished,
       publishedAreValues,
       keysArePublished,

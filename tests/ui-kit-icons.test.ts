@@ -301,3 +301,47 @@ describe('the art name', () => {
     expect(pending().itemArtName('baked_bread')).toBeNull();
   });
 });
+
+// Game 0.36.0 gave every authored weapon its own painting and listed it here, and
+// then declined to list one thing: a generated Heroic copy ships NO file and is
+// drawn from its base weapon's painting. The manifest is therefore no longer the
+// whole answer, and the resolution mirrors the game's own rather than guessing,
+// since the resolved base is checked against the manifest like any other id.
+describe('a Heroic variant, which reuses its base weapon art', () => {
+  it('answers the base weapon file for a variant the manifest does not list', async () => {
+    const icons = await itemsLoaded([], 'hoarfrost_edge');
+
+    expect(icons.item('heroic_hoarfrost_edge')).toBe('/ui/items/hoarfrost_edge.webp');
+  });
+
+  // The base arm is reached only when the item's OWN id is absent, so an id that
+  // merely begins with the prefix and ships its own painting is unaffected.
+  // `heroic_mark` is that id in the live table and it is not a variant of anything.
+  it('prefers an id its own file, whatever it starts with', async () => {
+    const icons = await itemsLoaded([], 'heroic_mark', 'mark');
+
+    expect(icons.item('heroic_mark')).toBe('/ui/items/heroic_mark.webp');
+  });
+
+  it('still answers null when neither the variant nor its base has a file', async () => {
+    const icons = await itemsLoaded([], 'baked_bread');
+
+    expect(icons.item('heroic_nothing_at_all')).toBeNull();
+  });
+
+  // The prefix is not a licence to strip anything: only a leading one resolves.
+  it('does not strip the prefix from the middle of an id', async () => {
+    const icons = await itemsLoaded([], 'mark');
+
+    expect(icons.item('sigil_heroic_mark')).toBeNull();
+  });
+
+  // The name describes the FILE, and the file is the base's painting. A Heroic
+  // copy is displayed under the base item's name anyway, so this cannot disagree
+  // with the item's own name any more than the base's entry already does.
+  it('answers the base entry name, because that is whose file it is', async () => {
+    const icons = await itemsLoaded([['hoarfrost_edge', 'Hoarfrost Edge']]);
+
+    expect(icons.itemArtName('heroic_hoarfrost_edge')).toBe('Hoarfrost Edge');
+  });
+});

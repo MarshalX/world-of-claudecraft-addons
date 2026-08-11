@@ -133,6 +133,46 @@ export interface CraftingIdentity {
 }
 
 /**
+ * One gathering tool's slotted effect.
+ *
+ * A charm crafted onto a tool, which is the difference between owning a tool and
+ * what that tool actually does when it swings. Read it to say why a yield came
+ * out better than the tool alone explains.
+ */
+export interface ToolEffectSlot {
+  /** The gathering profession whose tool carries it. Never localized text. */
+  professionId: string;
+  /** The effect's content id. */
+  effectId: string;
+  /**
+   * Charges left.
+   *
+   * 0 means slotted but SPENT, which is different from unslotted: the bonus
+   * stops, the base tool is untouched, and a recharge can restore it. A row at 0
+   * is still a row.
+   */
+  charges: number;
+  /**
+   * The slot's ceiling, and a real server value rather than a client default.
+   *
+   * Worth stating because `AbilityCharges.maxCharges` is the opposite case and is
+   * deliberately unpublished: the server keeps that one to itself and the client
+   * zero-fills it. This one rides the wire.
+   */
+  maxCharges: number;
+  /** `'prompt'` spends a charge only on an explicit per-use confirmation. */
+  confirmMode: string;
+  /**
+   * Whether YOU crafted the charm sitting in this slot.
+   *
+   * A boolean and never a name: another player's identity does not leave the
+   * server, so there is no crafter to display and this is the whole of what can
+   * be known about provenance.
+   */
+  selfCrafted: boolean;
+}
+
+/**
  * Your profession standing: two skill counter maps, your crafting identity, and
  * the mobile station you have placed.
  *
@@ -161,4 +201,18 @@ export interface ProfessionInfo {
    * craft maps to that type, as well as at an authored one in `world.stations`.
    */
   mobileStation: string | null;
+  /**
+   * Your slotted tool effects, one row per gathering profession that has one,
+   * sorted by `professionId`.
+   *
+   * EMPTY is the ordinary case and means "nothing slotted", not "not known yet":
+   * the game elides the key entirely for a player who has never slotted an
+   * effect, which is most of them. So an addon must not start disclosing a
+   * limitation to everybody on the strength of an empty list.
+   *
+   * Published from `apiMinor` 5. An older loader answers an empty array here for
+   * the same reason a fresh character does, which is why an addon that READS it
+   * has to declare 5 rather than infer support from the value.
+   */
+  toolEffectSlots: readonly ToolEffectSlot[];
 }

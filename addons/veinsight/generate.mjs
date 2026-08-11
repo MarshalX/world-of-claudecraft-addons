@@ -27,6 +27,8 @@
 //   src/sim/professions/wheel.ts          the two reduced-gain multipliers
 //   src/sim/professions/material_grades.ts  MATERIAL_GRADE_ROWS, the fine grade of
 //                                         each yield and the rung it sits at
+//   src/sim/content/professions.ts        TOOL_EFFECTS, for which slotted charm is a
+//                                         QUALITY one and what it adds
 //   src/sim/data.ts                       the ZONES array, for the canonical order
 //   src/sim/content/*.ts                  every `ZoneDef` export, for id and name
 //
@@ -82,6 +84,7 @@ const GATHERING_FILE = 'src/sim/professions/gathering.ts';
 const WIELD_FILE = 'src/sim/professions/wield_gate.ts';
 const WHEEL_FILE = 'src/sim/professions/wheel.ts';
 const GRADES_FILE = 'src/sim/professions/material_grades.ts';
+const EFFECTS_FILE = 'src/sim/content/professions.ts';
 const DATA_FILE = 'src/sim/data.ts';
 const CONTENT_DIR = 'src/sim/content';
 
@@ -95,6 +98,8 @@ const EXPECTED_WIELD_RUNGS = 5;
 const EXPECTED_MATERIALS = 42;
 /** Nine yields with a fine grade: three zone rungs by three node types. */
 const EXPECTED_GRADES = 9;
+/** Three shipped charms, one of each kind. */
+const EXPECTED_EFFECTS = 3;
 /** Each of those nine, plus the fine grade of each. */
 const EXPECTED_NAMES = 18;
 
@@ -132,6 +137,9 @@ const WIELD_CONST_RE = /export const (TIER\d_TOOL_WIELD_PROFICIENCY) = (\d+);/g;
 const MATERIAL_ROW_RE = /(\w+):\s*\{\s*itemId:\s*'(\w+)'/g;
 /** One `copper_ore: { fineItemId: 'fine_copper_ore', gatherTier: 1 }` grade row. */
 const GRADE_ROW_RE = /(\w+):\s*\{\s*fineItemId:\s*'(\w+)',\s*gatherTier:\s*(\d+)\s*\}/g;
+
+/** One `TOOL_EFFECTS` member, read for the two fields the grade comparison needs. */
+const EFFECT_ROW_RE = /(\w+):\s*\{[^{}]*?kind:\s*'(\w+)',\s*bonus:\s*(\d+)/g;
 /** An item's id and the display name written under it, which is the next member. */
 const ITEM_NAME_RE = /id:\s*'(\w+)',\s*name:\s*'([^']+)'/g;
 /** A bare identifier on its own line, which is how the ZONES array is written. */
@@ -481,6 +489,25 @@ function readMaterials(source, types) {
  * comment says why: a rule reading the node's tier would make fine Osmium farmable
  * off a Thornpeak tier-1 vein with a tier-2 pick.
  */
+/**
+ * Each slotted tool effect's KIND and the magnitude it adds.
+ *
+ * Both are read rather than written down, for the reason the wield ladder is. The
+ * quality charm's bonus of 1 lands exactly ON the fine threshold from bare hands,
+ * a margin the game's own suite pins, so a retune to 2 would change which nodes
+ * mint a fine grade with nothing on the wire to announce it. The KIND is read for
+ * a plainer reason: the three shipped charms are one of each, and only the quality
+ * one touches the comparison this addon draws.
+ */
+function readEffects(source) {
+  const literal = objectAfter(source, 'const TOOL_EFFECTS', EFFECTS_FILE);
+  const byId = {};
+  for (const row of literal.matchAll(EFFECT_ROW_RE)) {
+    byId[row[ONE]] = { kind: row[2], bonus: Number(row[3]) };
+  }
+  return byId;
+}
+
 function readGrades(source) {
   const literal = objectAfter(source, 'const MATERIAL_GRADE_ROWS', GRADES_FILE);
   const byBase = {};
@@ -631,6 +658,7 @@ function checkCounts(table, types) {
     ['wield rungs', Object.keys(table.wieldByTier).length, EXPECTED_WIELD_RUNGS],
     ['material rows', countMaterials(table.materials), EXPECTED_MATERIALS],
     ['fine grades', Object.keys(table.grades).length, EXPECTED_GRADES],
+    ['tool effects', Object.keys(table.effects).length, EXPECTED_EFFECTS],
     ['item names', Object.keys(table.itemNames).length, EXPECTED_NAMES],
   ];
   for (const [what, got, want] of counted) {
@@ -685,6 +713,7 @@ function build(root) {
     tools: sortTools(readTools(itemSource, typeByProfession), types),
     materials,
     grades,
+    effects: readEffects(readOrFail(join(root, EFFECTS_FILE), 'the tool effects')),
     itemNames: readItemNames(itemSource, yieldIds(materials, grades)),
     nodes: readNodes(nodeSource),
   };

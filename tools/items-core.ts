@@ -11,18 +11,26 @@
 // game has no file for this" and "the loader built the wrong id", which a 404
 // cannot tell apart.
 //
-// The gap it describes is bigger than the skill one and has two halves worth
-// knowing about. WEAPONS are filed under a MODEL name rather than an item id,
-// through a table the game does not serve at all, so no weapon is in this manifest
-// and none can be. The rest is art the game has not commissioned yet, which it
-// enumerates itself rather than leaving silent.
+// The gap it describes used to be most of the catalogue and is currently almost
+// nothing. WEAPONS were its permanent half, filed under a MODEL name rather than an
+// item id, until game 0.36.0 gave every authored weapon its own painting and listed
+// it here; at that release every item in the game ships a file. What is left is art
+// the game has not commissioned yet, which it enumerates itself rather than leaving
+// silent, and which refills whenever content lands ahead of its painting.
+//
+// One thing is deliberately NOT in the manifest and is not a gap: a heroic weapon
+// VARIANT ships no file and reuses its base weapon's painting. That resolution is
+// the runtime's (`ui/kit/item-art.ts`), not this generator's, because a union of
+// ids-with-a-file is exactly what it should stay: the sixteen variants have no file
+// of their own and autocompleting them here would say they do.
 //
 // LIVE ONLY, like the cue and icon generators, because the published types describe
-// what most players are running. The channels diverge for items too: measured
-// 2026-08-02, live and pbe carried 562 ids to pbe2's 563. The size of that gap is
-// not the argument, the DIRECTION is: unioning would autocomplete an id most
-// players' games 404 on, and narrowing costs autocomplete and nothing else, since
-// the RUNTIME reads the manifest from whichever host the player is on
+// what most players are running. The channels diverge for items too, and in both
+// directions: measured 2026-08-11, live carried 822 ids on v0.36.0 while both pbe
+// channels sat under 700 on v0.35.0, the reverse of the usual assumption. The size
+// of the gap is not the argument, the DIRECTION is: unioning would autocomplete an
+// id most players' games 404 on, and narrowing costs autocomplete and nothing else,
+// since the RUNTIME reads the manifest from whichever host the player is on
 // (`ui/kit/item-art.ts`) and the union is open where it is used.
 //
 // One thing differs from the skill manifests and shapes the shape check below.
@@ -124,10 +132,10 @@ function renderItemTypes(ids: readonly string[], source: string): string {
 // \`woc.ui.icon.item\` can return a URL for. Regenerate with \`pnpm items\` after a
 // game release commits art.
 //
-// This is not every item. Weapons are filed under a MODEL name rather than an item
-// id and have no served manifest at all, so no weapon is here and none can be; the
-// rest of the gap is art the game has not commissioned yet, which it enumerates
-// itself rather than leaving silent.
+// This is not quite every item. What is missing is art the game has not commissioned
+// yet, which it enumerates itself rather than leaving silent, plus the heroic weapon
+// variants, which ship no file of their own and are drawn from their base weapon's
+// painting. \`woc.ui.icon.item\` resolves that second case for you.
 //
 // Names are NOT here. The manifest carries one per curated entry and it is the ART
 // SOURCE name, which drifts from the game's display name on a content rename and is

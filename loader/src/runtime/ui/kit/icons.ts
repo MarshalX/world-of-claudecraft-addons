@@ -22,9 +22,9 @@
 // what `kit/bar.ts` hiding its own icon slot on error has always covered.
 //
 // `kit/item-art.ts` does the same job for `item()`, off a second served manifest,
-// and the gap it describes is larger: a WEAPON's art is filed under a model name
-// through a table the game does not serve at all, so no weapon icon is reachable
-// from here and none can be. That manifest also carries the name each art file was
+// and it also resolves the one item the manifest deliberately does not list: a
+// generated Heroic weapon copy, which reuses its base weapon's painting rather
+// than shipping a file. That manifest also carries the name each art file was
 // filed under, which `itemArtName()` serves as exactly that and never as the item's
 // name: nothing in the game keeps the two in step.
 
@@ -82,8 +82,10 @@ export interface IconUrls {
    *
    * Null once the loader KNOWS the game ships no file, which it learns from the
    * manifest the game serves. Before that has been read the answer is the URL and
-   * the image load decides. A WEAPON never has one: weapon art is filed under a
-   * model name through a table the game does not serve.
+   * the image load decides.
+   *
+   * A generated Heroic copy of a weapon ships no file of its own and is answered
+   * with its base weapon's painting, which is what the game draws for it too.
    */
   item: (itemId: string) => string | null;
   /**
@@ -132,17 +134,18 @@ export function createIconUrls(art: SkillArt, items: ItemArt): IconUrls {
     },
 
     item: (itemId) => {
-      const item = segment(itemId);
-      if (item === null) {
+      if (segment(itemId) === null) {
         return null;
       }
-      // Only a definite `false` withholds the URL, exactly as `ability` does:
-      // `null` is "not read yet", and treating it as absent would blank every cell
-      // of the first bag grid drawn in a session.
-      if (items.has(itemId) === false) {
+      // The file serving this item, which is its own id, a Heroic variant's base,
+      // or null once the manifest has been read and says neither. Optimistic
+      // before that read, exactly as `ability` is: treating "not known yet" as
+      // absent would blank every cell of the first bag grid drawn in a session.
+      const fileId = segment(items.fileIdFor(itemId));
+      if (fileId === null) {
         return null;
       }
-      return `${ITEM_DIR}/${item}${EXTENSION}`;
+      return `${ITEM_DIR}/${fileId}${EXTENSION}`;
     },
 
     itemArtName: (itemId) => items.artName(itemId),

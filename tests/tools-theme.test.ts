@@ -135,6 +135,30 @@ describe('the drift report', () => {
     const css = 'a{color:var(--zeta)}b{color:var(--alpha)}c{border-color:var(--zeta)}';
     expect(unbackedTokens(css, new Map())).toEqual(['--alpha', '--zeta']);
   });
+
+  // The loader's own tokens, which the game never declared and never will. Read
+  // against the game's set alone they were reported on every regeneration, which
+  // is a drift report that is wrong every time it fires.
+  it('says nothing about a token the loader declares itself', () => {
+    const css = '.woc-row{--woc-gap:6px;gap:var(--woc-gap)}';
+    expect(unbackedTokens(css, new Map())).toEqual([]);
+  });
+
+  // The exclusion is the declaring set rather than the `--woc-` prefix, so a
+  // loader token nothing declares is still a rule resolving to nothing.
+  it('still names a loader token that is read and never declared', () => {
+    expect(unbackedTokens('.woc-row{gap:var(--woc-never)}', new Map())).toEqual(['--woc-never']);
+  });
+
+  // The colon is the whole of what tells a declaration from a read, and the
+  // first case in this block is what proves it: drop it from the declaration
+  // pattern and every `var(--x)` becomes its own declaration, which excludes
+  // every token and reports nothing ever again.
+  it('does not read a var() as a declaration of the token it reads', () => {
+    expect(unbackedTokens('a{color:var(--gone)}b{border-color:var(--gone)}', new Map())).toEqual([
+      '--gone',
+    ]);
+  });
 });
 
 describe('the classes the loader wears', () => {

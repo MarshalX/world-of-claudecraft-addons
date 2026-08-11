@@ -187,6 +187,8 @@ let gainRule = null;
 let materialByType = new Map();
 /** A yield's base id to its fine grade and the zone rung that grade demands. */
 let gradeByItem = new Map();
+/** Effect id to the tier a QUALITY charm adds. Other kinds are not in it. */
+let qualityBonusById = new Map();
 /** Item id to the game's own display name for it, which an id is not. */
 let itemNames = new Map();
 /** Node type to the tiers of every matching tool in the bags, once per draw. */
@@ -340,6 +342,26 @@ function readGrades(value) {
   return byItem;
 }
 
+/**
+ * Effect id to what it adds, for the QUALITY charms only.
+ *
+ * The other two kinds are dropped here rather than filtered at every read: a quantity
+ * charm and a respawn charm change nothing this panel draws, so carrying them would put
+ * rows in the map that every caller would then have to know to ignore.
+ */
+function readEffects(value) {
+  const bonuses = new Map();
+  if (typeof value !== 'object' || value === null) {
+    return bonuses;
+  }
+  for (const [effectId, row] of Object.entries(value)) {
+    if (row?.kind === 'quality' && Number.isFinite(row.bonus) && row.bonus > NONE) {
+      bonuses.set(effectId, row.bonus);
+    }
+  }
+  return bonuses;
+}
+
 /** Item id to display name, keeping whatever checked out. An id is the fallback. */
 function readNames(value) {
   const names = new Map();
@@ -431,6 +453,7 @@ function adopt(table) {
   }
   materialByType = readMaterials(table.file.materials);
   gradeByItem = readGrades(table.file.grades);
+  qualityBonusById = readEffects(table.file.effects);
   itemNames = readNames(table.file.itemNames);
   const zones = keep(table.zones, readZone, 'zone');
   zoneNames = new Map(zones.map((zone) => [zone.id, zone.name]));
@@ -907,8 +930,35 @@ function teachLine(node) {
 }
 
 /**
+ * What a slotted quality charm adds to the grade comparison, or 0.
+ *
+ * Three ways to be nothing, and all three are the game's own: no slot on this profession's
+ * tool, a spent one, and a charm of another kind. The game's fourth, suppressing a quality
+ * charm where the fine grade is out of reach at all, is deliberately NOT here: `yieldFor`
+ * already gates the fine grade on `reachable`, so a copy of that rule in this function
+ * would be a second owner of one decision and could never change the answer.
+ *
+ * A `prompt` slot counts, because the game's own grade PREVIEW passes `effectUseConfirmed`
+ * as true and this is a preview: asking what a node WOULD yield spends no charge.
+ */
+function qualityBonusFor(type) {
+  const sheet = woc.world.professions;
+  const professionId = professionByType.get(type);
+  const slot = sheet?.toolEffectSlots.find((row) => row.professionId === professionId);
+  if (slot === undefined || slot.charges <= NONE) {
+    return NONE;
+  }
+  return qualityBonusById.get(slot.effectId) ?? NONE;
+}
+
+/**
  * What this node yields YOU: the zone's material for its type, upgraded to the fine grade
  * where your tool outclasses the material at a vein of at least the material's own rung.
+ *
+ * The tool tier read here is the game's `effectiveGradeToolTier`: your best WIELDABLE tool
+ * plus whatever a usable quality charm adds. Both halves are needed and the charm's is the
+ * one that used to be a disclosure, since a tool sitting exactly ON the material's rung
+ * mints a fine grade with a charm and a plain one without, and the panel could not tell.
  *
  * Null when the table carries no material for the zone, which is a future zone whose
  * content landed before its yields did rather than a node that gives nothing.
@@ -921,7 +971,11 @@ function yieldFor(node) {
   const grade = gradeByItem.get(base);
   const usable = usableTier(node.type);
   const reachable = grade !== undefined && node.tier >= grade.tier;
-  const fine = reachable && usable !== null && usable > grade.tier;
+  let effective = null;
+  if (usable !== null) {
+    effective = usable + qualityBonusFor(node.type);
+  }
+  const fine = reachable && effective !== null && effective > grade.tier;
   let id = base;
   if (fine) {
     id = grade.fine;
@@ -929,21 +983,13 @@ function yieldFor(node) {
   return { id, fine, reachable, usable, grade, name: itemNames.get(id) ?? id };
 }
 
-/** The yield's own line, plus the one disclosure the loader owes about it. */
+/** The yield's own line. */
 function yieldLines(node) {
   const found = yieldFor(node);
   if (found === null) {
     return [];
   }
-  const lines = [{ text: `Yields ${found.name}`, tone: 'muted' }];
-  // The one case where this answer can be short. A slotted quality effect adds a tier to
-  // the comparison the fine grade is decided by, and nothing on the loader's surface
-  // carries a slot, so a tool sitting exactly ON the material's rung is the tool whose
-  // answer an effect would flip and this cannot know it.
-  if (!found.fine && found.reachable && found.usable === found.grade.tier) {
-    lines.push({ text: 'A slotted quality effect would make that fine, and no addon can see one' });
-  }
-  return lines;
+  return [{ text: `Yields ${found.name}`, tone: 'muted' }];
 }
 
 function rowTooltip(node) {

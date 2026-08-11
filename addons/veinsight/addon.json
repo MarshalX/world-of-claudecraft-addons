@@ -1,9 +1,9 @@
 {
   "id": "veinsight",
   "name": "Veinsight",
-  "version": "1.2.0",
+  "version": "1.3.0",
   "apiVersion": 1,
-  "apiMinor": 4,
+  "apiMinor": 5,
   "author": "MarshalX",
   "description": "Every ore vein, wood stand and herb patch in the world, pinned where it stands and listed nearest first with a distance, a bearing and your own respawn timer. Says which ones you cannot open and whether that is the tool or the skill, what each one yields you, and which ones still raise your proficiency.",
   "entry": "main.js",

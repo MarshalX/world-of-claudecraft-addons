@@ -958,7 +958,10 @@ describe('the coverage line', () => {
     const said = tipOver(document.querySelector('[data-role="coverage"]'));
 
     expect(said).toContain(`${String(TABLE_SIZE - 1)} of ${String(TABLE_SIZE)} ship no art`);
-    expect(said).toContain('weapon art is filed under a model name');
+    // Why the count is not zero, which is what it reads as at game 0.36.0 in a real session:
+    // art is commissioned behind content rather than absent by design, so the line says the
+    // figure will move rather than naming a category that never gets one.
+    expect(said).toContain('commissions art behind content');
   });
 });
 

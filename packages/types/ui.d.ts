@@ -129,10 +129,15 @@ export interface IconUrls {
    * URL and the image load decides, which is why `ui.bar` hides its own icon slot on
    * error. See `preloadItems`.
    *
-   * WEAPONS never have one. The game files weapon art under a MODEL name rather than
-   * an item id, through a table it does not serve, so a weapon has an icon in the
-   * game and none an addon can point at. That is 134 of the game's 797 items today.
-   * The rest of the gap is art the game has not commissioned yet.
+   * Weapons used to be permanently absent and are not any more: game 0.36.0 gave
+   * every authored weapon its own painting, and at that release every item in the
+   * game ships a file. Write the null branch anyway. Art is commissioned behind
+   * content, so an item can ship before its picture, and the gap empties and refills
+   * with every release.
+   *
+   * A heroic weapon VARIANT is the one case that looks like a gap and is not: it
+   * ships no file of its own and this answers with its base weapon's painting, which
+   * is what the game draws for it too.
    */
   item: (itemId: ItemIconId) => string | null;
   /**
@@ -142,6 +147,12 @@ export interface IconUrls {
    * metadata for the icon file, gated by the game only on being non-empty, so it
    * drifts whenever content is renamed and the art is not: measured against game
    * 0.33.0, 281 of 303 agree with the game's own display name and 21 do not.
+   *
+   * It also answers for far less than it used to. The manifest keeps a name only for
+   * a CURATED entry, and game 0.36.0 moved the catalogue into unnamed generated
+   * batches, taking 307 named entries down to 39 reagents and bags. Those 39 all
+   * agree with the game today, and that is not a reason to trust the next one:
+   * nothing in the game compares the two.
    *
    * Null for an item whose art came from a generated batch, since those carry no
    * name at all, and null while the manifest has not been read.

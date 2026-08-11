@@ -69,6 +69,19 @@ const CUSTOM_PROPERTY = /^\s*(--[\w-]+)\s*:\s*(\S.*?)\s*$/;
 const VAR_REFERENCE = /var\(\s*(--[\w-]+)\s*(,)?/g;
 
 /**
+ * A custom property DECLARED anywhere in a sheet, as opposed to read from one.
+ *
+ * Deliberately not anchored to a line the way `CUSTOM_PROPERTY` is: this runs
+ * over the loader's whole concatenated stylesheet rather than one `:root` body,
+ * and all it needs is whether the name is written on the left of a colon. The
+ * COLON is what separates the two, and it separates them completely: a name
+ * being read is inside `var()`, where what follows it is `)` or `,` and never
+ * `:`. Matching the name alone would make every read its own declaration and
+ * silence the report entirely.
+ */
+const CUSTOM_PROPERTY_DECLARED = /(--[\w-]+)\s*:/g;
+
+/**
  * A token count below which the read is treated as a wrong URL rather than a
  * thin theme.
  *
@@ -253,11 +266,26 @@ function renderRule(rule: BorrowedRule): string {
  * nothing on screen except a colour that is now the inherited one. Reading the
  * loader's sheets against the theme is the only place that is visible before a
  * player reports it.
+ *
+ * A token the loader DECLARES is not one of these and is excluded, because the
+ * game never declared it and never will: `--woc-gap` and `--woc-wrap-gap` are
+ * written and read inside `ui/styles/layout.css` alone. Reported, they made the
+ * warning fire on a regeneration where nothing had drifted, and a drift report
+ * that cries wolf every run is one the next person learns to scroll past. The
+ * exclusion is the DECLARING set rather than the `--woc-` prefix, so a loader
+ * token that is read and never declared is still caught.
+ *
+ * The two sets are read from the same string, which is what makes this cheap and
+ * also what it rests on: `loaderCss()` concatenates every sheet the runtime
+ * ships, so a token declared in one file and read in another is still excluded.
  */
 function unbackedTokens(loaderCss: string, tokens: Map<string, string>): string[] {
+  const declared = new Set(
+    [...loaderCss.matchAll(CUSTOM_PROPERTY_DECLARED)].map(([, name]) => name as string),
+  );
   const missing = new Set<string>();
   for (const [, name, comma] of loaderCss.matchAll(VAR_REFERENCE)) {
-    if (comma === undefined && !tokens.has(name as string)) {
+    if (comma === undefined && !tokens.has(name as string) && !declared.has(name as string)) {
       missing.add(name as string);
     }
   }

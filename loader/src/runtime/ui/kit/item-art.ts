@@ -7,11 +7,27 @@
 // wrong id", and a 404 cannot tell those apart. The manifest the game serves at
 // `/ui/items/mapping.json` settles it before a request is made.
 //
-// Two halves of that gap are worth knowing about, because neither is a loader bug.
-// WEAPONS are filed under a MODEL name rather than an item id, through a table the
-// game does not serve, so a weapon has an icon in the game and none an addon can
-// point at. The rest is art the game has not commissioned yet, which it enumerates
-// itself.
+// The gap this describes has been most of the game's items and is currently
+// almost nothing: at game 0.36.0 every item in the table ships a file except the
+// sixteen HEROIC WEAPON VARIANTS below, and `ITEM_ART_PENDING` (the game's own
+// ledger of art it has not commissioned) is empty. Read that as dated rather than
+// as settled: the ledger refills whenever content lands ahead of its art, so
+// `has()` still has a real false to answer and an addon still has to handle one.
+//
+// WEAPONS used to be the permanent half of that gap, filed under a MODEL name
+// through a table the game does not serve. Game 0.36.0 gave every authored weapon
+// bespoke painted art under its own item id and put it in this manifest, so the
+// hole is closed except where the game closed it a second way: a generated Heroic
+// copy ships NO file and reuses its base weapon's painting, exactly as it inherits
+// the base held model. `fileIdFor` is that resolution, and it is a mirror of the
+// game's own rather than a guess. Three things make it safe. The variant id is a
+// pure prefix, `heroic_${baseId}`, frozen as such by the game's `heroicVariantId`;
+// every one of the 64 variants in the table satisfies it, with no exceptions; and
+// the resolved base is checked against the manifest like any other id, so a URL
+// still means a file exists. Measured at 0.36.0: 16 weapons need it, 16 resolve,
+// and none resolves to something that is not its own base. The one id starting
+// with `heroic_` that is not a variant, `heroic_mark`, ships its own file and is
+// answered before the fallback is reached.
 //
 // The manifest also carries a NAME per curated entry, and it is the ART SOURCE
 // name rather than the item's. Nothing in the game keeps the two in step: measured
@@ -46,18 +62,29 @@ interface ItemArt {
    */
   preload: () => Promise<void>;
   /**
-   * Whether the game ships a file for this item.
+   * The manifest id whose FILE serves this item, or null when none does.
    *
-   * Null while the manifest has not been read, which is a third answer rather than
-   * a false: turning "not known yet" into "no icon" would blank every cell of the
-   * first grid an addon draws.
+   * The item's own id where the manifest lists it, its base weapon's id where it
+   * is a Heroic variant reusing that painting, and null once the manifest has
+   * been read and neither is listed.
+   *
+   * Answers the id itself while the manifest has NOT been read, which is the
+   * optimism the whole module is built on rather than a claim: turning "not known
+   * yet" into "no icon" would blank every cell of the first grid an addon draws,
+   * and a URL that 404s costs an icon slot the kit already hides.
    */
-  has: (itemId: string) => boolean | null;
+  fileIdFor: (itemId: string) => string | null;
   /**
    * The name the item's ART was filed under, or null.
    *
    * Null for an id with no file, for an id that came from a generated batch (those
    * carry no name at all), and while the manifest has not been read.
+   *
+   * Resolved through `fileIdFor`, so a Heroic variant answers its base's name.
+   * That is the accurate reading rather than a convenience: this names the FILE,
+   * and the file is the base's painting. It also cannot disagree with the item's
+   * own name any more than the base's does, since a Heroic copy is displayed
+   * under the base item's name.
    */
   artName: (itemId: string) => string | null;
 }
@@ -70,6 +97,14 @@ interface ItemArtDeps {
 const ICON_SIZE = 128;
 
 const MANIFEST_URL = '/ui/items/mapping.json';
+
+/**
+ * What a generated Heroic copy's id is its base's id plus.
+ *
+ * The game's `heroicVariantId` calls it "a stable, pure prefix" and every one of
+ * the 64 variants in the table satisfies `id === 'heroic_' + heroicOf`.
+ */
+const HEROIC_PREFIX = 'heroic_';
 
 /** The ids a `generatedBatches` array names. Batches carry ids and no names. */
 function readBatches(batches: readonly unknown[], ids: Set<string>): void {
@@ -136,7 +171,41 @@ function manifestFrom(payload: unknown): ItemManifest | null {
   return { ids, names };
 }
 
-function createItemArt(deps: ItemArtDeps): ItemArt {
+/**
+ * The listed id whose file serves this item, once the manifest is known.
+ *
+ * Pure, and outside the factory because it closes over nothing: the answer is a
+ * function of the manifest and the id, which is what makes it the same reading
+ * for `fileIdFor` and for `artName`.
+ *
+ * The base arm is tried only when the item's OWN id is absent, so an id that
+ * merely starts with `heroic_` and ships its own painting never reaches it.
+ */
+function listedFor(known: ItemManifest, itemId: string): string | null {
+  if (known.ids.has(itemId)) {
+    return itemId;
+  }
+  if (!itemId.startsWith(HEROIC_PREFIX)) {
+    return null;
+  }
+  const base = itemId.slice(HEROIC_PREFIX.length);
+  if (!known.ids.has(base)) {
+    return null;
+  }
+  return base;
+}
+
+/**
+ * The one read, and what it is holding.
+ *
+ * Apart from the answers because it is a different concern: this is the caching
+ * and the "at most one request in flight" rule, and `createItemArt` below is the
+ * two questions asked of what it holds.
+ */
+function manifestReader(deps: ItemArtDeps): {
+  ensure: () => Promise<void>;
+  manifest: () => ItemManifest | null;
+} {
   /** Undefined until the one read has finished, either way. */
   const state: { known: KnownArt | undefined; reading: Promise<void> | undefined } = {
     known: undefined,
@@ -167,32 +236,50 @@ function createItemArt(deps: ItemArtDeps): ItemArt {
     return running;
   };
 
-  /** The manifest if it has been read and could be, and null in both other cases. */
-  const manifest = (): ItemManifest | null => {
-    if (state.known === undefined) {
-      // Start the read, and answer "not known" for this call. Nothing awaits it:
-      // the point of the cache is that the cell after this one is exact.
-      ensure().catch(() => undefined);
-      return null;
-    }
-    if (state.known === 'unreadable') {
-      return null;
-    }
-    return state.known;
+  return {
+    ensure,
+
+    /** The manifest if it has been read and could be, and null in both other cases. */
+    manifest: () => {
+      if (state.known === undefined) {
+        // Start the read, and answer "not known" for this call. Nothing awaits it:
+        // the point of the cache is that the cell after this one is exact.
+        ensure().catch(() => undefined);
+        return null;
+      }
+      if (state.known === 'unreadable') {
+        return null;
+      }
+      return state.known;
+    },
   };
+}
+
+function createItemArt(deps: ItemArtDeps): ItemArt {
+  const { ensure, manifest } = manifestReader(deps);
 
   return {
     preload: ensure,
 
-    has: (itemId) => {
+    fileIdFor: (itemId) => {
+      const known = manifest();
+      if (known === null) {
+        return itemId;
+      }
+      return listedFor(known, itemId);
+    },
+
+    artName: (itemId) => {
       const known = manifest();
       if (known === null) {
         return null;
       }
-      return known.ids.has(itemId);
+      const listed = listedFor(known, itemId);
+      if (listed === null) {
+        return null;
+      }
+      return known.names.get(listed) ?? null;
     },
-
-    artName: (itemId) => manifest()?.names.get(itemId) ?? null,
   };
 }
 

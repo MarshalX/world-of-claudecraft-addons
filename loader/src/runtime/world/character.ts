@@ -67,6 +67,18 @@ interface CharacterInfo {
   deedStats: DeedStats;
 }
 
+/** One gathering tool's slotted effect, mirrored from the `tslot` self delta. */
+interface ToolEffectSlot {
+  professionId: string;
+  effectId: string;
+  charges: number;
+  maxCharges: number;
+  /** 'prompt' spends a charge only on an explicit per-use confirmation. */
+  confirmMode: string;
+  /** Whether YOU crafted the charm in this slot. The crafter's name never rides. */
+  selfCrafted: boolean;
+}
+
 interface ProfessionInfo {
   /**
    * Craft id to skill. Independent, additive counters.
@@ -81,6 +93,8 @@ interface ProfessionInfo {
   identity: CraftingIdentity;
   /** The active mobile station's craft id, or null when none is placed. */
   mobileStation: string | null;
+  /** Slotted tool effects, sorted by profession. Empty is the common case. */
+  toolEffectSlots: readonly ToolEffectSlot[];
 }
 
 const NO_STATS: DeedStats = Object.freeze({
@@ -193,6 +207,35 @@ function readTalents(world: unknown): TalentInfo | null {
   };
 }
 
+/**
+ * One slot, or null for a row missing either of the two ids that name it.
+ *
+ * Lenient about the rest and strict about those two, matching the art readers: a
+ * row with no `professionId` names no tool, so keeping it would put an entry in
+ * the list that nothing can ever be matched against.
+ */
+function toolEffectSlot(row: unknown): ToolEffectSlot | null {
+  const professionId = fieldString(row, 'professionId');
+  const effectId = fieldString(row, 'effectId');
+  if (professionId === null || effectId === null) {
+    return null;
+  }
+  return {
+    professionId,
+    effectId,
+    charges: fieldNumber(row, 'charges') ?? 0,
+    maxCharges: fieldNumber(row, 'maxCharges') ?? 0,
+    confirmMode: fieldString(row, 'confirmMode') ?? 'always',
+    selfCrafted: fieldValue(row, 'selfCrafted') === true,
+  };
+}
+
+function toolEffectSlotsOf(world: unknown): readonly ToolEffectSlot[] {
+  return fieldArray(world, 'toolEffectSlots')
+    .map(toolEffectSlot)
+    .filter((slot): slot is ToolEffectSlot => slot !== null);
+}
+
 function readProfessions(world: unknown): ProfessionInfo | null {
   if (world === null) {
     return null;
@@ -202,6 +245,7 @@ function readProfessions(world: unknown): ProfessionInfo | null {
     gathering: recordAt(world, 'gatheringProficiency'),
     identity: readCraftingIdentity(world),
     mobileStation: fieldString(world, 'activeMobileStationCraft'),
+    toolEffectSlots: toolEffectSlotsOf(world),
   };
 }
 
@@ -213,5 +257,6 @@ export type {
   TalentInfo,
   TalentRole,
   TalentRowLevel,
+  ToolEffectSlot,
 };
 export { readCharacter, readProfessions, readTalents };

@@ -19,7 +19,23 @@ export interface Vec3 {
 
 export type EntityKind = 'player' | 'mob' | 'npc' | 'object';
 
-export type ResourceType = 'rage' | 'mana' | 'energy';
+/**
+ * What fills an entity's second bar.
+ *
+ * `focus` arrived with game 0.36.0, which rebuilt the classes. It is published
+ * as an ADDITION rather than as a break, and the reasoning is worth having here
+ * rather than re-derived the next time the game invents a resource: an addon can
+ * only ever READ one of these off an entity, never construct one, so widening
+ * the union leaves every existing comparison compiling and every working addon
+ * working. What would break an addon is the reverse, a member LEAVING, and that
+ * one moves the major.
+ *
+ * Closed rather than open, unlike the cue and icon unions, because those are
+ * content sets in the thousands and this is a handful the game adds to once a
+ * year. A closed union is what makes `switch` exhaustiveness worth having, and
+ * the cost of it being briefly short is one release, not a broken addon.
+ */
+export type ResourceType = 'rage' | 'mana' | 'energy' | 'focus';
 
 export type School = 'physical' | 'fire' | 'frost' | 'arcane' | 'shadow' | 'holy' | 'nature';
 
@@ -306,6 +322,22 @@ export interface Entity {
   /** Seconds left on the cast, against `castTotal`. Both 0 when not casting. */
   castRemaining: number;
   castTotal: number;
+  /**
+   * Who the cast currently RUNNING is aimed at, or null.
+   *
+   * Not the entity's selected target, which is `targetId` for a player and
+   * `aggro` for a mob: this is the target the cast itself was started against,
+   * which is what makes it worth reading, since a caster can retarget mid-cast
+   * and the spell still lands where it was aimed.
+   *
+   * It rides only while `castingAbility` is set, so null means "not casting, or
+   * casting something untargeted" and never "there is a target I cannot see".
+   *
+   * Sent from game 0.36.0. Before that it was a real field on every entity that
+   * the server never sent, holding its client-side default forever, which is why
+   * it was deliberately left unpublished until now.
+   */
+  castTargetId: number | null;
   channeling: boolean;
   auras: Aura[];
 

@@ -29,7 +29,7 @@ export interface Vec3 {
 
 export type EntityKind = 'player' | 'mob' | 'npc' | 'object';
 
-export type ResourceType = 'rage' | 'mana' | 'energy';
+export type ResourceType = 'rage' | 'mana' | 'energy' | 'focus';
 
 export type School = 'physical' | 'fire' | 'frost' | 'arcane' | 'shadow' | 'holy' | 'nature';
 
@@ -217,6 +217,8 @@ export interface Entity {
   /** Seconds left on the cast, against `castTotal`. Both 0 when not casting. */
   castRemaining: number;
   castTotal: number;
+  /** Who the RUNNING cast is aimed at. Null when not casting or untargeted. */
+  castTargetId: number | null;
   channeling: boolean;
   auras: Aura[];
 

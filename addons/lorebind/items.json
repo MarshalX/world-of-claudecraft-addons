@@ -1,5 +1,5 @@
 {
-  "gameVersion": "0.35.0",
+  "gameVersion": "0.36.0",
   "generatedFrom": [
     "src/sim/data.ts (the ITEMS merge)",
     "src/sim/content/items.ts",
@@ -631,6 +631,26 @@
       "requiredLevel": 20,
       "requiredClass": ["rogue", "hunter"],
       "sellValue": 9500
+    },
+    {
+      "id": "boneglass_shiv",
+      "name": "Boneglass Shiv",
+      "kind": "weapon",
+      "quality": "rare",
+      "slot": "mainhand",
+      "itemLevel": 17,
+      "stats": {
+        "agi": 7,
+        "sta": 3
+      },
+      "weapon": {
+        "min": 17,
+        "max": 27,
+        "speed": 1.7
+      },
+      "requiredLevel": 14,
+      "requiredClass": ["rogue", "hunter"],
+      "sellValue": 3000
     },
     {
       "id": "boneguard_breastplate",
@@ -1448,8 +1468,8 @@
       "slot": "offhand",
       "itemLevel": 17,
       "stats": {
-        "agi": 4,
-        "sta": 3
+        "agi": 3,
+        "sta": 1
       },
       "requiredLevel": 14,
       "requiredClass": ["hunter"],
@@ -1972,8 +1992,8 @@
       "slot": "offhand",
       "itemLevel": 29,
       "stats": {
-        "agi": 9,
-        "sta": 6
+        "agi": 5,
+        "sta": 4
       },
       "hitRating": 20,
       "requiredLevel": 20,
@@ -2305,6 +2325,26 @@
         "armor": 34
       },
       "sellValue": 340
+    },
+    {
+      "id": "duskwhisper",
+      "name": "Duskwhisper",
+      "kind": "weapon",
+      "quality": "epic",
+      "slot": "mainhand",
+      "itemLevel": 26,
+      "stats": {
+        "agi": 12,
+        "sta": 6
+      },
+      "weapon": {
+        "min": 20,
+        "max": 31,
+        "speed": 1.7
+      },
+      "requiredLevel": 20,
+      "requiredClass": ["rogue", "hunter"],
+      "sellValue": 9000
     },
     {
       "id": "duskwisp_essence",
@@ -3719,8 +3759,8 @@
       "slot": "offhand",
       "itemLevel": 23,
       "stats": {
-        "agi": 6,
-        "sta": 4
+        "agi": 4,
+        "sta": 2
       },
       "requiredLevel": 20,
       "requiredClass": ["hunter"],
@@ -4308,8 +4348,8 @@
       "heroicOf": "direfang_quiver",
       "itemLevel": 33,
       "stats": {
-        "agi": 10,
-        "sta": 7
+        "agi": 6,
+        "sta": 4
       },
       "critRating": 20,
       "hitRating": 55,
@@ -4352,6 +4392,28 @@
       "requiredLevel": 20,
       "requiredClass": ["mage", "priest", "warlock", "druid"],
       "sellValue": 1100
+    },
+    {
+      "id": "heroic_duskwhisper",
+      "name": "Duskwhisper",
+      "kind": "weapon",
+      "quality": "epic",
+      "slot": "mainhand",
+      "heroicOf": "duskwhisper",
+      "itemLevel": 31,
+      "stats": {
+        "agi": 15,
+        "sta": 7
+      },
+      "critRating": 50,
+      "weapon": {
+        "min": 21,
+        "max": 33,
+        "speed": 1.7
+      },
+      "requiredLevel": 20,
+      "requiredClass": ["rogue", "hunter"],
+      "sellValue": 9000
     },
     {
       "id": "heroic_eelscale_leggings",
@@ -4441,8 +4503,8 @@
       "heroicOf": "gravewyrm_bone_quiver",
       "itemLevel": 25,
       "stats": {
-        "agi": 7,
-        "sta": 4
+        "agi": 4,
+        "sta": 2
       },
       "requiredLevel": 20,
       "requiredClass": ["hunter"],
@@ -6138,6 +6200,26 @@
       "sellValue": 1050
     },
     {
+      "id": "marrowpoint",
+      "name": "Marrowpoint",
+      "kind": "weapon",
+      "quality": "epic",
+      "slot": "mainhand",
+      "itemLevel": 26,
+      "stats": {
+        "agi": 13,
+        "sta": 5
+      },
+      "weapon": {
+        "min": 21,
+        "max": 34,
+        "speed": 1.8
+      },
+      "requiredLevel": 20,
+      "requiredClass": ["rogue", "hunter"],
+      "sellValue": 9000
+    },
+    {
       "id": "marrowtread_boots",
       "name": "Marrowtread Boots",
       "kind": "armor",
@@ -6665,8 +6747,7 @@
       "slot": "offhand",
       "itemLevel": 7,
       "stats": {
-        "agi": 1,
-        "sta": 1
+        "agi": 1
       },
       "requiredClass": ["hunter"],
       "sellValue": 160
@@ -8046,6 +8127,27 @@
       "sellValue": 5000
     },
     {
+      "id": "rimefang",
+      "name": "Rimefang",
+      "kind": "weapon",
+      "quality": "epic",
+      "slot": "mainhand",
+      "itemLevel": 31,
+      "stats": {
+        "agi": 14,
+        "sta": 8
+      },
+      "critRating": 40,
+      "weapon": {
+        "min": 19,
+        "max": 31,
+        "speed": 1.6
+      },
+      "requiredLevel": 20,
+      "requiredClass": ["rogue", "hunter"],
+      "sellValue": 9000
+    },
+    {
       "id": "riptide_dirk",
       "name": "Riptide Dirk",
       "kind": "weapon",
@@ -8785,6 +8887,13 @@
       },
       "requiredLevel": 20,
       "sellValue": 280
+    },
+    {
+      "id": "soul_stone",
+      "name": "Soul Stone",
+      "kind": "potion",
+      "quality": "uncommon",
+      "soulbound": true
     },
     {
       "id": "soulflame_cord",
@@ -10729,12 +10838,12 @@
       "slot": "mainhand",
       "itemLevel": 16,
       "stats": {
-        "agi": 4,
+        "agi": 5,
         "sta": 2
       },
       "weapon": {
-        "min": 5,
-        "max": 9,
+        "min": 16,
+        "max": 24,
         "speed": 1.8
       },
       "sellValue": 45

@@ -9,10 +9,19 @@
 // `resolve` is the only place the ranking is decided, and the order is load-bearing:
 //   1. `items.json`, the game's own table, right by construction for every id it covers.
 //   2. A loot roll's `itemName`, the same server table spelled out on the wire.
-//   3. `ui.icon.itemArtName`, provenance for a picture and never a name: 21 of its 303 named
-//      entries disagree with the game's own, so it is labelled on screen and never published.
+//   3. `ui.icon.itemArtName`, provenance for a picture and never a name, so it is labelled on
+//      screen and never published.
 // `ui.icon.item` is not a fourth source and names nothing. A null from it is not evidence an id
 // is fake, since an item can ship before its art.
+//
+// SOURCE 3 ANSWERS FOR ALMOST NOTHING NOW, and it is worth knowing why it is still ranked
+// rather than dropped. The manifest keeps a name only for a CURATED entry, and game 0.36.0
+// moved almost the whole catalogue into unnamed generated batches: 307 named entries became
+// 39. Where it does answer it currently agrees with the game, all 38 of the 39 that are items
+// at all, so the last measured divergence (21 of 303, game 0.33.0) is gone. It stays third
+// anyway, because what made it untrustworthy was never the count: nothing in the game compares
+// the two, a content rename rewrites the item table and leaves the art provenance alone, and a
+// source that happens to agree today is not one to put ahead of the table itself.
 //
 // NO COUNT OF THE TABLE IS WRITTEN DOWN HERE. Content moves it in one commit, so every count on
 // screen is `table.size` as it is drawn.
@@ -903,9 +912,13 @@ function qualityOf(row) {
 }
 
 /**
- * Two letters for an item the game ships no art for, which is 134 of them and every weapon: a
- * grid of blank squares says nothing about which blank is which. Empty where there IS art, or
- * the figure would be a monogram over a picture.
+ * Two letters for an item the game ships no art for: a grid of blank squares says nothing
+ * about which blank is which. Empty where there IS art, or the figure would be a monogram
+ * over a picture.
+ *
+ * Draws for nothing at game 0.36.0, which commissioned the last of it, weapons included. It
+ * stays because the game keeps its own ledger of art it has not made yet and refills it
+ * whenever content lands ahead of the painting.
  */
 function initials(row) {
   if (hasArt(row.id)) {
@@ -1537,7 +1550,7 @@ function artText(counts) {
     return 'Every item the codex knows of ships art.';
   }
   const share = `${String(counts.artless)} of ${String(counts.total)}`;
-  return `${share} ship no art and draw as initials. Every weapon is one of them: weapon art is filed under a model name the game does not serve.`;
+  return `${share} ship no art and draw as initials. The game commissions art behind content, so this empties and refills as it catches up.`;
 }
 
 function say(el, said) {

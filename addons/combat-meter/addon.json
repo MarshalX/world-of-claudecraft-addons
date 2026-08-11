@@ -1,9 +1,9 @@
 {
   "id": "combat-meter",
   "name": "Combat Meter",
-  "version": "1.4.1",
+  "version": "1.5.0",
   "apiVersion": 1,
-  "apiMinor": 4,
+  "apiMinor": 5,
   "author": "MarshalX",
   "description": "What your damage and healing are made of: a row per ability, your pet's included, with per-second rates, crit rate, average and biggest hit, plus your real miss and dodge rates and what is hitting you.",
   "entry": "main.js",

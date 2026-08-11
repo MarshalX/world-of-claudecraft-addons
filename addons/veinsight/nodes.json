@@ -1,5 +1,5 @@
 {
-  "gameVersion": "0.35.1",
+  "gameVersion": "0.36.0",
   "respawnSeconds": {
     "ore": 240,
     "wood": 240,
@@ -243,6 +243,20 @@
     "sunpetal_herb": {
       "fine": "fine_sunpetal_herb",
       "tier": 3
+    }
+  },
+  "effects": {
+    "gatherers_cache": {
+      "kind": "quantity",
+      "bonus": 1
+    },
+    "artisans_eye": {
+      "kind": "quality",
+      "bonus": 1
+    },
+    "quickening_charm": {
+      "kind": "respawnSpeed",
+      "bonus": 1
     }
   },
   "itemNames": {

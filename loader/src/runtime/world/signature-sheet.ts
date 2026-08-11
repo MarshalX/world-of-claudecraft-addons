@@ -29,6 +29,28 @@ function joinFields(source: unknown, fields: readonly string[]): string {
   return fields.map((field) => String(fieldValue(source, field))).join(':');
 }
 
+/**
+ * The slotted tool effects, as `profession:effect:charges` per row.
+ *
+ * The CHARGE COUNT is in it, which is the whole reason this contributes at all: a
+ * slot's effect and profession move once when it is installed, and the counter is
+ * what moves on every harvest that spends one. A panel showing how many swings
+ * are left would otherwise repaint only when some other part of the sheet did.
+ *
+ * `maxCharges`, `confirmMode` and `selfCrafted` are left out. They move only on a
+ * re-slot or a recharge, and both of those move `effectId` or the count with them,
+ * so including them would lengthen the string without ever being the thing that
+ * changed it. The rows are server-sorted, so this is stable without a sort here.
+ */
+function toolSlotsSignature(professions: unknown): string {
+  return fieldArray(professions, 'toolEffectSlots')
+    .map(
+      (slot) =>
+        `${fieldString(slot, 'professionId') ?? ''}:${fieldString(slot, 'effectId') ?? ''}:${String(fieldNumber(slot, 'charges') ?? 0)}`,
+    )
+    .join(',');
+}
+
 /** Every scalar on the sheet, plus the SIZE of the two collections on it. */
 export function characterSignature(character: unknown): string {
   if (character === null) {
@@ -82,7 +104,7 @@ export function identitySignature(identity: unknown): string {
 }
 
 /**
- * The two counter maps, the identity, and the placed mobile station.
+ * The two counter maps, the identity, the placed mobile station, and the slots.
  *
  * The counters are the signature of themselves: a skill only moves when the player
  * did something worth repainting for. The identity joins both id ARRAYS rather than
@@ -98,7 +120,8 @@ export function professionsSignature(professions: unknown): string {
   const crafts = countsSignature(fieldValue(professions, 'craftSkills'));
   const gathering = countsSignature(fieldValue(professions, 'gathering'));
   const identity = identitySignature(fieldValue(professions, 'identity'));
-  return `${crafts}|${gathering}|${identity}|${fieldString(professions, 'mobileStation') ?? ''}`;
+  const station = fieldString(professions, 'mobileStation') ?? '';
+  return `${crafts}|${gathering}|${identity}|${station}|${toolSlotsSignature(professions)}`;
 }
 
 /** A counter map as one string, sorted so key order cannot fire a change. */

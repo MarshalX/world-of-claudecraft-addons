@@ -8,124 +8,24 @@
 //
 // The prose lives in the published copy, which is what an author reads. This one
 // carries the shapes and the notes a maintainer needs.
+//
+// The combat records are in `events-combat.ts`, the same split the published
+// catalogue makes. `EventPayloads` below is the one map over both files.
 
-import type { School } from '../world/game-types.ts';
+import type {
+  AuraEvent,
+  CastStartEvent,
+  CastStopEvent,
+  DamageEvent,
+  DeathEvent,
+  Heal2Event,
+  SpellFxAtEvent,
+  SpellFxEvent,
+} from './events-combat.ts';
 
 /** Set when the server routed this record to one player rather than to everyone. */
 interface PersonalEvent {
   pid?: number;
-}
-
-/** `evade` is a leashing wild mob refusing the hit, and always lands at amount 0. */
-type DamageKind = 'hit' | 'miss' | 'dodge' | 'parry' | 'block' | 'resist' | 'evade';
-
-interface DamageEvent extends PersonalEvent {
-  type: 'damage';
-  sourceId: number;
-  targetId: number;
-  amount: number;
-  crit: boolean;
-  school: School;
-  /** A display NAME, or null for an auto-attack. Never an ability id. */
-  ability: string | null;
-  /** A PLAYER ability's id, on the primary direct hit. Null on a mob, tick or echo. */
-  abilityId?: string | null;
-  kind: DamageKind;
-  /** Not present on any of 205 records in the session this was written from. */
-  absorbed?: number;
-  attackAnimationStarted?: boolean;
-}
-
-interface Heal2Event extends PersonalEvent {
-  type: 'heal2';
-  sourceId: number;
-  targetId: number;
-  amount: number;
-  crit: boolean;
-  /** A display NAME. `abilityId` is the id. */
-  ability: string;
-  /** What a heal-absorb shield ate. Direct heals only, and absent rather than 0. */
-  absorbed?: number;
-  hot?: boolean;
-  abilityId?: string;
-  /** Carries no healing. Consumers skip on this flag, never on the amount. */
-  cueOnly?: boolean;
-  /**
-   * Healing lost to the missing-hp clamp, absent rather than 0, and computed
-   * after absorb so it never double-counts with `absorbed`.
-   *
-   * PARTIAL ONLY: every emit site still gates on `healed > 0`, so a tick that
-   * fully overheals emits no record at all and cannot be reported here.
-   */
-  overheal?: number;
-}
-
-/**
- * An effect arriving or leaving. The four attribution fields ride the
- * `Sim.applyAura` path only, so every one of them is optional at the consumer.
- */
-interface AuraEvent extends PersonalEvent {
-  type: 'aura';
-  targetId: number;
-  name: string;
-  gained: boolean;
-  auraKind?: string;
-  /** The caster's entity id. */
-  sourceId?: number;
-  /** The aura's own id, and the only route to a MOB ability's id at event time. */
-  abilityId?: string;
-  stacks?: number;
-  /** A same-id same-name re-application, which emits no fade of its own. */
-  refresh?: boolean;
-}
-
-interface DeathEvent extends PersonalEvent {
-  type: 'death';
-  entityId: number;
-  killerId: number;
-}
-
-/** A player or pet cast, or an ACTIVITY sentinel. A mob never emits one. */
-interface CastStartEvent extends PersonalEvent {
-  type: 'castStart';
-  entityId: number;
-  /** An ID here, unlike the display name on a damage record, or a sentinel. */
-  ability: string;
-  time: number;
-  gatherNodeType?: string;
-}
-
-interface CastStopEvent extends PersonalEvent {
-  type: 'castStop';
-  entityId: number;
-  success: boolean;
-}
-
-interface SpellFxEvent extends PersonalEvent {
-  type: 'spellfx';
-  sourceId: number;
-  targetId: number;
-  school: School;
-  fx: string;
-  /** An ID, on the effects whose visual varies per ability. */
-  ability?: string;
-  duration?: number;
-  range?: number;
-  angle?: number;
-  level?: number;
-  attackAnimation?: 'ranged-shot';
-  wand?: true;
-}
-
-interface SpellFxAtEvent extends PersonalEvent {
-  type: 'spellfxAt';
-  x: number;
-  z: number;
-  school: School;
-  fx: string;
-  /** An ID, on the ground casts that have authored art of their own. */
-  ability?: string;
-  radius?: number;
 }
 
 interface XpEvent extends PersonalEvent {
@@ -232,6 +132,31 @@ interface GatherResultEvent extends PersonalEvent {
   effectDepleted?: true;
 }
 
+/** What a gather refusal was aimed at. A corpse is gated across every profession. */
+type GatherSurface = 'node' | 'corpse' | 'fishing';
+
+interface GatherDeniedEvent extends PersonalEvent {
+  type: 'gatherDenied';
+  surface: GatherSurface;
+  requiredTier: number;
+  /** Set for a node and for fishing, absent for a corpse, which spans them all. */
+  professionId?: string;
+  /** Set only when a COVERING tool is carried and the proficiency is what is short. */
+  wieldProficiency?: number;
+}
+
+interface GatherToolNoNodeEvent extends PersonalEvent {
+  type: 'gatherToolNoNode';
+  professionId: string;
+}
+
+interface GatherDowngradeEvent extends PersonalEvent {
+  type: 'gatherDowngrade';
+  surface: 'node' | 'corpse';
+  /** `mark` kept the units and lost the signature; `find` dropped a bonus outright. */
+  lost: 'mark' | 'find';
+}
+
 interface OpenWindowEvent extends PersonalEvent {
   type: 'bank' | 'mailbox';
 }
@@ -257,6 +182,9 @@ interface EventPayloads {
   error: ErrorEvent;
   log: LogEvent;
   gatherResult: GatherResultEvent;
+  gatherDenied: GatherDeniedEvent;
+  gatherToolNoNode: GatherToolNoNodeEvent;
+  gatherDowngrade: GatherDowngradeEvent;
   bank: OpenWindowEvent;
   mailbox: OpenWindowEvent;
 }
@@ -269,21 +197,18 @@ type EventKind = KnownEventKind | (string & Record<never, never>);
 type EventPayload<K> = K extends KnownEventKind ? EventPayloads[K] : unknown;
 
 export type {
-  AuraEvent,
-  CastStartEvent,
-  CastStopEvent,
   ChatChannel,
   ChatEvent,
-  DamageEvent,
-  DamageKind,
-  DeathEvent,
   DeedUnlockedEvent,
   ErrorEvent,
   EventKind,
   EventPayload,
   EventPayloads,
+  GatherDeniedEvent,
+  GatherDowngradeEvent,
   GatherResultEvent,
-  Heal2Event,
+  GatherSurface,
+  GatherToolNoNodeEvent,
   LearnAbilityEvent,
   LogEvent,
   LootEvent,
@@ -292,8 +217,6 @@ export type {
   PlayerDeathEvent,
   QuestAcceptedEvent,
   RespawnEvent,
-  SpellFxAtEvent,
-  SpellFxEvent,
   VendorEvent,
   XpEvent,
 };

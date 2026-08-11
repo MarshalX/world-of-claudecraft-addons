@@ -14,6 +14,24 @@ export type DamageKind = 'hit' | 'miss' | 'dodge' | 'parry' | 'block' | 'resist'
 export interface DamageEvent extends PersonalEvent {
   type: 'damage';
   sourceId: number;
+  /**
+   * Who owned the source when the record was emitted, for a pet or guardian.
+   *
+   * The one thing `world.entities.get(sourceId)?.ownerId` cannot answer. A pet
+   * despawns when its owner dies, so the killing blow's source is gone from the
+   * snapshot by the time an addon reads it, and a meter resolving the owner from
+   * the snapshot drops exactly the damage around a death. This is snapshotted at
+   * emit, so it survives that.
+   *
+   * Absent for anything with no owner, which is every player's own record and
+   * every mob's, so absence means "nobody owned this" rather than "not known".
+   * Still ask the question AGAINST your own id: an owner id is an owner id, and
+   * a stranger's pet carries one too.
+   *
+   * Added in game 0.36.0, so a server older than that sends nothing and the
+   * snapshot lookup stays the fallback.
+   */
+  sourceOwnerId?: number;
   targetId: number;
   amount: number;
   crit: boolean;

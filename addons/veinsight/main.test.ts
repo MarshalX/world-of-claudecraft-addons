@@ -39,12 +39,17 @@ const DATA_FILE = 'nodes.json';
 /**
  * The highest minor anything this addon calls arrived in. `woc.data`,
  * `world.nodeCooldowns` and `ui.project` are 2; `ui.list`, `fmt.duration`,
- * `fmt.compass`, `world.distanceTo`, `world.bearingTo` and `bus.follow` are 4.
+ * `fmt.compass`, `world.distanceTo`, `world.bearingTo` and `bus.follow` are 4;
+ * `world.professions.toolEffectSlots` is 5.
  *
  * A frame's own `toggleKey` is 4 as well and is deliberately NOT on that list: the toggle
  * is bound by hand, for the reason written above the bind in `main.js`.
+ *
+ * Declared at 5 even though an older loader answers an empty list rather than throwing,
+ * because that is the failure worth refusing: a silently empty list makes the fine-grade
+ * answer short by a tier for anyone carrying a charm, with nothing on screen saying so.
  */
-const NEEDS_MINOR = 4;
+const NEEDS_MINOR = 5;
 
 const PLAYER_ID = PLAYER_ENTITY.id;
 /** The redraw's period, so advancing this much runs exactly one of them. */
@@ -262,6 +267,13 @@ interface StartOpts {
    * world entry and is a different answer.
    */
   proficiency?: Record<string, number> | null;
+  /**
+   * The tool effects slotted onto your gathering tools.
+   *
+   * Absent is the ordinary case: the game elides the wire key for anyone who has never
+   * slotted one, which is most players, so the loader answers an empty array.
+   */
+  slots?: readonly { professionId: string; effectId: string; charges: number }[];
   /** Node id to seconds left on YOUR timer. A node with no entry is ready. */
   cooling?: Record<string, number>;
   table?: string;
@@ -391,6 +403,12 @@ async function start(
     get gatheringProficiency() {
       return gathering.value;
     },
+    toolEffectSlots: (opts.slots ?? []).map((slot) => ({
+      ...slot,
+      maxCharges: 20,
+      confirmMode: 'always',
+      selfCrafted: true,
+    })),
   };
   const harness = await mountAddon({
     manifest: MANIFEST_TEXT,
@@ -1441,13 +1459,70 @@ describe('what a node yields you', () => {
     expect(h.tipOf(ORE_MIREFEN_T1.id)).toContain('Yields Iron Ore');
   });
 
-  // The one answer here that can be short, disclosed where it can be short and nowhere else:
-  // a slotted quality effect adds a tier to the comparison and no addon can see one, so a
-  // tool sitting exactly ON the material's rung is the only tool whose answer it would flip.
-  it('discloses the one case a slotted effect would change', async () => {
-    const h = await run({ 'list-length': 20 }, undefined, { at: ORE_1, bags: TIER_1_KIT });
+  // The case this addon used to DISCLOSE it could not answer, and now answers. A tool
+  // sitting exactly on the material's rung mints the plain grade alone and the fine one
+  // with a quality charm, which is the whole of what `world.professions.toolEffectSlots`
+  // added at apiMinor 5. Nothing is disclosed any more, because nothing is unknown.
+  it('names the fine grade when a quality charm carries the tool past the rung', async () => {
+    const h = await run({ 'list-length': 20 }, undefined, {
+      at: ORE_1,
+      bags: TIER_1_KIT,
+      slots: [{ professionId: 'mining', effectId: 'artisans_eye', charges: 5 }],
+    });
 
-    expect(h.tipOf(ORE_1.id)).toContain('slotted quality effect');
+    expect(h.tipOf(ORE_1.id)).toContain('Yields Fine Copper Ore');
+    expect(h.tipOf(ORE_1.id)).not.toContain('slotted quality effect');
+  });
+
+  // A spent slot stays on the wire at 0 and contributes nothing, which is exactly what the
+  // game's own bonus rule does with it. Reading the slot's presence rather than its charges
+  // would promise a grade the harvest does not hand over.
+  it('keeps the plain grade when the charm has no charges left', async () => {
+    const h = await run({ 'list-length': 20 }, undefined, {
+      at: ORE_1,
+      bags: TIER_1_KIT,
+      slots: [{ professionId: 'mining', effectId: 'artisans_eye', charges: 0 }],
+    });
+
+    expect(h.tipOf(ORE_1.id)).toContain('Yields Copper Ore');
+  });
+
+  // Only the QUALITY kind touches this comparison. A quantity charm is a real slot on the
+  // same tool and adds units rather than grade, so folding it in would name a grade the
+  // harvest never mints.
+  it('keeps the plain grade for a charm of another kind', async () => {
+    const h = await run({ 'list-length': 20 }, undefined, {
+      at: ORE_1,
+      bags: TIER_1_KIT,
+      slots: [{ professionId: 'mining', effectId: 'gatherers_cache', charges: 5 }],
+    });
+
+    expect(h.tipOf(ORE_1.id)).toContain('Yields Copper Ore');
+  });
+
+  // A charm on a different tool. The slot list is one row per profession, so matching on
+  // anything less than the profession id would let a herbalist's charm upgrade ore.
+  it('ignores a charm slotted on another profession tool', async () => {
+    const h = await run({ 'list-length': 20 }, undefined, {
+      at: ORE_1,
+      bags: TIER_1_KIT,
+      slots: [{ professionId: 'herbalism', effectId: 'artisans_eye', charges: 5 }],
+    });
+
+    expect(h.tipOf(ORE_1.id)).toContain('Yields Copper Ore');
+  });
+
+  // The game suppresses a quality charm outright where the fine grade is out of reach at
+  // this node's tier, so the charm must not carry a vein below the material rung either.
+  it('keeps the plain grade at a vein below the rung even with a charm', async () => {
+    const h = await run({ 'draw-distance': 400, 'list-length': 20 }, undefined, {
+      at: ORE_MIREFEN_T1,
+      bags: [{ itemId: MITHRIL_PICK, count: 1 }],
+      proficiency: { mining: WIELD_BY_TIER[3] },
+      slots: [{ professionId: 'mining', effectId: 'artisans_eye', charges: 5 }],
+    });
+
+    expect(h.tipOf(ORE_MIREFEN_T1.id)).toContain('Yields Iron Ore');
   });
 
   it('says nothing about an effect once the tool is past the rung', async () => {

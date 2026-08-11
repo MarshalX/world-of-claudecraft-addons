@@ -66,11 +66,18 @@ const ROW_SPECS = [
   ['power', 'show-power', 'Power'],
 ];
 
-/** `ResourceType` is exactly these three. The fallback covers a kind a release adds. */
+/**
+ * `ResourceType` is exactly these four. The fallback covers a kind a release adds.
+ *
+ * `focus` arrived with the 0.36.0 class rebuild and is the case the fallback was written
+ * for: a hunter read 'Power' for a release rather than reading nothing, which is why the
+ * fallback stays even now that the list is complete again.
+ */
 const RESOURCE_LABELS = [
   ['mana', 'Mana'],
   ['rage', 'Rage'],
   ['energy', 'Energy'],
+  ['focus', 'Focus'],
 ];
 
 /** What the swing counts down FROM, which is the one length nothing publishes. */

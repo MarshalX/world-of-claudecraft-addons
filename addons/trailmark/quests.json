@@ -1,5 +1,5 @@
 {
-  "gameVersion": "0.35.0",
+  "gameVersion": "0.36.0",
   "source": "src/sim/data.ts, src/sim/quest_targets.ts, src/sim/types.ts, src/sim/content/*.ts",
   "zones": [
     {
@@ -349,6 +349,20 @@
           "count": 1,
           "label": "Morthen's Grimoire",
           "item": "morthen_grimoire"
+        }
+      ]
+    },
+    {
+      "id": "q_divine_tome",
+      "name": "The Dawnbound Tome",
+      "giver": "brother_aldric",
+      "turnIn": ["brother_aldric"],
+      "objectives": [
+        {
+          "type": "kill",
+          "count": 6,
+          "label": "Restless Bones laid to rest",
+          "mob": "restless_bones"
         }
       ]
     },
@@ -785,6 +799,20 @@
           "count": 1,
           "label": "The Drowned Warlord slain",
           "mob": "drowned_warlord"
+        }
+      ]
+    },
+    {
+      "id": "q_rite_of_redemption",
+      "name": "The Rite of Recall",
+      "giver": "brother_aldric_fen",
+      "turnIn": ["brother_aldric_fen"],
+      "objectives": [
+        {
+          "type": "kill",
+          "count": 8,
+          "label": "Drowned Dead laid to rest",
+          "mob": "drowned_dead"
         }
       ]
     },

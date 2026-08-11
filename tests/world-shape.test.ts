@@ -126,6 +126,7 @@ describe('the shape table', () => {
       castingAbility: true,
       castRemaining: true,
       castTotal: true,
+      castTargetId: true,
       channeling: true,
       auras: true,
       lootable: true,

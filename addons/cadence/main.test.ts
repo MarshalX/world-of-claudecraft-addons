@@ -621,15 +621,16 @@ describe('the resource and the combo points', () => {
     expect(h.valueOf('power')).toBe('45');
   });
 
-  // The game's `ResourceType` is exactly these three. A hunter is on mana rather than on a bar
-  // of its own, which is the case worth pinning.
-  it('names each of the three kinds the game sends', async () => {
+  // The game's `ResourceType` is exactly these four. `focus` is the hunter's and arrived with
+  // the 0.36.0 class rebuild; before it, a hunter was on mana and this suite pinned that.
+  it('names each of the four kinds the game sends', async () => {
     const h = await run();
 
     for (const [kind, label] of [
       ['mana', 'Mana'],
       ['rage', 'Rage'],
       ['energy', 'Energy'],
+      ['focus', 'Focus'],
     ]) {
       h.self({ templateId: 'hunter', resourceType: kind, resource: 60, maxResource: 100 });
       h.frame();
@@ -638,12 +639,12 @@ describe('the resource and the combo points', () => {
     }
   });
 
-  // `focus` in particular: no class is on focus, a hunter included, and the union has no such
-  // member, so it is not a kind waiting to be labelled.
-  it('falls back for a kind the game does not send', async () => {
+  // The fallback, and it earned its keep: `focus` went through it for a release, so a hunter
+  // read a vague word rather than nothing at all. It stays for the next one.
+  it('falls back for a kind the game does not send yet', async () => {
     const h = await run();
 
-    h.self({ templateId: 'hunter', resourceType: 'focus', resource: 60, maxResource: 100 });
+    h.self({ templateId: 'hunter', resourceType: 'chi', resource: 60, maxResource: 100 });
     h.frame();
 
     expect(h.labelOf('power')).toBe('Power');

@@ -195,6 +195,70 @@ export interface GatherResultEvent extends PersonalEvent {
   effectDepleted?: true;
 }
 
+/**
+ * What a gather attempt was aimed at.
+ *
+ * A corpse has no profession of its own: it is gated on the best tool tier across
+ * every gathering profession you have, which is why `professionId` is absent on a
+ * corpse refusal and present on the other two.
+ */
+export type GatherSurface = 'node' | 'corpse' | 'fishing';
+
+/**
+ * The server refused a gather, and why.
+ *
+ * The server's own answer to the question a node panel is already answering
+ * locally, which makes it the one thing that can correct a wrong local model the
+ * moment it is wrong. Personal and text-free: ids and numbers only, so the line
+ * the player reads is yours to compose.
+ */
+export interface GatherDeniedEvent extends PersonalEvent {
+  type: 'gatherDenied';
+  surface: GatherSurface;
+  /** The tool tier the target needs. */
+  requiredTier: number;
+  /** Set for a node and for fishing. Absent for a corpse, which spans them all. */
+  professionId?: string;
+  /**
+   * The proficiency at which a tool you ALREADY CARRY would work this target.
+   *
+   * Present exactly when a tool covering `requiredTier` is in your bags and only
+   * the counter is short, which is the difference between "you need a better
+   * pick" and "you need more practice". Absent means the tool itself is what is
+   * missing, and `requiredTier` is the whole answer.
+   *
+   * Keyed to your bags on purpose: naming a threshold that unlocks nothing you
+   * carry would be a true number and useless advice.
+   */
+  wieldProficiency?: number;
+}
+
+/**
+ * A gathering tool was used with nothing in range to use it on.
+ *
+ * The one refusal a node panel could have prevented, which is what makes it worth
+ * hearing: everything else is a gate, and this is a miss.
+ */
+export interface GatherToolNoNodeEvent extends PersonalEvent {
+  type: 'gatherToolNoNode';
+  professionId: string;
+}
+
+/**
+ * A yield arrived in a lesser form than it was rolled in, because the bags were full.
+ *
+ * `mark` means the units landed and your signature on them did not. `find` means a
+ * pure bonus was dropped outright. Neither is an error the game reports anywhere
+ * else, so without this a player sees a jackpot that silently was not one.
+ *
+ * At most one per harvest command, even when several yields downgrade.
+ */
+export interface GatherDowngradeEvent extends PersonalEvent {
+  type: 'gatherDowngrade';
+  surface: 'node' | 'corpse';
+  lost: 'mark' | 'find';
+}
+
 /** Asks the client to open a window. Carries nothing else. */
 export interface OpenWindowEvent extends PersonalEvent {
   type: 'bank' | 'mailbox';
@@ -222,6 +286,9 @@ export interface EventPayloads {
   error: ErrorEvent;
   log: LogEvent;
   gatherResult: GatherResultEvent;
+  gatherDenied: GatherDeniedEvent;
+  gatherToolNoNode: GatherToolNoNodeEvent;
+  gatherDowngrade: GatherDowngradeEvent;
   bank: OpenWindowEvent;
   mailbox: OpenWindowEvent;
 }
