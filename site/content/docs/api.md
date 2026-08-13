@@ -22,6 +22,8 @@ woc.net.onAnyEvent((event) => { /* every event, whatever its kind */ });
 
 `net.onRaw` is below the decoder, handing you frames before they are parsed. Reach for it only when you are looking at something the decoder does not model yet.
 
+The `error` event is every refused action, and `text` is the only part of one that is always there. A refusal the SERVER wrote can also carry `code`, a stable identity to branch on where the prose is not, `channel` where it is about chat, and `retryAfterSeconds` where it is a rate limit rather than a rejection. All three are optional and most refusals carry none of them: they arrived with game 0.37.1 and the chat quota is the only thing filling them today, so display `text` and treat the rest as a bonus. `reason` is a different field, the sim's own coarse label, and it has one member.
+
 `net.onSend` sees outbound frames, **after redaction**. The client's first frame on every socket carries your account bearer token, and it is blanked by field name rather than by frame type, so a version bump cannot slip one past.
 
 ```js
@@ -76,6 +78,8 @@ An item id does not resolve to a **name**, a quality, or any stats. That content
 `world.zone` is localized display text rather than an id, for the same class of reason: the zone table is content behind a pure function of your position, so the loader reads the game's own minimap label instead. Show it or watch it change; comparing it against a hardcoded string only works for players running your language. Underground it names the delve, because that is what the game puts there. There is no subzone: the game announces a landmark once when you walk into one and never clears it when you leave, so a reading taken from it would name somewhere you left an hour ago.
 
 `bagCapacity` derives from `bags` and has no key of its own, so watch `bags`.
+
+A stack in `world.inventory` or `world.bank` is a `HeldSlot`, which is an `InvSlot` plus one field the shared shape cannot promise: `instance.locked`, the safety mark the owner sets in the game's own bag window. A locked copy refuses salvage, consumption as a craft reagent, and a vendor sale until it is unlocked, and it is a fact worth drawing, because it is the one thing in a bag the player chose. It is absent, and unreachable rather than merely missing, everywhere else a stack appears: the server projects a payload down to `signer`, `enchant` and `rolled` before it sends a market row, a letter attachment or a guild bank row, so `undefined` there means "not sent" and not "unlocked". You cannot set one. `net` is read-only, so an addon reports a lock and never performs one.
 
 Position comes off the entity rather than the zone, and every entity has it, not just you:
 
@@ -216,6 +220,8 @@ That shape exists because the obvious alternative is a bug. On a nullable value 
 `world.marketCollectPending` and `world.mailUnread` are deliberately not inside them: a badge exists for the moment you are NOT at the counter, so both stream everywhere. `world.mail` carries its own `unread` over the same letters, which is the mailbox pane's figure; do not derive either from the other. `world.buyback` is ungated too, most recent first, because standing at a vendor is what lets you use the ring rather than what lets you see it.
 
 There is no price history anywhere and there never was: the server keeps no record of a completed sale and offers no query for one. A price series is something your addon builds, by recording each page its player browses.
+
+**Read `market.info.sort` before you fold two pages together.** Browse has two orders as of game 0.37.1, and it is an axis of its own beside the five filters: `'name'` is the classic one, the book grouped by display name and then by price, and `'price'` is the whole matched book cheapest first. It reorders and never narrows, so the same query under the two produces the same rows in a different arrangement, and the arrangement is what a partial reading samples. Under `'price'` page 0 is the cheapest rows in the market, which is the strongest thing either order can tell you about an item, and every page after it can hide a cheaper copy of anything: an item's listings are contiguous only under `'name'`. Record which order a reading came from, or a median over your own browsing becomes a median over whichever end of the book the player was looking at.
 
 `world.abilities` is how you get between an ability's id and its display name, which have diverged: skill art is filed under `arcane_shot`, while a combat event names it `Fell Shot`. Without this you can hold one and never reach the other.
 

@@ -24,11 +24,13 @@
 // of 20 against a single at the same total, which reads identically to a total-based series and
 // ten times apart to a correct one.
 //
-// The undercut check is pinned on what it refuses to say. The server sorts the others section
-// by display name and then by price, so a block is contiguous and ascending and its first row
-// is the cheapest competitor. Two answers are therefore not available: an item with no block on
-// the page reads as "not on this page" rather than as uncontested, and a block that begins at
-// the very first row of a page after the first may have started on the page before.
+// The undercut check is pinned on what it refuses to say. Name-sorted, the server groups the
+// others section by display name and then by price, so a block is contiguous and ascending and
+// its first row is the cheapest competitor. Two answers are therefore not available: an item
+// with no block on the page reads as "not on this page" rather than as uncontested, and a block
+// that begins at the very first row of a page after the first may have started on the page
+// before. Price-sorted (game 0.37.1), the same rows arrive spread across the book by price, so
+// the refusal widens to every later page and page 0 becomes the one certain reading.
 //
 // The cut and the cap are read, so the fixtures use figures that are not the game's own 5
 // percent and 12 listings: an addon that hardcoded either would pass against a fixture that
@@ -166,6 +168,8 @@ interface MarketPayload {
   armorClass: string;
   primaryStat: string;
   rarity: string;
+  /** The browse ORDER, from game 0.37.1. A server older than that sends none. */
+  sort?: string;
   page: number;
   pageCount: number;
   collectionCopper: number;
@@ -256,6 +260,7 @@ function marketPayload(patch: Partial<MarketPayload> = {}): MarketPayload {
     armorClass: '',
     primaryStat: '',
     rarity: '',
+    sort: 'name',
     page: 0,
     pageCount: 1,
     collectionCopper: 0,
@@ -1673,6 +1678,48 @@ describe('the undercut check', () => {
     expect(detailOf('mine', '1')).toContain('cheapest on this page');
   });
 
+  // Game 0.37.1 gave Browse a second order, and a price-sorted book breaks the one assumption
+  // this whole check rests on: rows are ascending by price across every ITEM, so an item's
+  // listings are no longer contiguous and a cheaper copy of the same thing can sit on any
+  // earlier page. The block-start guard cannot see that, because it only ever fires when the
+  // block begins at row 0.
+  it('refuses to call a listing cheapest on a later price-sorted page', async () => {
+    const h = await start();
+    h.send({
+      market: page(
+        [
+          listing({ id: 9, itemId: 'cloth', price: 300 }),
+          listing({ id: 1, itemId: 'ore', price: 400, mine: true }),
+          listing({ id: 2, itemId: 'ore', price: 500 }),
+        ],
+        { page: 1, pageCount: 3, sort: 'price' },
+      ),
+    });
+    await h.settle();
+
+    expect(detailOf('mine', '1')).toContain('may be undercut');
+  });
+
+  // Page 0 of a price-sorted book is the cheapest rows in the WHOLE book, so the first copy of
+  // an item there is its cheapest anywhere. That is a stronger reading than the name-sorted
+  // page gives, and the check must not throw it away along with the case above.
+  it('takes a price-sorted first page at face value', async () => {
+    const h = await start();
+    h.send({
+      market: page(
+        [
+          listing({ id: 9, itemId: 'cloth', price: 300 }),
+          listing({ id: 1, itemId: 'ore', price: 400, mine: true }),
+          listing({ id: 2, itemId: 'ore', price: 500 }),
+        ],
+        { page: 0, pageCount: 3, sort: 'price' },
+      ),
+    });
+    await h.settle();
+
+    expect(detailOf('mine', '1')).toContain('cheapest on this page');
+  });
+
   it('warns once when a listing stops being the cheapest', async () => {
     const h = await start();
     h.send({
@@ -2306,6 +2353,30 @@ describe('an unset filter', () => {
     // The four unset axes are gone. Matched on the repeat rather than on the word, because the
     // sentence legitimately ends by saying this is not all of the book.
     expect(said).not.toContain('all, all');
+  });
+
+  // The order is an axis whose unset value is `name` rather than `all`, so reading it the way
+  // the five enums are read would put a word on every default reading there has ever been.
+  it('says nothing about the order Browse has always used', async () => {
+    const h = await start();
+    h.send({ market: page([listing({ id: 1, itemId: 'ore', price: 500 })], { sort: 'name' }) });
+    await h.settle();
+    await saved();
+
+    expect(tipOnStrip()).toContain('the whole book');
+    expect(visitsFor(h, 'ore')[0]?.[3]).toBe('');
+  });
+
+  // A price-sorted trip and a name-sorted one are two readings of one book, and folding them
+  // together would take a median over whichever end the player happened to be looking at.
+  it('records a price-sorted reading as its own query', async () => {
+    const h = await start();
+    h.send({ market: page([listing({ id: 1, itemId: 'ore', price: 500 })], { sort: 'price' }) });
+    await h.settle();
+    await saved();
+
+    expect(visitsFor(h, 'ore')[0]?.[3]).toContain('price');
+    expect(lineFor('status-line')).toContain('cheapest first');
   });
 });
 

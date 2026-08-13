@@ -165,6 +165,34 @@ export interface PublicItemInstance {
 }
 
 /**
+ * One copy IN YOUR OWN KEEPING: the public payload, plus the one mark its owner
+ * sets by hand.
+ *
+ * Reachable through `world.inventory` and `world.bank` and nowhere else, which
+ * mirrors where the game itself paints the padlock: its bag grid and both bank
+ * grids. Every other surface carrying a stack has already been projected down to
+ * the three public fields by the server, so there a lock cannot be read at all
+ * rather than reading as absent.
+ *
+ * Added in API minor 6.
+ */
+export interface HeldItemInstance extends PublicItemInstance {
+  /**
+   * The owner's own safety mark on THIS copy, toggled in the game's bag window.
+   *
+   * A locked copy refuses salvage, consumption as a craft reagent, and a vendor
+   * sale, single or bulk, until it is unlocked again. It says nothing about
+   * binding, which is a content rule nobody chooses, and nothing about the
+   * def-level flags that make an item unsellable for everybody. Absent means
+   * unlocked, so read the value rather than the key.
+   *
+   * There is no way to set one. `net` is read-only and this is a player's
+   * gesture in the game's own window; an addon reports it and never performs it.
+   */
+  locked?: boolean;
+}
+
+/**
  * Your OWN worn item's payload, which carries what the public one is trimmed of.
  *
  * Reachable only through `world.equipmentInstances`, off your self record. The

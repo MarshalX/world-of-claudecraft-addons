@@ -34,6 +34,7 @@ const A_PAGE = {
   armorClass: '',
   primaryStat: '',
   rarity: '',
+  sort: 'name',
   page: 0,
   pageCount: 1,
   collectionCopper: 0,
@@ -252,6 +253,15 @@ describe('the economy signatures', () => {
     const filtered = { ...A_PAGE, rarity: 'epic' };
 
     expect(capture('market', near(A_PAGE))).not.toBe(capture('market', near(filtered)));
+  });
+
+  // The order is not one of the filters and cannot be read off the id list: a
+  // book of one row, or a page whose ids happen to come back in the same order,
+  // reorders into an identical listing array under a different reading.
+  it('fires when the browse order changes under an identical page', () => {
+    const byPrice = { ...A_PAGE, sort: 'price' };
+
+    expect(capture('market', near(A_PAGE))).not.toBe(capture('market', near(byPrice)));
   });
 
   it('ignores a letter"s body, which is unbounded free text', () => {

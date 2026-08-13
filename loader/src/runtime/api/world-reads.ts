@@ -18,6 +18,7 @@ import type {
   Aura,
   Entity,
   EquipSlot,
+  HeldSlot,
   InvSlot,
   PartyInfo,
   Vec3,
@@ -96,7 +97,7 @@ export function gameReads(hub: WorldHub) {
       return fromBackend(hub, (backend) => backend.party);
     },
 
-    get inventory(): readonly InvSlot[] | null {
+    get inventory(): readonly HeldSlot[] | null {
       return fromBackend(hub, (backend) => backend.inventory);
     },
 

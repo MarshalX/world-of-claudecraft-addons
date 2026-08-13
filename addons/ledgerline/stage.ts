@@ -277,6 +277,8 @@ function pageFor(browse: number): Record<string, unknown> {
     armorClass: '',
     primaryStat: '',
     rarity: '',
+    // The order Browse defaults to, which is what makes these rows a book grouped by name.
+    sort: 'name',
     page: 0,
     pageCount: 1,
     collectionCopper: waitingCopper(browse),

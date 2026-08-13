@@ -57,7 +57,14 @@ function slotsOf(source: unknown, field: string): string {
   return inventorySignature(fieldValue(source, field));
 }
 
-/** The filter axes the server echoed back, which is what says a page changed meaning. */
+/**
+ * The query the server echoed back, which is what says a page changed meaning.
+ *
+ * `sort` rides here beside the five filter axes even though it narrows nothing,
+ * because the id list cannot stand in for it: a book of one row, or a page whose
+ * rows happen to come back in the same order, reorders into an identical listing
+ * array under a different reading of the same book.
+ */
 function queryOf(info: unknown): string {
   return [
     fieldString(info, 'filter') ?? '',
@@ -66,6 +73,7 @@ function queryOf(info: unknown): string {
     fieldString(info, 'armorClass') ?? '',
     fieldString(info, 'primaryStat') ?? '',
     fieldString(info, 'rarity') ?? '',
+    fieldString(info, 'sort') ?? '',
   ].join(':');
 }
 

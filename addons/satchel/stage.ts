@@ -28,6 +28,12 @@ interface Stack {
   count: number;
   /** The cell the player dragged it into. Absent for anything never moved by hand. */
   slot?: number;
+  /**
+   * The per-copy payload, which only your OWN bags and bank carry untrimmed. The lock inside it
+   * is the one thing in a bag the player set by hand, so a picture of a bag is honest only if
+   * some cell in it can be locked.
+   */
+  instance?: { locked?: boolean };
 }
 
 /** One letter in a mailbox, under the game's own field names. */
@@ -88,7 +94,7 @@ const BRUK: Session = {
     { itemId: 'copper_ore', count: 20, slot: 0 },
     { itemId: 'copper_ore', count: 20, slot: 1 },
     { itemId: 'copper_ore', count: 14, slot: 2 },
-    { itemId: 'iron_ore', count: 20, slot: 3 },
+    { itemId: 'iron_ore', count: 20, slot: 3, instance: { locked: true } },
     { itemId: 'rough_hide', count: 10 },
     { itemId: 'boar_hide', count: 7 },
     { itemId: 'game_meat', count: 12 },
@@ -208,7 +214,7 @@ const MARSHAL: Session = {
     { itemId: 'copper_ore', count: 20, slot: 0 },
     { itemId: 'copper_ore', count: 20, slot: 1 },
     { itemId: 'copper_ore', count: 7, slot: 2 },
-    { itemId: 'iron_ore', count: 20, slot: 3 },
+    { itemId: 'iron_ore', count: 20, slot: 3, instance: { locked: true } },
     { itemId: 'iron_ore', count: 16, slot: 4 },
     { itemId: 'healing_potion', count: 5, slot: 8 },
     { itemId: 'healing_potion', count: 5, slot: 9 },
@@ -457,7 +463,7 @@ const SCENARIOS: readonly Scenario[] = [
     label: 'The bags, live',
     preview: true,
     caption: 'One character, live',
-    alt: 'the bags of the character in play, as a grid of squares',
+    alt: 'the bags of the character in play, as a grid of squares, one of them padlocked',
     frames: framed(SHEET_BOX),
     world: asBruk,
     run: (stage) => onTab(stage, 'Bags'),

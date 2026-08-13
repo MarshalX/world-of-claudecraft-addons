@@ -9,7 +9,7 @@
 //
 // Passed through rather than projected, for the reason `market.ts` gives.
 
-import type { InvSlot } from './game-types.ts';
+import type { HeldSlot } from './game-types.ts';
 import type { ProximityState } from './proximity.ts';
 
 /** One row of the bonus-slot breakdown. The id list is append-only content. */
@@ -26,7 +26,7 @@ interface BankBonusSource {
 
 interface BankInfo {
   /** The pooled contents. Order is the game's; there are no fixed cells. */
-  slots: readonly InvSlot[];
+  slots: readonly HeldSlot[];
   /** Total budget: the base allowance plus purchased plus bonus. */
   capacity: number;
   /** Copper-bought slots. */

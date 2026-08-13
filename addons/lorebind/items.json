@@ -1,5 +1,5 @@
 {
-  "gameVersion": "0.36.0",
+  "gameVersion": "0.37.1",
   "generatedFrom": [
     "src/sim/data.ts (the ITEMS merge)",
     "src/sim/content/items.ts",

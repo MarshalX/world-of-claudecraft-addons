@@ -4,11 +4,13 @@
 // the file limit and is the file two lanes are most likely to grow next. Both
 // shapes are CLAIMS about the game in the same sense everything in that file is.
 //
-// The pair matters more than either half. The server trims an instance to the
+// The set matters more than any one of them. The server trims an instance to the
 // three PUBLIC fields before it crosses to another player, and applies the same
 // trim to every market row and every mail attachment, so `PublicItemInstance` is
 // what an addon sees almost everywhere. `ItemInstance` is the untrimmed payload
-// and is reachable through `world.equipmentInstances` alone.
+// and is reachable through `world.equipmentInstances` alone. `HeldItemInstance`
+// is the third position and the narrowest promise: the public fields plus the
+// owner's lock, on the two surfaces the game lets an owner set one.
 
 /**
  * The public part of one worn item's instance payload.
@@ -34,6 +36,29 @@ interface PublicItemInstance {
    * payload that carries it is an old copy still loading as before.
    */
   rolled?: { quality?: string; stats?: Record<string, number>; masterwork?: boolean };
+}
+
+/**
+ * One copy IN YOUR OWN KEEPING: the public payload, plus the one mark its owner
+ * sets by hand.
+ *
+ * `world.inventory` and `world.bank` hand these over and nothing else does,
+ * which mirrors where the game itself paints the padlock (its bag grid and both
+ * bank grids). Everywhere else the same stack shape appears, the server has
+ * already projected the payload down to the three public fields, so a lock is
+ * structurally unreachable there rather than merely left out of this reading.
+ */
+interface HeldItemInstance extends PublicItemInstance {
+  /**
+   * The owner's own safety mark on THIS copy, toggled in the game's bag window.
+   *
+   * A locked copy refuses salvage, consumption as a craft reagent, and a vendor
+   * sale, single or bulk, until it is unlocked again. It says nothing about
+   * binding, which is a content rule nobody chooses, and nothing about the
+   * def-level flags that make an item unsellable for everyone. Absent means
+   * unlocked, so read the value rather than the key.
+   */
+  locked?: boolean;
 }
 
 /**
@@ -74,4 +99,4 @@ interface ItemInstance extends PublicItemInstance {
   };
 }
 
-export type { ItemInstance, PublicItemInstance };
+export type { HeldItemInstance, ItemInstance, PublicItemInstance };

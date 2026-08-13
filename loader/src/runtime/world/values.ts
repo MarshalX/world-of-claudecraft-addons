@@ -21,6 +21,7 @@ import type {
   Aura,
   Entity,
   EquipSlot,
+  HeldSlot,
   InvSlot,
   PartyInfo,
   Vec3,
@@ -38,7 +39,7 @@ export interface WorldValues {
   target: Entity | null;
   entities: ReadonlyMap<number, Entity>;
   party: PartyInfo | null;
-  inventory: readonly InvSlot[] | null;
+  inventory: readonly HeldSlot[] | null;
   equipment: Partial<Record<EquipSlot, string>> | null;
   /** What is on the worn gear. Sparse: a plain piece has no key. */
   equipmentInstances: Partial<Record<EquipSlot, ItemInstance>> | null;

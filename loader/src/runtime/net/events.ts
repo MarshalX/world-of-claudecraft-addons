@@ -104,10 +104,22 @@ interface RespawnEvent extends PersonalEvent {
   type: 'respawn';
 }
 
+/**
+ * A refused action.
+ *
+ * `text` is the only field every refusal carries. The three optional ones ride a
+ * SERVER-authored refusal alone (the General chat quota is the whole set today),
+ * so a refusal raised by the sim carries none of them, and neither does one from
+ * a server older than game 0.37.1. `reason` is the sim's own label and is a
+ * different field from `code`.
+ */
 interface ErrorEvent extends PersonalEvent {
   type: 'error';
   text: string;
   reason?: string;
+  code?: string;
+  channel?: string;
+  retryAfterSeconds?: number;
 }
 
 interface LogEvent extends PersonalEvent {

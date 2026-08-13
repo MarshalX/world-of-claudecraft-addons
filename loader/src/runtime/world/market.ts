@@ -67,6 +67,16 @@ interface MarketInfo {
   armorClass: string;
   primaryStat: string;
   rarity: string;
+  /**
+   * The ORDER the server applied, which is a different axis from the filters
+   * above: it reorders the matched book and never narrows it.
+   *
+   * `'name'` is the classic default, name then price. `'price'` puts the whole
+   * matched book cheapest first, which means page 0 is the cheap tail rather
+   * than an alphabetical slice, so anything inferring a market-wide figure from
+   * the pages a player happened to read is sampling one end of it.
+   */
+  sort: string;
   /** Clamped by the server against the live match count, so this is the page you got. */
   page: number;
   pageCount: number;

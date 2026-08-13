@@ -31,7 +31,7 @@
 // the moment the player collects. Copy them out if you want to keep them.
 
 import type { PublicItemInstance } from './entity.js';
-import type { InvSlot } from './world.js';
+import type { HeldSlot, InvSlot } from './world-items.js';
 
 /** The open arm: you are at the counter and the reading is real. */
 export interface Near<T> {
@@ -101,6 +101,18 @@ export interface MarketInfo {
   armorClass: string;
   primaryStat: string;
   rarity: string;
+  /**
+   * The ORDER the server applied, which is a different axis from the filters
+   * above: it reorders the matched book and never narrows it.
+   *
+   * `'name'` is the classic default, name then price. `'price'` puts the whole
+   * matched book cheapest first, so page 0 is the cheap tail rather than an
+   * alphabetical slice. That matters to anything building a price series out of
+   * the pages a player happened to read: under `'price'` a partial read samples
+   * one end of the book, so record which order produced a reading rather than
+   * folding the two together.
+   */
+  sort: string;
   /** Clamped by the server against the live match count, so this is the page you got. */
   page: number;
   pageCount: number;
@@ -198,7 +210,7 @@ export interface BankBonusSource {
 /** The deposit box: one pooled list and the budget behind it. */
 export interface BankInfo {
   /** The pooled contents. Order is the game's; there are no fixed cells. */
-  slots: readonly InvSlot[];
+  slots: readonly HeldSlot[];
   /** Total budget: the base allowance plus purchased plus bonus. */
   capacity: number;
   /** Copper-bought slots. */

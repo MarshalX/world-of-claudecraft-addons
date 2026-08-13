@@ -156,11 +156,37 @@ export interface RespawnEvent extends PersonalEvent {
   type: 'respawn';
 }
 
-/** A refused action, with the game's own already-composed line. */
+/**
+ * A refused action, with the game's own already-composed line.
+ *
+ * `text` is the only field every refusal carries, and it is the one to display.
+ * The three below ride a SERVER-authored refusal alone, which today is the
+ * General chat quota and nothing else, so treat all three as absent: a refusal
+ * from the sim (out of range, target dead, bags full) carries none of them, and
+ * so does any refusal from a server older than game 0.37.1.
+ */
 export interface ErrorEvent extends PersonalEvent {
   type: 'error';
   text: string;
+  /**
+   * The sim's own coarse label, which has exactly one member today,
+   * `'target_dead'`. Unrelated to `code` below, which comes from the server.
+   */
   reason?: string;
+  /**
+   * A stable identity for a server-authored refusal, safe to branch on where
+   * `text` is prose that a locale or a rewording can change under you.
+   *
+   * Added in API minor 6.
+   */
+  code?: string;
+  /** Which chat channel the refusal is about, on a chat refusal. Added in API minor 6. */
+  channel?: string;
+  /**
+   * Seconds until the same action is worth trying again, on a refusal that is a
+   * rate limit rather than a rejection. Added in API minor 6.
+   */
+  retryAfterSeconds?: number;
 }
 
 /** A line for the game's own log. `color` is a CSS colour the game chose. */

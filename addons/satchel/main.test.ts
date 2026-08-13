@@ -115,6 +115,11 @@ interface Cell {
   count: number;
   /** The cell the player dragged it into. Absent for anything never placed by hand. */
   slot?: number;
+  /**
+   * The per-copy payload. Only your own bags and bank carry an untrimmed one, which is why the
+   * lock can be read there and nowhere else; a letter's attachments arrive already projected.
+   */
+  instance?: { locked?: boolean };
 }
 
 /** `BankInfo` as the game's own world object carries it, under its wire name. */
@@ -167,6 +172,8 @@ interface StoredStack {
   itemId: string;
   count: number;
   slot?: number;
+  /** Flat, where the wire nests it under `instance`. See `parseStack`. */
+  locked?: boolean;
 }
 
 interface StoredLetter {
@@ -223,6 +230,11 @@ function pooled(bags: readonly (string | null)[]): number {
 /** `howMany` separate cells of one item, each holding `count`. */
 function cells(itemId: string, count: number, howMany = 1): Cell[] {
   return Array.from({ length: howMany }, () => ({ itemId, count }));
+}
+
+/** The same stack with the owner's lock on it, as the game sends one from your own bags. */
+function lockedCells(itemId: string, count: number, howMany = 1): Cell[] {
+  return cells(itemId, count, howMany).map((cell) => ({ ...cell, instance: { locked: true } }));
 }
 
 function emptyCarry(): CarryState {
@@ -500,6 +512,12 @@ function countAt(at: number): string {
 /** Whether the square is marked: an id in more than one cell, or one also worn. */
 function markedAt(at: number): boolean {
   return cellAt(at)?.classList.contains('woc-tile-warn') ?? false;
+}
+
+/** Whether the padlock is drawn on the square, which is a shape rather than a tint. */
+function lockedAt(at: number): boolean {
+  const mark = cellAt(at)?.querySelector<SVGElement>('[data-satchel-lock]');
+  return mark !== null && mark !== undefined && mark.style.display !== 'none';
 }
 
 /** Whether the square reads as holding something, art or no art. */
@@ -786,6 +804,40 @@ describe('what is written down', () => {
     await h.settle();
 
     expect(storedFor(h).sources.mail.letters).toHaveLength(1);
+  });
+
+  // Written flat rather than under a nested payload of one boolean, and written only when it is
+  // true: this store holds every character's bags, and the shape has to stay cheap.
+  it('writes down which copies are locked', async () => {
+    const h = await start({
+      carry: { inventory: [...lockedCells('ore', 20), ...cells('ore', 3)] },
+    });
+    await h.settle();
+
+    const [first, second] = storedFor(h).sources.bags.stacks;
+    expect(first?.locked).toBe(true);
+    expect(second?.locked).toBeUndefined();
+  });
+
+  // The whole reason to record it is the character you are NOT logged in as: you cannot log in
+  // as somebody else to find out whether the stack you were about to salvage is the one they
+  // protected. A stored cell spells the flag flat, so reading one back is its own case.
+  it('reads a stored lock back on a character who is not playing', async () => {
+    const storage = createFakeStorage();
+    seed(
+      storage,
+      storedCharacter('Alt', {
+        sources: {
+          bags: snapshot({ stacks: [{ itemId: 'ore', count: 20, locked: true }] }),
+          bank: snapshot({ at: 0 }),
+          mail: snapshot({ at: 0 }),
+        },
+      }),
+    );
+    const h = await start({ storage, carry: { inventory: cells('ore', 3) } });
+    await h.settle();
+
+    expect(tipOver(rowIn('items', 'ore'))).toContain('20 of 23 locked');
   });
 
   // The other closed arm. Nothing has decoded, so there is no reading to record and
@@ -1729,6 +1781,50 @@ describe('what the grid marks', () => {
     expect(markedAt(1)).toBe(true);
     expect(markedAt(2)).toBe(false);
     expect(markedAt(3)).toBe(false);
+  });
+
+  // The lock is the one thing in a bag the PLAYER set, and the alt case is the whole reason to
+  // record it: you cannot log in as somebody else to check whether the stack you were about to
+  // salvage is the protected one.
+  it('draws a padlock on a locked square', async () => {
+    const h = await start({
+      carry: { inventory: [...lockedCells('ore', 20), ...cells('cloth', 5)] },
+    });
+    await h.settle();
+
+    expect(lockedAt(0)).toBe(true);
+    expect(lockedAt(1)).toBe(false);
+  });
+
+  it('takes the padlock off a square that was unlocked', async () => {
+    const h = await start({ carry: { inventory: lockedCells('ore', 20) } });
+    await h.settle();
+    expect(lockedAt(0)).toBe(true);
+
+    h.carry({ inventory: cells('ore', 20) });
+    await h.settle();
+
+    expect(lockedAt(0)).toBe(false);
+  });
+
+  // A cell is reused as the grid repaints, so a mark left behind reports the lock of whatever
+  // the square used to hold.
+  it('takes the padlock off a square that emptied', async () => {
+    const h = await start({ carry: { inventory: lockedCells('ore', 20) } });
+    await h.settle();
+
+    h.carry({ inventory: [] });
+    await h.settle();
+
+    expect(lockedAt(0)).toBe(false);
+  });
+
+  // A tile is announced as one image, so the only place the fact can go is its name.
+  it('says a square is locked in the name it announces', async () => {
+    const h = await start({ carry: { inventory: lockedCells('ore', 20) } });
+    await h.settle();
+
+    expect(cellAt(0)?.getAttribute('aria-label')).toContain('locked');
   });
 
   it('stops marking a square once the duplicate has gone', async () => {

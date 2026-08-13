@@ -1,5 +1,5 @@
 {
-  "gameVersion": "0.36.0",
+  "gameVersion": "0.37.1",
   "source": "src/sim/data.ts, src/sim/quest_targets.ts, src/sim/types.ts, src/sim/content/*.ts",
   "zones": [
     {

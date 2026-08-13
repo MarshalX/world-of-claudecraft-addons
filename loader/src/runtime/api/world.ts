@@ -26,6 +26,7 @@ import type {
   Aura,
   Entity,
   EquipSlot,
+  HeldSlot,
   InvSlot,
   PartyInfo,
   PartyMemberAura,
@@ -95,7 +96,7 @@ export interface WorldApi {
   readonly target: Entity | null;
   readonly entities: ReadonlyMap<number, Entity>;
   readonly party: PartyInfo | null;
-  readonly inventory: readonly InvSlot[] | null;
+  readonly inventory: readonly HeldSlot[] | null;
   /** Worn gear by slot, item ids only. A slot with nothing in it is absent. */
   readonly equipment: Partial<Record<EquipSlot, string>> | null;
   /**

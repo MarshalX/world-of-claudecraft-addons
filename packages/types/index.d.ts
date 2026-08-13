@@ -66,6 +66,7 @@ export type {
   Entity,
   EntityKind,
   EquipSlot,
+  HeldItemInstance,
   ItemInstance,
   PublicItemInstance,
   ResourceType,
@@ -173,7 +174,6 @@ export type {
   CombatSource,
   CombatState,
   EntityCast,
-  InvSlot,
   QuestProgress,
   UnitToken,
   WorldApi,
@@ -189,6 +189,7 @@ export type {
   HazardKind,
   LootSlot,
 } from './world-ground.js';
+export type { HeldSlot, InvSlot } from './world-items.js';
 
 export interface WocApi {
   readonly addon: AddonInfo;

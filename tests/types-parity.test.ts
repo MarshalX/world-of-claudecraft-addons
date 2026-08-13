@@ -25,7 +25,9 @@ import type { UiApi } from '../loader/src/runtime/api/ui.ts';
 import type { WorldApi } from '../loader/src/runtime/api/world.ts';
 import type { EventPayloads } from '../loader/src/runtime/net/events.ts';
 import type { ProfessionInfo, ToolEffectSlot } from '../loader/src/runtime/world/character.ts';
-import type { Entity } from '../loader/src/runtime/world/game-types.ts';
+import type { Entity, HeldSlot, InvSlot } from '../loader/src/runtime/world/game-types.ts';
+import type { HeldItemInstance } from '../loader/src/runtime/world/items.ts';
+import type { MarketInfo } from '../loader/src/runtime/world/market.ts';
 import type { WorldKey } from '../loader/src/runtime/world/signature.ts';
 import type { WorldValues } from '../loader/src/runtime/world/values.ts';
 import type { AddonInfo, GameInfo } from '../packages/types/addon.js';
@@ -34,7 +36,11 @@ import type {
   ProfessionInfo as PublicProfessionInfo,
   ToolEffectSlot as PublicToolEffectSlot,
 } from '../packages/types/character.js';
-import type { Entity as PublicEntity } from '../packages/types/entity.js';
+import type { MarketInfo as PublicMarketInfo } from '../packages/types/economy.js';
+import type {
+  Entity as PublicEntity,
+  HeldItemInstance as PublicHeldItemInstance,
+} from '../packages/types/entity.js';
 import type { EventPayloads as PublicEventPayloads } from '../packages/types/events.js';
 import type { FmtApi as PublicFmtApi } from '../packages/types/fmt.js';
 import type { WocApi as PublicWocApi } from '../packages/types/index.js';
@@ -48,6 +54,10 @@ import type {
   WorldKey as PublicWorldKey,
   WorldValues as PublicWorldValues,
 } from '../packages/types/world.js';
+import type {
+  HeldSlot as PublicHeldSlot,
+  InvSlot as PublicInvSlot,
+} from '../packages/types/world-items.js';
 
 /**
  * True only when every member of `From` satisfies `To`.
@@ -184,6 +194,32 @@ const publishedIsToolSlot: Assignable<PublicToolEffectSlot, ToolEffectSlot> = tr
 const toolSlotFieldsAgree: SameFields<ToolEffectSlot, PublicToolEffectSlot> = true;
 
 /**
+ * The three stack shapes and the market page.
+ *
+ * They had no pair at all until the 0.37.1 catch-up, which is the silence this
+ * file exists to remove: `WorldValues` compares `inventory` as a whole and so
+ * catches a slot ARRAY being dropped, and it says nothing about a field arriving
+ * on one side of the slot itself. All four had a field added or narrowed in one
+ * merge, and only `SameFields` can see the OPTIONAL ones, which is what every
+ * field the game has added to an existing shape has been.
+ *
+ * `HeldSlot` is compared as well as `InvSlot` because it is the narrowing that
+ * carries the promise: an `InvSlot`-shaped `HeldSlot` on one side would satisfy
+ * both directions of the base pair while quietly dropping the lock.
+ */
+const slotIsPublished: Assignable<InvSlot, PublicInvSlot> = true;
+const publishedIsSlot: Assignable<PublicInvSlot, InvSlot> = true;
+const slotFieldsAgree: SameFields<InvSlot, PublicInvSlot> = true;
+const heldSlotIsPublished: Assignable<HeldSlot, PublicHeldSlot> = true;
+const publishedIsHeldSlot: Assignable<PublicHeldSlot, HeldSlot> = true;
+const heldInstanceIsPublished: Assignable<HeldItemInstance, PublicHeldItemInstance> = true;
+const publishedIsHeldInstance: Assignable<PublicHeldItemInstance, HeldItemInstance> = true;
+const heldInstanceFieldsAgree: SameFields<HeldItemInstance, PublicHeldItemInstance> = true;
+const marketIsPublished: Assignable<MarketInfo, PublicMarketInfo> = true;
+const publishedIsMarket: Assignable<PublicMarketInfo, MarketInfo> = true;
+const marketFieldsAgree: SameFields<MarketInfo, PublicMarketInfo> = true;
+
+/**
  * The watchable keys against the runtime's own list.
  *
  * `signature.ts` owns the keys: it holds the array `world.on` validates against
@@ -301,6 +337,17 @@ describe('the published types', () => {
       toolSlotIsPublished,
       publishedIsToolSlot,
       toolSlotFieldsAgree,
+      slotIsPublished,
+      publishedIsSlot,
+      slotFieldsAgree,
+      heldSlotIsPublished,
+      publishedIsHeldSlot,
+      heldInstanceIsPublished,
+      publishedIsHeldInstance,
+      heldInstanceFieldsAgree,
+      marketIsPublished,
+      publishedIsMarket,
+      marketFieldsAgree,
       valuesArePublished,
       publishedAreValues,
       keysArePublished,

@@ -282,6 +282,41 @@ describe('inventory', () => {
 
     expect(changed('inventory', bag, [...bag])).toBe(false);
   });
+
+  // A lock is toggled by hand, many times in a session, and it moves neither the
+  // id nor the count, so an id-and-count signature is silent on the one bag
+  // change a player performs deliberately.
+  it('notices a copy being locked', () => {
+    const before = [{ itemId: 'ore', count: 3, instance: {} }];
+    const after = [{ itemId: 'ore', count: 3, instance: { locked: true } }];
+
+    expect(changed('inventory', before, after)).toBe(true);
+  });
+
+  it('notices a copy being unlocked', () => {
+    const before = [{ itemId: 'ore', count: 3, instance: { locked: true } }];
+    const after = [{ itemId: 'ore', count: 3, instance: {} }];
+
+    expect(changed('inventory', before, after)).toBe(true);
+  });
+
+  // The flag is what is read, not the payload: a slot that gained an unrelated
+  // instance field is not a lock change, and treating every payload edit as one
+  // would fire the subscription on the enchant the player just applied as well.
+  it('is quiet on an unlocked copy whose payload moved elsewhere', () => {
+    const before = [{ itemId: 'blade', count: 1, instance: { signer: 'Ilya' } }];
+    const after = [{ itemId: 'blade', count: 1, instance: { signer: 'Mara' } }];
+
+    expect(changed('inventory', before, after)).toBe(false);
+  });
+
+  it('is quiet on a locked copy that stayed locked', () => {
+    const bag = [{ itemId: 'ore', count: 3, instance: { locked: true } }];
+
+    expect(
+      changed('inventory', bag, [{ itemId: 'ore', count: 3, instance: { locked: true } }]),
+    ).toBe(false);
+  });
 });
 
 describe('quests', () => {

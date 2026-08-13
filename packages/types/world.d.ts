@@ -10,29 +10,13 @@ import type { ArenaStandings } from './arena.js';
 import type { CharacterInfo, ProfessionInfo, TalentInfo } from './character.js';
 import type { Recipe, Station } from './content.js';
 import type { BankState, MailState, MarketState } from './economy.js';
-import type { Aura, Entity, EquipSlot, ItemInstance, PublicItemInstance, Vec3 } from './entity.js';
+import type { Aura, Entity, EquipSlot, ItemInstance, Vec3 } from './entity.js';
 import type { FinderInfo, FinderListingRow } from './finder.js';
 import type { EncounterInfo, GroupInfo, ThreatTable } from './group.js';
 import type { MatchInfo } from './match.js';
 import type { PartyAuraQuery, PartyInfo, PartyMemberAura } from './party.js';
 import type { CorpseView, DeathZone, Hazard } from './world-ground.js';
-
-/** One stack in the bags. */
-export interface InvSlot {
-  itemId: string;
-  count: number;
-  /** The bag cell it was dragged into. Absent when it was never placed by hand. */
-  slot?: number;
-  /**
-   * What is baked into this specific copy. Absent on an ordinary fungible stack.
-   *
-   * The PUBLIC trim, everywhere this shape appears. Your own goods carry more on
-   * the game object, reachable through `world.raw`; a field that is present on
-   * three surfaces and absent on two is worse than one that is absent
-   * everywhere.
-   */
-  instance?: PublicItemInstance;
-}
+import type { HeldSlot, InvSlot } from './world-items.js';
 
 export interface QuestProgress {
   questId: string;
@@ -147,7 +131,7 @@ export interface WorldValues {
   target: Entity | null;
   entities: ReadonlyMap<number, Entity>;
   party: PartyInfo | null;
-  inventory: readonly InvSlot[] | null;
+  inventory: readonly HeldSlot[] | null;
   equipment: Partial<Record<EquipSlot, string>> | null;
   /** What is on the worn gear. Sparse: a plain piece has no key. Added in API minor 2. */
   equipmentInstances: Partial<Record<EquipSlot, ItemInstance>> | null;
@@ -226,7 +210,7 @@ export interface WorldApi {
   readonly entities: ReadonlyMap<number, Entity>;
 
   readonly party: PartyInfo | null;
-  readonly inventory: readonly InvSlot[] | null;
+  readonly inventory: readonly HeldSlot[] | null;
 
   /**
    * Worn gear by slot, item ids only. A slot with nothing in it is absent.

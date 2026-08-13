@@ -1,6 +1,6 @@
 {
   "source": {
-    "game": "0.36.0",
+    "game": "0.37.1",
     "files": [
       "src/sim/data.ts (ZONES, WORLD_SIZE, INSTANCE_X_BASE, PORTALS)",
       "src/sim/content/*.ts (one ZoneDef and one PortalDef[] per zone)",

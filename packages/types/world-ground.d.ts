@@ -11,7 +11,7 @@
 // and cannot take, and `world.corpseLoot()` is the filter rather than the raw
 // list.
 
-import type { InvSlot } from './world.js';
+import type { InvSlot } from './world-items.js';
 
 /**
  * One stack on a corpse.

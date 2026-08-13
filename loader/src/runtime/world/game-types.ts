@@ -19,7 +19,7 @@
 // `unknown` because the game promises nothing about it.
 
 import type { CorpseLoot } from './corpse-types.ts';
-import type { PublicItemInstance } from './items.ts';
+import type { HeldItemInstance, PublicItemInstance } from './items.ts';
 
 export interface Vec3 {
   x: number;
@@ -409,7 +409,7 @@ export type EquipSlot =
   | 'ring1'
   | 'ring2';
 
-/** One stack in the bags. */
+/** One stack, wherever a stack is read: bags, bank, a letter, a corpse, a page. */
 export interface InvSlot {
   itemId: string;
   count: number;
@@ -418,12 +418,27 @@ export interface InvSlot {
   /**
    * What is baked into this specific copy. Absent on an ordinary fungible stack.
    *
-   * The PUBLIC trim, everywhere this shape appears. Your own goods carry more on
-   * the game object, reachable through `world.raw`; a field that is present on
-   * three surfaces and absent on two is worse than one that is absent
-   * everywhere.
+   * The PUBLIC trim, which is what the shared shape can promise: a market row, a
+   * letter attachment and a guild bank row are all projected to those three
+   * fields by the server before they are sent. A stack of YOUR OWN carries one
+   * field more and is read as a `HeldSlot`; the rest of the payload stays
+   * reachable through `world.raw` and is promised nowhere.
    */
   instance?: PublicItemInstance;
+}
+
+/**
+ * One stack in your OWN bags or bank, which is where a lock can exist.
+ *
+ * The only difference from `InvSlot` is that the payload here was never put
+ * through the server's public projection, so it still carries the owner's lock.
+ * Kept a separate shape rather than widening `InvSlot`: the lock is genuinely
+ * absent from every other surface the stack shape appears on, and a field that
+ * reads `undefined` on a market row would be indistinguishable there from an
+ * unlocked copy.
+ */
+export interface HeldSlot extends InvSlot {
+  instance?: HeldItemInstance;
 }
 
 export interface QuestProgress {

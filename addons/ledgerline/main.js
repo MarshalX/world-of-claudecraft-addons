@@ -19,7 +19,15 @@
 //
 // `price` is the total buyout for the STACK. Every series divides by `count` first, or a stack
 // of 20 against a single reads as a price movement; the total is kept too, since it is what the
-// server sorts on and therefore what the undercut check compares.
+// server sorts on under either order and therefore what the undercut check compares.
+//
+// BROWSE HAS TWO ORDERS as of game 0.37.1, and the second one changes what a page IS. Name-sorted
+// (the default), an item's listings are contiguous and ascending, so the first copy on the page
+// is the cheapest competitor and a block that did not start at row 0 started here. Price-sorted,
+// the whole book ascends by total price across every item: page 0 is then the cheapest rows in
+// the market, which is the strongest reading either order gives, and every page after it can hide
+// a cheaper copy of anything. Both the undercut verdict and the recorded query carry the order,
+// because a series folded across the two would be a median over one end of the book.
 //
 // The player's own completed sales are the one real sold-price record the game keeps, and it is
 // a pickup queue rather than an archive: `collectionSales` is capped at fifty with the overflow
@@ -237,6 +245,12 @@ const NO_FILTER = 'all';
 /** What a query with nothing set is called, so a series can say which it came from. */
 const NO_QUERY = 'the whole book';
 
+/** The order Browse has always used, and still defaults to: display name, then price. */
+const NAME_SORT = 'name';
+
+/** What the second order is called on screen, since `price` alone does not say which end. */
+const PRICE_SORT_LABEL = 'cheapest first';
+
 /** A flag in a cell, so a handler and the paint path cannot hold different copies of it. */
 function cell(value) {
   return { on: value };
@@ -379,6 +393,29 @@ function axisText(source, name) {
     return '';
   }
   return value;
+}
+
+/**
+ * The browse ORDER, and empty for the one Browse has always used.
+ *
+ * Read on its own rather than as a seventh entry in `QUERY_FIELDS`, because its unset value is
+ * `name` where every enum axis there spells nothing-chosen as `all`. Run through `axisText` it
+ * would put the word into the signature of every default-sorted trip, which is every trip ever
+ * recorded: a ledger written before this line would stop matching the visit that continues it,
+ * and a trip flipped through while this shipped would split in two. Empty for the default keeps
+ * every existing signature byte-identical, and only a price-sorted reading is new.
+ */
+function sortText(info) {
+  const value = fieldText(info, 'sort');
+  if (value === NAME_SORT) {
+    return '';
+  }
+  return value;
+}
+
+/** Whether the page in hand was read cheapest-first, which is what breaks item contiguity. */
+function sortsByPrice(info) {
+  return sortText(info) !== '';
 }
 
 /**
@@ -686,6 +723,10 @@ function makeRow(row) {
  */
 function querySignature(info) {
   const parts = QUERY_FIELDS.map((name) => axisText(info, name));
+  const order = sortText(info);
+  if (order !== '') {
+    parts.push(order);
+  }
   if (parts.every((part) => part === '')) {
     return '';
   }
@@ -695,6 +736,9 @@ function querySignature(info) {
 /** The same query, as something a tooltip can say. */
 function queryLabel(info) {
   const parts = QUERY_FIELDS.map((name) => axisText(info, name)).filter((part) => part !== '');
+  if (sortsByPrice(info)) {
+    parts.push(PRICE_SORT_LABEL);
+  }
   if (parts.length === 0) {
     return NO_QUERY;
   }
@@ -736,6 +780,7 @@ function capture(info, now) {
     queryText: queryLabel(info),
     page: Math.max(0, Math.round(numberOr(info.page, 0))),
     pageCount: Math.max(0, Math.round(numberOr(info.pageCount, 0))),
+    byPrice: sortsByPrice(info),
     totalCount: Math.max(0, Math.round(numberOr(info.totalCount, 0))),
     cutPct: numberOr(info.cutPct, 0),
     maxListings: Math.max(0, Math.round(numberOr(info.maxListings, 0))),
@@ -1737,8 +1782,13 @@ function dealsNow(page) {
 }
 
 /**
- * The server sorts the others section by display name then price, so an item's listings are
- * contiguous and ascending and the first is the cheapest competitor. No name table needed.
+ * The first row of the item on this page, which is its cheapest one here under EITHER order.
+ *
+ * Name-sorted, the server groups an item's listings and sorts them by price, so the block is
+ * contiguous and ascending. Price-sorted, the whole page ascends by price across every item, so
+ * the rows are scattered and the first one found is still the cheapest of them. No name table is
+ * needed either way. What the two orders do NOT share is what lies off the page, which is what
+ * `verdictFor` has to answer for.
  */
 function blockStart(others, itemId) {
   return others.findIndex((row) => row.itemId === itemId);
@@ -1746,8 +1796,15 @@ function blockStart(others, itemId) {
 
 /**
  * `unknown` where the item has no block on this page, which under a filter is most of the market
- * and is never evidence that nobody is selling. `partial` where the block starts at the first
- * row of a page after the first, since the rows before it may be cheaper.
+ * and is never evidence that nobody is selling. `partial` where cheaper rows of the same item
+ * could be on a page that was not read, which each order reaches differently.
+ *
+ * Name-sorted, that is only the block starting at the very first row of a later page, because a
+ * contiguous block starting anywhere else began here. Price-sorted, an item's rows are spread
+ * across the whole book by price, so ANY later page can have a cheaper copy behind it whatever
+ * row the block starts at, and the block-start guard cannot see it. Page 0 of a price-sorted
+ * book is the opposite case and the strongest reading either order gives: it holds the cheapest
+ * rows of the whole book, so a copy found there is the cheapest anywhere.
  */
 function verdictFor(row, page) {
   const at = blockStart(page.others, row.itemId);
@@ -1758,7 +1815,7 @@ function verdictFor(row, page) {
   if (rival === null) {
     return { state: 'unknown', rival: null };
   }
-  if (at === 0 && page.page > 0) {
+  if (page.page > 0 && (at === 0 || page.byPrice)) {
     return { state: 'partial', rival };
   }
   if (rival.price < row.price) {
@@ -3150,12 +3207,17 @@ function rivalLine(verdict) {
   return `Cheapest competing listing: ${money(rival.price)} for ${String(rival.count)}, by ${rival.seller}.`;
 }
 
-function verdictLine(verdict) {
+/** Why a verdict is uncertain, which is a different sentence under each browse order. */
+function partialText(page) {
+  if (page.byPrice) {
+    return 'This page is sorted cheapest first, which spreads an item across the whole book, so a cheaper listing of it may be on any page before this one. Read page 1 to be sure.';
+  }
+  return 'This item is the first row of the page, so its cheaper listings may be on the page before this one. Read page 1 to be sure.';
+}
+
+function verdictLine(verdict, page) {
   if (verdict.state === 'partial') {
-    return {
-      text: 'This item is the first row of the page, so its cheaper listings may be on the page before this one. Read page 1 to be sure.',
-      tone: 'warn',
-    };
+    return { text: partialText(page), tone: 'warn' };
   }
   // Undercut and cheapest are BOTH already on the row, in the word the detail line ends with and
   // in the wash behind it, and the line above this one names the rival and its price. Saying
@@ -3187,7 +3249,7 @@ function ownTip(page, id) {
     lines: spoken([
       netLine(row, page),
       rivalLine(verdict),
-      verdictLine(verdict),
+      verdictLine(verdict, page),
       {
         text: `First seen by you ${agoText(firstSeen(row))}, by this addon's own reckoning.`,
         tone: 'muted',

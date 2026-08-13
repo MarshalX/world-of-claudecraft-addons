@@ -1656,10 +1656,23 @@ function checkHoldings() {
     return result('holdings', false, 'the zone label did not resolve, so its anchor has moved');
   }
   const worn = Object.keys(equipment).length;
+  // The per-copy lock, which is a `HeldSlot` field and therefore only ever readable here and on
+  // the bank: a market row or a letter attachment is projected to the three public fields before
+  // the server sends it. Reported rather than asserted, since a bag with nothing locked in it is
+  // the ordinary state and this check would otherwise be a demand that the tester lock something.
+  const badLock = inventory.find((slot) => {
+    const held = slot.instance?.locked;
+    return held !== undefined && typeof held !== 'boolean';
+  });
+  if (badLock !== undefined) {
+    return result('holdings', false, `${badLock.itemId} carries a lock that is not a boolean`);
+  }
+  const locked = inventory.filter((slot) => slot.instance?.locked === true).length;
   return result(
     'holdings',
     true,
-    `in ${zone}: ${String(worn)} worn, ${String(inventory.length)}/${String(bagCapacity)} bags, ${money(copper)}`,
+    `in ${zone}: ${String(worn)} worn, ${String(inventory.length)}/${String(bagCapacity)} bags,` +
+      ` ${String(locked)} locked, ${money(copper)}`,
   );
 }
 
@@ -2118,6 +2131,13 @@ function checkSaleLedger() {
   if (market.status !== 'near') {
     return result('sale ledger', true, 'not at the Merchant, so there is no page to read');
   }
+  // The browse ORDER, new in game 0.37.1. Checked for being one of the two the server can echo
+  // rather than for either in particular, because which one is showing is the player's own
+  // choice in the game's window and this addon must never ask them to change it.
+  const { sort } = market.info;
+  if (sort !== 'name' && sort !== 'price') {
+    return result('sale ledger', false, `the browse order echoed back as ${typeOf(sort)}: ${sort}`);
+  }
   const { collectionSales: sales, collectionSalesOmitted: omitted } = market.info;
   if (!Array.isArray(sales)) {
     return result('sale ledger', false, `collectionSales is ${typeOf(sales)}`);
@@ -2137,7 +2157,7 @@ function checkSaleLedger() {
   return result(
     'sale ledger',
     true,
-    `${String(sales.length)} sales waiting, ${String(omitted)} dropped by the cap`,
+    `sorted by ${sort}, ${String(sales.length)} sales waiting, ${String(omitted)} dropped by the cap`,
   );
 }
 

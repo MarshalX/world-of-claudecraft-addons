@@ -24,6 +24,13 @@
 // feature, and one blob makes every write a rewrite of every other character's row. The stamp is
 // `woc.wallClock()`, since a monotonic reading restored into a fresh page is a moment in 1970.
 //
+// THE LOCK IS THE ONE THING IN A BAG THE PLAYER SET, and it is recorded for the same reason the
+// bags are: you cannot log in as somebody else to check whether the stack you are about to
+// salvage is the one they protected. Your own bags and your own bank are the only surfaces that
+// can answer, because the server projects a payload down to its three public fields before it
+// sends one anywhere else, so a parcel in the post is counted as unlocked and every line saying
+// so says which stores it counted. Nothing here can toggle one: `net` is read-only.
+//
 // A CELL is an entry and an ITEM is a total, and the two must never share an answer. Used slots
 // is `inventory.length` and never the sum of the counts, or a player carrying 300 ore is told
 // their 52 cells are overdrawn; the Items pane asks the opposite question and does sum.
@@ -157,6 +164,21 @@ const BAND_COLOR = 'rgb(255 143 133 / 30%)';
  * without a count, which a stack of one does not draw. Never `borderColor`: that is the tone's,
  * and an inline write would beat the class that sets it.
  */
+/**
+ * The lock mark, DRAWN rather than typed.
+ *
+ * A padlock as a character is either an emoji, which is not a thing to put in a grid of painted
+ * art, or a symbol half the fonts in the world do not carry; the loader's own close mark is a
+ * path for the same reason. Bottom-left, where the game paints its own, which keeps it clear of
+ * the stack count in the opposite corner. Shape first and colour second: the amber is the game's
+ * own lock tint, and a reader who cannot separate it from the border still sees a padlock.
+ */
+const SVG_NS = 'http://www.w3.org/2000/svg';
+const LOCK_PATH =
+  'M4 7V5a3 3 0 0 1 6 0v2h.4A1.6 1.6 0 0 1 12 8.6v3.8A1.6 1.6 0 0 1 10.4 14H3.6A1.6 1.6 0 0 1 2 12.4V8.6A1.6 1.6 0 0 1 3.6 7H4Zm1.6 0h2.8V5a1.4 1.4 0 0 0-2.8 0v2Z';
+const LOCK_COLOR = 'rgb(224 162 74)';
+const LOCK_PX = 11;
+
 const OCCUPIED_FILL = 'rgb(255 255 255 / 7%)';
 const EMPTY_FILL = 'transparent';
 const OCCUPIED_EDGE = 'solid';
@@ -271,6 +293,30 @@ function entryCount(entry) {
     return count;
   }
   return 1;
+}
+
+/**
+ * Whether the player has locked this specific copy, which only their OWN bags and bank can say.
+ *
+ * A locked copy refuses salvage, a craft's reagent draw and a vendor sale until it is unlocked
+ * again, and it is a gesture the player makes in the game's own bag window. This addon reports
+ * it and can never perform it: `net` is read-only and there is no send surface at all.
+ *
+ * Read off the entry rather than the wire's payload, so a stored cell and a live one answer the
+ * same way. A mail attachment cannot carry it: the server projects a letter's payload down to
+ * its three public fields before it sends one, so the flag is not absent there, it is
+ * unreachable, and a cell recorded from mail is honestly unlocked-as-far-as-anyone-knows.
+ */
+function isLocked(entry) {
+  return entry?.locked === true;
+}
+
+/** How many of a cell's units are protected: all of them, or none. A cell is locked whole. */
+function lockedUnits(entry, count) {
+  if (isLocked(entry)) {
+    return count;
+  }
+  return 0;
 }
 
 /**
@@ -468,6 +514,12 @@ function onItems(payload, from) {
  * The wire's shape and the stored shape are the same on purpose, so the live and stored paths
  * share every reader below. The placement hint rides along, which is what draws an alt's bags
  * the way that alt arranged them.
+ *
+ * The lock is the ONE place the two spellings differ, and both are read here. The wire nests it
+ * under the copy's payload, where the rest of that payload is signer, enchant and rolled stats
+ * this addon has no use for; storing the payload to keep one boolean would put an object per
+ * cell into a store that holds every character's bags, so it is written flat. Reading both is
+ * what lets a record saved by any version read back the same way.
  */
 function parseStack(value) {
   const itemId = entryId(value);
@@ -478,6 +530,11 @@ function parseStack(value) {
   const at = Number(value?.slot);
   if (Number.isInteger(at) && at >= 0) {
     stack.slot = at;
+  }
+  // APPENDED, and written only when it is true, so a record saved before locks existed reads
+  // with no migration pass and an unlocked cell costs no bytes.
+  if (value?.instance?.locked === true || value?.locked === true) {
+    stack.locked = true;
   }
   return stack;
 }
@@ -670,8 +727,13 @@ function parseRecord(key, value) {
 }
 
 /**
- * `{ cells, held }` per item, recording the largest stack seen on the way past: a reading of a
- * store is the only chance to observe a stack size, and every store goes through here.
+ * `{ cells, held, locked }` per item, recording the largest stack seen on the way past: a reading
+ * of a store is the only chance to observe a stack size, and every store goes through here.
+ *
+ * `locked` counts UNITS rather than cells, so it is comparable with `held` on the same row: a
+ * player asking how much of something is protected means copies, and one locked cell can hold
+ * twenty of them. A locked copy never merges into another stack, which is what keeps the two
+ * figures from double-counting a cell.
  */
 function stacksIn(entries) {
   const held = new Map();
@@ -679,8 +741,12 @@ function stacksIn(entries) {
     const itemId = entryId(entry);
     if (itemId !== '') {
       const count = entryCount(entry);
-      const seen = held.get(itemId) ?? { cells: 0, held: 0 };
-      held.set(itemId, { cells: seen.cells + 1, held: seen.held + count });
+      const seen = held.get(itemId) ?? { cells: 0, held: 0, locked: 0 };
+      held.set(itemId, {
+        cells: seen.cells + 1,
+        held: seen.held + count,
+        locked: seen.locked + lockedUnits(entry, count),
+      });
       largest.set(itemId, Math.max(largest.get(itemId) ?? 0, count));
     }
   }
@@ -1538,14 +1604,16 @@ function buildIndex() {
 function addPlaces(index, record, source) {
   const snap = record.sources[source];
   for (const [itemId, counts] of stacksIn(snap.stacks)) {
-    const row = index.get(itemId) ?? { total: 0, places: [] };
+    const row = index.get(itemId) ?? { total: 0, locked: 0, places: [] };
     row.total += counts.held;
+    row.locked += counts.locked;
     row.places.push({
       key: record.key,
       name: displayName(record),
       source,
       count: counts.held,
       cells: counts.cells,
+      locked: counts.locked,
       at: snap.at,
     });
     index.set(itemId, row);
@@ -1594,7 +1662,7 @@ function placesText(places) {
  * than as a timer, which is what turns a list of figures into something a player can scan.
  */
 function itemEntry(itemId, most) {
-  const row = found.index.get(itemId) ?? { total: 0, places: [] };
+  const row = found.index.get(itemId) ?? { total: 0, locked: 0, places: [] };
   const icon = woc.ui.icon.item(itemId);
   return {
     key: itemId,
@@ -1614,9 +1682,19 @@ function itemEntry(itemId, most) {
  * One line per place: whose it is, which store, how many, in how many cells, how old. The
  * hint the whole pane exists to give, and the reason a row can afford to be one line.
  */
+/** The clause a place adds when some of its copies are protected, and nothing when none are. */
+function lockedClause(locked) {
+  if (locked > 0) {
+    return `, ${String(locked)} locked`;
+  }
+  return '';
+}
+
 function placeLines(places) {
   return places.map((spot) => ({
-    text: `${spot.name}, ${spot.source}: ${String(spot.count)} in ${woc.fmt.count(spot.cells, 'cell')}, read ${agoText(spot.at)}`,
+    text:
+      `${spot.name}, ${spot.source}: ${String(spot.count)} in ${woc.fmt.count(spot.cells, 'cell')}` +
+      `${lockedClause(spot.locked)}, read ${agoText(spot.at)}`,
   }));
 }
 
@@ -1642,6 +1720,22 @@ function spreadText(row) {
   return `${String(row.total)} in all, across ${String(who)} characters`;
 }
 
+/**
+ * How many copies the player has locked, and nothing at all when none are.
+ *
+ * Silent at zero on purpose: unlocked is the ordinary state of everything in a bag, so a line
+ * saying so on every row of a forty-row pane is noise the interesting case has to compete with.
+ * Mail is why it says which stores it counted: a letter's attachments arrive already trimmed of
+ * the flag, so a copy sitting in the post is counted as unlocked whatever it was when it was
+ * sent, and this line would otherwise read as a claim about every copy on the account.
+ */
+function lockedLine(row) {
+  if (row.locked <= 0) {
+    return '';
+  }
+  return `${String(row.locked)} of ${String(row.total)} locked against salvage, crafting and vendor sale. Mail cannot say, so a copy in the post is not counted.`;
+}
+
 function itemTipFor(itemId) {
   const row = found.index.get(itemId);
   if (row === undefined) {
@@ -1649,6 +1743,10 @@ function itemTipFor(itemId) {
   }
   const lines = [`Item id: ${itemId}`, spreadText(row)];
   lines.push(...placeLines(row.places));
+  const locked = lockedLine(row);
+  if (locked !== '') {
+    lines.push({ text: locked, tone: 'warn' });
+  }
   const worth = worthLine(itemId, row.total);
   if (worth !== '') {
     lines.push(worth);
@@ -1998,6 +2096,61 @@ function markTone(itemId, view) {
   return 'default';
 }
 
+/** What a square announces: the item, and the lock where there is one. */
+function cellName(itemId, locked) {
+  if (locked) {
+    return `${nameOf(itemId)}, locked`;
+  }
+  return nameOf(itemId);
+}
+
+/**
+ * The padlock on one cell, built once and then shown or hidden.
+ *
+ * Built lazily and kept, rather than added and removed per paint: a grid of 72 cells is
+ * repainted on every world change, and a mark that is created and dropped each time is 72
+ * allocations a frame to say nothing has moved. It is a child of the tile the kit handed over,
+ * which is the same liberty this addon already takes with the cell's own border and fill.
+ */
+function lockMark(tile) {
+  const held = tile.el.querySelector('[data-satchel-lock]');
+  if (held !== null) {
+    return held;
+  }
+  const svg = document.createElementNS(SVG_NS, 'svg');
+  svg.setAttribute('viewBox', '0 0 14 16');
+  svg.setAttribute('fill', 'currentColor');
+  // Hidden from assistive technology on purpose: the cell's own accessible name carries the
+  // locked fact, and a second announcement of it is one the reader has to sit through twice.
+  svg.setAttribute('aria-hidden', 'true');
+  svg.setAttribute('focusable', 'false');
+  svg.dataset.satchelLock = '';
+  const path = document.createElementNS(SVG_NS, 'path');
+  path.setAttribute('d', LOCK_PATH);
+  svg.appendChild(path);
+  svg.style.position = 'absolute';
+  svg.style.left = '2px';
+  svg.style.bottom = '1px';
+  svg.style.width = `${String(LOCK_PX)}px`;
+  svg.style.height = `${String(LOCK_PX)}px`;
+  svg.style.color = LOCK_COLOR;
+  svg.style.filter = 'drop-shadow(0 1px 1px rgb(0 0 0))';
+  svg.style.pointerEvents = 'none';
+  tile.el.appendChild(svg);
+  return svg;
+}
+
+function paintLock(tile, locked) {
+  const held = tile.el.querySelector('[data-satchel-lock]');
+  if (!locked) {
+    if (held !== null) {
+      held.style.display = 'none';
+    }
+    return;
+  }
+  lockMark(tile).style.display = 'block';
+}
+
 /**
  * The label is UNSET rather than left alone, or a cell reused from an occupied one announces the
  * item it last held. `null` is unnamed; an empty string is a name that is blank.
@@ -2008,12 +2161,16 @@ function clearCell(tile) {
   tile.el.style.borderStyle = EMPTY_EDGE;
   tile.el.style.opacity = EMPTY_OPACITY;
   tile.el.dataset.item = '';
+  paintLock(tile, false);
 }
 
 function fillCell(tile, entry, view) {
   const itemId = entryId(entry);
+  const locked = isLocked(entry);
   tile.update({
-    label: nameOf(itemId),
+    // The lock rides the accessible name because a tile is announced as one image and there is
+    // nowhere else on it for a second fact to go.
+    label: cellName(itemId, locked),
     icon: woc.ui.icon.item(itemId),
     count: countFor(entry),
     tone: markTone(itemId, view),
@@ -2022,6 +2179,7 @@ function fillCell(tile, entry, view) {
   tile.el.style.borderStyle = OCCUPIED_EDGE;
   tile.el.style.opacity = OCCUPIED_OPACITY;
   tile.el.dataset.item = itemId;
+  paintLock(tile, locked);
 }
 
 function paintCell(tile, entry, view) {

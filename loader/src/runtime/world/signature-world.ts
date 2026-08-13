@@ -38,6 +38,14 @@ function rowAuras(row: unknown): string {
     .join('.');
 }
 
+/** The owner's lock as a mark, or nothing. Never a digit, so it cannot read as part of a count. */
+function lockMark(slot: unknown): string {
+  if (fieldValue(fieldValue(slot, 'instance'), 'locked') === true) {
+    return 'L';
+  }
+  return '';
+}
+
 /**
  * Party rows arrive from the wire, so these are the terse names, not the Entity's.
  *
@@ -108,9 +116,26 @@ export function equipmentSignature(equipment: unknown): string {
     .join(',');
 }
 
+/**
+ * What one bag, bank or buyback row IS: the item, how many, and whether the
+ * player has locked this copy.
+ *
+ * The lock is the only instance field read here, and the reason is that it is
+ * the only one the PLAYER toggles. It moves neither the id nor the count, so
+ * without it the one bag change a player makes deliberately is the one change
+ * this reading cannot see. Everything else in the payload stays out for the
+ * reason an aura's remaining time does: a signature answers "is this a different
+ * set of things", and a deep compare of every payload at sample rate is not that
+ * question. `locked` rides your own bags and your own bank only, so on a market
+ * row or a letter this arm is reading a field the server's public projection
+ * never sends, and answers absent for every one of them.
+ */
 export function inventorySignature(inventory: unknown): string {
   return eachOf(inventory)
-    .map((slot) => `${fieldString(slot, 'itemId') ?? ''}x${fieldNumber(slot, 'count') ?? 0}`)
+    .map(
+      (slot) =>
+        `${fieldString(slot, 'itemId') ?? ''}x${fieldNumber(slot, 'count') ?? 0}${lockMark(slot)}`,
+    )
     .join(',');
 }
 

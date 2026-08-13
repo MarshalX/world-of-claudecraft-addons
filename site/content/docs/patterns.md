@@ -267,9 +267,13 @@ Anchoring at fade puts the expiry a whole duration late: a 10 second polymorph o
 Four more things a ladder display has to know, all of them the game's own rules:
 
 - **Roots and interrupt lockouts** run 100 / 50 / 25 percent on an 18 second window and then become **immune**. An immune application produces no aura at all, so there is nothing to observe: keep counting the stage you can no longer see.
-- **Polymorph and fear** run absolute seconds (10 / 5 / 1 and 8 / 4 / 2 / 1) on a 60 second window and **never** become immune. The ladder clamps to its last entry, so the fourth polymorph still lands at 1 second. Do not draw an immune stage for these.
+- **Polymorph** runs absolute seconds, 10 / 5 / 1 on a 60 second window, and **never** becomes immune. It is the only absolute ladder, and it can afford to be: exactly one ability rides it, so the 10 second first rung reads as a deliberate cap on a longer value rather than as a number that fits one ability and no other.
+- **Fear** runs 100 / 50 / 25 / 12.5 percent of the ability's own duration, on the same 60 second window, and never becomes immune either. Read it as a multiplier and never as a table of seconds: five abilities across three classes share this ladder, so seconds can only ever be right for one of them. Before game 0.37.1 the game itself had that bug, and every fear in the game lasted 8 seconds on first application whatever its tooltip said.
 - **Stuns do not diminish at all**, and do not even stamp a window.
 - **It is player versus player only.** A mob never diminishes and is never diminished.
+- **An item set can shorten any of them**, on top of whatever the ladder decided and including the stuns the ladder skips. So a duration you compute is what the ability asks for rather than what the target will get, and the target's own reduction is not on the wire.
+
+The ladder's own state is not readable. The entity carries a `ccDr` map and the client builds it empty and is never sent one, which is the trap two sections up wearing different clothes: it is present, it is a Map, and it stays empty for the whole session. A ladder display is therefore something your addon TRACKS from the applications it watches, and it can be wrong in one direction it cannot detect, since an immune application produces no aura to observe.
 
 And death clears the whole ladder, as does an arena or match reset. Drop everything you are tracking for a target when that target dies, or you will report a target as immune to a root that is about to land at full duration.
 
