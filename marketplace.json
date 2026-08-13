@@ -2,7 +2,7 @@
   "schema": 1,
   "name": "Official Marketplace",
   "maintainer": "MarshalX",
-  "generated": "2026-08-13T21:45:18.000Z",
+  "generated": "2026-08-13T23:36:06.000Z",
   "addons": [
     {
       "id": "cadence",
@@ -211,9 +211,9 @@
     {
       "id": "dev-harness",
       "name": "Dev Harness",
-      "version": "1.5.0",
+      "version": "1.6.0",
       "apiVersion": 1,
-      "apiMinor": 5,
+      "apiMinor": 6,
       "author": "MarshalX",
       "description": "Exercises every part of the addon API and reports what worked, repainting as the world moves, so a loader change can be checked in the game rather than only in a test.",
       "entry": "main.js",
@@ -540,9 +540,9 @@
     {
       "id": "ledgerline",
       "name": "Ledgerline",
-      "version": "1.3.1",
+      "version": "1.4.0",
       "apiVersion": 1,
-      "apiMinor": 4,
+      "apiMinor": 6,
       "author": "MarshalX",
       "description": "A price history for a market that keeps almost none, and a scanner over it: every page you read at the Merchant is written down, each listing is judged against the vendor's floor, the page's own second-cheapest and your recorded prices, what is worth buying is ranked by what you would clear on the resale.",
       "entry": "main.js",
@@ -846,15 +846,15 @@
     {
       "id": "satchel",
       "name": "Satchel",
-      "version": "1.1.1",
+      "version": "1.2.0",
       "apiVersion": 1,
-      "apiMinor": 4,
+      "apiMinor": 6,
       "author": "MarshalX",
       "description": "One list of everything you own, across every character. Bags, bank and mailbox are recorded as they are read, so an item is one row with a total however many stacks and characters hold it, and hovering says who has how many and where. What a vendor would pay for a bag, a bank and the whole account.",
       "entry": "main.js",
       "preview": {
         "file": "preview.png",
-        "alt": "On the left, Everything you own, one row an item, pooled across every character On the right, One character, live, the bags of the character in play, as a grid of squares"
+        "alt": "On the left, Everything you own, one row an item, pooled across every character On the right, One character, live, the bags of the character in play, as a grid of squares, one of them padlocked"
       },
       "companions": [
         "lorebind"

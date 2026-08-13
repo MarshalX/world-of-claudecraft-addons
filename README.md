@@ -48,7 +48,7 @@ The per-browser procedure lives on the site rather than here, because two copies
 
 **[Satchel](addons/satchel)** — One list of everything you own, across every character. Bags, bank and mailbox are recorded as they are read, so an item is one row with a total however many stacks and characters hold it, and hovering says who has how many and where. What a vendor would pay for a bag, a bank and the whole account.
 
-<img src="addons/satchel/preview.png" width="440" alt="On the left, Everything you own, one row an item, pooled across every character On the right, One character, live, the bags of the character in play, as a grid of squares" />
+<img src="addons/satchel/preview.png" width="440" alt="On the left, Everything you own, one row an item, pooled across every character On the right, One character, live, the bags of the character in play, as a grid of squares, one of them padlocked" />
 
 **[Facemark](addons/facemark)** — A nameplate over every unit near you: its name, its level, a health bar, a cast bar, the harmful effects on it, a threat edge and its raid mark.
 
