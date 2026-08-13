@@ -1,0 +1,178 @@
+{
+  "gameVersion": "0.36.0",
+  "source": "src/sim/data.ts, src/sim/content/dungeons.ts, src/sim/types.ts, src/sim/mob/healer_channel.ts, src/sim/encounters/nythraxis.ts",
+  "encounters": [
+    {
+      "id": "nythraxis",
+      "templateId": "nythraxis_scourge_of_thornpeak",
+      "name": "Nythraxis, Scourge of Thornpeak",
+      "arenaId": "nythraxis_boss_arena",
+      "bossSpawn": {
+        "x": 0,
+        "z": 96
+      },
+      "phases": {
+        "transitionAura": "nythraxis_transition_pause",
+        "phaseTwoHp": 0.7,
+        "seeds": {
+          "gravebreaker": 5,
+          "soul-rend": 5,
+          "deathless": 20
+        }
+      },
+      "freeze": [
+        {
+          "kind": "aura",
+          "id": "nythraxis_deathless_stun"
+        },
+        {
+          "kind": "aura",
+          "id": "nythraxis_transition_pause"
+        },
+        {
+          "kind": "cast",
+          "id": "nythraxis_deathless_rage"
+        },
+        {
+          "kind": "cast",
+          "id": "nythraxis_heroic_summon"
+        }
+      ],
+      "mechanics": [
+        {
+          "id": "gravebreaker",
+          "label": "Gravebreaker",
+          "every": 12,
+          "detail": "11yd frontal cone",
+          "phase": "both",
+          "charge": true,
+          "anchor": {
+            "damage": "Gravebreaker"
+          }
+        },
+        {
+          "id": "raise-fallen",
+          "label": "Raise Fallen",
+          "every": 30,
+          "detail": "no crowd control, kill them",
+          "phase": "one",
+          "anchor": {
+            "spawn": "nythraxis_skeleton_warrior"
+          }
+        },
+        {
+          "id": "soul-rend",
+          "label": "Soul Rend",
+          "every": 30,
+          "detail": "marks stack up",
+          "phase": "two",
+          "anchor": {
+            "damage": "Soul Rend"
+          }
+        },
+        {
+          "id": "deathless",
+          "label": "Deathless Rage",
+          "every": 45,
+          "detail": "three wardstones, three different players",
+          "phase": "two",
+          "liveCast": "nythraxis_deathless_rage",
+          "lethal": true
+        }
+      ],
+      "blocks": [
+        {
+          "kind": "channels",
+          "label": "Wardstones",
+          "duringCast": "nythraxis_deathless_rage",
+          "castSeconds": 10,
+          "channelCast": "nythraxis_ward_channel",
+          "channelSeconds": 5,
+          "objectTemplateId": "ground_bastion_ward_stone",
+          "reach": 6,
+          "distinct": true,
+          "objects": [
+            {
+              "name": "Left Wardstone",
+              "x": -40,
+              "z": 79
+            },
+            {
+              "name": "Right Wardstone",
+              "x": 40,
+              "z": 79
+            },
+            {
+              "name": "Threshold Wardstone",
+              "x": 0,
+              "z": 63
+            }
+          ]
+        },
+        {
+          "kind": "marks",
+          "label": "Soul Rend",
+          "aura": "nythraxis_soul_rend",
+          "durationSeconds": 8,
+          "stackRange": 5,
+          "count": 3,
+          "countHeroic": 6,
+          "heroicMult": 1.5
+        },
+        {
+          "kind": "tankStacks",
+          "label": "Tank",
+          "aura": "nythraxis_dread_curse",
+          "perStack": 0.1,
+          "maxStacks": 10,
+          "heroicOnly": true
+        },
+        {
+          "kind": "adds",
+          "label": "Adds",
+          "rows": [
+            {
+              "templateId": "nythraxis_heroic_priest_add",
+              "name": "Spirit of Malric",
+              "ccImmune": false,
+              "quietMechanics": true,
+              "answer": "interrupt",
+              "healEvery": 4,
+              "healRadius": 45,
+              "healMax": 1440,
+              "healName": "Malric's Mending",
+              "interruptCast": "nythraxis_spirit_mending",
+              "heroicTell": true
+            },
+            {
+              "templateId": "nythraxis_heroic_rogue_add",
+              "name": "Spirit of Voss",
+              "ccImmune": false,
+              "quietMechanics": false,
+              "answer": "control",
+              "ignoreTaunt": true,
+              "heroicTell": true
+            },
+            {
+              "templateId": "nythraxis_heroic_warrior_add",
+              "name": "Spirit of Aldren",
+              "ccImmune": true,
+              "quietMechanics": false,
+              "answer": "tank",
+              "cleaveRadius": 8,
+              "cleaveName": "Royal Cleave",
+              "heroicTell": true
+            },
+            {
+              "templateId": "nythraxis_skeleton_warrior",
+              "name": "Risen Royal Guard",
+              "ccImmune": true,
+              "answer": "kill",
+              "note": "no crowd control, kill it"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
