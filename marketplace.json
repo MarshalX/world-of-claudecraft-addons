@@ -2,7 +2,7 @@
   "schema": 1,
   "name": "Official Marketplace",
   "maintainer": "MarshalX",
-  "generated": "2026-08-11T21:56:55.000Z",
+  "generated": "2026-08-13T21:45:18.000Z",
   "addons": [
     {
       "id": "cadence",
@@ -905,6 +905,85 @@
         }
       ],
       "path": "addons/satchel"
+    },
+    {
+      "id": "tocsin",
+      "name": "Tocsin",
+      "version": "1.0.0",
+      "apiVersion": 1,
+      "apiMinor": 4,
+      "author": "MarshalX",
+      "description": "What a raid boss is about to do, and what the group has to answer: a timer per mechanic, plus who is marked, what nobody is channelling, and the tank stacks.",
+      "entry": "main.js",
+      "preview": {
+        "file": "preview.png",
+        "alt": "On the left, A wardstone nobody is on, A raid panel: mechanic timers with Deathless Rage casting live, and the three wardstones in all three states, one done and named with who held it, one being channelled, and the third drawn red and reading UNHELD. On the right, Marks, stacks and adds, The same panel with no cast in flight: three Soul Rend marks, two stacked and one drawn red standing alone, the tank at six stacks with the other tank not yet clear, and the heroic court listed interrupt first."
+      },
+      "data": [
+        "bosses.json"
+      ],
+      "homepage": "https://github.com/MarshalX/world-of-claudecraft-addons",
+      "tags": [
+        "raid",
+        "combat"
+      ],
+      "permissions": [
+        "net.read",
+        "world.read",
+        "ui",
+        "sound",
+        "keys"
+      ],
+      "keybinds": [
+        {
+          "id": "toggle",
+          "label": "Show or hide the raid frame",
+          "default": "Alt+KeyT"
+        }
+      ],
+      "settings": [
+        {
+          "id": "mechanics",
+          "type": "boolean",
+          "label": "Show the mechanic timers",
+          "default": true
+        },
+        {
+          "id": "state",
+          "type": "boolean",
+          "label": "Show what the group has to answer",
+          "default": true
+        },
+        {
+          "id": "alert-lead",
+          "type": "number",
+          "label": "Warn this many seconds before a mechanic lands",
+          "default": 4,
+          "min": 1,
+          "max": 10
+        },
+        {
+          "id": "tank-warn",
+          "type": "number",
+          "label": "Warn about the tank at this percent of maximum stacks",
+          "default": 60,
+          "min": 10,
+          "max": 100
+        },
+        {
+          "id": "alerts",
+          "type": "boolean",
+          "label": "Warn with a banner across the screen",
+          "default": true
+        },
+        {
+          "id": "cue",
+          "type": "boolean",
+          "label": "Play a sound with each warning",
+          "default": true
+        }
+      ],
+      "path": "addons/tocsin"
     },
     {
       "id": "trailmark",

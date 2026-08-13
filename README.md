@@ -40,7 +40,7 @@ The per-browser procedure lives on the site rather than here, because two copies
 
 <!-- addons:start -->
 
-**15 addons ship with the loader**, reviewed and installed from inside the game. Five of them:
+**16 addons ship with the loader**, reviewed and installed from inside the game. Five of them:
 
 **[Combat Meter](addons/combat-meter)** — What your damage and healing are made of: a row per ability, your pet's included, with per-second rates, crit rate, average and biggest hit, plus your real miss and dodge rates and what is hitting you.
 
@@ -62,7 +62,7 @@ The per-browser procedure lives on the site rather than here, because two copies
 
 <img src="addons/ledgerline/preview.png" width="440" alt="Panel 1 of 3, What to buy, underpriced listings ranked by what each clears Panel 2 of 3, The ledger, every price recorded, each against its own range Panel 3 of 3, Your listings, undercuts washed red" />
 
-### The other 10
+### The other 11
 
 - **[Cadence](addons/cadence)** — The four timings a rotation is played against, on one thin strip: your swing, the global cooldown, your cast with a latency band, and your resource with combo points as pips.
 - **[Cooldown Bars](addons/cooldown-bars)** — A draining bar for every ability you have on cooldown, soonest ready first, measured against the real length of anything in your own spellbook.
@@ -71,6 +71,7 @@ The per-browser procedure lives on the site rather than here, because two copies
 - **[Longwatch](addons/longwatch)** — The rare spawns, where they live and when they are due back.
 - **[Lorebind](addons/lorebind)** — A browser for every item in the game, and the name service every other addon subscribes to.
 - **[Purelight](addons/purelight)** — Every effect in front of you that can actually be removed, worst first: on you, your pet, your group and your target, each tile naming who carries it.
+- **[Tocsin](addons/tocsin)** — What a raid boss is about to do, and what the group has to answer: a timer per mechanic, plus who is marked, what nobody is channelling, and the tank stacks.
 - **[Veinsight](addons/veinsight)** — Every ore vein, wood stand and herb patch in the world, pinned where it stands and listed nearest first with a distance, a bearing and your own respawn timer.
 - **[Wayfarer](addons/wayfarer)** — An atlas: where everything is, how far, and which way.
 - **[Wayline](addons/wayline)** — How far the next level is in time rather than in numbers: experience per hour over a rolling window, the kills and the time left to reach it, and a derived virtual level past the cap.
