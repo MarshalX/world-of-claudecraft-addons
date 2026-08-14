@@ -2,7 +2,7 @@
   "schema": 1,
   "name": "Official Marketplace",
   "maintainer": "MarshalX",
-  "generated": "2026-08-14T20:58:15.000Z",
+  "generated": "2026-08-14T21:07:39.000Z",
   "addons": [
     {
       "id": "cadence",
@@ -470,7 +470,7 @@
         {
           "id": "hide-selected-player",
           "type": "boolean",
-          "label": "Hide the plate over a player you have selected, which the game draws its own over",
+          "label": "Hide the plate over a player you have selected, which the game always draws its own over",
           "default": true
         },
         {
