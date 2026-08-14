@@ -50,9 +50,9 @@ The per-browser procedure lives on the site rather than here, because two copies
 
 <img src="addons/satchel/preview.png" width="440" alt="On the left, Everything you own, one row an item, pooled across every character On the right, One character, live, the bags of the character in play, as a grid of squares, one of them padlocked" />
 
-**[Facemark](addons/facemark)** — A nameplate over every unit near you: its name, its level, a health bar, a cast bar, the harmful effects on it, a threat edge and its raid mark.
+**[Facemark](addons/facemark)** — A nameplate over every unit: health, casts, effects and raid marks. It names the side each player is on in PvP, which no field says, and whether a cast is coming at you.
 
-<img src="addons/facemark/preview.png" width="391" alt="two nameplates over the units they belong to, each with a name, a level, a health bar and effect tiles. The hostile one adds a raid mark, a cast bar and a red threat edge." />
+<img src="addons/facemark/preview.png" width="440" alt="On the left, A pull, two nameplates over the units they belong to, each with a name, a level and a health bar. The hostile one is the current target: a drawn star marks it, its level is orange for being two above the player, its health bar is edged in white and carries a thin blue mana strip under it, and under its cast bar a red tag says the cast is coming at you. The friendly one shows a lighter shield laid over the end of its health bar and an effect tile. On the right, A battleground, two player nameplates in a battleground, side by side, both named in red for the other side. Each health bar is tinted with that player&#39;s class colour, olive for the rogue and cyan for the mage. The rogue is marked as carrying a flag; the mage&#39;s cast bar shows the frostbolt icon beside its name, with a red tag under it saying the cast is coming at you and a thin blue mana strip over it." />
 
 **[Trailmark](addons/trailmark)** — Where the thing your quest wants actually is: the zone, the distance, the way to turn and a world pin for every objective in your log, and who takes each quest that is ready.
 

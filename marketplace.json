@@ -2,7 +2,7 @@
   "schema": 1,
   "name": "Official Marketplace",
   "maintainer": "MarshalX",
-  "generated": "2026-08-14T00:27:06.000Z",
+  "generated": "2026-08-14T20:58:15.000Z",
   "addons": [
     {
       "id": "cadence",
@@ -153,11 +153,11 @@
     {
       "id": "cooldown-bars",
       "name": "Cooldown Bars",
-      "version": "1.3.1",
+      "version": "1.4.0",
       "apiVersion": 1,
       "apiMinor": 4,
       "author": "MarshalX",
-      "description": "A draining bar for every ability you have on cooldown, soonest ready first, measured against the real length of anything in your own spellbook. Draws as a column of named bars or as a strip of swept icons.",
+      "description": "A draining bar for every ability you have on cooldown, soonest ready first, measured against the real length of anything in your own spellbook. Draws as a column of named bars or as a strip of swept icons, and both are yours to drag to the size you want them.",
       "entry": "main.js",
       "preview": {
         "file": "preview.png",
@@ -204,6 +204,12 @@
           "type": "boolean",
           "label": "Hide cooldowns shorter than the global cooldown",
           "default": true
+        },
+        {
+          "id": "tint-school",
+          "type": "boolean",
+          "label": "Tint each timer by its damage school",
+          "default": false
         }
       ],
       "path": "addons/cooldown-bars"
@@ -211,7 +217,7 @@
     {
       "id": "dev-harness",
       "name": "Dev Harness",
-      "version": "1.6.0",
+      "version": "1.7.0",
       "apiVersion": 1,
       "apiMinor": 6,
       "author": "MarshalX",
@@ -380,15 +386,21 @@
     {
       "id": "facemark",
       "name": "Facemark",
-      "version": "1.0.1",
+      "version": "1.1.0",
       "apiVersion": 1,
-      "apiMinor": 4,
+      "apiMinor": 6,
       "author": "MarshalX",
-      "description": "A nameplate over every unit near you: its name, its level, a health bar, a cast bar, the harmful effects on it, a threat edge and its raid mark.",
+      "description": "A nameplate over every unit: health, casts, effects and raid marks. It names the side each player is on in PvP, which no field says, and whether a cast is coming at you.",
       "entry": "main.js",
       "preview": {
         "file": "preview.png",
-        "alt": "two nameplates over the units they belong to, each with a name, a level, a health bar and effect tiles. The hostile one adds a raid mark, a cast bar and a red threat edge."
+        "alt": "On the left, A pull, two nameplates over the units they belong to, each with a name, a level and a health bar. The hostile one is the current target: a drawn star marks it, its level is orange for being two above the player, its health bar is edged in white and carries a thin blue mana strip under it, and under its cast bar a red tag says the cast is coming at you. The friendly one shows a lighter shield laid over the end of its health bar and an effect tile. On the right, A battleground, two player nameplates in a battleground, side by side, both named in red for the other side. Each health bar is tinted with that player's class colour, olive for the rogue and cyan for the mage. The rogue is marked as carrying a flag; the mage's cast bar shows the frostbolt icon beside its name, with a red tag under it saying the cast is coming at you and a thin blue mana strip over it."
+      },
+      "companions": [
+        "longwatch"
+      ],
+      "companionReasons": {
+        "longwatch": "publishes which mobs the game counts as elite or bosses, which no snapshot says, so a plate can mark rank beside the level"
       },
       "homepage": "https://github.com/MarshalX/world-of-claudecraft-addons",
       "tags": [
@@ -453,6 +465,12 @@
           "id": "casts",
           "type": "boolean",
           "label": "Show what a unit is casting",
+          "default": true
+        },
+        {
+          "id": "hide-selected-player",
+          "type": "boolean",
+          "label": "Hide the plate over a player you have selected, which the game draws its own over",
           "default": true
         },
         {
@@ -634,18 +652,19 @@
     {
       "id": "longwatch",
       "name": "Longwatch",
-      "version": "1.1.0",
+      "version": "1.2.0",
       "apiVersion": 1,
       "apiMinor": 4,
       "author": "MarshalX",
-      "description": "The rare spawns, where they live and when they are due back. Carries the roster the wire cannot answer for, counts each rare down from the kill that dropped it, and keeps the countdown across a logout. A body you rode up on rather than watched fall still bounds the return, and the row says which of the two it is drawing. Pins the rares in your own zone into the world and calls out a sighting with a banner and a cue.",
+      "description": "The rare spawns, where they live and when they are due back. Carries the roster the wire cannot answer for, counts each rare down from the kill that dropped it, and keeps the countdown across a logout. A body you rode up on rather than watched fall still bounds the return, and the row says which of the two it is drawing. Pins the rares in your own zone into the world and calls out a sighting with a banner and a cue. It also carries the table saying which mobs the game counts as elite, as bosses or as rare, and publishes it for any other addon to draw from.",
       "entry": "main.js",
       "preview": {
         "file": "preview.png",
         "alt": "On the left, Rares list, a two-column list of rare spawns, a timer bar on every row On the right, An alert, a banner over an empty screen announcing that a rare is up"
       },
       "data": [
-        "rares.json"
+        "rares.json",
+        "mobs.json"
       ],
       "homepage": "https://github.com/MarshalX/world-of-claudecraft-addons",
       "tags": [
