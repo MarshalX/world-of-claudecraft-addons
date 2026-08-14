@@ -49,16 +49,30 @@ const DONE_SECONDS = 0.5;
  * handler ran last. An unanswered channel outranks everything because its failure is the
  * whole raid rather than one player.
  */
-const ALERT_RANK = ['channels', 'marks', 'interrupt', 'tank', 'mechanic'];
+const ALERT_RANK = ['channels', 'marks', 'enrage', 'interrupt', 'tank', 'mechanic'];
 
 const ASSUMED_NORMAL = 'Normal figures: nothing on the wire says which difficulty this is.';
 
-/** Drawn in this order whatever order the table declares them, so the layout never moves. */
-const BLOCK_ORDER = ['channels', 'marks', 'tankStacks', 'adds'];
+/** How far out from an enrage this starts saying so, as a multiple of the trigger itself. */
+const ENRAGE_WATCH_MULT = 2;
+
+/**
+ * Drawn in this order whatever order the table declares them, so the layout never moves.
+ *
+ * An enrage is first because it is only ever on screen for the last stretch of a fight, and
+ * for that stretch it is the line to read before any of the others.
+ */
+const BLOCK_ORDER = ['enrage', 'channels', 'marks', 'tankStacks', 'adds'];
 
 let encounters = [];
 let pull = null;
 let lastTick = woc.now();
+/**
+ * The boss this addon last saw standing with nobody on it, which is the only way to tell a
+ * pull it WATCHED START from a fight it walked in on. Module level rather than on `pull`,
+ * because `drawIdle` clears that on the same frames this has to survive.
+ */
+let idleBossId = null;
 
 /**
  * `woc.data` hands back `unknown`: the loader checks the file parses as JSON and nothing
@@ -147,10 +161,24 @@ function heroic() {
   return pull?.heroic === true;
 }
 
+/**
+ * The game starts every clock the moment the fight does, so a pull watched from the boss
+ * standing idle needs nothing observed to count the first of anything. A fight walked in on
+ * gets no seeds: the addon has no idea how far through it is, and a made-up figure is worse
+ * than the row saying it has not seen one yet.
+ */
+function seedPull(row) {
+  if (idleBossId !== pull.bossId) {
+    return;
+  }
+  idleBossId = null;
+  seedTimers(row.pullSeeds ?? {});
+}
+
 function startPull(found) {
   const timers = {};
   for (const mechanic of found.row.mechanics) {
-    timers[mechanic.id] = { dueAt: null };
+    timers[mechanic.id] = { dueAt: null, cycle: 0 };
   }
   pull = {
     bossId: found.entity.id,
@@ -159,13 +187,17 @@ function startPull(found) {
     transitionSeenAt: null,
     phaseTwoAt: null,
     seenSpawns: new Set(),
+    castAbility: null,
     woundedAt: null,
+    enraged: false,
     timers,
     channels: null,
     outcome: null,
     alert: null,
     firedAt: new Map(),
+    announced: new Map(),
   };
+  seedPull(found.row);
 }
 
 /** A target is the only engagement signal a mob sends: `inCombat` is not on the wire. */
@@ -243,10 +275,16 @@ function frozen(row, entity) {
   return false;
 }
 
+/**
+ * `cycle` counts ARMINGS rather than time, and the alert path is what needs it: a freeze moves
+ * `dueAt` on every frame it holds, so a call already made cannot be recognised by the time it
+ * was made for.
+ */
 function fired(id, every) {
   const timer = pull?.timers[id];
   if (timer !== undefined) {
     timer.dueAt = woc.now() + every * MS;
+    timer.cycle += 1;
   }
 }
 
@@ -266,16 +304,21 @@ function holdTimers(elapsed) {
   }
 }
 
-/** The only way to count the first of a phase down before it has ever been seen fire. */
-function seedPhase(row) {
+/** The only way to count the first of anything down before it has ever been seen fire. */
+function seedTimers(seeds) {
   const now = woc.now();
-  for (const [id, seconds] of Object.entries(row.phases?.seeds ?? {})) {
+  for (const [id, seconds] of Object.entries(seeds)) {
     const timer = pull.timers[id];
     if (timer !== undefined) {
       timer.dueAt = now + seconds * MS;
+      timer.cycle += 1;
     }
   }
-  pull.phaseTwoAt = now;
+}
+
+function seedPhase(row) {
+  seedTimers(row.phases?.seeds ?? {});
+  pull.phaseTwoAt = woc.now();
 }
 
 function trackSpawns(row) {
@@ -288,6 +331,29 @@ function trackSpawns(row) {
           fired(mechanic.id, mechanic.every);
         }
       }
+    }
+  }
+}
+
+/**
+ * A cast STARTING is an anchor like any other, and for a mechanic that ends in one it is the
+ * only edge there is: the game arms the next cadence where it opens the cast, and the damage
+ * that cast would deal is not dealt at all on the cycles the raid answers, so watching for the
+ * damage instead would leave the clock dead for exactly the pulls that went well.
+ *
+ * Joining mid-cast needs no correction for the same reason the freeze exists: the game holds
+ * its own counter at full for the length of the cast, so reading the start late reads it right.
+ */
+function trackCasts(row, entity) {
+  const ability = bossCast(entity)?.ability ?? null;
+  const began = ability !== null && ability !== pull.castAbility;
+  pull.castAbility = ability;
+  if (!began) {
+    return;
+  }
+  for (const mechanic of row.mechanics) {
+    if (mechanic.anchor?.cast === ability) {
+      fired(mechanic.id, mechanic.every);
     }
   }
 }
@@ -777,11 +843,49 @@ function addsBlockRows(block) {
   return rows;
 }
 
+/**
+ * The one state on this fight nothing is DONE about, which is why it is drawn from the boss's
+ * own health rather than from a clock: knowing it is close is the whole of the answer.
+ *
+ * The aura runs to the end of the fight once it lands, so the call is made on it ARRIVING.
+ * Made on its presence it would be the same call every re-warn floor until the boss died.
+ */
+function enrageBlockRows(block, entity) {
+  const left = healthFraction(entity);
+  if (auraOn(entity, block.aura) !== null) {
+    enrageAlert(left);
+    return [
+      {
+        id: 'enrage',
+        label: block.name,
+        detail: `${asPercent(left)} left`,
+        value: 'ENRAGED',
+        fraction: left,
+        tone: 'danger',
+      },
+    ];
+  }
+  if (left > block.hp * ENRAGE_WATCH_MULT) {
+    return [];
+  }
+  return [
+    {
+      id: 'enrage',
+      label: block.name,
+      detail: `at ${asPercent(block.hp)}`,
+      value: asPercent(left),
+      fraction: left,
+      tone: 'warn',
+    },
+  ];
+}
+
 const BLOCK_RENDERERS = new Map([
   ['channels', (block) => channelsBlockRows(block)],
   ['marks', (block) => marksBlockRows(block)],
   ['tankStacks', (block, entity) => tankStacksBlockRows(block, entity)],
   ['adds', (block) => addsBlockRows(block)],
+  ['enrage', (block, entity) => enrageBlockRows(block, entity)],
 ]);
 
 function outranks(next, held) {
@@ -799,22 +903,31 @@ function sizeFor(lethal) {
   return 'normal';
 }
 
+/**
+ * Answers whether the call was actually MADE, because a caller that has to remember it has
+ * spoken must not remember a banner the slot refused.
+ *
+ * `floor` separates the re-warn floor from the RANK, which is what lets several mechanics
+ * share one place in the order without sharing one throttle: two of them coming due inside
+ * eight seconds is the ordinary case at a phase change.
+ */
 function warn(alert) {
   const { key, text, detail, lethal } = alert;
+  const floor = alert.floor ?? key;
   // The banner is the one surface that draws over the middle of the game rather than in a
   // panel the player parked, so it is worth switching off on its own.
   if (!woc.settings.alerts) {
-    return;
+    return false;
   }
   const now = woc.now();
   // Every caller runs on a frame handler, so without this floor one call is sixty banners.
-  if (now - (pull.firedAt.get(key) ?? -REWARN_MS) < REWARN_MS) {
-    return;
+  if (now - (pull.firedAt.get(floor) ?? -REWARN_MS) < REWARN_MS) {
+    return false;
   }
   if (!outranks(key, pull.alert)) {
-    return;
+    return false;
   }
-  pull.firedAt.set(key, now);
+  pull.firedAt.set(floor, now);
   pull.alert = { key, until: now + BANNER_MS };
   woc.ui.banner(text, {
     detail,
@@ -825,6 +938,7 @@ function warn(alert) {
   if (woc.settings.cue) {
     woc.sound.alert();
   }
+  return true;
 }
 
 /**
@@ -900,11 +1014,48 @@ function tankAlert(tank, stacks, block) {
   }
 }
 
+function enrageAlert(left) {
+  // Compared rather than tested, for the reason `heroic()` is: the latch is initialised to a
+  // literal `false`, so a bare truthiness check reads to the linter as never satisfiable.
+  if (pull.enraged === true) {
+    return;
+  }
+  pull.enraged = true;
+  warn({ key: 'enrage', text: 'ENRAGED', detail: `${asPercent(left)} left`, lethal: false });
+}
+
+/** The row's timer if it is inside the lead and has not been called for this arming. */
+function uncalled(row, lead) {
+  const timer = pull.timers[row.id];
+  if (timer === undefined || typeof row.seconds !== 'number' || row.seconds > lead) {
+    return null;
+  }
+  if (pull.announced.get(row.id) === timer.cycle) {
+    return null;
+  }
+  return timer;
+}
+
+/**
+ * One call per ARMED CYCLE per mechanic, rather than one per re-warn floor.
+ *
+ * A prediction that has run out stays on screen at zero, honestly: the game defers a cast
+ * while another mechanic is unresolved and retries every second. Saying so again every eight
+ * seconds for the rest of the pull is the same call over and over about something the raid
+ * has already been told is due.
+ *
+ * The cycle is recorded only where the banner was actually SHOWN, so a call the slot refused
+ * to a louder one is still owed and is made when that one has had its four seconds.
+ */
 function mechanicAlert(rows) {
   const lead = woc.settings['alert-lead'];
   for (const row of rows) {
-    if (typeof row.seconds === 'number' && row.seconds <= lead) {
-      warn({ key: 'mechanic', text: row.label, detail: row.detail, lethal: false });
+    const timer = uncalled(row, lead);
+    if (timer !== null) {
+      const floor = `mechanic:${row.id}`;
+      if (warn({ key: 'mechanic', floor, text: row.label, detail: row.detail, lethal: false })) {
+        pull.announced.set(row.id, timer.cycle);
+      }
       return;
     }
   }
@@ -1058,6 +1209,7 @@ function drawFight(row, entity) {
   trackPhase(row, phase);
   trackBlocks(row, entity);
   trackSpawns(row);
+  trackCasts(row, entity);
   const rows = mechanicRows(row, entity, phase);
   const showMechanics = woc.settings.mechanics && rows.length > 0;
   woc.ui.show(mechanicSection.wrap, showMechanics);
@@ -1083,10 +1235,14 @@ woc.onFrame(() => {
   lastTick = now;
   const found = activeNow();
   if (found === null) {
+    // Not merely "no pull": a boss out of range says nothing about whether one is under way,
+    // so a player who zones into a fight must not read as having watched it start.
+    idleBossId = null;
     drawIdle('No encounter this addon knows is in range.');
     return;
   }
   if (!engaged(found.entity)) {
+    idleBossId = found.entity.id;
     drawIdle(`${found.row.name} is not in combat.`);
     return;
   }

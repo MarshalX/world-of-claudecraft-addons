@@ -37,7 +37,7 @@ interface Mechanic {
   phase?: 'one' | 'two' | 'both';
   charge?: true;
   liveCast?: string;
-  anchor?: { damage?: string; spawn?: string };
+  anchor?: { damage?: string; spawn?: string; cast?: string };
 }
 
 interface ChannelsBlock {
@@ -87,13 +87,22 @@ interface AddsBlock {
   rows: AddRow[];
 }
 
-type Block = ChannelsBlock | MarksBlock | TankBlock | AddsBlock;
+interface EnrageBlock {
+  kind: 'enrage';
+  label: string;
+  name: string;
+  aura: string;
+  hp: number;
+}
+
+type Block = ChannelsBlock | MarksBlock | TankBlock | AddsBlock | EnrageBlock;
 
 interface Encounter {
   id: string;
   templateId: string;
   name: string;
   phases: { transitionAura: string; phaseTwoHp: number; seeds: Record<string, number> };
+  pullSeeds: Record<string, number>;
   freeze: Array<{ kind: 'aura' | 'cast'; id: string }>;
   mechanics: Mechanic[];
   blocks: Block[];
@@ -135,6 +144,15 @@ function seedOf(id: string): number {
   return found;
 }
 
+/** What the game's own initialiser starts a clock at, which is not always its cadence. */
+function pullSeedOf(id: string): number {
+  const found = ENCOUNTER.pullSeeds[id];
+  if (found === undefined) {
+    throw new Error(`bosses.json declares no pull seed for ${id}`);
+  }
+  return found;
+}
+
 function mechanicOf(id: string): Mechanic {
   const found = ENCOUNTER.mechanics.find((one) => one.id === id);
   if (found === undefined) {
@@ -149,14 +167,21 @@ const FREEZE_AURA = only(
   ENCOUNTER.freeze.filter((one) => one.kind === 'aura').map((one) => one.id),
   'freeze condition',
 );
+const SEED_GRAVEBREAKER = seedOf('gravebreaker');
+const PULL_GRAVEBREAKER = pullSeedOf('gravebreaker');
+const PULL_RAISE_FALLEN = pullSeedOf('raise-fallen');
 const SEED_SOUL_REND = seedOf('soul-rend');
 const SEED_DEATHLESS = seedOf('deathless');
 const TUNING_CAST_MS = CHANNELS.castSeconds * 1000 + 500;
 const MARKS = blockOf('marks');
 const TANK = blockOf('tankStacks');
+const ENRAGE = blockOf('enrage');
+/** The addon watches from twice the trigger, and the fixture boss carries a thousand health. */
+const ENRAGE_WATCH_HP = ENRAGE.hp * 2 * 1000;
 const ADDS = blockOf('adds');
 const GRAVEBREAKER = mechanicOf('gravebreaker');
 const SOUL_REND = mechanicOf('soul-rend');
+const DEATHLESS = mechanicOf('deathless');
 const FIRST_COURT_ADD = only(
   ADDS.rows.filter((row) => row.heroicTell === true),
   'heroic court',
@@ -531,6 +556,16 @@ function banner(): string {
   return document.getElementById('woc-banner')?.textContent ?? '';
 }
 
+/**
+ * The card itself, which is what a case asserting a call was NOT repeated has to read. Nothing
+ * dismisses a banner under the suite's services, so its text stays in the document for the rest
+ * of the case and a second call reads exactly like the first one still being up. Showing one
+ * replaces the card, so the NODE is the difference between them.
+ */
+function bannerCard(): Element | null {
+  return document.getElementById('woc-banner')?.firstElementChild ?? null;
+}
+
 function castDeathless(h: TocsinHarness, remaining: number): void {
   writeCast(h.boss, CHANNELS.duringCast, remaining, CHANNELS.castSeconds);
 }
@@ -558,19 +593,28 @@ describe('the shipped table', () => {
     expect(ENCOUNTER.blocks.map((block) => block.kind).sort(byName)).toEqual([
       'adds',
       'channels',
+      'enrage',
       'marks',
       'tankStacks',
     ]);
   });
 
-  it('anchors every mechanic on something observable, or on a live cast', () => {
-    for (const mechanic of ENCOUNTER.mechanics) {
-      const anchored =
-        mechanic.anchor?.damage !== undefined ||
-        mechanic.anchor?.spawn !== undefined ||
-        mechanic.liveCast !== undefined;
-      expect(anchored).toBe(true);
-    }
+  /**
+   * A live cast is NOT a way to start a clock, and accepting one here as if it were is how a
+   * mechanic shipped with nothing to seed its at all. `liveCast` draws the game's own bar
+   * while the cast runs and seeds nothing, so the cadence counted down once, clamped at zero
+   * and called the same banner every re-warn floor for the rest of the pull.
+   */
+  it('gives every mechanic a way to start its clock, which a live cast is not', () => {
+    const stuck = ENCOUNTER.mechanics
+      .filter(
+        (one) =>
+          Object.values(one.anchor ?? {}).length === 0 &&
+          ENCOUNTER.pullSeeds[one.id] === undefined &&
+          ENCOUNTER.phases.seeds[one.id] === undefined,
+      )
+      .map((one) => one.id);
+    expect(stuck).toEqual([]);
   });
 
   it('carries three wardstones with the game’s own names', () => {
@@ -941,6 +985,40 @@ describe('the tank block', () => {
   });
 });
 
+describe('the enrage block', () => {
+  it('says nothing while the boss is nowhere near it', async () => {
+    const h = await start({ hp: 500 });
+    h.frame();
+    expect(h.shows('enrage')).toBe(false);
+  });
+
+  it('names the trigger while the fight is approaching it', async () => {
+    const h = await start({ hp: ENRAGE_WATCH_HP - 10 });
+    h.frame();
+    // The heading names the shape and the row names the aura, so neither says the other twice.
+    expect(h.headingOf('enrage')).toBe(ENRAGE.label);
+    expect(h.labelOf('enrage', 'enrage')).toBe(ENRAGE.name);
+    expect(h.detailOf('enrage', 'enrage')).toContain('5%');
+  });
+
+  /**
+   * The aura runs to the end of the fight, so a call made on its PRESENCE is a call made
+   * every re-warn floor until the boss dies. It is the arrival that is news.
+   */
+  it('calls the enrage once, on the aura arriving', async () => {
+    const h = await start({ hp: 40 });
+    h.give(BOSS_ID, aura(ENRAGE.aura, { kind: 'buff_haste', remaining: 600, duration: 600 }));
+    h.frame();
+    expect(h.valueOf('enrage', 'enrage')).toBe('ENRAGED');
+    expect(h.detailOf('enrage', 'enrage')).toContain('4%');
+    expect(banner()).toContain('ENRAGED');
+    const called = bannerCard();
+    h.advance(13_000);
+    h.frame();
+    expect(bannerCard()).toBe(called);
+  });
+});
+
 describe('the add block', () => {
   it('says what each member of the court wants done to it', async () => {
     const h = await start();
@@ -1021,6 +1099,82 @@ describe('the banner', () => {
     castDeathless(h, 3);
     h.frame();
     expect(banner()).toContain('UNHELD');
+  });
+
+  /**
+   * The failure this is written against is a mechanic whose clock never gets re-armed: it
+   * clamps at zero and the call is then made every re-warn floor, eight seconds apart, for the
+   * rest of the pull, against a cadence the raid reads as forty-five.
+   */
+  it('calls Deathless Rage once a cycle rather than every re-warn floor', async () => {
+    const lead = 4;
+    const h = await start({ hp: 500, settings: { 'alert-lead': lead } });
+    h.frame();
+    // The pull's first Rage is what starts this clock, since the cast is what arms the cadence.
+    castDeathless(h, CHANNELS.castSeconds);
+    h.frame();
+    clearCast(h.boss);
+    h.frame();
+    h.advance((DEATHLESS.every - lead - 1) * 1000);
+    h.frame();
+    expect(banner()).toBe('');
+    h.advance(1000);
+    h.frame();
+    expect(banner()).toContain(DEATHLESS.label);
+    const called = bannerCard();
+    // The game opens the next cast on the tick the cadence runs out and the clock is re-armed
+    // there, so nine seconds on, well past the re-warn floor the repeat used to ride, the card
+    // is still the one the lead put up rather than another saying the same thing.
+    h.advance(lead * 1000);
+    castDeathless(h, CHANNELS.castSeconds);
+    h.frame();
+    h.advance(9000);
+    h.frame();
+    expect(bannerCard()).toBe(called);
+  });
+
+  /**
+   * A clock the game is holding back sits at zero honestly: a Deathless Rage waits for the
+   * Soul Rend marks to clear and retries every second. What must not happen is the call being
+   * made again for a cycle already announced.
+   */
+  it('makes one call for one armed cycle, even where the clock sits at zero', async () => {
+    const lead = 4;
+    const h = await start({ hp: 500, settings: { 'alert-lead': lead } });
+    h.frame();
+    // Nothing else is seeded in this fixture, so the deathless clock is the only one that can
+    // speak and the case is about it alone.
+    castDeathless(h, CHANNELS.castSeconds);
+    h.frame();
+    clearCast(h.boss);
+    h.frame();
+    h.advance((DEATHLESS.every - lead) * 1000);
+    h.frame();
+    expect(banner()).toContain(DEATHLESS.label);
+    const called = bannerCard();
+    // The clock is now past due and stays there, which is what a deferred cast looks like.
+    h.advance(13_000);
+    h.frame();
+    expect(bannerCard()).toBe(called);
+  });
+
+  /**
+   * Two mechanics coming due inside one re-warn floor is the ordinary case at a phase change,
+   * where the game re-seeds all three at once. A floor shared across every mechanic drops the
+   * second call entirely, which is a mechanic nobody was told about.
+   */
+  it('gives each mechanic its own floor rather than one between them all', async () => {
+    const h = await start({ hp: 500, settings: { 'alert-lead': 4 } });
+    h.give(BOSS_ID, aura(ENCOUNTER.phases.transitionAura, { kind: 'stun', remaining: 21 }));
+    h.frame();
+    h.strip(BOSS_ID, ENCOUNTER.phases.transitionAura);
+    h.frame();
+    expect(banner()).toContain(GRAVEBREAKER.label);
+    // Past the first card's own four seconds, so what is read here is the slot being free
+    // rather than the floor having expired: Soul Rend is still inside its lead.
+    h.advance(4500);
+    h.frame();
+    expect(banner()).toContain(SOUL_REND.label);
   });
 
   it('sends on no path at all when the player has switched banners off', async () => {
@@ -1117,6 +1271,29 @@ describe('the mechanic timers', () => {
     expect(h.valueOf('mechanics', 'soul-rend')).toBe(`~${SEED_SOUL_REND.toFixed(1)}s`);
     const deathless = SEED_DEATHLESS;
     expect(h.valueOf('mechanics', 'deathless')).toBe(`~${deathless.toFixed(1)}s`);
+    // Gravebreaker's is the one that is NOT the settle delay the other two are timed off.
+    expect(h.valueOf('mechanics', 'gravebreaker')).toBe(`~${SEED_GRAVEBREAKER.toFixed(1)}s`);
+  });
+
+  /**
+   * The game starts every clock when the fight does, so a pull this addon watched open needs
+   * no observation to count the first of anything. It matters most for Gravebreaker, whose
+   * only anchor is a SPLASH record: a raid standing where it should be takes none, so without
+   * this the row reads "armed, not seen yet" for the whole pull.
+   */
+  it('counts from the game’s own opening values on a pull it watched start', async () => {
+    const h = await start({ engaged: false });
+    h.frame();
+    h.setBossField('aggroTargetId', BRONN);
+    h.frame();
+    expect(h.valueOf('mechanics', 'gravebreaker')).toBe(`~${PULL_GRAVEBREAKER.toFixed(1)}s`);
+    expect(h.valueOf('mechanics', 'raise-fallen')).toBe(`~${PULL_RAISE_FALLEN.toFixed(1)}s`);
+  });
+
+  it('invents nothing for a fight it arrived in the middle of', async () => {
+    const h = await start();
+    h.frame();
+    expect(h.detailOf('mechanics', 'gravebreaker')).toBe('armed, not seen yet');
   });
 
   it('draws the live Deathless Rage bar from the game’s own remaining time', async () => {
@@ -1124,5 +1301,24 @@ describe('the mechanic timers', () => {
     castDeathless(h, 7.5);
     h.frame();
     expect(h.valueOf('mechanics', 'deathless')).toBe('7.5s');
+  });
+
+  /**
+   * The game re-arms this one where it STARTS the cast, and a cast start is the only edge
+   * there is: the damage a Deathless Rage deals is not dealt at all on the cycles the raid
+   * answers, so a damage anchor would leave the clock dead for exactly the pulls that go well.
+   */
+  it('re-arms the Deathless Rage clock from the cast starting', async () => {
+    const h = await start({ hp: 500 });
+    h.frame();
+    castDeathless(h, CHANNELS.castSeconds);
+    h.frame();
+    // The whole cast is frozen, in the game and here, so the clock comes out of it at its
+    // full length rather than the cast eating a fifth of the cycle.
+    h.advance(CHANNELS.castSeconds * 1000);
+    h.frame();
+    clearCast(h.boss);
+    h.frame();
+    expect(h.valueOf('mechanics', 'deathless')).toBe(`~${DEATHLESS.every.toFixed(1)}s`);
   });
 });

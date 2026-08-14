@@ -63,6 +63,25 @@ const CONST_LINE = /^const (NYTHRAXIS_[A-Z0-9_]+) = ([^;]+);$/gm;
 const HEROIC_IDS_BLOCK = /const NYTHRAXIS_HEROIC_ADD_IDS = \[([^\]]+)\] as const;/;
 /** One quoted id inside that block. */
 const QUOTED_ID = /'([a-z0-9_]+)'/g;
+/** `st.<name>Timer = <expr>;`, which is how a phase change re-seeds a clock. */
+const TIMER_ASSIGNED = /st\.(\w+Timer) = ([^;]+);/g;
+/** `<name>Timer: <expr>,`, which is how the encounter's own initialiser starts one. */
+const TIMER_INITIALISED = /(\w+Timer): ([^,\n]+),/g;
+
+/**
+ * Which mechanic each of the encounter's clock fields belongs to.
+ *
+ * Every seed is READ from the source rather than derived from a cadence, because the two
+ * disagree and nothing says so: phase two starts Gravebreaker at 3 where its cadence is 12,
+ * and the deathless seed the settle delay plus a bare 15 that is not the lockout constant it
+ * happens to equal.
+ */
+const TIMER_FIELDS = {
+  gravebreakerTimer: 'gravebreaker',
+  raiseFallenTimer: 'raise-fallen',
+  soulRendTimer: 'soul-rend',
+  deathlessTimer: 'deathless',
+};
 
 /** Nothing defaults, so a name missing from the source stops the run naming what lost it. */
 const ENCOUNTER_NUMBERS = {
@@ -103,6 +122,15 @@ const AURA_IDS = {
   soulRend: 'nythraxis_soul_rend',
   dreadCurse: 'nythraxis_dread_curse',
   finalStand: 'nythraxis_final_stand',
+};
+
+/**
+ * Declared for the same reason the ids are, and checked the same way: an aura's display name
+ * is a string literal in an `applyAura` call that no export reaches. Only the ones an addon
+ * SHOWS are here, since a name nothing draws is a name nothing can get wrong.
+ */
+const AURA_NAMES = {
+  finalStand: 'Final Stand',
 };
 
 /**
@@ -249,6 +277,56 @@ function tuning(constants) {
   }
   out.gravebreakerHalfArcDeg = HALF_ARC_DEGREES;
   return out;
+}
+
+/** One top-level function, up to the first line that closes at column zero. */
+function functionBody(source, name) {
+  const head = source.indexOf(`export function ${name}(`);
+  if (head < NONE) {
+    return fail(`${ENCOUNTER_FILE} has no ${name}, which is where its clocks are seeded`);
+  }
+  const end = source.indexOf('\n}', head);
+  if (end < NONE) {
+    return fail(`${name} in ${ENCOUNTER_FILE} does not close: the read stopped working`);
+  }
+  return source.slice(head, end);
+}
+
+/** A number, a constant, or a sum of them. Anything else is a stop rather than a guess. */
+function seedValue(expr, constants, where) {
+  let total = NONE;
+  for (const term of expr.split('+')) {
+    const one = term.trim();
+    const literal = Number(one);
+    const named = constants.get(one);
+    if (Number.isFinite(literal) && one !== '') {
+      total += literal;
+    } else if (named !== undefined && Number.isFinite(Number(named))) {
+      total += Number(named);
+    } else {
+      return fail(`${where} is "${expr.trim()}", which this cannot resolve to a number of seconds`);
+    }
+  }
+  return total;
+}
+
+/** The clocks one function sets, keyed by the mechanic they belong to. */
+function seedsFrom(source, constants, name, pattern) {
+  const body = functionBody(source, name);
+  const found = {};
+  pattern.lastIndex = NONE;
+  let match = pattern.exec(body);
+  while (match !== null) {
+    const id = TIMER_FIELDS[match[ONE]];
+    if (id !== undefined) {
+      found[id] = seedValue(match[INDENT], constants, `${name}'s ${match[ONE]}`);
+    }
+    match = pattern.exec(body);
+  }
+  if (Object.keys(found).length === NONE) {
+    fail(`${name} seeds no clock this addon knows: the fields have been renamed`);
+  }
+  return found;
 }
 
 function checkIds(source, ids, label) {
@@ -410,6 +488,10 @@ function mechanicRows(t, waveAddId) {
       detail: 'three wardstones, three different players',
       phase: 'two',
       liveCast: CAST_IDS.deathlessRage,
+      // The same id twice, saying two different things: the game counts this one for itself
+      // while it casts, and STARTING that cast is what re-arms the cadence. There is no other
+      // edge to watch, because a Rage the raid answers deals no damage at all.
+      anchor: { cast: CAST_IDS.deathlessRage },
       lethal: true,
     },
   ];
@@ -432,6 +514,17 @@ function blockRows(t, deps) {
       count: t.soulRendMarks,
       countHeroic: t.soulRendMarksHeroic,
       heroicMult: t.soulRendHeroicMult,
+    },
+    {
+      // The last stretch of the fight, and the one state on this boss that is not a mechanic
+      // to answer: nothing is done about it except to know it is coming.
+      kind: 'enrage',
+      // The heading names the SHAPE and the row names the aura, the way the adds block heads
+      // 'Adds' over each add's own name. One row is still a row.
+      label: 'Enrage',
+      name: AURA_NAMES.finalStand,
+      aura: AURA_IDS.finalStand,
+      hp: t.finalStandHp,
     },
     {
       kind: 'tankStacks',
@@ -487,6 +580,7 @@ function encounterRow(deps) {
     return fail(`${ENCOUNTER_FILE} has no NYTHRAXIS_WARDSTONE_ITEM_ID`);
   }
   checkIds(source, AURA_IDS, 'auras');
+  checkIds(source, AURA_NAMES, 'aura names');
   checkIds(source, Object.fromEntries(ENCOUNTER_OWNED_CASTS.map((k) => [k, CAST_IDS[k]])), 'casts');
   const t = tuning(constants);
   const inner = {
@@ -502,7 +596,10 @@ function encounterRow(deps) {
     name: template(mobs, bossId).name,
     arenaId: ARENA_ID,
     bossSpawn: bossSpawn(inner.def, bossId),
-    phases: phaseRow(t),
+    phases: phaseRow(t, seedsFrom(source, constants, 'updateNythraxisTransition', TIMER_ASSIGNED)),
+    // What every clock starts at when the fight opens, which is the game's own initialiser
+    // rather than each mechanic's cadence: they agree today and nothing holds them together.
+    pullSeeds: seedsFrom(source, constants, 'initNythraxisEncounter', TIMER_INITIALISED),
     // What stops every clock at once, as one list of conditions rather than two parallel
     // arrays: each returns early from the game's own per-tick driver, and each says whether
     // it is an aura the boss wears or a cast it is in the middle of.
@@ -517,15 +614,11 @@ function encounterRow(deps) {
   };
 }
 
-function phaseRow(t) {
+function phaseRow(t, seeds) {
   return {
     transitionAura: AURA_IDS.transitionPause,
     phaseTwoHp: t.phaseTwoHp,
-    seeds: {
-      gravebreaker: t.phaseTwoSettle,
-      'soul-rend': t.phaseTwoSettle,
-      deathless: t.phaseTwoSettle + t.deathlessSoulRendLockout,
-    },
+    seeds,
   };
 }
 

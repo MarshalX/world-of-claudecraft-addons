@@ -58,6 +58,7 @@ function blockOf<T>(kind: string): T {
 const CHANNELS = blockOf<ChannelsBlock>('channels');
 const MARKS = blockOf<AuraBlock>('marks');
 const TANK = blockOf<AuraBlock>('tankStacks');
+const ENRAGE = blockOf<AuraBlock>('enrage');
 const ADDS = blockOf<AddsBlock>('adds');
 const COURT = ADDS.rows.filter((row) => row.heroicTell === true);
 const WAVE_ADD = ADDS.rows.find((row) => row.heroicTell !== true) ?? {
@@ -278,6 +279,21 @@ function aHeroicPress(draft: WorldDraft): void {
   }
 }
 
+/**
+ * The last stretch of the fight. The boss carries the aura here rather than gaining it in
+ * `run`, because a scenario states what a session would already have found true, and a raid
+ * this deep into a boss did not watch it land a moment ago.
+ */
+function aFinalStand(draft: WorldDraft): void {
+  const boss = addBoss(draft);
+  addWardstones(draft);
+  setRoster(draft, new Map());
+  draft.set(boss, 'hp', 150);
+  draft.set(boss, 'auras', [
+    aura(ENRAGE.aura, { name: 'Final Stand', kind: 'buff_haste', remaining: 600, duration: 600 }),
+  ]);
+}
+
 function scatterOneMark(stage: Stage): void {
   const party = readField<{ members: Array<{ pid: number; x: number }> }>(stage.world, 'partyInfo');
   const corin = party.members.find((row) => row.pid === 907);
@@ -370,10 +386,23 @@ const SCENARIOS: readonly Scenario[] = [
     run: underWay,
   },
   {
-    // What a pull looks like before anything has happened: the clocks are armed and say so
-    // rather than counting something nobody has seen fire.
+    // The enrage, which is the one thing on this fight nothing is done about. The panel is
+    // otherwise quiet on purpose: at 4% there is no mechanic left worth reading past it.
+    id: 'enrage',
+    label: 'The last four percent',
+    data: DATA,
+    frames: WARD_FRAME,
+    world: aFinalStand,
+    run: async (stage) => {
+      await stage.settle();
+      stage.frame();
+    },
+  },
+  {
+    // A fight this addon walked in on: it cannot know how far through any cadence is, so the
+    // clocks say they are armed rather than counting something nobody has seen fire.
     id: 'opening',
-    label: 'A pull with nothing seen yet',
+    label: 'A fight joined in progress',
     data: DATA,
     frames: WARD_FRAME,
     world: (draft) => {

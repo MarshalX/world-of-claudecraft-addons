@@ -15,10 +15,16 @@
         "transitionAura": "nythraxis_transition_pause",
         "phaseTwoHp": 0.7,
         "seeds": {
-          "gravebreaker": 5,
+          "gravebreaker": 3,
           "soul-rend": 5,
           "deathless": 20
         }
+      },
+      "pullSeeds": {
+        "gravebreaker": 12,
+        "raise-fallen": 30,
+        "soul-rend": 30,
+        "deathless": 45
       },
       "freeze": [
         {
@@ -77,6 +83,9 @@
           "detail": "three wardstones, three different players",
           "phase": "two",
           "liveCast": "nythraxis_deathless_rage",
+          "anchor": {
+            "cast": "nythraxis_deathless_rage"
+          },
           "lethal": true
         }
       ],
@@ -118,6 +127,13 @@
           "count": 3,
           "countHeroic": 6,
           "heroicMult": 1.5
+        },
+        {
+          "kind": "enrage",
+          "label": "Enrage",
+          "name": "Final Stand",
+          "aura": "nythraxis_final_stand",
+          "hp": 0.05
         },
         {
           "kind": "tankStacks",
