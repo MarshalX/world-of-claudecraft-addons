@@ -1,9 +1,9 @@
 {
   "id": "purelight",
   "name": "Purelight",
-  "version": "1.0.1",
+  "version": "1.1.0",
   "apiVersion": 1,
-  "apiMinor": 4,
+  "apiMinor": 6,
   "author": "MarshalX",
   "description": "Every effect in front of you that can actually be removed, worst first: on you, your pet, your group and your target, each tile naming who carries it.",
   "entry": "main.js",

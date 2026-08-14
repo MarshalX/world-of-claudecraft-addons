@@ -395,7 +395,23 @@ woc.ui.frame({ id: 'strip', resizable: true, height: 40, onMove: (box) => scaleT
 
 Use it rather than measuring `frame.el`. A measurement forces a synchronous layout, and a display that scales with its frame would pay for one on every frame it draws. It fires on a drag, on a resize at pointer rate, on the async restore of a saved box, and when the window is resized under you, but never for the initial placement, which is the size you asked for and therefore already hold. A throw inside it is caught and written to your addon's log rather than breaking the gesture the player is in the middle of.
 
-A resizable BARE frame has one more thing to arrange, and it is easy to miss because it works while you are testing it. Its default `pointer: 'content'` passes the pointer through everything you did not draw, and the edge a player grabs to resize is at the far side of your box, so a panel sized for more rows than it usually holds has its own resize edge over dead space: the drag is available only in the moment the panel happens to be full, and a player who tries once and gets nothing concludes the panel does not resize. Put a thin element of your own along the edge that grows, absolutely positioned against the frame and appended to `frame.body` as a direct child, which is what the loader hands the pointer back to. The unlock mode is not the answer here, since the gesture the player is making is already the right one.
+**A `bare` frame is moved and resized only while the arrange mode is on.** Nothing about that is yours to arrange, and it is worth knowing because it is the one place a frame behaves differently from what its options say. A bare frame has no title bar, so the whole overlay is its drag handle, and its default `pointer: 'content'` hands the gesture back over exactly the rows a player reads and clicks: before the rule, any press that travelled a few pixels moved the panel. Both gestures come back the moment the player unlocks frames, which is already how they reach an overlay that is drawing nothing, and every refused drag says so, one message at a time. Everything else is untouched: your clicks, your tooltips, your own controls, the toggle keybind, and every write the loader makes, so a bare frame is still restored to where the player left it and still pulled back on screen when the viewport shrinks. A frame with chrome keeps both gestures at all times, because a title bar and a visible border are targets nobody hits by accident.
+
+`resizable: 'width'` and `resizable: 'height'` hand over ONE axis and leave the other following your content. That is the shape most HUD lists want: the row count is a setting rather than a function of the box, so a height you owned could only clip the rows or leave a gap under them, while the width is a column of names and figures a player may well want wider.
+
+```js
+woc.ui.frame({ id: 'nodes', width: 300, resizable: 'width', minWidth: 180 });
+```
+
+`frame.box()` is the same box `onMove` reports, readable whenever you want it. It costs no layout, so a display that scales with its frame can read it on every frame it draws, and it answers at the one moment `onMove` deliberately does not: right after you built the frame.
+
+```js
+// Eight rows and their gaps, out of whatever height the player dragged.
+const row = woc.ui.units(frame.box().h, { count: 8, gap: 3, min: 23, max: 69 });
+rows.forEach((bar) => bar.update({ size: row }));
+```
+
+`woc.ui.units` is the arithmetic that goes with it, and the two rules in it are worth knowing whether or not you call it: the gaps come out of the box BEFORE the division, and the share is FLOORED. A share rounded up is a last row a pixel or two past the bottom of the box, and a bare frame clips rather than scrolls, so what that costs is the bottom row. `extra` is space the units never get, which is how a strip of art with a caption band under it solves back for the square.
 
 A frame that is NOT resizable, which is every frame unless you ask, is held to the `width` you declared and its height is whatever it is holding. That is the shape a HUD readout wants, since its text changes and a fixed height would leave it padded out one moment and clipped the next.
 
@@ -416,6 +432,14 @@ Cooldown Bars uses the pair for its tile strip: the frame's height is the icon s
 <!-- include: addons/cooldown-bars/main.js#bar -->
 
 A bar's fill can be tinted by damage school, which is a separate axis from `tone`. Tone is urgency; a school is what kind of damage a row is made of. Where both are set, tone wins.
+
+`size` makes a row as tall as you say, art and text with it, which is what a column dividing a resizable frame between its rows wants. Left alone, a row is as tall as its own line box and its text is the game's, which is what a bar has always been.
+
+```js
+bar.update({ size: woc.ui.units(frame.box().h, { count: 8, gap: 3, min: 23 }) });
+```
+
+Reach for it rather than writing a height or a font size onto the row yourself. The text scales as a ratio of the row, so a natural-height row reads at exactly the size the player's game is set to, and an inline style of your own would beat every rule in the loader's sheet, including the 40px tap-target floor it restores on a touch screen. `ui.tile` has taken `size` for longer and means the same thing by it: one number sizes the square, its art, its sweep and its figures together.
 
 ### Items, and the colour a player reads them by
 

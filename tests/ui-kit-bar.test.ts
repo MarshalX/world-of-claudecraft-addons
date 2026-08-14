@@ -632,3 +632,58 @@ describe('the banner and toasts together', () => {
     expect(document.getElementById(BANNER_ID)).not.toBeNull();
   });
 });
+
+// The height a caller decided, which the sheet turns into a row, its text and its art.
+//
+// The same shape `ui.tile` has had, and it arrived because every timer addon in the
+// catalogue had written it out by hand: six declarations per row, plus the kit's own
+// icon box transcribed into the addon to scale it.
+describe('the size', () => {
+  it('is the addon"s when it asked for one', () => {
+    const bar = createBar(document, { size: 28 });
+
+    expect(bar.el.style.getPropertyValue('--woc-bar-size')).toBe('28');
+    expect(bar.el.classList.contains('woc-bar-sized')).toBe(true);
+  });
+
+  // Unitless, because the sheet derives the TEXT from it as an em: a row at its
+  // natural height then reads at the size the player's game is set to, whatever that
+  // is, and calc cannot divide a length by a length to reach that ratio.
+  it('is written as a plain number rather than a length', () => {
+    expect(createBar(document, { size: 40 }).el.style.getPropertyValue('--woc-bar-size')).toBe(
+      '40',
+    );
+  });
+
+  // A row of no height is one that was never drawn, and a NaN drops the declaration
+  // silently. Both leave the bar sized by its own line box, which is what it has
+  // always been, rather than writing something that reads as a bar that failed.
+  it.each([
+    ['zero', 0],
+    ['NaN', Number.NaN],
+    ['a string', '40'],
+  ])('leaves a row sized by its content for %s', (_label, bad) => {
+    const bar = createBar(document, { size: bad as number });
+
+    expect(bar.el.style.getPropertyValue('--woc-bar-size')).toBe('');
+    expect(bar.el.classList.contains('woc-bar-sized')).toBe(false);
+  });
+
+  // A column that scales with its frame moves rows that already exist, on every
+  // pointer move of a drag. Rebuilding them would throw away decoded art each time.
+  it('moves on an update, so a column can scale without being rebuilt', () => {
+    const bar = createBar(document, { size: 23 });
+
+    bar.update({ size: 46 });
+
+    expect(bar.el.style.getPropertyValue('--woc-bar-size')).toBe('46');
+  });
+
+  it('holds the size it has when an update says nothing about it', () => {
+    const bar = createBar(document, { size: 23 });
+
+    bar.update({ value: '4s' });
+
+    expect(bar.el.style.getPropertyValue('--woc-bar-size')).toBe('23');
+  });
+});

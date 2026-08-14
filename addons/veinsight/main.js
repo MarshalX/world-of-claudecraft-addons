@@ -62,6 +62,8 @@ const MS_PER_SECOND = 1000;
 const NEARLY_READY = 15;
 
 const FRAME_WIDTH = 300;
+/** How narrow the panel may be dragged. Under this the distance crowds the name off. */
+const MIN_FRAME_WIDTH = 180;
 /** A pin's square, the tap-target floor the game holds its own controls to. */
 const PIN_SIZE = 40;
 /** How tall the pillar under a pin is, in screen pixels. */
@@ -486,13 +488,19 @@ list.style.display = 'flex';
 list.style.flexDirection = 'column';
 list.style.gap = '3px';
 
-/** NOT resizable: the row count is a setting, so a drag handle would either clip the rows
- * or leave a gap under them.
+/**
+ * The WIDTH is the player's and the height is the content's, which is the only shape this
+ * panel can take: the row count is a setting, so a height it owned could only clip the rows
+ * or leave a gap under them. A node name and its distance are what the width is for.
  */
 const frame = woc.ui.frame({
   id: 'nodes',
   title: 'Veinsight',
   width: FRAME_WIDTH,
+  resizable: 'width',
+  // Stated, or the width it opens at is also the narrowest it can ever be. The floor is
+  // where the distance starts crowding the name off rather than a figure of its own.
+  minWidth: MIN_FRAME_WIDTH,
   density: 'compact',
   closable: true,
   save: true,

@@ -75,6 +75,11 @@ interface CadenceHarness extends SharedHarness {
   strip: () => HTMLElement;
 }
 
+/** The height the kit was asked for. Its own sheet turns that into text and art. */
+function heightFor(key: string): string {
+  return rowFor(key)?.style.getPropertyValue('--woc-bar-size') ?? '';
+}
+
 function rowFor(key: string): HTMLElement | null {
   return document.querySelector(`[data-row="${key}"]`);
 }
@@ -223,11 +228,13 @@ describe('its manifest', () => {
     ]);
   });
 
-  // The smallest minor carrying every member the file reads: `woc.ui.column`,
+  // The smallest minor carrying every member the file reads. `woc.ui.column`,
   // `woc.ui.row` and `woc.ui.show` for the strip and its pips, `woc.fmt.titleCase`
-  // for the cast label, and `toggleKey` on the frame options.
+  // for the cast label, and `toggleKey` on the frame options were minor 4; the two
+  // that moved it to 6 are `size` on a bar, which is how a row is scaled now, and
+  // `frame.box()`, which is where the height being divided comes from.
   it('declares the minor every member it reads is carried by', () => {
-    expect(parseManifest(MANIFEST_TEXT).apiMinor).toBe(4);
+    expect(parseManifest(MANIFEST_TEXT).apiMinor).toBe(6);
   });
 });
 
@@ -677,13 +684,13 @@ describe('the resource and the combo points', () => {
   // taller than its own box and a bare frame clips.
   it('makes room for the pips out of the box the rows had', async () => {
     const h = await run();
-    expect(rowFor('swing')?.style.height).toBe('14px');
+    expect(heightFor('swing')).toBe('14');
 
     h.self({ comboPoints: 2 });
     h.frame();
 
     // Five lines and their four gaps inside the 62px the frame opened at.
-    expect(rowFor('swing')?.style.height).toBe('10px');
+    expect(heightFor('swing')).toBe('10');
     expect(shown(pipStrip())).toBe(true);
   });
 
@@ -816,7 +823,7 @@ describe('how small the strip can be made', () => {
 
     await run({}, hub);
 
-    expect(rowFor('swing')?.style.height).toBe('13px');
+    expect(heightFor('swing')).toBe('13');
   });
 
   // The floor is the row height setting's own minimum, spread over every line the strip can

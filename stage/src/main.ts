@@ -177,6 +177,15 @@ async function painted(doc: Document): Promise<void> {
 interface PageState {
   mounted: MountedStage | null;
   pending: Promise<unknown>;
+  /**
+   * Whether the player asked for the arrange mode, which every later mount inherits.
+   *
+   * On the page rather than in the mount, because a mount is thrown away on every
+   * scenario change and the answer is about the person at the keyboard: somebody who
+   * unlocked a panel to move it has not asked to be locked out by picking another
+   * scenario to look at.
+   */
+  arranging: boolean;
 }
 
 /**
@@ -198,6 +207,7 @@ function applySelection(state: PageState, choice: AddonChoice, selection: Select
   state.pending = state.pending
     .then(async () => {
       state.mounted = await swap(state.mounted, choice, selection.scenario);
+      state.mounted.stage.arrange(state.arranging);
       // The scenario's own `run` is awaited inside `mountScenario`, so the panel
       // now holds what it describes. `painted` is the second half of that claim:
       // holding it and having drawn it are not the same moment.
@@ -270,7 +280,7 @@ async function run(registry: ScenarioRegistry): Promise<void> {
   }
   injectLoaderCss(doc);
   const choices = choicesFrom(await readIndex(), registry);
-  const state: PageState = { mounted: null, pending: Promise.resolve() };
+  const state: PageState = { mounted: null, pending: Promise.resolve(), arranging: false };
 
   function showSelection(selection: Selection): void {
     writeSelection(selection);
@@ -288,7 +298,18 @@ async function run(registry: ScenarioRegistry): Promise<void> {
       .catch(() => undefined);
   }
 
-  const picker = createPicker({ doc, addons: choices, onChange: showSelection });
+  const picker = createPicker({
+    doc,
+    addons: choices,
+    onChange: showSelection,
+    onArrange: (on) => {
+      state.arranging = on;
+      const { mounted } = state;
+      if (mounted !== null) {
+        mounted.stage.arrange(on);
+      }
+    },
+  });
   doc.body.prepend(picker.el);
   // `?bare=1` is what a capture opens with. The key and the button are for a
   // person at the page; a headless run has neither, and navigating to a URL that

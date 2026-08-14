@@ -1,9 +1,9 @@
 {
   "id": "cadence",
   "name": "Cadence",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "apiVersion": 1,
-  "apiMinor": 4,
+  "apiMinor": 6,
   "author": "MarshalX",
   "description": "The four timings a rotation is played against, on one thin strip: your swing, the global cooldown, your cast with a latency band, and your resource with combo points as pips.",
   "entry": "main.js",

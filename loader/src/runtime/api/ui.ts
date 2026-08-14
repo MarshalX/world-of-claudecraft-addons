@@ -27,7 +27,6 @@ import type { FrameStateStore } from '../ui/kit/frame-state.ts';
 import type { FrameToggles } from '../ui/kit/frame-toggle.ts';
 import type { IconUrls } from '../ui/kit/icons.ts';
 import type { LineOpts, RowOpts, StackOpts } from '../ui/kit/layout.ts';
-import { createColumn, createLine, createRow, show } from '../ui/kit/layout.ts';
 import type { Destroyable, List, ListOpts } from '../ui/kit/list.ts';
 import { createList } from '../ui/kit/list.ts';
 import type { MenuItem } from '../ui/kit/menu.ts';
@@ -38,12 +37,14 @@ import type { Tile, TileOpts } from '../ui/kit/tile.ts';
 import { createTile } from '../ui/kit/tile.ts';
 import type { ToastOpts } from '../ui/kit/toast.ts';
 import type { TooltipInput } from '../ui/kit/tooltip-content.ts';
+import type { UnitOpts } from '../ui/kit/units.ts';
 import type { UiKit } from '../ui/mount.ts';
 import type { UnitPoint, WorldPoint } from '../world/anchor-point.ts';
 import type { ScreenPosition } from './ui-anchor.ts';
 import { addonAnchor, projected } from './ui-anchor.ts';
 import type { MenuEntryOpts, MicroButtonOpts } from './ui-injections.ts';
 import { injectionSurface } from './ui-injections.ts';
+import { layoutSurface } from './ui-layout.ts';
 
 /**
  * The controls a settings pane is made of, grouped like `ui.icon`'s builders.
@@ -80,6 +81,8 @@ interface UiApi {
   line: (opts?: LineOpts) => HTMLElement;
   /** On screen or not, without an addon having to remember what display it had. */
   show: (el: Element, shown: boolean) => void;
+  /** How big one unit is when a box is divided between several. See kit/units.ts. */
+  units: (available: number, opts?: UnitOpts) => number;
   /** Where the game's own art lives, so no addon writes a path. */
   icon: IconUrls;
   /**
@@ -202,6 +205,7 @@ function addonFrame(deps: UiDeps, opts: FrameOpts, chrome: 'frame' | 'window'): 
     viewport: deps.viewport,
     window: deps.window,
     raise: deps.kit.stacking.raise,
+    arrange: { unlock: deps.kit.unlock, hint: deps.kit.arrangeHint.note },
   });
   const forget = rostered(
     deps.kit.roster,
@@ -271,23 +275,6 @@ function fieldSurface(deps: UiDeps): FieldBuilders {
       addonField(deps, (doc, one) => createSelect(doc, one, deps.kit.menus.open), opts),
     slider: (opts) => addonField(deps, createSlider, opts),
     text: (opts) => addonField(deps, createText, opts),
-  };
-}
-
-/**
- * The layout vocabulary, which is the one family here that needs no bag.
- *
- * These are plain elements the addon appends into its own frame, and the frame's
- * teardown takes the whole tree with it. Contrast a bar, a tile or a list, each of
- * which the addon may put in DOM the loader does not own and each of which holds
- * something of its own to release. `show` builds nothing at all.
- */
-function layoutSurface(deps: UiDeps): Pick<UiApi, 'column' | 'line' | 'row' | 'show'> {
-  return {
-    column: (opts) => createColumn(deps.doc, opts),
-    row: (opts) => createRow(deps.doc, opts),
-    line: (opts) => createLine(deps.doc, opts),
-    show,
   };
 }
 

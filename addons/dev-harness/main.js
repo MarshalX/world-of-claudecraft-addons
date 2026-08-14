@@ -44,6 +44,17 @@ const PAINT_WAIT_MS = 250;
 const LIST_BUDGET = 2;
 const LIST_ROWS = 3;
 /**
+ * The scaling probe: a box of 205 divided between 8 rows with a 3px gap is 23 each, which
+ * is the natural height of a kit row and therefore the number a sized row should draw at.
+ * Stated rather than computed, so the check fails if the division ever moves.
+ */
+const SCALE_BOX = 205;
+const SCALE_ROWS = 8;
+const SCALE_GAP = 3;
+const SCALE_MIN = 12;
+const SCALE_SHARE = 23;
+const SCALE_WIDTH = 240;
+/**
  * What the formatting check puts through. The two that look like typos are the cases
  * worth having: 59.5 reads as `60` rather than `1m`, since the minute branch is chosen on
  * the raw value and the ceiling lands after it, and 3720 is an hour and two minutes.
@@ -1481,6 +1492,60 @@ function checkToggleKey() {
 }
 
 /**
+ * The three surfaces a display that scales with its own frame is built out of: the box the
+ * loader is holding, the arithmetic that divides it, and the height that goes onto a row.
+ *
+ * Measured rather than asserted where it can be. `ui.units` is pure and answers here; the
+ * row height is a custom property the sheet derives from, so the check is that the derived
+ * height actually reached the element, which is the half no suite can see.
+ */
+function checkScaling() {
+  const { units, bar } = woc.ui;
+  if (typeof units !== 'function' || typeof bar !== 'function') {
+    return result('scaling', false, 'ui.units or ui.bar is not callable');
+  }
+  const share = units(SCALE_BOX, { count: SCALE_ROWS, gap: SCALE_GAP, min: SCALE_MIN });
+  const probe = woc.ui.frame({ id: 'scale-probe', title: 'Probe', width: SCALE_WIDTH });
+  // Called defensively, the way everything reached through a loader surface is here: a
+  // member that never got wired to the object throws rather than answering.
+  let box = null;
+  if (typeof probe.box === 'function') {
+    box = probe.box();
+  }
+  const row = bar({ label: 'Probe', size: share });
+  stage.appendChild(row.el);
+  const tall = Math.round(row.el.getBoundingClientRect().height);
+  const written = row.el.style.getPropertyValue('--woc-bar-size');
+  row.destroy();
+  probe.destroy();
+
+  if (share !== SCALE_SHARE) {
+    return result('scaling', false, `units divided ${String(SCALE_BOX)} into ${String(share)}`);
+  }
+  if (box === null || box.w !== SCALE_WIDTH) {
+    return result(
+      'scaling',
+      false,
+      `frame.box() answered ${String(box?.w)} for a ${String(SCALE_WIDTH)} frame`,
+    );
+  }
+  if (written !== String(share)) {
+    return result(
+      'scaling',
+      false,
+      `a sized row carries "${written}" rather than ${String(share)}`,
+    );
+  }
+  if (!sheetLive()) {
+    return result('scaling', true, 'units and frame.box() agree, no sheet here to size a row');
+  }
+  if (tall !== share) {
+    return result('scaling', false, `a row asked for ${String(share)} drew ${String(tall)} tall`);
+  }
+  return result('scaling', true, `box, units and a ${String(tall)}px row all agree`);
+}
+
+/**
  * The checks that describe the live world, in report order.
  *
  * Separated from the rest because their answers change while the player plays, and because
@@ -1526,6 +1591,7 @@ const STATIC_CHECKS = [
   checkIcons,
   checkTile,
   checkList,
+  checkScaling,
   checkLayout,
   checkFields,
   checkAnchor,

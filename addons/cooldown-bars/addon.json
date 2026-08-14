@@ -1,9 +1,9 @@
 {
   "id": "cooldown-bars",
   "name": "Cooldown Bars",
-  "version": "1.4.0",
+  "version": "1.5.0",
   "apiVersion": 1,
-  "apiMinor": 4,
+  "apiMinor": 6,
   "author": "MarshalX",
   "description": "A draining bar for every ability you have on cooldown, soonest ready first, measured against the real length of anything in your own spellbook. Draws as a column of named bars or as a strip of swept icons, and both are yours to drag to the size you want them.",
   "entry": "main.js",

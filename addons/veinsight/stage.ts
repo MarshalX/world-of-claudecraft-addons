@@ -131,15 +131,16 @@ const COUNTERS = { mining: 31, logging: 27 };
 /**
  * Where the panel is parked: directly over its own pins, in the same column.
  *
- * The x centres the 320px panel on the three pins below it, which land between 242 and 476, so
+ * The x centres the panel on the three pins below it, which land between 242 and 476, so
  * the crop is one column rather than a panel and a world side by side. The y clears the highest
  * tile, at 437, by the width of the crop's own margin and no more: every pixel of gap is a pixel
  * of crop height, and at 494 the whole picture starts being narrowed to fit the portrait cap.
  *
- * The width and height are the panel's own and are not a request: the frame is not resizable, so
- * it sizes to its content whatever a stored box says, and only the position is restored.
+ * The WIDTH is now a request and the height still is not. The panel resizes across, so a stored
+ * width is restored and drawn; it states the declared 300 rather than a wider number so the
+ * picture is the panel a player gets on install. The height is the content's either way.
  */
-const PANEL = { box: { x: 199, y: 84, w: 320, h: 340 }, visible: true };
+const PANEL = { box: { x: 199, y: 84, w: 300, h: 340 }, visible: true };
 
 /**
  * The same parking for the second pane, over ITS pins, and it is a second box rather than the
@@ -163,7 +164,7 @@ const PANEL = { box: { x: 199, y: 84, w: 320, h: 340 }, visible: true };
  * other. Panes are laid out against a common baseline, so a pane cropped shorter than its
  * neighbour hangs below it by the difference.
  */
-const CROSSING_PANEL = { box: { x: 590, y: 161, w: 320, h: 340 }, visible: true };
+const CROSSING_PANEL = { box: { x: 590, y: 161, w: 300, h: 340 }, visible: true };
 
 /**
  * Everything in range fits in the list, which is a pair rather than two numbers.

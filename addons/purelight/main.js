@@ -169,7 +169,9 @@ frame.body.appendChild(list);
  * on the next reading, one frame away.
  */
 function resize(height) {
-  tileSize = Math.max(Math.round(height - CAPTION_HEIGHT), TILE_FLOOR);
+  // One unit under a fixed band, which is what `extra` is for: the caption is space the
+  // square never gets, and the floor holds for a box from anywhere.
+  tileSize = woc.ui.units(height, { extra: CAPTION_HEIGHT, min: TILE_FLOOR });
 }
 
 /**

@@ -514,10 +514,12 @@ describe('its manifest', () => {
   // minor 4: `ui.list` for both the strip and the pins, `fmt.titleCase` for a party row's
   // derived name, `fmt.duration` for the countdown in a square's corner, and a frame's
   // `toggleKey`. The rest are minor 2: `woc.data`, `woc.onFrame`, `world.harmful`,
-  // `world.dispellable`, `world.match` and the unit form of `ui.anchor3d`. A manifest claiming
-  // less than it calls loads against a loader that has none of them and throws.
+  // `world.dispellable`, `world.match` and the unit form of `ui.anchor3d`. `ui.units` is the
+  // one at 6, which is what solves the box back for a square under the caption band. A
+  // manifest claiming less than it calls loads against a loader that has none of them and
+  // throws.
   it('declares the minor its reads arrived in', () => {
-    expect(manifest().apiMinor).toBe(4);
+    expect(manifest().apiMinor).toBe(6);
   });
 
   it('declares the rules table it reads', () => {

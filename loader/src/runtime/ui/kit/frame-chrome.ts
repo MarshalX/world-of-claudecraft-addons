@@ -133,8 +133,13 @@ interface FrameOpts {
   maxHeight?: number;
   /** Persist position and visibility for this character. */
   save?: boolean;
-  /** Defaults to true for a window and false for a frame. */
-  resizable?: boolean;
+  /**
+   * Which axes the player may resize. Defaults to true for a window, false for a frame.
+   *
+   * `'width'` and `'height'` are the same option answering per axis; see
+   * kit/frame-size.ts `resizeAxes` for what the unrecognised case falls back to.
+   */
+  resizable?: boolean | 'width' | 'height';
   /** Whether it starts on screen. Ignored when a saved visibility is restored. */
   visible?: boolean;
   /**
@@ -172,6 +177,13 @@ interface Chrome {
   title: HTMLElement;
   body: HTMLElement;
   close: HTMLButtonElement | null;
+  /**
+   * The density this frame ended up at, which is not always the one it asked for:
+   * a window refuses `bare` and an unrecognised value falls back. Handed back
+   * rather than re-derived by the caller, because `densityOf` resolves those two
+   * cases and a second reading of `opts.density` would miss both.
+   */
+  density: FrameDensity;
 }
 
 interface ChromeDeps {
@@ -281,11 +293,11 @@ function buildChrome(deps: ChromeDeps): Chrome {
   // an overlay with no name at all is worse than an unseen one.
   if (density === 'bare') {
     el.append(body);
-    return { el, handle: el, title, body, close };
+    return { el, handle: el, title, body, close, density };
   }
 
   el.append(handle, body);
-  return { el, handle, title, body, close };
+  return { el, handle, title, body, close, density };
 }
 
 export type { Chrome, ChromeDeps, FrameChrome, FrameDensity, FrameOpts, FramePointer };

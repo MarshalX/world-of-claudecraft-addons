@@ -28,6 +28,7 @@ import type { AddonStatus } from '../supervisor.ts';
 import type { UnitPointResolver } from '../world/anchor-point.ts';
 import type { Projector } from '../world/project.ts';
 import { ANCHORS, ANCHORS_REQUIRED_IN_GAME } from './anchors.ts';
+import { type ArrangeHint, createArrangeHint } from './kit/arrange-hint.ts';
 import { createFrameRoster, type FrameRoster } from './kit/frame-roster.ts';
 import { createIconUrls, type IconUrls } from './kit/icons.ts';
 import { createGameInjector, type GameInjector } from './kit/injections.ts';
@@ -193,6 +194,7 @@ function buildKit(deps: UiDeps, parts: UiParts, manager: Manager): UiKit {
     roster,
     icons,
     unlock,
+    arrangeHint: createArrangeHint({ toaster: surfaces.toaster }),
     project: deps.project,
     unitPoint: deps.unitPoint,
   };
@@ -292,6 +294,12 @@ export interface UiKit extends Surfaces {
    * did would be rearranging a player's screen for them.
    */
   unlock: UnlockMode;
+  /**
+   * What a player is told when a frameless overlay refuses to move, said once a
+   * session. Shared for the reason the mode is: the refusal belongs to the mode
+   * rather than to any one frame.
+   */
+  arrangeHint: ArrangeHint;
   /**
    * A world point to a point on screen. The same read `ui.anchor3d` places by,
    * published as `ui.project` with no element attached to it.

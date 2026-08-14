@@ -29,6 +29,8 @@ interface PickerDeps {
   doc: Document;
   addons: readonly AddonChoice[];
   onChange: (selection: Selection) => void;
+  /** Hand the arrange mode to whatever is mounted now. See `arrangeToggle`. */
+  onArrange: (on: boolean) => void;
 }
 
 interface Picker {
@@ -103,6 +105,39 @@ function fillScenarios(doc: Document, el: HTMLSelectElement, choice: AddonChoice
   }
 }
 
+/**
+ * Turn the loader's arrange mode on, which is the only way to pick a BARE frame up.
+ *
+ * The one control here that is not about the picture. A frameless overlay refuses
+ * both gestures outside that mode (loader/src/runtime/ui/kit/frame-gestures.ts), and
+ * the keybind that flips it lives in runtime/boot.ts, which the stage does not run:
+ * without this, half the catalogue cannot be dragged on the stage at all.
+ *
+ * It survives a scenario change, because the state belongs to the page rather than
+ * to the mount: a person arranging a panel and then switching scenario to see the
+ * empty state has not asked to be locked out again.
+ */
+function arrangeToggle(doc: Document, deps: PickerDeps): HTMLButtonElement {
+  const button = doc.createElement('button');
+  button.type = 'button';
+  button.className = 'stage-btn';
+  let on = false;
+  const label = (): void => {
+    button.textContent = 'Unlock frames';
+    if (on) {
+      button.textContent = 'Frames unlocked';
+    }
+    button.setAttribute('aria-pressed', String(on));
+  };
+  label();
+  button.addEventListener('click', () => {
+    on = !on;
+    deps.onArrange(on);
+    label();
+  });
+  return button;
+}
+
 /** Hide the chrome, which is the state a screenshot is taken in. */
 function bareToggle(doc: Document): HTMLButtonElement {
   const button = doc.createElement('button');
@@ -122,6 +157,10 @@ function bareToggle(doc: Document): HTMLButtonElement {
  * a stage could offer (a viewport size, a theme, a zoom) is a thing the browser
  * window, `pnpm theme` and the browser's own zoom already do, and every one of
  * them would be a second place the shot's dimensions are decided.
+ *
+ * The two buttons are the exceptions and neither decides anything about the shot:
+ * one hides this strip, and the other is the only route to a gesture the loader
+ * otherwise refuses. See `arrangeToggle`.
  */
 function createPicker(deps: PickerDeps): Picker {
   const { doc } = deps;
@@ -131,7 +170,7 @@ function createPicker(deps: PickerDeps): Picker {
   const [scenarioField, scenarioEl] = select(doc, 'Scenario');
   const statusEl = doc.createElement('span');
   statusEl.id = STATUS_ID;
-  el.append(addonField, scenarioField, bareToggle(doc), statusEl);
+  el.append(addonField, scenarioField, arrangeToggle(doc, deps), bareToggle(doc), statusEl);
   fillAddons(doc, addonEl, deps.addons);
 
   const choiceOf = (id: string): AddonChoice | null =>

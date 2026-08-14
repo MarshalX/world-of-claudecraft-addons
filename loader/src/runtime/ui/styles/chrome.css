@@ -344,8 +344,13 @@
  * There is no title bar to grab, so the whole frame is the drag handle
  * (ui/kit/frame-chrome.ts hands the element itself back as the handle, and
  * interactjs still ignores buttons and fields inside it). Nothing here draws an
- * outline: an overlay that outlined itself would be a panel again, and the
- * cursor is what says the frame can be moved.
+ * outline: an overlay that outlined itself would be a panel again.
+ *
+ * And NO move cursor, which is the half that moves with the gesture rule: a bare
+ * frame is dragged only while the arrange mode is on (ui/kit/frame-gestures.ts), so
+ * a cursor promising a drag the rest of the time is the panel saying it will do
+ * something it then refuses. The mode's own rule below puts the cursor back, on
+ * every frame it hands the pointer to, which is the moment it is true again.
  */
 #woc-addons .woc-window.woc-density-bare {
   background-color: transparent;
@@ -353,7 +358,6 @@
   padding: 0;
   gap: 4px;
   border-radius: 0;
-  cursor: move;
   /* Belt and braces. The game's `panel` class is not applied to a bare frame at
      all (ui/kit/frame-chrome.ts), which is what actually removes the border; these
      make sure nothing else can put one back, because an empty bare frame with a
@@ -383,12 +387,13 @@
   overflow: hidden;
 }
 
-/* The content is the handle, so the move cursor belongs on the frame and not on
-   what an addon put inside it: a button in a bare frame is still a button. */
-#woc-addons .woc-density-bare button,
-#woc-addons .woc-density-bare input,
-#woc-addons .woc-density-bare select,
-#woc-addons .woc-density-bare textarea {
+/* The content is the handle while the mode is on, so the move cursor belongs on the
+   frame and not on what an addon put inside it: a button in a bare frame is still a
+   button. Scoped to the mode along with the cursor it is correcting. */
+#woc-addons.woc-unlocked .woc-density-bare button,
+#woc-addons.woc-unlocked .woc-density-bare input,
+#woc-addons.woc-unlocked .woc-density-bare select,
+#woc-addons.woc-unlocked .woc-density-bare textarea {
   cursor: auto;
 }
 

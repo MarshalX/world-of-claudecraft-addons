@@ -36,13 +36,8 @@ const SWING_HASTE_KINDS = ['buff_haste'];
 const MIN_HEIGHT = 8;
 const MAX_HEIGHT = 32;
 const ROW_GAP = 2;
-/** The kit row's own side padding, kept while its vertical padding is dropped. */
-const ROW_PAD_X = 6;
 /** The addon's own floor, above the loader's: only the name can shrink, not the figure. */
 const MIN_FRAME_WIDTH = 96;
-/** Share of a row's height the text is drawn at, so a thin row still reads. */
-const TEXT_SCALE = 0.72;
-const MIN_TEXT_PX = 9;
 /** Below this share left, a row goes warm: the thing it counts to is about to land. */
 const NEARLY_DONE = 0.25;
 const PIP_INSET = 4;
@@ -107,12 +102,6 @@ function numberOf(value) {
 /** Overrides the row-height setting while set. In-session: the loader saves the box. */
 let linePx = null;
 
-/**
- * The box the lines divide between. A bare frame clips, and a frame's height cannot be
- * restated after it is built, so this is the budget. See `fitLines`.
- */
-let boxHeight = null;
-
 function rowHeight() {
   const wanted = linePx ?? woc.settings['bar-height'];
   return Math.min(Math.max(wanted, MIN_HEIGHT), MAX_HEIGHT);
@@ -164,7 +153,9 @@ function shownRows() {
 /** Re-size without rebuilding: a drag cannot change which rows exist and fires at pointer rate. */
 function applySize() {
   for (const row of rows.values()) {
-    styleRow(row.bar.el);
+    // The kit sizes the row, its text and its art from one number, and drops an update
+    // repeating a height it already holds, so a strip nobody is dragging pays nothing.
+    row.bar.update({ size: rowHeight() });
   }
   const size = Math.max(MIN_PIP_PX, rowHeight() - PIP_INSET);
   for (const pip of pips.children) {
@@ -178,13 +169,19 @@ function applySize() {
  * change: the pips appear mid-session and the frame's height was stated without them.
  * Gaps are paid before the division and the share floored, since a pixel over the box is
  * a pixel of the bottom row quietly missing.
+ *
+ * The box is read from the frame rather than held. `onMove` never fires for the opening
+ * placement, so a copy of the box had to be seeded with the height this file had just
+ * asked for, in two places that could disagree; `frame.box()` is the loader's own answer
+ * and is right from the first paint.
  */
 function fitLines() {
-  if (boxHeight === null) {
-    return;
-  }
-  const lines = shownRows();
-  const next = Math.floor((boxHeight - (lines - 1) * ROW_GAP) / lines);
+  const next = woc.ui.units(frame.box().h, {
+    count: shownRows(),
+    gap: ROW_GAP,
+    min: MIN_HEIGHT,
+    max: MAX_HEIGHT,
+  });
   if (next === linePx) {
     return;
   }
@@ -270,41 +267,9 @@ const frame = woc.ui.frame({
    * The lines follow the box. Measuring the element would force a synchronous layout on
    * every pointer move. Split between SHOWN lines, so hiding a row makes the rest taller.
    */
-  onMove: (box) => {
-    boxHeight = box.h;
-    fitLines();
-  },
+  onMove: fitLines,
 });
 frame.body.appendChild(list);
-// The height asked for above, which is the budget until the loader reports one of
-// its own. A restored box arrives through `onMove` and replaces it.
-boxHeight = stripHeight(rowHeight());
-
-/**
- * Size one row to the height the player picked. The text scales with it, or a 16px label
- * in a 10px row is cropped by the row's own overflow rule.
- *
- * These inline writes look like the hand-sizing `woc.ui.column` and `woc.ui.row` exist to
- * prevent and are not: `touch.css` does not name `.woc-bar`, so there is no floor to opt
- * out of, and the numbers are the declared `bar-height` divided by `fitLines` rather than
- * constants. `ui.bar` has no height option, so there is no class to reach for.
- */
-function styleRow(el) {
-  const height = rowHeight();
-  el.style.height = `${String(height)}px`;
-  el.style.boxSizing = 'border-box';
-  el.style.display = 'flex';
-  el.style.flexDirection = 'column';
-  el.style.justifyContent = 'center';
-  el.style.fontSize = `${String(Math.max(MIN_TEXT_PX, Math.round(height * TEXT_SCALE)))}px`;
-  // The three declarations that make the height above the truth rather than a request. A
-  // kit row carries 2px of vertical padding and a normal line box, so its own content
-  // measures more than a thin row is given, and `min-height: auto` on a flex item then
-  // refuses to shrink it. A bare frame clips, so what that costs is the bottom row.
-  el.style.padding = `0 ${String(ROW_PAD_X)}px`;
-  el.style.lineHeight = '1';
-  el.style.minHeight = '0';
-}
 
 /**
  * The latency band, inside the cast row and behind its text. A negative z-index like the
@@ -324,9 +289,8 @@ function createBand(el) {
 }
 
 function createRow(key, label) {
-  const bar = woc.ui.bar({ label, className: 'woc-cadence-row' });
+  const bar = woc.ui.bar({ label, className: 'woc-cadence-row', size: rowHeight() });
   bar.el.dataset.row = key;
-  styleRow(bar.el);
   list.appendChild(bar.el);
   const row = { bar, band: null };
   if (key === 'cast') {

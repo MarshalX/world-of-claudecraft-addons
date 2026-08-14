@@ -21,6 +21,42 @@
   isolation: isolate;
 }
 
+/* A row whose height the caller decided, from `ui.bar`'s `size`.
+ *
+ * Everything here is derived from ONE unitless custom property, and every rule is
+ * behind the `woc-bar-sized` class rather than a fallback, because a row that never
+ * asked for a height must keep being sized by its own line box.
+ *
+ * 23 is that natural height: an 18px icon inside the 2px of padding above, measured
+ * in a browser. It appears twice below as the number the derivation is against, so a
+ * row asked for 23 looks exactly like a row that asked for nothing.
+ *
+ * The text is an `em` and that is the load-bearing part. A pixel figure here would
+ * be a figure calibrated on whatever font the machine that wrote it inherited, and
+ * the game runs 11px to 13px on a desktop against a browser default of 16. As a
+ * ratio, a natural row is `1em`, which is the game's own size whatever it is set to,
+ * and a row dragged to twice that reads at twice that. It is also why the property
+ * is unitless: calc cannot divide a length by a length to reach a ratio.
+ *
+ * The three flex declarations are what make the height the truth rather than a
+ * request: a kit row is a block sized by its own line box, and `min-height: 0` is
+ * what lets it go under that when an addon asks for a thin strip. */
+#woc-addons .woc-bar-sized {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-height: 0;
+  height: calc(var(--woc-bar-size) * 1px);
+  padding: 0 6px;
+  /* The ratio, with a floor under it. A strip driven down to 8px a row would
+     otherwise reach text nothing can read, and a row that clips a legible figure is
+     a better answer than one that shows an illegible whole one: this is what
+     `cadence` had already settled on by hand before the kit could carry it. */
+  font-size: max(9px, calc(var(--woc-bar-size) / 23 * 1em));
+  line-height: 1;
+}
+
 /* The head line. The row itself is a block so the fill can span the head and the
    detail together, which is what makes a share read as the whole row's. */
 #woc-addons .woc-bar-head {
@@ -112,6 +148,14 @@
      squash it, since a squashed ability icon is harder to recognise than a cropped
      one at this size. */
   object-fit: cover;
+}
+
+/* The art follows a row the caller sized, in the same ratio: 18 of the natural 23.
+   After the base rule rather than beside the other sized declarations, because it is
+   the more specific of the two and a sheet reads in one direction. */
+#woc-addons .woc-bar-sized .woc-bar-icon {
+  width: calc(var(--woc-bar-size) * 18 / 23 * 1px);
+  height: calc(var(--woc-bar-size) * 18 / 23 * 1px);
 }
 
 #woc-addons .woc-bar-label {

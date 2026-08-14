@@ -39,6 +39,8 @@ const BAR_HEIGHT = 23;
 const ROW_GAP = 3;
 /** How narrow the column may be dragged, well under the width it opens at. */
 const MIN_COLUMN_WIDTH = 120;
+/** How thin one row may be dragged, which is also the column's own height floor. */
+const MIN_BAR_HEIGHT = 14;
 
 /**
  * What a budget of rows works out to, stated the way the addon states it.
@@ -942,19 +944,6 @@ describe('the size of the strip', () => {
 
     expect(stripEl()?.style.width).toBe(`${CRAMPED.w}px`);
   });
-
-  // The strip grows to the RIGHT, so that is the edge its grab strip holds. See the column's
-  // own case below for what the thing is and why an invisible element is worth a test.
-  it('keeps the edge that grows the strip reachable', async () => {
-    await run({ layout: 'tiles' });
-
-    await vi.waitFor(() => {
-      expect(stripEl()?.querySelector('.woc-cd-grip')).not.toBeNull();
-    });
-    const grip = stripEl()?.querySelector<HTMLElement>('.woc-cd-grip');
-    expect(grip?.style.width).toBe('10px');
-    expect(grip?.style.height).toBe('');
-  });
 });
 
 // Resizing the column, which is how a player picks the row height.
@@ -974,6 +963,11 @@ describe('the size of the column', () => {
     return document.querySelector<HTMLElement>(`.woc-bar[data-ability="${abilityId}"]`);
   }
 
+  /** The height the kit was asked for, which its own sheet turns into art and text. */
+  function heightOf(abilityId: string): string {
+    return rowOf(abilityId)?.style.getPropertyValue('--woc-bar-size') ?? '';
+  }
+
   /** A box tall enough for a budget of two rows at twice their natural height. */
   const Tall: FrameBox = { x: 20, y: 20, w: 220, h: stack(BAR_HEIGHT * 2, 2) };
 
@@ -991,23 +985,22 @@ describe('the size of the column', () => {
     h.cooldown('bestial_wrath', LONG);
     h.poll();
 
-    expect(rowOf('bestial_wrath')?.style.height).toBe(`${BAR_HEIGHT}px`);
+    expect(heightOf('bestial_wrath')).toBe(String(BAR_HEIGHT));
   });
 
-  // The art and the text go with the row, or a doubled row is a small picture beside a small
-  // label with a hole under both. The font is an `em` so that the floor changes nothing: what
-  // the game's own font size is set to is not this addon's business.
-  it('scales a row, its art and its text with the box', async () => {
+  // The art and the text go with the row, and the KIT is what takes them there: this addon
+  // asks for a height and `styles/bar.css` derives the rest from it. Sizing the row here
+  // would mean writing a font size inline, which beats the tap-target floor on a phone.
+  it('asks the kit for a row scaled to the box', async () => {
     const h = await run({ 'max-bars': 2 }, { bars: { box: Tall, visible: true } });
 
     h.cooldown('bestial_wrath', LONG);
     h.poll();
     await settleFrames();
 
-    const row = rowOf('bestial_wrath');
-    expect(row?.style.height).toBe(`${BAR_HEIGHT * 2}px`);
-    expect(row?.style.fontSize).toBe('2em');
-    expect(row?.querySelector<HTMLElement>('.woc-bar-icon')?.style.height).toBe('36px');
+    expect(heightOf('bestial_wrath')).toBe(String(BAR_HEIGHT * 2));
+    expect(rowOf('bestial_wrath')?.classList.contains('woc-bar-sized')).toBe(true);
+    expect(rowOf('bestial_wrath')?.style.fontSize).toBe('');
   });
 
   // A row that appeared after the drag, which is most of them: the box is held rather than
@@ -1021,7 +1014,7 @@ describe('the size of the column', () => {
     h.cooldown('arcane_shot', FELL_SHOT);
     h.poll();
 
-    expect(rowOf('arcane_shot')?.style.height).toBe(`${BAR_HEIGHT * 2}px`);
+    expect(heightOf('arcane_shot')).toBe(String(BAR_HEIGHT * 2));
   });
 
   // The budget is the divisor, so a row keeps its height while the set of them changes. A
@@ -1033,44 +1026,59 @@ describe('the size of the column', () => {
     h.cooldown('bestial_wrath', LONG);
     h.poll();
     await settleFrames();
-    const before = rowOf('bestial_wrath')?.style.height;
+    const before = heightOf('bestial_wrath');
     h.cooldown('arcane_shot', FELL_SHOT);
     h.poll();
 
-    expect(rowOf('bestial_wrath')?.style.height).toBe(before);
+    expect(heightOf('bestial_wrath')).toBe(before);
   });
 
-  // The floor is the natural row rather than the loader's own, and this is the case it is for.
-  // A box saved before the column resized carries the loader's default height, which nobody
-  // chose; without the floor it would come back divided into rows a third of their size, with
-  // a bare frame's clip taking whatever did not fit.
-  it('holds the column at its natural height when a saved box is shorter', async () => {
-    const h = await run({ 'max-bars': 3 }, { bars: { box: CRAMPED, visible: true } });
+  // A player watching one cooldown should be able to have a panel the size of one cooldown,
+  // so the floor is a single row rather than the budget's worth of them. The loader's own
+  // structural floor is what stops it going below something grabbable.
+  it('lets the column be dragged down to a single row', async () => {
+    const h = await run({ 'max-bars': 8 }, { bars: { box: CRAMPED, visible: true } });
 
     h.cooldown('bestial_wrath', LONG);
     h.poll();
     await settleFrames();
 
-    expect(columnEl()?.style.height).toBe(`${stack(BAR_HEIGHT, 3)}px`);
-    expect(rowOf('bestial_wrath')?.style.height).toBe(`${BAR_HEIGHT}px`);
+    expect(Number(columnEl()?.style.height.replace('px', ''))).toBeLessThan(stack(BAR_HEIGHT, 8));
+    expect(Number(heightOf('bestial_wrath'))).toBe(MIN_BAR_HEIGHT);
   });
 
-  // The grab strip, which is the whole of what makes the height draggable in play.
-  //
-  // A bare frame passes the pointer through everything it did not draw, so the bottom edge of
-  // a column sized for eight rows and drawing three is over nothing: the drag is available
-  // only in the moment the budget happens to be full, or through the loader's arrange mode.
-  // The strip draws nothing itself, so this case is the only thing between it and a silent
-  // removal, and what would be lost is a gesture rather than a picture.
-  it('keeps the edge that grows the column reachable', async () => {
-    await run();
+  // Below the budget's worth of rows the height stops making them thinner, since they are
+  // already at their floor, and starts showing fewer of them. A bare frame clips rather than
+  // scrolls, so the alternative is a row cut in half at the bottom edge saying nothing.
+  it('draws fewer rows when the box cannot hold the budget', async () => {
+    const h = await run({ 'max-bars': 8 }, { bars: { box: CRAMPED, visible: true } });
 
-    await vi.waitFor(() => {
-      expect(columnEl()?.querySelector('.woc-cd-grip')).not.toBeNull();
-    });
-    const grip = columnEl()?.querySelector<HTMLElement>('.woc-cd-grip');
-    expect(grip?.style.height).toBe('10px');
-    expect(grip?.style.width).toBe('');
+    for (const id of CROWD) {
+      h.cooldown(id, LONG);
+    }
+    h.poll();
+    await settleFrames();
+    h.poll();
+
+    expect(h.drawn().length).toBeLessThan(CROWD.length);
+    expect(h.drawn().length).toBeGreaterThan(0);
+  });
+
+  // The strip is limited by its WIDTH, which is only room to grow into, so its count is the
+  // budget and nothing else. It shares one `shown` predicate with the column, and the first
+  // version of the column's counting divided a strip's one-tile height by a row's pitch and
+  // silently took the strip from five tiles to two. Nothing but the committed preview saw it.
+  it('draws the whole budget as tiles whatever the strip is a row of', async () => {
+    const h = await run({ layout: 'tiles', 'max-bars': 8 });
+
+    for (const id of CROWD) {
+      h.cooldown(id, LONG);
+    }
+    h.poll();
+    await settleFrames();
+    h.poll();
+
+    expect(h.drawn()).toHaveLength(CROWD.length);
   });
 
   // The width has a floor of its own, well under the width the column opens at: a name is

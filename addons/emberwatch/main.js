@@ -546,7 +546,9 @@ list.appendChild(overflow);
 
 /** The floor is applied here as well as declared, since a box also arrives from a restore or a clamp. */
 function resize(height) {
-  tileSize = Math.max(Math.round(height - CAPTION_HEIGHT), TILE_FLOOR);
+  // One unit under a fixed band, which is what `extra` is for: the caption is space the
+  // square never gets, and the floor holds for a box from anywhere.
+  tileSize = woc.ui.units(height, { extra: CAPTION_HEIGHT, min: TILE_FLOOR });
 }
 
 /** Read back off the element rather than held beside it: a pin and its cell share the one element. */

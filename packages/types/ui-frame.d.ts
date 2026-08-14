@@ -82,11 +82,24 @@ export interface FrameOpts {
   maxWidth?: number;
   maxHeight?: number;
   /**
-   * Whether the edges resize it. Defaults to true for `window` and false for
-   * `frame`: a frame is sized by its content, so an explicit height would leave
-   * it padded out or clipped as its text changes.
+   * Whether the edges resize it, and which of them. Defaults to true for `window`
+   * and false for `frame`: a frame is sized by its content, so an explicit height
+   * would leave it padded out or clipped as its text changes.
+   *
+   * `'width'` and `'height'` hand the player ONE axis and leave the other following
+   * your content. Since apiMinor 6, and the case it is for is the commonest shape a
+   * HUD list has: the row count is a setting rather than a function of the box, so an
+   * owned height can only clip the rows or leave a gap under them, while the width is
+   * a column of names and figures that a player may well want wider or narrower.
+   *
+   * The axis you do NOT hand over keeps every property a content-sized frame has: the
+   * `width` you declared is written as a width, and the height is whatever the frame
+   * is holding. `minWidth` and the rest still apply to the axis you did.
+   *
+   * A value that is none of these is read as `false`, which is the frame you had
+   * before you asked, rather than as both axes.
    */
-  resizable?: boolean;
+  resizable?: boolean | 'width' | 'height';
   /** Persist position and visibility for this character. */
   save?: boolean;
   /** Whether it starts on screen. A restored `save` visibility wins over this. */
@@ -192,6 +205,19 @@ export interface Frame {
   /** Where your content goes. Everything above it is chrome. */
   readonly body: HTMLElement;
   readonly visible: boolean;
+  /**
+   * Where the frame is now, as the loader is holding it. Since apiMinor 6.
+   *
+   * The pair of `onMove` rather than a replacement for it. That reports a CHANGE, and
+   * a display laid out against its own box also needs the answer when nothing has
+   * changed: the first of those moments is the one right after you built the frame,
+   * which `onMove` deliberately does not report because it is the size you asked for.
+   *
+   * Cheap, and cheap on purpose. It hands back the box the loader is already holding,
+   * so there is no measurement and no layout: this is what to reach for instead of
+   * `frame.el.getBoundingClientRect()`, which forces one on every call.
+   */
+  box: () => FrameBox;
   show: () => void;
   hide: () => void;
   toggle: () => void;

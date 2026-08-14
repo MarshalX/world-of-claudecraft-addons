@@ -13,6 +13,7 @@ import { createUi } from '../loader/src/runtime/api/ui.ts';
 import { elementId } from '../loader/src/runtime/api/ui-injections.ts';
 import { DisposalBag } from '../loader/src/runtime/disposal.ts';
 import { createAnchors } from '../loader/src/runtime/ui/kit/anchor3d.ts';
+import { createArrangeHint } from '../loader/src/runtime/ui/kit/arrange-hint.ts';
 import { createBanner } from '../loader/src/runtime/ui/kit/banner.ts';
 import { createFrameRoster } from '../loader/src/runtime/ui/kit/frame-roster.ts';
 import { createFrameToggles } from '../loader/src/runtime/ui/kit/frame-toggle.ts';
@@ -111,6 +112,9 @@ function open() {
     }),
     stacking: createStacking({ root }),
     unlock: createUnlockMode(root),
+    arrangeHint: createArrangeHint({
+      toaster: createToaster({ doc: document, root: overlay, ...timers }),
+    }),
     // Manifest readers whose fetch never settles, which is the state a first row is
     // drawn in: `has` answers "not known yet", so the builder hands back the URL and
     // the image decides. A suite that wanted the authoritative answer would resolve it.

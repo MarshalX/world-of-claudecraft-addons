@@ -162,6 +162,22 @@ export interface BarUpdate {
    */
   detail?: string;
   tone?: BarTone;
+  /**
+   * How tall the row is, in pixels, art and text with it. Since apiMinor 6.
+   *
+   * For a strip whose height is the PLAYER's: a column of these divided between a
+   * resizable frame's box. Left alone, a row is as tall as its own line box and its
+   * text is the game's, which is what a bar has always been, and anything that is
+   * not a positive finite number leaves it that way.
+   *
+   * The text scales WITH the row rather than to a figure in pixels, so a row at its
+   * natural height reads at exactly the size the player's game is set to. Reach for
+   * this rather than writing a font size onto the row yourself: an inline style
+   * beats every rule in the loader's sheet, including the 40px tap-target floor it
+   * restores under `@media (pointer: coarse)`, so hand-sizing a row is a decision
+   * about somebody's phone that you did not mean to make.
+   */
+  size?: number;
 }
 
 export interface BarOpts extends BarUpdate {

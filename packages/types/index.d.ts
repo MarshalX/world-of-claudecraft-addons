@@ -136,6 +136,7 @@ export type {
   MicroButtonOpts,
   ToastOpts,
   UiApi,
+  UnitOpts,
 } from './ui.js';
 export type {
   Anchor3d,

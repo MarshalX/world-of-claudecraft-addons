@@ -106,6 +106,26 @@ interface Stage extends WorldDraft {
   press: (combo: string) => void;
   /** Let a pending frame restore land before the next step reads the DOM. */
   settle: () => Promise<void>;
+  /**
+   * Say something on the bus AS another addon, which is how a scenario stands in for a
+   * companion an addon names.
+   *
+   * The fqid is the sender rather than a label: the hub stamps it, subscribers filter on
+   * it, and an addon that names a companion is subscribed to that companion's id. So a
+   * picture of the recommended pair is a scenario emitting what the companion emits,
+   * which is also the only honest way to draw one, since the companion's own addon is not
+   * mounted on the stage.
+   */
+  publish: (from: string, topic: string, payload: unknown) => void;
+  /**
+   * Turn the loader's arrange mode on, which is the only thing that lets a BARE
+   * frame be dragged or resized at all.
+   *
+   * Here because the stage is where a person picks a panel up with a real pointer,
+   * and because no scenario can reach the mode otherwise: the keybind that flips it
+   * belongs to runtime/boot.ts, which the stage does not run.
+   */
+  arrange: (on: boolean) => void;
 }
 
 /**
@@ -235,6 +255,8 @@ function createControls(deps: ControlDeps): Stage {
     netState: harness.netState,
     press: harness.press,
     settle: settleFrames,
+    publish: harness.shared.bus.emit,
+    arrange: harness.unlock.set,
   };
 }
 

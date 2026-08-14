@@ -21,6 +21,8 @@
 const DATA_FILE = 'atlas.json';
 const MS_PER_SECOND = 1000;
 const FRAME_WIDTH = 320;
+/** How narrow the panel may be dragged, which is about where a place name starts to cut. */
+const MIN_FRAME_WIDTH = 220;
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
 /** How far an arrow must have turned before it is worth writing a transform again. */
@@ -375,13 +377,17 @@ note.className = 'woc-wf-note';
 note.style.opacity = '0.6';
 
 /**
- * Not resizable, and it should stay that way: the row count is a setting rather than a
- * function of the box, so a drag handle would either do nothing or clip.
+ * The WIDTH is the player's and the height is the content's. The row count is a setting
+ * rather than a function of the box, so a height this frame owned could only do nothing or
+ * clip; the width is a list of place names, which are as long as the game made them.
  */
 const frame = woc.ui.frame({
   id: 'atlas',
   title: 'Wayfarer',
   width: FRAME_WIDTH,
+  resizable: 'width',
+  // Stated, or the width it opens at is also the narrowest it can ever be.
+  minWidth: MIN_FRAME_WIDTH,
   density: 'comfortable',
   closable: true,
   save: true,

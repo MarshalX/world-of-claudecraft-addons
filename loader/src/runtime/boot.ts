@@ -10,7 +10,7 @@ import { connectHost, type HostConnection } from './bridge.ts';
 import { type DiagnosticsReading, readDiagnostics } from './diagnostics.ts';
 import { clearTimer, setTimer } from './dom-timers.ts';
 import { createHostEventHandler } from './host-events.ts';
-import { createLoaderBinds, type LoaderBinds } from './keys/loader-binds.ts';
+import { createLoaderBinds, type LoaderBinds, UNLOCK_BIND } from './keys/loader-binds.ts';
 import { type GameProbe, probeGame } from './probe.ts';
 import { waitForDocument } from './ready.ts';
 import { createRuntimeServices, type RuntimeServices } from './services.ts';
@@ -128,13 +128,18 @@ function diagnosticsFor(deps: UiStartDeps): DiagnosticsReading {
  * keys/loader-binds.ts for why they reuse the addon keybind store.
  */
 function bindLoaderKeys(services: RuntimeServices, ui: MountedUi): LoaderBinds {
-  return createLoaderBinds({
+  const binds = createLoaderBinds({
     hub: services.storage,
     dispatcher: services.dispatcher,
     onUnlock: () => {
       ui.kit.unlock.toggle();
     },
   });
+  // Wired here rather than at mount, because the binds are built after the UI and
+  // the store is the only honest source: the message names the combo the player is
+  // actually on, which is not the declared default the moment they rebind it.
+  ui.kit.arrangeHint.setCombo(() => binds.store.combo(UNLOCK_BIND));
+  return binds;
 }
 
 /** Everything mountUi reads, gathered so startUi stays a wiring function. */

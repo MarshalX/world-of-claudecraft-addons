@@ -6,12 +6,15 @@
 // what is asserted here is the difference between them and the persistence,
 // which is the part a player notices across a login.
 
+import interact from 'interactjs';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { CLOSE_PATH } from '../loader/src/runtime/ui/kit/close-glyph.ts';
 import { createAddonFrame } from '../loader/src/runtime/ui/kit/frame.ts';
 import { buildChrome, type FrameOpts } from '../loader/src/runtime/ui/kit/frame-chrome.ts';
+import type { FrameArrange } from '../loader/src/runtime/ui/kit/frame-gestures.ts';
 import { createFrameStateStore } from '../loader/src/runtime/ui/kit/frame-state.ts';
 import { HIDDEN_CLASS } from '../loader/src/runtime/ui/kit/frame-visibility.ts';
+import { createUnlockMode, type UnlockMode } from '../loader/src/runtime/ui/kit/unlock.ts';
 import { perCharacterKey, uiNamespace } from '../loader/src/shared/storage-keys.ts';
 import { createFakeStorage, type FakeStorage } from './fakes/storage.ts';
 
@@ -64,10 +67,19 @@ function data(el: HTMLElement, key: string): string | undefined {
   return el.dataset[key];
 }
 
+/** The optional dependency, present or absent rather than present and undefined. */
+function arrangeDep(arrange?: FrameArrange): { arrange?: FrameArrange } {
+  if (arrange === undefined) {
+    return {};
+  }
+  return { arrange };
+}
+
 function open(
   opts: FrameOpts,
   chrome: 'frame' | 'window' = 'frame',
   hub: FakeStorage | null = null,
+  arrange?: FrameArrange,
 ) {
   const store = stateStore(hub);
   return createAddonFrame({
@@ -79,6 +91,9 @@ function open(
     store,
     viewport: () => VIEW,
     window: globalThis,
+    // Assigned rather than spread with an undefined, which exactOptionalPropertyTypes
+    // refuses: a frame given no arrange source is one with no rule over its gestures.
+    ...arrangeDep(arrange),
   });
 }
 
@@ -897,5 +912,238 @@ describe('stacking', () => {
   // stacking service and by any future caller that does not want one.
   it('works with no raise at all', () => {
     expect(() => open({ id: 'meter' }, 'window')).not.toThrow();
+  });
+});
+
+// Who may move a frameless overlay.
+//
+// A bare frame is its own drag handle and its pointer policy hands the gesture
+// back over exactly the rows a player clicks, so before the rule any press that
+// travelled a few pixels moved the panel. Both gestures now belong to arrange
+// mode. A chromed frame is untouched, because a title bar is a deliberate target.
+//
+// What is driven here is the GESTURE, which is all a Node suite can reach:
+// interactjs does not move a box under happy-dom, which has no layout, so the
+// arithmetic is proved in frame-geometry.test.ts and the wiring here.
+describe('the gestures of a frameless overlay', () => {
+  function arranged(): { mode: UnlockMode; hint: () => void } {
+    return { mode: createUnlockMode(root()), hint: vi.fn(() => undefined) };
+  }
+
+  /**
+   * Whether interactjs is currently willing to start a drag on this element.
+   *
+   * Compared against true rather than returned: the option is optional in
+   * interactjs's own types, and an undefined would read as "not draggable" here
+   * while meaning "never asked" there.
+   */
+  function draggable(el: HTMLElement): boolean {
+    return interact(el).draggable().enabled === true;
+  }
+
+  it('leaves the gestures of a bare frame off while frames are locked', () => {
+    const { mode, hint } = arranged();
+
+    const frame = open({ id: 'strip', density: 'bare' }, 'frame', null, { unlock: mode, hint });
+
+    expect(draggable(frame.el)).toBe(false);
+  });
+
+  it('hands them back the moment the mode goes on', () => {
+    const { mode, hint } = arranged();
+    const frame = open({ id: 'strip', density: 'bare' }, 'frame', null, { unlock: mode, hint });
+
+    mode.set(true);
+
+    expect(draggable(frame.el)).toBe(true);
+  });
+
+  // A frame built while the mode is already on has to be movable from its first
+  // frame rather than from the next time somebody flips the switch.
+  it('starts live for a frame built while the mode is on', () => {
+    const { mode, hint } = arranged();
+    mode.set(true);
+
+    const frame = open({ id: 'strip', density: 'bare' }, 'frame', null, { unlock: mode, hint });
+
+    expect(draggable(frame.el)).toBe(true);
+  });
+
+  // The rule is about the frames with no deliberate handle. A title bar is one.
+  it('leaves a chromed frame alone', () => {
+    const { mode, hint } = arranged();
+
+    const frame = open({ id: 'panel', title: 'Meter' }, 'frame', null, { unlock: mode, hint });
+
+    expect(draggable(frame.el)).toBe(true);
+  });
+
+  // The loader's own writes are not gestures: a locked frame is still restored to
+  // where the player left it, and still pulled back on screen when the viewport
+  // shrinks under it. This is why the gate is on the gestures and not on the box.
+  it('still lets the loader place a locked frame', () => {
+    const { mode, hint } = arranged();
+    const frame = open({ id: 'strip', density: 'bare' }, 'frame', null, { unlock: mode, hint });
+
+    globalThis.dispatchEvent(new Event('resize'));
+
+    expect(frame.el.style.left).not.toBe('');
+  });
+
+  // The subscription outlives nothing: an addon destroys a frame by hand when a
+  // layout setting changes, and a stale subscriber would be switched on and off
+  // for the rest of the session.
+  it('stops following the mode once the frame is destroyed', () => {
+    const { mode, hint } = arranged();
+    const frame = open({ id: 'strip', density: 'bare' }, 'frame', null, { unlock: mode, hint });
+    frame.destroy();
+
+    expect(() => {
+      mode.set(true);
+    }).not.toThrow();
+  });
+});
+
+// What the player is told when nothing happens.
+//
+// The refusal has no event of its own: interactjs with the gestures off simply
+// never starts, so the press is watched here instead. A press that does not travel
+// is a click on whatever the addon drew and says nothing.
+describe('the arrange hint', () => {
+  function press(el: HTMLElement, to: { x: number; y: number }): void {
+    const at = (x: number, y: number) => ({ clientX: x, clientY: y, pointerId: 1, bubbles: true });
+    el.dispatchEvent(new PointerEvent('pointerdown', at(100, 100)));
+    document.dispatchEvent(new PointerEvent('pointermove', at(to.x, to.y)));
+    document.dispatchEvent(new PointerEvent('pointerup', at(to.x, to.y)));
+  }
+
+  it('says frames are locked when a drag is refused', () => {
+    const hint = vi.fn(() => undefined);
+    const frame = open({ id: 'strip', density: 'bare' }, 'frame', null, {
+      unlock: createUnlockMode(root()),
+      hint,
+    });
+
+    press(frame.el, { x: 160, y: 140 });
+
+    expect(hint).toHaveBeenCalledTimes(1);
+  });
+
+  it('says nothing about a press that did not travel', () => {
+    const hint = vi.fn(() => undefined);
+    const frame = open({ id: 'strip', density: 'bare' }, 'frame', null, {
+      unlock: createUnlockMode(root()),
+      hint,
+    });
+
+    press(frame.el, { x: 101, y: 102 });
+
+    expect(hint).not.toHaveBeenCalled();
+  });
+
+  it('says nothing once the mode is on, because the drag then works', () => {
+    const hint = vi.fn(() => undefined);
+    const mode = createUnlockMode(root());
+    const frame = open({ id: 'strip', density: 'bare' }, 'frame', null, { unlock: mode, hint });
+
+    mode.set(true);
+    press(frame.el, { x: 160, y: 140 });
+
+    expect(hint).not.toHaveBeenCalled();
+  });
+});
+
+// The box, as the loader is holding it.
+//
+// It answers at moments `onMove` deliberately says nothing about, the first being right
+// after the frame was built, which is what every addon that scales with its own frame had
+// been seeding a variable to work around.
+describe('reading the box', () => {
+  it('answers the opening placement before any gesture', () => {
+    const frame = open({ id: 'strip', width: 300, height: 200, resizable: true }, 'frame');
+
+    expect(frame.box().w).toBe(300);
+    expect(frame.box().h).toBe(200);
+  });
+
+  it('follows a restored box, which is what a saved frame comes back at', async () => {
+    const hub = createFakeStorage();
+    await hub.set(uiNamespace(FQID), perCharacterKey('pbe', CHARACTER, 'strip'), {
+      box: { x: 40, y: 60, w: 240, h: 150 },
+      visible: true,
+    });
+
+    // Both bounds stated, or the opening size is the floor and the restored height
+    // comes back clamped up to it. That is the surprise `minWidth` and `minHeight`
+    // exist for, and it is the frame's own rule rather than anything about the read.
+    const frame = open(
+      {
+        id: 'strip',
+        save: true,
+        resizable: true,
+        width: 400,
+        height: 300,
+        minWidth: 100,
+        minHeight: 100,
+      },
+      'frame',
+      hub,
+    );
+    await vi.waitUntil(() => frame.box().w === 240);
+
+    expect(frame.box()).toMatchObject({ x: 40, y: 60, w: 240, h: 150 });
+  });
+
+  // No measurement, so a display that lays itself out against its frame can read this on
+  // every frame it draws. `getBoundingClientRect` on the element would force a layout
+  // each time, which is the whole reason this exists rather than being left to the addon.
+  it('does not touch the element to answer', () => {
+    const frame = open({ id: 'strip', width: 300, resizable: true }, 'frame');
+    const rect = vi.spyOn(frame.el, 'getBoundingClientRect');
+
+    frame.box();
+
+    expect(rect).not.toHaveBeenCalled();
+  });
+});
+
+// One axis rather than both, which is the shape a HUD list actually has.
+//
+// `veinsight` and `wayfarer` had each written the same comment refusing to be resizable
+// at all: their row count is a setting, so an owned height could only clip the rows or
+// leave a gap under them. Both wanted the width and gave it up with the height.
+describe('resizing one axis', () => {
+  it('writes the width and leaves the height to the content', () => {
+    const frame = open({ id: 'list', width: 300, height: 200, resizable: 'width' }, 'frame');
+
+    expect(frame.el.style.width).toBe('300px');
+    expect(frame.el.style.height).toBe('');
+  });
+
+  it('writes the height and holds the width it declared', () => {
+    const frame = open({ id: 'strip', width: 300, height: 200, resizable: 'height' }, 'frame');
+
+    expect(frame.el.style.height).toBe('200px');
+    expect(frame.el.style.width).toBe('300px');
+  });
+
+  // The edge a player would drag for an axis nobody owns is an edge that promises a
+  // gesture the frame will not honour, so it is not offered at all.
+  it('offers edges only on the axis it owns', () => {
+    const frame = open({ id: 'list', width: 300, resizable: 'width' }, 'frame');
+    const { edges } = interact(frame.el).resizable();
+
+    expect(edges).toMatchObject({ top: false, left: true, right: true, bottom: false });
+  });
+
+  // The same direction the density and pointer fallbacks take. A frame that owned an
+  // axis it should not would clip its own content, where one that owns neither is
+  // exactly the frame every addon had before it asked for anything.
+  it('reads an unrecognised value as not resizable', () => {
+    const frame = open({ id: 'list', width: 300, resizable: 'both' as 'width' }, 'frame');
+
+    expect(frame.el.style.width).toBe('300px');
+    expect(frame.el.style.height).toBe('');
+    expect(interact(frame.el).resizable().enabled).toBe(false);
   });
 });

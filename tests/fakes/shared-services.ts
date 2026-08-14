@@ -16,6 +16,7 @@ import { createNetHub } from '../../loader/src/runtime/net/hub.ts';
 import type { NetState } from '../../loader/src/runtime/net/state.ts';
 import { createSoundEngine } from '../../loader/src/runtime/sound/engine.ts';
 import { createAnchors } from '../../loader/src/runtime/ui/kit/anchor3d.ts';
+import { createArrangeHint } from '../../loader/src/runtime/ui/kit/arrange-hint.ts';
 import { createBanner } from '../../loader/src/runtime/ui/kit/banner.ts';
 import { createFrameRoster } from '../../loader/src/runtime/ui/kit/frame-roster.ts';
 import { createIconUrls } from '../../loader/src/runtime/ui/kit/icons.ts';
@@ -26,7 +27,7 @@ import { createSkillArt } from '../../loader/src/runtime/ui/kit/skill-art.ts';
 import { createStacking } from '../../loader/src/runtime/ui/kit/stacking.ts';
 import { createToaster } from '../../loader/src/runtime/ui/kit/toast.ts';
 import { createTooltips } from '../../loader/src/runtime/ui/kit/tooltip.ts';
-import { createUnlockMode } from '../../loader/src/runtime/ui/kit/unlock.ts';
+import { createUnlockMode, type UnlockMode } from '../../loader/src/runtime/ui/kit/unlock.ts';
 import { HUD_BAND_CLASS, OVERLAY_BAND_CLASS } from '../../loader/src/runtime/ui/root.ts';
 import { createWorldHub } from '../../loader/src/runtime/world/hub.ts';
 import { createFrameClock, type FrameClock } from './frame-loop.ts';
@@ -94,6 +95,13 @@ interface SharedHarness {
   frames: FrameClock;
   /** What the key dispatcher listens on, so a suite can press a key at it. */
   keyTarget: EventTarget;
+  /**
+   * The arrange-your-UI switch, which decides whether a BARE frame may be dragged
+   * or resized at all. Exposed because the rule cannot be driven any other way:
+   * the loader's own keybind for it is registered in boot.ts, which no suite and
+   * no stage scenario runs. See loader/src/runtime/ui/kit/frame-gestures.ts.
+   */
+  unlock: UnlockMode;
   /** Press a combo, in the manifest's own spelling, e.g. 'Alt+Shift+KeyD'. */
   press: (combo: string) => void;
   /** Deliver one inbound frame, as the socket hook would. */
@@ -278,6 +286,9 @@ function createSharedServices(
   });
   const keyTarget = new EventTarget();
   const dispatcher = createKeyDispatcher({ target: keyTarget, doc });
+  // Held rather than built inline, because the harness hands it back: nothing else
+  // can turn the arrange mode on, and a bare frame's gestures are its to grant.
+  const unlock = createUnlockMode(root);
   const logs = createLogBuffer();
   const stacking = createStacking({ root });
   // Keyed on the pair, because two addons may legitimately declare the same
@@ -347,7 +358,8 @@ function createSharedServices(
       stacking,
       roster: createFrameRoster(),
       icons,
-      unlock: createUnlockMode(root),
+      unlock,
+      arrangeHint: createArrangeHint({ toaster }),
       project,
       unitPoint,
     },
@@ -376,6 +388,7 @@ function createSharedServices(
     root,
     frames,
     keyTarget,
+    unlock,
     press: (combo) => {
       const parts = combo.split('+');
       // The last segment is the physical key; everything before it is a

@@ -40,8 +40,13 @@ const DATA_FILE = 'atlas.json';
  * `FrameOpts.toggleKey` is deliberately NOT on that list. It would have been the seventh,
  * and this addon declined it: its toggle also forces a redraw, so the bind is written by
  * hand. See the note above `keys.bind` in `main.js`.
+ *
+ * 6 is `resizable: 'width'`, which hands the player the one axis this panel can give away.
+ * An older loader reads that string as truthy and takes BOTH, which writes a height over a
+ * list whose length is a setting: the rows below the box are then clipped with nothing on
+ * screen saying so, which is the failure the declaration refuses.
  */
-const NEEDS_MINOR = 4;
+const NEEDS_MINOR = 6;
 const PLAYER_ID = PLAYER_ENTITY.id;
 /** The redraw's period, so advancing this much runs exactly one of them. */
 const TICK_MS = 1000;

@@ -55,6 +55,42 @@ const DECIMALS = 2;
 /** What every one of this row's variant classes starts with. */
 const PREFIX = 'woc-bar';
 
+/**
+ * How tall the row is, which the sheet turns into a height, a text size and an icon.
+ *
+ * UNITLESS, where `--woc-tile-size` carries pixels, and the difference is not a
+ * style choice. The text is derived as an `em` so a sized row keeps whatever font
+ * size the game is set to (see styles/bar.css), and CSS calc cannot divide a length
+ * by a length to reach a ratio: a plain number can be multiplied into either unit.
+ */
+const SIZE_PROPERTY = '--woc-bar-size';
+
+/**
+ * Marks a row whose height the caller decided, which is what the sheet keys its
+ * derivation off.
+ *
+ * A class as well as the property, because "sized" is not a thing CSS can ask about
+ * a custom property, and every one of those rules has to be inert on a row that
+ * never asked: an unsized bar is sized by its own line box and its text is the
+ * game's, and both must stay exactly that.
+ */
+const SIZED_CLASS = 'woc-bar-sized';
+
+/**
+ * The height the caller asked for, in pixels, or nothing.
+ *
+ * Nothing leaves the row sized by its content, which is what a bar has always been.
+ * Zero and NaN are refused for the reason a tile refuses them: a row of no height is
+ * one that was never drawn, and a NaN drops the declaration silently.
+ */
+function setSize(el: HTMLElement, size: StyleSlot, next: unknown): void {
+  if (typeof next !== 'number' || !Number.isFinite(next) || next <= 0) {
+    return;
+  }
+  el.classList.add(SIZED_CLASS);
+  writeStyle(size, String(next));
+}
+
 type BarTone = ReadoutTone;
 
 type BarSchool = ReadoutSchool;
@@ -77,6 +113,7 @@ function setFraction(fill: StyleSlot, fraction: unknown): void {
 interface BarParts {
   el: HTMLElement;
   fill: StyleSlot;
+  size: StyleSlot;
   icon: ArtSlot;
   label: TextSlot;
   value: TextSlot;
@@ -129,6 +166,7 @@ function buildBar(doc: Document, opts: BarOpts): BarParts {
   return {
     el,
     fill: styleSlot(fill, 'width'),
+    size: styleSlot(el, SIZE_PROPERTY),
     icon,
     label: textSlot(label),
     value: textSlot(value),
@@ -194,6 +232,24 @@ interface BarUpdate {
   /** A quieter second line under the head. An empty string hides it again. */
   detail?: string;
   tone?: BarTone;
+  /**
+   * How tall the row is, in pixels, art and text with it.
+   *
+   * For a strip whose height is the PLAYER's: a column of these divided between a
+   * frame's box is the shape every timer addon in the catalogue had hand-written,
+   * each of them setting six declarations per row and transcribing the icon box out
+   * of this kit's own sheet to do it.
+   *
+   * Left alone, a row is as tall as its own line box and its text is the game's,
+   * which is what a bar has always been. Anything that is not a positive finite
+   * number leaves it that way rather than drawing a row of no height.
+   *
+   * The text scales WITH the row rather than to a figure in pixels, so a row at its
+   * natural height reads at exactly the size the player's game is set to. Set this
+   * rather than writing a font size onto the row yourself: an inline style beats
+   * every rule in the sheet, including the tap-target floor a phone needs.
+   */
+  size?: number;
 }
 
 interface BarOpts extends BarUpdate {
@@ -235,6 +291,7 @@ function createBar(doc: Document, opts: BarOpts = {}): Bar {
     if (next.fraction !== undefined) {
       setFraction(parts.fill, next.fraction);
     }
+    setSize(parts.el, parts.size, next.size);
   };
 
   // The fraction is written even when the opts said nothing about it, so the row's

@@ -16,6 +16,7 @@ import {
   type FrameBox,
   MIN_HEIGHT,
   MIN_WIDTH,
+  type SizeAxes,
   type SizeBounds,
   type Viewport,
 } from './geometry.ts';
@@ -40,16 +41,17 @@ interface InteractiveFrameDeps {
    */
   onBox?: (box: FrameBox) => void;
   /**
-   * Whether the edges resize, and whether the size is written at all. Defaults
-   * to true.
+   * Which axes the box owns, and therefore which edges resize and which sizes are
+   * written at all. Defaults to both.
    *
-   * A small always-on HUD readout is sized by its content, so an explicit height
-   * would leave it padded out or clipped as its text changes, and edges that
-   * resize it turn every attempt to nudge it into a reshape.
+   * Per axis rather than a flag, because the two are different questions. A small
+   * always-on HUD readout is sized by its CONTENT vertically, so an explicit height
+   * would leave it padded out or clipped as its text changes, while its width is a
+   * column the player reads figures out of and may well want wider.
    */
-  resizable?: boolean;
+  resize?: SizeAxes;
   /**
-   * The element's live size, for a frame that is not resizable.
+   * The element's live size, for an axis the box does not own.
    *
    * Without it, clamping a content-sized frame would use whatever size it had
    * when it was created, and a frame that has since grown could be dragged most
@@ -73,15 +75,29 @@ interface InteractiveFrame {
   /** Move to a box directly, e.g. when a persisted position is restored. */
   place: (box: FrameBox) => void;
   box: () => FrameBox;
+  /**
+   * Turn the PLAYER's gestures on and off, leaving every loader write alone.
+   *
+   * Deliberately not a flag on the box keeper. That is the only path a box is
+   * written by, and it serves `place` and `refit` as well as a drag, so a gate
+   * there would stop a frame being restored to its saved position or being
+   * pulled back on screen after the viewport shrank. What a caller wants to stop
+   * is the pointer, so the pointer is what this stops.
+   */
+  setGestures: (enabled: boolean) => void;
   destroy: () => void;
 }
 
-function paint(el: HTMLElement, box: FrameBox, sized: boolean): void {
+function paint(el: HTMLElement, box: FrameBox, axes: SizeAxes): void {
   el.setAttribute('data-positioned', 'true');
   el.style.left = `${box.x}px`;
   el.style.top = `${box.y}px`;
-  if (sized) {
+  // Only the axes the box owns. Writing the other would pin a frame at whatever its
+  // content happened to measure at the moment it was first painted.
+  if (axes.w) {
     el.style.width = `${box.w}px`;
+  }
+  if (axes.h) {
     el.style.height = `${box.h}px`;
   }
 }
@@ -101,14 +117,28 @@ interface BoxKeeper {
  * arithmetic and none of the pointer handling. A gesture can only ever PROPOSE a
  * box, so there is no path that writes one which skipped the clamp.
  */
-function createBoxKeeper(deps: InteractiveFrameDeps, resizable: boolean): BoxKeeper {
-  /** A non-resizable frame's real size is whatever its content made it. */
+function createBoxKeeper(deps: InteractiveFrameDeps, axes: SizeAxes): BoxKeeper {
+  /**
+   * An axis the box does not own reports what the CONTENT made it.
+   *
+   * Per axis, because a frame may own one and not the other: a column that resizes
+   * across and grows down has a width the player set and a height nothing wrote, and
+   * clamping the second against a number from when it was built would let it be
+   * dragged most of the way off screen while the clamp believed it was still on.
+   */
   const withSize = (next: FrameBox): FrameBox => {
     const measured = deps.measure?.();
     if (measured === undefined) {
       return next;
     }
-    return { ...next, w: measured.w, h: measured.h };
+    const size = { w: measured.w, h: measured.h };
+    if (axes.w) {
+      size.w = next.w;
+    }
+    if (axes.h) {
+      size.h = next.h;
+    }
+    return { ...next, ...size };
   };
 
   const bounds: SizeBounds = { min: deps.bounds?.min ?? { w: MIN_WIDTH, h: MIN_HEIGHT } };
@@ -120,14 +150,14 @@ function createBoxKeeper(deps: InteractiveFrameDeps, resizable: boolean): BoxKee
   }
 
   let box = clampBox(withSize(deps.box), deps.viewport(), bounds);
-  paint(deps.el, box, resizable);
+  paint(deps.el, box, axes);
 
   return {
     bounds,
     box: () => box,
     move: (next) => {
       box = clampBox(withSize(next), deps.viewport(), bounds);
-      paint(deps.el, box, resizable);
+      paint(deps.el, box, axes);
       deps.onBox?.(box);
     },
   };
@@ -162,18 +192,22 @@ function restrictOpts(bounds: SizeBounds): RestrictSizeOpts {
   return opts;
 }
 
+/** What a caller may do to the gestures once they are attached. */
+interface Gestures {
+  /** Both of them at once: a frame nobody may move is not one they may resize. */
+  setEnabled: (enabled: boolean) => void;
+  destroy: () => void;
+}
+
 /**
  * Turn pointer gestures into proposed boxes, and hand back the teardown.
  *
- * The interactjs instance deliberately does not leave this function: unsetting
- * it is the only thing the caller ever wants, and keeping it in here is what
- * stops a later caller reaching around the keeper to move the element itself.
+ * The interactjs instance deliberately does not leave this function: unsetting it
+ * and switching it off are the only things a caller ever wants, and keeping it in
+ * here is what stops a later caller reaching around the keeper to move the element
+ * itself.
  */
-function attachGestures(
-  deps: InteractiveFrameDeps,
-  keeper: BoxKeeper,
-  resizable: boolean,
-): () => void {
+function attachGestures(deps: InteractiveFrameDeps, keeper: BoxKeeper, axes: SizeAxes): Gestures {
   const commit = (): void => {
     deps.onCommit(keeper.box());
   };
@@ -192,11 +226,14 @@ function attachGestures(
     },
   });
 
+  const resizable = axes.w || axes.h;
   if (resizable) {
     instance.resizable({
       // The top edge is deliberately not resizable: it is the drag handle, and
-      // an edge that both moves and resizes is a coin flip on every grab.
-      edges: { top: false, left: true, right: true, bottom: true },
+      // an edge that both moves and resizes is a coin flip on every grab. The other
+      // three are per axis, so a frame that owns only its width has no bottom edge
+      // to grab and cannot be dragged into a height nothing will write.
+      edges: { top: false, left: axes.w, right: axes.w, bottom: axes.h },
       listeners: {
         move: (event: { rect: { width: number; height: number }; deltaRect: { left: number } }) => {
           // A left-edge drag changes x and w together. deltaRect carries the
@@ -215,15 +252,30 @@ function attachGestures(
     });
   }
 
-  return () => {
-    instance.unset();
+  return {
+    // Partial options, which interactjs MERGES into what is already set: passing
+    // `enabled` alone leaves the listeners, the handle and the modifiers above in
+    // place, and re-passing them here would be a second copy of them to keep in
+    // step. The resize arm is guarded because the same merge cuts the other way:
+    // calling `.resizable()` on a frame that never asked to be one would make it
+    // resizable from the first switch on.
+    setEnabled: (enabled) => {
+      instance.draggable({ enabled });
+      if (resizable) {
+        instance.resizable({ enabled });
+      }
+    },
+
+    destroy: () => {
+      instance.unset();
+    },
   };
 }
 
 function makeFrameInteractive(deps: InteractiveFrameDeps): InteractiveFrame {
-  const resizable = deps.resizable !== false;
-  const keeper = createBoxKeeper(deps, resizable);
-  const destroy = attachGestures(deps, keeper, resizable);
+  const axes = deps.resize ?? { w: true, h: true };
+  const keeper = createBoxKeeper(deps, axes);
+  const gestures = attachGestures(deps, keeper, axes);
 
   return {
     refit: () => {
@@ -233,7 +285,8 @@ function makeFrameInteractive(deps: InteractiveFrameDeps): InteractiveFrame {
       keeper.move(next);
     },
     box: keeper.box,
-    destroy,
+    setGestures: gestures.setEnabled,
+    destroy: gestures.destroy,
   };
 }
 

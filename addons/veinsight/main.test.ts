@@ -45,11 +45,13 @@ const DATA_FILE = 'nodes.json';
  * A frame's own `toggleKey` is 4 as well and is deliberately NOT on that list: the toggle
  * is bound by hand, for the reason written above the bind in `main.js`.
  *
- * Declared at 5 even though an older loader answers an empty list rather than throwing,
- * because that is the failure worth refusing: a silently empty list makes the fine-grade
- * answer short by a tier for anyone carrying a charm, with nothing on screen saying so.
+ * Declared at 5 for `world.holdings` even though an older loader answers an empty list
+ * rather than throwing, because that is the failure worth refusing: a silently empty list
+ * makes the fine-grade answer short by a tier for anyone carrying a charm, with nothing on
+ * screen saying so. At 6 for `resizable: 'width'`, where an older loader reads the string
+ * as truthy and hands the player a height this panel cannot honour.
  */
-const NEEDS_MINOR = 5;
+const NEEDS_MINOR = 6;
 
 const PLAYER_ID = PLAYER_ENTITY.id;
 /** The redraw's period, so advancing this much runs exactly one of them. */

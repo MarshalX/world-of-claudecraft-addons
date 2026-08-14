@@ -11,22 +11,18 @@
 // dragged back from" is one rule with one test, not one per surface.
 
 import type { Teardown } from '../../disposal.ts';
-import { clampBox, initialBox, type SizeBounds, type Viewport } from '../frame/geometry.ts';
+import { clampBox, type FrameBox, initialBox, type Viewport } from '../frame/geometry.ts';
 import {
   type InteractiveFrame,
   type InteractiveFrameDeps,
   makeFrameInteractive,
 } from '../frame/interactive.ts';
 import { buildChrome, type Chrome, type FrameChrome, type FrameOpts } from './frame-chrome.ts';
+import { type FrameArrange, gateFor } from './frame-gestures.ts';
+import { applyWidth, defaultSize, resizeAxes, sizeBounds } from './frame-size.ts';
 import type { FrameState, FrameStateStore } from './frame-state.ts';
 import type { FrameToggles } from './frame-toggle.ts';
 import { createVisibility } from './frame-visibility.ts';
-
-/** What a frame with no width of its own opens at. */
-const DEFAULT_FRAME_WIDTH = 240;
-const DEFAULT_FRAME_HEIGHT = 120;
-const DEFAULT_WINDOW_WIDTH = 480;
-const DEFAULT_WINDOW_HEIGHT = 320;
 
 interface AddonFrame {
   /** The frame element. Addon-owned; the loader only positions it. */
@@ -34,6 +30,18 @@ interface AddonFrame {
   /** Where addon content goes. Everything above it is chrome. */
   readonly body: HTMLElement;
   readonly visible: boolean;
+  /**
+   * Where the frame is now, as the loader is holding it.
+   *
+   * The pair of `onMove` rather than a replacement for it: that reports a CHANGE, and
+   * an addon laying its content out against the box also needs the answer at moments
+   * nothing changed, the first one being the moment it was built. `onMove` does not
+   * fire for the initial placement, which every addon that scaled with its frame had
+   * answered by writing the opening size into a variable of its own.
+   *
+   * No measurement and no layout: the box is the one the gesture layer already holds.
+   */
+  box: () => FrameBox;
   show: () => void;
   hide: () => void;
   toggle: () => void;
@@ -57,6 +65,14 @@ interface FrameDeps {
   fqid: string;
   chrome: FrameChrome;
   opts: FrameOpts;
+  /**
+   * The arrange-your-UI switch and what a refusal says, which together decide
+   * whether a BARE frame may be dragged at all. See kit/frame-gestures.ts.
+   *
+   * Absent means the gestures are simply live, which is what a frame did before
+   * there was a rule and is what a suite that is not about the rule wants.
+   */
+  arrange?: FrameArrange;
   /** Null when the addon did not ask to save, or storage is unavailable. */
   store: FrameStateStore | null;
   /** The addon's toggle keybinds. Absent where it has no keybind surface at all. */
@@ -66,47 +82,6 @@ interface FrameDeps {
   window: Pick<EventTarget, 'addEventListener' | 'removeEventListener'>;
 }
 
-function defaultSize(chrome: FrameChrome, opts: FrameOpts): Viewport {
-  if (chrome === 'window') {
-    return { w: opts.width ?? DEFAULT_WINDOW_WIDTH, h: opts.height ?? DEFAULT_WINDOW_HEIGHT };
-  }
-  return { w: opts.width ?? DEFAULT_FRAME_WIDTH, h: opts.height ?? DEFAULT_FRAME_HEIGHT };
-}
-
-/**
- * What the addon said the frame may be sized between.
- *
- * The minimum falls back to the OPENING SIZE, which is the behaviour every frame
- * had before there was an option, and it is worth naming because it surprises
- * people: a frame created at 400 wide could not then be dragged narrower than
- * 400. The alternative fallback is the structural floor, and it was rejected as a
- * default rather than as an idea. Changing it would silently let the player shrink
- * every frame of every already-published addon down to 72 by 28, including the
- * ones whose layout stops making sense well before that, and an addon that wants
- * the floor can now say so. So the surprise stays, and `minWidth` is the way out
- * of it rather than a new default nobody asked for.
- *
- * Both are absent rather than undefined when unset: exactOptionalPropertyTypes,
- * and clampSize reads an absent maximum as the viewport.
- */
-function sizeBounds(opts: FrameOpts, size: Viewport): SizeBounds {
-  const bounds: SizeBounds = {
-    min: { w: opts.minWidth ?? size.w, h: opts.minHeight ?? size.h },
-  };
-  if (opts.maxWidth !== undefined || opts.maxHeight !== undefined) {
-    bounds.max = {
-      w: opts.maxWidth ?? Number.POSITIVE_INFINITY,
-      h: opts.maxHeight ?? Number.POSITIVE_INFINITY,
-    };
-  }
-  return bounds;
-}
-
-/** Whether the edges resize, which is also whether anything writes the size. */
-function isResizable(deps: FrameDeps): boolean {
-  return deps.opts.resizable ?? deps.chrome === 'window';
-}
-
 /** What the drag and clamp layer is told about one frame. */
 function gestureDeps(
   deps: FrameDeps,
@@ -114,7 +89,7 @@ function gestureDeps(
   size: Viewport,
   onCommit: () => void,
 ): InteractiveFrameDeps {
-  const resizable = isResizable(deps);
+  const axes = resizeAxes(deps.opts, deps.chrome);
   const bounds = sizeBounds(deps.opts, size);
   const gestures: InteractiveFrameDeps = {
     el: chrome.el,
@@ -122,14 +97,14 @@ function gestureDeps(
     viewport: deps.viewport,
     box: initialBox(deps.viewport(), size, bounds),
     onCommit,
-    resizable,
+    resize: axes,
     // Passed to every clamp, not just the first: without it a re-clamp after a
     // drag or a viewport change inflates the frame back to the manager's minimum.
     bounds,
   };
-  if (!resizable) {
-    // A content-sized frame reports what its content made it, so the clamp works
-    // on the real box rather than the one it was created with.
+  if (!(axes.w && axes.h)) {
+    // Whichever axis the box does not own reports what its content made it, so the
+    // clamp works on the real box rather than the one the frame was created with.
     gestures.measure = () => ({
       w: chrome.el.offsetWidth || size.w,
       h: chrome.el.offsetHeight || size.h,
@@ -157,22 +132,25 @@ interface FrameMechanics {
 }
 
 /**
- * Write a non-resizable frame its declared WIDTH. A resizable one is given its box by
- * `frame/interactive.ts` and never arrives here.
+ * Everything the frame subscribes to OUTSIDE itself, released together.
  *
- * Shrink-to-fit sizes an element by its content in both directions, and both are wrong: with
- * no ceiling the panel is as wide as its longest unbreakable line, and without a floor the
- * width MOVES as the content changes, stepping the panel in and out while it is being read.
- * Written whether or not the addon named a width, since an addon that never considered its
- * width is exactly the one whose panel would otherwise move.
- *
- * No equivalent for the HEIGHT, deliberately: a bounded frame clips rather than grows, and
- * nothing on screen says a row is below the fold. Ask to be resizable and state bounds instead.
+ * Two subscriptions to two shared things, and the same failure if either is left
+ * behind: the viewport re-clamps a frame that is no longer in the document, and
+ * the arrange mode switches gestures on a frame that no longer has any. A frame's
+ * `destroy` is the addon's to call as well as the loader's, so this is reached by
+ * a rebuild mid-session and not only by a disable.
  */
-function applyWidth(el: HTMLElement, size: Viewport, resizable: boolean): void {
-  if (!resizable) {
-    el.style.width = `${String(size.w)}px`;
-  }
+function attachShared(deps: FrameDeps, chrome: Chrome, interactive: InteractiveFrame): Teardown {
+  const onWindowResize = (): void => {
+    interactive.refit();
+  };
+  deps.window.addEventListener('resize', onWindowResize);
+  const gate = gateFor({ arrange: deps.arrange, chrome, setGestures: interactive.setGestures });
+
+  return () => {
+    deps.window.removeEventListener('resize', onWindowResize);
+    gate();
+  };
 }
 
 function mountFrame(deps: FrameDeps, chrome: Chrome, size: Viewport): FrameMechanics {
@@ -180,7 +158,7 @@ function mountFrame(deps: FrameDeps, chrome: Chrome, size: Viewport): FrameMecha
   let destroyed = false;
 
   deps.root.appendChild(chrome.el);
-  applyWidth(chrome.el, size, isResizable(deps));
+  applyWidth(chrome.el, size, resizeAxes(deps.opts, deps.chrome));
 
   // Everything about WHEN a frame is on screen, including why a saved one starts
   // hidden, is in kit/frame-visibility.ts.
@@ -206,10 +184,7 @@ function mountFrame(deps: FrameDeps, chrome: Chrome, size: Viewport): FrameMecha
     gestureDeps(deps, chrome, size, vis.commit),
   );
 
-  const onWindowResize = (): void => {
-    interactive.refit();
-  };
-  deps.window.addEventListener('resize', onWindowResize);
+  const detach = attachShared(deps, chrome, interactive);
 
   chrome.close?.addEventListener('click', () => {
     vis.set(false);
@@ -228,7 +203,7 @@ function mountFrame(deps: FrameDeps, chrome: Chrome, size: Viewport): FrameMecha
         return;
       }
       destroyed = true;
-      deps.window.removeEventListener('resize', onWindowResize);
+      detach();
       interactive.destroy();
       chrome.el.remove();
     },
@@ -301,6 +276,7 @@ function createAddonFrame(deps: FrameDeps): AddonFrame {
   return {
     el: chrome.el,
     body: chrome.body,
+    box: frame.interactive.box,
 
     get visible(): boolean {
       return frame.isVisible();
@@ -334,4 +310,4 @@ function frameTeardown(frame: AddonFrame): Teardown {
 }
 
 export type { AddonFrame, FrameDeps };
-export { createAddonFrame, DEFAULT_FRAME_WIDTH, frameTeardown };
+export { createAddonFrame, frameTeardown };

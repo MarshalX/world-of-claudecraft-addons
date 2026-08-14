@@ -193,6 +193,20 @@ export interface MenuEntryOpts {
   onClick: () => void;
 }
 
+/** What a box is being divided between. See `UiApi.units`. */
+export interface UnitOpts {
+  /** How many units share the box. Below one there is nothing to divide. */
+  count?: number;
+  /** The space between two of them, which is paid before the division. */
+  gap?: number;
+  /** Fixed space the units never get: a caption band, a footer, a header row. */
+  extra?: number;
+  /** How small a unit may be. Also the answer when the box cannot be divided at all. */
+  min?: number;
+  /** How large a unit may be. Defaults to no ceiling. */
+  max?: number;
+}
+
 export interface UiApi {
   /** A light, content-sized HUD frame: movable, with no close button. */
   frame: (opts: FrameOpts) => Frame;
@@ -319,6 +333,26 @@ export interface UiApi {
    * element of your own.
    */
   show: (el: Element, shown: boolean) => void;
+  /**
+   * How big one unit is when a box is divided between several of them. Since apiMinor 6.
+   *
+   * The arithmetic behind a display that scales with its own frame: a strip of squares
+   * whose height is the icon size, a column of rows dividing the box between them. Every
+   * addon in the catalogue that did this had written the same four steps, and the two
+   * worth having in one place are that the GAPS come out before the division rather than
+   * after, and that the share is FLOORED. A share rounded up is a last row a pixel or two
+   * past the bottom of the box, which a bare frame clips rather than scrolls.
+   *
+   * ```js
+   * // Eight rows and their gaps, out of the height the player dragged.
+   * const row = woc.ui.units(frame.box().h, { count: 8, gap: 3, min: 23, max: 69 });
+   * ```
+   *
+   * `extra` is space the units never get: the caption band under a strip of art, a footer,
+   * a header row. `min` is also the answer when there is nothing to divide, so a box that
+   * has not been measured yet gives back a usable number rather than a NaN.
+   */
+  units: (available: number, opts?: UnitOpts) => number;
   /** Where the game's own art lives, so no addon writes a path. */
   icon: IconUrls;
   /**

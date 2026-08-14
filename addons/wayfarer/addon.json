@@ -1,9 +1,9 @@
 {
   "id": "wayfarer",
   "name": "Wayfarer",
-  "version": "1.0.1",
+  "version": "1.1.0",
   "apiVersion": 1,
-  "apiMinor": 4,
+  "apiMinor": 6,
   "author": "MarshalX",
   "description": "An atlas: where everything is, how far, and which way. Every row carries an arrow pointing the way you would have to turn to walk there, so the list is read by turning until one of them points up.",
   "entry": "main.js",

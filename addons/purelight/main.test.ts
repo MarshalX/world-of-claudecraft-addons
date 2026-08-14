@@ -512,11 +512,12 @@ describe('its manifest', () => {
 
   // The published members this addon reads, and the minor each arrived at:
   // `world.dispellable` and `woc.onFrame` at 2, then `ui.list` (with `shown`),
-  // `fmt.duration` and a frame's own `toggleKey` at 4. A manifest that claims less than
-  // it calls loads against a loader that has none of them and throws, so the number is
-  // the highest of them rather than the one the addon shipped with.
+  // `fmt.duration` and a frame's own `toggleKey` at 4, and `ui.units` at 6, which is what
+  // solves the strip's box back for the square under its caption. A manifest that claims
+  // less than it calls loads against a loader that has none of them and throws, so the
+  // number is the highest of them rather than the one the addon shipped with.
   it('declares the minor the members it calls arrived in', () => {
-    expect(manifest().apiMinor).toBe(4);
+    expect(manifest().apiMinor).toBe(6);
   });
 });
 

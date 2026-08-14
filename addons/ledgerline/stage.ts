@@ -6,8 +6,22 @@
 //
 // Every id here ships painted art, from the deployed `/ui/items/mapping.json`, so a missing icon
 // in a shot is a real defect rather than a fixture naming a file that never existed.
-// `silverleaf_herb` is in on purpose: its art is filed under "Sheenleaf Herb", which is the case
-// the label under every row is hedging about.
+//
+// The NAMES come from `lorebind`, which this addon names as a companion for exactly that, and
+// the scenario stands in for it: `stage.publish` emits the batch a running lorebind would answer
+// an ask with, taken from lorebind's own committed table so a fixture cannot invent a name the
+// publisher would not give. Without it the picture is what a player with no publisher installed
+// sees, which is a mixture: the art manifest still names most of these and has stopped naming
+// `healing_potion`, `boar_hide` and `ghostly_essence`, so those three rows fall back to raw ids.
+// That mixture is honest and it is not the pair this addon recommends, which is what a Browse
+// thumbnail should be showing.
+//
+// `Stall.name` is what the FIXTURE sorts by and it is the game's display name, which is what
+// the server sorts on. It used to be the art manifest's name, and the two have come apart: the
+// manifest calls `silverleaf_herb` "Sheenleaf Herb", which the game now does too, so the
+// divergence this fixture was built to picture has closed there and opened at `boar_hide`,
+// which the game calls "Bristly Boar Hide". Nothing on screen depends on that any more, since
+// the labels come from the publisher above.
 //
 // The others section is sorted the way the SERVER sorts it, by display name then stack total.
 // The undercut check reads exactly that ordering, so a fixture in any other order would be a
@@ -16,6 +30,7 @@
 
 import { inSeries } from '../../loader/src/shared/sequence.ts';
 import type { Scenario, Stage, WorldDraft } from '../../stage/src/stage.ts';
+import ITEMS from '../lorebind/items.json' with { type: 'json' };
 import FLOORS from './floors.json' with { type: 'json' };
 
 const SILVER = 100;
@@ -91,7 +106,7 @@ interface Stack {
  */
 interface Stall {
   item: string;
-  /** The art name, which is what this fixture sorts by. See the header. */
+  /** The game's display name, which is what this fixture sorts by. See the header. */
   name: string;
   units: readonly number[];
   stacks: readonly Stack[];
@@ -440,6 +455,27 @@ function atTheMerchant(draft: WorldDraft): void {
  */
 const FLOOR_DATA = { 'floors.json': JSON.stringify(FLOORS) };
 
+/** What a running lorebind answers an `items` ask with, for the ids this fixture uses. */
+const LOREBIND_FQID = 'official/lorebind';
+const ITEMS_TOPIC = 'items';
+
+/**
+ * The companion, standing in.
+ *
+ * Every field is lorebind's own, read out of the table it ships, so the names on screen are the
+ * names a player would get rather than ones this file made up. Narrowed to the ids the fixture
+ * names, since the whole table is 837 rows and the panel draws eleven of them.
+ */
+function lorebindSpeaks(stage: Stage): void {
+  const wanted = new Set([
+    ...STALLS.map((stall) => stall.item),
+    ...WAITING_ITEMS.map((row) => row.itemId),
+    'ghostly_essence',
+  ]);
+  const rows = ITEMS.items.filter((item) => wanted.has(item.id));
+  stage.publish(LOREBIND_FQID, ITEMS_TOPIC, rows);
+}
+
 const SETTLE_MS = 60;
 
 function pause(ms: number): Promise<void> {
@@ -504,6 +540,10 @@ function artLanded(
  * stamp this addon keeps comes from `woc.wallClock()`.
  */
 async function browsedForDays(stage: Stage): Promise<void> {
+  // Before the first paint, because a row learns its name once and the picture is of a
+  // panel that has been running beside its companion for three days rather than of one
+  // that was told what an item is called a moment before the shutter.
+  lorebindSpeaks(stage);
   await drawn(stage);
   await inSeries(BROWSES.slice(1).entries(), async ([step, ago]) => {
     const at = step + 1;

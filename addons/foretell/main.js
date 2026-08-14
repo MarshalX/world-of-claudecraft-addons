@@ -72,12 +72,6 @@ function listHeight(count) {
 }
 
 /**
- * The height the loader last gave the frame. Held rather than measured, or every pointer
- * move costs a layout. Seeded, because `onMove` does not fire for the initial placement.
- */
-let boxHeight = 0;
-
-/**
  * The overlay, or null when the bars are anchored in the world.
  *
  * Bare, because nothing is casting most of the time and the empty state is what a session
@@ -100,13 +94,7 @@ function buildFrame() {
     resizable: true,
     minWidth: MIN_FRAME_WIDTH,
     minHeight: listHeight(1),
-    onMove: (box) => {
-      boxHeight = box.h;
-    },
   });
-  // The opening height, which `onMove` deliberately does not report. A restored box
-  // overwrites it through that callback a moment later.
-  boxHeight = listHeight(barBudget());
   built.body.append(list);
   return built;
 }
@@ -223,7 +211,10 @@ function rowCap() {
   if (frame === null) {
     return budget;
   }
-  const fits = Math.floor(boxHeight / ROW_PITCH);
+  // The loader's own answer rather than a copy of it: reading the box costs nothing,
+  // where measuring the element would cost a layout on every frame this is called from,
+  // and there is no opening height to seed since `onMove` never reports one.
+  const fits = Math.floor(frame.box().h / ROW_PITCH);
   return Math.max(Math.min(budget, fits), 1);
 }
 

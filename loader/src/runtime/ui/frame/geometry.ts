@@ -53,6 +53,18 @@ interface Viewport {
 }
 
 /**
+ * Which axes the BOX owns, and therefore which of them anything writes.
+ *
+ * An axis the box does not own follows the content, which is what a frame with no
+ * `resizable` has always done on both. Kept here beside the size rules rather than
+ * with the gesture layer, because it is what every clamp is answering about.
+ */
+interface SizeAxes {
+  w: boolean;
+  h: boolean;
+}
+
+/**
  * What a caller may pin a frame's size between.
  *
  * Both are the CALLER's numbers, stated before anything knows how big the screen
@@ -176,7 +188,7 @@ function initialBox(viewport: Viewport, size: Viewport, bounds?: SizeBounds): Fr
   );
 }
 
-export type { FrameBox, SizeBounds, Viewport };
+export type { FrameBox, SizeAxes, SizeBounds, Viewport };
 export {
   clampBox,
   clampNumber,
