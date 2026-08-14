@@ -24,13 +24,22 @@ import type { AddonStorageApi } from '../loader/src/runtime/api/storage.ts';
 import type { UiApi } from '../loader/src/runtime/api/ui.ts';
 import type { WorldApi } from '../loader/src/runtime/api/world.ts';
 import type { EventPayloads } from '../loader/src/runtime/net/events.ts';
+import type {
+  BattlegroundMatch,
+  BattlegroundStandings,
+} from '../loader/src/runtime/world/battleground.ts';
 import type { ProfessionInfo, ToolEffectSlot } from '../loader/src/runtime/world/character.ts';
 import type { Entity, HeldSlot, InvSlot } from '../loader/src/runtime/world/game-types.ts';
 import type { HeldItemInstance } from '../loader/src/runtime/world/items.ts';
 import type { MarketInfo } from '../loader/src/runtime/world/market.ts';
+import type { Reaction } from '../loader/src/runtime/world/reaction.ts';
 import type { WorldKey } from '../loader/src/runtime/world/signature.ts';
 import type { WorldValues } from '../loader/src/runtime/world/values.ts';
 import type { AddonInfo, GameInfo } from '../packages/types/addon.js';
+import type {
+  BattlegroundMatch as PublicBattlegroundMatch,
+  BattlegroundStandings as PublicBattlegroundStandings,
+} from '../packages/types/battleground.js';
 import type { BusApi as PublicBusApi } from '../packages/types/bus.js';
 import type {
   ProfessionInfo as PublicProfessionInfo,
@@ -50,14 +59,17 @@ import type { SoundApi as PublicSoundApi } from '../packages/types/sound.js';
 import type { StorageApi as PublicStorageApi } from '../packages/types/storage.js';
 import type { UiApi as PublicUiApi } from '../packages/types/ui.js';
 import type {
+  Reaction as PublicReaction,
   WorldApi as PublicWorldApi,
-  WorldKey as PublicWorldKey,
-  WorldValues as PublicWorldValues,
 } from '../packages/types/world.js';
 import type {
   HeldSlot as PublicHeldSlot,
   InvSlot as PublicInvSlot,
 } from '../packages/types/world-items.js';
+import type {
+  WorldKey as PublicWorldKey,
+  WorldValues as PublicWorldValues,
+} from '../packages/types/world-watch.js';
 
 /**
  * True only when every member of `From` satisfies `To`.
@@ -220,6 +232,38 @@ const publishedIsMarket: Assignable<PublicMarketInfo, MarketInfo> = true;
 const marketFieldsAgree: SameFields<MarketInfo, PublicMarketInfo> = true;
 
 /**
+ * The battleground's two shapes, compared directly like the entity's.
+ *
+ * `WorldApi` reaches both structurally, but `BattlegroundMatch` is one member of
+ * a five-way union, so a field moving on one side alone surfaces as an error
+ * about `MatchInfo` naming none of the five. Comparing the shapes says which.
+ *
+ * `SameFields` on both because this surface is the one most likely to gain an
+ * OPTIONAL field: the mode is under active development in the game, and the last
+ * two releases each added a member to it. Two-way assignability is blind to
+ * exactly that.
+ */
+const bgStandingsArePublished: Assignable<BattlegroundStandings, PublicBattlegroundStandings> =
+  true;
+const publishedAreBgStandings: Assignable<PublicBattlegroundStandings, BattlegroundStandings> =
+  true;
+const bgStandingsFieldsAgree: SameFields<BattlegroundStandings, PublicBattlegroundStandings> = true;
+const bgMatchIsPublished: Assignable<BattlegroundMatch, PublicBattlegroundMatch> = true;
+const publishedIsBgMatch: Assignable<PublicBattlegroundMatch, BattlegroundMatch> = true;
+const bgMatchFieldsAgree: SameFields<BattlegroundMatch, PublicBattlegroundMatch> = true;
+
+/**
+ * Compared directly although `WorldApi` reaches it, because a union of three
+ * string literals is the shape a drift is invisible in: dropping 'neutral' on one
+ * side leaves the other a superset, which is still assignable in the direction
+ * anybody would have written, and the reading silently narrows.
+ *
+ * No `SameFields`, which compares KEYS and reads nothing on a union of literals.
+ */
+const reactionIsPublished: Assignable<Reaction, PublicReaction> = true;
+const publishedIsReaction: Assignable<PublicReaction, Reaction> = true;
+
+/**
  * The watchable keys against the runtime's own list.
  *
  * `signature.ts` owns the keys: it holds the array `world.on` validates against
@@ -348,6 +392,14 @@ describe('the published types', () => {
       marketIsPublished,
       publishedIsMarket,
       marketFieldsAgree,
+      bgStandingsArePublished,
+      publishedAreBgStandings,
+      bgStandingsFieldsAgree,
+      bgMatchIsPublished,
+      publishedIsBgMatch,
+      bgMatchFieldsAgree,
+      reactionIsPublished,
+      publishedIsReaction,
       valuesArePublished,
       publishedAreValues,
       keysArePublished,

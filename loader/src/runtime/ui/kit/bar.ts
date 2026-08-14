@@ -29,28 +29,25 @@
 
 import type { Teardown } from '../../disposal.ts';
 import { type MoneyValue, writeValue } from './money.ts';
-import type {
-  ArtSlot,
-  ReadoutQuality,
-  ReadoutSchool,
-  ReadoutTone,
-  StyleSlot,
-  TextSlot,
-  VariantState,
-} from './readout.ts';
+import type { ArtSlot, StyleSlot, TextSlot } from './readout.ts';
 import {
-  applyVariants,
   buildArt,
   clampFraction,
   styleSlot,
   textSlot,
-  toneClass,
-  variantState,
   writeArt,
   writeStyle,
   writeText,
   writeTextHiding,
 } from './readout.ts';
+import type {
+  ReadoutClass,
+  ReadoutQuality,
+  ReadoutSchool,
+  ReadoutTone,
+  VariantState,
+} from './variants.ts';
+import { applyVariants, toneClass, variantState } from './variants.ts';
 
 const FULL_PERCENT = 100;
 const DECIMALS = 2;
@@ -63,6 +60,8 @@ type BarTone = ReadoutTone;
 type BarSchool = ReadoutSchool;
 
 type BarQuality = ReadoutQuality;
+
+type BarClass = ReadoutClass;
 
 function setFraction(fill: StyleSlot, fraction: unknown): void {
   writeStyle(fill, `${(clampFraction(fraction) * FULL_PERCENT).toFixed(DECIMALS)}%`);
@@ -179,6 +178,19 @@ interface BarUpdate {
    * ranks at no tier at all.
    */
   quality?: BarQuality | null;
+  /**
+   * Tint the fill by the game's own colour for a CLASS.
+   *
+   * The fourth axis, and the only one about who rather than what. It colours the FILL
+   * where a tier colours the label, because a class is what the whole row is: a health
+   * bar per class is how every client that has ever drawn one has drawn it.
+   *
+   * Weakest of the three fill claims, so a school tint and a tone both win over it. Null
+   * and anything that is not one of the nine colour nothing, which is the answer for a
+   * mob: the id an addon holds is a `templateId` as often as a class, and a wolf is not
+   * one.
+   */
+  unitClass?: BarClass | null;
   /** A quieter second line under the head. An empty string hides it again. */
   detail?: string;
   tone?: BarTone;
@@ -238,5 +250,5 @@ function createBar(doc: Document, opts: BarOpts = {}): Bar {
   };
 }
 
-export type { Bar, BarOpts, BarQuality, BarSchool, BarTone, BarUpdate };
+export type { Bar, BarClass, BarOpts, BarQuality, BarSchool, BarTone, BarUpdate };
 export { createBar };

@@ -24,6 +24,7 @@ import type { Aura, Entity, WorldQuests } from '../../loader/src/runtime/world/g
 import type { CorpseView } from '../../loader/src/runtime/world/ground.ts';
 import { type GroupInfo, readGroup } from '../../loader/src/runtime/world/group.ts';
 import { UNKNOWN } from '../../loader/src/runtime/world/proximity.ts';
+import { type Reaction, reactionOf } from '../../loader/src/runtime/world/reaction.ts';
 import { readThreat, type ThreatTable } from '../../loader/src/runtime/world/threat.ts';
 import { createWorldWatcher, type WorldWatcher } from '../../loader/src/runtime/world/watch.ts';
 import { PLAYER_ENTITY } from './frames.ts';
@@ -175,6 +176,7 @@ export function watchHarness(): WatchHarness {
         player: live.player as unknown as Entity,
         party: null,
         entities: live.entities as ReadonlyMap<number, Entity>,
+        match: null,
         lastDamageAt: null,
         now: 0,
       });
@@ -187,6 +189,7 @@ export function watchHarness(): WatchHarness {
     characterKey: null,
     match: null,
     arena: null,
+    battleground: null,
     finder: null,
     finderBoard: null,
     deathZones: null,
@@ -194,6 +197,17 @@ export function watchHarness(): WatchHarness {
     nodeCooldowns: null,
     corpse: null,
     corpseLoot: (): CorpseView | null => null,
+    // Through the real rule for the reason `combat` is: a suite that puts a pet
+    // or a bout in `live` sees the answer an addon would. No bout here, so every
+    // player reads friendly, which is what a world with no match is.
+    reaction: (entityId: number): Reaction | null => {
+      const roster = live.entities as ReadonlyMap<number, Entity>;
+      const entity = roster.get(entityId);
+      if (entity === undefined) {
+        return null;
+      }
+      return reactionOf(entity, roster, null);
+    },
     market: UNKNOWN,
     marketCollectPending: null,
     mail: UNKNOWN,

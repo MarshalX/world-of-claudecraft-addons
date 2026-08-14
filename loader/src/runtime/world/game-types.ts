@@ -293,6 +293,25 @@ export interface Entity {
   /** The paperdoll eye toggle: the composed body renders without its kit helm. */
   helmHidden: boolean;
 
+  // What a player is DOING outside combat, and what their account is. Player
+  // fields like the block above: on a mob these hold their inert default.
+  /** The /afk display bit. The game draws an `<AFK>` prefix on the nameplate. */
+  afk: boolean;
+  /**
+   * Sitting, EATING or DRINKING: the wire folds all three into one bit.
+   *
+   * So the name is the game's own field name and is narrower than the meaning.
+   * There is no way to tell the three apart for another player, because the
+   * server never sends them apart.
+   */
+  sitting: boolean;
+  /** The party emote floating over a player's head, or null. */
+  overheadEmoteId: string | null;
+  /** Bumped every time the same emote is played again, which is the only way to see a repeat. */
+  overheadEmoteSeq: number;
+  /** The operator-set mark on an AI-operated account. */
+  aiAccount: boolean;
+
   /**
    * Ranged attack power. Rides `dynamicFields`, so unlike the self-only block
    * below it is real on every entity, your own player included.
@@ -324,69 +343,6 @@ export interface Entity {
    * it. An ability with no charge model is simply not a key.
    */
   abilityCharges?: Record<string, AbilityCharge>;
-}
-
-/** A compact aura summary for a party row. Not the full `Aura`. */
-export interface PartyMemberAura {
-  id: string;
-  kind: AuraKind;
-  /**
-   * 1 when the effect's MAGNITUDE is negative. Not "this is a debuff".
-   *
-   * The game sets it from `aura.value < 0` and nothing else, so a damage over
-   * time, a root, a stun and a silence all arrive without it: they are harmful
-   * by KIND rather than by sign. Reading it as a debuff flag is how a dispel
-   * display comes to drop most of what a healer would dispel.
-   *
-   * `world.harmful` is the answer, and it puts both clauses back together.
-   */
-  neg?: 1;
-  /** Whole seconds. Absent on an older snapshot. */
-  remaining?: number;
-}
-
-/**
- * One party or raid row.
- *
- * These are the terse wire names, not the entity's: a row carries `mhp` where an
- * entity carries `maxHp`, and the flags are 0 or 1 rather than booleans. Party
- * rows come straight off the socket, which is why they read differently from
- * everything else here.
- */
-export interface PartyMember {
-  pid: number;
-  name: string;
-  /** The class id, e.g. 'hunter'. */
-  cls: string;
-  level: number;
-  hp: number;
-  mhp: number;
-  res: number;
-  mres: number;
-  rtype: ResourceType | null;
-  x: number;
-  z: number;
-  dead: number;
-  inCombat: number;
-  /** Raid subgroup. */
-  group: 1 | 2;
-  /** Remaining absorb total. Absent on an older snapshot. */
-  absorb?: number;
-  role?: 'tank' | 'healer' | 'dps';
-  /** 0 only when the realm reports this member disconnected. */
-  connected?: number;
-  /** 1 while a living hostile is targeting this member. */
-  hasAggro?: number;
-  incomingHeal?: number;
-  /** Absent on an older snapshot, which decodes as "no auras". */
-  auras?: PartyMemberAura[];
-}
-
-export interface PartyInfo {
-  /** The leader's pid. */
-  leader: number;
-  raid: boolean;
-  members: PartyMember[];
 }
 
 /**

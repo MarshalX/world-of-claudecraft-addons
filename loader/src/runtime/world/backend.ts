@@ -30,11 +30,13 @@ import type {
   Entity,
   EquipSlot,
   HeldSlot,
-  PartyInfo,
   QuestProgress,
   WorldQuests,
 } from './game-types.ts';
 import { type CorpseView, corpseViewOf, viewerOf } from './ground.ts';
+import { readMatch } from './match.ts';
+import type { PartyInfo } from './party-types.ts';
+import { type Reaction, reactionOf } from './reaction.ts';
 import { readonlyMapView } from './readonly-map.ts';
 import { readThreat, type ThreatTable } from './threat.ts';
 
@@ -79,6 +81,7 @@ function combatOf(
     player: readAs<Entity>(world, 'player'),
     party: readAs<PartyInfo>(world, 'partyInfo'),
     entities,
+    match: readMatch(world),
     lastDamageAt: deps.lastDamageAt(),
     now: deps.now(),
   });
@@ -199,6 +202,15 @@ function tailReads(world: unknown, entities: () => ReadonlyMap<number, Entity>, 
     corpseLoot: (entityId: number): CorpseView | null =>
       corpseViewOf(entities().get(entityId) ?? null, entityId, viewerOf(world)),
 
+    reaction: (entityId: number): Reaction | null => {
+      const roster = entities();
+      const entity = roster.get(entityId);
+      if (entity === undefined) {
+        return null;
+      }
+      return reactionOf(entity, roster, readMatch(world));
+    },
+
     get characterKey(): string | null {
       return readCharacterKey(deps.realm(), world);
     },
@@ -241,6 +253,8 @@ export interface WorldBackend
   readonly threat: (entityId: number) => ThreatTable;
   /** One corpse's contents filtered to what the player could take, or null. */
   readonly corpseLoot: (entityId: number) => CorpseView | null;
+  /** Which side one unit is on, or null for an id the roster does not hold. */
+  readonly reaction: (entityId: number) => Reaction | null;
   readonly quests: WorldQuests;
   /**
    * Ability id to seconds remaining.

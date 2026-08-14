@@ -13,11 +13,18 @@ import {
   IDLE_WINDOW_MS,
   readCombat,
 } from '../loader/src/runtime/world/combat.ts';
-import type { Entity, PartyInfo } from '../loader/src/runtime/world/game-types.ts';
+import type { Entity } from '../loader/src/runtime/world/game-types.ts';
+import type { MatchInfo } from '../loader/src/runtime/world/match.ts';
+import type { PartyInfo } from '../loader/src/runtime/world/party-types.ts';
 import { PLAYER_ENTITY } from './fakes/frames.ts';
 
 const PLAYER_ID = 3267;
 const MOB_ID = 286;
+/** Another player: the one kind of unit whose side is not on its record. */
+const RIVAL_ID = 42;
+/** The two teams, by the index the game gives each. */
+const CRIMSON = 0;
+const AZURE = 1;
 
 function player(over: Partial<Entity> = {}): Entity {
   return { ...(PLAYER_ENTITY as unknown as Entity), id: PLAYER_ID, ...over };
@@ -35,6 +42,66 @@ function mob(over: Partial<Entity> = {}): Entity {
     aggroTargetId: null,
     threat: new Map<number, number>(),
     ...over,
+  };
+}
+
+/**
+ * Another PLAYER, as the wire actually delivers one: `hostile` false, always.
+ *
+ * The flag is written where the game builds a mob, so an opponent carries the
+ * same false your own party does and only the bout tells them apart.
+ */
+function rival(over: Partial<Entity> = {}): Entity {
+  return mob({ id: RIVAL_ID, kind: 'player', hostile: false, ...over });
+}
+
+function duel(otherPid: number): MatchInfo {
+  return { format: 'duel', state: 'active', otherPid, otherName: 'Dravin' };
+}
+
+/** One fighter on each side, the player on Crimson. Every clock at rest. */
+function battleground(): MatchInfo {
+  return {
+    format: 'battleground',
+    state: 'active',
+    myTeam: CRIMSON,
+    capsToWin: 3,
+    scores: [0, 0],
+    flags: [
+      { state: 'home', carrierPid: null, carrierName: null, carrierTeam: null },
+      { state: 'home', carrierPid: null, carrierName: null, carrierTeam: null },
+    ],
+    fighters: [
+      {
+        pid: PLAYER_ID,
+        name: 'You',
+        cls: 'hunter',
+        team: CRIMSON,
+        carrying: false,
+        dead: false,
+        kills: 0,
+        deaths: 0,
+        captures: 0,
+        assists: 0,
+      },
+      {
+        pid: RIVAL_ID,
+        name: 'Dravin',
+        cls: 'rogue',
+        team: AZURE,
+        carrying: false,
+        dead: false,
+        kills: 0,
+        deaths: 0,
+        captures: 0,
+        assists: 0,
+      },
+    ],
+    countdown: 0,
+    timeLeft: 300,
+    waveIn: [0, 0],
+    respawnIn: 0,
+    winner: null,
   };
 }
 
@@ -68,6 +135,7 @@ function inputs(over: Partial<CombatInputs> = {}): CombatInputs {
     player: player(),
     party: null,
     entities: new Map<number, Entity>(),
+    match: null,
     lastDamageAt: null,
     now: 0,
     ...over,
@@ -112,12 +180,48 @@ describe('readCombat', () => {
     });
   });
 
-  it('reads a hostile player targeting you, which is the one place targetId is set', () => {
-    const enemy = mob({ id: 42, kind: 'player', targetId: PLAYER_ID });
+  it('reads a duel opponent targeting you, which is the one place targetId is set', () => {
+    const enemy = rival({ targetId: PLAYER_ID });
 
-    expect(readCombat(inputs({ entities: new Map([[42, enemy]]) }))).toEqual({
+    expect(
+      readCombat(inputs({ entities: new Map([[RIVAL_ID, enemy]]), match: duel(RIVAL_ID) })),
+    ).toEqual({
       active: true,
       source: 'pvp',
+    });
+  });
+
+  // The fixture this replaced set `hostile: true` on a player, which the game
+  // never does: it is written when a MOB is built and nowhere else. So the branch
+  // it was proving read as a restriction and was a permanent no, and this is the
+  // case that fails if hostility ever goes back to being read off the entity.
+  it('does not treat a stranger with you selected as a pvp attacker', () => {
+    const stranger = rival({ targetId: PLAYER_ID });
+
+    expect(readCombat(inputs({ entities: new Map([[RIVAL_ID, stranger]]) }))).toEqual({
+      active: false,
+      source: 'none',
+    });
+  });
+
+  it('reads an enemy fighter in a battleground, where nobody carries the flag', () => {
+    const enemy = rival({ targetId: PLAYER_ID });
+
+    expect(
+      readCombat(inputs({ entities: new Map([[RIVAL_ID, enemy]]), match: battleground() })),
+    ).toEqual({
+      active: true,
+      source: 'pvp',
+    });
+  });
+
+  it('does not treat your own side in a battleground as an attacker', () => {
+    const ally = rival({ targetId: PLAYER_ID });
+    const sameSide = { ...battleground(), myTeam: AZURE };
+
+    expect(readCombat(inputs({ entities: new Map([[RIVAL_ID, ally]]), match: sameSide }))).toEqual({
+      active: false,
+      source: 'none',
     });
   });
 

@@ -186,13 +186,22 @@ Competitive play and the group finder:
 ```js
 woc.world.match           // the bout you are in, discriminated on `format`
 woc.world.arena           // your standings, your queue, the live ladders
+woc.world.battleground    // your battleground record, queue and ladder
 woc.world.finder          // your dungeon finder state
 woc.world.finderBoard     // the realm's open premade listings
 ```
 
-`world.match` is one union over every format, a duel included, so you ask what kind of bout this is rather than reading two unrelated members. Everything but a duel is UP TO TEN SECONDS OLD: the arena key is gated to 0.1 Hz on the server, which is the game's own cadence. A Fiesta ring drawn from it agrees with the ring the game draws; a Yumi health bar does not, and the type says which events carry the live figures.
+`world.match` is one union over every format, a duel and a battleground included, so you ask what kind of bout this is rather than reading three unrelated members. The cadence is per format, because three different keys sit behind it: a duel rides every tick, a battleground rides at 1 Hz and is forced fresh on every transition worth acting on, and the four arena formats are UP TO TEN SECONDS OLD because that key is gated to 0.1 Hz on the server. That is the game's own cadence. A Fiesta ring drawn from it agrees with the ring the game draws; a Yumi health bar does not, and the type says which events carry the live figures.
 
 `world.arena` is present for every character whether or not they have ever played, so a non-null reading says nothing on its own. Only the two ranked brackets mean anything: the unranked three carry a copy of the 2v2 record and an empty ladder.
+
+`world.battleground` is the same shape of reading for Thornhollow Fields: present for everybody, a record and a queue and the live ladder, with the match itself over on `world.match` as the `format: 'battleground'` member. Three things are worth knowing before building on it.
+
+**An enemy PLAYER is identified from this roster and from no field.** A player entity never carries `hostile`, which the server sets on mobs alone, so a nameplate that colours from that flag paints every opponent in the game friendly-blue. Compare each `fighters[]` entry's `team` against `myTeam`, and the same applies in a duel and an arena, where the roster is on `world.match` too. `world.reaction` folds all three together and handles pets, so reach for it unless you need the roster itself.
+
+**Paint from the key, announce from the events.** The key carries the score, both flags, the roster and the clocks, and it survives a reload. `bgFlag`, `bgKill`, `bgTimeWarning` and `bgEnd` are the moment. An addon that keeps its own score by adding up events drifts the first time one is missed; one that polls the key for a capture announces it up to a second late. `bgEnd` is the only place a rating DELTA and the reason a match ended are readable.
+
+**What is missing is enforced, not an oversight.** An enemy fighter's position, health, auras and casts never reach your client past the ordinary interest radii, and the roster deliberately carries no health at all. `dead` is the one piece of enemy state that is match-wide, because the respawn wave clock already tells both sides the same thing. There is no way to build an enemy tracker or an enemy health readout, and nothing that appears to do so is reading real data. The queue offer is the same shape of limit from the other direction: `battleground.proposal` says an offer is open and counts its seconds, and accepting it is a send, so the Accept stays in the game's own prompt.
 
 `world.finder` and `world.finderBoard` are reads and nothing more. Neither can join a queue, answer a proposal, create a listing or accept an applicant.
 
@@ -249,7 +258,7 @@ woc.world.on('combat', ({ active, source }) => {
 });
 ```
 
-`source` is `party` when you are grouped, since the server sets a combat flag per member; `threat` when a nearby mob's hate table has you on it, which is server state too; `pvp` when a hostile player has you selected; and `recent` when none of those answered and damage involving you landed in the last five seconds. Only that last one is a guess. Most addons can ignore the source entirely; read it when acting on a false positive would be worse than acting late.
+`source` is `party` when you are grouped, since the server sets a combat flag per member; `threat` when a nearby mob's hate table has you on it, which is server state too; `pvp` when a player the bout puts on the other side has you selected, which is the same reading `world.reaction` answers with; and `recent` when none of those answered and damage involving you landed in the last five seconds. Only that last one is a guess. Most addons can ignore the source entirely; read it when acting on a false positive would be worse than acting late.
 
 There IS an `inCombat` field on the entity and it is never written, so it reads false forever. That is not an oversight in this API, it is the reason this reading exists.
 
@@ -265,6 +274,18 @@ woc.world.unit('party1');        // the first group member who is not you
 `world.unit` resolves a unit the way an addon thinks about one, and `targettarget` is the reason to use it rather than writing the lookup yourself. A mob does not carry `targetId`: the server fills that field from a SELECTION, and a mob does not select, so on every mob it is present, correctly typed, and permanently null. What a mob is fighting rides `aggroTargetId` instead. The resolver reads whichever field the target's kind actually fills, so a target-of-target display works on the units it is usually pointed at.
 
 `partyN` counts the other members, so `party1` is the first person who is not you; `raidN` counts everyone including you. Both resolve to an **entity**, which means both answer null for a member too far away to have one even while `world.party` still lists them. For a raid display read the party rows, which are complete, and reach for an entity only when you need something a row does not carry.
+
+### Which side a unit is on
+
+```js
+woc.world.reaction(entity.id);   // 'hostile' | 'friendly' | 'neutral', or null
+```
+
+**Read this rather than `entity.hostile`.** That flag is written where the game builds a MOB and nowhere else, so it is false on every player in the world for the whole of every session, including the five trying to kill you in a battleground. It is genuinely sent and correctly typed, and it is simply never true for the kind you are asking about, so a nameplate coloured from it paints every duel, arena and battleground opponent friendly-blue and nothing anywhere reports a problem.
+
+The answer comes from the bout instead, the same three sources the game's own nameplates use: the duel's other player, the arena's enemy list, and a battleground fighter whose `team` is not your `myTeam`. Outside a bout every player reads friendly, which is what the game draws. A **pet** is asked about its owner, one level deep, so an enemy player's pet reads hostile and your own never reads as a wild mob. `null` is a unit nothing in scope holds, which is a different answer from `neutral`.
+
+`neutral` is a real reading rather than a failure: a wild boar is on nobody's side until somebody makes it.
 
 ### Filtering auras
 
@@ -374,6 +395,8 @@ woc.ui.frame({ id: 'strip', resizable: true, height: 40, onMove: (box) => scaleT
 
 Use it rather than measuring `frame.el`. A measurement forces a synchronous layout, and a display that scales with its frame would pay for one on every frame it draws. It fires on a drag, on a resize at pointer rate, on the async restore of a saved box, and when the window is resized under you, but never for the initial placement, which is the size you asked for and therefore already hold. A throw inside it is caught and written to your addon's log rather than breaking the gesture the player is in the middle of.
 
+A resizable BARE frame has one more thing to arrange, and it is easy to miss because it works while you are testing it. Its default `pointer: 'content'` passes the pointer through everything you did not draw, and the edge a player grabs to resize is at the far side of your box, so a panel sized for more rows than it usually holds has its own resize edge over dead space: the drag is available only in the moment the panel happens to be full, and a player who tries once and gets nothing concludes the panel does not resize. Put a thin element of your own along the edge that grows, absolutely positioned against the frame and appended to `frame.body` as a direct child, which is what the loader hands the pointer back to. The unlock mode is not the answer here, since the gesture the player is making is already the right one.
+
 A frame that is NOT resizable, which is every frame unless you ask, is held to the `width` you declared and its height is whatever it is holding. That is the shape a HUD readout wants, since its text changes and a fixed height would leave it padded out one moment and clipped the next.
 
 The width is a width in both directions, and the second one is the reason. Without it the panel is sized by its content, so it moves whenever the content does: a header that gains a clause steps the whole frame out and pulls it back when the clause goes, rows reflowing, exactly while the player is doing the thing that changed the text. A long note wraps inside your column instead, and a short one leaves the box where it was. Omitting `width` does not opt out of this; it takes the default.
@@ -406,6 +429,20 @@ cell.update({ icon: woc.ui.icon.item('ashstalker_cowl'), quality: 'epic' });
 There is no way to pass a colour, for the reason there is none for a school: two addons drawing an epic should draw the same purple, and it should be the purple in the player's own bags. For an element you drew yourself, a chip or a heading or a name in a panel of your own, the same six colours are on the class `woc-quality-<tier>`, which you may put on anything you own, exactly as you may reuse `woc-btn` and `woc-tab`.
 
 Nothing in the loader knows an item's quality: the game's item table is bundled into its own chunk and is served nowhere. So a tier is something you got from somewhere, which today means a `LootRoll` off `world.group`, a record another addon published on the bus, or a table your own addon ships. Null, and anything outside the six tiers, colours nothing, which is the honest answer for the 96 items the game ranks at no tier at all and for an id you have not looked up.
+
+### People, and the colour a player reads THEM by
+
+A bar takes a fourth axis, `unitClass`, and it is the only one that is about who rather than what. It tints the FILL, where a tier tints the label, because a class is what a whole row is: a health bar per class is how every client that has ever drawn one has drawn it, and a player reads somebody's class off the bar before they read the name.
+
+```js
+row.update({ label: 'Anserra', fraction: 0.66, unitClass: 'priest' });
+```
+
+It is the weakest of the three claims on the fill, so a `school` tint and a `tone` both win over it: what a row is made of and whether it is about to matter are both louder than whose row it is. The nine colours are the game's own and there is no way to pass one, for the reason there is none for a tier. `woc-class-<id>` carries the same colours as text, for a name in a roster or a chip in a scoreboard you drew yourself.
+
+**Check the kind before you pass it.** The id you hold is an entity's `templateId`, which is a class on a player and a mob template everywhere else, so `'boss_wolf'` reaches this field as readily as `'mage'` does. Anything outside the nine tints nothing rather than guessing, but passing null for a mob is what says you looked. A tile has no equivalent: its only colourable edge already carries its school, and a tile of a person would be a portrait, which the game serves no art for.
+
+A tile has no `unitClass`, and a bar and a tile are otherwise the same information in two shapes.
 
 ### Money
 

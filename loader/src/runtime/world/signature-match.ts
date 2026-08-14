@@ -11,7 +11,7 @@
 
 import { fieldArray, fieldNumber, fieldScalar, fieldString, fieldValue } from '../net/frames.ts';
 
-const SOCIAL_KEYS = ['match', 'arena', 'finder', 'finderBoard'] as const;
+const SOCIAL_KEYS = ['match', 'arena', 'battleground', 'finder', 'finderBoard'] as const;
 
 /** The two brackets that keep a record. The other three mirror 2v2, so they would report twice. */
 const RANKED_FORMATS: readonly string[] = ['1v1', '2v2'];
@@ -98,6 +98,49 @@ function yumiSignature(match: unknown): string {
   return `${fieldScalar(match, 'suddenDeath')}|${fieldScalar(match, 'down')}|${alive}`;
 }
 
+/** Where each flag is and who has it. Its home team is its position, so only the pair's order carries it. */
+function flagsOf(match: unknown): string {
+  return fieldArray(match, 'flags')
+    .map((flag) => `${fieldString(flag, 'state') ?? ''}:${fieldNumber(flag, 'carrierPid') ?? 0}`)
+    .join(',');
+}
+
+/**
+ * The roster by pid, with the four tallies and the two states a scoreboard draws.
+ *
+ * The tallies are numbers and are in anyway, for the reason the dungeon finder's
+ * acceptance counts are: each increment is a discrete event a player is watching
+ * for rather than a bar filling, the game itself forces a fresh readout on every
+ * kill, and the key it rides cannot sample faster than 1 Hz.
+ *
+ * Sorted, because the wire's own roster order is not a fact about the match: a
+ * reordering that changed nothing would otherwise repaint every scoreboard.
+ */
+function fightersOf(match: unknown): string {
+  return fieldArray(match, 'fighters')
+    .map((fighter) => {
+      const state = `${fieldScalar(fighter, 'dead')}:${fieldScalar(fighter, 'carrying')}`;
+      const kills = `${fieldNumber(fighter, 'kills') ?? 0}:${fieldNumber(fighter, 'deaths') ?? 0}`;
+      const scored = `${fieldNumber(fighter, 'captures') ?? 0}:${fieldNumber(fighter, 'assists') ?? 0}`;
+      return `${fieldNumber(fighter, 'pid') ?? 0}=${fieldNumber(fighter, 'team') ?? 0}:${state}:${kills}:${scored}`;
+    })
+    .sort(byCodePoint)
+    .join(',');
+}
+
+/**
+ * State, the score, both flags and the roster. No clock of any kind.
+ *
+ * Its own branch rather than `baseSignature`, because a battleground carries no
+ * `allies`/`enemies` pair and no map: its roster is one list carrying each
+ * fighter's team, which is also what its flags are indexed by.
+ */
+function bgMatchSignature(match: unknown): string {
+  const score = fieldArray(match, 'scores').join(':');
+  const result = `${fieldString(match, 'state') ?? ''}|${fieldNumber(match, 'winner') ?? ''}`;
+  return `battleground|${result}|${score}|${flagsOf(match)}|${fightersOf(match)}`;
+}
+
 /** Format, state, both rosters, and whatever the format's own display repaints for. */
 function matchSignature(match: unknown): string {
   if (match === null) {
@@ -106,6 +149,9 @@ function matchSignature(match: unknown): string {
   const format = fieldString(match, 'format');
   if (format === 'duel') {
     return `duel|${fieldNumber(match, 'otherPid') ?? 0}|${fieldString(match, 'state') ?? ''}`;
+  }
+  if (format === 'battleground') {
+    return bgMatchSignature(match);
   }
   const base = baseSignature(match);
   if (format === 'fiesta') {
@@ -143,6 +189,52 @@ function arenaSignature(arena: unknown): string {
   const records = recordsOf(fieldValue(arena, 'standings'));
   return `${fieldString(arena, 'format') ?? ''}|${queue}|${records}|${laddersOf(
     fieldValue(arena, 'ladders'),
+  )}`;
+}
+
+/** In arrival order, which is rank order: a swap of two places is the change it exists to show. */
+function bgLadderOf(ladder: unknown): string {
+  if (!Array.isArray(ladder)) {
+    return '';
+  }
+  return (ladder as readonly unknown[])
+    .map((row) => `${fieldNumber(row, 'pid') ?? 0}:${fieldNumber(row, 'rating') ?? 0}`)
+    .join(',');
+}
+
+/**
+ * The offer by acceptance, never by its clock.
+ *
+ * Its own reader rather than the dungeon finder's `proposalOf` above: that one
+ * reads a per-role seat map this offer does not have, and the two shapes are
+ * unrelated beyond both being called a proposal.
+ */
+function bgProposalOf(proposal: unknown): string {
+  if (proposal === null) {
+    return '';
+  }
+  const answered = `${fieldNumber(proposal, 'accepted') ?? 0}:${fieldString(proposal, 'myResponse') ?? ''}`;
+  return `${fieldNumber(proposal, 'id') ?? 0}:${fieldString(proposal, 'kind') ?? ''}:${answered}`;
+}
+
+/**
+ * Your record, your queue, the offer and the ladder.
+ *
+ * `requeueIn` is carried as a BOOLEAN, exactly as the dungeon finder's cooldown
+ * is: it counts down every second, and what an addon acts on is the transition
+ * from locked out to clear rather than the number.
+ */
+function battlegroundSignature(info: unknown): string {
+  if (info === null) {
+    return '';
+  }
+  const wins = `${fieldNumber(info, 'wins') ?? 0}:${fieldNumber(info, 'losses') ?? 0}:${fieldNumber(info, 'draws') ?? 0}`;
+  const record = `${fieldNumber(info, 'rating') ?? 0}:${wins}:${fieldNumber(info, 'captures') ?? 0}`;
+  const queue = `${fieldScalar(info, 'queued')}:${fieldNumber(info, 'queueSize') ?? 0}:${fieldNumber(info, 'queuedParty') ?? 0}`;
+  const held = String((fieldNumber(info, 'requeueIn') ?? 0) > 0);
+  const bonus = `${fieldScalar(info, 'firstWinBonusReady')}:${held}`;
+  return `${record}|${queue}|${bonus}|${bgProposalOf(fieldValue(info, 'proposal'))}|${bgLadderOf(
+    fieldValue(info, 'ladder'),
   )}`;
 }
 
@@ -217,13 +309,16 @@ function boardSignature(board: unknown): string {
   return `${board.length}|${rows}`;
 }
 
-/** The four keys about what the player is currently in, dispatched by key. */
+/** The five keys about what the player is currently in, dispatched by key. */
 function socialCapture(key: SocialKey, value: unknown): string {
   if (key === 'match') {
     return matchSignature(value);
   }
   if (key === 'arena') {
     return arenaSignature(value);
+  }
+  if (key === 'battleground') {
+    return battlegroundSignature(value);
   }
   if (key === 'finder') {
     return finderSignature(value);
@@ -234,6 +329,7 @@ function socialCapture(key: SocialKey, value: unknown): string {
 export type { SocialKey };
 export {
   arenaSignature,
+  battlegroundSignature,
   boardSignature,
   finderSignature,
   isSocialKey,

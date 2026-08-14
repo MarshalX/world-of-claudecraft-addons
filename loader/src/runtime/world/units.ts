@@ -17,7 +17,8 @@
 // which is complete and comes straight off the wire, and reach for an entity
 // only when it needs something a row does not carry.
 
-import type { Entity, PartyInfo } from './game-types.ts';
+import type { Entity } from './game-types.ts';
+import type { PartyInfo } from './party-types.ts';
 
 /** A `partyN` or `raidN` tail. Hoisted so matching a token allocates nothing. */
 const INDEX_RE = /^[1-9][0-9]*$/;

@@ -6,7 +6,8 @@
 
 import { describe, expect, it } from 'vitest';
 import { filterAuras, filterPartyAuras } from '../loader/src/runtime/world/auras.ts';
-import type { Aura, PartyMemberAura } from '../loader/src/runtime/world/game-types.ts';
+import type { Aura } from '../loader/src/runtime/world/game-types.ts';
+import type { PartyMemberAura } from '../loader/src/runtime/world/party-types.ts';
 
 const ME = 1;
 const SOMEONE_ELSE = 2;

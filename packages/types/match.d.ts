@@ -1,16 +1,20 @@
-// What competitive bout you are in, across all six formats.
+// What competitive bout you are in, across all seven formats.
 //
-// One union rather than six reads, discriminated on `format`, because you ask
+// One union rather than seven reads, discriminated on `format`, because you ask
 // "am I fighting anyone" before you ask what kind. A duel is a member of it for
 // the same reason: it is a bout with an opponent and a countdown, and an addon
 // that has to check two unrelated reads to answer one question will check one of
 // them.
 //
-// EVERYTHING BUT THE DUEL IS UP TO TEN SECONDS OLD. The arena key is gated to
-// 0.1 Hz on the server, so this reading is the game's own recoverable baseline
-// rather than a live feed, and the members whose live path is the event queue
-// say which events those are. The duel key rides every tick.
+// THREE KEYS AT THREE CADENCES SIT BEHIND IT, and the union hides that, so read
+// each member's own type for which. A duel rides every tick. A battleground
+// rides at 1 Hz and is forced fresh on every transition worth acting on. The
+// four arena formats are gated to 0.1 Hz, so anything read from one is up to ten
+// seconds old and is the game's own recoverable baseline rather than a live
+// feed; the members whose live path is the event queue say which events those
+// are.
 
+import type { BattlegroundMatch } from './battleground.js';
 import type { FiestaMatch, YumiMatch } from './match-modes.js';
 
 /** One fighter in a bout, on either side. */
@@ -53,5 +57,12 @@ export interface RankedMatch extends BoutBase {
   format: '1v1' | '2v2';
 }
 
-/** The bout in progress, whatever kind it is. Narrow on `format` first. */
-export type MatchInfo = DuelMatch | RankedMatch | FiestaMatch | YumiMatch;
+/**
+ * The bout in progress, whatever kind it is. Narrow on `format` first.
+ *
+ * `BattlegroundMatch` is the one member that does not extend `BoutBase`, and
+ * `battleground.d.ts` says why: its roster carries no level, so it publishes one
+ * `fighters` list rather than an `allies`/`enemies` pair. It joined at API minor
+ * 6; the rest have been here since 2.
+ */
+export type MatchInfo = BattlegroundMatch | DuelMatch | RankedMatch | FiestaMatch | YumiMatch;

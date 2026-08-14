@@ -94,6 +94,11 @@ const SHAPE: Record<keyof Entity, FieldSpec> = {
   weaponSkinId: { kind: 'string', nullable: true },
   mountKey: { kind: 'string' },
   helmHidden: { kind: 'boolean' },
+  afk: { kind: 'boolean' },
+  sitting: { kind: 'boolean' },
+  overheadEmoteId: { kind: 'string', nullable: true },
+  overheadEmoteSeq: { kind: 'number' },
+  aiAccount: { kind: 'boolean' },
   rangedPower: { kind: 'number' },
 
   cooldowns: { kind: 'map' },

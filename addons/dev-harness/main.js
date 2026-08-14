@@ -31,6 +31,10 @@ const ANCHOR_TICK_MS = 200;
 const DECIMALS_YARDS = 1;
 /** How many distinct wire contradictions to name before the note gets unreadable. */
 const MAX_CONTRADICTIONS = 3;
+/** Negative, because the server issues no such id and every roster answer for it is a null. */
+const NO_SUCH_ENTITY = -1;
+/** Every answer `world.reaction` is allowed to give for a unit that exists. */
+const REACTIONS = ['hostile', 'friendly', 'neutral'];
 /**
  * A frame is 16 ms, so past this is a document with no loop rather than a slow one, and
  * the report must not sit on "running the checks" waiting for one.
@@ -106,6 +110,7 @@ const WORLD_KEYS = [
   'encounter',
   'match',
   'arena',
+  'battleground',
   'finder',
   'finderBoard',
   'quests',
@@ -1494,6 +1499,7 @@ const LIVE_CHECKS = [
   checkMobTargeting,
   checkEntityStats,
   checkUnits,
+  checkReaction,
   checkAuraQueries,
   checkAuraPolarity,
   checkHoldings,
@@ -1924,6 +1930,59 @@ function checkUnits() {
     );
   }
   return result('units', true, `target is a ${target.kind}, fighting ${expected ?? 'nobody'}`);
+}
+
+/**
+ * `world.reaction`, and the claim the whole reading rests on.
+ *
+ * The load-bearing half is the last one: the lookup exists because the game writes
+ * `hostile` where it builds a MOB and never on a player, so a session in which any player
+ * carries it is a session where this stopped being true, and the flag would then be
+ * answering a question the bout is being asked. Nothing else can catch that, since a plate
+ * built either way looks right until you meet somebody who wants to kill you.
+ *
+ * A hostile mob is checked in the other direction, because that is the one case where the
+ * flag IS the answer and a rule that had stopped reading it would still pass every
+ * friendly case.
+ */
+function checkReaction() {
+  const { world } = woc;
+  if (typeof world.reaction !== 'function') {
+    return result('reaction', false, 'world.reaction is not callable');
+  }
+  if (world.reaction(NO_SUCH_ENTITY) !== null) {
+    return result('reaction', false, 'an id nothing in scope holds answered with a reading');
+  }
+  let players = 0;
+  let flagged = 0;
+  for (const [id, entity] of world.entities) {
+    const side = world.reaction(id);
+    if (!REACTIONS.includes(side)) {
+      return result('reaction', false, `entity ${String(id)} answered ${String(side)}`);
+    }
+    if (entity.kind === 'player') {
+      players += 1;
+      if (entity.hostile === true) {
+        flagged += 1;
+      }
+    }
+    if (
+      entity.kind === 'mob' &&
+      entity.hostile === true &&
+      entity.ownerId === null &&
+      side !== 'hostile'
+    ) {
+      return result('reaction', false, `a hostile mob (${String(id)}) read ${String(side)}`);
+    }
+  }
+  if (flagged > 0) {
+    return result(
+      'reaction',
+      false,
+      `${String(flagged)} players carry hostile, which the game never sets`,
+    );
+  }
+  return result('reaction', true, `${String(players)} players in scope, none flagged hostile`);
 }
 
 /**

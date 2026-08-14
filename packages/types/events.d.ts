@@ -15,6 +15,10 @@
 // knowing before writing a handler: an `ability` on a damage or heal record is a
 // display NAME while an `ability` on a cast is an ID, and a `heal2` record
 // flagged `cueOnly` carries no healing at all.
+//
+// The battleground's live in `events-pvp.d.ts`, which is where the flag plays,
+// the kill feed and the result are. They are the moment `world.battleground` and
+// the `battleground` member of `world.match` report the state of.
 
 import type {
   AuraEvent,
@@ -26,6 +30,19 @@ import type {
   SpellFxAtEvent,
   SpellFxEvent,
 } from './events-combat.js';
+import type {
+  BgCountdownEvent,
+  BgEndEvent,
+  BgFlagEvent,
+  BgFoundEvent,
+  BgKillEvent,
+  BgProposalUpdateEvent,
+  BgProposedEvent,
+  BgQueuedEvent,
+  BgStartEvent,
+  BgTimeWarningEvent,
+  BgUnqueuedEvent,
+} from './events-pvp.js';
 
 /**
  * The recipient a record was routed to, when it is personal.
@@ -317,6 +334,17 @@ export interface EventPayloads {
   gatherDowngrade: GatherDowngradeEvent;
   bank: OpenWindowEvent;
   mailbox: OpenWindowEvent;
+  bgQueued: BgQueuedEvent;
+  bgUnqueued: BgUnqueuedEvent;
+  bgProposed: BgProposedEvent;
+  bgProposalUpdate: BgProposalUpdateEvent;
+  bgFound: BgFoundEvent;
+  bgCountdown: BgCountdownEvent;
+  bgStart: BgStartEvent;
+  bgFlag: BgFlagEvent;
+  bgKill: BgKillEvent;
+  bgTimeWarning: BgTimeWarningEvent;
+  bgEnd: BgEndEvent;
 }
 
 export type KnownEventKind = keyof EventPayloads;

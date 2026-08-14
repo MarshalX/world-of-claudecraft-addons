@@ -17,8 +17,9 @@
 //  threat a nearby mob's hate table contains the player. Server state again: the
 //         table rides the wire only for a living mob in combat, and the player is
 //         in it only because the server put them there.
-//  pvp    a hostile PLAYER has the player selected. A player carries a real
-//         targetId, unlike a mob, so this reads the field that is actually set.
+//  pvp    a PLAYER the bout puts on the other side has the player selected. A
+//         player carries a real targetId, unlike a mob, so this reads the field
+//         that is actually set, and the bout answers the half no field does.
 //  recent damage involving the player landed inside the idle window. The only
 //         branch that can be wrong, and the last one consulted.
 //
@@ -27,7 +28,10 @@
 // ticking on a mob that has run out of interest scope. It is deliberately the
 // fallback rather than the mechanism.
 
-import type { Entity, PartyInfo } from './game-types.ts';
+import type { Entity } from './game-types.ts';
+import type { MatchInfo } from './match.ts';
+import type { PartyInfo } from './party-types.ts';
+import { fightsPlayer } from './reaction.ts';
 
 /** How long after damage stops the fallback branch still reads as in combat. */
 const IDLE_WINDOW_MS = 5000;
@@ -63,9 +67,19 @@ function threatensPlayer(entity: Entity, playerId: number): boolean {
  * Restricted to `kind === 'player'` deliberately: a mob's `targetId` is never
  * written, so including mobs here would be a branch that can only ever answer no
  * while looking like it covers them.
+ *
+ * Hostility comes from the BOUT and never from `entity.hostile`, which the game
+ * writes when it builds a mob and nowhere else. Asking the flag made this branch
+ * unreachable, so `source` could never answer 'pvp' for anybody: it read as a
+ * restriction and was a permanent no. See `world/reaction.ts`.
  */
-function attacksPlayer(entity: Entity, playerId: number): boolean {
-  return entity.kind === 'player' && !entity.dead && entity.hostile && entity.targetId === playerId;
+function attacksPlayer(entity: Entity, playerId: number, match: MatchInfo | null): boolean {
+  return (
+    entity.kind === 'player' &&
+    !entity.dead &&
+    entity.targetId === playerId &&
+    fightsPlayer(match, entity.id)
+  );
 }
 
 /**
@@ -75,14 +89,18 @@ function attacksPlayer(entity: Entity, playerId: number): boolean {
  * first attacker it finds: a hostile player and an angry mob can both be in
  * scope, and the mob's hate table is the better answer of the two.
  */
-function fromEntities(entities: ReadonlyMap<number, Entity>, playerId: number): CombatSource {
+function fromEntities(
+  entities: ReadonlyMap<number, Entity>,
+  playerId: number,
+  match: MatchInfo | null,
+): CombatSource {
   let pvp = false;
   for (const entity of entities.values()) {
     if (entity.id !== playerId) {
       if (threatensPlayer(entity, playerId)) {
         return 'threat';
       }
-      pvp = pvp || attacksPlayer(entity, playerId);
+      pvp = pvp || attacksPlayer(entity, playerId, match);
     }
   }
   if (pvp) {
@@ -95,6 +113,8 @@ interface CombatInputs {
   player: Entity | null;
   party: PartyInfo | null;
   entities: ReadonlyMap<number, Entity>;
+  /** The bout in progress, which is the only thing that says who is fighting you. */
+  match: MatchInfo | null;
   /** When damage involving the player last landed, or null if it never has. */
   lastDamageAt: number | null;
   now: number;
@@ -107,7 +127,7 @@ interface CombatInputs {
  * fighting, and a hate table can outlive the player who was on it.
  */
 function readCombat(inputs: CombatInputs): CombatState {
-  const { player, party, entities, lastDamageAt, now } = inputs;
+  const { player, party, entities, match, lastDamageAt, now } = inputs;
   if (player === null || player.dead) {
     return OUT_OF_COMBAT;
   }
@@ -117,7 +137,7 @@ function readCombat(inputs: CombatInputs): CombatState {
     return { active: row.inCombat === 1, source: 'party' };
   }
 
-  const found = fromEntities(entities, player.id);
+  const found = fromEntities(entities, player.id, match);
   if (found !== 'none') {
     return { active: true, source: found };
   }

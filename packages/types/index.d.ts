@@ -30,6 +30,14 @@ export type {
   ArenaStanding,
   ArenaStandings,
 } from './arena.js';
+export type {
+  BattlegroundMatch,
+  BattlegroundStandings,
+  BgFighter,
+  BgFlag,
+  BgLadderRow,
+  BgProposal,
+} from './battleground.js';
 export type { BusApi, BusMessage, Publication } from './bus.js';
 export type {
   CharacterInfo,
@@ -158,6 +166,7 @@ export type { LineOpts, LineTone, RowAlign, RowOpts, StackOpts } from './ui-layo
 export type { Destroyable, List, ListOpts } from './ui-list.js';
 export type {
   Bar,
+  BarClass,
   BarOpts,
   BarSchool,
   BarTone,
@@ -175,11 +184,10 @@ export type {
   CombatState,
   EntityCast,
   QuestProgress,
+  Reaction,
   UnitToken,
   WorldApi,
-  WorldKey,
   WorldQuests,
-  WorldValues,
 } from './world.js';
 export type {
   CorpseLoot,
@@ -190,6 +198,7 @@ export type {
   LootSlot,
 } from './world-ground.js';
 export type { HeldSlot, InvSlot } from './world-items.js';
+export type { WorldKey, WorldValues } from './world-watch.js';
 
 export interface WocApi {
   readonly addon: AddonInfo;

@@ -7,6 +7,7 @@
 import type { AbilityIndex } from './abilities.js';
 import type { Unsubscribe } from './addon.js';
 import type { ArenaStandings } from './arena.js';
+import type { BattlegroundStandings } from './battleground.js';
 import type { CharacterInfo, ProfessionInfo, TalentInfo } from './character.js';
 import type { Recipe, Station } from './content.js';
 import type { BankState, MailState, MarketState } from './economy.js';
@@ -17,6 +18,7 @@ import type { MatchInfo } from './match.js';
 import type { PartyAuraQuery, PartyInfo, PartyMemberAura } from './party.js';
 import type { CorpseView, DeathZone, Hazard } from './world-ground.js';
 import type { HeldSlot, InvSlot } from './world-items.js';
+import type { WorldKey, WorldValues } from './world-watch.js';
 
 export interface QuestProgress {
   questId: string;
@@ -90,6 +92,15 @@ export interface CombatState {
 }
 
 /**
+ * How a unit stands toward you, from `world.reaction`.
+ *
+ * `neutral` is a real answer rather than a way of saying the question could not
+ * be answered: a wild boar is neither on your side nor fighting you until
+ * somebody makes it. A unit nothing in scope holds is null instead.
+ */
+export type Reaction = 'hostile' | 'friendly' | 'neutral';
+
+/**
  * A unit you can name.
  *
  * `partyN` counts the OTHER members, 1-based, so `party1` is the first person
@@ -124,68 +135,6 @@ export interface AuraQuery {
    */
   mine?: boolean;
 }
-
-/** What each read returns, and what the matching `world.on` key reports. */
-export interface WorldValues {
-  player: Entity | null;
-  target: Entity | null;
-  entities: ReadonlyMap<number, Entity>;
-  party: PartyInfo | null;
-  inventory: readonly HeldSlot[] | null;
-  equipment: Partial<Record<EquipSlot, string>> | null;
-  /** What is on the worn gear. Sparse: a plain piece has no key. Added in API minor 2. */
-  equipmentInstances: Partial<Record<EquipSlot, ItemInstance>> | null;
-  bags: readonly (string | null)[] | null;
-  copper: number | null;
-  zone: string | null;
-  /** Who is playing, as the key per-character state is filed under. Added in API minor 2. */
-  characterKey: string | null;
-  character: CharacterInfo | null;
-  talents: TalentInfo | null;
-  professions: ProfessionInfo | null;
-  group: GroupInfo | null;
-  encounter: EncounterInfo | null;
-  /** The competitive bout in progress. Added in API minor 2. */
-  match: MatchInfo | null;
-  /** Your standings and queue. Added in API minor 2. */
-  arena: ArenaStandings | null;
-  /** Your dungeon finder state. Added in API minor 2. */
-  finder: FinderInfo | null;
-  /** The realm's open premade listings. Added in API minor 2. */
-  finderBoard: readonly FinderListingRow[] | null;
-  quests: WorldQuests | null;
-  cooldowns: ReadonlyMap<string, number> | null;
-  auras: readonly Aura[] | null;
-  casts: ReadonlyMap<number, EntityCast>;
-  targetAuras: readonly Aura[] | null;
-  hazards: readonly Hazard[] | null;
-  markers: ReadonlyMap<number, number> | null;
-  /** Lethal rings on a rift boss floor. Added in API minor 2. */
-  deathZones: readonly DeathZone[] | null;
-  /** Every lootable corpse in scope. Never null, like `casts`. Added in API minor 2. */
-  corpses: ReadonlyMap<number, CorpseView>;
-  /** Gathering node id to seconds until you can harvest it. Added in API minor 2. */
-  nodeCooldowns: ReadonlyMap<string, number> | null;
-  /** Where your own body lies while your spirit is a ghost. Added in API minor 2. */
-  corpse: Vec3 | null;
-  abilities: AbilityIndex;
-  combat: CombatState;
-  /** The Merchant's book, or why there is not one. Never null. Added in API minor 2. */
-  market: MarketState;
-  /** Whether gold or goods wait at the Merchant. Added in API minor 2. */
-  marketCollectPending: boolean | null;
-  /** The mailbox, or why there is not one. Never null. Added in API minor 2. */
-  mail: MailState;
-  /** Delivered and unread letters. Added in API minor 2. */
-  mailUnread: number | null;
-  /** The deposit box, or why there is not one. Never null. Added in API minor 2. */
-  bank: BankState;
-  /** The buyback ring, most recent first. Added in API minor 2. */
-  buyback: readonly InvSlot[] | null;
-}
-
-/** The state keys `world.on` can watch. Anything else throws. */
-export type WorldKey = keyof WorldValues;
 
 export interface WorldApi {
   /**
@@ -304,15 +253,17 @@ export interface WorldApi {
   /**
    * The competitive bout you are in, or null.
    *
-   * One union over all six formats, discriminated on `format`, so a display asks
-   * what kind of bout this is rather than reading two unrelated members. A duel
-   * is a member of it.
+   * One union over all seven formats, discriminated on `format`, so a display
+   * asks what kind of bout this is rather than reading three unrelated members.
+   * A duel is a member of it, and so is a battleground.
    *
-   * Everything but a duel is UP TO TEN SECONDS OLD, because the arena key is
-   * gated to 0.1 Hz on the server. That is the game's own cadence, so a Fiesta
-   * ring drawn from this agrees with the ring the game draws; a Yumi health bar
-   * does not, and the type says which events carry the live figures. Added in
-   * API minor 2.
+   * THE CADENCE IS PER FORMAT. A duel rides every tick. A battleground rides at
+   * 1 Hz and is forced fresh on every transition worth acting on. The four arena
+   * formats are UP TO TEN SECONDS OLD, because that key is gated to 0.1 Hz on
+   * the server. That is the game's own cadence, so a Fiesta ring drawn from this
+   * agrees with the ring the game draws; a Yumi health bar does not, and the
+   * type says which events carry the live figures. Added in API minor 2, and the
+   * battleground member in 6.
    */
   readonly match: MatchInfo | null;
 
@@ -325,6 +276,19 @@ export interface WorldApi {
    * in API minor 2.
    */
   readonly arena: ArenaStandings | null;
+
+  /**
+   * Your battleground record, your queue and the live ladder.
+   *
+   * Present for every character, so a non-null reading says nothing about
+   * whether you have ever fought one. Only `world.match` says a match is on.
+   *
+   * The match itself is NOT here: it is the `format: 'battleground'` member of
+   * `world.match`, because you ask what bout you are in before you ask what
+   * mode it is. This member is the standing that outlives it. Added in API
+   * minor 6.
+   */
+  readonly battleground: BattlegroundStandings | null;
 
   /** Your dungeon finder state. Present whether or not you are queued. Added in API minor 2. */
   readonly finder: FinderInfo | null;
@@ -350,6 +314,32 @@ export interface WorldApi {
    * ```
    */
   threat: (entityId: number) => ThreatTable;
+
+  /**
+   * Which side one unit is on, or null for an id nothing in scope holds.
+   *
+   * READ THIS RATHER THAN `entity.hostile`. That flag is written where the game
+   * builds a MOB and nowhere else, so it is false on every player in the world
+   * for the whole of every session, including the five trying to kill you in a
+   * battleground. It is sent, it is correctly typed, and it is never true for
+   * the kind you are asking about, so a display built on it paints every duel,
+   * arena and battleground opponent friendly and nothing anywhere complains.
+   *
+   * The answer comes from the bout instead, the same three sources the game's
+   * own nameplates use: the duel's other player, the arena's enemy list, and a
+   * battleground fighter whose team is not yours. Outside a bout every player
+   * reads friendly, which is what the game draws.
+   *
+   * A PET is asked about its OWNER, one level deep, so an enemy player's pet
+   * reads hostile and your own never reads as a wild mob.
+   *
+   * ```js
+   * if (woc.world.reaction(entity.id) === 'hostile') paintRed(entity);
+   * ```
+   *
+   * Added in API minor 6.
+   */
+  reaction: (entityId: number) => Reaction | null;
 
   readonly quests: WorldQuests | null;
   /** Your ability cooldowns: ability id to seconds remaining. */

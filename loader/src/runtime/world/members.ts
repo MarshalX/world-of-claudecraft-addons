@@ -26,6 +26,7 @@ const WORLD_MEMBERS: readonly string[] = [
   'bagCapacity',
   'bags',
   'bankInfo',
+  'bgInfo',
   'copper',
   'craftingIdentity',
   'craftSkills',

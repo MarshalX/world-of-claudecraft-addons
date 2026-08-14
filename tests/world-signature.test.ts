@@ -40,6 +40,7 @@ describe('world keys', () => {
       'encounter',
       'match',
       'arena',
+      'battleground',
       'finder',
       'finderBoard',
       'quests',

@@ -9,8 +9,11 @@
 // Both take `fraction` as how much is LEFT, both take the same `tone` and
 // `school`, and both hand back `{ el, update, destroy }`. Anything true of one
 // that is not true of the other is a difference somebody chose, and there are
-// exactly two: a tile has a `count` corner and a `size`, because it has no room
-// for a name and a bar has no room for a stack.
+// exactly three. A tile has a `count` corner and a `size`, because it has no room
+// for a name and a bar has no room for a stack. And a bar has `unitClass`, because
+// a class is what a WHOLE ROW is: it tints the fill, and a tile's only colourable
+// edge is already carrying its school. A tile of a person would be a portrait, and
+// there is no art for one.
 
 import type { School } from './entity.js';
 
@@ -63,6 +66,26 @@ export interface MoneyValue {
   prefix?: string;
 }
 
+/**
+ * A class to tint a bar's fill by. The game's nine, and the id `PartyMember.cls`
+ * carries.
+ *
+ * The palette is the game's own and no addon may pass a colour, for the reason the
+ * schools and the tiers refuse one: a nameplate, a party frame and a scoreboard
+ * drawing three different blues for mage would be worse than none of them drawing
+ * any.
+ */
+export type BarClass =
+  | 'warrior'
+  | 'mage'
+  | 'rogue'
+  | 'paladin'
+  | 'hunter'
+  | 'priest'
+  | 'shaman'
+  | 'warlock'
+  | 'druid';
+
 export interface BarUpdate {
   label?: string;
   /**
@@ -110,6 +133,27 @@ export interface BarUpdate {
    * either a `LootRoll` off `world.group` or a record another addon published on the bus.
    */
   quality?: BarQuality | null;
+  /**
+   * Tint the fill by the game's own colour for a CLASS. Since apiMinor 6.
+   *
+   * The one axis that is about WHO rather than what, and the reason it colours the fill
+   * where a tier colours the label: a class is what the whole row is. A health bar per
+   * class is how every client that has ever drawn one has drawn it, and a player reads
+   * somebody's class off it before they read the name.
+   *
+   * Weakest of the three claims on the fill, so a `school` tint and a `tone` both win
+   * over it: what a row is made of and whether it is about to matter are both louder than
+   * who it belongs to.
+   *
+   * Null and anything outside the nine tint nothing. That is the answer for a MOB, and it
+   * is worth knowing that the id you hold is a `templateId` as often as a class: an
+   * entity's is `'boss_wolf'` as readily as `'mage'`, and a wolf is not a class. Pass it
+   * for a player and pass null for everything else.
+   *
+   * `woc-class-<id>` is published as a class you may put on anything you drew yourself,
+   * the way `woc-quality-<tier>` is, for a name in a roster or a chip in a scoreboard.
+   */
+  unitClass?: BarClass | null;
   /**
    * A quieter second line under the head, e.g. a hit count and crit rate.
    *

@@ -63,8 +63,9 @@ import picker from './picker.css';
 import quality from './quality.css';
 import tile from './tile.css';
 import touch from './touch.css';
+import unitClass from './unit-class.css';
 
-// biome-ignore-end lint/correctness/noUnresolvedImports: the twelve sheets above are the whole of it
+// biome-ignore-end lint/correctness/noUnresolvedImports: the thirteen sheets above are the whole of it
 
 const LOADER_CSS = [
   chrome,
@@ -75,6 +76,7 @@ const LOADER_CSS = [
   menu,
   picker,
   quality,
+  unitClass,
   bar,
   tile,
   banner,

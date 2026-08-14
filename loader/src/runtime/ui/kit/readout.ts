@@ -26,79 +26,6 @@
 // way, and it belongs HERE rather than in each addon for the reason the kit rests on:
 // an addon is one file, and everything the kit does not carry comes out of it.
 
-/** The tones a sheet draws. Anything else falls back to the first. */
-const TONES = Object.freeze(['default', 'warn', 'danger'] as const);
-
-/**
- * The game's own damage schools, which a readout can tint itself by.
- *
- * A SEPARATE axis from tone, not more values on it. Tone is urgency, which is why
- * Cooldown Bars sets 'warn' as an ability comes back up; a school is what KIND of
- * damage a row is made of. Folding them into one enum would make `tone: 'frost'` and
- * `tone: 'danger'` look like alternatives when they answer different questions.
- *
- * The palette is not invented here: the game already publishes one as
- * `--color-debuff-*` custom properties for its own debuff borders, and the loader
- * inherits those like every other token. So a readout tinted by school matches the
- * colour the player already reads on the aura icon for the same school.
- */
-const SCHOOLS = Object.freeze([
-  'physical',
-  'fire',
-  'frost',
-  'arcane',
-  'shadow',
-  'holy',
-  'nature',
-] as const);
-
-/**
- * The game's item quality tiers, which a readout drawing an ITEM can colour itself by.
- *
- * The third axis of the same kind as the other two, and the one an item panel needs: a
- * player picks an item out of a grid by its tier before they read a word of it, and every
- * addon that draws items was otherwise carrying its own copy of six hexes.
- *
- * The palette is the GAME'S, and unlike the schools it is not a token: the game keeps two
- * tables of literals, `QUALITY_COLOR` in `src/ui/icons.ts` for a NAME and the `.q-*` rules
- * in its own stylesheet for a BORDER, which differ only in that common is white as a word
- * and a dimmer grey as an edge. `styles/quality.css` carries both, transcribed, for the
- * reason lorebind carries the item table: nothing serves either of them.
- */
-const QUALITIES = Object.freeze([
-  'poor',
-  'common',
-  'uncommon',
-  'rare',
-  'epic',
-  'legendary',
-] as const);
-
-type ReadoutTone = (typeof TONES)[number];
-
-type ReadoutSchool = (typeof SCHOOLS)[number];
-
-type ReadoutQuality = (typeof QUALITIES)[number];
-
-/** The three axes, as any update carrying them states them. */
-interface ReadoutVariants {
-  tone?: ReadoutTone;
-  school?: ReadoutSchool | null;
-  quality?: ReadoutQuality | null;
-}
-
-/**
- * Which variant classes are on an element right now.
- *
- * The normalized VALUES rather than the class names, so an update repeating the tone
- * a readout already carries costs one comparison and builds no string at all.
- */
-interface VariantState {
-  tone: ReadoutTone;
-  school: ReadoutSchool | null;
-  quality: ReadoutQuality | null;
-}
-
 /** An element whose text is written only when it moved. */
 interface TextSlot {
   readonly el: HTMLElement;
@@ -116,136 +43,6 @@ interface StyleSlot {
 interface ArtSlot {
   readonly el: HTMLImageElement;
   written: string | null;
-}
-
-function isTone(value: unknown): value is ReadoutTone {
-  return typeof value === 'string' && (TONES as readonly string[]).includes(value);
-}
-
-function isSchool(value: unknown): value is ReadoutSchool {
-  return typeof value === 'string' && (SCHOOLS as readonly string[]).includes(value);
-}
-
-function isQuality(value: unknown): value is ReadoutQuality {
-  return typeof value === 'string' && (QUALITIES as readonly string[]).includes(value);
-}
-
-function normalizeTone(tone: unknown): ReadoutTone {
-  if (isTone(tone)) {
-    return tone;
-  }
-  return TONES[0];
-}
-
-/**
- * The school, or none for a school the game does not have.
- *
- * No fallback tint: an unrecognised school means the sheet has nothing true to say
- * about the readout, and inventing a colour would claim a damage type that is not the
- * one the event reported. The tone's own colour shows through instead.
- */
-function normalizeSchool(school: unknown): ReadoutSchool | null {
-  if (isSchool(school)) {
-    return school;
-  }
-  return null;
-}
-
-/**
- * The tier, or none for anything the game does not rank.
- *
- * No fallback colour, for the reason a school has none: the game declares no quality at all
- * for 96 of its items, and painting one would claim a tier nobody said. An addon that knows
- * an item is unranked and an addon that has not looked it up both pass null, and both get an
- * item drawn in the panel's own colours.
- */
-function normalizeQuality(quality: unknown): ReadoutQuality | null {
-  if (isQuality(quality)) {
-    return quality;
-  }
-  return null;
-}
-
-function applyTone(el: HTMLElement, prefix: string, tone: unknown, state: VariantState): void {
-  const next = normalizeTone(tone);
-  if (next === state.tone) {
-    return;
-  }
-  // One call rather than a remove and an add: a readout carries exactly one tone, so
-  // there is nothing to accumulate and nothing left behind to sweep up.
-  el.classList.replace(`${prefix}-${state.tone}`, `${prefix}-${next}`);
-  state.tone = next;
-}
-
-function applySchool(el: HTMLElement, prefix: string, school: unknown, state: VariantState): void {
-  const next = normalizeSchool(school);
-  if (next === state.school) {
-    return;
-  }
-  if (state.school !== null) {
-    el.classList.remove(`${prefix}-school-${state.school}`);
-  }
-  if (next !== null) {
-    el.classList.add(`${prefix}-school-${next}`);
-  }
-  state.school = next;
-}
-
-function applyQuality(
-  el: HTMLElement,
-  prefix: string,
-  quality: unknown,
-  state: VariantState,
-): void {
-  const next = normalizeQuality(quality);
-  if (next === state.quality) {
-    return;
-  }
-  if (state.quality !== null) {
-    el.classList.remove(`${prefix}-quality-${state.quality}`);
-  }
-  if (next !== null) {
-    el.classList.add(`${prefix}-quality-${next}`);
-  }
-  state.quality = next;
-}
-
-function toneClass(prefix: string, tone: unknown): string {
-  return `${prefix}-${normalizeTone(tone)}`;
-}
-
-/**
- * Seeded from the tone the builder wrote into `className`.
- *
- * It has to match what is on the element, or the first update would try to replace a
- * class that is not there and leave the built one alongside the new one.
- */
-function variantState(tone: unknown): VariantState {
-  return { tone: normalizeTone(tone), school: null, quality: null };
-}
-
-/**
- * Record the two variants, each swapped rather than accumulated.
- *
- * A readout reused for another ability must not end up carrying two schools' classes,
- * or two tones', at once. Which of the two WINS is settled in each sheet by source
- * order at equal specificity, not here: this only records what the caller said.
- */
-function applyVariants(
-  el: HTMLElement,
-  prefix: string,
-  next: ReadoutVariants,
-  state: VariantState,
-): void {
-  if (next.tone !== undefined) {
-    applyTone(el, prefix, next.tone, state);
-  }
-  if (next.school !== undefined) {
-    applySchool(el, prefix, next.school, state);
-  }
-  if (next.quality !== undefined) {
-    applyQuality(el, prefix, next.quality, state);
-  }
 }
 
 /** A fresh slot over an empty element, which is what both builders hand it. */
@@ -348,27 +145,12 @@ function clampFraction(fraction: unknown): number {
   return Math.min(Math.max(fraction, 0), 1);
 }
 
-export type {
-  ArtSlot,
-  ReadoutQuality,
-  ReadoutSchool,
-  ReadoutTone,
-  ReadoutVariants,
-  StyleSlot,
-  TextSlot,
-  VariantState,
-};
+export type { ArtSlot, StyleSlot, TextSlot };
 export {
-  applyVariants,
   buildArt,
   clampFraction,
-  QUALITIES as READOUT_QUALITIES,
-  SCHOOLS as READOUT_SCHOOLS,
   styleSlot,
-  TONES as READOUT_TONES,
   textSlot,
-  toneClass,
-  variantState,
   writeArt,
   writeStyle,
   writeText,

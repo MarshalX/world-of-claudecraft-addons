@@ -203,6 +203,40 @@ describe('a bar', () => {
     expect(bar.el.classList.contains('woc-bar-quality-rare')).toBe(true);
   });
 
+  // The fourth axis, for a row that is a PERSON. It takes none of the others' properties
+  // either, so a party row can be a priest, about to expire, and made of shadow at once.
+  it('carries a class beside the other three', () => {
+    const bar = createBar(document, {
+      tone: 'warn',
+      school: 'shadow',
+      quality: 'epic',
+      unitClass: 'priest',
+    });
+
+    expect(bar.el.classList.contains('woc-bar-class-priest')).toBe(true);
+    expect(bar.el.classList.contains('woc-bar-warn')).toBe(true);
+  });
+
+  it('swaps the class rather than accumulating them', () => {
+    const bar = createBar(document, { unitClass: 'mage' });
+
+    bar.update({ unitClass: 'druid' });
+
+    expect(bar.el.classList.contains('woc-bar-class-mage')).toBe(false);
+    expect(bar.el.classList.contains('woc-bar-class-druid')).toBe(true);
+  });
+
+  // A `templateId` is a class on a player and a mob template everywhere else, so the id an
+  // addon holds reaches this field as `boss_wolf` about as often as it does as `mage`.
+  it.each([
+    ['null, which a caller who checked the kind passes', null],
+    ['a mob template, which is what a templateId is off a player', 'boss_wolf' as 'mage'],
+  ])('tints nothing for %s', (_label, unitClass) => {
+    const bar = createBar(document, { unitClass });
+
+    expect([...bar.el.classList].some((name) => name.startsWith('woc-bar-class-'))).toBe(false);
+  });
+
   // Null is an addon saying it does not know the tier, which is the ordinary state of an
   // item id anywhere on this API, and it must colour nothing rather than guess at one.
   it.each([

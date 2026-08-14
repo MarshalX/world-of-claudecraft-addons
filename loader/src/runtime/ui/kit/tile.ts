@@ -24,29 +24,20 @@
 // cannot see.
 
 import type { Teardown } from '../../disposal.ts';
-import type {
-  ArtSlot,
-  ReadoutQuality,
-  ReadoutSchool,
-  ReadoutTone,
-  StyleSlot,
-  TextSlot,
-  VariantState,
-} from './readout.ts';
+import type { ArtSlot, StyleSlot, TextSlot } from './readout.ts';
 import {
-  applyVariants,
   buildArt,
   clampFraction,
   styleSlot,
   textSlot,
-  toneClass,
-  variantState,
   writeArt,
   writeStyle,
   writeTextHiding,
 } from './readout.ts';
 import type { TileState } from './tile-name.ts';
 import { applyName } from './tile-name.ts';
+import type { ReadoutQuality, ReadoutSchool, ReadoutTone, VariantState } from './variants.ts';
+import { applyVariants, toneClass, variantState } from './variants.ts';
 
 const FULL_PERCENT = 100;
 const DECIMALS = 2;

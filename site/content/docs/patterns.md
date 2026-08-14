@@ -178,6 +178,8 @@ There is no namespace on the bus and no registry the loader enforces. A topic is
 | `items:ask` | anyone | nothing |
 | `item:ask` | anyone | nothing, and see below: this is the older spelling |
 | `alert` | `emberwatch` | `{ ruleId, unit, auraId, state }` |
+| `mobs` | `longwatch` | the mob rank table, every flagged template at once |
+| `mobs:ask` | anyone | nothing |
 
 **`zone`** is one shape in every state, never an object-or-null. `place` is `'zone'`, `'instance'`, `'nowhere'` or `'unknown'`, and `id`, `name` and `levelRange` are all null unless it is `'zone'`. The four are worth telling apart: `'instance'` means the player is in a dungeon, an arena or a delve, where a zone filter has nothing to say; `'nowhere'` means a point the publisher's rectangles do not cover; `'unknown'` means it cannot answer yet, which is every session's first seconds and is not a fact about where anybody is standing. A consumer that reads only `typeof payload.id === 'string'` and ignores the rest is correct and will stay correct. `levelRange` is `{ min, max }`.
 
@@ -186,6 +188,10 @@ There is no namespace on the bus and no registry the loader enforces. A topic is
 **The item protocol has two ask names for one release, and this is the only place that says so.** It was written before `publish` and `follow` existed and it named its ask `item:ask` while what an ask actually triggers is a re-emit of `items`. `follow('items', ...)` derives `items:ask` from the topic, so the two names now both mean the same request. `lorebind` answers both: `items:ask` because that is what `publish` listens for, and `item:ask` with one extra line, kept so that an addon speaking the shipped protocol does not go quiet on the release that migrated it. Use `items:ask`. Do not build anything new on `item:ask`, and expect it to go one release later.
 
 The incremental `item` topic has no ask half at all and never did. It is a push, one row at a time as the publisher learns them, so `follow` is the wrong tool for it and a plain `on` with `bus.anySender` is the right one.
+
+**`mobs`** is the answer to a question the wire never answers: which mob templates the game counts as **elite**, as **bosses**, and as **rare**, plus the one gate that hides a template from anybody not on its quest. None of it is on any snapshot, so it can only come from a table generated out of the game's own content, and `longwatch` carries that table because it already evaluates the same `MOBS` to build its rare roster. A second addon shipping its own copy would be a second thing to regenerate on a game release.
+
+A row is `{ id, name }` plus whichever of `rank` (`'elite'` or `'boss'`), `rare` (`true`) and `requiresQuestId` applies. Three things to know. **Absence means false here**, not unknown as it does for `item`: the table is read from the whole of `MOBS`, so an id you do not find in it is an ordinary mob rather than one nobody has looked up. **`rank` and `rare` are separate** because the game's flags are independent and a rare elite is an ordinary thing to be. And **`name` rides every row** because a mob's id and its display name have already diverged in this game, so title-casing an id prints a name no player will ever see.
 
 **`alert`** fires on an aura rule matching. `state` is `'active'` when the rule is met and `'cleared'` when it stops being met, so a consumer can pair them; `unit` is a unit key rather than an entity id.
 

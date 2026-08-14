@@ -447,6 +447,50 @@ export interface Entity {
    */
   helmHidden: boolean;
 
+  // What a player is DOING outside combat, and what kind of account they are on.
+  // Player fields like the block above: on a mob, an npc and an object these
+  // hold an inert default, so check `kind === 'player'` before reading one.
+  // Added in API minor 6.
+  /**
+   * The player has flagged themselves away.
+   *
+   * The game draws an `<AFK>` prefix on their nameplate, which is where the flag
+   * is normally read. Set by the player's own /afk, so it is a statement rather
+   * than an inference from idleness.
+   */
+  afk: boolean;
+  /**
+   * Sitting, EATING or DRINKING.
+   *
+   * The wire folds all three into one bit, so this field's name is narrower than
+   * its meaning and there is no way to tell them apart for somebody else: the
+   * server never sends them apart. What it reliably answers is that the player
+   * is at rest and will stand up if disturbed.
+   */
+  sitting: boolean;
+  /**
+   * The party emote floating over a player's head, or null for none.
+   *
+   * An emote id, and the game resolves its own art from `/ui/emotes/`. Set for a
+   * living player only: the game clears the bubble on death.
+   */
+  overheadEmoteId: string | null;
+  /**
+   * Bumped each time the SAME emote is played again.
+   *
+   * Without it a player repeating one emote is indistinguishable from a player
+   * holding it, because the id never changes. Compare it against the last one
+   * you saw rather than reading it as a count of anything.
+   */
+  overheadEmoteSeq: number;
+  /**
+   * The account is marked as AI-operated by the game's operators.
+   *
+   * The game tags the name with it. A disclosure about who is playing, set by
+   * the operator rather than guessed, and false on every ordinary account.
+   */
+  aiAccount: boolean;
+
   /**
    * Ranged attack power, the hunter stat. 0 on anything that has none.
    *

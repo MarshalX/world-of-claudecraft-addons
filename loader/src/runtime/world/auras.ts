@@ -14,7 +14,8 @@
 // than accepting `mine` and quietly ignoring it.
 
 import { DEBUFF_AURA_KINDS } from '../../shared/aura-kinds.generated.ts';
-import type { Aura, PartyMemberAura } from './game-types.ts';
+import type { Aura } from './game-types.ts';
+import type { PartyMemberAura } from './party-types.ts';
 
 interface AuraQuery {
   /** The applying ability's id. */

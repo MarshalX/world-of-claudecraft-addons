@@ -9,6 +9,7 @@ import { type AbilityIndex, emptyAbilities } from '../world/abilities.ts';
 import type { ArenaStandings } from '../world/arena.ts';
 import type { WorldBackend } from '../world/backend.ts';
 import type { BankState } from '../world/bank.ts';
+import type { BattlegroundStandings } from '../world/battleground.ts';
 import type { CharacterInfo, ProfessionInfo, TalentInfo } from '../world/character.ts';
 import { type CombatState, OUT_OF_COMBAT } from '../world/combat.ts';
 import type { EntityCast, Hazard } from '../world/derived.ts';
@@ -20,7 +21,6 @@ import type {
   EquipSlot,
   HeldSlot,
   InvSlot,
-  PartyInfo,
   Vec3,
   WorldQuests,
 } from '../world/game-types.ts';
@@ -31,6 +31,7 @@ import type { ItemInstance } from '../world/items.ts';
 import type { MailState } from '../world/mail.ts';
 import type { MarketState } from '../world/market.ts';
 import type { MatchInfo } from '../world/match.ts';
+import type { PartyInfo } from '../world/party-types.ts';
 import { UNKNOWN } from '../world/proximity.ts';
 import { readonlyMapView } from '../world/readonly-map.ts';
 
@@ -249,6 +250,10 @@ export function socialReads(hub: WorldHub) {
 
     get arena(): ArenaStandings | null {
       return fromBackend(hub, (backend) => backend.arena);
+    },
+
+    get battleground(): BattlegroundStandings | null {
+      return fromBackend(hub, (backend) => backend.battleground);
     },
 
     get finder(): FinderInfo | null {

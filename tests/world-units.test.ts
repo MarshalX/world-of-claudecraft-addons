@@ -6,7 +6,8 @@
 // blank in the game. Both kinds are asserted here for that reason.
 
 import { describe, expect, it } from 'vitest';
-import type { Entity, PartyInfo } from '../loader/src/runtime/world/game-types.ts';
+import type { Entity } from '../loader/src/runtime/world/game-types.ts';
+import type { PartyInfo } from '../loader/src/runtime/world/party-types.ts';
 import { resolveUnit, type UnitContext } from '../loader/src/runtime/world/units.ts';
 import { PLAYER_ENTITY } from './fakes/frames.ts';
 

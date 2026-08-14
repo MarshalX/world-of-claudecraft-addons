@@ -1,0 +1,110 @@
+/* The colour the game paints a CLASS in, and the two places the kit writes it.
+ *
+ * `CLASSES[cls].color` in the game's `src/sim/content/classes.ts`, transcribed. Nine values,
+ * held as numbers there and written into a `--class-color` custom property wherever the game
+ * needs one, so there is no token to read at run time and this is a transcription with the
+ * same standing as the quality tables next door: it moves when the game's does.
+ *
+ * The point of having it in the kit rather than in an addon is the point quality makes. A
+ * class is what a player identifies somebody by before they read the name, and a nameplate,
+ * a party frame and a battleground scoreboard drawing three different blues for mage would be
+ * worse than none of them drawing any. So no addon may pass a colour here either.
+ *
+ * Written as rgb(), which is this sheet family's notation, against a source written as hex:
+ * warrior #d67a54, mage #33c1f1, rogue #fcee58, paladin #f58ca0, hunter #a6d84f,
+ * priest #c6d4f0, shaman #4e8aea, warlock #a785e6, druid #ff8c1a.
+ *
+ * THIS FILE IS JOINED BEFORE bar.css AND THAT IS THE MECHANISM. A class is the weakest of the
+ * fill's three claims: it says who somebody is, a school says what kind of damage a row is
+ * made of, and a tone says something is about to matter. All three are (1,2,0), so the later
+ * group wins, which puts tone over school over class. Moving this file down the join in
+ * styles/index.ts would silently make a mage's blue beat a danger row's red. */
+
+/* The text family, for an element an addon drew itself: a name in a roster, a chip in a
+   scoreboard, a caption under a portrait. Documented for reuse the way `.woc-btn` and
+   `.woc-quality-*` are, since the alternative is every addon holding nine hexes. */
+#woc-addons .woc-class-warrior {
+  color: rgb(214 122 84);
+}
+
+#woc-addons .woc-class-mage {
+  color: rgb(51 193 241);
+}
+
+#woc-addons .woc-class-rogue {
+  color: rgb(252 238 88);
+}
+
+#woc-addons .woc-class-paladin {
+  color: rgb(245 140 160);
+}
+
+#woc-addons .woc-class-hunter {
+  color: rgb(166 216 79);
+}
+
+#woc-addons .woc-class-priest {
+  color: rgb(198 212 240);
+}
+
+#woc-addons .woc-class-shaman {
+  color: rgb(78 138 234);
+}
+
+#woc-addons .woc-class-warlock {
+  color: rgb(167 133 230);
+}
+
+#woc-addons .woc-class-druid {
+  color: rgb(255 140 26);
+}
+
+/* A bar's class colours its FILL rather than its label, which is the one place this family
+   differs from quality's. A tier is a property of the item a row NAMES, so it belongs on the
+   name; a class is what the whole row IS, and every client that has ever drawn a health bar
+   per class has drawn the bar itself. The opacity matches the school tints, so a row keeps
+   its text legible over the fill at any width. */
+#woc-addons .woc-bar-class-warrior .woc-bar-fill {
+  background: rgb(214 122 84);
+  opacity: 0.32;
+}
+
+#woc-addons .woc-bar-class-mage .woc-bar-fill {
+  background: rgb(51 193 241);
+  opacity: 0.32;
+}
+
+#woc-addons .woc-bar-class-rogue .woc-bar-fill {
+  background: rgb(252 238 88);
+  opacity: 0.32;
+}
+
+#woc-addons .woc-bar-class-paladin .woc-bar-fill {
+  background: rgb(245 140 160);
+  opacity: 0.32;
+}
+
+#woc-addons .woc-bar-class-hunter .woc-bar-fill {
+  background: rgb(166 216 79);
+  opacity: 0.32;
+}
+
+#woc-addons .woc-bar-class-priest .woc-bar-fill {
+  background: rgb(198 212 240);
+  opacity: 0.32;
+}
+
+#woc-addons .woc-bar-class-shaman .woc-bar-fill {
+  background: rgb(78 138 234);
+  opacity: 0.32;
+}
+
+#woc-addons .woc-bar-class-warlock .woc-bar-fill {
+  background: rgb(167 133 230);
+  opacity: 0.32;
+}
+
+#woc-addons .woc-bar-class-druid .woc-bar-fill {
+  background: rgb(255 140 26);
+  opacity: 0.32;
+}

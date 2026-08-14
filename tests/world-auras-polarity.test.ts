@@ -23,7 +23,8 @@ import {
   isDispellable,
   isHarmful,
 } from '../loader/src/runtime/world/auras.ts';
-import type { Aura, PartyMemberAura } from '../loader/src/runtime/world/game-types.ts';
+import type { Aura } from '../loader/src/runtime/world/game-types.ts';
+import type { PartyMemberAura } from '../loader/src/runtime/world/party-types.ts';
 
 /** A full aura in the shape the game hands over, with only the fields under test set. */
 function aura(fields: Partial<Aura>): Aura {

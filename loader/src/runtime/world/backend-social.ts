@@ -7,14 +7,17 @@
 // is different from the question the sheet reads answer.
 
 import { type ArenaStandings, readArena } from './arena.ts';
+import { type BattlegroundStandings, readBattleground } from './battleground.ts';
 import { type FinderInfo, type FinderListingRow, readFinder, readFinderBoard } from './finder.ts';
 import { type MatchInfo, readMatch } from './match.ts';
 
 interface SocialReads {
-  /** The competitive bout in progress. See `world/match.ts` for the ten second cadence. */
+  /** The competitive bout in progress. See `world/match.ts` for the three cadences. */
   readonly match: MatchInfo | null;
   /** Standings, queue and ladders. See `world/arena.ts`. */
   readonly arena: ArenaStandings | null;
+  /** Battleground record, queue and ladder. See `world/battleground.ts`. */
+  readonly battleground: BattlegroundStandings | null;
   /** Dungeon finder state. See `world/finder.ts`. */
   readonly finder: FinderInfo | null;
   /** The realm's open premade listings, or null before the first sync. */
@@ -29,6 +32,10 @@ function socialReads(world: unknown): SocialReads {
 
     get arena(): ArenaStandings | null {
       return readArena(world);
+    },
+
+    get battleground(): BattlegroundStandings | null {
+      return readBattleground(world);
     },
 
     get finder(): FinderInfo | null {

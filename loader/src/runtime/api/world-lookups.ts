@@ -13,9 +13,11 @@ import {
   NONE,
   type PartyAuraQuery,
 } from '../world/auras.ts';
-import type { Aura, Entity, PartyMemberAura } from '../world/game-types.ts';
+import type { Aura, Entity } from '../world/game-types.ts';
 import type { CorpseView } from '../world/ground.ts';
 import type { WorldHub } from '../world/hub.ts';
+import type { PartyMemberAura } from '../world/party-types.ts';
+import type { Reaction } from '../world/reaction.ts';
 import { NO_THREAT, type ThreatTable } from '../world/threat.ts';
 import { resolveUnit, type UnitContext } from '../world/units.ts';
 import { emptyEntities, fromBackend } from './world-reads.ts';
@@ -102,6 +104,14 @@ export function lookups(hub: WorldHub) {
         return null;
       }
       return backend.corpseLoot(entityId);
+    },
+
+    reaction: (entityId: number): Reaction | null => {
+      const backend = hub.backend();
+      if (backend === null) {
+        return null;
+      }
+      return backend.reaction(entityId);
     },
 
     partyAuras: (pid: number, query: PartyAuraQuery = {}): readonly PartyMemberAura[] => {

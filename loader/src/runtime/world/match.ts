@@ -1,21 +1,26 @@
-// What competitive bout the player is in, across all six formats.
+// What competitive bout the player is in, across all seven formats.
 //
-// One union rather than six reads, discriminated on `format`, because an addon
+// One union rather than seven reads, discriminated on `format`, because an addon
 // asks "am I fighting anyone" before it asks what kind. A duel is a member of it
 // for the same reason: it is a bout with an opponent and a countdown, and an
 // addon that has to check two unrelated reads to answer one question will check
 // one of them.
 //
-// EVERYTHING BUT THE DUEL IS UP TO TEN SECONDS OLD. The arena self key is gated
-// to 0.1 Hz on the server, so this reading is the game's own recoverable
-// baseline rather than a live feed, and the members whose live path is the event
-// queue say which events those are. The duel key rides every tick.
+// THE THREE KEYS BEHIND IT REFRESH AT THREE DIFFERENT RATES, and the union hides
+// that, so each member's own type says which it came from. The duel key rides
+// every tick. The battleground key rides at 1 Hz and is forced fresh on every
+// transition worth acting on. The arena key is gated to 0.1 Hz, so everything
+// read from it is up to ten seconds old and is the game's own recoverable
+// baseline rather than a live feed; the members whose live path is the event
+// queue say which events those are.
 //
 // `match-modes.ts` holds the two unranked bout shapes and type-imports the two
 // bases below back from here. `verbatimModuleSyntax` erases both directions, so
-// there is no runtime cycle.
+// there is no runtime cycle. `battleground.ts` needs nothing from here, because
+// its match member deliberately does not extend `BoutBase`: see that module.
 
 import { fieldArray, fieldNumber, fieldString, fieldValue } from '../net/frames.ts';
+import { type BattlegroundMatch, battlegroundOf } from './battleground.ts';
 import { type FiestaMatch, fiestaOf, type YumiMatch, yumiOf } from './match-modes.ts';
 
 /** One fighter in a bout, on either side. */
@@ -59,7 +64,7 @@ interface RankedMatch extends BoutBase {
 }
 
 /** The bout in progress, whatever kind it is. */
-type MatchInfo = DuelMatch | RankedMatch | FiestaMatch | YumiMatch;
+type MatchInfo = BattlegroundMatch | DuelMatch | RankedMatch | FiestaMatch | YumiMatch;
 
 /**
  * An unrecognised state reads as 'active'.
@@ -124,18 +129,23 @@ function duelState(state: string | null): DuelMatch['state'] {
 /**
  * The bout the player is in, or null when they are in none.
  *
- * The duel is read first and answered first: the two keys are mutually
- * exclusive in the game, and the duel rides every tick where the arena key is
- * ten seconds stale, so the fresher of two answers wins.
+ * READ IN FALLING ORDER OF FRESHNESS, which is what decides the order rather
+ * than taste: the three keys are mutually exclusive in the game, so any of them
+ * answering is the answer, and where two could the fresher one should win. The
+ * duel rides every tick, the battleground 1 Hz, the arena 0.1 Hz.
  *
- * THE ARENA KEY IS PRESENT FOR EVERY CHARACTER, queued or not. Only its `match`
- * member says a bout is on, so a reader that answered a bout whenever
- * `arenaInfo` existed would tell the whole realm it is fighting.
+ * THE ARENA AND BATTLEGROUND KEYS ARE PRESENT FOR EVERY CHARACTER, queued or
+ * not. Only their `match` member says a bout is on, so a reader that answered a
+ * bout whenever `arenaInfo` existed would tell the whole realm it is fighting.
  */
 function readMatch(world: unknown): MatchInfo | null {
   const duel = duelOf(fieldValue(world, 'duelInfo'));
   if (duel !== null) {
     return duel;
+  }
+  const battleground = battlegroundOf(world);
+  if (battleground !== null) {
+    return battleground;
   }
   const match = fieldValue(fieldValue(world, 'arenaInfo'), 'match');
   if (match === null) {

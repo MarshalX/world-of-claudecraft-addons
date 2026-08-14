@@ -1,7 +1,7 @@
 {
   "id": "dev-harness",
   "name": "Dev Harness",
-  "version": "1.6.0",
+  "version": "1.7.0",
   "apiVersion": 1,
   "apiMinor": 6,
   "author": "MarshalX",

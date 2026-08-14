@@ -15,6 +15,7 @@ import type { AbilityIndex } from '../world/abilities.ts';
 import type { ArenaStandings } from '../world/arena.ts';
 import type { AuraQuery, PartyAuraQuery } from '../world/auras.ts';
 import type { BankState } from '../world/bank.ts';
+import type { BattlegroundStandings } from '../world/battleground.ts';
 import type { CharacterInfo, ProfessionInfo, TalentInfo } from '../world/character.ts';
 import type { CombatState } from '../world/combat.ts';
 import type { Recipe, Station } from '../world/content.ts';
@@ -28,8 +29,6 @@ import type {
   EquipSlot,
   HeldSlot,
   InvSlot,
-  PartyInfo,
-  PartyMemberAura,
   Vec3,
   WorldQuests,
 } from '../world/game-types.ts';
@@ -40,6 +39,8 @@ import type { ItemInstance } from '../world/items.ts';
 import type { MailState } from '../world/mail.ts';
 import type { MarketState } from '../world/market.ts';
 import type { MatchInfo } from '../world/match.ts';
+import type { PartyInfo, PartyMemberAura } from '../world/party-types.ts';
+import type { Reaction } from '../world/reaction.ts';
 import { isWorldKey, WORLD_KEYS, type WorldKey } from '../world/signature.ts';
 import type { ThreatTable } from '../world/threat.ts';
 import type { UnitToken } from '../world/units.ts';
@@ -137,14 +138,16 @@ export interface WorldApi {
   /**
    * The competitive bout you are in, or null.
    *
-   * One union over all six formats, discriminated on `format`, so a display asks
-   * what kind of bout this is rather than reading two unrelated members. A duel
-   * is a member of it.
+   * One union over all seven formats, discriminated on `format`, so a display
+   * asks what kind of bout this is rather than reading three unrelated members.
+   * A duel is a member of it, and so is a battleground.
    *
-   * Everything but a duel is UP TO TEN SECONDS OLD, because the arena self key
-   * is gated to 0.1 Hz on the server. That is the game's own cadence, so a
-   * Fiesta ring drawn from this agrees with the ring the game draws; a Yumi
-   * health bar does not, and the type says which events carry the live figures.
+   * THE CADENCE IS PER FORMAT. A duel rides every tick. A battleground rides at
+   * 1 Hz and is forced fresh on every transition worth acting on. The four arena
+   * formats are UP TO TEN SECONDS OLD, because that self key is gated to 0.1 Hz
+   * on the server. That is the game's own cadence, so a Fiesta ring drawn from
+   * this agrees with the ring the game draws; a Yumi health bar does not, and
+   * the type says which events carry the live figures.
    */
   readonly match: MatchInfo | null;
 
@@ -156,6 +159,16 @@ export interface WorldApi {
    * the unranked three carry a copy of the 2v2 record and an empty ladder.
    */
   readonly arena: ArenaStandings | null;
+
+  /**
+   * Your battleground record, your queue and the live ladder.
+   *
+   * Present for every character, so this being non-null says nothing about
+   * whether you have ever fought one. The match itself is the
+   * `format: 'battleground'` member of `match` above; this is the standing that
+   * outlives it.
+   */
+  readonly battleground: BattlegroundStandings | null;
 
   /** Your dungeon finder state. Present whether or not you are queued. */
   readonly finder: FinderInfo | null;
@@ -170,6 +183,13 @@ export interface WorldApi {
 
   /** One entity's hate table, sorted and measured against you. */
   threat: (entityId: number) => ThreatTable;
+  /**
+   * Which side one unit is on, from the bout rather than from `entity.hostile`.
+   *
+   * The flag is a mob's and is false on every player alive, so this is the only
+   * honest answer for a player. See `world/reaction.ts`.
+   */
+  reaction: (entityId: number) => Reaction | null;
   readonly quests: WorldQuests | null;
   readonly cooldowns: ReadonlyMap<string, number> | null;
   readonly auras: readonly Aura[] | null;

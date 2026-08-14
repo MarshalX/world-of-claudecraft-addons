@@ -55,6 +55,7 @@ const KEYS = [
   'encounter',
   'match',
   'arena',
+  'battleground',
   'finder',
   'finderBoard',
   'quests',

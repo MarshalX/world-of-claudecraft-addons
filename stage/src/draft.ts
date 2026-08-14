@@ -84,15 +84,20 @@ interface DraftDeps {
   label: ZoneLabel;
 }
 
-/** What a mob carries that a player does not, so a scenario need not repeat it. */
+/**
+ * What a mob carries that a player does not, so a scenario need not repeat it.
+ *
+ * The three null ids this used to spell out are gone: `liveEntity` now answers
+ * null for every NULLABLE field rather than its kind's zero, so a mob no longer
+ * arrives owned by entity 0, tapped by entity 0 and casting at entity 0. Stating
+ * them here would have covered the three somebody thought of.
+ */
 function mobDefaults(id: number): Fake {
   return {
     id,
     name: `Mob${String(id)}`,
     kind: 'mob',
     hostile: true,
-    aggroTargetId: null,
-    forcedTargetId: null,
     forcedTargetTimer: 0,
     threat: new Map<number, number>(),
   };

@@ -9,8 +9,9 @@
 // The prose lives in the published copy, which is what an author reads. This one
 // carries the shapes and the notes a maintainer needs.
 //
-// The combat records are in `events-combat.ts`, the same split the published
-// catalogue makes. `EventPayloads` below is the one map over both files.
+// The combat records are in `events-combat.ts` and the battleground's in
+// `events-pvp.ts`, the same split the published catalogue makes. `EventPayloads`
+// below is the one map over all three files.
 
 import type {
   AuraEvent,
@@ -22,6 +23,19 @@ import type {
   SpellFxAtEvent,
   SpellFxEvent,
 } from './events-combat.ts';
+import type {
+  BgCountdownEvent,
+  BgEndEvent,
+  BgFlagEvent,
+  BgFoundEvent,
+  BgKillEvent,
+  BgProposalUpdateEvent,
+  BgProposedEvent,
+  BgQueuedEvent,
+  BgStartEvent,
+  BgTimeWarningEvent,
+  BgUnqueuedEvent,
+} from './events-pvp.ts';
 
 /** Set when the server routed this record to one player rather than to everyone. */
 interface PersonalEvent {
@@ -199,6 +213,17 @@ interface EventPayloads {
   gatherDowngrade: GatherDowngradeEvent;
   bank: OpenWindowEvent;
   mailbox: OpenWindowEvent;
+  bgQueued: BgQueuedEvent;
+  bgUnqueued: BgUnqueuedEvent;
+  bgProposed: BgProposedEvent;
+  bgProposalUpdate: BgProposalUpdateEvent;
+  bgFound: BgFoundEvent;
+  bgCountdown: BgCountdownEvent;
+  bgStart: BgStartEvent;
+  bgFlag: BgFlagEvent;
+  bgKill: BgKillEvent;
+  bgTimeWarning: BgTimeWarningEvent;
+  bgEnd: BgEndEvent;
 }
 
 type KnownEventKind = keyof EventPayloads;

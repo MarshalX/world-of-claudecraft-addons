@@ -12,6 +12,7 @@
 import type { AbilityIndex } from './abilities.ts';
 import type { ArenaStandings } from './arena.ts';
 import type { BankState } from './bank.ts';
+import type { BattlegroundStandings } from './battleground.ts';
 import type { CharacterInfo, ProfessionInfo, TalentInfo } from './character.ts';
 import type { CombatState } from './combat.ts';
 import type { EntityCast, Hazard } from './derived.ts';
@@ -23,7 +24,6 @@ import type {
   EquipSlot,
   HeldSlot,
   InvSlot,
-  PartyInfo,
   Vec3,
   WorldQuests,
 } from './game-types.ts';
@@ -33,6 +33,7 @@ import type { ItemInstance } from './items.ts';
 import type { MailState } from './mail.ts';
 import type { MarketState } from './market.ts';
 import type { MatchInfo } from './match.ts';
+import type { PartyInfo } from './party-types.ts';
 
 export interface WorldValues {
   player: Entity | null;
@@ -70,13 +71,17 @@ export interface WorldValues {
   /**
    * The competitive bout in progress, or null when you are not in one.
    *
-   * Everything but a duel is up to ten seconds old: the arena self key is gated
-   * to 0.1 Hz on the server. This is the recoverable baseline a reload restores
-   * from; the live path for a Fiesta or Yumi bout is the event queue.
+   * Three keys at three cadences: a duel every tick, a battleground at 1 Hz and
+   * forced fresh on every transition, and everything else up to ten seconds old
+   * because the arena self key is gated to 0.1 Hz. This is the recoverable
+   * baseline a reload restores from; the live path for a Fiesta or Yumi bout is
+   * the event queue, and for a battleground it is the `bg*` events.
    */
   match: MatchInfo | null;
   /** Where you stand and what you are queued for. Present whether or not you play. */
   arena: ArenaStandings | null;
+  /** Your battleground record, queue and ladder. Present whether or not you play. */
+  battleground: BattlegroundStandings | null;
   /** Your dungeon finder state. Present whether or not you are queued. */
   finder: FinderInfo | null;
   /** The realm's open premade listings, capped by the server. Null before the first sync. */

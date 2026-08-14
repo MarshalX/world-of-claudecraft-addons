@@ -18,8 +18,21 @@ import {
 } from '../../loader/src/runtime/world/shape.ts';
 import { PLAYER_ENTITY } from './frames.ts';
 
-/** An inert value of the right kind, for a field no fixture has an opinion about. */
+/**
+ * An inert value of the right kind, for a field no fixture has an opinion about.
+ *
+ * A NULLABLE field defaults to null rather than to its kind's zero, and the
+ * distinction is not pedantry: every nullable number here means "nobody", so a
+ * generated 0 is the id of a real entity and reads as an answer. `ownerId: 0`
+ * makes the player their own pet's owner-of-record for anything resolving a
+ * principal, and `tappedById: 0` makes every mob in every fixture somebody
+ * else's kill. Both are valid for the type and wrong for the domain, which is
+ * the shape of fixture bug that stays green while the code under it rots.
+ */
 function defaultFor(spec: FieldSpec): unknown {
+  if (spec.nullable === true) {
+    return null;
+  }
   if (spec.kind === 'number') {
     return 0;
   }
