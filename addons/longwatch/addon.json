@@ -1,17 +1,17 @@
 {
   "id": "longwatch",
   "name": "Longwatch",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "apiVersion": 1,
   "apiMinor": 4,
   "author": "MarshalX",
-  "description": "The rare spawns, where they live and when they are due back. Carries the roster the wire cannot answer for, counts each rare down from the kill that dropped it, and keeps the countdown across a logout. A body you rode up on rather than watched fall still bounds the return, and the row says which of the two it is drawing. Pins the rares in your own zone into the world and calls out a sighting with a banner and a cue.",
+  "description": "The rare spawns, where they live and when they are due back. Carries the roster the wire cannot answer for, counts each rare down from the kill that dropped it, and keeps the countdown across a logout. A body you rode up on rather than watched fall still bounds the return, and the row says which of the two it is drawing. Pins the rares in your own zone into the world and calls out a sighting with a banner and a cue. It also carries the table saying which mobs the game counts as elite, as bosses or as rare, and publishes it for any other addon to draw from.",
   "entry": "main.js",
   "preview": {
     "file": "preview.png",
     "alt": "On the left, Rares list, a two-column list of rare spawns, a timer bar on every row On the right, An alert, a banner over an empty screen announcing that a rare is up"
   },
-  "data": ["rares.json"],
+  "data": ["rares.json", "mobs.json"],
   "homepage": "https://github.com/MarshalX/world-of-claudecraft-addons",
   "tags": ["world", "interface"],
   "permissions": ["net.read", "world.read", "ui", "sound", "storage", "keys"],

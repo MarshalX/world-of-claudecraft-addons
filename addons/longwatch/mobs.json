@@ -1,0 +1,586 @@
+{
+  "gameVersion": "0.37.1",
+  "source": "src/sim/data.ts, src/ui/i18n.resolved.generated/en.ts",
+  "mobs": [
+    {
+      "id": "ancient_guardian",
+      "name": "Ancient Guardian",
+      "rank": "elite"
+    },
+    {
+      "id": "aurelhorn",
+      "name": "Aurelhorn, First of the Herd",
+      "rank": "elite",
+      "rare": true
+    },
+    {
+      "id": "barrow_king",
+      "name": "The Barrow King",
+      "rank": "elite"
+    },
+    {
+      "id": "bastion_revenant",
+      "name": "Bastion Revenant",
+      "rank": "elite"
+    },
+    {
+      "id": "bonechill_widow",
+      "name": "Bonechill Widow",
+      "rank": "elite"
+    },
+    {
+      "id": "bound_guardian",
+      "name": "The Bound Guardian",
+      "rank": "boss"
+    },
+    {
+      "id": "brakka_wallbreaker",
+      "name": "Brakka the Wallbreaker",
+      "rank": "elite"
+    },
+    {
+      "id": "brutok_skullsmasher",
+      "name": "Brutok Skullsmasher",
+      "rank": "elite",
+      "rare": true
+    },
+    {
+      "id": "captain_verlan",
+      "name": "Captain Verlan",
+      "rank": "elite",
+      "rare": true
+    },
+    {
+      "id": "choirmother_selthe",
+      "name": "Choirmother Selthe",
+      "rank": "elite"
+    },
+    {
+      "id": "cindraleth_maw_matriarch",
+      "name": "Cindraleth the Maw Matriarch",
+      "rank": "elite"
+    },
+    {
+      "id": "corrupted_priest_malric",
+      "name": "Corrupted Priest Malric",
+      "rank": "elite",
+      "rare": true
+    },
+    {
+      "id": "crypt_shambler",
+      "name": "Crypt Shambler",
+      "rank": "elite"
+    },
+    {
+      "id": "deacon_varric",
+      "name": "Deacon Varric",
+      "rank": "boss"
+    },
+    {
+      "id": "deacon_voss",
+      "name": "Deacon Voss",
+      "rank": "boss"
+    },
+    {
+      "id": "deathstalker_voss",
+      "name": "Deathstalker Voss",
+      "rank": "elite",
+      "rare": true
+    },
+    {
+      "id": "drakemaw_broodlord",
+      "name": "Drakemaw Broodlord",
+      "rank": "elite",
+      "rare": true
+    },
+    {
+      "id": "drowned_templeguard",
+      "name": "Drowned Templeguard",
+      "rank": "elite"
+    },
+    {
+      "id": "drowned_warlord",
+      "name": "The Drowned Warlord",
+      "rank": "elite"
+    },
+    {
+      "id": "drowsy_croaker",
+      "name": "The Drowsy Croaker",
+      "rank": "elite"
+    },
+    {
+      "id": "emberwing_drake",
+      "name": "Emberwing Drake",
+      "rank": "elite"
+    },
+    {
+      "id": "fallen_captain_aldren",
+      "name": "Fallen Captain Aldren",
+      "rank": "elite",
+      "rare": true
+    },
+    {
+      "id": "frostmane_yeti",
+      "name": "Frostmane Yeti",
+      "rank": "elite"
+    },
+    {
+      "id": "gleamstag",
+      "name": "The Gleamstag",
+      "rank": "elite",
+      "rare": true
+    },
+    {
+      "id": "glimmerscale_lurker",
+      "name": "Glimmerscale Lurker",
+      "rank": "elite"
+    },
+    {
+      "id": "gorrak",
+      "name": "Gorrak the Ruthless",
+      "rank": "boss"
+    },
+    {
+      "id": "grand_necromancer_velkhar",
+      "name": "Grand Necromancer Velkhar",
+      "rank": "elite"
+    },
+    {
+      "id": "grave_silt_bulwark",
+      "name": "Grave-Silt Bulwark",
+      "rank": "elite"
+    },
+    {
+      "id": "grix_the_tunnelking",
+      "name": "Grix the Tunnelking",
+      "rank": "elite",
+      "rare": true
+    },
+    {
+      "id": "grubjaw",
+      "name": "Grubjaw the Glutton",
+      "rare": true
+    },
+    {
+      "id": "hollow_acolyte",
+      "name": "Hollow Acolyte",
+      "rank": "elite"
+    },
+    {
+      "id": "idol_guardian",
+      "name": "The Idol Guardian",
+      "rank": "elite"
+    },
+    {
+      "id": "ironvein_foreman",
+      "name": "Ironvein Foreman",
+      "rank": "elite",
+      "rare": true
+    },
+    {
+      "id": "knight_commander_olen",
+      "name": "Knight-Commander Olen",
+      "rank": "elite"
+    },
+    {
+      "id": "korgath_the_bound",
+      "name": "Korgath the Bound",
+      "rank": "elite"
+    },
+    {
+      "id": "korzul_the_gravewyrm",
+      "name": "Korzul the Gravewyrm",
+      "rank": "boss"
+    },
+    {
+      "id": "marrowlord_varkas",
+      "name": "Marrowlord Varkas",
+      "rank": "elite",
+      "rare": true
+    },
+    {
+      "id": "mirefen_broodmother",
+      "name": "The Broodmother",
+      "rank": "boss"
+    },
+    {
+      "id": "mirejaw_the_ravenous",
+      "name": "Mirejaw the Ravenous",
+      "rank": "elite",
+      "rare": true
+    },
+    {
+      "id": "mogger",
+      "name": "Mogger",
+      "rank": "elite",
+      "rare": true
+    },
+    {
+      "id": "morthen",
+      "name": "Morthen the Gravecaller",
+      "rank": "boss"
+    },
+    {
+      "id": "necromancy_gravewing",
+      "name": "Gravewing",
+      "rank": "elite"
+    },
+    {
+      "id": "nythraxis_heroic_priest_add",
+      "name": "Spirit of Malric",
+      "rank": "elite"
+    },
+    {
+      "id": "nythraxis_heroic_rogue_add",
+      "name": "Spirit of Voss",
+      "rank": "elite"
+    },
+    {
+      "id": "nythraxis_heroic_warrior_add",
+      "name": "Spirit of Aldren",
+      "rank": "elite"
+    },
+    {
+      "id": "nythraxis_scourge_of_thornpeak",
+      "name": "Nythraxis, Scourge of Thornpeak",
+      "rank": "boss"
+    },
+    {
+      "id": "nythraxis_skeleton_warrior",
+      "name": "Risen Royal Guard",
+      "rank": "elite"
+    },
+    {
+      "id": "ogre_crusher",
+      "name": "Thornpeak Crusher",
+      "rank": "elite"
+    },
+    {
+      "id": "old_cragmaw",
+      "name": "Old Cragmaw",
+      "rank": "elite",
+      "rare": true
+    },
+    {
+      "id": "old_greyjaw",
+      "name": "Old Greyjaw",
+      "rare": true
+    },
+    {
+      "id": "old_marrowshell",
+      "name": "Old Marrowshell",
+      "rank": "elite",
+      "rare": true
+    },
+    {
+      "id": "orchard_treant",
+      "name": "Orchard Treant",
+      "rank": "elite"
+    },
+    {
+      "id": "pale_choir_acolyte",
+      "name": "Pale Choir Acolyte",
+      "rank": "elite"
+    },
+    {
+      "id": "pale_huntsman",
+      "name": "The Pale Huntsman",
+      "rank": "elite"
+    },
+    {
+      "id": "pearlguard_sentinel",
+      "name": "Pearlguard Sentinel",
+      "rank": "elite"
+    },
+    {
+      "id": "reliquary_saintless_effigy",
+      "name": "Saintless Effigy",
+      "rank": "elite"
+    },
+    {
+      "id": "rift_boneclad",
+      "name": "Boneclad Warrior",
+      "rank": "elite"
+    },
+    {
+      "id": "rift_boss_arcane",
+      "name": "Archon Nyxaris",
+      "rank": "boss"
+    },
+    {
+      "id": "rift_boss_brute",
+      "name": "Warlord Grask",
+      "rank": "boss"
+    },
+    {
+      "id": "rift_boss_ember",
+      "name": "Emberforge Tyrant",
+      "rank": "boss"
+    },
+    {
+      "id": "rift_boss_frost",
+      "name": "Hoarfrost Warden",
+      "rank": "boss"
+    },
+    {
+      "id": "rift_boss_necro",
+      "name": "Bonelord Xarreth",
+      "rank": "boss"
+    },
+    {
+      "id": "rift_boss_pitlord",
+      "name": "Azgorath, Lord of the Pit",
+      "rank": "boss"
+    },
+    {
+      "id": "rift_boss_ritualist",
+      "name": "Magus Vel'Kor the Pactbound",
+      "rank": "elite"
+    },
+    {
+      "id": "rift_boss_storm",
+      "name": "Tempest Vharok",
+      "rank": "boss"
+    },
+    {
+      "id": "rift_boss_tide",
+      "name": "Abyssal Maw",
+      "rank": "boss"
+    },
+    {
+      "id": "rift_boss_venom",
+      "name": "Broodmother Vysska",
+      "rank": "boss"
+    },
+    {
+      "id": "rift_deep_lurker",
+      "name": "Deep Lurker",
+      "rank": "elite"
+    },
+    {
+      "id": "rift_dread_stalker",
+      "name": "Dread Stalker",
+      "rank": "elite"
+    },
+    {
+      "id": "rift_ember_fiend",
+      "name": "Ember Fiend",
+      "rank": "elite"
+    },
+    {
+      "id": "rift_frost_revenant",
+      "name": "Frostbound Revenant",
+      "rank": "elite"
+    },
+    {
+      "id": "rift_hellguard",
+      "name": "Hellguard",
+      "rank": "elite"
+    },
+    {
+      "id": "rift_magma_brute",
+      "name": "Magma Brute",
+      "rank": "elite"
+    },
+    {
+      "id": "rift_marrow_troll",
+      "name": "Marrow Troll",
+      "rank": "elite"
+    },
+    {
+      "id": "rift_pact_acolyte",
+      "name": "Pact Acolyte",
+      "rank": "elite"
+    },
+    {
+      "id": "rift_rime_elemental",
+      "name": "Rime Elemental",
+      "rank": "elite"
+    },
+    {
+      "id": "rift_stone_ogre",
+      "name": "Stone Ogre",
+      "rank": "elite"
+    },
+    {
+      "id": "rift_storm_caller",
+      "name": "Storm Caller",
+      "rank": "elite"
+    },
+    {
+      "id": "rift_stormscale",
+      "name": "Stormscale Drake",
+      "rank": "elite"
+    },
+    {
+      "id": "rift_thornback",
+      "name": "Thornback Stalker",
+      "rank": "elite"
+    },
+    {
+      "id": "rift_tide_thrall",
+      "name": "Tide Thrall",
+      "rank": "elite"
+    },
+    {
+      "id": "rift_venom_weaver",
+      "name": "Venom Weaver",
+      "rank": "elite"
+    },
+    {
+      "id": "rift_void_acolyte",
+      "name": "Voidscar Acolyte",
+      "rank": "elite"
+    },
+    {
+      "id": "sanctum_boneguard",
+      "name": "Sanctum Boneguard",
+      "rank": "elite"
+    },
+    {
+      "id": "sanctum_drakonid",
+      "name": "Sanctum Scaleguard",
+      "rank": "elite"
+    },
+    {
+      "id": "sethrael_palecoil",
+      "name": "Sethrael the Palecoil",
+      "rare": true
+    },
+    {
+      "id": "sexton_marrow",
+      "name": "Sexton Marrow",
+      "rank": "elite"
+    },
+    {
+      "id": "shardlord_kazzix",
+      "name": "Shardlord Kazzix",
+      "rare": true
+    },
+    {
+      "id": "sister_nhalia",
+      "name": "Sister Nhalia",
+      "rank": "elite",
+      "rare": true
+    },
+    {
+      "id": "sister_nhalia_drowned_canticle",
+      "name": "Sister Nhalia, the Drowned Canticle",
+      "rank": "boss"
+    },
+    {
+      "id": "sloomtooth_the_drowned",
+      "name": "Sloomtooth the Drowned",
+      "rank": "elite",
+      "rare": true
+    },
+    {
+      "id": "spider_egg",
+      "name": "Broodmother Egg",
+      "requiresQuestId": "q_broodmother"
+    },
+    {
+      "id": "sump_troll_devourer",
+      "name": "Sump Troll Devourer",
+      "rank": "elite"
+    },
+    {
+      "id": "sundered_horror",
+      "name": "The Sundered Horror",
+      "rank": "elite"
+    },
+    {
+      "id": "the_meredark",
+      "name": "The Meredark",
+      "rank": "elite"
+    },
+    {
+      "id": "the_topiary_bull",
+      "name": "The Topiary Bull",
+      "rank": "elite"
+    },
+    {
+      "id": "the_wreck_warden",
+      "name": "The Wreck Warden",
+      "rank": "elite"
+    },
+    {
+      "id": "threnos_first_voice",
+      "name": "Threnos the First Voice",
+      "rank": "elite"
+    },
+    {
+      "id": "thunzharr_waking_peak",
+      "name": "Thunzharr, the Waking Peak",
+      "rank": "boss"
+    },
+    {
+      "id": "tidebound_acolyte",
+      "name": "Tidebound Acolyte",
+      "rank": "elite"
+    },
+    {
+      "id": "treant_elder",
+      "name": "Treant Elder",
+      "rank": "elite"
+    },
+    {
+      "id": "vael_the_mistcaller",
+      "name": "Vael the Fogbinder",
+      "rank": "boss"
+    },
+    {
+      "id": "voskar_emberwing",
+      "name": "Voskar the Emberwing",
+      "rank": "elite",
+      "rare": true
+    },
+    {
+      "id": "waking_warden",
+      "name": "The Waking Warden",
+      "rank": "elite"
+    },
+    {
+      "id": "warlord_drogmar",
+      "name": "Warlord Drogmar",
+      "rank": "boss"
+    },
+    {
+      "id": "wildheart_beastmaster",
+      "name": "Fanglord Beastmaster",
+      "rank": "elite",
+      "rare": true
+    },
+    {
+      "id": "wildheart_hexcaller",
+      "name": "Sunbone Hexcaller",
+      "rank": "elite"
+    },
+    {
+      "id": "wildheart_high_priest",
+      "name": "Zulgar, Voice of the Basin",
+      "rank": "boss"
+    },
+    {
+      "id": "wildheart_ravager",
+      "name": "Bloodmane Ravager",
+      "rank": "elite"
+    },
+    {
+      "id": "wildheart_stalker",
+      "name": "Vineclaw Stalker",
+      "rank": "elite"
+    },
+    {
+      "id": "wraithbinder_maldrec",
+      "name": "Wraithbinder Maldrec",
+      "rank": "elite",
+      "rare": true
+    },
+    {
+      "id": "ysolei",
+      "name": "Ysolei, Avatar of the Drowned Moon",
+      "rank": "boss"
+    }
+  ]
+}

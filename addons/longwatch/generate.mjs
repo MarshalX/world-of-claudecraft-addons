@@ -1,6 +1,15 @@
-// Regenerates addons/longwatch/rares.json from a World of ClaudeCraft checkout.
+// Regenerates addons/longwatch/rares.json and addons/longwatch/mobs.json from a
+// World of ClaudeCraft checkout.
 //
 //   node addons/longwatch/generate.mjs --game=/path/to/world-of-claudecraft
+//
+// TWO TABLES, ONE READ. `rares.json` is this addon's own roster: the rares it can
+// place and count down. `mobs.json` is the rank service it PUBLISHES on the bus for
+// every other addon: which templates are elite, which are bosses, which are rare, and
+// which the game hides from a player who is not on the gating quest. None of that is
+// on the wire, and it comes off the same `MOBS` this already evaluates, so a second
+// generator reading the same table would be a second thing to regenerate on a game
+// release and a second way to be silently stale.
 //
 // The checkout path is REQUIRED and is never defaulted, for the reason every other
 // generator here says so: nothing tells you a stale working tree is stale the way a
@@ -12,9 +21,10 @@
 // WHAT IT READS, all of it under the checkout and none of it written to:
 //
 //   package.json                          the version stamped into the output
-//   src/sim/data.ts                       MOBS for the rare flag and the name, CAMPS
-//                                         for where each one stands, ZONES and
-//                                         `zoneContaining` for which zone that is
+//   src/sim/data.ts                       MOBS for the rare, elite, boss and quest-gate
+//                                         flags and the name, CAMPS for where each one
+//                                         stands, ZONES and `zoneContaining` for which
+//                                         zone that is
 //   src/sim/respawn_policy.ts             `resolveRespawnSeconds`, which is the whole
 //                                         of the countdown this addon draws
 //   src/ui/i18n.resolved.generated/en.ts  the resolved English catalogue, for the
@@ -93,10 +103,13 @@ const DATA_MODULE = '/src/sim/data.ts';
 const RESPAWN_MODULE = '/src/sim/respawn_policy.ts';
 const CATALOGUE_MODULE = '/src/ui/i18n.resolved.generated/en.ts';
 const OUT_FILE = 'rares.json';
+const RANKS_FILE = 'mobs.json';
 
 /** What the shipped file records about where it came from. */
 const SOURCE_NOTE =
   'src/sim/data.ts, src/sim/respawn_policy.ts, src/ui/i18n.resolved.generated/en.ts';
+/** The rank table reads less: no camp, no respawn policy, so it says so. */
+const RANKS_SOURCE_NOTE = 'src/sim/data.ts, src/ui/i18n.resolved.generated/en.ts';
 
 /**
  * The zones this addon can express, which is `ZONES` in `main.js` and the `zones`
@@ -124,6 +137,8 @@ const KNOWN_ZONES = new Set([
 /** Roughly what the tables carried at game 0.34.0, so a thin read cannot pass. */
 const EXPECTED_RARES = 24;
 const EXPECTED_CAMPED = 19;
+/** What `MOBS` carried at game 0.37.1: 64 elites, 20 rare elites, 23 bosses, 4 plain rares, 1 gate. */
+const EXPECTED_RANKED = 112;
 
 const GAME_ARG = '--game=';
 /** Two spaces, which is what biome.json formats every JSON file in this tree to. */
@@ -346,6 +361,80 @@ function rareRows(deps) {
 }
 
 /**
+ * Which rank a template carries, or null for the ordinary mob most of them are.
+ *
+ * `boss` beats `elite` because that is the order the game's own nameplate resolves
+ * them in, and `rare` is a SEPARATE flag rather than a third rank: the three are
+ * independent in `MOBS` and a rare elite is an ordinary thing to be.
+ */
+function rankOf(template) {
+  if (template.boss === true) {
+    return 'boss';
+  }
+  if (template.elite === true) {
+    return 'elite';
+  }
+  return null;
+}
+
+/**
+ * One rank row, carrying only what is not derivable from an id.
+ *
+ * `name` rides every row for the reason `agreedName` exists at all: a mob's id and
+ * its display name have already diverged in this game, so a consumer that title-cased
+ * the id would print a name no player sees, and no regeneration could fix it.
+ *
+ * `requiresQuestId` rides the same table rather than a second one. It is the same read
+ * of `MOBS`, and it is what lets a display honour the game's own rule that a
+ * quest-gated mob reads as inert scenery to anybody not on the quest.
+ */
+function rankRow(id, template, mobs) {
+  const row = { id, name: agreedName(id, template, mobs) };
+  const rank = rankOf(template);
+  if (rank !== null) {
+    row.rank = rank;
+  }
+  if (template.rare === true) {
+    row.rare = true;
+  }
+  if (typeof template.requiresQuestId === 'string' && template.requiresQuestId.length > NONE) {
+    row.requiresQuestId = template.requiresQuestId;
+  }
+  return row;
+}
+
+/**
+ * Every template carrying something the wire cannot say, sorted by id.
+ *
+ * ONLY THE FLAGGED SHIP, and an id a consumer does not find here is an ordinary mob.
+ * That is safe because this is read from the whole of `MOBS` rather than from a
+ * curated list, so it is complete by construction: the failure a hand-written roster
+ * has, of decorating a few and silently missing the rest, cannot happen here.
+ */
+function rankRows(deps) {
+  const rows = [];
+  for (const [id, template] of Object.entries(deps.data.MOBS)) {
+    if (rankOf(template) !== null || template.rare === true || template.requiresQuestId) {
+      rows.push(rankRow(id, template, deps.mobs));
+    }
+  }
+  rows.sort((a, b) => byCodePoint(a.id, b.id));
+  return rows;
+}
+
+/** The same shape of guard the rares get, and for the same reason. */
+function checkRanks(rows) {
+  if (rows.length === NONE) {
+    fail('read no elite, boss or rare template at all, which is a read that stopped working');
+  }
+  if (rows.length !== EXPECTED_RANKED) {
+    console.warn(
+      `generate: ranked ${String(rows.length)} templates, expected ${String(EXPECTED_RANKED)}`,
+    );
+  }
+}
+
+/**
  * Counts, so a table that stopped being read cannot pass quietly.
  *
  * A moved count is a WARNING, because content growing is the ordinary case and a
@@ -388,13 +477,19 @@ async function main() {
   // reported as a resolution failure reads as the game having moved something.
   const gameVersion = checkoutVersion(root);
   const { data, respawn, catalogue } = await loadModules(root);
-  const { rows, campless, offMap } = rareRows({ data, respawn, mobs: mobCatalogue(catalogue) });
+  const deps = { data, respawn, mobs: mobCatalogue(catalogue) };
+  const { rows, campless, offMap } = rareRows(deps);
   checkCounts(rows, campless, offMap);
-  // Beside this script rather than anywhere an argument could name, so the only file
-  // this can write is the one it exists to write.
+  const ranked = rankRows(deps);
+  checkRanks(ranked);
+  // Beside this script rather than anywhere an argument could name, so the only files
+  // this can write are the two it exists to write.
   const out = join(import.meta.dirname, OUT_FILE);
   writeFileSync(out, render({ gameVersion, source: SOURCE_NOTE, rares: rows }));
-  console.log(`generate: wrote ${out} from ${GAME_PACKAGE_NAME} ${gameVersion}`);
+  const ranksOut = join(import.meta.dirname, RANKS_FILE);
+  writeFileSync(ranksOut, render({ gameVersion, source: RANKS_SOURCE_NOTE, mobs: ranked }));
+  console.log(`generate: wrote ${out} and ${ranksOut} from ${GAME_PACKAGE_NAME} ${gameVersion}`);
+  console.log(`generate: ${String(ranked.length)} templates carry a rank, a rare flag or a gate`);
   console.log(
     `generate: ${String(rows.length)} rares placed, ` +
       `${String(campless)} left out for having no camp, ` +

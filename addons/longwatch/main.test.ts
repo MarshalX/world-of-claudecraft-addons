@@ -13,6 +13,7 @@
 // install-time cache holds it, because the addon reads it with `woc.data` on its first line.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { ANY_SENDER } from '../../loader/src/runtime/bus/hub.ts';
 import { validateManifest } from '../../loader/src/shared/schema.ts';
 import { characterNamespace, perCharacterKey } from '../../loader/src/shared/storage-keys.ts';
 import { mountAddon, parseManifest } from '../../tests/fakes/addon.ts';
@@ -23,6 +24,7 @@ import { createFakeStorage, type FakeStorage } from '../../tests/fakes/storage.t
 import MANIFEST_TEXT from './addon.json?raw';
 // biome-ignore lint/correctness/noUnresolvedImports: Vite's ?raw suffix is a loader directive a static resolver does not model, and an addon file is a function BODY with no exports at all. Same reason as the cooldown-bars suite.
 import SOURCE from './main.js?raw';
+import RANKS_TEXT from './mobs.json?raw';
 import ROSTER_TEXT from './rares.json?raw';
 
 const MANIFEST_JSON: unknown = JSON.parse(MANIFEST_TEXT);
@@ -32,6 +34,10 @@ const CHARACTER = 'Claudemoon/Marshal';
 const CHANNEL = 'pbe';
 const STORE_KEY = 'sightings';
 const ROSTER_FILE = 'rares.json';
+/** The rank table this addon carries for every other addon rather than for itself. */
+const RANKS_FILE = 'mobs.json';
+/** The topic it is published on. `follow` derives `mobs:ask` from it. */
+const RANKS_TOPIC = 'mobs';
 /**
  * The highest minor anything this addon calls arrived in. `woc.data` is 2; `ui.list`,
  * `fmt.duration` and `world.distanceTo` are 4. An older loader strips an unknown manifest key rather than refusing it, so a
@@ -43,6 +49,8 @@ const ROSTER_FILE = 'rares.json';
 const NEEDS_MINOR = 4;
 
 const PLAYER_ID = PLAYER_ENTITY.id;
+/** Somebody else, because nobody receives their own bus messages. */
+const ASKER = 'official/facemark';
 /** What the harness's wall clock starts at, and therefore what every case starts at. */
 const NOW = 1_700_000_000_000;
 /** The redraw's period, so advancing this much runs exactly one of them. */
@@ -115,6 +123,10 @@ function storedSightings(storage: FakeStorage): unknown {
 
 interface LongwatchHarness extends SharedHarness {
   storage: FakeStorage;
+  /** Every payload this addon has put on the rank topic, in order. */
+  published: () => unknown[];
+  /** Ask for the table the way `bus.follow` does, which is the whole of the protocol. */
+  ask: () => void;
   /** Put a mob in interest scope, with nothing on it that says it is rare. */
   spawn: (id: number, templateId: string, name?: string) => Fake;
   /** Kill one: the corpse goes dead, and the death record lands. */
@@ -181,6 +193,15 @@ interface RosterRow {
   [field: string]: unknown;
 }
 
+/** One row of the rank table, in the shape a follower receives it. */
+interface RankRow {
+  id: string;
+  name: string;
+  rank?: 'elite' | 'boss';
+  rare?: true;
+  requiresQuestId?: string;
+}
+
 /**
  * The shipped roster with one row broken, as a hand edit or an older version leaves it. Built
  * from the real file rather than a hand-written stub, so a case about a bad row is a case about
@@ -234,16 +255,39 @@ async function start(
     source: SOURCE,
     storage,
     settings,
-    // The shipped file, seeded the way the host's install-time cache holds it. A case
+    // The shipped files, seeded the way the host's install-time cache holds them. A case
     // that wants a broken one passes its own text.
-    data: { [ROSTER_FILE]: roster },
+    data: { [ROSTER_FILE]: roster, [RANKS_FILE]: RANKS_TEXT },
     game: Promise.resolve({ world }),
   });
   teardown.push(harness.dispose);
 
+  // Subscribed as somebody else, because nobody receives their own messages. The first
+  // announce happens while the addon body is being evaluated, before anything here can
+  // listen, which is exactly why `ask()` exists: a follower that starts late is the
+  // ordinary case rather than an edge one.
+  const published: unknown[] = [];
+  teardown.push(
+    harness.shared.bus.subscribe({
+      from: ANY_SENDER,
+      topic: RANKS_TOPIC,
+      owner: ASKER,
+      handler: (message) => {
+        published.push(message.payload);
+      },
+      onError: (err: unknown) => {
+        throw err;
+      },
+    }),
+  );
+
   return {
     ...harness,
     storage,
+    published: () => published,
+    ask: () => {
+      harness.shared.bus.emit(ASKER, `${RANKS_TOPIC}:ask`, null);
+    },
     spawn: (id, templateId, name = templateId) => {
       // No rare flag, no elite flag, nothing: the template id is the only thing distinguishing
       // this from any other wolf in the zone.
@@ -365,8 +409,8 @@ describe('its manifest', () => {
   // `data` is what puts the roster in its own file, and the minor is what says which loader
   // can read it. Without it this addon would install on a loader with no `woc.data`, start,
   // and find that its only content file does not exist.
-  it('declares the roster file and the minor that reads it', () => {
-    expect(manifest().data).toEqual([ROSTER_FILE]);
+  it('declares both tables and the minor that reads them', () => {
+    expect(manifest().data).toEqual([ROSTER_FILE, RANKS_FILE]);
     expect(manifest().apiMinor).toBe(NEEDS_MINOR);
   });
 
@@ -1193,5 +1237,97 @@ describe('disabling it', () => {
     expect(document.querySelectorAll('.woc-lw-anchor')).toHaveLength(0);
     expect(Object.keys(h.shared.dispatcher.bindings())).toEqual([]);
     expect(() => h.tick()).not.toThrow();
+  });
+});
+
+// The rank table this addon carries for everybody else.
+//
+// It lives here rather than in the addon that draws it because this is the one already
+// evaluating the game's `MOBS` to build its own roster: a second addon carrying its own
+// copy would be a second thing to regenerate on a game release, and a stale content
+// table is the failure that looks like nothing at all.
+//
+// Nothing in this addon reads it. Every case below is about what a FOLLOWER receives.
+describe('the mob rank service', () => {
+  /** The shipped table, which is what every case here is measured against. */
+  const shipped = (JSON.parse(RANKS_TEXT) as { mobs: RankRow[] }).mobs;
+
+  /** The last thing published, taken as the table: every case here asks first. */
+  async function asked(): Promise<RankRow[]> {
+    const h = await run();
+    h.ask();
+    return h.published().at(-1) as RankRow[];
+  }
+
+  it('answers an ask with the whole table', async () => {
+    const rows = await asked();
+
+    expect(rows).toHaveLength(shipped.length);
+  });
+
+  it('names every row, because a mob id is not a display name', async () => {
+    const rows = await asked();
+
+    expect(rows.every((row) => row.id.length > 0 && row.name.length > 0)).toBe(true);
+  });
+
+  // The three flags are independent in the game, so a rare elite is an ordinary thing to
+  // be and folding `rare` into the rank would lose one of the two facts about it.
+  it('carries the rank and the rare flag as separate answers', async () => {
+    const rows = await asked();
+
+    expect(new Set(rows.map((row) => row.rank))).toEqual(new Set([undefined, 'elite', 'boss']));
+    expect(rows.some((row) => row.rank === 'elite' && row.rare === true)).toBe(true);
+  });
+
+  // Every row has to carry something an id cannot be turned into, or the table would be
+  // paying to ship rows that say nothing at all.
+  it('ships no row that says nothing', async () => {
+    const rows = await asked();
+
+    expect(rows.every((row) => row.rank ?? row.rare ?? row.requiresQuestId)).toBeTruthy();
+  });
+
+  // The game hides a quest-gated mob from anybody not on the quest, so its clutch reads as
+  // inert scenery. Nothing on the wire says so, which is why it rides this table.
+  it('carries the quest gate the wire cannot say', async () => {
+    const rows = await asked();
+
+    expect(rows.some((row) => row.requiresQuestId !== undefined)).toBe(true);
+  });
+
+  // The two tables fail apart on purpose. A rank table that cannot be read leaves every
+  // other addon undecorated, and taking this addon's own rare list down with it would be
+  // the worse trade of the two.
+  it('keeps the rare list working when the rank table cannot be read', async () => {
+    const harness = await mountAddon({
+      manifest: MANIFEST_TEXT,
+      source: SOURCE,
+      storage: createFakeStorage(),
+      settings: {},
+      data: { [ROSTER_FILE]: ROSTER_TEXT, [RANKS_FILE]: '{"mobs":"not an array"}' },
+      game: Promise.resolve({ world: { entities: new Map(), player: null, known: [] } }),
+    });
+    teardown.push(harness.dispose);
+    await settle();
+
+    const answers: unknown[] = [];
+    teardown.push(
+      harness.shared.bus.subscribe({
+        from: ANY_SENDER,
+        topic: RANKS_TOPIC,
+        owner: ASKER,
+        handler: (message) => {
+          answers.push(message.payload);
+        },
+        onError: (err: unknown) => {
+          throw err;
+        },
+      }),
+    );
+    harness.shared.bus.emit(ASKER, `${RANKS_TOPIC}:ask`, null);
+
+    expect(answers).toEqual([null]);
+    expect(harness.shared.logs.tail(harness.fqid).some((line) => line.level === 'warn')).toBe(true);
   });
 });

@@ -56,6 +56,15 @@ const AT_MOST = '≤ ';
 const STORE_KEY = 'sightings';
 /** The data file the roster lives in, declared as `data` in the manifest. */
 const ROSTER_FILE = 'rares.json';
+/** The rank table this addon carries for everybody else. Nothing here draws from it. */
+const RANKS_FILE = 'mobs.json';
+/**
+ * The topic the rank table is published on.
+ *
+ * A bare noun, and `follow` derives `mobs:ask` from it. Written down in the topic table
+ * in the authoring docs, which is the only registry the bus has.
+ */
+const RANKS_TOPIC = 'mobs';
 
 const FULL = 1;
 const EMPTY = 0;
@@ -955,6 +964,63 @@ woc.onSettingsChange(() => {
  * whatever landed during it. `load()` rather than `await restore()`, since a per-character
  * read waits for the character and would hold the first draw on the landing page.
  */
+/**
+ * The rank table, for whoever asks.
+ *
+ * Answered from what was read rather than fetched per ask, and `null` until the read
+ * lands, which `publish` requires: a follower that started first gets the announce.
+ * Nothing in this addon draws from it. It lives here because this is the addon that
+ * already evaluates the game's `MOBS` to build its own roster, so carrying the rank
+ * table costs one more read of a table it opens anyway, where a second addon carrying
+ * its own copy would be a second thing to regenerate on a game release.
+ */
+let ranks = null;
+
+/** A row is worth publishing only if it carries something an id cannot be turned into. */
+function rankRow(row) {
+  if (typeof row?.id !== 'string' || typeof row.name !== 'string') {
+    return null;
+  }
+  const out = { id: row.id, name: row.name };
+  if (row.rank === 'elite' || row.rank === 'boss') {
+    out.rank = row.rank;
+  }
+  if (row.rare === true) {
+    out.rare = true;
+  }
+  if (typeof row.requiresQuestId === 'string') {
+    out.requiresQuestId = row.requiresQuestId;
+  }
+  return out;
+}
+
+/** The shipped file's own shape, checked here for the reason `readRoster` checks the roster's. */
+function readRanks(table) {
+  const listed = table?.mobs;
+  if (!Array.isArray(listed)) {
+    return null;
+  }
+  return listed.map(rankRow).filter((row) => row !== null);
+}
+
+/**
+ * The rank table is loaded and published separately from the roster.
+ *
+ * Its own path because the two fail apart: a rank table that could not be read leaves
+ * every other addon without decoration, and this addon's own rare list working. Folding
+ * them into one `await` would take the rare list down with it.
+ */
+async function serveRanks() {
+  const table = readRanks(await woc.data(RANKS_FILE));
+  if (table === null) {
+    throw new Error(`${RANKS_FILE} carries no "mobs" array`);
+  }
+  ranks = table;
+  publication.announce();
+}
+
+const publication = woc.bus.publish(RANKS_TOPIC, () => ranks);
+
 async function boot() {
   const listed = readRoster(await woc.data(ROSTER_FILE));
   if (listed === null) {
@@ -967,4 +1033,8 @@ async function boot() {
 
 boot().catch((err) => {
   woc.error('could not read the rare roster, so there is nothing to watch for', err);
+});
+
+serveRanks().catch((err) => {
+  woc.warn('could not read the mob rank table, so nothing is published for other addons', err);
 });
