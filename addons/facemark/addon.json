@@ -72,7 +72,7 @@
     {
       "id": "hide-selected-player",
       "type": "boolean",
-      "label": "Hide the plate over a player you have selected, which the game draws its own over",
+      "label": "Hide the plate over a player you have selected, which the game always draws its own over",
       "default": true
     },
     {

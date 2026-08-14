@@ -2480,18 +2480,11 @@ describe('the colour of a health bar', () => {
 // the current target so a clicked player stays readable, which is the only place a player
 // who switched the game's plates off still gets two of everything.
 describe('the plate over a player you have selected', () => {
-  it('is drawn by default, because it is the plate this says the most on', async () => {
+  // On by DEFAULT, which is safe only because this is the one case where hiding cannot
+  // leave a hole: a player you have selected always has a game plate, either because the
+  // toggle is on for everybody or because the target exception spared exactly them.
+  it('gives way to the game’s own by default', async () => {
     const h = await run({ show: 'everything' });
-    h.unit(DUELIST, { kind: 'player', hostile: false });
-    h.target(DUELIST);
-
-    h.poll();
-
-    expect(h.drawn()).toContain(DUELIST);
-  });
-
-  it('gives way to the game’s own when the setting asks it to', async () => {
-    const h = await run({ show: 'everything', 'hide-selected-player': true });
     h.unit(DUELIST, { kind: 'player', hostile: false });
     h.target(DUELIST);
 
@@ -2500,8 +2493,18 @@ describe('the plate over a player you have selected', () => {
     expect(h.drawn()).not.toContain(DUELIST);
   });
 
+  it('is drawn when the setting is switched off', async () => {
+    const h = await run({ show: 'everything', 'hide-selected-player': false });
+    h.unit(DUELIST, { kind: 'player', hostile: false });
+    h.target(DUELIST);
+
+    h.poll();
+
+    expect(h.drawn()).toContain(DUELIST);
+  });
+
   it('leaves every other player alone', async () => {
-    const h = await run({ show: 'everything', 'hide-selected-player': true });
+    const h = await run({ show: 'everything' });
     h.unit(DUELIST, { kind: 'player', hostile: false });
     h.unit(HEALER, { kind: 'player', hostile: false });
     h.target(DUELIST);
@@ -2514,7 +2517,7 @@ describe('the plate over a player you have selected', () => {
   // The mob rule has NO target exception, so with mob nameplates off a mob target has no
   // game plate to double. Hiding this one would leave the unit you are fighting bare.
   it('keeps a mob target, which the game does not spare', async () => {
-    const h = await run({ 'hide-selected-player': true });
+    const h = await run();
     h.unit(BOSS);
     h.target(BOSS);
 
@@ -2526,7 +2529,7 @@ describe('the plate over a player you have selected', () => {
   // It follows the selection rather than a unit, which is what makes it worth a setting
   // rather than a filter: the doubled plate moves as the player moves their target.
   it('follows the selection from one player to another', async () => {
-    const h = await run({ show: 'everything', 'hide-selected-player': true });
+    const h = await run({ show: 'everything' });
     h.unit(DUELIST, { kind: 'player', hostile: false });
     h.unit(HEALER, { kind: 'player', hostile: false });
     h.target(DUELIST);

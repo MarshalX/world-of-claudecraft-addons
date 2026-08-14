@@ -772,9 +772,12 @@ function corpseWorthDrawing(entity) {
  * game's plates off still gets two, and it follows them around, since it is whatever they
  * are pointed at rather than a fixed unit.
  *
- * Off by default, because the target's plate is the one this addon says the most on: the
- * health count, the class-tinted bar, the effect strip and whether the cast is aimed at
- * you. Somebody who would rather read the game's own there can have that instead.
+ * ON by default, and the reason is that this is the one case where hiding cannot leave a
+ * hole. A player you have selected ALWAYS has a game plate: either Show Player Nameplates
+ * is on and everybody has one, or it is off and the target exception spares exactly this
+ * unit. So the addon's plate there is always the second one on the same head. Turn it off
+ * to have the health count, the class-tinted bar, the effect strip and the cast warning
+ * back on the unit you are pointed at, and accept reading two plates over it.
  *
  * PLAYERS ONLY, and that is the whole of why this is not simply "hide the target". The
  * mob rule has no target exception at all, so with mob nameplates off your mob target has
