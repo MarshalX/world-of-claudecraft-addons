@@ -39,6 +39,9 @@ const REMAINING_PAIRS = Object.freeze([
   ['system_unstuck', 155.5],
 ] as const);
 
+/** Everything drawn here: the four timers above, and the charge pool below them. */
+const SHOWN_TIMERS = REMAINING_PAIRS.length + 1;
+
 /** Resolved lengths, from the spellbook, which is what a bar measures against. */
 const FELL_SHOT_LENGTH = 6;
 const HOWLING_RAGE_LENGTH = 120;
@@ -132,7 +135,11 @@ const SCENARIOS: readonly Scenario[] = [
     preview: true,
     caption: 'Bars',
     alt: 'a column of named, draining bars, soonest ready at the top.',
-    settings: { layout: 'bars' },
+    // The bar budget is set to the five timers this world holds, because the column is sized
+    // for its budget rather than for what is running: left at the default of eight it would
+    // photograph three rows of dead space under the picture, which in a Browse thumbnail
+    // reads as a panel that failed to draw.
+    settings: { layout: 'bars', 'max-bars': SHOWN_TIMERS },
     world: aHunter,
     run: onCooldown,
   },
@@ -143,6 +150,17 @@ const SCENARIOS: readonly Scenario[] = [
     caption: 'Icon strip',
     alt: 'the same cooldowns as square icons, each swept and counting down.',
     settings: { layout: 'tiles' },
+    world: aHunter,
+    run: onCooldown,
+  },
+  {
+    // The tint, which no Vitest case can answer for: a suite reads the class the kit wrote and
+    // the colour is a rule in a stylesheet that resolves to '' there. It is the MIXED panel
+    // that is worth looking at rather than the colour, since the two abilities this hunter has
+    // learned are tinted and the three the spellbook cannot answer for stay grey.
+    id: 'tinted',
+    label: 'Tinted by damage school',
+    settings: { layout: 'bars', 'max-bars': SHOWN_TIMERS, 'tint-school': true },
     world: aHunter,
     run: onCooldown,
   },

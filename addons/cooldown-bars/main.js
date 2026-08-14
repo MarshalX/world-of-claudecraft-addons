@@ -24,12 +24,16 @@
 // charge is left. `maxCharges` is present, numeric and permanently zero, so the pool
 // size comes from `AbilityInfo.charges`.
 //
-// The strip's width is only room to grow into, or tiles would resize as more cooldowns
-// started, and both bounds are stated since a frame stating neither takes the size it
-// opened at as its floor.
+// Both layouts are the player's to size, and each reads its box differently. The strip's
+// height is one icon and its width is only room to grow into, or tiles would resize as more
+// cooldowns started. The column's height is the whole BUDGET of rows divided between them,
+// which is the one thing a column cannot take from the rows currently up: a cooldown
+// starting would then resize every other row under the eye of the player who pressed it.
 
 const DECIMALS = 1;
 const FRAME_WIDTH = 220;
+/** How narrow the column may be dragged. Under this the figure crowds the name off. */
+const MIN_FRAME_WIDTH = 120;
 /** The global cooldown, and the floor under "worth drawing a bar for". */
 const GCD_SECONDS = 1.5;
 /** Below this share left, the row goes warm: it is about to be ready. */
@@ -44,9 +48,34 @@ const GUESS_MARK = '?';
 const TILE_START = 40;
 /** How wide the strip starts. Only room to grow into. */
 const STRIP_WIDTH = 260;
+/** The gap between two timers, in either direction. The height budget is stated over it. */
+const ROW_GAP = 3;
+/**
+ * A bar's natural height, measured in a browser: the kit's own 18px icon inside the 2px of
+ * padding `.woc-bar` carries. It is the column's floor as well as its opening row, so the
+ * column only ever grows. Rows any denser than this is what `max-bars` is for, and a saved
+ * box from before the column resized carries the loader's own default height rather than
+ * one anybody chose, so a floor below this would silently reopen those columns cramped.
+ */
+const BAR_HEIGHT = 23;
+/** The icon slot in `.woc-bar`, transcribed. See `styleBar` for why it cannot be an em. */
+const BAR_ICON = 18;
+/** How far past its natural height a row may be dragged. */
+const MAX_BAR_SCALE = 3;
+/** The grab strip along a panel's growing edge, as thin as interactjs makes that edge. */
+const GRIP = 10;
 
 /** The current icon size, which is the strip's height. Ignored by the bars layout. */
 let tileSize = TILE_START;
+
+/**
+ * The box the column's rows divide between, and the row height that came out of it.
+ *
+ * A frame's height cannot be restated after it is built and a bare frame CLIPS rather than
+ * scrolls, so this is a budget rather than a measurement. Null until a frame has been built.
+ */
+let boxHeight = null;
+let barPx = null;
 
 /**
  * What to call this ability, and whether that was worked out rather than read.
@@ -86,6 +115,26 @@ function published(abilityId) {
 }
 
 /**
+ * The damage school to tint this timer by, or null for none.
+ *
+ * Only ever what the spellbook carries. A measured row is measured BECAUSE the game
+ * published nothing about that ability, so the honest answer there is no colour: an item
+ * cooldown and the anti-relog timer are not made of any kind of damage, and inventing one
+ * for them would be a claim about the row that nothing made.
+ *
+ * The string goes through unchecked on purpose. Which schools exist is the KIT's to hold: it
+ * tints nothing for a value it does not know, and the same list written out here would be a
+ * second claim about the game's palette, free to drift from the first while both still
+ * looked right on their own.
+ */
+function tintFor(abilityId) {
+  if (!woc.settings['tint-school']) {
+    return null;
+  }
+  return woc.world.abilities.byId(abilityId)?.school ?? null;
+}
+
+/**
  * Your class, which is where the game files a skill icon. An entity's `templateId` is
  * its mob template, except on a player, where it is the class id.
  */
@@ -98,12 +147,114 @@ function drawsTiles() {
   return woc.settings.layout === 'tiles';
 }
 
+/** How many rows the column is sized for, which is the budget rather than a count. */
+function maxBars() {
+  return woc.settings['max-bars'];
+}
+
+function stackHeight(height, count) {
+  return count * height + (count - 1) * ROW_GAP;
+}
+
+/** The row height the box works out to, held between the natural row and its ceiling. */
+function barHeight() {
+  const wanted = barPx ?? BAR_HEIGHT;
+  return Math.min(Math.max(wanted, BAR_HEIGHT), BAR_HEIGHT * MAX_BAR_SCALE);
+}
+
+/**
+ * Size one row to the share of the box it was given, art and text with it: a row dragged to
+ * three times its height and left holding an 18px icon is a picture with a hole under it.
+ *
+ * The font is written as an `em`, which is what makes the floor a no-op rather than a change:
+ * a row keeps whatever size the game's own font is set to, and a pixel figure calibrated
+ * here would be that figure in a game that inherits something else. The icon cannot do the
+ * same, because `.woc-bar-icon` is 18px in the kit's own sheet and an em on the slot would be
+ * measured against the font this just changed. That 18 is transcribed, so a kit that restyles
+ * the slot moves this out of step, and the cost is an icon a few pixels off its row.
+ *
+ * The three flex declarations are what make the height above the truth rather than a request:
+ * a kit row is a block sized by its own line box, so without them the extra height sits under
+ * the content instead of around it.
+ */
+function styleBar(el) {
+  const height = barHeight();
+  const scale = height / BAR_HEIGHT;
+  el.style.height = `${String(height)}px`;
+  el.style.boxSizing = 'border-box';
+  el.style.display = 'flex';
+  el.style.flexDirection = 'column';
+  el.style.justifyContent = 'center';
+  el.style.fontSize = `${String(scale)}em`;
+  const icon = el.querySelector('.woc-bar-icon');
+  if (icon !== null) {
+    const size = `${String(Math.round(BAR_ICON * scale))}px`;
+    icon.style.width = size;
+    icon.style.height = size;
+  }
+}
+
+/**
+ * Divide the box between the budget of rows, on every box change. The gaps are paid before
+ * the division and the share floored, since a pixel over the box is a pixel of the bottom row
+ * the frame quietly clips.
+ *
+ * The layout is asked rather than each row, because a box can arrive from a frame the player
+ * has just switched away from: a restore lands asynchronously and the old frame outlives the
+ * rebuild by a moment, so the row it would style is a tile by then.
+ */
+function fitBars() {
+  if (boxHeight === null || drawsTiles()) {
+    return;
+  }
+  const budget = maxBars();
+  const next = Math.floor((boxHeight - (budget - 1) * ROW_GAP) / budget);
+  if (next === barPx) {
+    return;
+  }
+  barPx = next;
+  for (const row of rows.values()) {
+    styleBar(row.ui.el);
+  }
+}
+
 // One flex line, whose DIRECTION is the layout. It outlives the frame, because a
 // layout change rebuilds the frame and this keeps every row that survives it.
 const list = document.createElement('div');
 list.className = 'woc-cd-list';
 list.style.display = 'flex';
-list.style.gap = '3px';
+list.style.gap = `${String(ROW_GAP)}px`;
+
+/**
+ * The one edge a player can always take hold of.
+ *
+ * A bare frame passes the pointer through everything it did not DRAW, and neither layout
+ * fills its own box: the column is sized for its whole budget of rows and the strip for more
+ * tiles than are usually up, so the edge that grows each of them is over dead space almost
+ * always. Without this, the drag works only in the moment the panel happens to be full, and a
+ * player who tries once and gets nothing concludes the panel does not resize. The loader's
+ * arrange mode does hand the whole frame back, and it is the wrong thing to need for a
+ * gesture the player is already making correctly.
+ *
+ * What it takes from the game is a strip as thin as the edge itself, along one side of a
+ * panel the player put there. Positioned against the frame rather than laid out in the list,
+ * or it would be a row in the column and a tile in the strip. It has to be a direct child of
+ * the frame BODY, which is what the kit hands the pointer back to.
+ */
+function buildGrip() {
+  const grip = document.createElement('div');
+  grip.className = 'woc-cd-grip';
+  grip.style.position = 'absolute';
+  // The growing edge of whichever layout is up: the bottom of a column, the side of a strip.
+  if (drawsTiles()) {
+    grip.style.inset = '0 0 0 auto';
+    grip.style.width = `${String(GRIP)}px`;
+    return grip;
+  }
+  grip.style.inset = 'auto 0 0 0';
+  grip.style.height = `${String(GRIP)}px`;
+  return grip;
+}
 
 /**
  * Ability id to its widget, denominator, whether that was published, and pool size.
@@ -124,26 +275,12 @@ const rows = woc.ui.list({
 // #endregion
 
 /**
- * Bare, because the rows are the display. The title is still the frame's accessible name
- * and its label while frames are unlocked.
+ * The strip: bare, because the tiles are the display, and one square tall to start.
  *
- * Only the strip resizes: a column of bars is sized by its content, and a fixed height
- * would pad it out or hide the row that just started. The two layouts are two frame ids
- * and therefore two saved boxes, or a column's height would open the strip with icons
- * the size of a portrait.
+ * Both axes take the same floor. One tap-target square is a whole tile whatever the bar
+ * budget is set to and however many cooldowns are running.
  */
-// #region frame
-function buildFrame() {
-  if (!drawsTiles()) {
-    return woc.ui.frame({
-      id: 'bars',
-      title: 'Cooldowns',
-      width: FRAME_WIDTH,
-      density: 'bare',
-      save: true,
-      toggleKey: 'toggle',
-    });
-  }
+function buildStrip() {
   return woc.ui.frame({
     id: 'tiles',
     title: 'Cooldowns',
@@ -153,8 +290,6 @@ function buildFrame() {
     density: 'bare',
     save: true,
     toggleKey: 'toggle',
-    // Both axes take the same constant: the floor is one tap-target square whatever the
-    // bar budget is set to and however many cooldowns are running.
     minWidth: TILE_START,
     minHeight: TILE_START,
     onMove: (box) => {
@@ -163,8 +298,57 @@ function buildFrame() {
   });
 }
 
+/**
+ * Two frame ids and therefore two saved boxes. Shared, a column's height would open the
+ * strip with icons the size of a portrait.
+ */
+function buildFrame() {
+  if (drawsTiles()) {
+    return buildStrip();
+  }
+  return buildColumn();
+}
+
+/**
+ * The column: bare for the reason the strip is, and sized for the whole BUDGET of rows
+ * rather than for the rows that happen to be running, so the ones a player is watching hold
+ * still as cooldowns come and go. What that costs is dead space under a half-full column,
+ * which is what `buildGrip` is there to keep hold of.
+ *
+ * Its floor is the natural row and there is nothing under it: a denser column is what
+ * `max-bars` is for, and a shorter box could only crop rows a bare frame then clips. Stated
+ * rather than left to the default that works out the same, because it is a decision.
+ *
+ * The title is still the frame's accessible name and its label while frames are unlocked.
+ */
+// #region frame
+function buildColumn() {
+  // The height asked for, which stands until a box of the player's own arrives on `onMove`.
+  boxHeight = stackHeight(BAR_HEIGHT, maxBars());
+  return woc.ui.frame({
+    id: 'bars',
+    title: 'Cooldowns',
+    width: FRAME_WIDTH,
+    height: boxHeight,
+    resizable: true,
+    density: 'bare',
+    save: true,
+    toggleKey: 'toggle',
+    minWidth: MIN_FRAME_WIDTH,
+    minHeight: stackHeight(BAR_HEIGHT, maxBars()),
+    maxHeight: stackHeight(BAR_HEIGHT * MAX_BAR_SCALE, maxBars()),
+    // The rows follow the box. Measuring the element would force a synchronous layout on
+    // every pointer move, for a number the loader is holding anyway.
+    onMove: (box) => {
+      boxHeight = box.h;
+      fitBars();
+    },
+  });
+}
+
 let frame = buildFrame();
 frame.body.appendChild(list);
+frame.body.appendChild(buildGrip());
 // #endregion
 
 /**
@@ -191,6 +375,9 @@ applyLayout();
  * `data-ability` is this addon's own marking, so the frame reads back by ability rather
  * than by position. Not every ability ships art, and the kit hides its icon slot when an
  * image fails, so a URL that may not resolve is intended usage.
+ *
+ * The school is set once, here, rather than on every paint: it is a fact about the ability
+ * and cannot change while the row is up, and the setting that switches it on rebuilds.
  */
 // #region bar
 function createBar(abilityId) {
@@ -199,8 +386,11 @@ function createBar(abilityId) {
     label,
     icon: woc.ui.icon.ability(abilityId, playerClass()),
     className: 'woc-cd-bar',
+    school: tintFor(abilityId),
   });
   bar.el.dataset.ability = abilityId;
+  // Whatever the column is at now, so a bar appearing mid-fight matches its neighbours.
+  styleBar(bar.el);
   // The full name is one hover away, so truncating costs nothing.
   woc.ui.tooltip(bar.el, () => timerTooltip(abilityId));
   return bar;
@@ -221,6 +411,8 @@ function createTile(abilityId) {
     className: 'woc-cd-tile',
     // Whatever the strip is at now, so a tile appearing mid-fight matches its neighbours.
     size: tileSize,
+    // A tile wears its school as a BORDER, which is where the game puts one too.
+    school: tintFor(abilityId),
   });
   tile.el.dataset.ability = abilityId;
   woc.ui.tooltip(tile.el, () => timerTooltip(abilityId));
@@ -492,14 +684,19 @@ resync();
  */
 function rebuild() {
   rows.clear();
-  // The frame goes too, because whether it resizes is decided when it is built.
-  // Rebuilding under the same id restores the same saved box, so the overlay does not move.
+  // The frame goes too, because whether it resizes is decided when it is built. Rebuilding
+  // under the same id restores the same saved box, so the overlay does not move. The grip
+  // goes with the frame rather than surviving it like the list: which edge it holds is the
+  // layout, which is what a rebuild is usually for.
   const previous = frame;
   // Back to the floor before the new frame exists, because a restored box reports its
-  // height through onMove and that answer has to win rather than be overwritten.
+  // height through onMove and that answer has to win rather than be overwritten. The row
+  // height goes too: `max-bars` may be what changed, and it is the divisor.
   tileSize = TILE_START;
+  barPx = null;
   frame = buildFrame();
   frame.body.appendChild(list);
+  frame.body.appendChild(buildGrip());
   previous.destroy();
   applyLayout();
   resync();

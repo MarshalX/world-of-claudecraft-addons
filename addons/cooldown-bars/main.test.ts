@@ -33,6 +33,23 @@ interface FrameBox {
 }
 /** One tap-target square: the strip's icon size, and its floor on both axes. */
 const TILE_FLOOR = 40;
+/** A bar's natural height, which is the column's floor and the row it opens at. */
+const BAR_HEIGHT = 23;
+/** The gap between two timers, which the height budget is stated over. */
+const ROW_GAP = 3;
+/** How narrow the column may be dragged, well under the width it opens at. */
+const MIN_COLUMN_WIDTH = 120;
+
+/**
+ * What a budget of rows works out to, stated the way the addon states it.
+ *
+ * Restated here rather than imported, because an addon is a function body with no exports:
+ * these four numbers are a transcription, and a suite that derived them from the addon could
+ * not fail when the addon changed one.
+ */
+function stack(height: number, rows: number): number {
+  return rows * height + (rows - 1) * ROW_GAP;
+}
 /** A box saved narrower and shorter than the strip has any business being. */
 const CRAMPED: FrameBox = { x: 20, y: 20, w: 90, h: 20 };
 
@@ -903,18 +920,6 @@ describe('the size of the strip', () => {
     expect(sizeOf('bestial_wrath')).toBe('40px');
   });
 
-  // The column is sized by its content: a fixed height would either pad it out or
-  // hide the row that just started.
-  it('leaves the bars layout unresizable', async () => {
-    await run();
-
-    await vi.waitFor(() => {
-      expect(document.querySelector('[data-woc-frame="bars"]')).not.toBeNull();
-    });
-    const frame = document.querySelector<HTMLElement>('[data-woc-frame="bars"]');
-    expect(frame?.style.height).toBe('');
-  });
-
   // Both bounds are stated, and these two cases are why. A bare frame's body clips rather than
   // scrolls, so a strip dragged under one square would cut a cooldown in half; and a frame
   // that states no bounds takes the size it opened at as its floor. Driven by the saved box,
@@ -936,6 +941,196 @@ describe('the size of the strip', () => {
     await run({ layout: 'tiles' }, { tiles: { box: CRAMPED, visible: true } });
 
     expect(stripEl()?.style.width).toBe(`${CRAMPED.w}px`);
+  });
+
+  // The strip grows to the RIGHT, so that is the edge its grab strip holds. See the column's
+  // own case below for what the thing is and why an invisible element is worth a test.
+  it('keeps the edge that grows the strip reachable', async () => {
+    await run({ layout: 'tiles' });
+
+    await vi.waitFor(() => {
+      expect(stripEl()?.querySelector('.woc-cd-grip')).not.toBeNull();
+    });
+    const grip = stripEl()?.querySelector<HTMLElement>('.woc-cd-grip');
+    expect(grip?.style.width).toBe('10px');
+    expect(grip?.style.height).toBe('');
+  });
+});
+
+// Resizing the column, which is how a player picks the row height.
+//
+// The column divides its box between the BUDGET of rows rather than the rows on screen, and
+// that is the case worth pinning: dividing between what is up would resize every row a player
+// is reading the moment a cooldown starts, which is exactly when they are reading it.
+//
+// Driven by the saved box for the reason the strip's cases are: a restore reports through the
+// same `onMove` a drag does, and it is the only one a Node suite can reach.
+describe('the size of the column', () => {
+  function columnEl(): HTMLElement | null {
+    return document.querySelector<HTMLElement>('[data-woc-frame="bars"]');
+  }
+
+  function rowOf(abilityId: string): HTMLElement | null {
+    return document.querySelector<HTMLElement>(`.woc-bar[data-ability="${abilityId}"]`);
+  }
+
+  /** A box tall enough for a budget of two rows at twice their natural height. */
+  const Tall: FrameBox = { x: 20, y: 20, w: 220, h: stack(BAR_HEIGHT * 2, 2) };
+
+  it('opens with room for the whole bar budget', async () => {
+    await run({ 'max-bars': 3 });
+
+    await vi.waitFor(() => {
+      expect(columnEl()?.style.height).toBe(`${stack(BAR_HEIGHT, 3)}px`);
+    });
+  });
+
+  it('holds a row at its natural height', async () => {
+    const h = await run({ 'max-bars': 3 });
+
+    h.cooldown('bestial_wrath', LONG);
+    h.poll();
+
+    expect(rowOf('bestial_wrath')?.style.height).toBe(`${BAR_HEIGHT}px`);
+  });
+
+  // The art and the text go with the row, or a doubled row is a small picture beside a small
+  // label with a hole under both. The font is an `em` so that the floor changes nothing: what
+  // the game's own font size is set to is not this addon's business.
+  it('scales a row, its art and its text with the box', async () => {
+    const h = await run({ 'max-bars': 2 }, { bars: { box: Tall, visible: true } });
+
+    h.cooldown('bestial_wrath', LONG);
+    h.poll();
+    await settleFrames();
+
+    const row = rowOf('bestial_wrath');
+    expect(row?.style.height).toBe(`${BAR_HEIGHT * 2}px`);
+    expect(row?.style.fontSize).toBe('2em');
+    expect(row?.querySelector<HTMLElement>('.woc-bar-icon')?.style.height).toBe('36px');
+  });
+
+  // A row that appeared after the drag, which is most of them: the box is held rather than
+  // re-read, so a bar built mid-fight has to come up matching the ones beside it.
+  it('builds a later row at the size the box already reported', async () => {
+    const h = await run({ 'max-bars': 2 }, { bars: { box: Tall, visible: true } });
+
+    h.cooldown('bestial_wrath', LONG);
+    h.poll();
+    await settleFrames();
+    h.cooldown('arcane_shot', FELL_SHOT);
+    h.poll();
+
+    expect(rowOf('arcane_shot')?.style.height).toBe(`${BAR_HEIGHT * 2}px`);
+  });
+
+  // The budget is the divisor, so a row keeps its height while the set of them changes. A
+  // column dividing its box between the rows currently up would shrink every one of these the
+  // moment the second cooldown started.
+  it('keeps a row the same height when another cooldown starts', async () => {
+    const h = await run({ 'max-bars': 2 }, { bars: { box: Tall, visible: true } });
+
+    h.cooldown('bestial_wrath', LONG);
+    h.poll();
+    await settleFrames();
+    const before = rowOf('bestial_wrath')?.style.height;
+    h.cooldown('arcane_shot', FELL_SHOT);
+    h.poll();
+
+    expect(rowOf('bestial_wrath')?.style.height).toBe(before);
+  });
+
+  // The floor is the natural row rather than the loader's own, and this is the case it is for.
+  // A box saved before the column resized carries the loader's default height, which nobody
+  // chose; without the floor it would come back divided into rows a third of their size, with
+  // a bare frame's clip taking whatever did not fit.
+  it('holds the column at its natural height when a saved box is shorter', async () => {
+    const h = await run({ 'max-bars': 3 }, { bars: { box: CRAMPED, visible: true } });
+
+    h.cooldown('bestial_wrath', LONG);
+    h.poll();
+    await settleFrames();
+
+    expect(columnEl()?.style.height).toBe(`${stack(BAR_HEIGHT, 3)}px`);
+    expect(rowOf('bestial_wrath')?.style.height).toBe(`${BAR_HEIGHT}px`);
+  });
+
+  // The grab strip, which is the whole of what makes the height draggable in play.
+  //
+  // A bare frame passes the pointer through everything it did not draw, so the bottom edge of
+  // a column sized for eight rows and drawing three is over nothing: the drag is available
+  // only in the moment the budget happens to be full, or through the loader's arrange mode.
+  // The strip draws nothing itself, so this case is the only thing between it and a silent
+  // removal, and what would be lost is a gesture rather than a picture.
+  it('keeps the edge that grows the column reachable', async () => {
+    await run();
+
+    await vi.waitFor(() => {
+      expect(columnEl()?.querySelector('.woc-cd-grip')).not.toBeNull();
+    });
+    const grip = columnEl()?.querySelector<HTMLElement>('.woc-cd-grip');
+    expect(grip?.style.height).toBe('10px');
+    expect(grip?.style.width).toBe('');
+  });
+
+  // The width has a floor of its own, well under the width the column opens at: a name is
+  // allowed to be cut short, and a player who wants a narrow strip of figures may have one.
+  it('lets the column be dragged narrower than it opened', async () => {
+    await run({}, { bars: { box: CRAMPED, visible: true } });
+
+    await vi.waitFor(() => {
+      expect(columnEl()?.style.width).toBe(`${MIN_COLUMN_WIDTH}px`);
+    });
+  });
+});
+
+// Colouring a timer by its damage school, which is the game's vocabulary and not this
+// addon's: the kit tints from the custom properties the game gives its own debuff borders, so
+// a row coloured this way matches what the player already reads on an aura icon. There is
+// deliberately no way to pass a colour, here or in any addon.
+describe('tinting a timer by its school', () => {
+  function classesOf(abilityId: string): string {
+    return barFor(abilityId)?.className ?? '';
+  }
+
+  it('draws no school at all until it is asked for', async () => {
+    const h = await run();
+
+    h.cooldown('arcane_shot', FELL_SHOT);
+    h.poll();
+
+    expect(classesOf('arcane_shot')).not.toContain('school');
+  });
+
+  it('tints a row by what the spellbook says the ability is', async () => {
+    const h = await run({ 'tint-school': true });
+
+    h.cooldown('arcane_shot', FELL_SHOT);
+    h.poll();
+
+    expect(classesOf('arcane_shot')).toContain('woc-bar-school-arcane');
+  });
+
+  // The rows this addon MARKS are the ones the spellbook does not carry, so there is nothing
+  // to colour them by: an item cooldown and the anti-relog timer are not made of any kind of
+  // damage. Guessing would put an invented claim on exactly the rows that already say the
+  // least about themselves.
+  it('leaves a measured row uncoloured', async () => {
+    const h = await run({ 'tint-school': true });
+
+    h.cooldown('system_unstuck', LONG);
+    h.poll();
+
+    expect(classesOf('system_unstuck')).not.toContain('school');
+  });
+
+  it('tints a tile too, which wears it as a border', async () => {
+    const h = await run({ layout: 'tiles', 'tint-school': true });
+
+    h.cooldown('bestial_wrath', LONG);
+    h.poll();
+
+    expect(classesOf('bestial_wrath')).toContain('woc-tile-school-physical');
   });
 });
 
