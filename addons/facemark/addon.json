@@ -1,18 +1,22 @@
 {
   "id": "facemark",
   "name": "Facemark",
-  "version": "1.0.1",
+  "version": "1.1.0",
   "apiVersion": 1,
-  "apiMinor": 4,
+  "apiMinor": 6,
   "author": "MarshalX",
-  "description": "A nameplate over every unit near you: its name, its level, a health bar, a cast bar, the harmful effects on it, a threat edge and its raid mark.",
+  "description": "A nameplate over every unit: health, casts, effects and raid marks. It names the side each player is on in PvP, which no field says, and whether a cast is coming at you.",
   "entry": "main.js",
   "preview": {
     "file": "preview.png",
-    "alt": "two nameplates over the units they belong to, each with a name, a level, a health bar and effect tiles. The hostile one adds a raid mark, a cast bar and a red threat edge."
+    "alt": "On the left, A pull, two nameplates over the units they belong to, each with a name, a level and a health bar. The hostile one is the current target: a drawn star marks it, its level is orange for being two above the player, its health bar is edged in white and carries a thin blue mana strip under it, and under its cast bar a red tag says the cast is coming at you. The friendly one shows a lighter shield laid over the end of its health bar and an effect tile. On the right, A battleground, two player nameplates in a battleground, side by side, both named in red for the other side. Each health bar is tinted with that player's class colour, olive for the rogue and cyan for the mage. The rogue is marked as carrying a flag; the mage's cast bar shows the frostbolt icon beside its name, with a red tag under it saying the cast is coming at you and a thin blue mana strip over it."
   },
   "homepage": "https://github.com/MarshalX/world-of-claudecraft-addons",
   "tags": ["interface", "world"],
+  "companions": ["longwatch"],
+  "companionReasons": {
+    "longwatch": "publishes which mobs the game counts as elite or bosses, which no snapshot says, so a plate can mark rank beside the level"
+  },
   "permissions": ["world.read", "ui", "keys"],
   "keybinds": [
     {
@@ -63,6 +67,12 @@
       "id": "casts",
       "type": "boolean",
       "label": "Show what a unit is casting",
+      "default": true
+    },
+    {
+      "id": "hide-selected-player",
+      "type": "boolean",
+      "label": "Hide the plate over a player you have selected, which the game draws its own over",
       "default": true
     },
     {
