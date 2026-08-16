@@ -755,9 +755,47 @@ describe('the art on a tile', () => {
     expect(h.artOf(key(NEAR, 'gravebind', ALLY))).toContain('paladin/gravebind');
   });
 
-  // Skill art is filed per player CLASS and a mob has no class directory, so there
-  // is no file anywhere to point at. A blank slot here is the honest answer.
-  it('draws none for an effect a mob applied', async () => {
+  // Skill art is filed per player CLASS and a mob has no class directory, so its aura resolves
+  // to no file at all. Its PORTRAIT is one, and this is the case a raid is made of: without it
+  // the strip a PvE player reads is squares of school colour.
+  it('draws the portrait of the mob that applied it', async () => {
+    const h = await run();
+
+    h.afflict(NEAR, { ...GRAVEBIND, sourceId: FOE });
+    h.frame();
+
+    expect(h.artOf(key(NEAR, 'gravebind', FOE))).toBe('/ui/mobs/gnoll.webp');
+  });
+
+  // A portrait answers a different question from an ability icon, and a tile is art, so a
+  // screen reader gets nothing off the square unless the name carries it.
+  it('says whose face it is, in the tooltip and in the accessible name', async () => {
+    const h = await run();
+
+    h.afflict(NEAR, { ...GRAVEBIND, sourceId: FOE });
+    h.frame();
+    const cell = key(NEAR, 'gravebind', FOE);
+    cellFor(cell)?.dispatchEvent(new Event('pointerenter'));
+
+    expect(document.getElementById('woc-tooltip')?.textContent ?? '').toContain(
+      'Pictured: the mob that applied it',
+    );
+    expect(h.labelOf(cell)).toContain('from Grimjaw');
+  });
+
+  // A player's own art is the effect's, so there is no face to explain.
+  it('explains nothing when the art is the ability', async () => {
+    const h = await run();
+
+    h.afflict(NEAR, { ...GRAVEBIND, sourceId: ALLY });
+    h.frame();
+    cellFor(key(NEAR, 'gravebind', ALLY))?.dispatchEvent(new Event('pointerenter'));
+
+    expect(document.getElementById('woc-tooltip')?.textContent ?? '').not.toContain('Pictured');
+  });
+
+  // The caster is the only route to a picture, so a source out of interest scope has none.
+  it('draws none for a caster no entity answers to', async () => {
     const h = await run();
 
     h.afflict(NEAR, GRAVEBIND);

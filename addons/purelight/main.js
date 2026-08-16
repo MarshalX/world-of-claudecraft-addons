@@ -22,8 +22,10 @@
 // A tile draws the applying ability's art only where a PLAYER applied it: art is filed
 // per player class and an aura carries none, so the caster is the only route, and a
 // control aura is that ability with a tail on its id (see `AURA_SUFFIXES`). A mob's
-// aura is composited on a canvas no addon can reach, so those tiles carry the school
-// colour, the countdown and the stack count, with the name one hover away.
+// aura is composited on a canvas no addon can reach, so those tiles carry the mob's own
+// PORTRAIT instead, which is the case a raid is made of: nearly everything dispellable
+// off a group came from a mob, and without it a PvE strip is squares of school colour.
+// Whose face it is, is said in the tooltip and in the accessible name.
 //
 // The strip's width is only room to grow into: tiles sized to fill it would shrink as
 // more effects landed.
@@ -253,15 +255,28 @@ function artId(auraId) {
 }
 
 /**
- * The applying ability's art, or null when there is no file to point at. Only a
- * player-applied aura resolves: art is filed per player class, and a mob has no class
- * directory to look under.
+ * The picture for a tile, and whether it is the caster's face rather than the effect's own.
+ *
+ * Only a player-applied aura resolves to ability art: it is filed per player class, and a mob has
+ * no class directory to look under. A mob's PORTRAIT is a file, though, and every catalogued
+ * template ships one, so its effect is pictured by the thing that applied it. That case is most of
+ * a raid rather than a corner: nearly everything dispellable off a group came from a mob, so
+ * without it the strip a PvE player reads is squares of school colour.
+ *
+ * An npc is deliberately left out. The game draws a crest for one rather than a portrait, so
+ * `/ui/mobs/` would 404 and the square would come back empty by a longer route.
  */
 function artOf(aura, caster) {
-  if (caster === null || caster.kind !== 'player') {
-    return null;
+  if (caster === null) {
+    return { icon: null, portrait: false };
   }
-  return woc.ui.icon.ability(artId(aura.id), caster.templateId);
+  if (caster.kind === 'player') {
+    return { icon: woc.ui.icon.ability(artId(aura.id), caster.templateId), portrait: false };
+  }
+  if (caster.kind !== 'mob') {
+    return { icon: null, portrait: false };
+  }
+  return { icon: woc.ui.icon.mob(caster.templateId), portrait: true };
 }
 
 /**
@@ -291,7 +306,7 @@ function effectFrom(unit, aura, key) {
     name: aura.name,
     kind: aura.kind,
     school: aura.school,
-    icon: artOf(aura, caster),
+    ...artOf(aura, caster),
     remaining: aura.remaining,
     duration: aura.duration,
     stacks: aura.stacks ?? 0,
@@ -391,8 +406,27 @@ function tooltipFor(key) {
   if (effect.from !== null) {
     lines.push(`Applied by ${effect.from}`);
   }
+  if (effect.portrait) {
+    lines.push({
+      text: 'Pictured: the mob that applied it. Its effect has no icon of its own.',
+      tone: 'muted',
+    });
+  }
   lines.push({ text: reasonFor(effect), tone: 'good' });
   return { title: effect.name, lines };
+}
+
+/**
+ * How a square is announced. A tile's whole face is art, so a screen reader gets none of it, and
+ * a portrait is the caster rather than the effect: whose face it is has to be said rather than
+ * looked at.
+ */
+function labelFor(effect) {
+  const said = `${effect.who}: ${effect.name}`;
+  if (!effect.portrait || effect.from === null) {
+    return said;
+  }
+  return `${said}, from ${effect.from}`;
 }
 
 /**
@@ -402,7 +436,7 @@ function tooltipFor(key) {
  */
 function createCell(effect) {
   const tile = woc.ui.tile({
-    label: `${effect.who}: ${effect.name}`,
+    label: labelFor(effect),
     icon: effect.icon,
     school: effect.school,
     className: 'woc-pl-tile',
@@ -455,7 +489,7 @@ function paintCell(cell, effect) {
   sizeCell(cell);
   cell.name.textContent = effect.who;
   cell.ui.update({
-    label: `${effect.who}: ${effect.name}`,
+    label: labelFor(effect),
     icon: effect.icon,
     fraction: fractionOf(effect),
     value: woc.fmt.duration(effect.remaining),

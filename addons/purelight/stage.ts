@@ -3,9 +3,10 @@
 // A battleground rather than a raid, and that is the composition rather than a setting. This
 // addon answers two questions with one rule, "what harmful effect can be lifted off a friendly
 // unit" and "what benefit can be stripped off a hostile one", and a raid picture can only show
-// the first: a boss's debuffs all come from a mob, a mob's icon is composited on a canvas at run
-// time, and the shot would be five squares of school colour. In a battleground both halves are
-// on screen and four of the five tiles resolve real art.
+// the first: a boss's debuffs all come from a mob. The art is no longer the reason, since a
+// mob's tile now carries the mob's own portrait, but a picture of one direction is still half
+// the addon. In a battleground both halves are on screen and four of the five tiles resolve
+// real ability art.
 //
 // Every id, name, kind, school and duration here is the game's own, and the ids and the names
 // disagree because the game's do: `polymorph` is displayed as "Bewitch", `corruption` as
