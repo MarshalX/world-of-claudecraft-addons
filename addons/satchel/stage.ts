@@ -16,6 +16,9 @@
 
 import { inSeries } from '../../loader/src/shared/sequence.ts';
 import type { FrameState, Scenario, Stage, WorldDraft } from '../../stage/src/stage.ts';
+import { HELLO_FRAME } from '../../tests/fakes/frames.ts';
+import { WALL_CLOCK_MS } from '../../tests/fakes/shared-services.ts';
+import ITEMS from '../lorebind/items.json' with { type: 'json' };
 
 const SILVER = 100;
 const GOLD = 100 * SILVER;
@@ -349,9 +352,12 @@ function imagesSettled(): Promise<void> {
   });
 }
 
+/** How far `playedForDays` moves the clock, which is the age of the oldest session in it. */
+const PLAYED_MS = 3 * DAY_MS;
+
 /** The sessions behind the shot, in the order they happened, and how long ago. */
 const HISTORY: readonly (readonly [Session, number])[] = [
-  [BRUK, 3 * DAY_MS],
+  [BRUK, PLAYED_MS],
   [SENA, 20 * HOUR_MS],
   [MARSHAL, 0],
 ];
@@ -449,26 +455,117 @@ function asBruk(draft: WorldDraft): void {
   beThem(draft, BRUK);
 }
 
+/**
+ * The hello frame, which is where the REALM comes from.
+ *
+ * Without it `world.characterKey` reads `offline/<name>` and this addon records no realm for
+ * anybody, so a published market price matches nothing and the panel silently falls back to the
+ * vendor floor. That is a real state, a player who has not entered the world, and it is not the
+ * state any of these scenarios are of.
+ */
+function joined(stage: Stage): void {
+  stage.inbound(HELLO_FRAME);
+}
+
+/** What a running lorebind answers an `items` ask with, out of its own committed table. */
+const LOREBIND_FQID = 'official/lorebind';
+const ITEMS_TOPIC = 'items';
+
+/** The other companion, which is the only thing that knows what anything GOES FOR. */
+const LEDGERLINE_FQID = 'official/ledgerline';
+const PRICES_TOPIC = 'prices';
+/** The realm the shared world fixture is on, which every price has to name to be spent. */
+const REALM = 'Claudemoon';
+
+/**
+ * A handful of prices, at what a ledger three days old would carry: a multiple of the vendor
+ * floor rather than a figure invented here, since the point of the pair is the GAP between the
+ * two. `visits` is what says how much is behind each, and the herb at one is deliberate: a
+ * single reading is one seller's asking price and the panel discloses that it counted one.
+ */
+const ASKING: readonly (readonly [string, number, number])[] = [
+  ['copper_ore', 420, 6],
+  ['iron_ore', 900, 4],
+  ['boar_hide', 260, 3],
+  ['rough_hide', 180, 5],
+  ['healing_potion', 1100, 7],
+  ['silverleaf_herb', 640, 1],
+  ['goldleaf_herb', 1500, 4],
+  ['homespun_cloth', 310, 6],
+  ['spider_silk', 2200, 3],
+  ['arcane_dust', 1750, 5],
+];
+
+/**
+ * The companions, standing in.
+ *
+ * This addon names two and neither was ever in a picture. Until this existed every shot was the
+ * unpaired panel: no worth figure, no tier on a square, no price under the pointer, and the
+ * label on half the rows an id read back as words. So the state the manifest RECOMMENDS was
+ * invisible in every artifact this repository ships, the committed preview a player reads in
+ * Browse included. Ledgerline's stage has stood lorebind in for the same reason since it was
+ * written.
+ *
+ * BOTH PREVIEW PANELS use it, rather than a scenario of its own beside them, for the reason
+ * ledgerline's does: a thumbnail should picture what a player gets when they take the addon's
+ * own advice. The six scenarios below it stay unpaired, which is where the other honest state
+ * is still there to look at.
+ *
+ * lorebind's whole table rather than the ids this fixture names: the panel pools three
+ * characters' bags, banks and mailboxes, and narrowing it to a list would be a list to keep in
+ * step.
+ */
+function lorebindSpeaks(stage: Stage): void {
+  stage.publish(LOREBIND_FQID, ITEMS_TOPIC, ITEMS.items);
+}
+
+/** What a running ledgerline answers a `prices` ask with, for the ids this fixture holds. */
+function ledgerlineSpeaks(stage: Stage): void {
+  const rows = ASKING.map(([id, unit, visits]) => ({
+    id,
+    realm: REALM,
+    unit,
+    low: Math.round(unit * 0.9),
+    latest: unit,
+    // Four hours ago, on the clock the three logins left behind: `playedForDays` elapses the
+    // whole of `HISTORY`, so a stamp taken from the raw start would read as three days old and
+    // the panel would say so, which is a different picture from the one this scenario is of.
+    at: WALL_CLOCK_MS + PLAYED_MS - 4 * HOUR_MS,
+    visits,
+  }));
+  stage.publish(LEDGERLINE_FQID, PRICES_TOPIC, rows);
+}
+
+/** The pair, on the tab a scenario has already opened. See `lorebindSpeaks`. */
+async function paired(stage: Stage, label: string): Promise<void> {
+  joined(stage);
+  await onTab(stage, label);
+  lorebindSpeaks(stage);
+  ledgerlineSpeaks(stage);
+  stage.frame();
+  await pause(SETTLE_MS);
+}
+
 const SCENARIOS: readonly Scenario[] = [
   {
     id: 'items',
     label: 'Every item on the account',
     preview: true,
     caption: 'Everything you own',
-    alt: 'one row an item, pooled across every character',
+    alt: 'one row an item, pooled across every character and searchable, sortable and filterable by who holds it, each name coloured by its tier, with what the whole list goes for at the Merchant along the bottom',
     frames: framed(SHEET_BOX),
     world: asBruk,
-    run: (stage) => onTab(stage, 'Items'),
+    run: (stage) => paired(stage, 'Items'),
   },
   {
     id: 'bags',
     label: 'The bags, live',
     preview: true,
     caption: 'One character, live',
-    alt: 'the bags of the character in play, as a grid of squares, one of them padlocked',
+    alt: 'the bags of the character in play, as a grid of squares bordered by item tier, one of them padlocked',
     frames: framed(SHEET_BOX),
     world: asBruk,
-    run: (stage) => onTab(stage, 'Bags'),
+    run: (stage) => paired(stage, 'Bags'),
   },
   {
     id: 'bank',
@@ -490,6 +587,15 @@ const SCENARIOS: readonly Scenario[] = [
     frames: framed(),
     world: asBruk,
     run: (stage) => onTab(stage, 'Roster'),
+  },
+  {
+    // The pair on the pane that pools every character, which is where a price crosses realms
+    // and has to say what it left out. Not a preview: the two above already picture the pair.
+    id: 'priced-roster',
+    label: 'The roster, with both companions',
+    frames: framed(),
+    world: asBruk,
+    run: (stage) => paired(stage, 'Roster'),
   },
   {
     // An alt's bank, read while logged in as somebody else. The pane the client cannot

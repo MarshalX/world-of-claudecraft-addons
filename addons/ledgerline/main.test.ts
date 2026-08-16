@@ -103,6 +103,26 @@ const VISIT_WINDOW_MS = 10 * 60 * 1000;
 const ASK_TOPIC = 'items:ask';
 /** A fork's fqid on purpose: a consumer that named the official one would miss it. */
 const PUBLISHER = 'someone/lorebind';
+/** A computed read, because the reasons map is an index signature. See STYLE.md. */
+function reasonFor(reasons: Record<string, string> | undefined, id: string): string {
+  return reasons?.[id] ?? '';
+}
+
+/** A fork of the addon that CONSUMES what this one publishes, which is satchel's half. */
+const SUBSCRIBER = 'someone/satchel';
+
+/** One row as this addon puts it on the bus. See `priceRecord` in `main.js`. */
+interface PriceRow {
+  id: string;
+  realm: string;
+  unit: number;
+  low: number;
+  latest: number;
+  at: number;
+  visits: number;
+  sold?: number;
+  sales?: number;
+}
 
 const HOUR_MS = 60 * 60 * 1000;
 const DAY_MS = 24 * HOUR_MS;
@@ -347,6 +367,10 @@ interface LedgerHarness extends SharedHarness {
   publish: (payload: unknown, from?: string) => void;
   /** Publish the batch form, which is how a publisher answers a catch-up. */
   publishAll: (rows: unknown, from?: string) => void;
+  /** Every `price` row this addon has put on the bus, in the order it emitted them. */
+  prices: PriceRow[];
+  /** Send the ask a follower sends, and answer with whatever this addon publishes. */
+  askPrices: () => PriceRow[] | null;
   /** The socket came back, which is what the away blip rides on. */
   reconnect: () => void;
 }
@@ -502,6 +526,33 @@ async function start(options: StartOptions = {}): Promise<LedgerHarness> {
   teardown.push(harness.dispose);
   harness.inbound(HELLO_FRAME);
 
+  // Straight onto the hub, standing in for a subscriber, for the reason the ask fixture below
+  // does it: an addon's own surface refuses to deliver a message to its sender.
+  const prices: PriceRow[] = [];
+  teardown.push(
+    harness.shared.bus.subscribe({
+      from: ANY_SENDER,
+      topic: 'price',
+      owner: SUBSCRIBER,
+      handler: (message) => {
+        prices.push(message.payload as PriceRow);
+      },
+      onError: () => undefined,
+    }),
+  );
+  let answered: PriceRow[] | null = null;
+  teardown.push(
+    harness.shared.bus.subscribe({
+      from: ANY_SENDER,
+      topic: 'prices',
+      owner: SUBSCRIBER,
+      handler: (message) => {
+        answered = message.payload as PriceRow[] | null;
+      },
+      onError: () => undefined,
+    }),
+  );
+
   const settle = async (): Promise<void> => {
     harness.shared.world.watcher.poll();
     await flush(MICROTASKS);
@@ -527,6 +578,12 @@ async function start(options: StartOptions = {}): Promise<LedgerHarness> {
     },
     publishAll: (rows, from = PUBLISHER) => {
       harness.shared.bus.emit(from, 'items', rows);
+    },
+    prices,
+    askPrices: () => {
+      answered = null;
+      harness.shared.bus.emit(SUBSCRIBER, 'prices:ask', undefined);
+      return answered;
     },
     reconnect: () => {
       reconnects.count += 1;
@@ -751,10 +808,14 @@ describe('its manifest', () => {
     expect(parseManifest(MANIFEST_TEXT).data).toEqual(['floors.json']);
   });
 
-  // The topic it consumes comes from a publisher the loader cannot require, so the
-  // manifest says so and gates nothing.
-  it('names lorebind as a companion', () => {
-    expect(parseManifest(MANIFEST_TEXT).companions).toEqual(['lorebind']);
+  // Two companions and they point opposite ways: this addon CONSUMES names from lorebind and
+  // PUBLISHES prices to satchel. Neither is required and the manifest gates nothing either way,
+  // which is why each carries a sentence saying what it adds.
+  it('names both companions and says what each one is for', () => {
+    const manifest = parseManifest(MANIFEST_TEXT);
+
+    expect(manifest.companions).toEqual(['lorebind', 'satchel']);
+    expect(reasonFor(manifest.companionReasons, 'satchel')).toContain('publishes');
   });
 });
 
@@ -3118,5 +3179,111 @@ describe('what an import will not take', () => {
     await h.settle();
 
     expect(lastToast()).toContain('belong to another character');
+  });
+});
+
+// The other direction on the bus, and the reason this addon has one at all: nothing else in the
+// catalogue knows what anything GOES FOR, so a panel that pools a player's stock across
+// characters can price it only if this one says so.
+//
+// The shape it publishes is the shape it consumes, `price` and `prices` against `item` and
+// `items`, so a consumer that implements one implements both. What it must never be is a field
+// on an `item` record: a subscriber keyed by id replaces a record wholesale, so a second
+// publisher there overwrites the name and the tier the catalogue publisher owns.
+describe('publishing what things go for', () => {
+  it('puts a page it has just read on the bus', async () => {
+    const h = await start();
+    h.send({ market: page([listing({ id: 1, itemId: 'ore', count: 20, price: 4000 })]) });
+    await h.settle();
+
+    expect(h.prices).toHaveLength(1);
+    expect(h.prices[0]).toMatchObject({ id: 'ore', realm: 'Claudemoon', unit: 200, visits: 1 });
+  });
+
+  // A player stands at the counter and the same page arrives at snapshot rate. `foldPage`
+  // reports the ledger moved on a stamp sliding forward, so a subscriber repainting for that
+  // would repaint many times a second to be told nothing changed.
+  // The gate is the FIGURE rather than the fold. Every reason a page is re-delivered walks the
+  // whole of it: a second page of one query, a collect, a staged sell price. The ore below is on
+  // both reads at the same price and its figure has not moved, so a subscriber must not be woken
+  // to be told so. The cloth is the control: it is new, so it does speak.
+  it('says nothing about an item whose figure has not moved', async () => {
+    const h = await start();
+    h.send({ market: page([listing({ id: 1, itemId: 'ore', count: 20, price: 4000 })]) });
+    await h.settle();
+    h.send({
+      market: page([
+        listing({ id: 1, itemId: 'ore', count: 20, price: 4000 }),
+        listing({ id: 2, itemId: 'cloth', count: 10, price: 500 }),
+      ]),
+    });
+    await h.settle();
+
+    expect(h.prices.map((row) => row.id)).toEqual(['ore', 'cloth']);
+  });
+
+  it('speaks again once the price behind the figure has moved', async () => {
+    const h = await start();
+    h.send({ market: page([listing({ id: 1, itemId: 'ore', count: 20, price: 4000 })]) });
+    await h.settle();
+    h.send({ market: page([listing({ id: 2, itemId: 'ore', count: 20, price: 2000 })]) });
+    await h.settle();
+
+    expect(h.prices).toHaveLength(2);
+    expect(h.prices.at(-1)?.unit).toBe(100);
+  });
+
+  // The ask half. A follower subscribes and then asks, and a publisher that had nothing to say
+  // at registration has to answer the whole ledger once it does.
+  it('answers an ask with everything in the ledger', async () => {
+    const h = await start();
+    h.send({
+      market: page([
+        listing({ id: 1, itemId: 'ore', count: 20, price: 4000 }),
+        listing({ id: 2, itemId: 'cloth', count: 10, price: 500 }),
+      ]),
+    });
+    await h.settle();
+
+    const rows = h.askPrices();
+
+    expect(rows?.map((row) => row.id).sort()).toEqual(['cloth', 'ore']);
+  });
+
+  // Null rather than an empty array, and the difference is what a follower can tell apart:
+  // an addon that has nothing yet and one that has nothing to say are the same answer, and
+  // both are ordinary.
+  it('answers an empty ledger with nothing at all', async () => {
+    const h = await start();
+    await h.settle();
+
+    expect(h.askPrices()).toBeNull();
+  });
+
+  // What was PAID and what is being ASKED are two series, and this addon refuses to fold them
+  // into one figure everywhere it draws them. Publishing them merged would hand a consumer the
+  // one shape it will not draw itself.
+  it('carries what was paid beside the ask rather than inside it', async () => {
+    const h = await start();
+    h.send({
+      market: page([listing({ id: 1, itemId: 'ore', count: 20, price: 4000 })], {
+        collectionSales: [
+          { itemId: 'ore', count: 10, price: 3000, proceeds: 2850, buyerName: 'Someone' },
+        ],
+      }),
+    });
+    await h.settle();
+
+    expect(h.prices.at(-1)).toMatchObject({ unit: 200, sold: 300, sales: 1 });
+  });
+
+  // The realm is required and is not a courtesy: a consumer pooling stock across characters
+  // holds things sitting on markets this ledger has never seen.
+  it('names the realm every figure is about', async () => {
+    const h = await start();
+    h.send({ market: page([listing({ id: 1, itemId: 'ore', count: 20, price: 4000 })]) });
+    await h.settle();
+
+    expect(h.prices.at(-1)?.realm).toBe('Claudemoon');
   });
 });

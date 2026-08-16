@@ -1,7 +1,7 @@
 {
   "id": "satchel",
   "name": "Satchel",
-  "version": "1.3.0",
+  "version": "1.4.0",
   "apiVersion": 1,
   "apiMinor": 7,
   "author": "MarshalX",
@@ -9,14 +9,15 @@
   "entry": "main.js",
   "preview": {
     "file": "preview.png",
-    "alt": "On the left, Everything you own, one row an item, pooled across every character On the right, One character, live, the bags of the character in play, as a grid of squares, one of them padlocked"
+    "alt": "On the left, Everything you own, one row an item, pooled across every character and searchable, sortable and filterable by who holds it, each name coloured by its tier, with what the whole list goes for at the Merchant along the bottom On the right, One character, live, the bags of the character in play, as a grid of squares bordered by item tier, one of them padlocked"
   },
   "homepage": "https://github.com/MarshalX/world-of-claudecraft-addons",
   "tags": ["economy", "interface"],
   "permissions": ["world.read", "net.read", "ui", "sound", "storage", "keys"],
-  "companions": ["lorebind"],
+  "companions": ["lorebind", "ledgerline"],
   "companionReasons": {
-    "lorebind": "publishes what every item is called and what a vendor pays, which is what puts a name and a worth on these rows"
+    "lorebind": "publishes what every item is called and what a vendor pays, which is what puts a name, a tier and a floor on these rows",
+    "ledgerline": "publishes what things have been going for at the Merchant, which is what turns a vendor floor into a figure worth reading"
   },
   "keybinds": [
     {

@@ -1,7 +1,7 @@
 {
   "id": "ledgerline",
   "name": "Ledgerline",
-  "version": "1.5.0",
+  "version": "1.6.0",
   "apiVersion": 1,
   "apiMinor": 7,
   "author": "MarshalX",
@@ -15,9 +15,10 @@
   "homepage": "https://github.com/MarshalX/world-of-claudecraft-addons",
   "tags": ["economy", "interface"],
   "permissions": ["world.read", "net.read", "ui", "sound", "storage", "keys"],
-  "companions": ["lorebind"],
+  "companions": ["lorebind", "satchel"],
   "companionReasons": {
-    "lorebind": "publishes what every item is called, so a price row reads as an item rather than as an id"
+    "lorebind": "publishes what every item is called, so a price row reads as an item rather than as an id",
+    "satchel": "reads the prices this addon publishes, so what you own is valued at what it goes for rather than at what a vendor pays"
   },
   "keybinds": [
     {

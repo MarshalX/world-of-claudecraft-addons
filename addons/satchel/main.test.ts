@@ -75,6 +75,10 @@ const CHARACTER_KEY = `${CHANNEL}/Claudemoon/Marshal`;
 const PLAYER_NAME_FIELD = 'name';
 /** A fork's fqid on purpose: a consumer that named the official one would miss it. */
 const PUBLISHER = 'someone/lorebind';
+/** The price publisher, a second addon entirely: names and prices are two protocols. */
+const PRICER = 'someone/ledgerline';
+/** The realm the shared hello frame carries, which is what a price record has to match. */
+const REALM = 'Claudemoon';
 const NAMESPACE = addonNamespace(FQID);
 const CHARACTER_PREFIX = 'char/';
 
@@ -208,6 +212,8 @@ interface StoredRecord {
   copper: number;
   at: number;
   equipped: string[];
+  /** Which market this character's things sit on, which is what a published price applies to. */
+  realm?: string;
   sources: { bags: StoredSnapshot; bank: StoredSnapshot; mail: StoredSnapshot };
 }
 
@@ -308,6 +314,7 @@ function storedCharacter(name: string, patch: Partial<StoredRecord> = {}): Store
     copper: 0,
     at: WALL_CLOCK_MS,
     equipped: [],
+    realm: REALM,
     sources: { bags: snapshot(), bank: snapshot({ at: 0 }), mail: snapshot({ at: 0 }) },
     ...patch,
   };
@@ -371,6 +378,11 @@ function partOf(el: Element | null, selector: string): string {
   return el?.querySelector(selector)?.textContent ?? '';
 }
 
+/** How far a row's fill runs, which is the one thing a bar says that its text does not. */
+function fillOf(list: string, key: string): string {
+  return rowIn(list, key)?.querySelector<HTMLElement>('.woc-bar-fill')?.style.width ?? '';
+}
+
 function labelOf(list: string, key: string): string {
   return partOf(rowIn(list, key), '.woc-bar-label');
 }
@@ -401,18 +413,29 @@ function barAt(role: string): HTMLElement | null {
   return document.querySelector(`[data-role="${role}"]`);
 }
 
-/** What a worth row says beside its figure, which is the half that says it is partial. */
-function worthDetail(role: string): string {
-  return partOf(barAt(role), '.woc-bar-detail');
-}
-
 /**
- * Whether a bar is on screen at all. A worth of nothing is not drawn as `0c`, so the cases
+ * Whether a figure is on screen at all. A worth of nothing is not drawn as `0c`, so the cases
  * about silence assert on this rather than on the figure.
  */
 function shownAt(role: string): boolean {
   const el = barAt(role);
   return el !== null && !el.hidden;
+}
+
+/** A computed read, because a `DOMStringMap` is an index signature. See STYLE.md. */
+function dataOf(el: HTMLElement | null, key: string): string {
+  return el?.dataset[key] ?? '';
+}
+
+/** The chip's own word, which changes with what its figure MEANS. */
+function statLabel(role: string): string {
+  const chip = document.querySelector(`[data-role="${role}"]`);
+  return chip?.querySelector('.woc-satchel-stat-label')?.textContent ?? '';
+}
+
+/** The urgency on a chip, which is an attribute beside the colour rather than the colour. */
+function statTone(role: string): string {
+  return dataOf(document.querySelector<HTMLElement>(`[data-role="${role}"]`), 'tone');
 }
 
 function detailOf(list: string, key: string): string {
@@ -510,8 +533,18 @@ function countAt(at: number): string {
 }
 
 /** Whether the square is marked: an id in more than one cell, or one also worn. */
+function markedIn(grid: string, at: number): boolean {
+  const pip = cellIn(grid, at)?.querySelector<HTMLElement>('[data-satchel-mark]');
+  return pip !== null && pip !== undefined && pip.style.display !== 'none';
+}
+
+/**
+ * The mark is a corner PIP rather than the cell's border, since the border carries the item's
+ * quality tier and the kit lets a tone beat one. Split, spare and carried are annotations
+ * rather than urgency, so the tone on a square is the free-slot warning and nothing else.
+ */
 function markedAt(at: number): boolean {
-  return cellAt(at)?.classList.contains('woc-tile-warn') ?? false;
+  return markedIn('bags', at);
 }
 
 /** Whether the padlock is drawn on the square, which is a shape rather than a tint. */
@@ -525,25 +558,21 @@ function occupiedAt(at: number): boolean {
   return cellAt(at)?.style.borderStyle === 'solid';
 }
 
+/** The confirmation the loader draws, which is a real modal in the document rather than a fake. */
+function modalMessage(): string {
+  return document.querySelector('.woc-modal-message')?.textContent ?? '';
+}
+
+function pressModal(label: string): void {
+  const button = [...document.querySelectorAll('.woc-modal-buttons button')].find(
+    (el) => el.textContent === label,
+  );
+  (button as HTMLButtonElement | undefined)?.click();
+}
+
 function tipOver(el: Element | null): string {
   el?.dispatchEvent(new Event('pointerenter'));
   return document.getElementById('woc-tooltip')?.textContent ?? '';
-}
-
-function capacityBar(): HTMLElement {
-  return document.querySelector('.woc-satchel-capacity') as HTMLElement;
-}
-
-function bankBar(): HTMLElement | null {
-  return document.querySelector('.woc-satchel-bank-capacity');
-}
-
-function bankValue(): string {
-  return partOf(bankBar(), '.woc-bar-value');
-}
-
-function bankDetail(): string {
-  return partOf(bankBar(), '.woc-bar-detail');
 }
 
 /**
@@ -556,19 +585,19 @@ function frameTitle(): string {
 }
 
 function capacityValue(): string {
-  return partOf(capacityBar(), '.woc-bar-value');
+  return statFor('slots');
 }
 
 function capacityDetail(): string {
-  return partOf(capacityBar(), '.woc-bar-detail');
+  return `${statFor('free')} free`;
 }
 
-function bandWidth(): string {
-  const band = document.querySelector<HTMLElement>('.woc-satchel-band');
-  if (band === null || band.hidden) {
-    return '';
-  }
-  return band.style.width;
+function bankValue(): string {
+  return statFor('bank-slots');
+}
+
+function bankDetail(): string {
+  return `${statFor('bank-free')} free`;
 }
 
 /**
@@ -581,12 +610,44 @@ function picker(): HTMLElement | null {
   return document.querySelector<HTMLElement>('[data-role="picker"]');
 }
 
+/**
+ * Open a tab the way a player does. Every pane is in the document at once and the suite reads
+ * them all without switching, so this exists for the one thing that depends on WHICH is open:
+ * the character selector, which belongs to the three per-character panes.
+ */
+function openTab(label: string): void {
+  const button = [...document.querySelectorAll('.woc-tab')].find((el) => el.textContent === label);
+  (button as HTMLButtonElement | undefined)?.click();
+}
+
+/** Whether an element the addon hides with `ui.show` is on screen. */
+function shownIn(selector: string): boolean {
+  const el = document.querySelector<HTMLElement>(selector);
+  return el !== null && !el.hidden;
+}
+
 function pickerOptions(): string[] {
   return optionsOf(picker() ?? document);
 }
 
 function choose(label: string): void {
   choosePicker(picker() ?? document, label);
+}
+
+/** The addon's own cap on drawn rows, which is what the sentence under the list is about. */
+const MAX_ITEM_ROWS = 40;
+
+/** As many distinct kinds as a case needs, for the cases about the row cap. */
+function manyKinds(count: number): StoredStack[] {
+  return Array.from({ length: count }, (_unused, at) => ({
+    itemId: `kind_${String(at).padStart(2, '0')}`,
+    count: 1,
+  }));
+}
+
+/** Pick from one of the Items pane's own dropdowns, which are the same kit control. */
+function chooseIn(role: string, label: string): void {
+  choosePicker(document.querySelector(`[data-role="${role}"]`) ?? document, label);
 }
 
 function typeSearch(value: string): void {
@@ -1144,7 +1205,7 @@ describe('the bank pane', () => {
     });
     await h.settle();
 
-    expect(cellIn('bank', 0)?.classList.contains('woc-tile-warn')).toBe(true);
+    expect(markedIn('bank', 0)).toBe(true);
     expect(statFor('bank-marks')).toBe('1 carried');
     expect(markedAt(0)).toBe(false);
   });
@@ -1258,7 +1319,27 @@ describe('the index across every character', () => {
     await h.settle();
 
     expect(figureOf('items', 'ore')).toBe('3');
-    expect(detailOf('items', 'ore')).toBe('Marshal 3');
+    // The STORE rather than the name: one character is recorded, so naming them on every row
+    // would restate the figure beside it and leave which of the three stores holds it unsaid.
+    expect(detailOf('items', 'ore')).toBe('mail 3');
+  });
+
+  it('names the characters instead once a second one is recorded', async () => {
+    const storage = createFakeStorage();
+    seed(
+      storage,
+      storedCharacter('Alt', {
+        sources: {
+          bags: snapshot({ stacks: cells('ore', 20, 2) }),
+          bank: snapshot(),
+          mail: snapshot(),
+        },
+      }),
+    );
+    const h = await start({ storage, carry: { inventory: cells('ore', 5) } });
+    await h.settle();
+
+    expect(detailOf('items', 'ore')).toBe('Marshal 5, Alt 40');
   });
 
   it('narrows to what the search matches, by published name as well as by id', async () => {
@@ -1294,6 +1375,32 @@ describe('the index across every character', () => {
   });
 });
 
+// The selector is a labelled full-width row on three of the five tabs, and with one character
+// recorded it offers one option: a control asking a question that has one answer, on a pane
+// whose own age line already names whose reading it is drawing.
+describe('the character selector', () => {
+  it('stays off the panel while there is only one character', async () => {
+    const h = await start({ carry: { inventory: cells('ore', 20) } });
+    await h.settle();
+    openTab('Bags');
+    await h.settle();
+
+    expect(shownIn('.woc-satchel-picker')).toBe(false);
+  });
+
+  it('comes back the moment a second character is recorded', async () => {
+    const storage = createFakeStorage();
+    seed(storage, storedCharacter('Alt'));
+    const h = await start({ storage, carry: { inventory: cells('ore', 20) } });
+    await h.settle();
+    openTab('Bags');
+    await h.settle();
+
+    expect(shownIn('.woc-satchel-picker')).toBe(true);
+    expect(pickerOptions()).toEqual(['Marshal (here)', 'Alt']);
+  });
+});
+
 describe('the roster', () => {
   it('lists every character with what they are carrying, this one marked', async () => {
     const storage = createFakeStorage();
@@ -1314,7 +1421,62 @@ describe('the roster', () => {
     expect(keysIn('roster')).toEqual([CHARACTER_KEY, `${CHANNEL}/Claudemoon/Alt`]);
     expect(labelOf('roster', CHARACTER_KEY)).toBe('Marshal (here)');
     expect(coinsIn('roster', `${CHANNEL}/Claudemoon/Alt`)).toBe('9 silver');
-    expect(detailOf('roster', `${CHANNEL}/Claudemoon/Alt`)).toBe('30 / 34 cells, 4 free');
+    expect(detailOf('roster', `${CHANNEL}/Claudemoon/Alt`)).toBe('30 / 34 cells, seen moments ago');
+  });
+
+  // The class and the level ride the player entity and were not being written down, so a roster
+  // could only say what its characters were called. A record from before this reads as neither
+  // and draws the same row it always did rather than a guess.
+  it('says what class and level a character is once one has been recorded', async () => {
+    const h = await start({ carry: { inventory: cells('ore', 1, 5) } });
+    await h.settle();
+
+    expect(detailOf('roster', CHARACTER_KEY)).toContain('20 Hunter');
+  });
+
+  // ONE meaning per bar. The fill has been wrong twice: first the share that was FREE, which
+  // inverts on sight, then the share of the account's COIN, which fixed the inversion by
+  // changing the quantity rather than the direction and left length and colour measuring two
+  // unrelated things with a label for neither. It is how full that character is, and the tone
+  // is the same fact escalating.
+  it('draws each row as how full that character bags are', async () => {
+    const storage = createFakeStorage();
+    seed(
+      storage,
+      storedCharacter('Alt', {
+        copper: 3000,
+        sources: {
+          bags: snapshot({ total: 40, stacks: cells('ore', 1, 30) }),
+          bank: snapshot({ at: 0 }),
+          mail: snapshot({ at: 0 }),
+        },
+      }),
+    );
+    const h = await start({ storage, carry: { copper: 1000, inventory: cells('ore', 1, 4) } });
+    await h.settle();
+
+    expect(fillOf('roster', CHARACTER_KEY)).toBe('25.00%');
+    expect(fillOf('roster', `${CHANNEL}/Claudemoon/Alt`)).toBe('75.00%');
+  });
+
+  // The coin is DRAWN at the end of the row and the bar no longer measures it, so the one
+  // thing that has to be true is that a rich character with room does not draw a long bar.
+  it('does not let the coin move the bar', async () => {
+    const storage = createFakeStorage();
+    seed(storage, storedCharacter('Alt', { copper: 999_999 }));
+    const h = await start({ storage, carry: { copper: 1 } });
+    await h.settle();
+
+    expect(fillOf('roster', `${CHANNEL}/Claudemoon/Alt`)).toBe('0.00%');
+  });
+
+  it('says what the bar measures under the pointer', async () => {
+    const h = await start({ carry: { inventory: cells('ore', 1, 4) } });
+    await h.settle();
+
+    expect(tipOver(rowIn('roster', CHARACTER_KEY))).toContain(
+      'The bar is how full their bags are: 4 of 16 cells.',
+    );
   });
 
   it('says how old each of a character stores is, under the pointer', async () => {
@@ -1347,9 +1509,34 @@ describe('the roster', () => {
 
     document.querySelector<HTMLElement>('[data-role="forget"]')?.click();
     await h.settle();
+    // Asserted BEFORE the button is pressed: without it the case passes on an addon that
+    // forgets from the click and never asks, since pressing a button that is not there is
+    // indistinguishable from pressing one that is.
+    expect(keysIn('roster')).toHaveLength(2);
+    expect(modalMessage()).toContain('1 character will be dropped');
+    pressModal('Forget them');
+    await h.settle();
 
     expect(keysIn('roster')).toEqual([CHARACTER_KEY]);
     expect(storedKeys(h)).toEqual([CHARACTER_KEY]);
+  });
+
+  // There is no undo and no second copy: a record comes back only by playing that character
+  // again, and its bank only by walking them to one. One click used to be the whole gesture.
+  it('keeps every record when the confirmation is dismissed', async () => {
+    const storage = createFakeStorage();
+    seed(storage, storedCharacter('Alt'));
+    const h = await start({ storage, carry: { inventory: cells('ore', 1, 5) } });
+    await h.settle();
+
+    document.querySelector<HTMLElement>('[data-role="forget"]')?.click();
+    await h.settle();
+    expect(modalMessage()).toContain('1 character will be dropped');
+    pressModal('Keep them');
+    await h.settle();
+
+    expect(keysIn('roster')).toHaveLength(2);
+    expect(storedKeys(h)).toHaveLength(2);
   });
 
   // A list of characters cannot answer "how much of anything do I have", which is the
@@ -1524,7 +1711,8 @@ describe('the free-slot count', () => {
     await start({ world: false });
 
     expect(lineFor('bags-note')).toBe('Not in the world yet.');
-    expect(bandWidth()).toBe('');
+    expect(statFor('slots')).toBe('');
+    expect(statFor('free')).toBe('');
   });
 
   it('counts the filled sockets rather than guessing what they hold', async () => {
@@ -1758,16 +1946,16 @@ describe('its layout', () => {
   });
 
   // `setShown` restores what an element was built as rather than writing one display for
-  // everything it is pointed at. The capacity bar is the case that catches it: a kit bar shown as
-  // a flex line puts its own detail beside its figure instead of under it, and nothing raises. A
+  // everything it is pointed at. The purse is the case that catches it: a kit bar shown as a
+  // flex line puts its own detail beside its figure instead of under it, and nothing raises. A
   // bar is the kit's, so the right assertion is that this addon has written no display onto it.
   it('gives an element it did not lay out back its own display', async () => {
     const h = await start({ carry: { inventory: cells('ore', 20) } });
     await h.settle();
 
-    const capacity = document.querySelector<HTMLElement>('.woc-satchel-capacity');
-    expect(capacity?.hidden).toBe(false);
-    expect(capacity?.style.display).toBe('');
+    const purse = document.querySelector<HTMLElement>('.woc-satchel-purse');
+    expect(purse?.hidden).toBe(false);
+    expect(purse?.style.display).toBe('');
     expect(gridEl('bags')?.style.display).toBe('grid');
   });
 });
@@ -1921,33 +2109,50 @@ describe('what the grid marks', () => {
   });
 });
 
-describe('the warning band', () => {
-  it('marks the share of the bags the threshold covers', async () => {
-    // 4 free slots out of 50 is 8 percent of the bar.
+// The capacity figure is a chip on the strip rather than a whole `ui.bar` row, so the urgency
+// it used to carry as a fill and a band is carried in TWO places instead: the figure itself,
+// which is always on screen, and the empty squares in the grid, which are what the player is
+// looking at when they wonder whether the next thing they pick up will fit.
+describe('the free-slot warning', () => {
+  it('leaves the figure alone while there is room', async () => {
     const h = await start({
       settings: { 'warn-free': 4 },
       carry: { bags: ['bag_16', null, 'bag_12', 'bag_6'] },
     });
     await h.settle();
 
-    expect(bandWidth()).toBe('8.00%');
+    expect(statTone('free')).toBe('default');
+    expect(cellAt(0)?.classList.contains('woc-tile-warn')).toBe(false);
   });
 
-  it('goes warm once the free count is inside the band', async () => {
+  it('goes warm once the free count is inside the threshold', async () => {
     const h = await start({
       settings: { 'warn-free': 4 },
       carry: { inventory: cells('ore', 1, 13) },
     });
     await h.settle();
 
-    expect(capacityBar().classList.contains('woc-bar-warn')).toBe(true);
+    expect(statTone('free')).toBe('warn');
+  });
+
+  // Every free square rather than the last few: with three left, three coloured squares is the
+  // whole answer, and picking a subset of identical empties would claim one of them is the last.
+  it('colours the squares that are left, and none that are full', async () => {
+    const h = await start({
+      settings: { 'warn-free': 4 },
+      carry: { inventory: cells('ore', 1, 13) },
+    });
+    await h.settle();
+
+    expect(cellAt(0)?.classList.contains('woc-tile-warn')).toBe(false);
+    expect(cellAt(13)?.classList.contains('woc-tile-warn')).toBe(true);
   });
 
   it('goes loud with nothing left at all', async () => {
     const h = await start({ carry: { inventory: cells('ore', 1, 16) } });
     await h.settle();
 
-    expect(capacityBar().classList.contains('woc-bar-danger')).toBe(true);
+    expect(statTone('free')).toBe('danger');
   });
 });
 
@@ -1988,7 +2193,7 @@ describe('the warning cue', () => {
     await h.settle();
 
     expect(played).not.toHaveBeenCalled();
-    expect(capacityBar().classList.contains('woc-bar-warn')).toBe(true);
+    expect(statTone('free')).toBe('warn');
   });
 });
 
@@ -2076,8 +2281,8 @@ describe('what it is all worth', () => {
     h.publish('item', { id: 'ore', name: 'Copper Ore', sellValue: 25 });
     await h.settle();
 
-    expect(coinsAt('bags-worth')).toBe('10 silver');
-    expect(worthDetail('bags-worth')).toBe('1 of 1 kinds priced');
+    expect(statFor('bags-worth')).toBe('10s');
+    expect(tipOver(barAt('bags-worth'))).toContain('1 of 1 kinds priced');
   });
 
   // The half that keeps the figure honest. An item nobody priced is left OUT of the sum rather
@@ -2090,8 +2295,8 @@ describe('what it is all worth', () => {
     h.publish('item', { id: 'ore', name: 'Copper Ore', sellValue: 25 });
     await h.settle();
 
-    expect(coinsAt('bags-worth')).toBe('5 silver');
-    expect(worthDetail('bags-worth')).toBe('1 of 2 kinds priced');
+    expect(statFor('bags-worth')).toBe('5s');
+    expect(tipOver(barAt('bags-worth'))).toContain('1 of 2 kinds priced');
   });
 
   // Nobody publishing is the ordinary state, and a `0c` row is a claim that the bags are worth
@@ -2112,7 +2317,7 @@ describe('what it is all worth', () => {
     h.publish('item', { id: 'ore', name: 'Copper Ore', sellValue: 25 });
     await h.settle();
 
-    expect(coinsAt('bank-worth')).toBe('15 silver');
+    expect(statFor('bank-worth')).toBe('15s');
   });
 
   // The account figure counts every store of every character, which is the opposite of what the
@@ -2135,7 +2340,7 @@ describe('what it is all worth', () => {
     await h.settle();
 
     // 10 here, 20 in the alt's bags, 40 in the alt's bank: 70 at 25 copper.
-    expect(coinsAt('account-worth')).toBe('17 silver, 50 copper');
+    expect(statFor('account-worth')).toBe('17s 50c');
   });
 
   it('follows the search on the items strip', async () => {
@@ -2177,6 +2382,35 @@ describe('what it is all worth', () => {
     expect(tipOver(rowIn('items', 'ore'))).toContain('A vendor pays 25c each, 10s for all 40');
   });
 
+  // The pane that DRAWS the bag was the one that could not say what was in it: the price
+  // reached the Items row and stopped there, so a player with the pointer over a stack of ore
+  // got its id, its count and its kind and no figure at all.
+  it('prices the square under the pointer, each and for the cell', async () => {
+    const h = await start({ carry: { inventory: cells('ore', 20) } });
+    h.publish('item', { id: 'ore', name: 'Copper Ore', sellValue: 25 });
+    await h.settle();
+
+    expect(tipOver(cellAt(0))).toContain('A vendor pays 25c each, 5s for this cell.');
+  });
+
+  // One of a thing has no "each" to give, and a line saying `25c each, 25c for this cell` is
+  // two figures for one fact.
+  it('gives a single item one figure rather than the same one twice', async () => {
+    const h = await start({ carry: { inventory: cells('ore', 1) } });
+    h.publish('item', { id: 'ore', name: 'Copper Ore', sellValue: 25 });
+    await h.settle();
+
+    expect(tipOver(cellAt(0))).toContain('A vendor pays 25c.');
+  });
+
+  it('says nothing about a price nobody has published', async () => {
+    const h = await start({ carry: { inventory: cells('ore', 20) } });
+    h.publish('item', { id: 'ore', name: 'Copper Ore' });
+    await h.settle();
+
+    expect(tipOver(cellAt(0))).not.toContain('A vendor pays');
+  });
+
   // A price is a number off another addon, so it is checked like every other field of the
   // payload: a string that looks like one is not one, and a zero is a real answer the
   // publisher's own rule says it will never send.
@@ -2191,6 +2425,51 @@ describe('what it is all worth', () => {
     await h.settle();
 
     expect(shownAt('bags-worth')).toBe(true);
+  });
+});
+
+// A tier is what a player picks an item out of a grid by before reading a word, and it was
+// arriving on the bus already: `quality` was received, kept, and spent on one word in a
+// tooltip. The BORDER is the kit's own axis for it, and it was being spent on this addon's
+// three marks instead, which the kit lets a tone win because a tone is urgency. None of split,
+// spare and carried is urgent, so they moved to a corner pip and the border is the tier's.
+describe('the tier on a square', () => {
+  it('borders a cell by the tier a publisher gave it', async () => {
+    const h = await start({ carry: { inventory: cells('ore', 20) } });
+    h.publish('item', { id: 'ore', name: 'Copper Ore', quality: 'epic' });
+    await h.settle();
+
+    expect(cellAt(0)?.classList.contains('woc-tile-quality-epic')).toBe(true);
+  });
+
+  it('colours the name on an index row by the same tier', async () => {
+    const h = await start({ carry: { inventory: cells('ore', 20) } });
+    h.publish('item', { id: 'ore', name: 'Copper Ore', quality: 'rare' });
+    await h.settle();
+
+    expect(rowIn('items', 'ore')?.classList.contains('woc-bar-quality-rare')).toBe(true);
+  });
+
+  // A publisher's `quality` is another addon's string. The kit colours nothing for a value
+  // outside its six, so passing one through and passing null are the same picture and only one
+  // of them is a decision this addon made.
+  it('refuses a tier the kit does not know', async () => {
+    const h = await start({ carry: { inventory: cells('ore', 20) } });
+    h.publish('item', { id: 'ore', name: 'Copper Ore', quality: 'mythic' });
+    await h.settle();
+
+    expect(cellAt(0)?.className).not.toContain('woc-tile-quality');
+  });
+
+  // The two axes on one square, which is the case the move was made for: before it, a stack
+  // split across two cells took the border and the tier could never be drawn.
+  it('draws the mark and the tier at once', async () => {
+    const h = await start({ carry: { inventory: cells('ore', 20, 2) } });
+    h.publish('item', { id: 'ore', name: 'Copper Ore', quality: 'uncommon' });
+    await h.settle();
+
+    expect(markedAt(0)).toBe(true);
+    expect(cellAt(0)?.classList.contains('woc-tile-quality-uncommon')).toBe(true);
   });
 });
 
@@ -2485,5 +2764,535 @@ describe('disabling it', () => {
     expect(document.querySelectorAll('[data-cell]')).toHaveLength(0);
     expect(Object.keys(h.shared.dispatcher.bindings())).toEqual([]);
     expect(() => vi.advanceTimersToNextFrame()).not.toThrow();
+  });
+});
+
+// The SECOND bus protocol. What a vendor pays is a floor and it is small: a whole bag of ore
+// comes to a few silver against a purse of a thousand gold, so as the only figure on the strip
+// it was a true fact nobody could act on. What the counter goes for is the number a player
+// decides anything with, and one addon in the catalogue keeps a history of it.
+//
+// It is a separate topic and never a field on an `item` record, because a record here is
+// replaced wholesale by id: a second publisher on that topic would overwrite the name and the
+// tier the catalogue publisher owns, and that publisher has no way to answer for a price anyway.
+describe('what things go for', () => {
+  const priceRow = (patch: Record<string, unknown> = {}): Record<string, unknown> => ({
+    id: 'ore',
+    realm: REALM,
+    unit: 400,
+    at: WALL_CLOCK_MS,
+    visits: 6,
+    ...patch,
+  });
+
+  it('draws the market total where one has been published, and says which it is', async () => {
+    const h = await start({ carry: { inventory: cells('ore', 20) } });
+    h.publish('price', priceRow(), PRICER);
+    await h.settle();
+
+    expect(statFor('bags-worth')).toBe('80s');
+    expect(statLabel('bags-worth')).toBe('Market');
+  });
+
+  // The vendor figure does not go away. It moves to the tooltip beside the market one, where
+  // being the CERTAIN one is worth stating: a vendor pays that today whatever the counter does.
+  it('keeps the vendor floor beside it rather than replacing it', async () => {
+    const h = await start({ carry: { inventory: cells('ore', 20) } });
+    h.publish('item', { id: 'ore', name: 'Copper Ore', sellValue: 25 }, PUBLISHER);
+    h.publish('price', priceRow(), PRICER);
+    await h.settle();
+
+    const said = tipOver(barAt('bags-worth'));
+
+    expect(said).toContain('A vendor would pay 5s');
+    expect(said).toContain('only certain figure');
+  });
+
+  it('falls back to the vendor figure when nobody has published a price', async () => {
+    const h = await start({ carry: { inventory: cells('ore', 20) } });
+    h.publish('item', { id: 'ore', name: 'Copper Ore', sellValue: 25 }, PUBLISHER);
+    await h.settle();
+
+    expect(statFor('bags-worth')).toBe('5s');
+    expect(statLabel('bags-worth')).toBe('Worth');
+  });
+
+  // The realm test is the whole reason a price record carries one. The ledger publishing these
+  // is a history of ONE market, and an alt's stock on another realm is worth what that realm
+  // pays, which nothing here knows. Silence rather than the wrong figure.
+  it('refuses to spend another realm price on this character stock', async () => {
+    const h = await start({ carry: { inventory: cells('ore', 20) } });
+    h.publish('item', { id: 'ore', name: 'Copper Ore', sellValue: 25 }, PUBLISHER);
+    h.publish('price', priceRow({ realm: 'Emberfall' }), PRICER);
+    await h.settle();
+
+    expect(statLabel('bags-worth')).toBe('Worth');
+    expect(statFor('bags-worth')).toBe('5s');
+  });
+
+  // A row without one is refused rather than accepted as applying everywhere, which is the only
+  // other thing it could mean and is never true. Guarded twice on purpose, at the parse and at
+  // the lookup: the first keeps a record that cannot mean anything out of the map at all.
+  it('refuses a price record that names no realm', async () => {
+    const h = await start({ carry: { inventory: cells('ore', 20) } });
+    h.publish('price', { id: 'ore', unit: 400, at: WALL_CLOCK_MS }, PRICER);
+    await h.settle();
+
+    expect(shownAt('bags-worth')).toBe(false);
+  });
+
+  // The other side of the same test: a character recorded before this addon wrote realms down
+  // has none, and a price that named a real one must not be spent on them either. Two blanks
+  // are not a match.
+  it('refuses to price a character recorded before realms were written down', async () => {
+    const storage = createFakeStorage();
+    // The key ABSENT rather than undefined, which is what a record written before the field
+    // existed actually looks like. Destructured off rather than deleted, because Biome refuses
+    // `delete` and `exactOptionalPropertyTypes` refuses the `= undefined` it offers instead.
+    const { realm: _dropped, ...before } = storedCharacter('Alt', { copper: 10 });
+    seed(storage, before);
+    const h = await start({ storage });
+    h.publish('price', priceRow({ id: 'ore' }), PRICER);
+    await h.settle();
+    choose('Alt');
+    await h.settle();
+
+    expect(shownAt('bags-worth')).toBe(false);
+  });
+
+  it('takes the batch an ask is answered with', async () => {
+    const h = await start({ carry: { inventory: cells('ore', 20) } });
+    h.publish('prices', [priceRow()], PRICER);
+    await h.settle();
+
+    expect(statFor('bags-worth')).toBe('80s');
+  });
+
+  it('ignores a batch that is not one, the way it does for names', async () => {
+    const h = await start({ carry: { inventory: cells('ore', 20) } });
+    h.publish('prices', null, PRICER);
+    await h.settle();
+
+    expect(shownAt('bags-worth')).toBe(false);
+  });
+
+  // Both figures on one square, labelled, never merged. A number made of a vendor floor and a
+  // market median is true of neither, which is the rule the publisher holds itself to as well.
+  it('prices a square from both sources at once', async () => {
+    const h = await start({ carry: { inventory: cells('ore', 20) } });
+    h.publish('item', { id: 'ore', name: 'Copper Ore', sellValue: 25 }, PUBLISHER);
+    h.publish('price', priceRow(), PRICER);
+    await h.settle();
+
+    const said = tipOver(cellAt(0));
+
+    expect(said).toContain('A vendor pays 25c each, 5s for this cell.');
+    expect(said).toContain('The counter: 4s each, 80s for this cell.');
+    expect(said).toContain('6 readings, newest moments ago');
+  });
+
+  // Two ages are on screen at once and they answer different questions: the store stamp says
+  // when the bags were read and this says when the counter was.
+  it('says how old a price is and how much is behind it', async () => {
+    const h = await start({ carry: { inventory: cells('ore', 20) } });
+    h.publish('price', priceRow({ visits: 1, at: WALL_CLOCK_MS - 3 * DAY_MS }), PRICER);
+    await h.settle();
+
+    const said = tipOver(cellAt(0));
+
+    expect(said).toContain('1 reading, newest 3 days ago');
+    expect(said).toContain("one seller's asking price on one day");
+  });
+
+  it('carries what was paid beside the ask rather than inside it', async () => {
+    const h = await start({ carry: { inventory: cells('ore', 20) } });
+    h.publish('price', priceRow({ sold: 350, sales: 4 }), PRICER);
+    await h.settle();
+
+    const said = tipOver(cellAt(0));
+
+    expect(said).toContain('The counter: 4s each');
+    expect(said).toContain('paid a median of 3s 50c each over 4 sales');
+  });
+
+  // A single thin reading is IN the total and disclosed, rather than silently dropped or
+  // silently folded in. The count is what says the figure below it rests on one person's day.
+  it('discloses how many kinds rest on a single reading', async () => {
+    const h = await start({
+      carry: { inventory: [...cells('ore', 20), ...cells('cloth', 10)] },
+    });
+    h.publish('prices', [priceRow(), priceRow({ id: 'cloth', visits: 1 })], PRICER);
+    await h.settle();
+
+    expect(tipOver(barAt('bags-worth'))).toContain('1 of 2 rest on a single reading');
+  });
+
+  // A row pools every character on the account and they are not all on one realm, so the row
+  // total is the wrong multiplier. Priced against the copies the figure applies to, and the
+  // rest counted rather than quietly folded in.
+  it('prices only the copies sitting on the realm the price is about', async () => {
+    const storage = createFakeStorage();
+    seed(
+      storage,
+      storedCharacter('Alt', {
+        realm: 'Emberfall',
+        sources: {
+          bags: snapshot({ stacks: cells('ore', 30) }),
+          bank: snapshot({ at: 0 }),
+          mail: snapshot({ at: 0 }),
+        },
+      }),
+    );
+    const h = await start({ storage, carry: { inventory: cells('ore', 20) } });
+    h.publish('price', priceRow(), PRICER);
+    await h.settle();
+
+    const said = tipOver(rowIn('items', 'ore'));
+
+    expect(said).toContain('The counter: 4s each, 80s for all 20.');
+    expect(said).toContain('30 of these are on another realm');
+  });
+});
+
+// The pane the addon exists for had one control on it, a search box, so the only question it
+// could answer was "where is my X" and only if you could spell X. Worse, `MAX_ITEM_ROWS`
+// truncates whatever order it is given: alphabetically that showed A through G on a large
+// account and asked the player to narrow it, which is what a cap over an arbitrary order can
+// honestly say. A cap over a sorted list is a top-40 and a real answer.
+describe('reading the index in an order', () => {
+  const threeKinds = {
+    inventory: [...cells('ore', 20, 3), ...cells('cloth', 5), ...cells('herb', 1, 2)],
+  };
+
+  it('is alphabetical until the player says otherwise', async () => {
+    const h = await start({ carry: threeKinds });
+    await h.settle();
+
+    expect(keysIn('items')).toEqual(['cloth', 'herb', 'ore']);
+  });
+
+  it('ranks by how many copies there are', async () => {
+    const h = await start({ carry: threeKinds });
+    await h.settle();
+    chooseIn('sort', 'Copies');
+    await h.settle();
+
+    expect(keysIn('items')).toEqual(['ore', 'cloth', 'herb']);
+  });
+
+  // The question the Bags tab makes a player ask and cannot answer: 60 ore in three cells is
+  // cheaper to carry than two herbs in two.
+  it('ranks by how many cells a kind is spending', async () => {
+    const h = await start({ carry: threeKinds });
+    await h.settle();
+    chooseIn('sort', 'Cells');
+    await h.settle();
+
+    expect(keysIn('items').slice(0, 2)).toEqual(['ore', 'herb']);
+  });
+
+  // The prices are picked so the worth order DIFFERS from the alphabetical one. Ore is
+  // published as "Copper Ore", so by name the three read Cloth, Copper Ore, Herb, and a case
+  // whose expected worth order happened to match that would pass against no sorting at all.
+  it('ranks by what each kind is worth', async () => {
+    const h = await start({ carry: threeKinds });
+    h.publish('items', [
+      { id: 'ore', name: 'Copper Ore', sellValue: 100 },
+      { id: 'cloth', name: 'Cloth', sellValue: 500 },
+    ]);
+    await h.settle();
+    chooseIn('sort', 'Worth');
+    await h.settle();
+
+    // Ore: 60 at 100 is 60s. Cloth: 5 at 500 is 25s. Herb is unpriced and sinks.
+    expect(keysIn('items')).toEqual(['ore', 'cloth', 'herb']);
+  });
+
+  // Never a MIXTURE of the two sources. A market median and a vendor floor differ by a factor
+  // of tens, so a list ordered on whichever each row happened to have would rank a browsed
+  // piece of junk over an unbrowsed valuable and still read as a ranking by worth.
+  it('ranks on the market figure once the pane is drawing one', async () => {
+    const h = await start({ carry: threeKinds });
+    h.publish('items', [
+      { id: 'ore', name: 'Copper Ore', sellValue: 10 },
+      { id: 'cloth', name: 'Cloth', sellValue: 500 },
+    ]);
+    h.publish('price', { id: 'ore', realm: REALM, unit: 4000, at: WALL_CLOCK_MS }, PRICER);
+    await h.settle();
+    chooseIn('sort', 'Worth');
+    await h.settle();
+
+    // Ore is 60 at 40s on the counter. Cloth has a vendor floor and no market figure, so on
+    // the market ranking it is worth nothing here and says so.
+    expect(keysIn('items')).toEqual(['ore', 'cloth', 'herb']);
+    expect(detailOf('items', 'cloth')).toBe('no recorded price');
+  });
+
+  // A list ordered by worth whose rows read `Marshal 87, Bruk 54` has been reshuffled rather
+  // than sorted: the figure the order was taken on is the one thing not on screen.
+  it('puts the figure it sorted on under each row', async () => {
+    const h = await start({ carry: threeKinds });
+    h.publish('items', [{ id: 'ore', name: 'Copper Ore', sellValue: 10 }]);
+    await h.settle();
+
+    expect(detailOf('items', 'ore')).toBe('bags 60');
+
+    chooseIn('sort', 'Worth');
+    await h.settle();
+    expect(detailOf('items', 'ore')).toBe('6s');
+
+    chooseIn('sort', 'Cells');
+    await h.settle();
+    expect(detailOf('items', 'ore')).toBe('60 in 3 cells');
+
+    chooseIn('sort', 'Last seen');
+    await h.settle();
+    expect(detailOf('items', 'ore')).toBe('last read moments ago');
+  });
+
+  it('names the order in the sentence about the cap', async () => {
+    const h = await start({ carry: { inventory: manyKinds(MAX_ITEM_ROWS + 3) } });
+    await h.settle();
+    chooseIn('sort', 'Copies');
+    await h.settle();
+
+    expect(lineFor('items-note')).toBe(
+      'The first 40 by copies. Search or pick a character for the rest.',
+    );
+  });
+});
+
+// Pooling across characters is the addon's whole premise and there was no way to un-pool it.
+describe('narrowing the index to one character', () => {
+  const withAlt = (): FakeStorage => {
+    const storage = createFakeStorage();
+    seed(
+      storage,
+      storedCharacter('Alt', {
+        sources: {
+          bags: snapshot({ stacks: [...cells('ore', 20, 2), ...cells('silk', 7)] }),
+          bank: snapshot({ at: 0 }),
+          mail: snapshot({ at: 0 }),
+        },
+      }),
+    );
+    return storage;
+  };
+
+  it('drops the rows that character holds none of', async () => {
+    const h = await start({ storage: withAlt(), carry: { inventory: cells('cloth', 5) } });
+    await h.settle();
+    expect(keysIn('items')).toEqual(['cloth', 'ore', 'silk']);
+
+    chooseIn('who', 'Alt');
+    await h.settle();
+
+    expect(keysIn('items')).toEqual(['ore', 'silk']);
+  });
+
+  // The FIGURES follow it too. A player asking about Alt means Alt's copies, not every row
+  // Alt happens to hold one of counted across the account.
+  it('counts that character copies rather than the account', async () => {
+    const h = await start({ storage: withAlt(), carry: { inventory: cells('ore', 9) } });
+    await h.settle();
+    expect(figureOf('items', 'ore')).toBe('49');
+
+    chooseIn('who', 'Alt');
+    await h.settle();
+
+    expect(figureOf('items', 'ore')).toBe('40');
+    expect(statFor('items-held')).toBe('47');
+  });
+
+  // The roster's own account total reads the same index on the same paint, so a filter that
+  // narrowed the index in place would make the roster report one character worth as everyone's.
+  it('leaves the roster account total alone', async () => {
+    const h = await start({ storage: withAlt(), carry: { inventory: cells('ore', 9) } });
+    h.publish('items', [{ id: 'ore', name: 'Copper Ore', sellValue: 100 }]);
+    await h.settle();
+    const before = statFor('account-worth');
+
+    chooseIn('who', 'Alt');
+    await h.settle();
+
+    expect(statFor('account-worth')).toBe(before);
+    expect(statFor('items-worth')).not.toBe(before);
+  });
+
+  it('says whose list is empty when a search matches nothing under the filter', async () => {
+    const h = await start({ storage: withAlt(), carry: { inventory: cells('cloth', 5) } });
+    await h.settle();
+    chooseIn('who', 'Alt');
+    typeSearch('cloth');
+    await h.settle();
+
+    expect(lineFor('items-note')).toBe('Nothing on Alt matches that.');
+  });
+
+  // One character is not a choice, exactly as on the Bags selector.
+  it('stays off the panel while there is only one character', async () => {
+    const h = await start({ carry: { inventory: cells('ore', 20) } });
+    await h.settle();
+
+    expect(shownIn('[data-role="who"]')).toBe(false);
+  });
+});
+
+// A bar is read before the figure beside it, so a bar measuring something other than the thing
+// the list is ordered on is worse than no bar at all: under a worth order a nearly worthless
+// row could draw the longest one. The fill, the second line and the row order are one fact now.
+describe('what a row fill measures', () => {
+  // Herb is THREE to a cell, so its copy count and its cell count differ. At one apiece the
+  // two were the same number and a case about the cells order passed against a fill still
+  // measuring copies.
+  const mixed = {
+    inventory: [...cells('ore', 20, 3), ...cells('cloth', 5), ...cells('herb', 3, 2)],
+  };
+
+  it('is the copy count while the list is alphabetical', async () => {
+    const h = await start({ carry: mixed });
+    await h.settle();
+
+    expect(fillOf('items', 'ore')).toBe('100.00%');
+    expect(fillOf('items', 'cloth')).toBe('8.33%');
+  });
+
+  it('follows a worth order rather than staying on copies', async () => {
+    const h = await start({ carry: mixed });
+    h.publish('items', [
+      { id: 'ore', name: 'Copper Ore', sellValue: 1 },
+      { id: 'cloth', name: 'Cloth', sellValue: 500 },
+    ]);
+    await h.settle();
+    chooseIn('sort', 'Worth');
+    await h.settle();
+
+    // Cloth is 25s against ore's 60c, so the sixty ore draw the SHORT bar here.
+    expect(fillOf('items', 'cloth')).toBe('100.00%');
+    expect(fillOf('items', 'ore')).toBe('2.40%');
+  });
+
+  it('follows a cells order', async () => {
+    const h = await start({ carry: mixed });
+    await h.settle();
+    chooseIn('sort', 'Cells');
+    await h.settle();
+
+    expect(fillOf('items', 'ore')).toBe('100.00%');
+    expect(fillOf('items', 'herb')).toBe('66.67%');
+  });
+
+  // A share needs a zero point and a wall-clock stamp has none: every bar would draw at very
+  // nearly full width and say nothing at all.
+  it('draws none at all under an order that has no zero', async () => {
+    const h = await start({ carry: mixed });
+    await h.settle();
+    chooseIn('sort', 'Last seen');
+    await h.settle();
+
+    expect(fillOf('items', 'ore')).toBe('0.00%');
+  });
+
+  // The denominator is everything the filters matched rather than the forty rows drawn, so the
+  // cap cannot silently rescale the pane.
+  //
+  // ONLY THE NAME ORDER CAN SHOW THIS, and the reason is worth keeping: every other order is
+  // descending, so the largest row is row one and is always drawn. Alphabetically it can be
+  // anywhere, and here the hundred-copy pile sorts last and falls off the end of the cap.
+  it('is not rescaled by the row cap', async () => {
+    const h = await start({
+      carry: { inventory: [...manyKinds(MAX_ITEM_ROWS + 3), ...cells('zzz_big', 20, 5)] },
+    });
+    await h.settle();
+
+    // The biggest pile is past the fortieth row and still sets the scale: one copy against a
+    // hundred is a hair of a bar, where the largest DRAWN row would have made it a full one.
+    expect(keysIn('items')).not.toContain('zzz_big');
+    expect(fillOf('items', 'kind_00')).toBe('1.00%');
+  });
+});
+
+// Money is the one thing a mailbox holds that a bank does not, and nothing ever counted it.
+// A letter carries copper, the panel has always drawn it per letter, and every total left it
+// out, so an account with sale proceeds waiting at a mailbox read low in the panel's own
+// headline figure using a number it was already holding.
+describe('money in the post', () => {
+  const withPost = (copper: number): Partial<CarryState> => ({
+    mail: mailPayload({
+      totalCount: 1,
+      messages: [letter({ id: 7, copper, items: [] })],
+    }),
+  });
+
+  it('totals what the letters in a mailbox are carrying', async () => {
+    const h = await start({ carry: withPost(14_025) });
+    await h.settle();
+
+    expect(statFor('mail-post')).toBe('1g 40s 25c');
+  });
+
+  it('counts it across every character on the roster strip', async () => {
+    const h = await start({ carry: withPost(14_025) });
+    await h.settle();
+
+    expect(statFor('account-post')).toBe('1g 40s 25c');
+  });
+
+  // BESIDE the carried total rather than added into it. The bar says `Every character` and
+  // draws the sum of their purses, and a letter's attachment is carried by nobody.
+  it('keeps it out of the carried figure and says where it went', async () => {
+    const h = await start({ carry: { copper: 5000, ...withPost(14_025) } });
+    await h.settle();
+
+    expect(coinsAt('account')).toBe('50 silver');
+    expect(tipOver(barAt('account'))).toContain('attached to letters in a recorded mailbox');
+  });
+
+  it('draws no figure at all for a mailbox holding no coin', async () => {
+    const h = await start({ carry: withPost(0) });
+    await h.settle();
+
+    expect(shownAt('mail-post')).toBe(false);
+    expect(shownAt('account-post')).toBe(false);
+  });
+});
+
+// The purse was on the Bags pane alone, so the two panes that can be pointed at somebody else
+// could not say whose money they were showing. It bites hardest on an alt's bank, which is the
+// pane this addon exists for.
+describe('whose money a pane is about', () => {
+  it('names it on the bank pane', async () => {
+    const h = await start({ carry: { copper: 5000, bank: bankPayload({}) } });
+    await h.settle();
+
+    expect(statFor('bank-purse')).toBe('50s');
+  });
+
+  it('names it on the mail pane', async () => {
+    const h = await start({ carry: { copper: 5000, mail: mailPayload({ totalCount: 0 }) } });
+    await h.settle();
+
+    expect(statFor('mail-purse')).toBe('50s');
+  });
+
+  it('follows the character the pane is pointed at', async () => {
+    const storage = createFakeStorage();
+    seed(
+      storage,
+      storedCharacter('Alt', {
+        copper: 900,
+        sources: {
+          bags: snapshot(),
+          bank: snapshot({ stacks: cells('ore', 20) }),
+          mail: snapshot({ at: 0 }),
+        },
+      }),
+    );
+    const h = await start({ storage, carry: { copper: 5000 } });
+    await h.settle();
+    choose('Alt');
+    await h.settle();
+
+    expect(statFor('bank-purse')).toBe('9s');
   });
 });

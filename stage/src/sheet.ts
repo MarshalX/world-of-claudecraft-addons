@@ -146,24 +146,43 @@ function drawnIn(doc: Document): Rect {
  * A helper doing the computed read, which is STYLE.md's resolution for the pair
  * of rules that disagree here: Biome wants `dataset.stage` and TypeScript forbids
  * dotting into an index signature.
+ *
+ * `documentElement` IS OPTIONAL HERE and the `?.` on it is load-bearing. An
+ * iframe mid-navigation answers `contentDocument` with a document that has no
+ * root element yet, for a window this poll lands inside often enough to matter:
+ * three runs in four of `pnpm shots satchel` died on it. The throw happened in a
+ * `setTimeout` callback, so it escaped as an uncaught page error, `look` was
+ * never rescheduled, and the whole sheet waited for a pane that had gone quiet
+ * rather than failed. What that reads as is a 15 second `waitForSelector`
+ * timeout naming no cause, on a scenario that is working.
  */
 function stageState(doc: Document | null): string | undefined {
-  return doc?.documentElement.dataset[STAGE_KEY];
+  return doc?.documentElement?.dataset[STAGE_KEY];
 }
 
 /** Resolve once one pane has mounted and painted, or reject with its reason. */
 function paneReady(frame: HTMLIFrameElement): Promise<Document> {
   return new Promise((resolve, reject) => {
     const look = (): void => {
-      const doc = frame.contentDocument;
-      const state = stageState(doc);
-      if (state === 'ready' && doc !== null) {
-        resolve(doc);
-      } else if (state === 'failed') {
-        reject(new Error(doc?.getElementById('stage-status')?.textContent ?? 'pane failed'));
-      } else {
-        globalThis.setTimeout(look, READY_POLL_MS);
+      // Every read inside the poll is guarded rather than only the ones that have
+      // been seen to fail, because the failure mode is a hang rather than an
+      // error: a throw here stops the loop and nothing is left to report it.
+      try {
+        const doc = frame.contentDocument;
+        const state = stageState(doc);
+        if (state === 'ready' && doc !== null) {
+          resolve(doc);
+          return;
+        }
+        if (state === 'failed') {
+          reject(new Error(doc?.getElementById('stage-status')?.textContent ?? 'pane failed'));
+          return;
+        }
+      } catch {
+        // Look again. A read that threw is a document mid-navigation, which is a
+        // state to wait through rather than one to report.
       }
+      globalThis.setTimeout(look, READY_POLL_MS);
     };
     look();
   });

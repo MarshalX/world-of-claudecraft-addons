@@ -91,6 +91,20 @@ const SOLD_KEY = 'sold';
 const ITEM_TOPIC = 'item';
 const ITEMS_TOPIC = 'items';
 
+/**
+ * What this addon PUBLISHES, in the same two shapes it subscribes to `item` and `items` in.
+ *
+ * A price is not a field on an `item` record and must never become one. A subscriber keyed by id
+ * replaces a record wholesale, so a second publisher on that topic overwrites the name, the kind
+ * and the tier the catalogue publisher owns; and that publisher could not answer for a price
+ * anyway, because there is no table of them. They are also different KINDS of fact. A sell value
+ * is a catalogue constant, the same on every realm forever. A price here is a dated observation
+ * with a realm, an evidence count and a query behind it, and a consumer has to be able to say so
+ * rather than draw a figure that looks like a constant.
+ */
+const PRICE_TOPIC = 'price';
+const PRICES_TOPIC = 'prices';
+
 /** The older ask topic, sent beside the one `follow` derives. Drop next release. */
 const LEGACY_ASK_TOPIC = 'item:ask';
 
@@ -297,6 +311,8 @@ const series = new Map();
 const floors = new Map();
 /** Which game the floor table was read from, because a price is a claim about a version. */
 const floorsFrom = { version: '' };
+/** Item id to the figure last put on the bus for it, so a re-read page publishes nothing. */
+const onBus = new Map();
 /**
  * This install's own id, which is what lets a sale record say which device drained it.
  *
@@ -1650,6 +1666,108 @@ function median(units, middle) {
 }
 
 /**
+ * What was PAID, for the record that carries it, and nothing where none was.
+ *
+ * A separate pair of fields rather than a figure folded into `unit`. The two series answer
+ * different questions and this addon keeps them apart everywhere else it draws them, on the
+ * grounds that a number made of an ask and a sale is true of neither; publishing them merged
+ * would hand a consumer the one shape this addon refuses to draw.
+ */
+function soldPart(itemId) {
+  const record = sold.get(itemId);
+  if (record === undefined || record.sales.length === 0) {
+    return null;
+  }
+  const stats = soldStats(record);
+  return { sold: Math.round(stats.median), sales: stats.sales };
+}
+
+/**
+ * One item as the bus carries it, or null for an item with no ask series behind it.
+ *
+ * `unit` is the MEDIAN of the per-visit lows, which is this addon's own answer to what one of
+ * these normally costs: one vote per trip rather than per listing, so a day when four people
+ * were undercutting each other does not outvote the four weeks around it. `low` and `latest`
+ * ride along because a consumer drawing a range needs the ends, and `visits` rides along
+ * because ONE visit is one stranger's asking price and a total built out of those should be
+ * able to say so.
+ *
+ * An item with sales and no browse record is left OUT rather than published off the sale
+ * median, for the reason `soldPart` is a separate pair: `unit` means an ask everywhere it
+ * appears, and an item where it quietly meant something else would be the one figure in the
+ * batch a consumer could not reason about.
+ */
+function priceRecord(itemId) {
+  const record = series.get(itemId);
+  if (record === undefined || record.visits.length === 0) {
+    return null;
+  }
+  const stats = statsFor(record);
+  return {
+    id: itemId,
+    // The realm is REQUIRED and is not a courtesy: a consumer pooling stock across characters
+    // holds things sitting on markets this ledger has never seen, and a figure from here is
+    // true of one of them.
+    realm: realmNow(),
+    unit: Math.round(stats.median),
+    low: Math.round(stats.low),
+    latest: Math.round(stats.latest),
+    at: stats.at,
+    visits: stats.visits,
+    ...(soldPart(itemId) ?? {}),
+  };
+}
+
+/** Every price known, as ONE batch, for the reason the name publisher answers an ask with one. */
+function everyPriceKnown() {
+  const rows = [];
+  for (const itemId of series.keys()) {
+    const row = priceRecord(itemId);
+    if (row !== null) {
+      rows.push(row);
+      onBus.set(itemId, priceMark(row));
+    }
+  }
+  if (rows.length === 0) {
+    return null;
+  }
+  return rows;
+}
+
+/** What changes exactly when a published figure does, so a repeat page emits nothing. */
+function priceMark(row) {
+  return `${String(row.unit)}/${String(row.low)}/${String(row.latest)}/${String(row.visits)}/${String(row.sold ?? -1)}`;
+}
+
+/**
+ * Put on the bus what this page MOVED, and nothing it merely re-read.
+ *
+ * A player stands at the counter and the same page arrives at snapshot rate, so the gate is the
+ * figure rather than the fold: `foldPage` reports that the ledger moved, which it does on a
+ * stamp sliding forward, and a subscriber repainting for that would repaint for nothing many
+ * times a second. Bounded by the page either way, since only ids that were on it can have moved.
+ */
+/** The row for an id whose published figure has changed, or null for one that has not. */
+function priceIfMoved(itemId) {
+  const row = priceRecord(itemId);
+  if (row === null || onBus.get(itemId) === priceMark(row)) {
+    return null;
+  }
+  return row;
+}
+
+function publishPrices(page) {
+  const seen = new Set([...page.mine, ...page.others].map((row) => row.itemId));
+  for (const itemId of seen) {
+    const row = priceIfMoved(itemId);
+    if (row !== null) {
+      onBus.set(itemId, priceMark(row));
+      woc.bus.emit(PRICE_TOPIC, row);
+    }
+  }
+}
+
+/**
  * Every listing on this page into the visit's buffer, and what the page said about its own size.
  *
  * A row is never edited once it exists, so re-seeing one moves nothing but the stamp. Deliberate:
@@ -2189,6 +2307,12 @@ function onNear(info) {
   // AFTER the fold, because the recorded anchor is the one that has to exclude the visit being
   // written; before it, `recordedAnchor` would be dropping a visit that is not there yet.
   foldScan(page);
+  // After the fold too, and only where the ledger was actually written: `recordPage` is what
+  // moves a series, so publishing ahead of it would put the previous visit's figure on the bus
+  // and then say nothing about the one just read.
+  if (loaded.on) {
+    publishPrices(page);
+  }
   announceDeals(page);
   checkUndercut(page);
 }
@@ -2372,6 +2496,11 @@ async function startLedger() {
   // A watch key reports a CHANGE and its first sample is the baseline, so a player already at
   // the Merchant gets no handler call. This read is what says which of the three states it is.
   onMarket();
+  // The whole ledger onto the bus, now there is one. `publish` announces once at registration,
+  // which happens while this read is still in flight and answers with the null `everyPriceKnown`
+  // returns for an empty one, so without this a subscriber that started first would hear nothing
+  // until the player next walked to the Merchant.
+  pricePublication.announce();
   draw();
 }
 
@@ -2391,6 +2520,10 @@ function characterChanged() {
     loaded.on = false;
     loadedFor.ledger = '';
     series.clear();
+    // What was on the bus was about the OLD realm. Cleared with the series, or an item this
+    // realm has never been browsed for would keep its previous realm's mark and be withheld
+    // from the first page that reads it.
+    onBus.clear();
     mineSeen.clear();
     // The Merchant keeps a collection per seller, so none of this carries over.
     sold.clear();
@@ -3946,6 +4079,16 @@ woc.world.on('characterKey', characterChanged);
 woc.bus.follow(ITEMS_TOPIC, onItems);
 // The incremental form is a push with no ask half, so a plain subscription is all of it.
 woc.bus.on(woc.bus.anySender, ITEM_TOPIC, onItem);
+
+// The other direction: this addon is the only thing in the catalogue that knows what anything
+// GOES FOR, and until now it kept that to itself. `publish` answers an ask with the whole batch
+// and `emit` pushes one row when a page moves it, which is the pair `item` and `items` already
+// are, so a subscriber that implements one implements both.
+//
+// `produce` has to tolerate running before the ledger has been read, which is what the null
+// from `everyPriceKnown` is for, and `startLedger` announces once the read lands. A CHARACTER
+// SWITCH announces too, since it can move the ledger to another realm's book entirely.
+const pricePublication = woc.bus.publish(PRICES_TOPIC, everyPriceKnown);
 // The older ask topic, sent beside the one `follow` derives. Drop next release.
 woc.bus.emit(LEGACY_ASK_TOPIC);
 
