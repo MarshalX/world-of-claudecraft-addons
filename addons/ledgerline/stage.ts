@@ -438,6 +438,55 @@ function noCounter(draft: WorldDraft): void {
 }
 
 /**
+ * The book under Browse's "lowest price only", which is one row per item over the WHOLE match.
+ *
+ * Built by collapsing the fixture the way the server does rather than by listing rows by hand:
+ * cheapest per item id, the player's own rows collapsing with everyone else's, so exactly the two
+ * things this state is about fall out of it. The rows that survive are floors, and the listings
+ * of the player's that lost are simply gone, which is what `myListingCount` is left to report.
+ */
+function collapsedPage(): Record<string, unknown> {
+  const base = pageFor(2);
+  const cheapest = new Map<string, Listing>();
+  for (const row of rowsOn(base, LISTINGS_FIELD)) {
+    const held = cheapest.get(row.itemId);
+    if (held === undefined || row.price / row.count < held.price / held.count) {
+      cheapest.set(row.itemId, row);
+    }
+  }
+  const listings = [...cheapest.values()];
+  return {
+    ...base,
+    listings,
+    collapseLowest: true,
+    // Both counts are over the COLLAPSED rows, which is what the server does and is the half of
+    // this that is easy to get wrong: the listings behind these floors are not on the wire.
+    totalCount: listings.length,
+    // Not collapsed and not filtered: every listing the player has anywhere, which is the only
+    // figure that can see the ones this page dropped.
+    myListingCount: rowsOn(base, LISTINGS_FIELD).filter((row) => row.mine).length,
+  };
+}
+
+/**
+ * An item staged on the Sell tab, with the price the server answers a staging with.
+ *
+ * `spider_silk` because the player has one listed at 62 each and the floor here is 58, so the
+ * panel is answering the question a seller actually has: somebody is under you, and this is what
+ * being under THEM would net.
+ */
+function stagingToSell(draft: WorldDraft): void {
+  // Over the SCANNED page rather than a quiet one: a player staging something is standing at the
+  // counter with everything else they have read still in front of them, and a picture of the line
+  // over an empty panel is a picture of a state that only happens on the first page of a session.
+  draft.set(draft.world, 'marketInfo', {
+    ...scanPage(),
+    sellPriceItemId: 'spider_silk',
+    sellLowestPrice: 58,
+  });
+}
+
+/**
  * In `world` rather than `run`: a player who logs in at the Merchant is reading a page before
  * this addon has drawn anything, and folding that page in is the first thing it does.
  */
@@ -701,6 +750,42 @@ const SCENARIOS: readonly Scenario[] = [
     frames: { ledger: { box: WIDENED, visible: true } },
     world: noCounter,
     run: drawn,
+  },
+  {
+    // Browse's "lowest price only", where the pane has to read the other way round: a listing of
+    // the player's that is HERE is one nobody has undercut, and the ones that were undercut are
+    // not on the page at all. Worth looking at because the two sentences under the lists are the
+    // whole feature, and neither of them is a figure.
+    id: 'collapsed',
+    label: 'Browsing the lowest price of each',
+    data: FLOOR_DATA,
+    frames: { ledger: { box: WIDENED, visible: true } },
+    world: atTheMerchant,
+    run: async (stage) => {
+      await browsedForDays(stage);
+      stage.set(stage.world, 'marketInfo', collapsedPage());
+      await drawn(stage);
+      openTab('Yours');
+      await artLanded(stage, 'mine');
+      stage.frame();
+      await pause(SETTLE_MS);
+    },
+  },
+  {
+    // Part-way through listing something, which is the only moment the game states a market-wide
+    // price and therefore the only moment this addon can answer a question about SELLING. The
+    // line above the panes is the whole scenario.
+    id: 'selling',
+    label: 'Staging an item on the Sell tab',
+    data: FLOOR_DATA,
+    frames: { ledger: { box: WIDENED, visible: true } },
+    world: atTheMerchant,
+    run: async (stage) => {
+      await browsedForDays(stage);
+      stagingToSell(stage);
+      await drawn(stage);
+      await artLanded(stage, 'deals', 'Iron Ore x20');
+    },
   },
   {
     // The reconnect blip: the client force-nulls its own market mirror for one snapshot after a

@@ -251,6 +251,39 @@ const NAME_SORT = 'name';
 /** What the second order is called on screen, since `price` alone does not say which end. */
 const PRICE_SORT_LABEL = 'cheapest first';
 
+/**
+ * Browse's "lowest price only", from game 0.38.0, on screen and in a stored query signature.
+ *
+ * It is not a filter and it is not an order: it collapses the matched book to one row per item
+ * id, cheapest first, before the page is cut and before either count is taken. So a page of it is
+ * one price per item where every other page is a list of listings, and a reading of one folded
+ * into a reading of the other would widen a spread against a floor.
+ */
+const COLLAPSE_LABEL = 'lowest price only';
+const COLLAPSE_KEY = 'collapsed';
+
+/**
+ * The Sell tab's own reading, which is not a query and is filed as one so it cannot fold into a
+ * browsed visit. `SELL_KEY` is the stored signature and `SELL_LABEL` is what a tooltip says.
+ */
+const SELL_KEY = 'sell';
+const SELL_LABEL = 'the Sell tab';
+
+/**
+ * What KIND of reading a visit is, in a sixth positional slot written only when it is not the
+ * ordinary one, which keeps every visit a browsed page has ever produced byte-identical.
+ *
+ * `VISIT_ASKS` is a page: the cheapest and dearest ask over OTHER sellers, which is what a resale
+ * is priced against. `VISIT_FLOOR` is the Sell tab's answer: the whole book's cheapest copy per
+ * unit, the Merchant's own stock and the player's own listings counted in. The two are not the
+ * same quantity, which is why `recordedAnchor` reads one of them and not the other.
+ */
+const VISIT_ASKS = 0;
+const VISIT_FLOOR = 1;
+
+/** A copper under a floor of one copper is not a price, since the Merchant's own floor is one. */
+const MIN_ASK = 1;
+
 /** A flag in a cell, so a handler and the paint path cannot hold different copies of it. */
 function cell(value) {
   return { on: value };
@@ -278,6 +311,8 @@ const install = { id: '' };
  * hour after it stopped being true.
  */
 const scan = new Map();
+/** The last Sell tab answer folded, so a snapshot repeating it is not a second reading. */
+const stagedSeen = { itemId: '', unit: -1 };
 /** Query signature to which pages of it have been read this visit, and how big it said it was. */
 const covered = new Map();
 /** Listing ids already announced this visit, so paging back over one is not a second toast. */
@@ -416,6 +451,22 @@ function sortText(info) {
 /** Whether the page in hand was read cheapest-first, which is what breaks item contiguity. */
 function sortsByPrice(info) {
   return sortText(info) !== '';
+}
+
+/** Whether the server collapsed the book to one row per item. See `COLLAPSE_LABEL`. */
+function collapsesLowest(info) {
+  return info?.collapseLowest === true;
+}
+
+/**
+ * Whether anything is NARROWING the page, which is a different question from what is on it.
+ *
+ * The sort is deliberately not in here: it reorders the match and never cuts it, so a page under
+ * it still holds every listing the query found. What this answers is whether the rows on a page
+ * are the whole of what the player has out there, which is what `collapsedUndercut` turns on.
+ */
+function filtersApplied(info) {
+  return QUERY_FIELDS.some((name) => axisText(info, name) !== '');
 }
 
 /**
@@ -635,15 +686,36 @@ function vendorFloor(itemId) {
  * arrive on the page, so that half needs no table.
  */
 function everCeiling(itemId, page) {
-  const shop = floors.get(itemId)?.buyValue ?? null;
-  const house = housePrice(itemId, page);
-  if (shop === null) {
-    return house;
+  // Three sources and they answer one question: what a buyer can have this for instead. The Sell
+  // tab's floor is the only one of them that is market-wide and the only one that arrives because
+  // the player asked for it, which is why it is here and not among the resale anchors: as a CAP
+  // it is unimpeachable even when the cheapest copy is the player's own, since nothing resells
+  // above the cheapest copy on the counter whoever put it there.
+  return lowestOf([
+    floors.get(itemId)?.buyValue ?? null,
+    housePrice(itemId, page),
+    stagedCeiling(itemId, page),
+  ]);
+}
+
+/** The lowest of several prices, any of which may be missing, or null where all of them are. */
+function lowestOf(values) {
+  let low = null;
+  for (const value of values) {
+    if (value !== null && (low === null || value < low)) {
+      low = value;
+    }
   }
-  if (house === null) {
-    return shop;
+  return low;
+}
+
+/** The Sell tab's floor, where the answer in hand is about THIS item. See `stagedOf`. */
+function stagedCeiling(itemId, page) {
+  const { staged } = page;
+  if (staged === null || staged.itemId !== itemId) {
+    return null;
   }
-  return Math.min(shop, house);
+  return staged.unit;
 }
 
 /** The Merchant's own standing stock for an item on this page, per unit, or null. */
@@ -727,6 +799,9 @@ function querySignature(info) {
   if (order !== '') {
     parts.push(order);
   }
+  if (collapsesLowest(info)) {
+    parts.push(COLLAPSE_KEY);
+  }
   if (parts.every((part) => part === '')) {
     return '';
   }
@@ -739,10 +814,37 @@ function queryLabel(info) {
   if (sortsByPrice(info)) {
     parts.push(PRICE_SORT_LABEL);
   }
+  if (collapsesLowest(info)) {
+    parts.push(COLLAPSE_LABEL);
+  }
   if (parts.length === 0) {
     return NO_QUERY;
   }
   return parts.join(', ');
+}
+
+/**
+ * What kind of copy a listing is, in one word, or empty for the ordinary item.
+ *
+ * The server holds a copy as non-fungible whenever it carries a payload at all, and it trims that
+ * payload to the three fields a stranger may see before sending it. So an EMPTY object is a real
+ * answer, the presence of the key is the mark, and nothing inside it can be relied on to say why.
+ * The named words are what survives the trim; `marked` is what is left when nothing does.
+ */
+function copyMark(instance) {
+  if (typeof instance !== 'object' || instance === null) {
+    return '';
+  }
+  if (text(instance.enchant) !== '') {
+    return 'enchanted';
+  }
+  if (instance.rolled?.masterwork === true) {
+    return 'masterwork';
+  }
+  if (text(instance.signer) !== '') {
+    return 'signed';
+  }
+  return 'marked';
 }
 
 /** One row of the page, kept under this addon's own names rather than the game's. */
@@ -750,6 +852,7 @@ function captureRow(row) {
   const held = makeRow(row);
   held.itemId = text(row.itemId);
   held.mine = row.mine === true;
+  held.mark = copyMark(row.instance);
   return held;
 }
 
@@ -781,15 +884,42 @@ function capture(info, now) {
     page: Math.max(0, Math.round(numberOr(info.page, 0))),
     pageCount: Math.max(0, Math.round(numberOr(info.pageCount, 0))),
     byPrice: sortsByPrice(info),
+    collapsed: collapsesLowest(info),
+    filtered: filtersApplied(info),
     totalCount: Math.max(0, Math.round(numberOr(info.totalCount, 0))),
     cutPct: numberOr(info.cutPct, 0),
     maxListings: Math.max(0, Math.round(numberOr(info.maxListings, 0))),
     myListingCount: Math.max(0, Math.round(numberOr(info.myListingCount, 0))),
     collectionCopper: Math.max(0, numberOr(info.collectionCopper, 0)),
     collectionItems: countOf(info.collectionItems),
+    kind: VISIT_ASKS,
+    staged: stagedOf(info),
     mine: rows.filter((row) => row.mine),
     others: rows.filter((row) => !row.mine),
   };
+}
+
+/**
+ * The Sell tab's price reference, as a PAIR or not at all.
+ *
+ * The id is what says whose price this is, and it arrives a round trip after the player staged
+ * something, so the two are only true together. Taken this way the pair is always self-consistent
+ * and the staleness the game warns about cannot arise: this reads which item the answer is ABOUT
+ * rather than assuming which item is staged.
+ *
+ * A real id with no price is a real answer and a different one: nobody is selling that item.
+ */
+function stagedOf(info) {
+  // biome-ignore lint/security/noSecrets: a field name copied off the game's wire, which the entropy heuristic cannot tell from a token
+  const itemId = fieldText(info, 'sellPriceItemId');
+  if (itemId === '') {
+    return null;
+  }
+  const unit = numberOr(info.sellLowestPrice, 0);
+  if (unit < MIN_ASK) {
+    return { itemId, unit: null };
+  }
+  return { itemId, unit };
 }
 
 /**
@@ -819,7 +949,27 @@ function parseVisit(value) {
   // does have. That reading is an inference rather than a record, which is why `mergeVisits`
   // keeps the fold rule as a fallback instead of trusting identity alone.
   const first = numberOr(value[4], 0) * MS_PER_SECOND;
-  return { at, low, high, query: text(value[3]), first: startedAt(first, at) };
+  return {
+    at,
+    low,
+    high,
+    query: text(value[3]),
+    first: startedAt(first, at),
+    kind: visitKind(numberOr(value[5], VISIT_ASKS)),
+  };
+}
+
+/** An unrecognised kind reads as the ordinary one, since a stored value is a player-editable file. */
+function visitKind(value) {
+  if (value === VISIT_FLOOR) {
+    return VISIT_FLOOR;
+  }
+  return VISIT_ASKS;
+}
+
+/** Whether a reading is a page's asks, which is the only kind a resale may be priced against. */
+function isAskVisit(visit) {
+  return visit.kind !== VISIT_FLOOR;
 }
 
 /** The recorded start, or the only stamp a ledger written before `first` existed can offer. */
@@ -831,13 +981,19 @@ function startedAt(first, at) {
 }
 
 function storedVisit(visit) {
-  return [
+  const row = [
     Math.round(visit.at / MS_PER_SECOND),
     visit.low,
     visit.high,
     visit.query,
     Math.round(visit.first / MS_PER_SECOND),
   ];
+  // Written only for the kind that is not the ordinary one, which is what keeps a ledger of
+  // browsed pages byte-identical to one written before this slot existed. See `VISIT_ASKS`.
+  if (visit.kind === VISIT_FLOOR) {
+    row.push(VISIT_FLOOR);
+  }
+  return row;
 }
 
 function parseSeries(itemId, value) {
@@ -914,6 +1070,11 @@ function recordable(row) {
   if (row.itemId === '') {
     return false;
   }
+  // An enchanted, masterwork or signed copy is a different good wearing the plain item's id, and
+  // its premium in the plain item's series is a price nobody ever asked for the plain item.
+  if (row.mark !== '') {
+    return false;
+  }
   return recordingHouse() || !row.house;
 }
 
@@ -943,40 +1104,78 @@ function pageAsks(page) {
 /**
  * A page read close behind the last, under the same query, is the same TRIP. Merging widens the
  * spread and moves the stamp, so four pages are one point at the time the player finished.
+ *
+ * A reading is `{ at, query, kind }`, which is a page most of the time and the Sell tab's own
+ * answer otherwise. The query is what keeps those apart, since the Sell tab files under a
+ * signature no browsed page can produce, so the two never merge into one visit.
  */
-function foldVisit(record, ask, page) {
+function foldVisit(record, ask, reading) {
   const last = record.visits.at(-1);
-  if (last !== undefined && last.query === page.query && page.at - last.at <= VISIT_WINDOW_MS) {
+  if (
+    last !== undefined &&
+    last.query === reading.query &&
+    reading.at - last.at <= VISIT_WINDOW_MS
+  ) {
     last.low = Math.min(last.low, ask.low);
     last.high = Math.max(last.high, ask.high);
-    last.at = page.at;
+    last.at = reading.at;
     return;
   }
   // `at` slides as the trip goes on, which is what keeps four pages one visit; `first` is the
   // moment the trip started and never moves, which is what gives the visit an identity two
   // devices can agree on. See `mergeVisits`.
   record.visits.push({
-    at: page.at,
-    first: page.at,
+    at: reading.at,
+    first: reading.at,
     low: ask.low,
     high: ask.high,
-    query: page.query,
+    query: reading.query,
+    kind: reading.kind,
   });
+}
+
+/** One item's reading into its series, pruned to the retention setting on the way in. */
+function foldReading(itemId, ask, reading) {
+  const record = series.get(itemId) ?? emptySeries(itemId);
+  foldVisit(record, ask, reading);
+  record.visits = prunedVisits(record.visits, cutoffAt(reading.at));
+  record.at = reading.at;
+  series.set(itemId, record);
 }
 
 /** Write one page into the ledger, and answer whether anything moved. */
 function foldPage(page) {
-  const cutoff = cutoffAt(page.at);
   let moved = false;
   for (const [itemId, ask] of pageAsks(page)) {
-    const record = series.get(itemId) ?? emptySeries(itemId);
-    foldVisit(record, ask, page);
-    record.visits = prunedVisits(record.visits, cutoff);
-    record.at = page.at;
-    series.set(itemId, record);
+    foldReading(itemId, ask, page);
     moved = true;
   }
   return moved;
+}
+
+/**
+ * The Sell tab's floor into the ledger, once per answer rather than once per snapshot.
+ *
+ * The pair rides EVERY market snapshot while an item stays staged, so folding on arrival would
+ * write one reading over and over at the rate the game sends them. What is worth recording is
+ * that the answer moved, which is a price changing or the player staging something else.
+ */
+function foldSell(page) {
+  const { staged } = page;
+  if (staged === null || staged.unit === null) {
+    return false;
+  }
+  if (stagedSeen.itemId === staged.itemId && stagedSeen.unit === staged.unit) {
+    return false;
+  }
+  stagedSeen.itemId = staged.itemId;
+  stagedSeen.unit = staged.unit;
+  foldReading(
+    staged.itemId,
+    { low: staged.unit, high: staged.unit },
+    { at: page.at, query: SELL_KEY, kind: VISIT_FLOOR },
+  );
+  return true;
 }
 
 /** The least recently seen items, once the ledger is over its ceiling. */
@@ -1426,10 +1625,12 @@ function keepSold() {
 function statsFor(record) {
   const lows = record.visits.map((visit) => visit.low).sort((a, b) => a - b);
   const newest = record.visits.at(-1);
+  // No `high` here. The dearest ask left the row and the tooltip when both stopped reporting the
+  // top of a spread beside three figures it is not comparable with, and a derived figure nothing
+  // draws is a claim nobody can check: a page read under `lowest price only` carries no spread at
+  // all, and it would have contributed its floor to a range as though it had.
   return {
     low: lows[0] ?? 0,
-    // The top of the SPREAD rather than of the trend line. Both are drawn and they differ.
-    high: record.visits.reduce((top, visit) => Math.max(top, visit.high), 0),
     median: median(lows, Math.floor(lows.length / 2)),
     latest: newest?.low ?? 0,
     at: newest?.at ?? record.at,
@@ -1526,6 +1727,12 @@ function clearScan() {
   scan.clear();
   covered.clear();
   announced.clear();
+  // The Sell tab's answer is deduplicated against the LAST one folded, and walking away ends the
+  // trip that reading belonged to. Left standing, the same item staged at the same price on a
+  // later visit would be recognised as the answer already in hand and never written down, which
+  // is exactly the reading worth having: the same floor, confirmed an hour later.
+  stagedSeen.itemId = '';
+  stagedSeen.unit = -1;
 }
 
 /** Pages read against pages there are, over every query this visit. Both are drawn, never a ratio. */
@@ -1539,11 +1746,16 @@ function coverageNow() {
   return { read, total, queries: covered.size, listings: scan.size };
 }
 
-/** Everything seen this visit for one item, cheapest first, the Merchant's own stock left out. */
+/**
+ * Everything seen this visit for one item, cheapest first, the Merchant's own stock left out.
+ *
+ * A marked copy is left out too, and for a stronger reason than the house rows are: it is not the
+ * same goods, so its ask is not a price for this item in either direction.
+ */
 function offersOf(itemId) {
   const rows = [];
   for (const row of scan.values()) {
-    if (row.itemId === itemId && !row.house) {
+    if (row.itemId === itemId && !row.house && row.mark === '') {
       rows.push(row);
     }
   }
@@ -1580,7 +1792,13 @@ function recordedAnchor(itemId) {
   if (record === undefined) {
     return null;
   }
-  const prior = record.visits.slice(0, -1);
+  // Page readings only. A Sell tab floor counts the Merchant's own stock and the player's own
+  // listings, so a median taken over it prices a resale partly against the player's own hope,
+  // which is the mistake `pageAsks` refuses when it reads other sellers alone. The Prices pane
+  // keeps every reading, because there the question is what the item goes for and the cheapest
+  // copy anybody can buy is a true answer to it; here the question is what somebody else will
+  // pay, and it is not.
+  const prior = record.visits.filter(isAskVisit).slice(0, -1);
   if (prior.length < THIN_EVIDENCE) {
     return null;
   }
@@ -1667,6 +1885,13 @@ function optionsFor(row, page) {
  * the same quantity, and it is carried beside the figure rather than averaged into it.
  */
 function resaleArms(row, page, ceiling) {
+  // A marked copy has no resale arm at all. Both anchors answer what THIS item goes for, and the
+  // premium on an enchanted copy is not in either of them, so a figure from one would be a resale
+  // priced as though the enchant were worth nothing. The vendor arm survives in `optionsFor`,
+  // which is right rather than a consolation: a vendor pays `sellValue` and no premium either.
+  if (row.mark !== '') {
+    return [];
+  }
   const arms = [
     resaleOption('page', cappedAnchor(rivalAnchor(row), ceiling), row, page),
     resaleOption('history', cappedAnchor(recordedAnchor(row.itemId), ceiling), row, page),
@@ -1791,7 +2016,7 @@ function dealsNow(page) {
  * `verdictFor` has to answer for.
  */
 function blockStart(others, itemId) {
-  return others.findIndex((row) => row.itemId === itemId);
+  return others.findIndex((row) => row.itemId === itemId && row.mark === '');
 }
 
 /**
@@ -1807,6 +2032,20 @@ function blockStart(others, itemId) {
  * rows of the whole book, so a copy found there is the cheapest anywhere.
  */
 function verdictFor(row, page) {
+  // A marked copy is not in a race with the plain rows sharing its id, so the cheapest of those
+  // says nothing about it. Reporting one as an undercut is the loudest wrong thing this pane can
+  // do: it is a warning, in danger tone, about competition the listing does not have.
+  if (row.mark !== '') {
+    return { state: 'copy', rival: null };
+  }
+  // A collapsed page is one row per item over the WHOLE matched book, and a filter matches by
+  // item id, so every listing of this item was in that match. A row of the player's that came
+  // back is therefore the cheapest copy of it anywhere, which is the strongest thing this pane
+  // can ever say and is unreachable on any other page. The ones that were undercut are not here
+  // to be judged: the server dropped each behind whatever is cheaper. See `collapsedUndercut`.
+  if (page.collapsed) {
+    return { state: 'floor', rival: null };
+  }
   const at = blockStart(page.others, row.itemId);
   if (at < 0) {
     return { state: 'unknown', rival: null };
@@ -1825,7 +2064,26 @@ function verdictFor(row, page) {
 }
 
 function undercutCount(page) {
+  if (page.collapsed) {
+    return collapsedUndercut(page);
+  }
   return page.mine.filter((row) => verdictFor(row, page).state === 'undercut').length;
+}
+
+/**
+ * How many listings of the player's the collapse dropped, which is how many were undercut.
+ *
+ * Counted rather than found, because there is nothing to find: the row that would have carried
+ * the verdict is exactly the row the server removed. `myListingCount` is the only figure that
+ * can see them, and it is over the WHOLE book while the page is over the match, so this can only
+ * be asked where nothing is narrowing the page. Under a filter the difference is "not this item"
+ * and "undercut" added together, and nothing on the wire separates them, so it answers none.
+ */
+function collapsedUndercut(page) {
+  if (page.filtered) {
+    return 0;
+  }
+  return Math.max(0, page.myListingCount - page.mine.length);
 }
 
 /** On the CROSSING rather than the state, or every page read while undercut would say it again. */
@@ -2001,9 +2259,12 @@ function onCollectPending() {
 }
 
 function recordPage(page) {
-  const moved = foldPage(page);
+  // Both, never short-circuited: a page that recorded something must not stop the Sell tab's own
+  // answer from being recorded beside it.
+  const pageMoved = foldPage(page);
+  const sellMoved = foldSell(page);
   forget(overflowIds());
-  if (moved) {
+  if (pageMoved || sellMoved) {
     keep();
   }
   pruneOwn(page.at);
@@ -2336,6 +2597,15 @@ const whereStat = stat(statusStrip, 'where', 'At');
 const capStat = stat(statusStrip, 'cap', 'Listings');
 const collectStat = stat(statusStrip, 'collect', 'Waiting');
 const statusLine = line(frame.body, 'status-line');
+/**
+ * What the Sell tab was told, which is on screen only while the player has something staged.
+ *
+ * Above the panes rather than in one, because it is about a thing the player is doing right now
+ * at the counter rather than about anything in the ledger, and it is the one moment this addon
+ * can answer a question about SELLING at all.
+ */
+const sellLine = line(frame.body, 'sell-line');
+woc.ui.tooltip(sellLine, () => sellTip());
 // Where the page number and the cut went. On the strip rather than on the title bar, because the
 // strip is this addon's own element and is the place those two figures used to be.
 woc.ui.tooltip(statusStrip, () => stripTip());
@@ -2919,12 +3189,27 @@ function evidenceWord(deal) {
   return woc.fmt.count(deal.evidence, 'visit');
 }
 
+/**
+ * The item's name, plus what kind of copy the row is where it is not the plain one.
+ *
+ * On the LABEL rather than in the second line, because it is part of what the row is rather than
+ * a fact about it: two rows carrying one name and two prices, where one of them is enchanted,
+ * read as a market that disagrees with itself until the word is there.
+ */
+function markedName(row) {
+  const name = nameOf(row.itemId);
+  if (row.mark === '') {
+    return name;
+  }
+  return `${name} (${row.mark})`;
+}
+
 /** How many of an item a row is, where saying so adds anything. */
 function stackLabel(row) {
   if (row.count <= 1) {
-    return nameOf(row.itemId);
+    return markedName(row);
   }
-  return `${nameOf(row.itemId)} x${String(row.count)}`;
+  return `${markedName(row)} x${String(row.count)}`;
 }
 
 /**
@@ -3078,6 +3363,13 @@ function dealsNoteText(count) {
   if (live.status !== 'near') {
     return 'Deals are found while you are standing at the Merchant. Walk up to one and page through the book.';
   }
+  // Ahead of the empty case, because with the toggle on it IS the empty case: one row per item is
+  // one price per item, so there is no second-cheapest to judge a listing against and the whole
+  // page arm is gone. A scan that was never given anything to compare is not a scan that looked
+  // and found nothing, and only this sentence can tell a player which of the two they are seeing.
+  if (live.page?.collapsed === true) {
+    return `With ${COLLAPSE_LABEL} on, every row is one item's floor, so nothing here has a cheaper rival to be judged against. Your own history and the vendor floor still do. ${coverageText()}`;
+  }
   if (count === 0) {
     return `Nothing on what you have read clears ${money(minProfit())}. ${coverageText()}`;
   }
@@ -3138,6 +3430,8 @@ const VERDICT_TEXT = new Map([
   ['undercut', 'undercut'],
   ['partial', 'may be undercut'],
   ['unknown', 'not on this page'],
+  ['copy', 'its own good, not the plain item'],
+  ['floor', 'cheapest anywhere'],
 ]);
 
 const VERDICT_TONE = new Map([
@@ -3145,6 +3439,8 @@ const VERDICT_TONE = new Map([
   ['undercut', 'danger'],
   ['partial', 'warn'],
   ['unknown', 'default'],
+  ['copy', 'default'],
+  ['floor', 'default'],
 ]);
 
 /** A whole row of tone, or none at all. Never anything between: see `ownEntry`. */
@@ -3177,7 +3473,7 @@ function ownEntry(row, page) {
   return {
     key: String(row.id),
     update: {
-      label: nameOf(row.itemId),
+      label: markedName(row),
       icon: woc.ui.icon.item(row.itemId),
       quality: qualityOf(row.itemId),
       value: { copper: row.price, prefix: 'asking' },
@@ -3258,9 +3554,30 @@ function ownTip(page, id) {
   };
 }
 
+/**
+ * What a collapsed page can and cannot say about the player's own listings.
+ *
+ * AHEAD of the empty-list case in `mineNoteText`, which is the whole reason this is a function:
+ * with the toggle on, a player whose every listing has been undercut sees an empty pane, and the
+ * sentence under it would otherwise be that they had no listings at all.
+ */
+function collapsedMineNote(page) {
+  if (page.filtered) {
+    return `With ${COLLAPSE_LABEL} on and a filter narrowing the page, the listings of yours that were undercut cannot be counted: nothing here separates them from the ones the filter left out.`;
+  }
+  const missing = collapsedUndercut(page);
+  if (missing === 0) {
+    return `With ${COLLAPSE_LABEL} on, every listing of yours is here, so nobody has undercut any of them.`;
+  }
+  return `With ${COLLAPSE_LABEL} on, ${woc.fmt.count(missing, 'listing')} of yours dropped off the page, each of them behind something cheaper.`;
+}
+
 function mineNoteText() {
   if (live.page === null) {
     return 'Walk up to a Merchant and your listings are read from the page it sends.';
+  }
+  if (live.page.collapsed) {
+    return collapsedMineNote(live.page);
   }
   if (live.page.mine.length === 0) {
     return 'You had no listings at the Merchant when this page was read.';
@@ -3407,6 +3724,14 @@ function statusText() {
   if (live.page === null || live.page.queryText === NO_QUERY) {
     return '';
   }
+  // Two sentences, because the label carries three kinds of thing and only one of them narrows
+  // the match. A FILTER means the rows are part of the book. A sort and the collapse leave the
+  // match whole and change its arrangement, which still has to be said, since it decides what a
+  // partial reading samples, but calling it a search would claim a limit the player did not set
+  // and would hide the one the collapse does impose. That limit is said in the panes it changes.
+  if (!live.page.filtered) {
+    return `Reading the book, ${live.page.queryText}.`;
+  }
   return `Searching ${live.page.queryText}: part of the book, not all of it.`;
 }
 
@@ -3445,12 +3770,123 @@ function collectText(page) {
   return `${money(page.collectionCopper)}, ${woc.fmt.count(page.collectionItems, 'item')}`;
 }
 
+/**
+ * The per-unit ask this addon would put under the floor, or why it will not name one.
+ *
+ * The undercut is exactly one copper and it is safe by construction: the server divides a stack's
+ * total by the stack and rounds UP, so the reported floor sits at or just above the true per-unit
+ * price and a copper under it is genuinely under. No upper clamp is needed and none should be
+ * added: a listing's TOTAL cannot exceed the Merchant's own ceiling, so a per-unit floor read off
+ * one never can either.
+ *
+ * Two refusals, and both of them have a better answer behind them rather than a missing figure.
+ */
+function askAdvice(staged, page) {
+  const floor = staged.unit;
+  if (floor === null) {
+    return { kind: 'none' };
+  }
+  if (ownsFloor(staged.itemId, floor)) {
+    return { kind: 'yours', floor };
+  }
+  const ask = floor - 1;
+  const vendor = vendorFloor(staged.itemId);
+  if (ask < MIN_ASK) {
+    return { kind: 'copper', floor };
+  }
+  if (vendor !== null && ask < vendor) {
+    return { kind: 'vendor', floor, vendor };
+  }
+  return { kind: 'ask', floor, ask, net: Math.floor(ask * (1 - page.cutPct / PERCENT)) };
+}
+
+/**
+ * Whether the cheapest copy on the counter is one of the player's own.
+ *
+ * The floor counts their own listings, so without this the panel tells a player to undercut
+ * themselves. Compared under the server's own rounding, which is up: a stack read any other way
+ * misses its own listing by a copper.
+ */
+function ownsFloor(itemId, floor) {
+  for (const row of scan.values()) {
+    if (row.mine && row.itemId === itemId && Math.ceil(row.unit) === floor) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/** One line while something is staged, and nothing at all the rest of the time. */
+function sellText() {
+  const staged = live.page?.staged ?? null;
+  if (staged === null || live.status !== 'near') {
+    return '';
+  }
+  return `Selling ${nameOf(staged.itemId)}: ${adviceText(askAdvice(staged, live.page))}`;
+}
+
+function adviceText(advice) {
+  if (advice.kind === 'none') {
+    return 'nobody is selling one, so there is no floor to go under.';
+  }
+  const floor = `floor ${money(advice.floor)} each`;
+  if (advice.kind === 'yours') {
+    return `${floor}, which is your own listing.`;
+  }
+  if (advice.kind === 'copper') {
+    return `${floor}, and nothing can go under a copper.`;
+  }
+  if (advice.kind === 'vendor') {
+    return `${floor}, under which a vendor pays ${money(advice.vendor)} and pays it today.`;
+  }
+  return `${floor}, ask ${money(advice.ask)} to be under it, netting ${money(advice.net)}.`;
+}
+
+/**
+ * The prose the line cannot carry, and the two caveats that decide whether a player is reading
+ * this figure correctly at all.
+ */
+function sellTip() {
+  const staged = live.page?.staged ?? null;
+  if (staged === null) {
+    return { title: 'The Sell tab', lines: ['Nothing is staged to sell.'] };
+  }
+  return {
+    title: nameOf(staged.itemId),
+    icon: woc.ui.icon.item(staged.itemId),
+    lines: spoken([
+      `Read from ${SELL_LABEL} the moment you staged this, which is the only market-wide price the game will ever state. This addon cannot ask for it.`,
+      floorNote(staged),
+      {
+        text: 'The figure is per item, and the book is ordered by what a whole stack costs, so a large stack priced well can still sit behind a cheap single copy.',
+        tone: 'muted',
+      },
+      {
+        text: 'The Merchant refuses a listing whose total is over 500 gold, so the most you can ask for each falls as the stack grows.',
+        tone: 'muted',
+      },
+    ]),
+  };
+}
+
+/** What the floor counts, which is what stops it being read as the cheapest RIVAL. */
+function floorNote(staged) {
+  if (staged.unit === null) {
+    return { text: 'Nobody has one listed, so nothing here says what it is worth.', tone: 'warn' };
+  }
+  return {
+    text: "It counts every listing of this, the Merchant's own stock and your own listings among them, because a buyer can take either instead of yours.",
+    tone: 'warn',
+  };
+}
+
 function paintStatus() {
   const { page } = live;
   setStat(whereStat, whereText());
   setStat(capStat, capText(page));
   setStat(collectStat, collectText(page));
   say(statusLine, statusText());
+  say(sellLine, sellText());
 }
 
 /** The two figures the strip no longer spends a line on. See `statusStrip`. */

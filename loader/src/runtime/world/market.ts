@@ -57,7 +57,14 @@ interface MarketSaleRecord {
 interface MarketInfo {
   /** Your own listings first, then one page of everyone else's. */
   listings: readonly MarketListing[];
-  /** Every listing matching the filter, yours included, across all pages. */
+  /**
+   * Every ROW matching the filter, yours included, across all pages.
+   *
+   * Rows rather than listings, because `collapseLowest` narrows this too: it
+   * collapses before the count is taken, so with it on this counts the distinct
+   * items that matched and the listings standing behind them are not on the wire
+   * at all.
+   */
   totalCount: number;
   /** The search string the server actually applied. */
   filter: string;
@@ -80,15 +87,21 @@ interface MarketInfo {
   /**
    * The server COLLAPSED the matched book to one row per item id, cheapest first.
    *
-   * A narrowing of the rows rather than of the match: `totalCount` still counts
-   * the whole match, so with this on the page is a price floor per item and the
-   * count above it is the number of listings behind those floors. An addon
-   * counting rows to say how deep a market is has to read this first, and an
-   * instanced listing is exempt because no two of them are the same goods.
+   * It narrows the rows AND both counts: the collapse runs before the page is cut
+   * and before the count is taken, so `totalCount` and `pageCount` are over the
+   * collapsed rows. How many listings stand behind a floor is not on the wire
+   * under this, so depth cannot be read off a page at all here.
+   *
+   * What the page becomes is stronger than what it loses. The filter is a
+   * function of the item id alone, so every listing of one item matches or none
+   * does, which makes a collapsed row that item's cheapest listing in the whole
+   * book rather than on the page. An instanced listing is exempt, because no two
+   * of them are the same goods.
    */
   collapseLowest: boolean;
   /** Clamped by the server against the live match count, so this is the page you got. */
   page: number;
+  /** Over the collapsed rows where `collapseLowest` is set. See it. */
   pageCount: number;
   /** Sale proceeds waiting at the Merchant. */
   collectionCopper: number;
@@ -128,6 +141,12 @@ interface MarketInfo {
    * make the reading happen. `sellValue` is still the only reference always
    * there, and a price series is still something an addon builds from the pages
    * its player browses.
+   *
+   * It counts EVERY active listing, the Merchant's own stock and the player's own
+   * rows included, because a buyer can take either instead. So it is what nothing
+   * resells above, and it is NOT the cheapest rival. It is also the whole stack's
+   * price divided by the stack and rounded UP, so it sits at or just above the
+   * true per-unit price and never under it.
    */
   sellLowestPrice: number | null;
 }

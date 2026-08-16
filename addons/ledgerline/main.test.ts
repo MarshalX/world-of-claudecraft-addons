@@ -142,6 +142,11 @@ interface Listing {
   price: number;
   mine: boolean;
   house: boolean;
+  /**
+   * Present only on a copy the server holds as non-fungible, and trimmed to what a stranger may
+   * see, which can leave it EMPTY. So the key is the mark and its contents are not.
+   */
+  instance?: { signer?: string; enchant?: string; rolled?: Record<string, unknown> };
 }
 
 /**
@@ -170,6 +175,16 @@ interface MarketPayload {
   rarity: string;
   /** The browse ORDER, from game 0.37.1. A server older than that sends none. */
   sort?: string;
+  /** One row per item id, from game 0.38.0. A server older than that sends none. */
+  collapseLowest?: boolean;
+  /**
+   * The Sell tab's price reference and the item it was computed for, from game 0.38.0.
+   *
+   * Both optional together: a server older than that sends neither, and the addon has to read
+   * the pair rather than either half, since the id is what says whose price this is.
+   */
+  sellPriceItemId?: string | null;
+  sellLowestPrice?: number | null;
   page: number;
   pageCount: number;
   collectionCopper: number;
@@ -199,7 +214,7 @@ interface MarketState {
  * `first` exists because `at` SLIDES, moving forward as a trip is paged through, so it cannot
  * identify a visit across two copies of one ledger. The start does not move.
  */
-type StoredVisit = [number, number, number, string, number?];
+type StoredVisit = [number, number, number, string, number?, number?];
 
 interface StoredLedger {
   items: Record<string, StoredVisit[]>;
@@ -679,6 +694,23 @@ function visit(at: number, low: number, high = low, said: VisitSaid = {}): Store
 interface VisitSaid {
   query?: string;
   first?: number;
+}
+
+/**
+ * A Sell tab reading as it lands in storage: one price, so no spread, and a SIXTH slot saying so.
+ *
+ * The slot is written only where it is not the ordinary kind, which is what keeps every visit a
+ * page ever produced byte-identical to the ones written before this existed.
+ */
+function floorVisit(at: number, unit: number, said: VisitSaid = {}): StoredVisit {
+  return [
+    Math.round(at / 1000),
+    unit,
+    unit,
+    said.query ?? '',
+    Math.round((said.first ?? at) / 1000),
+    1,
+  ];
 }
 
 /** The same visit as a ledger written before `first` existed holds it: four slots, no start. */
@@ -1747,6 +1779,243 @@ describe('the undercut check', () => {
   });
 });
 
+/**
+ * Browse's "lowest price only" toggle, from game 0.38.0, which changes what a page IS.
+ *
+ * The server collapses the matched book to one row per item id before it cuts the page and
+ * before it counts, and your own listings collapse with everyone else's. So one of yours on the
+ * page is one nobody has undercut, and one that is MISSING has been undercut by whatever is
+ * standing in its place. The whole undercut check reads the other way round from every other
+ * page: there is no cheaper row beside yours to find, because the server already dropped yours.
+ *
+ * `myListingCount` is the only thing that can see the missing ones, and it can only be used
+ * where nothing is filtered: it counts every listing you have anywhere in the book, while the
+ * page counts the ones that matched, so under a filter the difference is two facts added
+ * together and is not an undercut count at all.
+ */
+describe('the lowest-price-only toggle', () => {
+  it('warns about a listing of yours the collapse dropped', async () => {
+    const h = await start();
+    h.send({
+      market: page(
+        [
+          listing({ id: 1, itemId: 'ore', price: 500, mine: true }),
+          listing({ id: 2, itemId: 'cloth', price: 300 }),
+        ],
+        { collapseLowest: true, myListingCount: 3 },
+      ),
+    });
+    await h.settle();
+
+    // Three listings, one still cheapest, so two are behind somebody else's price.
+    expect(lastToast()).toContain('2 listings');
+    expect(lastToast()).toContain('no longer the cheapest');
+  });
+
+  it('will not count the dropped ones while a filter is narrowing the page', async () => {
+    const h = await start();
+    h.send({
+      market: page([listing({ id: 1, itemId: 'ore', price: 500, mine: true })], {
+        collapseLowest: true,
+        myListingCount: 3,
+        filter: 'ore',
+      }),
+    });
+    await h.settle();
+
+    // Two of the three are missing because they are not ore, or because they were undercut, and
+    // nothing on the page says which. A count that added those together would be invented.
+    expect(lastToast()).toBe('');
+    expect(lineFor('mine-note')).toContain('cannot be counted');
+  });
+
+  it('says a listing of yours that survived is the cheapest anywhere', async () => {
+    const h = await start();
+    h.send({
+      market: page([listing({ id: 1, itemId: 'ore', price: 500, mine: true })], {
+        collapseLowest: true,
+      }),
+    });
+    await h.settle();
+
+    // Not "cheapest on this page": the collapse ran over the whole matched book, so this is the
+    // strongest thing this pane can ever say about one of the player's listings.
+    expect(detailOf('mine', '1')).toContain('cheapest anywhere');
+  });
+
+  it('keeps a page of floors out of the visit that read the listings', async () => {
+    const h = await start();
+    h.send({ market: page([listing({ id: 1, itemId: 'ore', price: 500 })]) });
+    await h.settle();
+    h.setWallClock(WALL_CLOCK_MS + VISIT_WINDOW_MS / 2);
+    h.send({
+      market: page([listing({ id: 2, itemId: 'ore', price: 300 })], { collapseLowest: true }),
+    });
+    await h.settle();
+    await saved();
+
+    // Same query, same trip, and still two readings: one is what the book was asking and the
+    // other is one price per item, and folding them widens a spread against a floor.
+    expect(visitsFor(h, 'ore')).toHaveLength(2);
+  });
+
+  it('does not report the toggle as a search that narrowed the book', async () => {
+    const h = await start();
+    h.send({
+      market: page([listing({ id: 1, itemId: 'ore', price: 500 })], { collapseLowest: true }),
+    });
+    await h.settle();
+
+    // It collapses the rows and leaves the match whole, so the page is every item that matched.
+    // Saying the player is reading part of the book would be a limit they did not set, on top of
+    // hiding the one the toggle does impose, which the panes say where its figures are.
+    expect(lineFor('status-line')).toContain('Reading the book');
+    expect(lineFor('status-line')).not.toContain('Searching');
+  });
+
+  it('says what the toggle costs the scan', async () => {
+    const h = await start({ settings: { 'min-profit': 0 } });
+    h.send({
+      market: page([listing({ id: 1, itemId: 'iron_ore', count: 10, price: 200 })], {
+        collapseLowest: true,
+      }),
+    });
+    await h.settle();
+
+    // One row per item is one price per item, so there is no second-cheapest to judge anything
+    // against. Saying so is the difference between a scanner that found nothing and one that
+    // was never given anything to look at.
+    expect(lineFor('deals-note')).toContain('With lowest price only on');
+  });
+});
+
+/**
+ * What the Sell tab was told, which is the one market-wide price the game will ever state.
+ *
+ * It exists because the PLAYER asked: staging an item sends a request, and sending is outside
+ * what an addon may do, so this is real while something is staged and null the rest of the time.
+ * The pair is read together, since the id is what says whose price it is.
+ *
+ * It counts every active listing of the item, the Merchant's own stock and the player's own rows
+ * included, which is what makes it a ceiling rather than a rival's price: nothing resells above
+ * the cheapest copy a buyer can walk up and take. So it caps a resale anchor and never joins the
+ * median one is drawn from, and an undercut of it has to check whose the floor is first.
+ */
+describe('what the Sell tab was told', () => {
+  it('records the floor under the item it was computed for', async () => {
+    const h = await start();
+    h.send({
+      market: page([], { sellPriceItemId: 'ore', sellLowestPrice: 400 }),
+    });
+    await h.settle();
+    await saved();
+
+    // One price rather than a spread, and the sixth slot says which kind of reading it was.
+    expect(visitsFor(h, 'ore')).toEqual([floorVisit(WALL_CLOCK_MS, 400, { query: 'sell' })]);
+  });
+
+  it('records the same floor again on a later trip', async () => {
+    const h = await start();
+    const staged = { sellPriceItemId: 'ore', sellLowestPrice: 400 };
+    h.send({ market: page([], staged) });
+    await h.settle();
+    h.send({ market: null });
+    await h.settle();
+    h.setWallClock(WALL_CLOCK_MS + VISIT_WINDOW_MS + HOUR_MS);
+    h.send({ market: page([], staged) });
+    await h.settle();
+    await saved();
+
+    // The same answer an hour later is a second reading rather than a repeat: it says the floor
+    // held, which is the thing a series of one price cannot say.
+    expect(visitsFor(h, 'ore')).toHaveLength(2);
+  });
+
+  it('records nothing for a staged item nobody is selling', async () => {
+    const h = await start();
+    h.send({ market: page([], { sellPriceItemId: 'ore', sellLowestPrice: null }) });
+    await h.settle();
+
+    expect(storedItems(h)).toEqual([]);
+    expect(lineFor('sell-line')).toContain('nobody is selling');
+  });
+
+  it('keeps the floor out of what a resale is priced against', async () => {
+    const h = await start({ settings: { 'min-profit': 0 } });
+    // Two ordinary readings at 40 a unit, then a Sell tab floor. The EVIDENCE is what tells the
+    // two apart: a median is robust enough that one outlier moves it either way, so counting the
+    // floor as a visit would be invisible in the figure and visible only here.
+    const earlier = [0, 1];
+    await inSeries(earlier.entries(), async ([at]) => {
+      h.setWallClock(WALL_CLOCK_MS + at * (VISIT_WINDOW_MS + HOUR_MS));
+      h.send({
+        market: page([listing({ id: 90 + at, itemId: 'iron_ore', count: 10, price: 400 })]),
+      });
+      await h.settle();
+      h.send({ market: null });
+      await h.settle();
+    });
+    h.setWallClock(WALL_CLOCK_MS + 2 * (VISIT_WINDOW_MS + HOUR_MS));
+    h.send({ market: page([], { sellPriceItemId: 'iron_ore', sellLowestPrice: 4000 }) });
+    await h.settle();
+    h.send({
+      market: page([listing({ id: 7, itemId: 'iron_ore', count: 10, price: 100 })]),
+    });
+    await h.settle();
+
+    // 40 a unit over ten, less the suite's 7 percent cut, less the 100 the stack cost: 272.
+    expect(figureOf('deals', '7')).toContain('2 silver, 72 copper');
+    // Two readings stand behind that price, not three. The third is a number the player's own
+    // listing and the Merchant's own shelf are inside.
+    expect(detailOf('deals', '7')).toContain('2 visits');
+  });
+
+  it('suggests an ask a copper under the floor, and what it nets', async () => {
+    const h = await start();
+    h.send({ market: page([], { sellPriceItemId: 'ore', sellLowestPrice: 400 }) });
+    await h.settle();
+
+    // The server rounds a per-unit price UP, so the reported floor is at or just above the true
+    // one and 399 is genuinely under it. 399 less the suite's 7 percent is 371.
+    expect(lineFor('sell-line')).toContain('ask 3s 99c');
+    expect(lineFor('sell-line')).toContain('netting 3s 71c');
+  });
+
+  it('will not suggest undercutting a listing of your own', async () => {
+    const h = await start();
+    h.send({
+      market: page([listing({ id: 1, itemId: 'ore', count: 2, price: 800, mine: true })], {
+        sellPriceItemId: 'ore',
+        sellLowestPrice: 400,
+      }),
+    });
+    await h.settle();
+
+    // The floor counts the player's own rows, so the cheapest copy of this is theirs and the
+    // naive suggestion is to undercut themselves.
+    expect(lineFor('sell-line')).toContain('your own');
+    expect(lineFor('sell-line')).not.toContain('ask 3s 99c');
+  });
+
+  it('will not suggest an ask a vendor would beat', async () => {
+    const h = await start();
+    // A vendor pays 4 a unit for copper ore, so a copper under a 4 copper floor is worse than
+    // walking to one, and that is a certainty rather than an estimate.
+    h.send({ market: page([], { sellPriceItemId: 'copper_ore', sellLowestPrice: 4 }) });
+    await h.settle();
+
+    expect(lineFor('sell-line')).toContain('vendor');
+  });
+
+  it('says nothing at all while nothing is staged', async () => {
+    const h = await start();
+    h.send({ market: page([listing({ id: 1, itemId: 'ore', price: 500 })]) });
+    await h.settle();
+
+    expect(lineFor('sell-line')).toBe('');
+  });
+});
+
 // Both figures ride the payload, so an addon that wrote either down would agree with a
 // fixture using the game's own numbers and could never be caught.
 describe('the Merchant terms', () => {
@@ -2478,6 +2747,95 @@ describe('when the competition is your own', () => {
     expect(figureOf('deals', '2')).toContain('17 silver, 90 copper');
     expect(tipOn('deals', '2')).toContain('YOUR OWN');
     expect(tipOn('deals', '2')).toContain('Cancelling it');
+  });
+});
+
+/**
+ * An enchanted, masterwork or signed copy, which is a DIFFERENT GOOD sharing an item id.
+ *
+ * The server agrees, and says so where it counts: a collapsed book keeps every instanced row
+ * distinct while folding the plain ones into a single floor, on the grounds that no two of them
+ * are the same goods. Everything here follows from taking that seriously in both directions, so
+ * a premium never enters the plain item's series and a plain price never judges a premium copy.
+ *
+ * The test is the PRESENCE of the key rather than anything inside it. The server trims the
+ * payload to what a stranger may see and hands over an object even when nothing survives the
+ * trim, so a row can carry an empty `instance` and still be a copy nobody else has.
+ */
+describe('an instanced copy', () => {
+  it('leaves the premium out of the plain item price series', async () => {
+    const h = await start();
+    h.send({
+      market: page([
+        listing({ id: 1, itemId: 'iron_ore', count: 10, price: 200 }),
+        listing({
+          id: 2,
+          itemId: 'iron_ore',
+          count: 1,
+          price: 5000,
+          instance: { enchant: 'keen' },
+        }),
+      ]),
+    });
+    await h.settle();
+    await saved();
+
+    // 20 a unit, twice, and not a range from 20 to 5000: the second row is an enchanted axe head
+    // wearing an ore's id, and folding it in would put a premium into the ore's own history.
+    expect(visitsFor(h, 'iron_ore')).toEqual([visit(WALL_CLOCK_MS, 20)]);
+  });
+
+  it('does not price a plain listing against an enchanted one', async () => {
+    const h = await start({ settings: { 'min-profit': 0 } });
+    h.send({
+      market: page([
+        listing({ id: 1, itemId: 'iron_ore', count: 10, price: 200 }),
+        listing({ id: 2, itemId: 'iron_ore', count: 10, price: 4000, instance: {} }),
+      ]),
+    });
+    await h.settle();
+
+    // Anchoring the plain stack on the enchanted one would report a resale clearing over three
+    // silver on a stack of ore, against a price nobody will pay for ore.
+    expect(keysIn('deals')).toEqual([]);
+  });
+
+  it('still offers one under the vendor floor, which pays no premium either', async () => {
+    const h = await start({ settings: { 'min-profit': 0 } });
+    // A vendor pays `sellValue` for the copy whatever is on it, so the one arm that never reads
+    // a rival is the one arm an instanced row keeps.
+    h.send({
+      market: page([
+        listing({
+          id: 1,
+          itemId: 'ashwood_axe',
+          count: 1,
+          price: 10,
+          instance: { enchant: 'keen' },
+        }),
+      ]),
+    });
+    await h.settle();
+
+    expect(keysIn('deals')).toEqual(['1']);
+    expect(detailOf('deals', '1')).toContain('vendor floor');
+  });
+
+  it('does not call a copy of yours undercut by a plain listing', async () => {
+    const h = await start();
+    h.send({
+      market: page([
+        listing({ id: 1, itemId: 'iron_ore', count: 1, price: 4000, mine: true, instance: {} }),
+        listing({ id: 2, itemId: 'iron_ore', count: 10, price: 200 }),
+      ]),
+    });
+    await h.settle();
+
+    // The cheap ore is not competing with it, so the pane says what the copy is rather than
+    // reporting an undercut that is not one.
+    expect(detailOf('mine', '1')).not.toContain('undercut');
+    expect(detailOf('mine', '1')).toContain('its own');
+    expect(lastToast()).toBe('');
   });
 });
 

@@ -1,9 +1,9 @@
 {
   "id": "ledgerline",
   "name": "Ledgerline",
-  "version": "1.4.0",
+  "version": "1.5.0",
   "apiVersion": 1,
-  "apiMinor": 6,
+  "apiMinor": 7,
   "author": "MarshalX",
   "description": "A price history for a market that keeps almost none, and a scanner over it: every page you read at the Merchant is written down, each listing is judged against the vendor's floor, the page's own second-cheapest and your recorded prices, what is worth buying is ranked by what you would clear on the resale.",
   "entry": "main.js",
