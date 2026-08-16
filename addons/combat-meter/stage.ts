@@ -26,9 +26,26 @@ import { eventsFrame, PLAYER_ENTITY } from '../../tests/fakes/frames.ts';
 
 const PLAYER_ID = PLAYER_ENTITY.id;
 const MOB_ID = 900;
+/**
+ * What the mob is called and how big it is, which together are what a kept fight is NAMED
+ * after: the meter latches the biggest mob it saw, so this is the label the fight strip shows
+ * once the fight is over.
+ */
+const MOB_NAME = 'Sableweb Lurker';
+const MOB_HP = 9400;
 /** The hunter's own wolf, which nothing but `ownerId` tells from any other mob. */
 const PET_ID = 901;
 const PET_NAME = 'Grizzle';
+/**
+ * Something smaller, fought after the first one and named after itself.
+ *
+ * A second fight against the SAME mob would leave two pages under one name, and a picture of
+ * a fight strip has one job, which is to say that the fight on screen is not the fight that
+ * just happened.
+ */
+const NEXT_ID = 902;
+const NEXT_NAME = 'Deeprock Digger';
+const NEXT_HP = 3100;
 
 /** The class whose art directory a resolvable row's icon comes from. */
 const CLASS_ID = 'hunter';
@@ -40,6 +57,9 @@ const CLASS_ID = 'hunter';
  * because being early is a blank meter and being late costs a third of a second.
  */
 const REPAINT_WAIT_MS = 700;
+
+/** Comfortably past the meter's own `fight-timeout`, which defaults to five seconds. */
+const FIGHT_TIMEOUT_MS = 8000;
 
 /**
  * The spellbook, in the game's own shape. Only these three can ever carry art. The ids are real
@@ -118,9 +138,10 @@ interface Blow {
  * deliberate: the only things this addition moves in the picture are the pet and the shares.
  *
  * Raptor Strike went to make room for it, and this is the constraint to know before adding to
- * this table: the panel opens at a fixed 320px and holds SIX rows plus the outcome line. A
- * seventh row does not scroll or grow the frame, it pushes the outcome line off the bottom and
- * clips its own second line, which reads in a Browse thumbnail as a panel that is broken.
+ * this table: the panel opens at a fixed 348px and holds SIX rows plus the outcome line, the
+ * fight strip having taken the height the frame grew by. A seventh row does not scroll or grow
+ * the frame, it pushes the outcome line off the bottom and clips its own second line, which
+ * reads in a Browse thumbnail as a panel that is broken.
  */
 const DEALT: readonly Blow[] = [
   { ability: 'Auto Shot', school: 'physical', amount: 214, after: 0 },
@@ -169,6 +190,34 @@ const TAKEN: readonly Blow[] = [
   { ability: 'Rimebite', school: 'frost', amount: 176, after: 2000 },
 ];
 
+/**
+ * An EARLIER fight, against something else, shot at melee range.
+ *
+ * A different table on purpose, and this is the whole reason it exists rather than the sheet
+ * paging back to the fight the other panel is already showing: two panels of the same rows
+ * under two captions say nothing about what a kept fight is. Different mob, different opener,
+ * different shares, and a parry rather than a dodge, so every line of the panel moves.
+ *
+ * The same six-row ceiling applies. Raptor Strike is here and absent from the fight above,
+ * which is what a player would actually see between a melee pull and a ranged one.
+ */
+const EARLIER: readonly Blow[] = [
+  { ability: 'Raptor Strike', school: 'physical', amount: 288, after: 0 },
+  { ability: null, school: 'physical', amount: 131, after: 800, pet: true },
+  { ability: 'Auto Shot', school: 'physical', amount: 176, after: 900 },
+  { ability: 'Serpent Sting', school: 'nature', amount: 109, after: 1100 },
+  { ability: 'Raptor Strike', school: 'physical', amount: 512, crit: true, after: 1300 },
+  { ability: null, school: 'physical', amount: 144, after: 900, pet: true },
+  { ability: 'Auto Shot', school: 'physical', amount: 0, kind: 'parry', after: 1200 },
+  { ability: 'Fell Shot', school: 'arcane', amount: 302, after: 1000 },
+  { ability: null, school: 'physical', amount: 127, after: 1100, pet: true },
+  { ability: 'Raptor Strike', school: 'physical', amount: 271, after: 1400 },
+  { ability: 'Auto Shot', school: 'physical', amount: 191, after: 1200 },
+  { ability: 'Serpent Sting', school: 'nature', amount: 113, after: 1300 },
+  { ability: null, school: 'physical', amount: 139, after: 900, pet: true },
+  { ability: 'Raptor Strike', school: 'physical', amount: 264, after: 1500 },
+];
+
 interface Cast {
   ability: string;
   amount: number;
@@ -208,6 +257,11 @@ function aHunter(draft: WorldDraft): void {
   // session rather than something that happened. It is a mob-kind entity like any other and
   // `ownerId` is the whole of what separates it from the thing it is biting.
   draft.mob(PET_ID, { name: PET_NAME, templateId: 'wolf', hostile: false, ownerId: PLAYER_ID });
+  // The thing being fought, in scope before the first shot for the reason the pet is: the meter
+  // reads the target's name off the snapshot as each record lands, so a mob that arrived after
+  // the exchange would leave the fight it named unnamed.
+  draft.mob(MOB_ID, { name: MOB_NAME, maxHp: MOB_HP });
+  draft.mob(NEXT_ID, { name: NEXT_NAME, maxHp: NEXT_HP });
 }
 
 /** Let the panel's saved state come back, which is what un-hides it. */
@@ -260,6 +314,8 @@ interface Direction {
 
 const OUTGOING: Direction = { by: PLAYER_ID, at: MOB_ID };
 const INCOMING: Direction = { by: MOB_ID, at: PLAYER_ID };
+/** The earlier fight, which is against the other mob and is what gives it its own name. */
+const EARLIER_ON: Direction = { by: PLAYER_ID, at: NEXT_ID };
 
 /**
  * The same exchange with the pet standing in for the player.
@@ -278,13 +334,18 @@ function sideFor(blow: Blow, direction: Direction): Direction {
   return { by: direction.by, at: PET_ID };
 }
 
-/** Run a whole exchange, then wait for the panel to catch up with it. */
-async function exchange(stage: Stage, blows: readonly Blow[], direction: Direction): Promise<void> {
-  await panelUp(stage);
-  for (const blow of blows) {
+/** Land every blow in a table, in the direction it was fought. */
+function blows(stage: Stage, table: readonly Blow[], direction: Direction): void {
+  for (const blow of table) {
     const side = sideFor(blow, direction);
     strike(stage, blow, side.by, side.at);
   }
+}
+
+/** Run a whole exchange, then wait for the panel to catch up with it. */
+async function exchange(stage: Stage, table: readonly Blow[], direction: Direction): Promise<void> {
+  await panelUp(stage);
+  blows(stage, table, direction);
   await repainted(stage);
 }
 
@@ -301,15 +362,53 @@ function openTab(label: string): void {
   (button as HTMLButtonElement | undefined)?.click();
 }
 
+/** Page the fight strip back, the same click a player makes, for the reason `openTab` is one. */
+function stepBack(): void {
+  const button = document.querySelector('[data-role="fights"] [data-step="1"]');
+  (button as HTMLButtonElement | null)?.click();
+}
+
+/**
+ * Let the fight end, which is what puts it on a page of its own.
+ *
+ * The meter closes a fight on an idle timeout of its own, checked on its repaint interval, so
+ * this is a jump of the addon's clock and then a real wait for the interval that reads it.
+ */
+async function closed(stage: Stage): Promise<void> {
+  stage.advance(FIGHT_TIMEOUT_MS);
+  await repainted(stage);
+}
+
 const SCENARIOS: readonly Scenario[] = [
   {
     id: 'damage',
     label: 'Damage, mid-fight',
     preview: true,
-    alt: 'The Combat Meter panel on its Damage tab: one fight broken down per ability, six rows tinted by damage school under a total with a per-second rate, above the player attack table.',
+    caption: 'The fight you are in',
+    alt: 'the Combat Meter on its Damage tab, the fight strip reading Current: six ability rows tinted by damage school under a per-second total, above the attack table.',
     world: aHunter,
     run: async (stage) => {
       await exchange(stage, DEALT, OUTGOING);
+    },
+  },
+  {
+    // The fights it keeps, which is the half of this addon a picture of one fight cannot show.
+    // Two whole fights, then a step back onto the first: what makes the shot worth taking is
+    // that the strip names the fight rather than numbering it, so the page is recognisable.
+    id: 'history',
+    label: 'A fight you kept',
+    preview: true,
+    caption: 'One you already had',
+    alt: 'the same panel paged back one fight, the strip naming the mob and marking page two of three, above that earlier fight and its own rows.',
+    world: aHunter,
+    run: async (stage) => {
+      await panelUp(stage);
+      blows(stage, EARLIER, EARLIER_ON);
+      await closed(stage);
+      blows(stage, DEALT, OUTGOING);
+      await closed(stage);
+      stepBack();
+      await repainted(stage);
     },
   },
   {

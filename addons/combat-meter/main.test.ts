@@ -11,10 +11,17 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { validateManifest } from '../../loader/src/shared/schema.ts';
-import { mountAddon, parseManifest } from '../../tests/fakes/addon.ts';
+import {
+  characterNamespace,
+  configNamespace,
+  perCharacterKey,
+  SETTINGS_KEY,
+} from '../../loader/src/shared/storage-keys.ts';
+import { type MountInput, mountAddon, parseManifest } from '../../tests/fakes/addon.ts';
 import { liveEntity } from '../../tests/fakes/entity.ts';
 import { eventsFrame, PLAYER_ENTITY } from '../../tests/fakes/frames.ts';
 import type { SharedHarness } from '../../tests/fakes/shared-services.ts';
+import { createFakeStorage, type FakeStorage } from '../../tests/fakes/storage.ts';
 import MANIFEST_TEXT from './addon.json?raw';
 // biome-ignore lint/correctness/noUnresolvedImports: Vite's ?raw suffix is a loader directive a static resolver does not model, and an addon file is a function BODY with no exports at all. Same reason as the dev-harness suite.
 import SOURCE from './main.js?raw';
@@ -24,6 +31,13 @@ const MANIFEST_JSON: unknown = JSON.parse(MANIFEST_TEXT);
 /** The fixture player's id, which is what an event's ids are matched against. */
 const PLAYER_ID = PLAYER_ENTITY.id;
 const MOB_ID = 9;
+/** What a fight against the default target is called, which is the mob's own display name. */
+const MOB_NAME = 'Sableweb Lurker';
+const MOB_HP = 800;
+/** The biggest thing in the zone, so a fight holding both is named after this one. */
+const BOSS_ID = 10;
+const BOSS_NAME = 'Nythraxis';
+const BOSS_HP = 40_000;
 const OTHER_ID = PLAYER_ID + 1;
 /** The player's own wolf, which nothing but `ownerId` tells from any other mob. */
 const PET_ID = 670;
@@ -36,6 +50,10 @@ const GHOST_PET_ID = 672;
 /** The addon's own repaint interval, so a suite can reach the next drawn number. */
 const REPAINT_MS = 500;
 const SECOND = 1000;
+/** Which way each of the strip's two buttons moves the view, as the addon marks them. */
+const STEPS = { older: '1', newer: '-1' };
+/** Where this character's kept fights are filed, by the loader's own per-character key. */
+const FIGHTS_KEY = perCharacterKey('pbe', 'Claudemoon/Marshal', 'fights');
 
 const teardown: Array<() => void> = [];
 
@@ -108,6 +126,15 @@ interface MeterHarness extends SharedHarness {
   openTab: (label: string) => void;
   /** Press the addon's own show/hide bind, the way a player does. */
   togglePanel: () => void;
+  /** Step the fight strip, older or newer, the way a player does. */
+  stepFight: (way: 'older' | 'newer') => void;
+  /** What the strip says is open, and where that page sits in the list. */
+  openFight: () => string;
+  fightPosition: () => string;
+  /** Whether a step is offered at all, which is how the strip says it has reached an end. */
+  canStep: (way: 'older' | 'newer') => boolean;
+  /** Wipe everything, the way a player does. */
+  reset: () => void;
 }
 
 /** Any total order will do: the sort exists to make the assertion order-free. */
@@ -123,6 +150,16 @@ function byName(a: string, b: string): number {
 
 function rowFor(label: string): Element | null {
   return document.querySelector(`[data-ability="${label}"]`);
+}
+
+/**
+ * One of the fight strip's two steps, found by the direction it moves the view rather than
+ * by its glyph: the arrow is a character somebody may well retype, and the step is the thing
+ * the button means.
+ */
+function stepButton(way: 'older' | 'newer'): HTMLButtonElement | null {
+  const step = STEPS[way];
+  return document.querySelector(`[data-role="fights"] [data-step="${step}"]`);
 }
 
 function hover(label: string): string {
@@ -176,9 +213,20 @@ function pet(id: number, name: string, ownerId: number): Record<string, unknown>
   return liveEntity({ set: { id, name, kind: 'mob', templateId: 'wolf', ownerId } });
 }
 
+/**
+ * A mob with nobody's collar on it. `ownerId` is left at the fixture's null rather than set,
+ * because null is what "nobody" is on the wire and a zero there would make every mob in the
+ * fixture the player's own pet.
+ */
+function mob(id: number, name: string, maxHp: number): Record<string, unknown> {
+  return liveEntity({ set: { id, name, maxHp, kind: 'mob', templateId: 'spider' } });
+}
+
 interface RunOpts {
   /** Stored settings, seeded before the body runs, as the loader would hydrate them. */
   settings?: Record<string, unknown>;
+  /** Pass one in to seed this character's kept fights, or to read back what was written. */
+  storage?: FakeStorage;
 }
 
 /**
@@ -194,13 +242,21 @@ async function run(opts: RunOpts = {}): Promise<MeterHarness> {
   // every case so that a fixture cannot pass by having only ever seen the friendly one.
   entities.set(PET_ID, pet(PET_ID, PET_NAME, PLAYER_ID));
   entities.set(STRANGER_PET_ID, pet(STRANGER_PET_ID, 'Snarl', OTHER_ID));
+  entities.set(MOB_ID, mob(MOB_ID, MOB_NAME, MOB_HP));
+  entities.set(BOSS_ID, mob(BOSS_ID, BOSS_NAME, BOSS_HP));
   const world = { entities, player, known: KNOWN };
-  const harness = await mountAddon({
+  const input: MountInput = {
     manifest: MANIFEST_TEXT,
     source: SOURCE,
     game: Promise.resolve({ world }),
     settings: opts.settings ?? {},
-  });
+  };
+  // Assigned only when there is one: `exactOptionalPropertyTypes` refuses an explicit
+  // undefined for an optional property. See STYLE.md.
+  if (opts.storage !== undefined) {
+    input.storage = opts.storage;
+  }
+  const harness = await mountAddon(input);
   teardown.push(harness.dispose);
   // The sample resolves the character; the awaits let the read keyed on it return.
   harness.shared.world.watcher.poll();
@@ -271,6 +327,17 @@ async function run(opts: RunOpts = {}): Promise<MeterHarness> {
     // player takes, rather than a call to the frame the addon happens to hold.
     togglePanel: () => {
       harness.press('Alt+KeyD');
+      harness.frames.tick();
+    },
+    stepFight: (way) => {
+      stepButton(way)?.click();
+      harness.frames.tick();
+    },
+    openFight: () => textOf('.woc-meter-page'),
+    fightPosition: () => textOf('.woc-meter-position'),
+    canStep: (way) => stepButton(way)?.disabled === false,
+    reset: () => {
+      harness.press('Alt+Shift+KeyD');
       harness.frames.tick();
     },
   };
@@ -344,16 +411,18 @@ describe('its manifest', () => {
     expect(manifest().name).toBe('Combat Meter');
   });
 
-  // The four surfaces it actually uses. A permission it does not need would be
-  // asked of every player installing it, on a screen built to be read.
+  // The five surfaces it actually uses. A permission it does not need would be
+  // asked of every player installing it, on a screen built to be read. `storage` is here for
+  // the kept fights, which are this character's rather than the account's.
   it('declares exactly the permissions it uses', () => {
-    expect(manifest().permissions).toEqual(['net.read', 'world.read', 'ui', 'keys']);
+    expect(manifest().permissions).toEqual(['net.read', 'world.read', 'ui', 'keys', 'storage']);
   });
 
   it('declares the keybinds it binds and the settings it reads', () => {
     expect((manifest().keybinds ?? []).map((bind) => bind.id).sort()).toEqual(['reset', 'toggle']);
     expect((manifest().settings ?? []).map((setting) => setting.id).sort()).toEqual([
       'fight-timeout',
+      'keep-fights',
       'max-rows',
       'show-detail',
       'show-outcomes',
@@ -1459,9 +1528,10 @@ describe('a panel nobody can see', () => {
     expect(h.detailOf('Fell Shot')).toContain('2 hits');
   });
 
-  // The honest limit: the meter holds one fight, so a fight that starts while the panel is
-  // away replaces the one before it. "Last fight" means the most recent, not a history.
-  it('replaces the old fight when a new one starts while hidden', async () => {
+  // The view FOLLOWS the newest fight rather than pinning to it, so a pull that starts while
+  // the panel is away is what the panel is showing when it comes back. The fight before it is
+  // not gone, which is what the strip is for; it is one page older.
+  it('follows the new fight when one starts while hidden', async () => {
     const h = await run();
 
     h.hit({ ability: 'Fell Shot', amount: 300 });
@@ -1472,5 +1542,262 @@ describe('a panel nobody can see', () => {
 
     expect(h.fight()).toContain('50 damage');
     expect(h.labels()).toEqual(['Melee']);
+
+    h.stepFight('older');
+
+    expect(h.fight()).toContain('300 damage');
+    expect(h.labels()).toEqual(['Fell Shot']);
+  });
+});
+
+// The fights it keeps, which is the whole of what the strip pages through. The cases here are
+// about what a player can reach and what it is called, rather than about the array holding it.
+describe('the fights it keeps', () => {
+  /** One whole fight against the default target, closed by the idle timeout. */
+  function fought(h: MeterHarness, ability: string, amount: number): void {
+    h.hit({ ability, amount });
+    h.tick(SECOND * 10);
+  }
+
+  /**
+   * Change a setting the way the manager does, by writing the whole blob the loader hydrates
+   * from. The fake hub echoes a local write as a change, so the addon's own handler runs.
+   */
+  async function changeSettings(h: MeterHarness, values: Record<string, unknown>): Promise<void> {
+    await h.hub.set(configNamespace(FQID), SETTINGS_KEY, values);
+    h.frames.tick();
+  }
+
+  it('offers no step before anything has been fought', async () => {
+    const h = await run();
+
+    expect(h.openFight()).toBe('Current');
+    expect(h.canStep('older')).toBe(false);
+    expect(h.canStep('newer')).toBe(false);
+  });
+
+  it('says which fight is open and where it sits', async () => {
+    const h = await run();
+    fought(h, 'Fell Shot', 300);
+    fought(h, 'Aimed Shot', 200);
+
+    // Two fights and the page that adds them up, newest first.
+    expect(h.fightPosition()).toBe('1/3');
+
+    h.stepFight('older');
+
+    expect(h.fightPosition()).toBe('2/3');
+    expect(h.fight()).toContain('300 damage');
+  });
+
+  // A fight is named after what was in it, because "Fight -3" is not a question anybody has.
+  // Latched at record time: the mob is dead and gone from the snapshot by the time it is read.
+  it('names a fight after the biggest mob in it', async () => {
+    const h = await run();
+    h.hit({ at: MOB_ID, amount: 100 });
+    h.hit({ at: BOSS_ID, amount: 100 });
+    h.tick(SECOND * 10);
+
+    expect(h.openFight()).toBe(BOSS_NAME);
+  });
+
+  // Liveness beats the name on the page whose figures are still moving: whether what you are
+  // reading is over is the thing to know first.
+  it('calls the fight in progress the current one, named or not', async () => {
+    const h = await run();
+    h.hit({ at: MOB_ID, amount: 100 });
+    h.tick();
+
+    expect(h.openFight()).toBe('Current');
+
+    h.tick(SECOND * 10);
+
+    expect(h.openFight()).toBe(MOB_NAME);
+  });
+
+  // The pin is the page OBJECT rather than its index. A fight closing shifts every index
+  // along, so a pin by number would move the player onto a different fight while they read.
+  it('keeps the page under the player when another fight closes', async () => {
+    const h = await run();
+    fought(h, 'Fell Shot', 300);
+    fought(h, 'Aimed Shot', 200);
+    h.stepFight('older');
+    expect(h.fight()).toContain('300 damage');
+    expect(h.fightPosition()).toBe('2/3');
+
+    fought(h, 'Melee', 50);
+
+    // The same fight, one page further back, rather than whatever has taken page two.
+    expect(h.fight()).toContain('300 damage');
+    expect(h.fightPosition()).toBe('3/4');
+  });
+
+  // The last page is worked out from the fights still kept rather than run as a total of its
+  // own, so it can never report more than the pages behind it can account for.
+  it('adds the kept fights together on the last page', async () => {
+    const h = await run();
+    fought(h, 'Fell Shot', 300);
+    fought(h, 'Melee', 100);
+
+    h.stepFight('older');
+    h.stepFight('older');
+
+    expect(h.openFight()).toBe('All kept fights');
+    expect(h.fight()).toContain('400 damage');
+    expect(h.labels().sort(byName)).toEqual(['Fell Shot', 'Melee']);
+    expect(h.canStep('older')).toBe(false);
+  });
+
+  it('drops the oldest fight once the cap is reached', async () => {
+    const h = await run({ settings: { 'keep-fights': 2 } });
+    fought(h, 'Fell Shot', 300);
+    fought(h, 'Melee', 100);
+    fought(h, 'Aimed Shot', 50);
+
+    // Two fights and the page adding them up. The first is gone rather than unreachable.
+    expect(h.fightPosition()).toBe('1/3');
+    h.stepFight('older');
+    expect(h.fight()).toContain('100 damage');
+    h.stepFight('older');
+    expect(h.fight()).toContain('150 damage');
+  });
+
+  // The pin can outlive its fight, and a view pointing at nothing has to land somewhere a
+  // player recognises rather than on whichever fight has taken that index.
+  it('takes the view back to the newest when the pinned fight ages out', async () => {
+    const h = await run({ settings: { 'keep-fights': 2 } });
+    fought(h, 'Fell Shot', 300);
+    fought(h, 'Melee', 100);
+    h.stepFight('older');
+    expect(h.fight()).toContain('300 damage');
+
+    fought(h, 'Aimed Shot', 50);
+
+    expect(h.fight()).toContain('50 damage');
+    expect(h.fightPosition()).toBe('1/3');
+  });
+
+  // Lowering the cap is a decision about what is kept, so it takes effect on the fights that
+  // are already kept rather than at the end of the next fight.
+  it('drops the fights a lowered cap no longer keeps', async () => {
+    const h = await run();
+    fought(h, 'Fell Shot', 300);
+    fought(h, 'Melee', 100);
+    fought(h, 'Aimed Shot', 50);
+    expect(h.fightPosition()).toBe('1/4');
+
+    await changeSettings(h, { 'keep-fights': 1 });
+
+    expect(h.fightPosition()).toBe('1/2');
+  });
+});
+
+// Kept fights outlive the page, which is the difference between this meter and the game's own.
+// The write is per FIGHT rather than per hit, which is what the fight in progress being left
+// out of the payload buys.
+describe('what it keeps for the character', () => {
+  function storedFights(storage: FakeStorage): unknown {
+    return storage.dump()[`${characterNamespace(FQID)}/${FIGHTS_KEY}`];
+  }
+
+  /**
+   * Let a per-character write settle. It awaits world entry and then the storage hub, so a
+   * suite reading the store on the next line reads it before the write has been made.
+   */
+  async function settled(): Promise<void> {
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+  }
+
+  it('writes a fight down once it has closed', async () => {
+    const storage = createFakeStorage();
+    const h = await run({ storage });
+
+    h.hit({ ability: 'Fell Shot', amount: 300, at: MOB_ID });
+    h.tick(SECOND * 10);
+    await settled();
+
+    expect(storedFights(storage)).toMatchObject({
+      version: 1,
+      fights: [{ label: MOB_NAME, totals: { dealt: 300 } }],
+    });
+  });
+
+  // Storing the fight in progress would be a write per hit to be worth anything, and a stale
+  // copy read back after a reload would report a fight that never ended.
+  it('leaves the fight in progress out of the store', async () => {
+    const storage = createFakeStorage();
+    const h = await run({ storage });
+
+    h.hit({ ability: 'Fell Shot', amount: 300 });
+    h.tick(SECOND * 10);
+    h.hit({ ability: 'Melee', amount: 50 });
+    h.tick();
+    await settled();
+
+    expect(storedFights(storage)).toMatchObject({ fights: [{ totals: { dealt: 300 } }] });
+  });
+
+  it('reads the fights back and pages into them', async () => {
+    const storage = createFakeStorage();
+    await storage.set(characterNamespace(FQID), FIGHTS_KEY, {
+      version: 1,
+      fights: [
+        {
+          at: 1,
+          seconds: 10,
+          label: BOSS_NAME,
+          totals: { dealt: 1000, healed: 0, taken: 0 },
+          tallies: {
+            dealt: [{ label: 'Fell Shot', total: 1000, count: 4, crits: 1, biggest: 400 }],
+            healed: [],
+            taken: [],
+          },
+          outcomes: { hit: 4 },
+        },
+      ],
+    });
+
+    const h = await run({ storage });
+    await settled();
+    h.frames.tick();
+
+    expect(h.openFight()).toBe(BOSS_NAME);
+    expect(h.fight()).toContain('1,000 damage');
+    expect(h.labels()).toEqual(['Fell Shot']);
+    expect(h.detailOf('Fell Shot')).toContain('4 hits');
+  });
+
+  // A stored shape this version cannot read is dropped rather than thrown on: the alternative
+  // is an addon that fails to start over a file it wrote itself.
+  it('ignores a stored shape it does not recognise', async () => {
+    const storage = createFakeStorage();
+    await storage.set(characterNamespace(FQID), FIGHTS_KEY, { version: 99, fights: 'nonsense' });
+
+    const h = await run({ storage });
+    await settled();
+    h.frames.tick();
+
+    expect(h.openFight()).toBe('Current');
+    expect(h.canStep('older')).toBe(false);
+  });
+
+  // Everything, rather than the fight in progress alone: leaving the kept fights behind would
+  // leave the numbers the player asked to be rid of one press of the strip away.
+  it('wipes the kept fights and what was written for them', async () => {
+    const storage = createFakeStorage();
+    const h = await run({ storage });
+    h.hit({ ability: 'Fell Shot', amount: 300 });
+    h.tick(SECOND * 10);
+    await settled();
+
+    h.reset();
+    await settled();
+
+    expect(h.canStep('older')).toBe(false);
+    expect(h.fight()).toContain('0 damage');
+    expect(storedFights(storage)).toBeUndefined();
   });
 });

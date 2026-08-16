@@ -1,19 +1,19 @@
 {
   "id": "combat-meter",
   "name": "Combat Meter",
-  "version": "1.5.0",
+  "version": "1.6.0",
   "apiVersion": 1,
   "apiMinor": 5,
   "author": "MarshalX",
-  "description": "What your damage and healing are made of: a row per ability, your pet's included, with per-second rates, crit rate, average and biggest hit, plus your real miss and dodge rates and what is hitting you.",
+  "description": "Damage, healing and damage taken broken down per ability, pet included, with rates, crits and your real miss and dodge rates. Pages back through past fights, kept across a reload.",
   "entry": "main.js",
   "preview": {
     "file": "preview.png",
-    "alt": "The Combat Meter panel on its Damage tab: one fight broken down per ability, six rows tinted by damage school under a total with a per-second rate, above the player attack table."
+    "alt": "On the left, The fight you are in, the Combat Meter on its Damage tab, the fight strip reading Current: six ability rows tinted by damage school under a per-second total, above the attack table. On the right, One you already had, the same panel paged back one fight, the strip naming the mob and marking page two of three, above that earlier fight and its own rows."
   },
   "homepage": "https://github.com/MarshalX/world-of-claudecraft-addons",
   "tags": ["combat"],
-  "permissions": ["net.read", "world.read", "ui", "keys"],
+  "permissions": ["net.read", "world.read", "ui", "keys", "storage"],
   "keybinds": [
     {
       "id": "toggle",
@@ -34,6 +34,14 @@
       "default": 5,
       "min": 2,
       "max": 60
+    },
+    {
+      "id": "keep-fights",
+      "type": "number",
+      "label": "Fights to keep, counting the one you are in",
+      "default": 8,
+      "min": 1,
+      "max": 20
     },
     {
       "id": "max-rows",

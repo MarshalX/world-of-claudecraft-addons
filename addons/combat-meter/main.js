@@ -6,6 +6,14 @@
 // A fight ends on an idle timeout, because `inCombat` is not on the wire, and its duration
 // is floored at a second or a burst divides by a fraction and reports a rate nobody hit.
 //
+// Closed fights are KEPT, newest first, and the panel pages between them; `keep-fights` says
+// how many, counting the one being fought. Each is named after the biggest mob in it, latched
+// as the records land, because a mob that died and despawned is gone from `world.entities`
+// long before the page is opened. The last page adds the kept fights together rather than
+// running a total of its own, so it can only ever report the fights still on the pages behind
+// it. Kept fights are written to THIS CHARACTER's store as each one closes, so a reload keeps
+// them; the fight in progress is not, since storing that would mean a write per hit.
+//
 // A pet's output is yours. `damage.sourceOwnerId` says so from game 0.36.0 and `Entity.ownerId`
 // says so otherwise, and both are needed: the record's own owner is the only one that survives
 // the pet despawning with its dying owner, which is precisely when the last exchange lands.
@@ -21,7 +29,15 @@ const DECIMALS = 1;
 const PERCENT = 100;
 const SECONDS_PER_MINUTE = 60;
 const FRAME_WIDTH = 340;
-const FRAME_HEIGHT = 320;
+const FRAME_HEIGHT = 348;
+/**
+ * The height this panel opened at before it grew a fight strip, kept as the floor.
+ *
+ * A frame's minimum defaults to the size it was declared at, and a saved box is held to the
+ * same bounds a dragged one is, so raising the opening height without this would quietly
+ * grow every panel already saved at the old one on its owner's next login.
+ */
+const MIN_FRAME_HEIGHT = 320;
 /** Auto-attacks arrive with no ability at all. */
 const MELEE_LABEL = 'Melee';
 /** A pet the snapshot carries with no name of its own, which nothing has been seen to send. */
@@ -31,6 +47,34 @@ const OVERHEAL_NOTE = Object.freeze({
   text: 'overhealing seen on landed heals; a fully wasted tick sends nothing',
   tone: 'muted',
 });
+
+/** Where this character's kept fights are written, and the shape they are written in. */
+const STORE_KEY = 'fights';
+const STORE_VERSION = 1;
+/**
+ * Rows kept per table in a STORED fight. The panel draws at most `max-rows`, which stops at
+ * 40, so anything deeper is bytes no page can show. A fight's totals are stored whole and are
+ * never summed back from these rows, so trimming them cannot move a figure the summary reports.
+ */
+const STORED_ROWS = 40;
+/** The last page: the kept fights added together. A string, because it is not one of them. */
+const SESSION_PAGE = 'session';
+const SESSION_LABEL = 'All kept fights';
+/** What page 0 is called while it is still being fought, and once it is not. */
+const LIVE_LABEL = 'Current';
+const CLOSED_LABEL = 'Last fight';
+const OLDER_LABEL = 'Older fight';
+const NEWER_LABEL = 'Newer fight';
+const OLDER_GLYPH = '‹';
+const NEWER_GLYPH = '›';
+/**
+ * Wider than the density's own 4px, because this row is the one place in the panel where a
+ * bordered control sits directly beside plain text: at the shared spacing the arrows read as
+ * attached to the name and to the count rather than as controls of their own.
+ */
+const NAV_GAP = 10;
+/** Above and below the strip, on top of the column's own spacing. */
+const NAV_BAND_PX = 4;
 
 /**
  * Attack-table outcomes, in the order they are worth reading. Must hold every kind the
@@ -61,19 +105,43 @@ function emptyTally(pet) {
   };
 }
 
-/** `endedAt` freezes the duration once the fight closes, so averages stop decaying. */
+/**
+ * `seconds` is null while the fight is open and frozen the moment it closes, which is both
+ * how the duration stops decaying and how everything here tells a live fight from a kept one.
+ *
+ * `at` is a WALL CLOCK reading where the other two stamps are monotonic ones, because this is
+ * the field that has to survive a page load: a `now()` reading stored and read back on the
+ * next load is a time in the future, with nothing about it to say so.
+ */
 function emptyFight(at) {
   return {
     startedAt: at,
-    endedAt: null,
     lastEventAt: at,
+    at: woc.wallClock(),
+    seconds: null,
+    label: null,
+    biggestHp: -1,
     totals: { dealt: 0, healed: 0, taken: 0 },
     tallies: { dealt: new Map(), healed: new Map(), taken: new Map() },
     outcomes: new Map(),
   };
 }
 
-let fight = emptyFight(woc.now());
+/** What the panel reads before anything has been fought. Never recorded into, never stored. */
+const NO_FIGHT = emptyFight(0);
+NO_FIGHT.seconds = 1;
+
+/** Newest first. `fights[0]` is the fight in progress whenever its `seconds` is still null. */
+let fights = [];
+/**
+ * Which page the panel is reading.
+ *
+ * Null FOLLOWS the newest fight rather than pinning to it, so a new pull takes the view with
+ * it. Anything else is the page object itself rather than its index: a closing fight shifts
+ * every index along, and a pin by number would silently move the player onto a different
+ * fight at exactly the moment they were reading one.
+ */
+let viewing = null;
 let tab = 'dealt';
 
 function timeoutMs() {
@@ -208,11 +276,16 @@ function duration(seconds) {
   return `${String(minutes)}m ${String(whole % SECONDS_PER_MINUTE)}s`;
 }
 
+/** When a kept fight was fought, which is the one thing a stored page cannot say for itself. */
+function clockTime(at) {
+  return new Date(at).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+}
+
 function nounFor(id) {
   return TABLES.find((entry) => entry.id === id)?.noun ?? '';
 }
 
-function record(id, row, event) {
+function record(fight, id, row, event) {
   const map = fight.tallies[id];
   const tally = map.get(row.label) ?? emptyTally(row.pet);
   if (tally.school === null && typeof event.school === 'string' && event.school.length > 0) {
@@ -231,16 +304,50 @@ function record(id, row, event) {
 }
 
 /**
- * Floored at a second, which is the game's own floor on the same figure: a fight measured
- * at a fraction of a second reports a rate no player sustained for any of it.
+ * Name the fight after the biggest thing in it, whichever side of the exchange it was on.
+ *
+ * Read at RECORD time and latched, because the answer is unrecoverable later: a mob despawns
+ * when it dies, so by the time a player pages back to the fight that killed it there is
+ * nothing in `world.entities` to ask. Biggest by maximum health, which is the game's own
+ * choice on the same question and picks the boss out of its own trash.
+ *
+ * A player is not a name: a duel and a battleground stay unnamed rather than being filed
+ * under whoever happened to be hit hardest.
  */
-function fightSeconds(now) {
-  const until = fight.endedAt ?? now;
-  return Math.max(until - fight.startedAt, MS_PER_SECOND) / MS_PER_SECOND;
+function nameFight(fight, id) {
+  const entity = woc.world.entities.get(id);
+  if (entity === undefined || entity.kind !== 'mob' || entity.maxHp <= fight.biggestHp) {
+    return;
+  }
+  fight.biggestHp = entity.maxHp;
+  if (typeof entity.name === 'string' && entity.name.length > 0) {
+    fight.label = entity.name;
+  }
 }
 
-function startFight() {
-  fight = emptyFight(woc.now());
+/**
+ * How long a fight ran: frozen once it closed, and floored at a second.
+ *
+ * The floor is the game's own on the same figure: a fight measured at a fraction of a second
+ * reports a rate no player sustained for any of it.
+ */
+function fightSeconds(fight, now) {
+  if (fight.seconds !== null) {
+    return fight.seconds;
+  }
+  return Math.max(now - fight.startedAt, MS_PER_SECOND) / MS_PER_SECOND;
+}
+
+/** The fight in progress, opening one if the last has closed. Trims to the cap as it goes. */
+function openFight() {
+  const [first] = fights;
+  if (first !== undefined && first.seconds === null) {
+    return first;
+  }
+  const started = emptyFight(woc.now());
+  fights.unshift(started);
+  fights.length = Math.min(fights.length, woc.settings['keep-fights']);
+  return started;
 }
 
 /**
@@ -248,9 +355,12 @@ function startFight() {
  * the last event, or every fight would read the timeout longer than it was.
  */
 function expireFight(now) {
-  if (fight.endedAt === null && now - fight.lastEventAt >= timeoutMs()) {
-    fight.endedAt = fight.lastEventAt;
+  const [first] = fights;
+  if (first === undefined || first.seconds !== null || now - first.lastEventAt < timeoutMs()) {
+    return;
   }
+  first.seconds = Math.max(first.lastEventAt - first.startedAt, MS_PER_SECOND) / MS_PER_SECOND;
+  persist();
 }
 
 /**
@@ -258,10 +368,9 @@ function expireFight(now) {
  * counts, or the meter would do nothing for a healer who deals no damage all encounter.
  */
 function noteActivity() {
-  if (fight.endedAt !== null) {
-    startFight();
-  }
+  const fight = openFight();
   fight.lastEventAt = woc.now();
+  return fight;
 }
 
 /**
@@ -269,7 +378,7 @@ function noteActivity() {
  * A pet's swing rolls against the PET's hit rating, so the raw `sourceId` keeps it out:
  * the one place a pet is not treated as you.
  */
-function countOutcome(event, player) {
+function countOutcome(fight, event, player) {
   if (event.sourceId !== player.id) {
     return;
   }
@@ -287,19 +396,21 @@ woc.net.onEvent('damage', (event) => {
   if (!(mine || atMe)) {
     return;
   }
-  noteActivity();
+  const fight = noteActivity();
 
   if (mine) {
-    countOutcome(event, player);
+    nameFight(fight, event.targetId);
+    countOutcome(fight, event, player);
     if (landed(event)) {
-      record('dealt', rowFor(event, event.sourceId, player, event.sourceOwnerId), event);
+      record(fight, 'dealt', rowFor(event, event.sourceId, player, event.sourceOwnerId), event);
     }
   }
   // Damage your pet took is damage you should see, and since game 0.35.0 the server delivers
   // it on exactly that basis. The prefix names who it LANDED on rather than who dealt it,
   // which is this table's reading: the ability is the attacker's.
   if (atMe && landed(event)) {
-    record('taken', rowFor(event, event.targetId, player), event);
+    nameFight(fight, event.sourceId);
+    record(fight, 'taken', rowFor(event, event.targetId, player), event);
   }
 });
 
@@ -315,12 +426,157 @@ woc.net.onEvent('heal2', (event) => {
   if (event.cueOnly === true) {
     return;
   }
-  noteActivity();
+  const fight = noteActivity();
   if (landed(event)) {
-    record('healed', rowFor(event, event.sourceId, player), event);
+    record(fight, 'healed', rowFor(event, event.sourceId, player), event);
   }
 });
 // #endregion
+
+function mergeTally(into, label, tally) {
+  const found = into.get(label) ?? emptyTally(tally.pet);
+  if (found.school === null) {
+    found.school = tally.school;
+  }
+  found.total += tally.total;
+  found.count += tally.count;
+  found.crits += tally.crits;
+  found.biggest = Math.max(found.biggest, tally.biggest);
+  found.absorbed += tally.absorbed;
+  found.overheal += tally.overheal;
+  into.set(label, found);
+}
+
+function mergeFight(into, fight) {
+  for (const table of TABLES) {
+    into.totals[table.id] += fight.totals[table.id];
+    for (const [label, tally] of fight.tallies[table.id]) {
+      mergeTally(into.tallies[table.id], label, tally);
+    }
+  }
+  for (const [kind, count] of fight.outcomes) {
+    into.outcomes.set(kind, (into.outcomes.get(kind) ?? 0) + count);
+  }
+}
+
+/**
+ * The last page: every kept fight added together, worked out when it is READ.
+ *
+ * A running total kept as the events land would go on counting fights that have since aged
+ * out of the cap, so it would report more than any page behind it could account for, and it
+ * would have to be stored and reconciled on top of that. Its duration is the fights added
+ * up rather than the wall clock, or the rate would be divided by every minute spent walking.
+ */
+function sessionSegment(now) {
+  const all = emptyFight(0);
+  all.label = SESSION_LABEL;
+  let seconds = 0;
+  for (const fight of fights) {
+    seconds += fightSeconds(fight, now);
+    mergeFight(all, fight);
+  }
+  all.seconds = Math.max(seconds, 1);
+  return all;
+}
+
+/** Every page in order, newest fight first. Empty until something has been fought. */
+function pages() {
+  if (fights.length === 0) {
+    return [];
+  }
+  return [...fights, SESSION_PAGE];
+}
+
+/** Where the view is pointing. A fight aged out from under the pin takes it back to the newest. */
+function pageIndex() {
+  if (viewing === null) {
+    return 0;
+  }
+  return Math.max(pages().indexOf(viewing), 0);
+}
+
+function viewed(now) {
+  const page = pages()[pageIndex()];
+  if (page === SESSION_PAGE) {
+    return sessionSegment(now);
+  }
+  return page ?? NO_FIGHT;
+}
+
+/** Index 0 is a FOLLOW rather than a pin, so a new pull takes the view with it. */
+function pinFor(list, index) {
+  if (index === 0) {
+    return null;
+  }
+  return list[index] ?? null;
+}
+
+function turnPage(step) {
+  const list = pages();
+  if (list.length === 0) {
+    return;
+  }
+  const next = Math.min(Math.max(pageIndex() + step, 0), list.length - 1);
+  viewing = pinFor(list, next);
+  // Clearing makes the turn instant rather than one repaint late, the same as a tab switch.
+  bars.clear();
+  draw();
+}
+
+/** What an unnamed fight is called: the newest closed one, and the rest counting back. */
+function positionLabel(index) {
+  if (index === 0) {
+    return CLOSED_LABEL;
+  }
+  return `Fight -${String(index)}`;
+}
+
+function pageLabel() {
+  const index = pageIndex();
+  const page = pages()[index];
+  if (page === undefined) {
+    return LIVE_LABEL;
+  }
+  if (page === SESSION_PAGE) {
+    return SESSION_LABEL;
+  }
+  // Liveness beats the name on the page whose figures are still moving: whether what you are
+  // reading is still being fought is the thing to know first, and the tooltip has the rest.
+  if (index === 0 && page.seconds === null) {
+    return LIVE_LABEL;
+  }
+  return page.label ?? positionLabel(index);
+}
+
+function sessionTip(list) {
+  return {
+    title: SESSION_LABEL,
+    lines: [{ text: `${woc.fmt.count(list.length - 1, 'kept fight')} added together` }],
+  };
+}
+
+function fightTipLines(page, index, count) {
+  const lines = [{ text: `fight ${String(index + 1)} of ${String(count)}` }];
+  if (page.seconds === null) {
+    lines.push({ text: `started ${clockTime(page.at)}, still going`, tone: 'muted' });
+    return lines;
+  }
+  lines.push({ text: `${clockTime(page.at)}, ${duration(page.seconds)} long`, tone: 'muted' });
+  return lines;
+}
+
+function pageTip() {
+  const list = pages();
+  const index = pageIndex();
+  const page = list[index];
+  if (page === undefined) {
+    return 'No fight measured yet.';
+  }
+  if (page === SESSION_PAGE) {
+    return sessionTip(list);
+  }
+  return { title: pageLabel(), lines: fightTipLines(page, index, list.length - 1) };
+}
 
 /**
  * A frame rather than a window: HUD furniture toggled by a keybind. `resizable` is
@@ -331,6 +587,7 @@ const panel = woc.ui.frame({
   title: 'Combat',
   width: FRAME_WIDTH,
   height: FRAME_HEIGHT,
+  minHeight: MIN_FRAME_HEIGHT,
   density: 'compact',
   resizable: true,
   closable: true,
@@ -367,7 +624,55 @@ const strip = woc.ui.tabs({
 // The addon's own marking, for its own styling. The kit's classes are already on it.
 strip.el.classList.add('woc-meter-tabs');
 
-panel.body.append(strip.el, total, table, outcomes);
+/**
+ * The fight strip: which page is open, and the two steps between pages.
+ *
+ * Drawn whether or not there is anything to page through, because a row that appeared once
+ * a second fight existed would move the figures under the eye of a player mid-pull. The
+ * buttons wear `.woc-btn`, the loader's own labelled control, so they answer to the frame's
+ * density and to the tap-target floor on a phone without this addon sizing anything.
+ */
+const nav = woc.ui.row({ className: 'woc-meter-nav', gap: NAV_GAP });
+nav.dataset.role = 'fights';
+// Its own band rather than a third row packed against the two around it: the tab strip carries
+// a rule under it, so with the column's own 4px this strip reads as attached to the tabs above
+// and pressed against the figures below. A margin on the addon's own box, never a size on the
+// controls inside it, which would opt them out of the tap-target floor on a phone.
+nav.style.margin = `${String(NAV_BAND_PX)}px 0`;
+
+function navButton(glyph, label, step) {
+  const el = document.createElement('button');
+  el.type = 'button';
+  el.className = 'woc-btn';
+  el.textContent = glyph;
+  el.title = label;
+  el.setAttribute('aria-label', label);
+  el.dataset.step = String(step);
+  el.addEventListener('click', () => {
+    turnPage(step);
+  });
+  return el;
+}
+
+const older = navButton(OLDER_GLYPH, OLDER_LABEL, 1);
+const newer = navButton(NEWER_GLYPH, NEWER_LABEL, -1);
+
+const pageName = document.createElement('span');
+pageName.className = 'woc-meter-page';
+pageName.style.flex = '1';
+pageName.style.overflow = 'hidden';
+pageName.style.textOverflow = 'ellipsis';
+pageName.style.whiteSpace = 'nowrap';
+
+const pagePosition = document.createElement('span');
+pagePosition.className = 'woc-meter-position';
+pagePosition.style.opacity = '0.75';
+pagePosition.style.fontVariantNumeric = 'tabular-nums';
+
+nav.append(older, pageName, pagePosition, newer);
+woc.ui.tooltip(pageName, () => pageTip());
+
+panel.body.append(strip.el, nav, total, table, outcomes);
 
 /**
  * Keyed on the label, never on position, or two rows swap identities as the ranking moves.
@@ -414,7 +719,7 @@ function artNote(label, tally) {
 }
 
 function rowTooltip(label) {
-  const tally = fight.tallies[tab].get(label);
+  const tally = viewed(woc.now()).tallies[tab].get(label);
   if (tally === undefined) {
     return label;
   }
@@ -448,7 +753,7 @@ function abilityArt(label, tally) {
   return woc.ui.icon.ability(info.id, woc.world.player?.templateId ?? '');
 }
 
-function tableRows() {
+function tableRows(fight) {
   const source = fight.tallies[tab];
   const ordered = [...source.entries()].sort((a, b) => b[1].total - a[1].total);
   return ordered.slice(0, woc.settings['max-rows']);
@@ -502,12 +807,12 @@ function drawRow(bar, item) {
 }
 
 /** The total and the duration ride the item: per-sync facts, decided in one place. */
-function drawTable(seconds) {
+function drawTable(fight, seconds) {
   const whole = fight.totals[tab];
-  bars.sync(tableRows().map(([label, tally]) => ({ label, tally, whole, seconds })));
+  bars.sync(tableRows(fight).map(([label, tally]) => ({ label, tally, whole, seconds })));
 }
 
-function outcomeText() {
+function outcomeText(fight) {
   let swings = 0;
   for (const count of fight.outcomes.values()) {
     swings += count;
@@ -526,18 +831,39 @@ function outcomeText() {
 }
 
 /** Your own attack table, so it belongs to the damage tab only. */
-function outcomeLine() {
+function outcomeLine(fight) {
   if (tab !== 'dealt' || !woc.settings['show-outcomes']) {
     return '';
   }
-  return outcomeText();
+  return outcomeText(fight);
 }
 
+/**
+ * Said on the newest page alone, where it means the fight has closed. Every page behind it
+ * is a last fight of its own, and the strip above already says which one is open.
+ */
 function fightSuffix() {
-  if (fight.endedAt === null) {
+  const [first] = fights;
+  if (pageIndex() !== 0 || first === undefined || first.seconds === null) {
     return '';
   }
   return ', last fight';
+}
+
+function positionText(index, count) {
+  if (count === 0) {
+    return '';
+  }
+  return `${String(index + 1)}/${String(count)}`;
+}
+
+function drawNav() {
+  const list = pages();
+  const index = pageIndex();
+  pageName.textContent = pageLabel();
+  pagePosition.textContent = positionText(index, list.length);
+  older.disabled = index >= list.length - 1;
+  newer.disabled = index === 0;
 }
 
 /**
@@ -546,7 +872,9 @@ function fightSuffix() {
  */
 const draw = woc.paint(
   () => {
-    const seconds = fightSeconds(woc.now());
+    const now = woc.now();
+    const fight = viewed(now);
+    const seconds = fightSeconds(fight, now);
 
     // One direction per tab, or a player who never heals reads a "0 healing" line.
     const amount = num(fight.totals[tab]);
@@ -554,11 +882,176 @@ const draw = woc.paint(
     const summary = `${amount} ${nounFor(tab)} (${rate}) in ${duration(seconds)}`;
     total.textContent = `${summary}${fightSuffix()}`;
 
-    drawTable(seconds);
-    outcomes.textContent = outcomeLine();
+    drawNav();
+    drawTable(fight, seconds);
+    outcomes.textContent = outcomeLine(fight);
   },
   { frame: panel },
 );
+
+function storedRows(map) {
+  return [...map.entries()]
+    .sort((a, b) => b[1].total - a[1].total)
+    .slice(0, STORED_ROWS)
+    .map(([label, tally]) => ({ label, ...tally }));
+}
+
+function storedFight(fight) {
+  return {
+    at: fight.at,
+    seconds: fight.seconds,
+    label: fight.label,
+    totals: { ...fight.totals },
+    tallies: {
+      dealt: storedRows(fight.tallies.dealt),
+      healed: storedRows(fight.tallies.healed),
+      taken: storedRows(fight.tallies.taken),
+    },
+    outcomes: Object.fromEntries(fight.outcomes),
+  };
+}
+
+/**
+ * The fight in progress is left out, which is what keeps this to one write per fight: a
+ * stored live fight would have to be rewritten on every hit to be worth anything, and a
+ * stale copy of one read back after a reload would report a fight that never ended.
+ */
+async function save() {
+  await woc.world.ready;
+  const closed = fights.filter((fight) => fight.seconds !== null);
+  await woc.storage.character.set(STORE_KEY, {
+    version: STORE_VERSION,
+    fights: closed.map(storedFight),
+  });
+}
+
+function persist() {
+  save().catch((err) => {
+    woc.warn('could not write the kept fights down', err);
+  });
+}
+
+function numberOr0(value) {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return value;
+  }
+  return 0;
+}
+
+function textOrNull(value) {
+  if (typeof value === 'string' && value.length > 0) {
+    return value;
+  }
+  return null;
+}
+
+function readRow(row) {
+  if (typeof row !== 'object' || row === null || typeof row.label !== 'string') {
+    return null;
+  }
+  const tally = emptyTally(textOrNull(row.pet));
+  tally.total = numberOr0(row.total);
+  tally.count = numberOr0(row.count);
+  tally.crits = numberOr0(row.crits);
+  tally.biggest = numberOr0(row.biggest);
+  tally.absorbed = numberOr0(row.absorbed);
+  tally.overheal = numberOr0(row.overheal);
+  tally.school = textOrNull(row.school);
+  return [row.label, tally];
+}
+
+function readRows(value) {
+  const map = new Map();
+  if (!Array.isArray(value)) {
+    return map;
+  }
+  for (const row of value) {
+    const pair = readRow(row);
+    if (pair !== null) {
+      map.set(pair[0], pair[1]);
+    }
+  }
+  return map;
+}
+
+function readOutcomes(value) {
+  const map = new Map();
+  if (typeof value !== 'object' || value === null) {
+    return map;
+  }
+  for (const [kind, count] of Object.entries(value)) {
+    map.set(kind, numberOr0(count));
+  }
+  return map;
+}
+
+/**
+ * A stored fight, or null for anything this version cannot read.
+ *
+ * The totals are read back rather than summed from the rows, because the rows were capped
+ * on the way out and the totals were not: a summed total would quietly shrink a big fight
+ * every time it was stored and read again.
+ */
+function readFight(stored) {
+  if (typeof stored !== 'object' || stored === null) {
+    return null;
+  }
+  const fight = emptyFight(0);
+  fight.at = numberOr0(stored.at);
+  fight.seconds = Math.max(numberOr0(stored.seconds), 1);
+  fight.label = textOrNull(stored.label);
+  for (const entry of TABLES) {
+    fight.totals[entry.id] = numberOr0(stored.totals?.[entry.id]);
+    fight.tallies[entry.id] = readRows(stored.tallies?.[entry.id]);
+  }
+  fight.outcomes = readOutcomes(stored.outcomes);
+  return fight;
+}
+
+function readFights(stored) {
+  if (typeof stored !== 'object' || stored === null) {
+    return [];
+  }
+  if (stored.version !== STORE_VERSION || !Array.isArray(stored.fights)) {
+    return [];
+  }
+  const loaded = [];
+  for (const one of stored.fights) {
+    const fight = readFight(one);
+    if (fight !== null) {
+      loaded.push(fight);
+    }
+  }
+  return loaded;
+}
+
+/**
+ * Read back at world entry, which is when the character these belong to is known.
+ *
+ * They go BEHIND whatever this session has already measured rather than replacing it: the
+ * read settles after the world does, by which time a pull can have started, and a fight
+ * happening now is newer than every stored one by definition.
+ */
+async function restore() {
+  const stored = await woc.storage.character.get(STORE_KEY, null);
+  const loaded = readFights(stored);
+  if (loaded.length === 0) {
+    return;
+  }
+  fights = [...fights, ...loaded].slice(0, woc.settings['keep-fights']);
+  draw();
+}
+
+function load() {
+  restore().catch((err) => {
+    woc.warn('could not read the kept fights back', err);
+  });
+}
+
+async function forget() {
+  await woc.world.ready;
+  await woc.storage.character.delete(STORE_KEY);
+}
 
 /**
  * Expiring the fight must keep running while the panel is away, or a fight that closed
@@ -571,15 +1064,25 @@ function tick() {
 }
 
 tick();
+load();
 woc.setInterval(tick, REPAINT_MS);
 
+// Everything, rather than the fight in progress alone: with the kept fights still on the
+// pages behind it, resetting only the newest would leave the numbers the player asked to be
+// rid of one press of the strip away, and there is no second control to reach for.
 woc.keys.bind('reset', () => {
-  startFight();
+  fights = [];
+  viewing = null;
   bars.clear();
+  forget().catch((err) => {
+    woc.warn('could not clear the kept fights', err);
+  });
   draw();
 });
 
-// A changed row cap takes effect on the next repaint rather than at the next hit.
+// A changed row cap takes effect on the next repaint rather than at the next hit, and a
+// lowered fight cap drops the oldest pages now rather than at the end of the next fight.
 woc.onSettingsChange(() => {
+  fights.length = Math.min(fights.length, woc.settings['keep-fights']);
   draw();
 });
