@@ -1689,11 +1689,15 @@ describe('its layout', () => {
 
   // A wrapping track list rather than a column count, so the squares follow the frame
   // as it is dragged with no measurement and no resize handler in the addon at all.
+  //
+  // The 42 is `woc.ui.itemCell`, the game's own bag cell, written out rather than read
+  // from the loader: the number is what a player sees, so a change to it has to fail
+  // here and send somebody to re-capture the preview rather than passing silently.
   it('fits as many squares across as the frame is wide', async () => {
     const h = await start({ carry: { inventory: cells('ore', 20) } });
     await h.settle();
 
-    expect(gridEl('bags')?.style.gridTemplateColumns).toBe('repeat(auto-fill, 32px)');
+    expect(gridEl('bags')?.style.gridTemplateColumns).toBe('repeat(auto-fill, 42px)');
   });
 
   // A frame states no size bounds and takes the size it OPENED at as its floor, so

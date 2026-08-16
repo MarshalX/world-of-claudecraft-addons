@@ -353,6 +353,32 @@ export interface UiApi {
    * has not been measured yet gives back a usable number rather than a NaN.
    */
   units: (available: number, opts?: UnitOpts) => number;
+  /**
+   * One square of item art, at the size the game draws its own bags. Since apiMinor 7.
+   *
+   * The game lays every grid of items out at `minmax(42px, 1fr)` over a 4px gap, and
+   * nothing serves that number, so an addon either transcribes it or invents one. Two
+   * in this catalogue had invented two, and grids drawing the same art sat side by side
+   * at different sizes. Use it as the tile's `size` and as the grid's own track:
+   *
+   * ```js
+   * const cell = woc.ui.itemCell;
+   * grid.style.gridTemplateColumns = `repeat(auto-fill, ${cell}px)`;
+   * grid.style.gap = '4px';
+   * const square = woc.ui.tile({ size: cell });
+   * ```
+   *
+   * A fixed track rather than the game's `1fr`, deliberately: a stretched track
+   * stretches the square in it, and a cell that changes size as the player drags the
+   * frame is worse than a grid that stays put and centres.
+   *
+   * It carries the touch floor with it, which is the reason not to pick a smaller
+   * number for a denser panel. The game's own note ties this figure to keeping every
+   * cell at or above the 40x40 tap target, and the loader's coarse-pointer sheet cannot
+   * reach a tile to enforce it: a tile's size arrives as an inline custom property, and
+   * an inline style outranks every selector a stylesheet can spell.
+   */
+  itemCell: number;
   /** Where the game's own art lives, so no addon writes a path. */
   icon: IconUrls;
   /**

@@ -83,6 +83,8 @@ interface UiApi {
   show: (el: Element, shown: boolean) => void;
   /** How big one unit is when a box is divided between several. See kit/units.ts. */
   units: (available: number, opts?: UnitOpts) => number;
+  /** One square of item art, at the game's own bag grid. See kit/item-cell.ts. */
+  itemCell: number;
   /** Where the game's own art lives, so no addon writes a path. */
   icon: IconUrls;
   /**

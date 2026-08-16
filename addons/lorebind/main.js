@@ -47,8 +47,12 @@ const FRAME_MIN_WIDTH = 340;
  */
 const CHROME_HEIGHT = 400;
 
-/** One square of item art, and the gap between two of them. */
-const CELL_SIZE = 44;
+/**
+ * One square of item art, and the gap between two of them. The square is the loader's, which
+ * is the game's own bag cell: a grid of items should be the size the game draws one at, and
+ * the figure this panel had picked for itself was two pixels off that by coincidence.
+ */
+const CELL_SIZE = woc.ui.itemCell;
 const CELL_GAP = 4;
 /** The record under the grid draws the same art larger, since it is one item rather than many. */
 const DETAIL_SIZE = 56;

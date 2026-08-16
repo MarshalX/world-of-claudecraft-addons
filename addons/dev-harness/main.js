@@ -1492,17 +1492,25 @@ function checkToggleKey() {
 }
 
 /**
- * The three surfaces a display that scales with its own frame is built out of: the box the
- * loader is holding, the arithmetic that divides it, and the height that goes onto a row.
+ * The four surfaces a display sized against the game is built out of: the box the loader
+ * is holding, the arithmetic that divides it, the height that goes onto a row, and the
+ * square the game draws one item at.
  *
  * Measured rather than asserted where it can be. `ui.units` is pure and answers here; the
  * row height is a custom property the sheet derives from, so the check is that the derived
- * height actually reached the element, which is the half no suite can see.
+ * height actually reached the element, which is the half no suite can see. The item cell
+ * can only be reported, since nothing on the page holds the figure it was copied from.
  */
 function checkScaling() {
-  const { units, bar } = woc.ui;
+  const { units, bar, itemCell } = woc.ui;
   if (typeof units !== 'function' || typeof bar !== 'function') {
     return result('scaling', false, 'ui.units or ui.bar is not callable');
+  }
+  // A number rather than a function, so the failure to catch is the member never having
+  // been wired to the object an addon is handed: that reads as `undefined`, and an addon
+  // sizing a grid off it lays every square out at NaN pixels rather than throwing.
+  if (typeof itemCell !== 'number' || !Number.isFinite(itemCell) || itemCell <= 0) {
+    return result('scaling', false, `ui.itemCell is ${String(itemCell)} rather than a size`);
   }
   const share = units(SCALE_BOX, { count: SCALE_ROWS, gap: SCALE_GAP, min: SCALE_MIN });
   const probe = woc.ui.frame({ id: 'scale-probe', title: 'Probe', width: SCALE_WIDTH });
@@ -1536,13 +1544,21 @@ function checkScaling() {
       `a sized row carries "${written}" rather than ${String(share)}`,
     );
   }
+  const cell = `item cell ${String(itemCell)}px`;
   if (!sheetLive()) {
-    return result('scaling', true, 'units and frame.box() agree, no sheet here to size a row');
+    return result(
+      'scaling',
+      true,
+      `units and frame.box() agree, no sheet here to size a row, ${cell}`,
+    );
   }
   if (tall !== share) {
     return result('scaling', false, `a row asked for ${String(share)} drew ${String(tall)} tall`);
   }
-  return result('scaling', true, `box, units and a ${String(tall)}px row all agree`);
+  // The cell is REPORTED rather than checked against anything: it is a transcription of
+  // the game's own bag grid, so the figure in front of somebody running this against a
+  // live client is the only thing that can tell them the reading has gone stale.
+  return result('scaling', true, `box, units and a ${String(tall)}px row all agree, ${cell}`);
 }
 
 /**

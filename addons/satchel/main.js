@@ -82,9 +82,14 @@ const MAX_SLOTS = 72;
  * The square, and the floor a resize may take the grid to. No column count: the grid is a
  * wrapping track list, so the browser refits it. The floor is stated because a frame's bounds
  * are settled when it is built, and a grid two squares across is a list drawn the hard way.
+ *
+ * The square is the loader's, which is the game's: a bag drawn beside the game's own bags
+ * should be the same size as them, and the figure this panel had picked for itself was a
+ * third smaller, which also put every cell under the tap target a phone needs. The gap is
+ * the game's 4 to go with it.
  */
-const CELL_SIZE = 32;
-const CELL_GAP = 3;
+const CELL_SIZE = woc.ui.itemCell;
+const CELL_GAP = 4;
 const MIN_COLUMNS = 6;
 const MIN_ROWS = 3;
 
@@ -98,10 +103,14 @@ const STAT_GAP = 4;
 const STRIP_GAP = 10;
 const STRIP_WRAP_GAP = 2;
 
-/** Wide enough for five tabs on one row: measured at 279px of the 324 the padding leaves. */
-const FRAME_WIDTH = 340;
-/** Tall enough for a backpack of 16 squares, its bar, its strip and the tabs above. */
-const FRAME_HEIGHT = 420;
+/**
+ * Eight squares across, which is what the width is FOR: a 16 slot backpack is then exactly two
+ * rows and a full 72 exactly nine, so no bag ever ends on a part-filled row. The five tabs fit
+ * on one line inside it with room to spare, measured at 279px of the 364 the padding leaves.
+ */
+const FRAME_WIDTH = 380;
+/** Five rows of squares under the chrome: the whole backpack, and 40 of the 72 a player holds. */
+const FRAME_HEIGHT = 460;
 /** Carried twice by the width. It belongs to `.woc-addon-frame` rather than to a density. */
 const FRAME_PADDING = 8;
 /**
@@ -1177,8 +1186,9 @@ function createGrid(name) {
   el.className = 'woc-satchel-grid';
   el.dataset.grid = name;
   el.style.display = 'grid';
-  // A FIXED track rather than `minmax(32px, 1fr)`: a stretched track stretches the square in it,
-  // and a bag cell that changes shape with the window is worse than a centred grid.
+  // A FIXED track rather than the game's own `minmax(42px, 1fr)`: a stretched track stretches
+  // the square in it, and a bag cell that changes size with the window is worse than a
+  // centred grid. The square itself is the game's, which is what `ui.itemCell` carries.
   el.style.gridTemplateColumns = `repeat(auto-fill, ${String(CELL_SIZE)}px)`;
   el.style.gap = `${String(CELL_GAP)}px`;
   el.style.justifyContent = 'center';

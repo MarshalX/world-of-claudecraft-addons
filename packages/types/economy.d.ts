@@ -91,7 +91,14 @@ export interface MarketSaleRecord {
 export interface MarketInfo {
   /** Your own listings first, then one page of everyone else's. */
   listings: readonly MarketListing[];
-  /** Every listing matching the filter, yours included, across all pages. */
+  /**
+   * Every ROW matching the filter, yours included, across all pages.
+   *
+   * Rows rather than listings, because `collapseLowest` narrows this as well as
+   * the page: with it on the collapse happens before the count, so this is how
+   * many distinct items matched, and how many listings stand behind each of them
+   * is not on the wire at all.
+   */
   totalCount: number;
   /** The search string the server actually applied. */
   filter: string;
@@ -116,18 +123,26 @@ export interface MarketInfo {
   /**
    * The server COLLAPSED the matched book to one row per item id, cheapest first.
    *
-   * A narrowing of the ROWS and not of the match, so it changes what a page means
-   * without changing what `totalCount` counts: with this on, the page is one
-   * price floor per item and the count above it is how many listings stand behind
-   * those floors. Anything reading depth out of a page has to read this first, or
-   * it reports a market of one seller per item. Instanced listings stay distinct,
-   * since no two of them are the same goods.
+   * It narrows the ROWS and both COUNTS, which is what makes it more than a
+   * display option. The collapse runs before the page is cut and before the count
+   * is taken, so `totalCount` and `pageCount` are both over collapsed rows: with
+   * this on, nothing on the wire says how many listings stand behind a floor, and
+   * a page cannot be read for depth at all.
+   *
+   * What it gives back is the strongest single reading Browse offers. The filter
+   * is a function of the item id alone, so all of an item's listings match or
+   * none do, which makes a collapsed row that item's cheapest listing in the
+   * WHOLE BOOK rather than merely on this page. Your own listings collapse with
+   * everyone else's, so one of yours on the page is one nobody has undercut, and
+   * one that is missing has been undercut by the row standing in its place.
+   * Instanced listings stay distinct, since no two of them are the same goods.
    *
    * Added in game 0.38.0.
    */
   collapseLowest: boolean;
   /** Clamped by the server against the live match count, so this is the page you got. */
   page: number;
+  /** Over the collapsed rows wherever `collapseLowest` is set. Read it first. */
   pageCount: number;
   /** Sale proceeds waiting at the Merchant. */
   collectionCopper: number;
@@ -174,6 +189,13 @@ export interface MarketInfo {
    * Sell tab and null the rest of the time, which is most of the time. `sellValue`
    * on an item is still the only reference always available, and a price series
    * is still something an addon builds by recording the pages its player browses.
+   *
+   * It counts EVERY active listing of that item, including the Merchant's own
+   * stock and the player's own rows, because a buyer can take either instead of
+   * the one being staged. So it is the price nothing resells above, and it is not
+   * the cheapest RIVAL: an unguarded undercut of it can be a player undercutting
+   * themselves. It is also a stack's price divided by the stack and rounded UP,
+   * so it sits at or just above the true per-unit figure and never below it.
    *
    * Added in game 0.38.0.
    */

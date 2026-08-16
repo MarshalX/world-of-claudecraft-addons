@@ -65,10 +65,12 @@ function slotsOf(source: unknown, field: string): string {
  * rows happen to come back in the same order, reorders into an identical listing
  * array under a different reading of the same book.
  *
- * `collapseLowest` rides for the stronger version of that reason. It narrows the
- * rows without narrowing the match, so toggling it can leave `totalCount` and the
- * page bounds exactly where they were while every row on screen now means one
- * item's price floor instead of one listing.
+ * `collapseLowest` rides for the same reason at the case where it is hardest to
+ * see. It does move the counts, since the collapse runs before both of them, but
+ * on a book where every matched item has exactly one listing it moves nothing at
+ * all: same rows, same ids, same counts, same bounds, and a page that now means
+ * one price floor per item rather than one listing per row. The flag is the only
+ * thing that differs there, so it is the only thing that can report the change.
  */
 function queryOf(info: unknown): string {
   return [

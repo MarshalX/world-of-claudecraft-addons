@@ -1,9 +1,9 @@
 {
   "id": "satchel",
   "name": "Satchel",
-  "version": "1.2.0",
+  "version": "1.3.0",
   "apiVersion": 1,
-  "apiMinor": 6,
+  "apiMinor": 7,
   "author": "MarshalX",
   "description": "One list of everything you own, across every character. Bags, bank and mailbox are recorded as they are read, so an item is one row with a total however many stacks and characters hold it, and hovering says who has how many and where. What a vendor would pay for a bag, a bank and the whole account.",
   "entry": "main.js",

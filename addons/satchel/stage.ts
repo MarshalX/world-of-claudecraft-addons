@@ -428,15 +428,17 @@ async function onTab(stage: Stage, label: string): Promise<void> {
   await pause(SETTLE_MS);
 }
 
-/** A size the frame is genuinely draggable to: at its opening 340 by 420 the shot is chrome. */
+/** A size the frame is genuinely draggable to: at its opening 380 by 460 the shot is chrome. */
 const WIDENED = { x: 80, y: 120, w: 420, h: 560 };
 
 /**
  * ONE height for both preview panels: a sheet centres its panes against each other, so two of
  * different heights read as one that has slipped. Matched on the GRID's, since a list pane is
- * full at any height and a bag grid is only as tall as its cell ceiling.
+ * full at any height and a bag grid is only as tall as its cell ceiling. The height is the
+ * frame's own, which lands the grid on exactly five whole rows: a bag ending on a half row of
+ * empty sockets is the one thing in this shot that reads as the panel having been cut off.
  */
-const SHEET_BOX = { x: 80, y: 120, w: 420, h: 440 };
+const SHEET_BOX = { x: 80, y: 120, w: 420, h: 460 };
 
 function framed(box: typeof WIDENED = WIDENED): Record<string, FrameState> {
   return { bags: { box, visible: true } };

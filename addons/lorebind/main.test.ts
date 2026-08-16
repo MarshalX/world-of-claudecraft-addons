@@ -134,9 +134,11 @@ const FQID = 'official/lorebind';
  * `woc.data` landed at minor 2 and the kit's item quality axis at 3. The grid is a `ui.list`
  * now, the counting lines are `ui.line`, the strips are `ui.row`, the repaint is `woc.paint`,
  * the count is `fmt.count`, the name service is `bus.publish` and the key is the frame's own
- * `toggleKey`: all of them minor 4, so the claim tracks the newest member rather than the oldest.
+ * `toggleKey`: all of them minor 4. The square a cell is drawn at is `ui.itemCell`, minor 7,
+ * and the claim tracks the newest member rather than the oldest. An addon reading it off an
+ * older loader gets `undefined`, and a grid whose track is `NaNpx` draws nothing at all.
  */
-const NEEDS_MINOR = 4;
+const NEEDS_MINOR = 7;
 
 /** The row `mountAddon` would build, for the one case that mounts the addon by hand. */
 function installedRow(): InstalledAddon {

@@ -5,8 +5,9 @@
 // plain elements the addon appends into its own frame, and the frame's teardown
 // takes the whole tree with it. Contrast a bar, a tile or a list, each of which the
 // addon may put in DOM the loader does not own and each of which holds something of
-// its own to release. `show` and `units` build nothing at all.
+// its own to release. `show`, `units` and `itemCell` build nothing at all.
 
+import { ITEM_CELL_PX } from '../ui/kit/item-cell.ts';
 import { createColumn, createLine, createRow, show } from '../ui/kit/layout.ts';
 import { units } from '../ui/kit/units.ts';
 
@@ -20,6 +21,7 @@ interface LayoutSurface {
   line: (opts?: Parameters<typeof createLine>[1]) => HTMLElement;
   show: typeof show;
   units: typeof units;
+  itemCell: number;
 }
 
 function layoutSurface(deps: LayoutDeps): LayoutSurface {
@@ -29,6 +31,7 @@ function layoutSurface(deps: LayoutDeps): LayoutSurface {
     line: (opts) => createLine(deps.doc, opts),
     show,
     units,
+    itemCell: ITEM_CELL_PX,
   };
 }
 

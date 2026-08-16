@@ -232,7 +232,9 @@ There is no price history anywhere and there never was: the server keeps no reco
 
 `market.info.sellLowestPrice` is the one exception and it is not one you can use on demand. It is the cheapest live listing of whatever the player has staged on the Sell tab, filled by a request the game's own window sends, and sending is outside what an addon may do. So it is real while a player is part-way through listing something and null the rest of the time, which is most of the time. Read `market.info.sellPriceItemId` first and compare it against the item you think is staged: the answer arrives a round trip after the question, so a snapshot taken across an item switch carries the previous item's price under the new item's form.
 
-**Read `market.info.collapseLowest` before you read depth off a page.** With it on, the server has narrowed the rows to one per item id, cheapest first, without narrowing the match: `totalCount` still counts every listing, so the page is a list of price floors and the count above it is how many listings stand behind them. An addon that counted rows would report a market with one seller per item. Instanced copies stay distinct, since no two of them are the same goods. Added in game 0.38.0.
+Two things about that price decide whether an addon built on it is right. It counts every active listing of the item, the Merchant's own stock and the player's own rows included, because a buyer can take either instead: it is the price nothing resells above, and it is not the cheapest rival, so an unguarded "undercut this" can be telling a player to undercut themselves. And it is a stack's price divided by the stack and rounded up, so it sits at or just above the true per-unit figure and never below it, which is the direction that makes an ask one copper under it genuinely under the real one.
+
+**Read `market.info.collapseLowest` before you read depth off a page.** With it on, the server has collapsed the matched book to one row per item id, cheapest first, and it has done that before cutting the page and before counting: `totalCount` and `pageCount` are both over collapsed rows, so nothing on the wire says how many listings stand behind a floor and depth cannot be read off that page at all. What you get instead is the strongest single reading Browse offers. The filter is a function of the item id alone, so all of an item's listings match or none do, which makes a row the cheapest listing of that item in the whole book rather than on the page. Your own listings collapse with everyone else's, so one of yours on the page is one nobody has undercut, and one that is missing has been undercut by the row standing in its place. Instanced copies stay distinct, since no two of them are the same goods. Added in game 0.38.0.
 
 **Read `market.info.sort` before you fold two pages together.** Browse has two orders as of game 0.37.1, and it is an axis of its own beside the five filters: `'name'` is the classic one, the book grouped by display name and then by price, and `'price'` is the whole matched book cheapest first. It reorders and never narrows, so the same query under the two produces the same rows in a different arrangement, and the arrangement is what a partial reading samples. Under `'price'` page 0 is the cheapest rows in the market, which is the strongest thing either order can tell you about an item, and every page after it can hide a cheaper copy of anything: an item's listings are contiguous only under `'name'`. Record which order a reading came from, or a median over your own browsing becomes a median over whichever end of the book the player was looking at.
 
@@ -460,6 +462,17 @@ cell.update({ icon: woc.ui.icon.item('ashstalker_cowl'), quality: 'epic' });
 There is no way to pass a colour, for the reason there is none for a school: two addons drawing an epic should draw the same purple, and it should be the purple in the player's own bags. For an element you drew yourself, a chip or a heading or a name in a panel of your own, the same six colours are on the class `woc-quality-<tier>`, which you may put on anything you own, exactly as you may reuse `woc-btn` and `woc-tab`.
 
 Nothing in the loader knows an item's quality: the game's item table is bundled into its own chunk and is served nowhere. So a tier is something you got from somewhere, which today means a `LootRoll` off `world.group`, a record another addon published on the bus, or a table your own addon ships. Null, and anything outside the six tiers, colours nothing, which is the honest answer for the 96 items the game ranks at no tier at all and for an id you have not looked up.
+
+`woc.ui.itemCell` is how big to draw one. The game lays every grid of items out at `minmax(42px, 1fr)` over a 4px gap and serves that number nowhere, so before this every addon drawing a grid invented one, and two panels showing the same art sat side by side at different sizes.
+
+```js
+const cell = woc.ui.itemCell;
+grid.style.gridTemplateColumns = `repeat(auto-fill, ${cell}px)`;
+grid.style.gap = '4px';
+const square = woc.ui.tile({ size: cell, quality: 'epic' });
+```
+
+A fixed track rather than the game's own `1fr`, deliberately: a stretched track stretches the square in it, and a cell that changes size while the player drags the frame is worse than a grid that stays put and centres. Take the figure rather than picking a denser one, because it carries the touch floor with it. The game's own note ties it to keeping every cell at or above the 40px tap target, and the loader's coarse-pointer sheet cannot reach a tile to restore it: a tile's size arrives as an inline custom property, and an inline style beats every rule in the sheet.
 
 ### People, and the colour a player reads THEM by
 
