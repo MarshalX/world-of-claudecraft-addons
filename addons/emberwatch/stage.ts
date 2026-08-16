@@ -11,10 +11,10 @@
 // frost, which cannot both be in play, and the pane lists both because a rule is switched off by
 // hand rather than by a spec nothing on the wire states.
 //
-// The five tiles are one of each thing the strip can say, and the three artless ones each have a
-// different reason: a rule anchored on a KIND names no ability at all, an aura id that is not an
-// ability id has no file whatever the caster resolves to, and one ability's icon is composited at
-// run time from a module an addon cannot reach.
+// The five tiles are one of each thing the strip can say, and the two the player did not cast are
+// the reason `artOf` has a second branch: their ids are the mob's own, in no class manifest and in
+// nothing an addon can reach, so those squares carry the applying mob's PORTRAIT. Both mobs here
+// are catalogued templates with committed portrait art, which every mob template has.
 //
 // The dot on the target carries `mine`, which is the clause the whole addon turns on: two mages
 // on one boss both leave a `pyroblast`, and only one is worth a global.

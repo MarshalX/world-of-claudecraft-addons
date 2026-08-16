@@ -291,6 +291,8 @@ interface Harness extends AddonHarness {
   /** What the strip says it is not showing. */
   overflow: () => string;
   labelOf: (cellKey: string) => string;
+  /** The tile's picture, or empty for a square drawing none. */
+  artOf: (cellKey: string) => string;
   valueOf: (cellKey: string) => string;
   countOf: (cellKey: string) => string;
   sweepOf: (cellKey: string) => string;
@@ -454,6 +456,13 @@ async function start(opts: StartOpts = {}): Promise<Harness> {
     overflow: () => document.querySelector('.woc-ew-overflow')?.textContent ?? '',
     labelOf: (cellKey) =>
       cellFor(cellKey)?.querySelector('.woc-tile')?.getAttribute('aria-label') ?? '',
+    artOf: (cellKey) => {
+      const art = cellFor(cellKey)?.querySelector<HTMLImageElement>('.woc-tile-art');
+      if (art === null || art === undefined || art.hidden) {
+        return '';
+      }
+      return art.getAttribute('src') ?? '';
+    },
     valueOf: (cellKey) => textIn(cellKey, '.woc-tile-value'),
     countOf: (cellKey) => textIn(cellKey, '.woc-tile-count'),
     sweepOf: (cellKey) =>
@@ -678,6 +687,76 @@ describe('your own copy of an effect two people applied', () => {
 
     expect(h.drawn()).toHaveLength(2);
     expect(h.valueOf(key('dot', 'target', 'corruption', ALLY))).toBe('18');
+  });
+});
+
+// A square is the whole display, so what is in it is the addon's answer to "what is this".
+// Ability art exists for a player's kit and for nothing a mob casts, and the two cases below are
+// the pair a version that resolved everything through `icon.ability` would pass on one of.
+describe('the picture on a tile', () => {
+  const Silenced: RuleSpec = {
+    id: 'silenced',
+    label: 'Silenced',
+    unit: 'player',
+    kind: 'silence',
+    on: 'gained',
+  };
+
+  const MyDot: RuleSpec = {
+    id: 'dot',
+    label: 'Blackrot',
+    unit: 'target',
+    auraId: 'corruption',
+    on: 'gained',
+  };
+
+  /** A mob's, so its id is in no class manifest and never will be. */
+  const Shriek: Effect = {
+    id: 'silence_gnoll',
+    name: 'Silencing Shriek',
+    kind: 'silence',
+    remaining: 3,
+  };
+
+  const FromFoe = key('silenced', 'player', 'silence_gnoll', FOE);
+
+  it('carries the portrait of the mob that applied it', async () => {
+    const h = await run({ rules: rulesFile([Silenced]) });
+    h.afflict(ME, { ...Shriek, sourceId: FOE });
+    h.frame();
+
+    expect(h.artOf(FromFoe)).toBe('/ui/mobs/gnoll.webp');
+  });
+
+  // A portrait answers a different question from an ability icon, so the square has to say which
+  // it is drawing. Both routes, because a tile is art and a screen reader gets none of it.
+  it('says whose face it is, in the tooltip and in the accessible name', async () => {
+    const h = await run({ rules: rulesFile([Silenced]) });
+    h.afflict(ME, { ...Shriek, sourceId: FOE });
+    h.frame();
+
+    expect(h.hover(FromFoe)).toContain('Pictured: Grimjaw');
+    expect(h.labelOf(FromFoe)).toContain('from Grimjaw');
+  });
+
+  it('carries the ability art for an effect you applied, and pictures nobody', async () => {
+    const h = await run({ rules: rulesFile([MyDot]) });
+    h.select(FOE);
+    h.afflict(FOE, { ...CORRUPTION, sourceId: ME });
+    h.frame();
+
+    const mine = key('dot', 'target', 'corruption', ME);
+    expect(h.artOf(mine)).toBe('/ui/skills/warlock/corruption.webp');
+    expect(h.hover(mine)).not.toContain('Pictured');
+  });
+
+  // The caster is the only route to a picture, so a source out of interest scope has none.
+  it('draws no picture for a caster no entity answers to', async () => {
+    const h = await run({ rules: rulesFile([Silenced]) });
+    h.afflict(ME, Shriek);
+    h.frame();
+
+    expect(h.artOf(key('silenced', 'player', 'silence_gnoll'))).toBe('');
   });
 });
 

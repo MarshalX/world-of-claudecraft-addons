@@ -29,8 +29,10 @@
 // before it breaks. The soak and the per-hit chance never leave the server, and the wire
 // carries a bare presence marker in a field the published `Aura` does not declare.
 //
-// An effect a mob applied has no art anywhere: the game composites aura icons at run time,
-// so the only file to point at is the applying ability's, filed per player class.
+// An effect a mob applied has no icon anywhere: the game composites aura icons at run time,
+// so the only ability file to point at is filed per player class. What a mob does have is a
+// PORTRAIT, so those squares carry the face of whatever applied the effect, said out loud in
+// the tooltip and in the accessible name rather than left to be read off the picture.
 //
 // `world.abilities` is deliberately not consulted for a name. An entity's aura carries one
 // on the wire; a party row carries none, and a spellbook would answer for your own kit and
@@ -198,13 +200,31 @@ function reassemble() {
   assemble();
 }
 
-/** Art is filed per player class, so a mob's effect resolves through nothing, and a lockout id 404s. */
+/**
+ * The picture for an alert, and whose face it is when it is not the effect's own.
+ *
+ * Ability art is filed per player class, so an effect a mob applied resolves through nothing: the
+ * game composites those icons on a canvas from a module no addon can reach, and a lockout id 404s.
+ * A mob's PORTRAIT is a file, and every catalogued template ships one, so the square is filled by
+ * the thing that applied the effect rather than left blank. `castBy` is what makes that honest:
+ * the tooltip and the accessible name both say whose face it is, because a portrait answers a
+ * different question from an ability icon and a square that does not say which is a guess.
+ *
+ * An npc is deliberately not portrayed. The game draws a crest for one rather than a portrait, so
+ * `/ui/mobs/` would 404 and the slot would go back to being empty by a longer route.
+ */
 function artOf(auraId, sourceId) {
   const caster = woc.world.entities.get(sourceId);
-  if (caster === undefined || caster.kind !== 'player') {
-    return null;
+  if (caster === undefined) {
+    return { art: null, castBy: null };
   }
-  return woc.ui.icon.ability(auraId, caster.templateId);
+  if (caster.kind === 'player') {
+    return { art: woc.ui.icon.ability(auraId, caster.templateId), castBy: null };
+  }
+  if (caster.kind !== 'mob') {
+    return { art: null, castBy: null };
+  }
+  return { art: woc.ui.icon.mob(caster.templateId), castBy: caster.name };
 }
 
 /** `mine` is the clause a dot tracker cannot skip. */
@@ -266,7 +286,7 @@ function fromAura(rule, unit, unitKey, aura) {
     remaining: aura.remaining,
     duration: aura.duration,
     encounterOwned: aura.unbreakableControl === true,
-    art: artOf(aura.id, aura.sourceId),
+    ...artOf(aura.id, aura.sourceId),
   };
 }
 
@@ -291,6 +311,7 @@ function fromRow(rule, member, row) {
     duration: null,
     encounterOwned: false,
     art: null,
+    castBy: null,
   };
 }
 
@@ -595,6 +616,12 @@ function remainingLine(found) {
 
 function extraLines(found) {
   const lines = [];
+  if (found.castBy !== null) {
+    lines.push({
+      text: `Pictured: ${found.castBy}, which applied it. A mob's effect has no icon of its own.`,
+      tone: 'muted',
+    });
+  }
   if (found.encounterOwned) {
     lines.push({ text: 'The encounter owns this one: nothing you do breaks it.', tone: 'danger' });
   }
@@ -682,9 +709,13 @@ function createPin(entry) {
   };
 }
 
-/** A tile is all art, so everything it says has to be in its accessible name too. */
+/** A tile is all art, so everything it says has to be in its accessible name too, the face included. */
 function labelFor(found) {
-  return `${found.rule.label}: ${found.name} on ${found.who}`;
+  const said = `${found.rule.label}: ${found.name} on ${found.who}`;
+  if (found.castBy === null) {
+    return said;
+  }
+  return `${said}, from ${found.castBy}`;
 }
 
 /** Full rather than empty with no denominator: an empty square reads as an effect already gone. */
