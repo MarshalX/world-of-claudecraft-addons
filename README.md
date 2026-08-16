@@ -42,13 +42,13 @@ The per-browser procedure lives on the site rather than here, because two copies
 
 **16 addons ship with the loader**, reviewed and installed from inside the game. Five of them:
 
-**[Combat Meter](addons/combat-meter)** — What your damage and healing are made of: a row per ability, your pet's included, with per-second rates, crit rate, average and biggest hit, plus your real miss and dodge rates and what is hitting you.
+**[Combat Meter](addons/combat-meter)** — Damage, healing and damage taken broken down per ability, pet included, with rates, crits and your real miss and dodge rates. Pages back through past fights, kept across a reload.
 
-<img src="addons/combat-meter/preview.png" width="388" alt="The Combat Meter panel on its Damage tab: one fight broken down per ability, six rows tinted by damage school under a total with a per-second rate, above the player attack table." />
+<img src="addons/combat-meter/preview.png" width="440" alt="On the left, The fight you are in, the Combat Meter on its Damage tab, the fight strip reading Current: six ability rows tinted by damage school under a per-second total, above the attack table. On the right, One you already had, the same panel paged back one fight, the strip naming the mob and marking page two of three, above that earlier fight and its own rows." />
 
 **[Satchel](addons/satchel)** — One list of everything you own, across every character. Bags, bank and mailbox are recorded as they are read, so an item is one row with a total however many stacks and characters hold it, and hovering says who has how many and where. What a vendor would pay for a bag, a bank and the whole account.
 
-<img src="addons/satchel/preview.png" width="440" alt="On the left, Everything you own, one row an item, pooled across every character On the right, One character, live, the bags of the character in play, as a grid of squares, one of them padlocked" />
+<img src="addons/satchel/preview.png" width="440" alt="On the left, Everything you own, one row an item, pooled across every character and searchable, sortable and filterable by who holds it, each name coloured by its tier, with what the whole list goes for at the Merchant along the bottom On the right, One character, live, the bags of the character in play, as a grid of squares bordered by item tier, one of them padlocked" />
 
 **[Facemark](addons/facemark)** — A nameplate over every unit: health, casts, effects and raid marks. It names the side each player is on in PvP, which no field says, and whether a cast is coming at you.
 
