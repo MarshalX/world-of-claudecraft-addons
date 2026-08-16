@@ -38,6 +38,7 @@
     "items": "node tools/items.mjs",
     "theme": "node tools/theme.mjs",
     "aura-kinds": "node tools/aura-kinds.mjs",
+    "tables": "node tools/tables.mjs",
     "changelog": "git-cliff --config cliff.toml --output CHANGELOG.md"
   },
   "dependencies": {
