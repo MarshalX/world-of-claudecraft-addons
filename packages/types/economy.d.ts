@@ -137,7 +137,7 @@ export interface MarketInfo {
    * one that is missing has been undercut by the row standing in its place.
    * Instanced listings stay distinct, since no two of them are the same goods.
    *
-   * Added in game 0.38.0.
+   * Added in game 0.38.0, and in API minor 7.
    */
   collapseLowest: boolean;
   /** Clamped by the server against the live match count, so this is the page you got. */
@@ -176,7 +176,7 @@ export interface MarketInfo {
    * the new item's form. Comparing this id against what the player has staged is
    * the only thing that makes that visible.
    *
-   * Added in game 0.38.0.
+   * Added in game 0.38.0, and in API minor 7.
    */
   sellPriceItemId: string | null;
   /**
@@ -197,7 +197,7 @@ export interface MarketInfo {
    * themselves. It is also a stack's price divided by the stack and rounded UP,
    * so it sits at or just above the true per-unit figure and never below it.
    *
-   * Added in game 0.38.0.
+   * Added in game 0.38.0, and in API minor 7.
    */
   sellLowestPrice: number | null;
 }

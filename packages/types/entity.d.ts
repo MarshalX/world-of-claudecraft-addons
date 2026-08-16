@@ -501,7 +501,8 @@ export interface Entity {
    * the game keeps the mark's aura off party and raid frames for exactly that
    * reason.
    *
-   * False on every ordinary account and on every mob. Added in game 0.38.0.
+   * False on every ordinary account and on every mob. Added in game 0.38.0, and
+   * in API minor 7 rather than the 6 the block above this one carries.
    */
   cheaterMark: boolean;
 
