@@ -66,7 +66,15 @@ Zone layouts, gather nodes, rare spawns and quest text are in the game's own bun
 
 Reads a deployed host, defaults to live, which is correct and must not be pointed elsewhere: a preview pictures what a PLAYER reads in Browse.
 
-Only re-capture an addon whose panel VISIBLY changed. A preview is a committed artifact and a re-capture with no visible change is churn. It binds the stage port before it bundles, so a second run refuses and so does one started while `pnpm run stage` is up. It bundles fifteen scenario files and rewrites fifteen manifests, so run it on a quiet tree.
+**Capture EVERY addon, diff the result, and keep every preview whose bytes changed.** A preview photographs the game's ART as well as the addon's DOM, so an addon nobody edited can still be picturing something stale: 0.38.2 re-encoded 229 files under `public/ui/mobs/` and moved every portrait in every preview that draws one. Deciding what to capture by reading addon diffs cannot see that, and restoring a capture because the change looked too small to notice puts the file back to a picture of an older game and leaves the same decision for the next pass.
+
+Decide with numbers rather than by eye, in two steps. **First re-capture anything whose bytes moved, because a capture is not always reproducible.** Most are, so an unchanged checksum is a real all-clear; `emberwatch` is not, photographing 2342px and then 2348px wide from one tree, which would have rewritten its preview on every catch-up while looking like a real change each time. Only a diff that reproduces is worth measuring.
+
+**Then measure it, to know what you are committing rather than to decide whether to.** Take the max per-channel delta and the count of pixels above about 32. A webp re-encode peaks near 40 with a handful of pixels over that and no bounding box: on 0.38.2 `longwatch` and `trailmark` came in at 40 and 49 with four and sixteen such pixels, the game's own portraits, and both were kept. A tight box with large deltas is a layout shift and is usually your own change. Where the diff SITS names the cause: scattered across icons is the game's art, a localized rectangle is your own change, and text-wide speckle under about 20 is capture noise between Chromium builds.
+
+The first addon captured in a cold run can exceed the 15s `READY_MS` while the 6.7 MB bundle is served for the first time, and it reports as a `waitForSelector` timeout indistinguishable from a broken scenario. Re-run before believing one.
+
+It binds the stage port before it bundles, so a second run refuses and so does one started while `pnpm run stage` is up. It bundles sixteen scenario files and rewrites the `preview` block of every manifest it captures, so run it on a quiet tree and check afterwards that the only manifest changes left are the version bumps you meant. An addon with no `preview` block is not capturable, which is not a gap: `dev-harness` ships without one.
 
 If an addon uses `woc.paint`, its stage scenario must call `stage.frame()` or the capture photographs a blank panel, writes it into `addon.json`, and nothing warns.
 

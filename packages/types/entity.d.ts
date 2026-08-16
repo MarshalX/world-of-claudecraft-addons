@@ -490,6 +490,20 @@ export interface Entity {
    * the operator rather than guessed, and false on every ordinary account.
    */
   aiAccount: boolean;
+  /**
+   * The account is wearing the operators' Cheater tag.
+   *
+   * A sanction the game states rather than hides: it draws the tag beside the
+   * name for everyone nearby, and the countdown to its expiry rides an aura on
+   * the marked player alone, so the flag says a mark is on and nothing about how
+   * long is left. Deliberately power-neutral in the game, and it stays that way
+   * here: it is a thing to SAY, never a reason to treat a player as weaker, and
+   * the game keeps the mark's aura off party and raid frames for exactly that
+   * reason.
+   *
+   * False on every ordinary account and on every mob. Added in game 0.38.0.
+   */
+  cheaterMark: boolean;
 
   /**
    * Ranged attack power, the hunter stat. 0 on anything that has none.

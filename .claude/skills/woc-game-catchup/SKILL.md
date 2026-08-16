@@ -104,7 +104,23 @@ Three kinds of work, and they are worth keeping distinct because only the first 
 
 **Never invent an action.** `net` is read-only, there is no send API, and a new game write command is a line in the report and nothing else. An addon reports state; the player acts in the game's own UI.
 
-Every addon change carries its own suite (`addons/<id>/main.test.ts`, starting from `tests/fakes/addon.ts`) and, where the panel changed, its stage scenario. Re-capture `preview.png` with `pnpm shots <id>` only when the panel VISIBLY changed, on a quiet tree, and update the `alt` text on the scenario rather than on the manifest. If the addon uses `woc.paint`, its scenario must call `stage.frame()` or the capture photographs a blank panel and nothing warns.
+Every addon change carries its own suite (`addons/<id>/main.test.ts`, starting from `tests/fakes/addon.ts`) and, where the panel changed, its stage scenario. Update the `alt` text on the scenario rather than on the manifest. If the addon uses `woc.paint`, its scenario must call `stage.frame()` or the capture photographs a blank panel and nothing warns.
+
+### Verify the previews, for EVERY addon, by capturing rather than by reasoning
+
+Run `pnpm shots` over the whole catalogue once the addon work is final, and diff what comes out. Not only the addons you touched, and never a judgement made from reading diffs.
+
+**The reason is that a preview photographs the GAME's art as well as the addon's DOM, and only one of those is in your diff.** Game 0.38.2 re-encoded 229 files under `public/ui/mobs/`, which moved every mob portrait in every preview that draws one, on a branch where no addon's drawing code had changed at all. No amount of reading addon source finds that. The other half is the same lesson pointing the other way: an addition that looks invisible can still move layout, and a cheater tag added as an always-present empty `<span>` cost a fourth 5px gap on every facemark plate, because the tag row is a flex container and an empty child is still a flex item. The capture is what sees both.
+
+**A preview whose bytes changed is KEPT and committed with the rest of the catch-up.** Not judged against whether a player would notice: the committed PNG is meant to be the current picture of the current game, and the whole reason this step exists is that its inputs move without anything in the diff saying so. Restoring one because the change looked too small to matter puts the file back to a picture of an older game and hands the next pass the same decision again, forever. The measurement below is for UNDERSTANDING and reporting what moved, not for deciding whether to keep it.
+
+- **An unchanged checksum is a real all-clear; a changed one is not yet a finding.** Most captures are byte-stable, so the thirteen that come back identical need no further thought. **Not all of them are, and the exception is invisible until you look for it:** on 0.38.2 `emberwatch` photographed 2342px wide and then 2348px wide from the same tree, so its preview would have been rewritten by every catch-up forever, each time looking like a real change. Any addon whose bytes moved gets captured a SECOND time first, and only a diff that reproduces is worth measuring.
+- **A cold run flakes at the top.** The first addon captured can blow the 15s `READY_MS` while the 6.7 MB bundle is served for the first time, and it reports as a `waitForSelector` timeout that reads exactly like a broken scenario. Re-run before believing one: `cadence` failed twice that way and then captured clean, reaching ready in 600ms at every scale.
+- **Measure what moved, so the report can say what it was.** Decode both PNGs and take the max per-channel delta, the count of pixels above ~32, and the bounding box of those. A max near 40 with a handful of such pixels and no tight box is the game re-encoding its own art, which is what `longwatch` and `trailmark` were at 0.38.2. A tight box with large deltas is a layout shift, and that one is worth stopping on because it is usually YOURS: it is how the cheater tag's always-present empty `<span>` would have surfaced.
+- **Read WHERE the diff is, because it names the cause.** Scattered over every icon is the game's art moving. A localized rectangle is your own change. Text-wide speckle under a max of about 20 is capture noise between Chromium builds.
+- **Save the committed bytes before running anyway.** Not to restore churn, but because a capture can fail and a scenario can turn out unstable, and you need the original both to diff against and to fall back to. Copy files; nothing in this pass runs a git write.
+- **Then check the manifests.** `pnpm shots` rewrites the `preview` block of every addon it captures. Confirm what is left is the version bumps you intended plus the preview blocks that genuinely moved.
+- An addon with no `preview` block is not capturable and is not a gap: `dev-harness` ships without one, so its panel is photographed by nothing.
 
 Then sweep the whole branch for version bumps, which is a judgement about the SET of changes and is visible to nobody working item by item. Every addon a player can OBSERVE a change in needs its `version` bumped, and needs `apiMinor` set to the smallest minor carrying every member it reads. An addon changed without a bump is an addon changed for nobody: no badge, no update row, no error, and fresh installs silently getting a different body from every existing player.
 
@@ -128,6 +144,7 @@ Report, in this order:
 
 - **What moved**, by surface, with citations.
 - **What was regenerated**, including the no-ops. A verified no-op is a real result: it is the difference between "the art did not change" and "nobody looked."
+- **What the preview capture found**, over the whole catalogue rather than the addons you touched. Say which came back byte-identical, which differed, and for each that differed whether it was committed or restored, with the number the visibility call rested on. "Every preview re-captured unchanged" is a finding; "I did not expect any to change" is not one.
 - **What was published** and what `API_MINOR` did, with the `git tag --contains` reading behind the decision.
 - **Which addons changed**, with their version bumps, and which deliberately did not bump and why.
 - **What was refused**, with the reason. A reworked mechanic whose state is never sent, a new write command, a field only honest on some surfaces. This section is worth as much as the rest, because it is what stops the same idea being re-proposed next cycle.

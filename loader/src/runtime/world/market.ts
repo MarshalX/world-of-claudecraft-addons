@@ -77,6 +77,16 @@ interface MarketInfo {
    * the pages a player happened to read is sampling one end of it.
    */
   sort: string;
+  /**
+   * The server COLLAPSED the matched book to one row per item id, cheapest first.
+   *
+   * A narrowing of the rows rather than of the match: `totalCount` still counts
+   * the whole match, so with this on the page is a price floor per item and the
+   * count above it is the number of listings behind those floors. An addon
+   * counting rows to say how deep a market is has to read this first, and an
+   * instanced listing is exempt because no two of them are the same goods.
+   */
+  collapseLowest: boolean;
   /** Clamped by the server against the live match count, so this is the page you got. */
   page: number;
   pageCount: number;
@@ -97,6 +107,29 @@ interface MarketInfo {
   /** Per-seller active-listing cap. */
   maxListings: number;
   myListingCount: number;
+  /**
+   * The item the Sell tab's price reference was computed for, or null for none.
+   *
+   * Read it BEFORE `sellLowestPrice`: the pair is the answer to a question the
+   * player asked by staging an item, and it arrives a round trip later, so a
+   * snapshot taken across an item switch carries the previous item's price under
+   * the new one's form. Comparing this against what is staged is what makes that
+   * visible.
+   */
+  sellPriceItemId: string | null;
+  /**
+   * The cheapest active listing of `sellPriceItemId`, per unit, or null when that
+   * item has none. Null with a null id means nothing was ever asked for.
+   *
+   * The only market-wide price the game will state, and it exists because the
+   * player asked: it is filled by a request the Sell tab sends, which is a SEND
+   * and therefore outside what an addon may do. So an addon reads it when the
+   * player has staged an item and reads null the rest of the time, and it cannot
+   * make the reading happen. `sellValue` is still the only reference always
+   * there, and a price series is still something an addon builds from the pages
+   * its player browses.
+   */
+  sellLowestPrice: number | null;
 }
 
 /**

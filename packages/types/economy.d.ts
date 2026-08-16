@@ -113,6 +113,19 @@ export interface MarketInfo {
    * folding the two together.
    */
   sort: string;
+  /**
+   * The server COLLAPSED the matched book to one row per item id, cheapest first.
+   *
+   * A narrowing of the ROWS and not of the match, so it changes what a page means
+   * without changing what `totalCount` counts: with this on, the page is one
+   * price floor per item and the count above it is how many listings stand behind
+   * those floors. Anything reading depth out of a page has to read this first, or
+   * it reports a market of one seller per item. Instanced listings stay distinct,
+   * since no two of them are the same goods.
+   *
+   * Added in game 0.38.0.
+   */
+  collapseLowest: boolean;
   /** Clamped by the server against the live match count, so this is the page you got. */
   page: number;
   pageCount: number;
@@ -139,6 +152,32 @@ export interface MarketInfo {
   /** Per-seller active-listing cap. */
   maxListings: number;
   myListingCount: number;
+  /**
+   * The item the Sell tab's price reference below was computed for, or null.
+   *
+   * Read this BEFORE `sellLowestPrice`. The pair answers a question the player
+   * asked by staging an item and the answer arrives a round trip later, so a
+   * snapshot taken across an item switch carries the previous item's price under
+   * the new item's form. Comparing this id against what the player has staged is
+   * the only thing that makes that visible.
+   *
+   * Added in game 0.38.0.
+   */
+  sellPriceItemId: string | null;
+  /**
+   * The cheapest active listing of `sellPriceItemId`, per unit, or null when that
+   * item has none listed. Null under a null id means nothing was ever asked for.
+   *
+   * The only market-wide price the game will ever state, and you cannot ask for
+   * it: it is filled by a request the Sell tab sends, and sending is outside what
+   * an addon may do. So this is real while the player has an item staged on the
+   * Sell tab and null the rest of the time, which is most of the time. `sellValue`
+   * on an item is still the only reference always available, and a price series
+   * is still something an addon builds by recording the pages its player browses.
+   *
+   * Added in game 0.38.0.
+   */
+  sellLowestPrice: number | null;
 }
 
 /**

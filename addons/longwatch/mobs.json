@@ -1,5 +1,5 @@
 {
-  "gameVersion": "0.37.1",
+  "gameVersion": "0.38.2",
   "source": "src/sim/data.ts, src/ui/i18n.resolved.generated/en.ts",
   "mobs": [
     {

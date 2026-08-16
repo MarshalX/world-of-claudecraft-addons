@@ -49,7 +49,7 @@ export type {
   TalentRole,
   TalentRowLevel,
 } from './character.js';
-export type { Recipe, Station } from './content.js';
+export type { CivicService, Recipe, Station } from './content.js';
 export type { KnownCue } from './cues.generated.js';
 export type {
   Absent,

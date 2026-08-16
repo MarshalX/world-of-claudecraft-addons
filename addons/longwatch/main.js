@@ -21,6 +21,13 @@
 // standing plus the same. `windowOf` is that pair, and the row says which of the two
 // readings it is drawing, because a bound presented as a countdown is a lie about how much
 // is known.
+//
+// The game itself is the second source of uncertainty, and it defeats a watched kill rather
+// than being fixed by one. A rare with an authored respawn WINDOW draws its delay fresh on
+// every death (game 0.38.0 put Grix the Tunnelking on a quarter to half an hour), so its
+// return is a stretch of time however exactly its death was dated. `rares.json` carries
+// both ends for such a rare and one figure for every other, and `isExact` is the single
+// question that decides whether a row may count down to a moment at all.
 
 /** The opening box. The minimums are well under it, since the opening size is the floor. */
 const FRAME_WIDTH = 460;
@@ -148,6 +155,12 @@ const watch = new Map();
  *  - `respawn` is seconds, resolved by running the game's own `resolveRespawnSeconds`. It
  *    has to be positive, or a row would divide the fill by nothing and read as due the
  *    instant the rare died.
+ *  - `respawnMax` is the other end, present only where the game authored a random window
+ *    rather than a fixed schedule (game 0.38.0 put Grix the Tunnelking on one). Absent
+ *    means the two ends are the same and a kill this character watched gives an exact
+ *    countdown; present means it never can, whatever was watched, so the row reads as a
+ *    window and says so. A value that does not exceed `respawn` is dropped rather than
+ *    obeyed, since a window that runs backwards would make every row of that rare due.
  *  - `zone` has to be one of the four rectangles above. A row naming any other zone could
  *    never pass the zone filter and would sort by a distance to nowhere.
  */
@@ -155,15 +168,30 @@ function readRare(value) {
   if (typeof value !== 'object' || value === null) {
     return null;
   }
-  const { id, name, zone, x, z, respawn } = value;
+  const { id, name, zone, x, z, respawn, respawnMax } = value;
   const named = typeof id === 'string' && id.length > 0;
   const titled = typeof name === 'string' && name.length > 0;
   const placed = Number.isFinite(x) && Number.isFinite(z) && ZONE_IDS.has(zone);
   const timed = Number.isFinite(respawn) && respawn > 0;
   if (named && titled && placed && timed) {
-    return { id, name, zone, x, z, respawn };
+    return { id, name, zone, x, z, respawn, respawnMax: ceilingOf(respawn, respawnMax) };
   }
   return null;
+}
+
+/**
+ * The far end of a row's respawn, which is the near end again on a fixed schedule.
+ *
+ * Carried as a number rather than as an absent field so nothing downstream has to ask
+ * whether a rare is windowed before doing arithmetic: `respawn === respawnMax` is what a
+ * fixed schedule looks like, and it is the one comparison that decides whether a watched
+ * kill can be counted exactly.
+ */
+function ceilingOf(respawn, respawnMax) {
+  if (Number.isFinite(respawnMax) && respawnMax > respawn) {
+    return respawnMax;
+  }
+  return respawn;
 }
 
 /** The file's `rares` array, or null when the file is not the shape it claims. */
@@ -284,47 +312,79 @@ function since(stampMs) {
 }
 
 /**
- * Seconds from a stamp to the respawn it starts, going NEGATIVE past the window rather than
- * clamping, since a row that has run out has to be able to say so.
+ * Seconds from a stamp to the two ends of the respawn it starts, going NEGATIVE past each
+ * rather than clamping, since a row that has run out has to be able to say so.
+ *
+ * The two ends are equal on a fixed schedule, which is what lets everything below take a
+ * pair without asking first.
  */
-function leftFrom(rare, stampMs) {
+function boundsFrom(rare, stampMs) {
   const elapsed = since(stampMs);
   if (elapsed === null) {
     return null;
   }
-  return rare.respawn - elapsed;
+  return { earliest: rare.respawn - elapsed, latest: rare.respawnMax - elapsed };
 }
 
-/** Seconds until it is certainly back, for a kill this character watched. Null otherwise. */
+/** The bounds a kill this character watched gives, or null for a rare nobody watched die. */
 function measuredFor(rare) {
-  return leftFrom(rare, watch.get(rare.id).killedAt);
+  return boundsFrom(rare, watch.get(rare.id).killedAt);
+}
+
+/** A kill was watched AND the game respawns this one on a fixed schedule, so it is exact. */
+function isExact(rare) {
+  return measuredFor(rare) !== null && rare.respawn === rare.respawnMax;
 }
 
 /**
- * The window a found body bounds the return to, or null when no body was ever found.
+ * The window the return falls inside, or null when nothing bounds it at all.
  *
- * `latest` is the ceiling and is what the row draws. `earliest` is null whenever nothing
- * proves when the rare was last alive, which is the ordinary case for a body walked into
- * cold, and a null floor means "any moment now" rather than a floor of zero.
+ * Two sources, and a watched kill beats a found body because it dates the death instead of
+ * bounding it. `latest` is the ceiling and is what the row draws. `earliest` is null only
+ * where nothing proves when the rare was last alive, which is the ordinary case for a body
+ * walked into cold; a null floor means "any moment now" rather than a floor of zero.
+ *
+ * A watched kill of a WINDOWED rare lands here rather than reading as exact, which is the
+ * whole reason this returns a pair: the death is dated to the second and the return still
+ * is not, because the game draws that rare's delay fresh on every death.
  */
 function windowOf(rare) {
+  const measured = measuredFor(rare);
+  if (measured !== null) {
+    return measured;
+  }
   const row = watch.get(rare.id);
-  const latest = leftFrom(rare, row.downAt);
-  if (latest === null) {
+  const bounded = boundsFrom(rare, row.downAt);
+  if (bounded === null) {
     return null;
   }
-  return { latest, earliest: leftFrom(rare, row.aliveAt) };
+  const alive = boundsFrom(rare, row.aliveAt);
+  if (alive === null) {
+    return { latest: bounded.latest, earliest: null };
+  }
+  return { latest: bounded.latest, earliest: alive.earliest };
 }
 
 /** Seconds until it is back at the latest, measured where it can be and bounded where not. */
 function leftFor(rare) {
-  return measuredFor(rare) ?? windowOf(rare)?.latest ?? null;
+  const bounds = windowOf(rare);
+  if (bounds === null) {
+    return null;
+  }
+  return bounds.latest;
 }
 
 /**
  * One of 'up', 'down', 'window', 'body', 'due' or 'unseen'. Everything drawn comes from
- * this, and the split that matters is 'down' against 'window': the first is counted from a
- * kill and the second is bounded by a body.
+ * this, and the split that matters is 'down' against 'window': the first is a countdown to
+ * a moment and the second is a stretch of time the rare turns up somewhere inside.
+ *
+ * Two different things put a row in 'window', and the row's own tooltip is what tells them
+ * apart. A body walked into cold bounds a death nobody watched. A watched kill of a rare
+ * the game respawns on a RANDOM window dates the death exactly and still cannot date the
+ * return, which is why 'down' asks `isExact` rather than merely asking whether a kill was
+ * watched: reading a windowed rare as exact was a countdown that ran out fifteen minutes
+ * early and then sat on 'Due' for the rest of the window with nothing saying why.
  *
  * 'body' is the state where the arithmetic has run out and the corpse is still lying there,
  * so the rare is provably NOT back whatever the clock says. It outranks 'due' rather than
@@ -339,7 +399,7 @@ function stateOf(rare) {
   if (left === null) {
     return 'unseen';
   }
-  if (left > 0 && measuredFor(rare) === null) {
+  if (left > 0 && !isExact(rare)) {
     return 'window';
   }
   if (left > 0) {
@@ -385,7 +445,7 @@ function fillOf(rare) {
     return FULL;
   }
   if (state === 'down' || state === 'window') {
-    return leftFor(rare) / rare.respawn;
+    return leftFor(rare) / rare.respawnMax;
   }
   return EMPTY;
 }
@@ -462,17 +522,29 @@ function sightingLine(rare) {
  * The window a bound gives, spelled out. Two readings a player has to be able to tell
  * apart: with a floor this is a stretch of time the rare turns up inside, and without one
  * the ceiling is all there is and the rare could already be standing there.
+ *
+ * Where the window came from is on the line too, because the same words otherwise cover a
+ * death nobody watched and a death watched to the second whose RETURN the game rolls.
  */
 function windowLine(rare) {
   const bounds = windowOf(rare);
   const ceiling = `Back within ${woc.fmt.duration(Math.max(bounds.latest, 0), 'coarse')}`;
+  const source = sourceOf(rare);
   if (bounds.earliest === null || bounds.earliest <= 0) {
-    return { text: `${ceiling}, from finding its body`, tone: 'muted' };
+    return { text: `${ceiling}, ${source}`, tone: 'muted' };
   }
   return {
     text: `${ceiling}, no sooner than ${woc.fmt.duration(bounds.earliest, 'coarse')}`,
     tone: 'muted',
   };
+}
+
+/** Why a window rather than a countdown: a rolled respawn, or a death nobody watched. */
+function sourceOf(rare) {
+  if (measuredFor(rare) !== null) {
+    return 'and the game rolls this one';
+  }
+  return 'from finding its body';
 }
 
 /**
@@ -495,11 +567,26 @@ function readingLine(rare) {
   return null;
 }
 
+/**
+ * The rare's own schedule, which is the one line here that says nothing about this session.
+ *
+ * A range where the game authored one, because the alternative is a single figure standing
+ * for a delay that is drawn fresh on every death: a player reading "back 15m" then times
+ * the next kill against it and finds an empty clearing, with the addon still saying 15m.
+ */
+function scheduleLine(rare) {
+  const earliest = woc.fmt.duration(rare.respawn, 'coarse');
+  if (rare.respawn === rare.respawnMax) {
+    return `Back ${earliest} after it dies`;
+  }
+  return `Back ${earliest} to ${woc.fmt.duration(rare.respawnMax, 'coarse')} after it dies`;
+}
+
 /** A function rather than a string: the distance, the reading and the sighting all move. */
 function rowTooltip(rare) {
   const lines = [
     `${zoneName(rare.zone)}, camp at ${String(rare.x)}, ${String(rare.z)}`,
-    { text: `Back ${woc.fmt.duration(rare.respawn, 'coarse')} after it dies`, tone: 'muted' },
+    { text: scheduleLine(rare), tone: 'muted' },
     readingLine(rare),
     sightingLine(rare),
   ];
@@ -822,7 +909,7 @@ function readLock(entity, row) {
  * later sighting of it could give.
  */
 function needsBound(rare, row) {
-  return row.downAt === null || leftFrom(rare, row.downAt) <= 0;
+  return row.downAt === null || boundsFrom(rare, row.downAt).latest <= 0;
 }
 
 /**

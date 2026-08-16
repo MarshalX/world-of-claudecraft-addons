@@ -114,18 +114,20 @@ describe('refusing a payload that is not a stylesheet', () => {
 
 describe('the drift report', () => {
   it('names a token read with no fallback that the game no longer declares', () => {
-    expect(unbackedTokens('a{color:var(--gone)}', new Map())).toEqual(['--gone']);
+    expect(unbackedTokens('a{color:var(--gone)}', '', new Map())).toEqual(['--gone']);
   });
 
   // A `var()` carrying a fallback degrades to something rather than to nothing,
   // so it is not what this exists to catch and reporting it would bury the ones
   // that are.
   it('says nothing about a token that carries a fallback', () => {
-    expect(unbackedTokens('a{color:var(--gone, red)}', new Map())).toEqual([]);
+    expect(unbackedTokens('a{color:var(--gone, red)}', '', new Map())).toEqual([]);
   });
 
   it('says nothing about a token the game still declares', () => {
-    expect(unbackedTokens('a{color:var(--gold)}', new Map([['--gold', '#ffd100']]))).toEqual([]);
+    expect(unbackedTokens('a{color:var(--gold)}', '', new Map([['--gold', '#ffd100']]))).toEqual(
+      [],
+    );
   });
 
   // Reported once however many rules read it, and sorted, because the point of
@@ -133,7 +135,7 @@ describe('the drift report', () => {
   // `--color-border-default` fifteen times would bury the other fourteen.
   it('names each missing token once, sorted', () => {
     const css = 'a{color:var(--zeta)}b{color:var(--alpha)}c{border-color:var(--zeta)}';
-    expect(unbackedTokens(css, new Map())).toEqual(['--alpha', '--zeta']);
+    expect(unbackedTokens(css, '', new Map())).toEqual(['--alpha', '--zeta']);
   });
 
   // The loader's own tokens, which the game never declared and never will. Read
@@ -141,13 +143,24 @@ describe('the drift report', () => {
   // is a drift report that is wrong every time it fires.
   it('says nothing about a token the loader declares itself', () => {
     const css = '.woc-row{--woc-gap:6px;gap:var(--woc-gap)}';
-    expect(unbackedTokens(css, new Map())).toEqual([]);
+    expect(unbackedTokens(css, '', new Map())).toEqual([]);
+  });
+
+  // Declared from JAVASCRIPT rather than from a sheet, which is the half the CSS
+  // cannot see: `kit/bar.ts` names `--woc-bar-size` and sets it per element, and
+  // `styles/bar.css` guards the rules behind a class instead of a fallback. Read
+  // against the sheets alone it was a wrong warning on every run.
+  it('says nothing about a property the loader sets from its own source', () => {
+    const css = '.woc-bar-sized{height:calc(var(--woc-bar-size) * 1px)}';
+    expect(unbackedTokens(css, "const SIZE = '--woc-bar-size';", new Map())).toEqual([]);
   });
 
   // The exclusion is the declaring set rather than the `--woc-` prefix, so a
   // loader token nothing declares is still a rule resolving to nothing.
   it('still names a loader token that is read and never declared', () => {
-    expect(unbackedTokens('.woc-row{gap:var(--woc-never)}', new Map())).toEqual(['--woc-never']);
+    expect(unbackedTokens('.woc-row{gap:var(--woc-never)}', '', new Map())).toEqual([
+      '--woc-never',
+    ]);
   });
 
   // The colon is the whole of what tells a declaration from a read, and the
@@ -155,9 +168,9 @@ describe('the drift report', () => {
   // pattern and every `var(--x)` becomes its own declaration, which excludes
   // every token and reports nothing ever again.
   it('does not read a var() as a declaration of the token it reads', () => {
-    expect(unbackedTokens('a{color:var(--gone)}b{border-color:var(--gone)}', new Map())).toEqual([
-      '--gone',
-    ]);
+    expect(
+      unbackedTokens('a{color:var(--gone)}b{border-color:var(--gone)}', '', new Map()),
+    ).toEqual(['--gone']);
   });
 });
 

@@ -16,6 +16,7 @@
 import { readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import process from 'node:process';
 import { fileURLToPath } from 'node:url';
+import { uiSourceText } from './kit-classes.ts';
 import {
   borrowedRules,
   GENERATED,
@@ -70,7 +71,7 @@ function loaderCss() {
  * declaration quietly not applying.
  */
 function reportDrift(tokens) {
-  const missing = unbackedTokens(loaderCss(), tokens);
+  const missing = unbackedTokens(loaderCss(), uiSourceText(), tokens);
   if (missing.length > 0) {
     console.warn(
       `theme: the loader reads ${missing.join(', ')} with no fallback, ` +

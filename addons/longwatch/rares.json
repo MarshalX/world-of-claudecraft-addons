@@ -1,5 +1,5 @@
 {
-  "gameVersion": "0.37.1",
+  "gameVersion": "0.38.2",
   "source": "src/sim/data.ts, src/sim/respawn_policy.ts, src/ui/i18n.resolved.generated/en.ts",
   "rares": [
     {
@@ -40,7 +40,8 @@
       "zone": "eastbrook_vale",
       "x": -95,
       "z": -78,
-      "respawn": 10800
+      "respawn": 900,
+      "respawnMax": 1800
     },
     {
       "id": "grubjaw",

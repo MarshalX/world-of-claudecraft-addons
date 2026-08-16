@@ -311,6 +311,8 @@ export interface Entity {
   overheadEmoteSeq: number;
   /** The operator-set mark on an AI-operated account. */
   aiAccount: boolean;
+  /** The operator-applied Cheater tag. Cosmetic: nothing reads it for power. */
+  cheaterMark: boolean;
 
   /**
    * Ranged attack power. Rides `dynamicFields`, so unlike the self-only block

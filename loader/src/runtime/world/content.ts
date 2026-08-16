@@ -41,6 +41,19 @@ interface Recipe {
   comboRequirement: { craftA: string; craftB: string; minTier: number } | null;
 }
 
+/**
+ * One authored civic service point: a mailbox or a noticeboard.
+ *
+ * No zone and no id, because the game's own list carries neither. It is built
+ * from the active world content by kind and position alone, which is enough to
+ * put a marker on a map and not enough to name one.
+ */
+interface CivicService {
+  kind: string;
+  x: number;
+  z: number;
+}
+
 /** One authored crafting station, placed in a zone. */
 interface Station {
   id: string;
@@ -52,6 +65,7 @@ interface Station {
 
 const NO_RECIPES: readonly Recipe[] = Object.freeze([]);
 const NO_STATIONS: readonly Station[] = Object.freeze([]);
+const NO_CIVIC_SERVICES: readonly CivicService[] = Object.freeze([]);
 
 /**
  * What has already been copied, keyed on the array it was copied FROM.
@@ -109,6 +123,14 @@ function recipeOf(recipe: unknown): Recipe {
   });
 }
 
+function civicServiceOf(service: unknown): CivicService {
+  return Object.freeze({
+    kind: fieldString(service, 'kind') ?? '',
+    x: fieldNumber(service, 'x') ?? 0,
+    z: fieldNumber(service, 'z') ?? 0,
+  });
+}
+
 function stationOf(station: unknown): Station {
   const pos = fieldValue(station, 'pos');
   return Object.freeze({
@@ -159,5 +181,22 @@ function readStations(world: unknown): readonly Station[] {
   return copyOnce(source, stationOf);
 }
 
-export type { Recipe, Station };
-export { readRecipes, readStations };
+/**
+ * The authored mailboxes and noticeboards, copied and frozen.
+ *
+ * The client reads it lazily off the active world content and freezes its own
+ * array, so the copy here is not about mutation reaching the game the way it is
+ * for the two above. It is about the array being the GAME's: an addon handed it
+ * unwrapped could sort it, and the cache would then serve the reordered one back
+ * to the game's map window. Cheap either way, since a world ships a handful.
+ */
+function readCivicServices(world: unknown): readonly CivicService[] {
+  const source = tableAt(world, 'civicServicePlacements');
+  if (source === null) {
+    return NO_CIVIC_SERVICES;
+  }
+  return copyOnce(source, civicServiceOf);
+}
+
+export type { CivicService, Recipe, Station };
+export { readCivicServices, readRecipes, readStations };

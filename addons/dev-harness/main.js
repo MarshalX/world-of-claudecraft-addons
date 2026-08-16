@@ -1815,21 +1815,22 @@ function checkCharacterKey() {
 }
 
 /**
- * The two static content tables. Never null even before world entry, which is why neither
+ * The three static content tables. Never null even before world entry, which is why none
  * is a watch key: an empty table is the honest answer for a client that has not carried
- * one, and authored content cannot change during a session. Both are copies the loader
+ * one, and authored content cannot change during a session. All are copies the loader
  * froze, so the write test is here for the reason `world.entities` gets one.
  */
 function checkContent() {
-  const { recipes, stations } = woc.world;
-  if (!(Array.isArray(recipes) && Array.isArray(stations))) {
+  const { recipes, stations, civicServices } = woc.world;
+  if (!(Array.isArray(recipes) && Array.isArray(stations) && Array.isArray(civicServices))) {
     return result(
       'content',
       false,
-      `recipes is ${typeOf(recipes)}, stations is ${typeOf(stations)}`,
+      `recipes is ${typeOf(recipes)}, stations is ${typeOf(stations)}, ` +
+        `civicServices is ${typeOf(civicServices)}`,
     );
   }
-  if (!(refusesWrite(recipes) && refusesWrite(stations))) {
+  if (!(refusesWrite(recipes) && refusesWrite(stations) && refusesWrite(civicServices))) {
     return result('content', false, 'a content table accepted a write');
   }
   if (recipes.length === 0) {
@@ -1842,10 +1843,13 @@ function checkContent() {
     return result('content', false, `${String(shapeless.length)} recipes are not recipes`);
   }
   const gated = recipes.filter((recipe) => recipe.stationType !== null).length;
+  const kinds = new Set(civicServices.map((service) => service.kind));
   return result(
     'content',
     true,
-    `${String(recipes.length)} recipes (${String(gated)} need a station), ${String(stations.length)} stations`,
+    `${String(recipes.length)} recipes (${String(gated)} need a station), ` +
+      `${String(stations.length)} stations, ` +
+      `${String(civicServices.length)} civic services (${[...kinds].sort().join(', ') || 'none'})`,
   );
 }
 

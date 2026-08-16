@@ -230,6 +230,10 @@ That shape exists because the obvious alternative is a bug. On a nullable value 
 
 There is no price history anywhere and there never was: the server keeps no record of a completed sale and offers no query for one. A price series is something your addon builds, by recording each page its player browses.
 
+`market.info.sellLowestPrice` is the one exception and it is not one you can use on demand. It is the cheapest live listing of whatever the player has staged on the Sell tab, filled by a request the game's own window sends, and sending is outside what an addon may do. So it is real while a player is part-way through listing something and null the rest of the time, which is most of the time. Read `market.info.sellPriceItemId` first and compare it against the item you think is staged: the answer arrives a round trip after the question, so a snapshot taken across an item switch carries the previous item's price under the new item's form.
+
+**Read `market.info.collapseLowest` before you read depth off a page.** With it on, the server has narrowed the rows to one per item id, cheapest first, without narrowing the match: `totalCount` still counts every listing, so the page is a list of price floors and the count above it is how many listings stand behind them. An addon that counted rows would report a market with one seller per item. Instanced copies stay distinct, since no two of them are the same goods. Added in game 0.38.0.
+
 **Read `market.info.sort` before you fold two pages together.** Browse has two orders as of game 0.37.1, and it is an axis of its own beside the five filters: `'name'` is the classic one, the book grouped by display name and then by price, and `'price'` is the whole matched book cheapest first. It reorders and never narrows, so the same query under the two produces the same rows in a different arrangement, and the arrangement is what a partial reading samples. Under `'price'` page 0 is the cheapest rows in the market, which is the strongest thing either order can tell you about an item, and every page after it can hide a cheaper copy of anything: an item's listings are contiguous only under `'name'`. Record which order a reading came from, or a median over your own browsing becomes a median over whichever end of the book the player was looking at.
 
 `world.abilities` is how you get between an ability's id and its display name, which have diverged: skill art is filed under `arcane_shot`, while a combat event names it `Fell Shot`. Without this you can hold one and never reach the other.
@@ -301,14 +305,17 @@ woc.world.dispellable(aura, true);  // ...or strip it off an enemy
 
 `world.harmful` and `world.dispellable` are functions rather than fields on the aura, and that is worth knowing rather than working around: the loader hands you the game's own aura objects rather than copies, so a field could only exist by writing onto state the game's HUD reads from the same array, or by copying every aura on every read, which would break the object identity you use to track one effect across frames. `world.harmful` accepts a party row as well as a full aura. `world.dispellable` refuses a row, because a row carries neither a school nor the encounter-control flag and those are the two clauses whose absence costs a player a global cooldown.
 
-Crafting content, which is authored rather than live:
+Authored content, which ships in the client rather than arriving on the wire:
 
 ```js
 woc.world.recipes         // the game's own recipe table, copied and frozen
 woc.world.stations        // the authored crafting stations
+woc.world.civicServices   // the authored mailboxes and noticeboards
 ```
 
-Both are copies, because the game renders its own crafting window from the originals. Neither is a watch key and neither will become one: content cannot change during a session, so a subscription would walk the whole table on every snapshot to report that nothing moved. What actually changes is on `world.professions`, including which of these recipes you have learned.
+All three are copies, because the game renders its own windows and its own map from the originals. None is a watch key and none will become one: content cannot change during a session, so a subscription would walk the whole table on every snapshot to report that nothing moved. What actually changes is on `world.professions`, including which of these recipes you have learned.
+
+`world.civicServices` answers where a counter IS, which is a different question from `world.mail`: that one is proximity-gated and tells you whether the player is standing at a mailbox now. A row is a `kind` and a position and nothing else, because that is all the game's own list carries, and the kind is a plain string rather than a pair of literals: `'mailbox'` and `'noticeboard'` are what ships today and the set is content, so match the kinds you draw and let an unknown one fall through. Added in game 0.38.0.
 
 `partyAuras` is separate because a party row's auras are a smaller shape than an entity's: an id, a kind, whole seconds, and a debuff flag, with no source. That is also why `PartyAuraQuery` has no `mine`, rather than one that silently matches nothing.
 

@@ -18,7 +18,7 @@ import type { BankState } from '../world/bank.ts';
 import type { BattlegroundStandings } from '../world/battleground.ts';
 import type { CharacterInfo, ProfessionInfo, TalentInfo } from '../world/character.ts';
 import type { CombatState } from '../world/combat.ts';
-import type { Recipe, Station } from '../world/content.ts';
+import type { CivicService, Recipe, Station } from '../world/content.ts';
 import type { EntityCast, Hazard } from '../world/derived.ts';
 import type { EncounterInfo } from '../world/encounter.ts';
 import { mergeLive } from '../world/facade.ts';
@@ -353,6 +353,14 @@ export interface WorldApi {
 
   /** The authored crafting stations, copied and frozen. Static, like `recipes`. */
   readonly stations: readonly Station[];
+
+  /**
+   * The authored mailboxes and noticeboards, copied and frozen. Static too.
+   *
+   * Where a counter IS, from the game's own list. Whether the player is standing
+   * at one is `world.mail`, which is proximity-gated.
+   */
+  readonly civicServices: readonly CivicService[];
 
   /**
    * Watch one key for change, sampled once per animation frame.

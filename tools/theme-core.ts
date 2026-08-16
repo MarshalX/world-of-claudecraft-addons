@@ -82,6 +82,25 @@ const VAR_REFERENCE = /var\(\s*(--[\w-]+)\s*(,)?/g;
 const CUSTOM_PROPERTY_DECLARED = /(--[\w-]+)\s*:/g;
 
 /**
+ * A custom property NAMED as a string literal, which is how the kit declares the
+ * few it writes from JavaScript rather than from a stylesheet.
+ *
+ * `kit/bar.ts` holds `'--woc-bar-size'` and hands it to `style.setProperty`, so
+ * the property exists on every element the kit sized and appears in no `.css`
+ * file at all. Read against the sheets alone that is a token nothing declares,
+ * which is exactly the shape of a game token that went away, and the report said
+ * so on the first regeneration after the sizing work landed. It is not drift:
+ * `styles/bar.css` guards those rules behind the `woc-bar-sized` class the same
+ * code adds, which is a deliberate alternative to a fallback and is why there is
+ * no comma to find.
+ *
+ * A quoted name is the whole heuristic, and it is loose on purpose: over-reading
+ * costs a token being excluded that nothing declares anyway, while under-reading
+ * puts a wrong warning in front of the next person to run this.
+ */
+const CUSTOM_PROPERTY_NAMED = /['"`](--[\w-]+)['"`]/g;
+
+/**
  * A token count below which the read is treated as a wrong URL rather than a
  * thin theme.
  *
@@ -275,14 +294,24 @@ function renderRule(rule: BorrowedRule): string {
  * exclusion is the DECLARING set rather than the `--woc-` prefix, so a loader
  * token that is read and never declared is still caught.
  *
- * The two sets are read from the same string, which is what makes this cheap and
- * also what it rests on: `loaderCss()` concatenates every sheet the runtime
- * ships, so a token declared in one file and read in another is still excluded.
+ * DECLARING includes writing the property from JavaScript, which is `loaderSource`
+ * and is the half a stylesheet cannot see. `--woc-bar-size` is set by `kit/bar.ts`
+ * and read by `styles/bar.css`, so against the sheets alone it read as a token the
+ * game had taken away, on the first regeneration after the sizing work shipped.
+ *
+ * The sets are read from whole concatenations rather than per file, which is what
+ * makes this cheap and also what it rests on: a token declared in one file and
+ * read in another is still excluded.
  */
-function unbackedTokens(loaderCss: string, tokens: Map<string, string>): string[] {
-  const declared = new Set(
-    [...loaderCss.matchAll(CUSTOM_PROPERTY_DECLARED)].map(([, name]) => name as string),
-  );
+function unbackedTokens(
+  loaderCss: string,
+  loaderSource: string,
+  tokens: Map<string, string>,
+): string[] {
+  const declared = new Set([
+    ...[...loaderCss.matchAll(CUSTOM_PROPERTY_DECLARED)].map(([, name]) => name as string),
+    ...[...loaderSource.matchAll(CUSTOM_PROPERTY_NAMED)].map(([, name]) => name as string),
+  ]);
   const missing = new Set<string>();
   for (const [, name, comma] of loaderCss.matchAll(VAR_REFERENCE)) {
     if (comma === undefined && !tokens.has(name as string) && !declared.has(name as string)) {

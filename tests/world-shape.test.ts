@@ -145,6 +145,7 @@ describe('the shape table', () => {
       overheadEmoteId: true,
       overheadEmoteSeq: true,
       aiAccount: true,
+      cheaterMark: true,
       rangedPower: true,
       cooldowns: true,
       gcdRemaining: true,

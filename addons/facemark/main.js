@@ -173,6 +173,16 @@ const AFK_TAG = '<AFK>';
 const MOUNTED_NOTE = 'mounted';
 const RESTING_NOTE = 'resting';
 const AI_TAG = 'AI';
+/**
+ * The operators' Cheater tag, in the game's own bracketed spelling.
+ *
+ * The game draws it on its own nameplate and on the target frame, so a plate that
+ * left it off would be hiding a sanction the game states, which reads as this
+ * addon being broken rather than as the player being clean.
+ */
+const CHEATER_TAG = '< Cheater >';
+/** The one colour here that is not the game's: its tag colour is not a token. */
+const CHEATER_COLOUR = '#ff6b6b';
 
 /** The topic `longwatch` publishes its mob table on. `follow` derives `mobs:ask` from it. */
 const RANKS_TOPIC = 'mobs';
@@ -612,6 +622,23 @@ function aiNote(entity) {
   return '';
 }
 
+/**
+ * The operator-applied Cheater mark, which is the other account-level disclosure.
+ *
+ * Player-gated exactly as the game gates it: the mark is an ACCOUNT sanction, so a
+ * server that ever set the flag on a mob would brand nothing here rather than put a
+ * moderation verdict over a wolf. What is deliberately NOT here is any consequence:
+ * the tag is said and nothing else changes, no tone, no sort, no filter, because the
+ * game keeps the mark power-neutral and a display that treated a marked player as
+ * lesser would put the handicap back in from outside.
+ */
+function cheaterNote(entity) {
+  if (isPlayer(entity) && entity.cheaterMark === true) {
+    return CHEATER_TAG;
+  }
+  return '';
+}
+
 /** What the rank service says about this template, or null when nothing does. */
 function rankOf(entity) {
   return ranks.get(entity.templateId) ?? null;
@@ -1037,17 +1064,22 @@ function buildTags() {
   const tags = tagRow('woc-fm-tags');
   const note = box('span', 'woc-fm-note', {});
   const ai = box('span', 'woc-fm-ai', {});
+  const cheater = box('span', 'woc-fm-cheater', {
+    display: 'none',
+    color: CHEATER_COLOUR,
+    fontWeight: '700',
+  });
   const rare = box('span', 'woc-fm-rare', { color: RARE_COLOUR, fontWeight: '700' });
   const carry = box('span', 'woc-fm-carry', { fontWeight: '700' });
   carry.textContent = CARRY_LABEL;
-  tags.append(rare, note, ai, carry);
+  tags.append(rare, note, ai, cheater, carry);
 
   const alerts = tagRow('woc-fm-alerts');
   const atYou = box('span', 'woc-fm-atyou', { color: HOSTILE_NAME, fontWeight: '700' });
   const taunt = box('span', 'woc-fm-taunt', { color: EDGE_CLOSE });
   alerts.append(atYou, taunt);
 
-  return { tags, alerts, rare, note, ai, atYou, taunt, carry };
+  return { tags, alerts, rare, note, ai, cheater, atYou, taunt, carry };
 }
 
 /**
@@ -1343,10 +1375,20 @@ function atYouNote(entity, player) {
   return '';
 }
 
+/** A tag that leaves the flow when it says nothing, so its gap goes with it. */
+function showTag(tag) {
+  tag.style.display = 'none';
+  if (tag.textContent !== '') {
+    tag.style.display = '';
+  }
+}
+
 function paintTags(entry, entity, side, player) {
   entry.rare.textContent = rareNote(entity);
   entry.note.textContent = stateNote(entity);
   entry.ai.textContent = aiNote(entity);
+  entry.cheater.textContent = cheaterNote(entity);
+  showTag(entry.cheater);
   entry.atYou.textContent = atYouNote(entity, player);
   entry.taunt.textContent = tauntNote(entity, player);
   paintCarry(entry, entity, side);
@@ -1354,6 +1396,7 @@ function paintTags(entry, entity, side, player) {
     entry.rare.textContent !== '' ||
     entry.note.textContent !== '' ||
     entry.ai.textContent !== '' ||
+    entry.cheater.textContent !== '' ||
     carriers.has(entity.id);
   const warned = entry.atYou.textContent !== '' || entry.taunt.textContent !== '';
   showRow(entry.tags, named);

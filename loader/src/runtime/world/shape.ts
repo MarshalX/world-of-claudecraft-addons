@@ -99,6 +99,7 @@ const SHAPE: Record<keyof Entity, FieldSpec> = {
   overheadEmoteId: { kind: 'string', nullable: true },
   overheadEmoteSeq: { kind: 'number' },
   aiAccount: { kind: 'boolean' },
+  cheaterMark: { kind: 'boolean' },
   rangedPower: { kind: 'number' },
 
   cooldowns: { kind: 'map' },

@@ -216,6 +216,7 @@ export function watchHarness(): WatchHarness {
     buyback: null,
     recipes: [],
     stations: [],
+    civicServices: [],
     raw: live,
   } satisfies WorldBackend;
 

@@ -94,4 +94,19 @@ function gameClassesWorn(): string[] {
   return [...found].sort();
 }
 
-export { gameClassesWorn, UI_DIR };
+/**
+ * The whole UI tree as one string, for a reader that wants the SOURCE rather than
+ * the class names in it.
+ *
+ * `pnpm theme` uses it to find the custom properties the kit writes from
+ * JavaScript, which appear in no stylesheet and would otherwise read as tokens
+ * the game had taken away. Same tree and same reason as `gameClassesWorn`: what
+ * the loader's own elements carry is decided here rather than in a sheet.
+ */
+function uiSourceText(): string {
+  return uiSources(UI_DIR)
+    .map((file) => readFileSync(file, 'utf8'))
+    .join('\n');
+}
+
+export { gameClassesWorn, UI_DIR, uiSourceText };

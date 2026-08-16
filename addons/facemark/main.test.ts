@@ -161,6 +161,7 @@ interface UnitSpec {
   mountKey?: string;
   /** The operator-set mark on an AI-operated account. */
   aiAccount?: boolean;
+  cheaterMark?: boolean;
   /** Whether a corpse has anything on it, which is what keeps its plate on screen. */
   lootable?: boolean;
   /** The first player to damage it, who owns the kill. Null means nobody has. */
@@ -214,6 +215,7 @@ function playerState(spec: UnitSpec): Fake {
     sitting: spec.sitting ?? false,
     mountKey: spec.mountKey ?? '',
     aiAccount: spec.aiAccount ?? false,
+    cheaterMark: spec.cheaterMark ?? false,
   };
 }
 
@@ -361,6 +363,10 @@ interface FacemarkHarness extends SharedHarness {
   noteOf: (id: number) => string;
   /** The AI-account tag, or empty. */
   aiOf: (id: number) => string;
+  /** The operators' Cheater tag, or empty. */
+  cheaterOf: (id: number) => string;
+  /** Its `display`, which is what says whether it costs the row a gap. */
+  cheaterDisplayOf: (id: number) => string;
   /** Publish a mob rank table as the companion addon would. */
   ranks: (rows: unknown) => void;
   /** Put one quest in the log, which is where the game keeps what you are on. */
@@ -598,6 +604,8 @@ async function start(
     levelColourOf: (id) => partOf(id, '.woc-fm-level')?.style.color ?? '',
     noteOf: (id) => textOf(id, '.woc-fm-note'),
     aiOf: (id) => textOf(id, '.woc-fm-ai'),
+    cheaterOf: (id) => textOf(id, '.woc-fm-cheater'),
+    cheaterDisplayOf: (id) => partOf(id, '.woc-fm-cheater')?.style.display ?? '',
     ranks: (rows) => {
       harness.shared.bus.emit(RANKER, RANKS_TOPIC, rows);
     },
@@ -706,13 +714,16 @@ describe('its manifest', () => {
   });
 
   // The declaration is the smallest minor carrying every member this addon reads, and the
-  // highest is now 6: the `format: 'battleground'` member of `world.match`, whose roster is
-  // the only thing that says which players are fighting you. Two are minor 4: `fmt.titleCase`,
-  // for an effect the wire sent with no name, and `world.abilities.describe`, for the cast
-  // bar's label. The rest are minor 2: `ui.anchor3d`'s unit point, `over: 'head'`,
+  // highest is now 7: `Entity.cheaterMark`, the operators' tag, which the game draws on its
+  // own plate and this one would otherwise leave off. A FIELD on a published record is a
+  // member like any other, so reading it moves the declaration exactly as a new function
+  // would. Below it sits 6, the `format: 'battleground'` member of `world.match`, whose
+  // roster is the only thing that says which players are fighting you. Two are minor 4:
+  // `fmt.titleCase`, for an effect the wire sent with no name, and `world.abilities.describe`,
+  // for the cast bar's label. The rest are minor 2: `ui.anchor3d`'s unit point, `over: 'head'`,
   // `ui.project`, `woc.onFrame` and `world.harmful`.
   it('declares the minor the surface it reads was added in', () => {
-    expect(manifest().apiMinor).toBe(6);
+    expect(manifest().apiMinor).toBe(7);
   });
 
   // `over: 'head'` answers the offset outright. Its correct value is always zero, so offering
@@ -1816,6 +1827,64 @@ describe('what a plate says a player is doing', () => {
     h.poll();
 
     expect(h.aiOf(HEALER)).toBe('');
+  });
+
+  // The game draws this tag on its own nameplate and on the target frame, so a plate
+  // that dropped it would be hiding a sanction the game states.
+  it('tags an account wearing the operators" Cheater mark', async () => {
+    const h = await run({ show: 'everything' });
+    h.unit(HEALER, { kind: 'player', templateId: 'priest', cheaterMark: true });
+
+    h.poll();
+
+    expect(h.cheaterOf(HEALER)).toBe('< Cheater >');
+  });
+
+  // The mark is an ACCOUNT sanction and the game refuses to put one over a mob, whatever
+  // a regressed server sets. Nothing here may either: a moderation verdict on a wolf is
+  // one no operator could ever lift.
+  it('never tags a mob, whatever the flag says', async () => {
+    const h = await run({ show: 'everything' });
+    h.unit(BOSS, { kind: 'mob', templateId: 'forest_wolf', cheaterMark: true });
+
+    h.poll();
+
+    expect(h.cheaterOf(BOSS)).toBe('');
+  });
+
+  // The row is a flex box with a gap, so a span that is merely EMPTY still costs one
+  // gap on every plate showing any tag at all. A sanction almost no account wears must
+  // not widen every nameplate in the world to reserve room for itself, which is why
+  // this one leaves the flow like the carrier tag rather than sitting in it like the
+  // three beside it. Nothing in a screenshot would have said which it was doing.
+  it('leaves the row entirely on a player with no mark', async () => {
+    const h = await run({ show: 'everything' });
+    h.unit(HEALER, { kind: 'player', templateId: 'priest', sitting: true });
+
+    h.poll();
+
+    expect(h.cheaterDisplayOf(HEALER)).toBe('none');
+  });
+
+  it('takes its place in the row on a player who has one', async () => {
+    const h = await run({ show: 'everything' });
+    h.unit(HEALER, { kind: 'player', templateId: 'priest', cheaterMark: true });
+
+    h.poll();
+
+    expect(h.cheaterDisplayOf(HEALER)).not.toBe('none');
+  });
+
+  // Said and nothing else. The mark is power-neutral in the game, so a display that
+  // recoloured or reordered a marked player would put the handicap back from outside.
+  it('changes nothing else about a marked player", s row', async () => {
+    const h = await run({ show: 'everything' });
+    h.unit(HEALER, { kind: 'player', templateId: 'priest', cheaterMark: true, sitting: true });
+
+    h.poll();
+
+    expect(h.noteOf(HEALER)).toBe('resting');
+    expect(h.nameOf(HEALER)).toBe(`Unit${String(HEALER)}`);
   });
 });
 

@@ -314,18 +314,53 @@ function rareRow(id, template, camps, deps) {
         'both have to gain the zone before this row can ship',
     );
   }
-  const respawn = deps.respawn.resolveRespawnSeconds(template, camp.center, undefined);
-  if (!Number.isFinite(respawn) || respawn <= NONE) {
-    return fail(`${id} resolves to a respawn of ${String(respawn)}, which is not a countdown`);
-  }
   return {
     id,
     name: agreedName(id, template, deps.mobs),
     zone: zone.id,
     x: camp.center.x,
     z: camp.center.z,
-    respawn,
+    ...respawnBounds(id, template, camp, deps),
   };
+}
+
+/**
+ * The seconds a row records, which is a PAIR wherever the game authored a window.
+ *
+ * A `respawnWindow` template draws its multiplier uniformly per death, so there is no one
+ * number to record: game 0.38.0 put Grix the Tunnelking on [36, 72) and a table pinning
+ * either end alone would show a countdown that is wrong by up to fifteen minutes with
+ * nothing on screen saying so. `null` as the roll resolves the FLOOR, which is the game's
+ * own way of asking for the fastest respawn and is what `respawn` has always meant here;
+ * the ceiling is the same resolution with a roll that answers its own maximum. Both are
+ * written for a windowed rare and `respawnMax` is left off a fixed one, so a fixed row is
+ * byte-identical to what this generator has always written.
+ *
+ * The ceiling is the window's own upper bound although the draw is half-open and can never
+ * reach it. A bound the game cannot hit is the right kind of wrong for a row that says
+ * "back within": it is late by less than a second and never early.
+ */
+function respawnBounds(id, template, camp, deps) {
+  const respawn = deps.respawn.resolveRespawnSeconds(template, camp.center, undefined, null);
+  if (!Number.isFinite(respawn) || respawn <= NONE) {
+    fail(`${id} resolves to a respawn of ${String(respawn)}, which is not a countdown`);
+  }
+  if (template.respawnWindow === undefined) {
+    return { respawn };
+  }
+  const respawnMax = deps.respawn.resolveRespawnSeconds(
+    template,
+    camp.center,
+    undefined,
+    (_min, max) => max,
+  );
+  if (!Number.isFinite(respawnMax) || respawnMax <= respawn) {
+    fail(
+      `${id} carries a respawn window resolving to [${String(respawn)}, ${String(respawnMax)}], ` +
+        'which is not a window',
+    );
+  }
+  return { respawn, respawnMax };
 }
 
 /**

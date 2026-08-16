@@ -1,4 +1,5 @@
-// The two authored content tables the client carries: recipes and stations.
+// The authored content tables the client carries: recipes, crafting stations and
+// civic service points.
 //
 // These are COPIES. The game holds one recipe table and one station table for
 // the life of the session and its own crafting window renders from them, so the
@@ -50,4 +51,25 @@ export interface Station {
   /** World coordinates. There is no y: the ground height is not authored here. */
   pos: { x: number; z: number };
   masterNpcId: string;
+}
+
+/**
+ * One authored civic service point: a mailbox or a noticeboard.
+ *
+ * Flatter than a `Station` because the game's own list is: no id, no zone, and
+ * the position is not nested. That is enough to draw a marker and not enough to
+ * name one, so a display has to say what it is from the `kind` alone.
+ *
+ * `'mailbox'` and `'noticeboard'` are what the game ships. The type is a plain
+ * string rather than that pair, because the set is content and a release adds to
+ * it before these types catch up, exactly as with a cue name. Match the kinds you
+ * draw and let an unknown one fall through rather than assuming there are two.
+ *
+ * Added in game 0.38.0.
+ */
+export interface CivicService {
+  kind: string;
+  /** World coordinates. There is no y, as with a station. */
+  x: number;
+  z: number;
 }

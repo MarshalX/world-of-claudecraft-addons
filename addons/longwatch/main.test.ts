@@ -66,6 +66,8 @@ const SESSION_MS = 1_200_000;
 const GREYJAW = 'old_greyjaw';
 const VOSKAR = 'voskar_emberwing';
 const CRAGMAW = 'old_cragmaw';
+/** The one rare the game rolls a respawn window for, as of game 0.38.0. */
+const GRIX = 'grix_the_tunnelking';
 
 /** A template id no roster carries: what a hand edit or an older version could leave. */
 const GONE_RARE = 'made_up_rare';
@@ -75,6 +77,7 @@ const OTHER_CHARACTER = 'Marshalt';
 
 const GREYJAW_ID = 700;
 const VOSKAR_ID = 701;
+const GRIX_ID = 702;
 
 type Fake = Record<string, unknown>;
 
@@ -646,6 +649,72 @@ describe('the countdown after a kill', () => {
     h.tick();
 
     expect(h.figureOf(GREYJAW)).toBe('Unseen');
+  });
+});
+
+// The rare whose respawn the GAME rolls. Game 0.38.0 put Grix on [15m, 30m) instead of a
+// flat three hours, and a table that kept one figure for it would count down to a moment
+// nothing happens at. Watching the kill does not fix that, which is what separates this
+// from every case above: the death is dated to the second and the return still is not.
+describe('a rare the game draws a fresh respawn for', () => {
+  it('reads as a window after a kill it watched, not as a countdown', async () => {
+    const h = await run();
+    h.spawn(GRIX_ID, GRIX);
+    h.poll();
+
+    h.kill(GRIX_ID, GRIX);
+    h.tick();
+
+    // The ceiling, marked as one. A bare '15m' here is the defect: it would run out at the
+    // floor and then sit on 'Due' for the other fifteen minutes.
+    expect(h.figureOf(GRIX)).toBe('≤ 30m 0s');
+    expect(h.fillOf(GRIX)).toBeCloseTo(100, 0);
+  });
+
+  // The floor is the moment it becomes worth riding over, and the ceiling is when it is
+  // certainly back. Both are real, so the row goes warm at the first and due at the second.
+  it('goes warm at the earliest it could be back rather than at the latest', async () => {
+    const h = await run();
+    h.spawn(GRIX_ID, GRIX);
+    h.poll();
+    h.kill(GRIX_ID, GRIX);
+    h.despawn(GRIX_ID);
+    h.poll();
+
+    h.clockTo(890_000);
+    expect(h.classesOf(GRIX)).toContain('woc-bar-default');
+
+    h.clockTo(910_000);
+    expect(h.classesOf(GRIX)).toContain('woc-bar-warn');
+    expect(h.figureOf(GRIX)).toBe('≤ 14m 50s');
+  });
+
+  it('reads as due only once the whole window has run out', async () => {
+    const h = await run();
+    h.spawn(GRIX_ID, GRIX);
+    h.poll();
+    h.kill(GRIX_ID, GRIX);
+    h.despawn(GRIX_ID);
+    h.poll();
+
+    h.clockTo(1_790_000);
+    expect(h.figureOf(GRIX)).not.toBe('Due');
+
+    h.clockTo(1_810_000);
+    expect(h.figureOf(GRIX)).toBe('Due');
+  });
+
+  // The other side of the same rule: a rare on a fixed schedule still counts down to a
+  // moment, so widening the window must not have widened everything.
+  it('leaves a fixed-schedule rare counting down exactly', async () => {
+    const h = await run();
+    h.spawn(GREYJAW_ID, GREYJAW);
+    h.poll();
+
+    h.kill(GREYJAW_ID, GREYJAW);
+    h.tick();
+
+    expect(h.figureOf(GREYJAW)).toBe('1m 40s');
   });
 });
 

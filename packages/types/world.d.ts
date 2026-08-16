@@ -9,7 +9,7 @@ import type { Unsubscribe } from './addon.js';
 import type { ArenaStandings } from './arena.js';
 import type { BattlegroundStandings } from './battleground.js';
 import type { CharacterInfo, ProfessionInfo, TalentInfo } from './character.js';
-import type { Recipe, Station } from './content.js';
+import type { CivicService, Recipe, Station } from './content.js';
 import type { BankState, MailState, MarketState } from './economy.js';
 import type { Aura, Entity, EquipSlot, ItemInstance, Vec3 } from './entity.js';
 import type { FinderInfo, FinderListingRow } from './finder.js';
@@ -600,6 +600,21 @@ export interface WorldApi {
    * API minor 2.
    */
   readonly stations: readonly Station[];
+
+  /**
+   * The authored mailboxes and noticeboards, copied and frozen.
+   *
+   * Static, like `recipes` and `stations`, and not a watch key for the same
+   * reason. It answers where a counter IS, from the game's own authored list,
+   * which is the question a committed data table would otherwise have to be
+   * hand-typed to answer. What it does not answer is whether the player is
+   * standing at one: that is `world.mail`, which is proximity-gated and says why
+   * there is no mailbox when there is not.
+   *
+   * Empty rather than null before world entry, and empty on a client too old to
+   * carry the list. Added in API minor 7.
+   */
+  readonly civicServices: readonly CivicService[];
 
   /**
    * Entity id to raid target marker, 0 through 7.

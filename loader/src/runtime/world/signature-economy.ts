@@ -64,6 +64,11 @@ function slotsOf(source: unknown, field: string): string {
  * because the id list cannot stand in for it: a book of one row, or a page whose
  * rows happen to come back in the same order, reorders into an identical listing
  * array under a different reading of the same book.
+ *
+ * `collapseLowest` rides for the stronger version of that reason. It narrows the
+ * rows without narrowing the match, so toggling it can leave `totalCount` and the
+ * page bounds exactly where they were while every row on screen now means one
+ * item's price floor instead of one listing.
  */
 function queryOf(info: unknown): string {
   return [
@@ -74,7 +79,31 @@ function queryOf(info: unknown): string {
     fieldString(info, 'primaryStat') ?? '',
     fieldString(info, 'rarity') ?? '',
     fieldString(info, 'sort') ?? '',
+    collapseMark(info),
   ].join(':');
+}
+
+/** The collapse flag as a digit. A named helper because `noTernary` is on. */
+function collapseMark(info: unknown): string {
+  if (fieldValue(info, 'collapseLowest') === true) {
+    return '1';
+  }
+  return '0';
+}
+
+/**
+ * The Sell tab's price reference, id and price together.
+ *
+ * Both, because either alone is ambiguous: the price moves when another seller
+ * undercuts while the same item stays staged, and the id moves when the player
+ * stages something whose floor happens to match. Neither touches a listing on the
+ * page being browsed, so nothing else in this signature can stand in for it.
+ */
+function sellReferenceOf(info: unknown): string {
+  // biome-ignore lint/security/noSecrets: a field name copied from the game, which the entropy heuristic cannot tell from a token
+  const itemId = fieldString(info, 'sellPriceItemId') ?? '';
+  const price = fieldNumber(info, 'sellLowestPrice');
+  return `${itemId}@${String(price ?? -1)}`;
 }
 
 /** A letter's read flag as a digit. A named helper because `noTernary` is on. */
@@ -128,7 +157,7 @@ function marketSignature(state: unknown): string {
     `|${fieldNumber(info, 'totalCount') ?? 0}|${fieldNumber(info, 'myListingCount') ?? 0}`;
   const copper = fieldNumber(info, 'collectionCopper') ?? 0;
   const collection = `${copper}|${slotsOf(info, 'collectionItems')}`;
-  return `near|${paging}|${queryOf(info)}|${collection}|${ids}`;
+  return `near|${paging}|${queryOf(info)}|${sellReferenceOf(info)}|${collection}|${ids}`;
 }
 
 /**

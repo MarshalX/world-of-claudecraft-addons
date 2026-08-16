@@ -29,6 +29,7 @@ import type {
   BattlegroundStandings,
 } from '../loader/src/runtime/world/battleground.ts';
 import type { ProfessionInfo, ToolEffectSlot } from '../loader/src/runtime/world/character.ts';
+import type { CivicService, Recipe, Station } from '../loader/src/runtime/world/content.ts';
 import type { Entity, HeldSlot, InvSlot } from '../loader/src/runtime/world/game-types.ts';
 import type { HeldItemInstance } from '../loader/src/runtime/world/items.ts';
 import type { MarketInfo } from '../loader/src/runtime/world/market.ts';
@@ -45,6 +46,11 @@ import type {
   ProfessionInfo as PublicProfessionInfo,
   ToolEffectSlot as PublicToolEffectSlot,
 } from '../packages/types/character.js';
+import type {
+  CivicService as PublicCivicService,
+  Recipe as PublicRecipe,
+  Station as PublicStation,
+} from '../packages/types/content.js';
 import type { MarketInfo as PublicMarketInfo } from '../packages/types/economy.js';
 import type {
   Entity as PublicEntity,
@@ -232,6 +238,25 @@ const publishedIsMarket: Assignable<PublicMarketInfo, MarketInfo> = true;
 const marketFieldsAgree: SameFields<MarketInfo, PublicMarketInfo> = true;
 
 /**
+ * The three authored content tables.
+ *
+ * They had no pair at all until the 0.38.2 catch-up added the third, which is the
+ * same silence the stack shapes were in: `WorldApi` reaches all three
+ * structurally, so an assignability break surfaces as an error about the whole
+ * world surface rather than about the row that moved, and nothing at all was
+ * comparing key SETS. A recipe grows a field whenever the game's crafting does.
+ */
+const recipeIsPublished: Assignable<Recipe, PublicRecipe> = true;
+const publishedIsRecipe: Assignable<PublicRecipe, Recipe> = true;
+const recipeFieldsAgree: SameFields<Recipe, PublicRecipe> = true;
+const stationIsPublished: Assignable<Station, PublicStation> = true;
+const publishedIsStation: Assignable<PublicStation, Station> = true;
+const stationFieldsAgree: SameFields<Station, PublicStation> = true;
+const civicServiceIsPublished: Assignable<CivicService, PublicCivicService> = true;
+const publishedIsCivicService: Assignable<PublicCivicService, CivicService> = true;
+const civicServiceFieldsAgree: SameFields<CivicService, PublicCivicService> = true;
+
+/**
  * The battleground's two shapes, compared directly like the entity's.
  *
  * `WorldApi` reaches both structurally, but `BattlegroundMatch` is one member of
@@ -392,6 +417,15 @@ describe('the published types', () => {
       marketIsPublished,
       publishedIsMarket,
       marketFieldsAgree,
+      recipeIsPublished,
+      publishedIsRecipe,
+      recipeFieldsAgree,
+      stationIsPublished,
+      publishedIsStation,
+      stationFieldsAgree,
+      civicServiceIsPublished,
+      publishedIsCivicService,
+      civicServiceFieldsAgree,
       bgStandingsArePublished,
       publishedAreBgStandings,
       bgStandingsFieldsAgree,
