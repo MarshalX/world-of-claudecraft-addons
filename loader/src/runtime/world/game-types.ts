@@ -335,6 +335,7 @@ export interface Entity {
   /** Seconds until the next auto-attack swing lands. */
   swingTimer: number;
   comboPoints: number;
+  savedMana: number;
   stats: CoreStats;
   weapon: WeaponInfo;
   /**

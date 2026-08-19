@@ -14,6 +14,7 @@ import { elementId } from '../loader/src/runtime/api/ui-injections.ts';
 import { DisposalBag } from '../loader/src/runtime/disposal.ts';
 import { createAnchors } from '../loader/src/runtime/ui/kit/anchor3d.ts';
 import { createArrangeHint } from '../loader/src/runtime/ui/kit/arrange-hint.ts';
+import { createAuraArt } from '../loader/src/runtime/ui/kit/aura-art.ts';
 import { createBanner } from '../loader/src/runtime/ui/kit/banner.ts';
 import { createFrameRoster } from '../loader/src/runtime/ui/kit/frame-roster.ts';
 import { createFrameToggles } from '../loader/src/runtime/ui/kit/frame-toggle.ts';
@@ -121,6 +122,7 @@ function open() {
     icons: createIconUrls(
       createSkillArt({ fetchJson: PENDING_MANIFEST }),
       createItemArt({ fetchJson: PENDING_MANIFEST }),
+      createAuraArt({ fetchJson: PENDING_MANIFEST }),
     ),
   };
 

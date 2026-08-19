@@ -113,6 +113,7 @@ const SHAPE: Record<keyof Entity, FieldSpec> = {
   blockChance: { kind: 'number' },
   swingTimer: { kind: 'number' },
   comboPoints: { kind: 'number' },
+  savedMana: { kind: 'number' },
   stats: { kind: 'object' },
   weapon: { kind: 'object' },
   // Created on the first snapshot that carried a charge pool, rather than

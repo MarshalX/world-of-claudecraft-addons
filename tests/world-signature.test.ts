@@ -88,6 +88,12 @@ describe('player', () => {
     ['maxResource', 120],
     ['targetId', 250],
     ['id', 999],
+    // A druid's bar and its parked pool. Both move without any other watched
+    // field moving: a cat-form druid at 0 energy who cross-shifts to bear pays
+    // the shift out of the parked mana and lands on a rage bar still reading 0,
+    // so `resource` and `maxResource` are both unchanged across the transition.
+    ['resourceType', 'rage'],
+    ['savedMana', 2400],
   ])('notices %s changing', (field, value) => {
     expect(changed('player', entity(), entity({ [field]: value }))).toBe(true);
   });

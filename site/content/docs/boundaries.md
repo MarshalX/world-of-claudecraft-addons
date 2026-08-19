@@ -57,17 +57,31 @@ What to do instead, in the order they are worth trying:
 
 The related question, how many pixels a 30 yard radius covers on screen, IS answerable: project the centre and a point one radius away and measure the distance between them. `ui.project` documents that idiom. There is no single scale figure because under perspective a ground radius covers a different number of pixels across the screen than up it, so a published scalar would be right along one axis and wrong along the other.
 
-### An icon for an aura a mob applied
+### An icon for every aura, which is now a smaller gap than it was
 
-The game serves no aura art at all. Every aura icon you see in its own HUD is composited on a canvas at runtime, from a bundled table, and cached as a data URL. There is no file to point at, so there is no URL the loader could hand you.
+This section used to say the game serves no aura art at all, and that stopped being true at game **0.39.0**, which added `/ui/auras/mapping.json` and the directory under it. It is left here rather than deleted because the boundary moved and did not disappear, and because what remains behind it is the part that was always the real problem.
 
-It is worse than a naming problem, which is what it looks like at first. An aura's id is only an ability id when the game happens to have an ability by that name; the game's own HUD tests exactly that and falls back to a recipe derived from the aura's KIND when it does not. Mob-applied auras are full of ids no ability answers to (`<ability>_lockout` for an interrupt lockout, and a long tail of encounter-specific stuns), and those never had a file to begin with.
+There are now **two** routes to an aura's picture, and they cover different auras.
 
-What IS resolvable is an aura a **player** applied, which covers most of what a party or PvP display draws: the applying ability id is usually the aura's own id, and the caster's class is on their entity.
+`ui.icon.aura(id)` reads that new manifest. The family it covers is the auras **no ability id names**: a mob's, an encounter mechanic's, a battleground rune's, a set bonus's, resurrection sickness. It is a closed set of a few hundred rather than everything the game can apply.
+
+`ui.icon.ability(id, cls)` still answers an aura a **player** applied, where the applying ability id is usually the aura's own id and the caster's class is on their entity.
+
+Ask them in that order, which is the order the game's own resolver uses:
 
 ```js
+const own = woc.ui.icon.aura(aura.id);
 const caster = woc.world.entities.get(aura.sourceId);
-const art = caster?.kind === 'player' ? woc.ui.icon.ability(aura.id, caster.templateId) : null;
+const art = own ?? abilityArtFor(aura, caster);
+
+function abilityArtFor(aura, caster) {
+  if (caster?.kind !== 'player') {
+    return null;
+  }
+  return woc.ui.icon.ability(aura.id, caster.templateId);
+}
 ```
 
-`sourceId` is 0 when the game did not say, and `ui.icon.ability` answers null once it knows there is no file, so both dead ends come back as null rather than as a broken image. A blank slot on a mob debuff is not a bug you can fix: draw the aura's name, or a shape keyed to its kind, and move on.
+One difference from the other icon builders is worth knowing before you draw a row with it. `ui.icon.aura` answers **null until its manifest has been read**, where `ability` and `item` hand back an optimistic URL and let the image decide. That is deliberate: this family is small and covers only the complement of what `ability` answers, so a guess would 404 for most ids. `await woc.ui.icon.preloadAuras()` once at start, or a row drawn in the first moments of a session keeps whatever fallback you gave it.
+
+**What is still true.** Everything outside that family is composited on a canvas at runtime, from a bundled table, cached as a data URL, with no file to point at. Mob-applied auras are still full of ids no ability answers to (`<ability>_lockout` for an interrupt lockout, and a long tail of encounter-specific stuns), and most of those still resolve through nothing. `sourceId` is 0 when the game did not say. So both dead ends still come back as null rather than as a broken image, and a blank slot is still not a bug you can fix: draw the aura's name, or a shape keyed to its kind, and move on. What changed is how often you reach that point, not that you stop reaching it.

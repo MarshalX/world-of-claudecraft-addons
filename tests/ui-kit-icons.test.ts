@@ -12,7 +12,7 @@
 // path, and what the builder answers before, after, and without that manifest.
 
 import { describe, expect, it } from 'vitest';
-
+import { createAuraArt } from '../loader/src/runtime/ui/kit/aura-art.ts';
 import { createIconUrls } from '../loader/src/runtime/ui/kit/icons.ts';
 import { createItemArt } from '../loader/src/runtime/ui/kit/item-art.ts';
 import { createSkillArt } from '../loader/src/runtime/ui/kit/skill-art.ts';
@@ -45,7 +45,11 @@ function itemManifest(named: readonly NamedArt[], ...batched: readonly string[])
 }
 
 function builders(skills: Fetch, items: Fetch) {
-  return createIconUrls(createSkillArt({ fetchJson: skills }), createItemArt({ fetchJson: items }));
+  return createIconUrls(
+    createSkillArt({ fetchJson: skills }),
+    createItemArt({ fetchJson: items }),
+    createAuraArt({ fetchJson: NEVER }),
+  );
 }
 
 /** One curated item, used wherever a suite needs a real named entry. */

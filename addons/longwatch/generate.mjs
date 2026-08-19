@@ -137,8 +137,8 @@ const KNOWN_ZONES = new Set([
 /** Roughly what the tables carried at game 0.34.0, so a thin read cannot pass. */
 const EXPECTED_RARES = 24;
 const EXPECTED_CAMPED = 19;
-/** What `MOBS` carried at game 0.37.1: 64 elites, 20 rare elites, 23 bosses, 4 plain rares, 1 gate. */
-const EXPECTED_RANKED = 112;
+/** What `MOBS` carried at game 0.39.0: 64 elites, 20 rare elites, 25 bosses, 4 plain rares, 1 gate. */
+const EXPECTED_RANKED = 114;
 
 const GAME_ARG = '--game=';
 /** Two spaces, which is what biome.json formats every JSON file in this tree to. */

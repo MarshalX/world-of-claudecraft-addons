@@ -18,7 +18,7 @@
 // loader reads the manifest from the host the player is on and this union is open
 // where it is used.
 //
-// Ids with a file: 822
+// Ids with a file: 823
 
 export type KnownItemIcon =
   | 'abyssal_loop'
@@ -160,6 +160,7 @@ export type KnownItemIcon =
   | 'cultist_flayer'
   | 'curved_tusk'
   | 'cyan_magenta_armor_plate'
+  | 'dawnhold_posy'
   | 'deacon_reliquary_helm'
   | 'deacons_cleaver'
   | 'deathless_greatblade'

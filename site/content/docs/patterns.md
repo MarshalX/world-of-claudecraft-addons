@@ -315,13 +315,27 @@ The distinction is worth holding on to, because the three primitives are not int
 
 **And `{ frame }` is a fourth decision, about the HANDLER rather than the panel.** Pass it only when the handler does nothing but draw. If it also records something the addon needs whether or not anybody is looking, a closed panel records nothing for the rest of the session and nothing anywhere says so: no throw, no warning, just a table that turns out to be empty when something reads it. Split the recording out and give `paint` the drawing. [The API page](/docs/api) has the two shipped addons that decided this opposite ways and were both right.
 
-## An aura's icon comes from the caster's class, or from nowhere
+## An aura's icon comes from its own family, then from the caster's class, then from nowhere
 
-The game composites every aura icon on a canvas rather than serving files, so there is no `ui.icon.aura`. For an aura a player applied you can usually resolve the ability art instead:
+This page used to say there is no `ui.icon.aura` and that no version of this API would change that. Game **0.39.0** changed it: the game began serving an aura art manifest, and `ui.icon.aura` reads it. Ask the two builders in the order the game's own resolver does.
 
 ```js
+// The effect's own painting, for the auras no ability id names: a mob's, an
+// encounter mechanic's, a battleground rune's, a set bonus's.
+const own = woc.ui.icon.aura(aura.id);
+
+// Failing that, the ability art, which answers for an aura a PLAYER applied.
 const caster = woc.world.entities.get(aura.sourceId);
-const art = caster?.kind === 'player' ? woc.ui.icon.ability(aura.id, caster.templateId) : null;
+const art = own ?? abilityArtFor(aura, caster);
+
+function abilityArtFor(aura, caster) {
+  if (caster?.kind !== 'player') {
+    return null;
+  }
+  return woc.ui.icon.ability(aura.id, caster.templateId);
+}
 ```
 
-For an aura a mob applied there is nothing to point at, and no version of this API will change that. See [Boundaries](/docs/boundaries) for why.
+`ui.icon.aura` answers null until its manifest has been read, unlike `ability` and `item`, which hand back an optimistic URL. Call `await woc.ui.icon.preloadAuras()` once at start; a row drawn before that lands keeps whatever fallback you gave it and is not redrawn for the icon alone.
+
+Plenty of auras are in neither family and still resolve through nothing, so keep the null branch. See [Boundaries](/docs/boundaries) for what is left behind that line and why.

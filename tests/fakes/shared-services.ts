@@ -17,6 +17,7 @@ import type { NetState } from '../../loader/src/runtime/net/state.ts';
 import { createSoundEngine } from '../../loader/src/runtime/sound/engine.ts';
 import { createAnchors } from '../../loader/src/runtime/ui/kit/anchor3d.ts';
 import { createArrangeHint } from '../../loader/src/runtime/ui/kit/arrange-hint.ts';
+import { createAuraArt } from '../../loader/src/runtime/ui/kit/aura-art.ts';
 import { createBanner } from '../../loader/src/runtime/ui/kit/banner.ts';
 import { createFrameRoster } from '../../loader/src/runtime/ui/kit/frame-roster.ts';
 import { createIconUrls } from '../../loader/src/runtime/ui/kit/icons.ts';
@@ -258,7 +259,11 @@ function createSharedServices(
   // the same state a row drawn before the art manifests land is in.
   const pendingManifest = (): Promise<unknown> => new Promise(() => undefined);
   const fetchJson = options.fetchJson ?? pendingManifest;
-  const icons = createIconUrls(createSkillArt({ fetchJson }), createItemArt({ fetchJson }));
+  const icons = createIconUrls(
+    createSkillArt({ fetchJson }),
+    createItemArt({ fetchJson }),
+    createAuraArt({ fetchJson }),
+  );
   const tooltips = createTooltips({ doc, root, layer: overlay, viewport });
   const menus = createMenus({ doc, root: overlay, viewport });
   // The projector answers, so an addon's anchor lands somewhere; the frame clock

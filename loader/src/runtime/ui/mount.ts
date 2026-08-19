@@ -29,6 +29,7 @@ import type { UnitPointResolver } from '../world/anchor-point.ts';
 import type { Projector } from '../world/project.ts';
 import { ANCHORS, ANCHORS_REQUIRED_IN_GAME } from './anchors.ts';
 import { type ArrangeHint, createArrangeHint } from './kit/arrange-hint.ts';
+import { createAuraArt } from './kit/aura-art.ts';
 import { createFrameRoster, type FrameRoster } from './kit/frame-roster.ts';
 import { createIconUrls, type IconUrls } from './kit/icons.ts';
 import { createGameInjector, type GameInjector } from './kit/injections.ts';
@@ -182,6 +183,7 @@ function buildKit(deps: UiDeps, parts: UiParts, manager: Manager): UiKit {
   const icons = createIconUrls(
     createSkillArt({ fetchJson: deps.fetchJson }),
     createItemArt({ fetchJson: deps.fetchJson }),
+    createAuraArt({ fetchJson: deps.fetchJson }),
   );
 
   return {

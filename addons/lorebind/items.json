@@ -1,5 +1,5 @@
 {
-  "gameVersion": "0.38.2",
+  "gameVersion": "0.39.0",
   "generatedFrom": [
     "src/sim/data.ts (the ITEMS merge)",
     "src/sim/content/items.ts",
@@ -23,7 +23,8 @@
     "src/sim/content/evergarden.ts",
     "src/sim/content/galecrest.ts",
     "src/sim/content/farshore.ts",
-    "src/sim/content/wildheart.ts"
+    "src/sim/content/wildheart.ts",
+    "src/sim/content/dungeons.ts"
   ],
   "fields": "what the game's own item tooltip draws, plus the two prices it does not: id, name and kind always, then quality, slot, armorType, heroicOf, uniqueEquipped, itemLevel, stats, pvpOffenseRating, pvpDefenseRating, spellPower, critRating, hasteRating, hitRating, weapon, blockValue, foodHp, drinkMana, potionHp, potionMana, elixir, bagSlots, requiredLevel, requiredClass, set, soulbound, sellValue and priceHonor wherever the game declares or derives one",
   "items": [
@@ -1789,6 +1790,12 @@
       "name": "Cyan Magenta",
       "kind": "tool",
       "quality": "uncommon"
+    },
+    {
+      "id": "dawnhold_posy",
+      "name": "Dawnhold Garden Posy",
+      "kind": "junk",
+      "sellValue": 25
     },
     {
       "id": "deacon_reliquary_helm",

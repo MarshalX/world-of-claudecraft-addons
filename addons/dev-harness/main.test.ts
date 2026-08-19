@@ -70,6 +70,31 @@ async function reportFrom(harness: AddonHarness): Promise<string> {
 }
 
 /**
+ * The aura art manifest, shaped as the game serves it.
+ *
+ * The one art manifest this suite answers, and the others are left as the harness has
+ * them, never settling. That asymmetry is the checks themselves: `checkIcons` accepts
+ * either the optimistic URL or the withheld null for an ability and an item, and
+ * `checkSkillArt` returns before it awaits anything when there is no player. The aura
+ * check has neither out, because `icon.aura` answers null until its manifest lands and
+ * the family does not depend on a class, so an unanswered read is a check that never
+ * resolves and a report that never completes.
+ */
+const AURA_MANIFEST = {
+  schemaVersion: 1,
+  family: 'auras',
+  assets: [{ auraId: 'resurrection_sickness', output: 'resurrection_sickness.webp' }],
+};
+
+/** Answers the aura manifest and leaves every other art read as the harness has it. */
+function readArtManifest(url: string): Promise<unknown> {
+  if (url === '/ui/auras/mapping.json') {
+    return Promise.resolve(AURA_MANIFEST);
+  }
+  return new Promise<unknown>(() => undefined);
+}
+
+/**
  * The harness runs with NO game, which is the state it is most often started in:
  * an addon's first line executes at document-start, on the landing page.
  *
@@ -81,6 +106,7 @@ async function run() {
     manifest: MANIFEST_TEXT,
     source: SOURCE,
     marketplace: MARKETPLACE,
+    fetchJson: readArtManifest,
   });
   teardown.push(harness.dispose);
   return {
@@ -212,7 +238,7 @@ describe('what it reports without a game', () => {
   it('passes every check', async () => {
     const { report } = await run();
 
-    expect(await report()).toContain('48 of 48 checks passed');
+    expect(await report()).toContain('49 of 49 checks passed');
   });
 
   it('names no check as failed', async () => {

@@ -158,6 +158,7 @@ describe('the shape table', () => {
       blockChance: true,
       swingTimer: true,
       comboPoints: true,
+      savedMana: true,
       stats: true,
       weapon: true,
       abilityCharges: true,

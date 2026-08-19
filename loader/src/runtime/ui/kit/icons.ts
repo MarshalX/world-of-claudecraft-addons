@@ -21,6 +21,13 @@
 // class has been read the answer stays optimistic and the image decides, which is
 // what `kit/bar.ts` hiding its own icon slot on error has always covered.
 //
+// `kit/aura-art.ts` is the third, new with game 0.39.0, and it is the one that
+// answers a whole URL rather than a file name: five of its entries are auras the
+// game draws from another family's painting and the manifest carries the finished
+// path to each. It is also the one that is NOT optimistic before its manifest
+// lands, because the family is closed and small and most ids asked about are
+// legitimately not in it.
+//
 // `kit/item-art.ts` does the same job for `item()`, off a second served manifest,
 // and it also resolves the one item the manifest deliberately does not list: a
 // generated Heroic weapon copy, which reuses its base weapon's painting rather
@@ -28,6 +35,7 @@
 // filed under, which `itemArtName()` serves as exactly that and never as the item's
 // name: nothing in the game keeps the two in step.
 
+import type { AuraArt } from './aura-art.ts';
 import type { ItemArt } from './item-art.ts';
 import type { SkillArt } from './skill-art.ts';
 
@@ -97,6 +105,21 @@ export interface IconUrls {
    */
   itemArtName: (itemId: string) => string | null;
   /**
+   * An aura's painted icon, or null when there is none to point at.
+   *
+   * The id is the aura's own, which is what `world` puts on an aura record. This
+   * family is the auras NO ability names: a mob's, an encounter's, a battleground
+   * rune's, a set bonus's. An aura applied by an ability you can name carries that
+   * ability's id and is answered by `ability()` instead, which is the same order
+   * the game's own resolver checks in.
+   *
+   * Null until the manifest has been read, unlike `ability` and `item`. The family
+   * is closed and covers the complement of what `ability` already answers, so
+   * guessing a URL here would 404 for most ids and reach the same blank slot. Call
+   * `preloadAuras` when the first row drawn needs to be exact.
+   */
+  aura: (auraId: string) => string | null;
+  /**
    * Read a class's art manifest, so `ability` is exact from the first call.
    *
    * Never rejects, and needing it is optional: the manifest is fetched in the
@@ -106,10 +129,12 @@ export interface IconUrls {
   preload: (cls: string) => Promise<void>;
   /** The same for items, so `item` and `itemArtName` are exact from the first call. */
   preloadItems: () => Promise<void>;
+  /** The same for auras, which need it more: `aura` answers null until this lands. */
+  preloadAuras: () => Promise<void>;
 }
 
 /** The URL builders, over a source of truth about which ids have a file. */
-export function createIconUrls(art: SkillArt, items: ItemArt): IconUrls {
+export function createIconUrls(art: SkillArt, items: ItemArt, auras: AuraArt): IconUrls {
   return {
     ability: (abilityId, cls) => {
       const ability = segment(abilityId);
@@ -148,10 +173,17 @@ export function createIconUrls(art: SkillArt, items: ItemArt): IconUrls {
       return `${ITEM_DIR}/${fileId}${EXTENSION}`;
     },
 
+    // Already a whole URL by the time it gets here: the manifest resolves an aura
+    // that borrows another family's painting to that family's own path, so there
+    // is no directory for this one to compose.
+    aura: (auraId) => auras.urlFor(auraId),
+
     itemArtName: (itemId) => items.artName(itemId),
 
     preload: (cls) => art.preload(cls),
 
     preloadItems: () => items.preload(),
+
+    preloadAuras: () => auras.preload(),
   };
 }

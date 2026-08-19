@@ -48,7 +48,7 @@ Each entry says what is missing and what to do instead, because "you cannot have
 
 **Combo points have no published maximum.** Size a pip strip to the most seen this session and say so.
 
-**A mob's aura has no icon.** Every aura icon in the game is composited on a canvas from a bundled table, and the served art directories carry nothing for auras, so for a mob-applied effect there is nothing to point at. For an aura applied by a player the applying ability is usually resolvable and the ordinary ability icon works.
+**A mob's aura often has an icon now, and this entry used to say it never could.** Game 0.39.0 began serving `/ui/auras/mapping.json`, and `ui.icon.aura(id)` reads it. That family is exactly the auras no ability id names, mob-applied ones among them, so ask it FIRST and fall back to `ui.icon.ability` for an aura a player applied, which is the order the game's own resolver uses. Two things to carry from the old entry, because they still hold. The family is closed and small, so plenty of effects are in neither route and are still composited on a canvas from a bundled table with nothing to point at: keep the null branch. And `ui.icon.aura` answers null until its manifest lands, unlike the other builders, so `await woc.ui.icon.preloadAuras()` once at start or your first rows keep their fallback.
 
 ## Items and the economy
 

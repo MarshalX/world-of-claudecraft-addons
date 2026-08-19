@@ -162,6 +162,27 @@ export interface IconUrls {
    */
   itemArtName: (itemId: ItemIconId) => string | null;
   /**
+   * An aura's painted icon, or null when there is none to point at.
+   *
+   * New with game 0.39.0, which added the manifest and the directory under it.
+   * Before that release an aura had no icon this API could reach unless it happened
+   * to carry a real ability id, so a mob's aura, an encounter mechanic, a
+   * battleground rune and a set bonus all drew a row with a name and no picture.
+   *
+   * This family is exactly that complement: the auras NO ability names. An aura
+   * applied by an ability you can name carries that ability's id, and `ability()`
+   * answers it, which is the order the game's own resolver checks in too. So try
+   * this one for an aura whose id is not in your spellbook.
+   *
+   * NULL UNTIL THE MANIFEST IS READ, which is the one place this differs from
+   * `ability` and `item`. Those hand back a URL before their manifest lands and let
+   * the image decide, because nearly every id they are asked about does have a
+   * file. This family is closed and small, so a guess would 404 for most ids and
+   * reach the same empty slot having spent a request. Await `preloadAuras` when the
+   * first row you draw needs its icon.
+   */
+  aura: (auraId: string) => string | null;
+  /**
    * Read a class's art manifest, so `ability` is exact from its first call.
    *
    * Optional, and it never rejects: the manifest is fetched in the background the
@@ -176,6 +197,14 @@ export interface IconUrls {
    * item in the game, so a bag grid that would rather not flash costs one await.
    */
   preloadItems: () => Promise<void>;
+  /**
+   * Read the aura art manifest, so `aura` can answer at all.
+   *
+   * Never rejects, like the other two, and closer to required than they are: `aura`
+   * answers null for everything until this has landed. One request covers every
+   * painted aura in the game.
+   */
+  preloadAuras: () => Promise<void>;
 }
 
 export interface MicroButtonOpts {

@@ -90,6 +90,8 @@ export const PLAYER_FIELDS = [
   'maxHp',
   'resource',
   'maxResource',
+  'resourceType',
+  'savedMana',
   'dead',
   'targetId',
 ];

@@ -1038,7 +1038,46 @@ function checkIcons() {
   if (icon.ability('fireball', '') !== null) {
     return result('icons', false, 'ability() built a path with no class in it');
   }
+  // `aura` is the one builder that is NOT optimistic: the family is closed and
+  // covers the auras no ability id names, so it answers null until the manifest
+  // lands and null forever for an aura outside it. Both are legitimate here, so
+  // what is checked is that it refuses an id it cannot make a file name from.
+  if (icon.aura('') !== null) {
+    return result('icons', false, 'aura() built a path from an empty id');
+  }
   return result('icons', true, `empty ids refused, baked_bread ${artWord(item)}`);
+}
+
+/**
+ * The served AURA art manifest, new with game 0.39.0.
+ *
+ * The half no unit suite reaches: whether the game still serves this family at all. The
+ * check is deliberately not that any given aura has a file, because the family covers only
+ * the auras no ability names (a mob's, an encounter's, a battleground rune's) and which of
+ * those a session can see is content. What it proves is that the manifest read resolved and
+ * that a known member of the family came back with a URL, so a release that moved or
+ * dropped the file shows up here rather than as a blank slot in somebody's addon.
+ */
+async function checkAuraArt() {
+  await woc.ui.icon.preloadAuras();
+
+  // Resurrection sickness: in the family since it shipped, and one of the few members
+  // that is neither an encounter's nor a battleground's, so a session anywhere can be
+  // expected to resolve it once the manifest is read.
+  const known = woc.ui.icon.aura('resurrection_sickness');
+  if (known === null) {
+    return result('aura art', false, 'manifest read but resurrection_sickness has no URL');
+  }
+  if (!known.startsWith('/ui/')) {
+    return result('aura art', false, `aura() built ${known}`);
+  }
+  // An aura applied by an ability carries that ability's id and belongs to `ability()`,
+  // which is the order the game's own resolver checks in. A URL here would mean the two
+  // families had started overlapping.
+  if (woc.ui.icon.aura('rejuvenation') !== null) {
+    return result('aura art', false, 'an ability-applied aura resolved in the aura family too');
+  }
+  return result('aura art', true, `manifest read, resurrection_sickness ${known}`);
 }
 
 /**
@@ -1657,6 +1696,7 @@ async function runSlowChecks() {
     checkTimers(),
     checkPaint(),
     checkSkillArt(),
+    checkAuraArt(),
   ]);
 }
 

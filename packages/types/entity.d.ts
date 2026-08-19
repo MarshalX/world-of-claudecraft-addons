@@ -529,6 +529,16 @@ export interface Entity {
   /** Seconds until your next auto-attack swing lands. */
   swingTimer: number;
   comboPoints: number;
+  /**
+   * A druid's real mana pool, parked while a form runs the live bar on rage or
+   * energy. Zero whenever there is nothing set aside.
+   *
+   * The game floors it (`wireParkedMana` is `Math.floor`) and omits it at rest,
+   * so a form with an empty parked pool and no form at all both arrive as 0. It
+   * is the only way to read the mana a shapeshifted druid still has: `resource`
+   * and `maxResource` describe the form's own bar while a form is up.
+   */
+  savedMana: number;
   stats: CoreStats;
   weapon: WeaponInfo;
   /**

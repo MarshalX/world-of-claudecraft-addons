@@ -1,5 +1,5 @@
 {
-  "gameVersion": "0.38.2",
+  "gameVersion": "0.39.0",
   "source": "src/sim/data.ts, src/ui/i18n.resolved.generated/en.ts",
   "mobs": [
     {
@@ -162,6 +162,11 @@
       "rare": true
     },
     {
+      "id": "heroic_boss_dummy",
+      "name": "Heroic Boss Dummy",
+      "rank": "boss"
+    },
+    {
       "id": "hollow_acolyte",
       "name": "Hollow Acolyte",
       "rank": "elite"
@@ -224,6 +229,11 @@
       "id": "necromancy_gravewing",
       "name": "Gravewing",
       "rank": "elite"
+    },
+    {
+      "id": "normal_boss_dummy",
+      "name": "Normal Boss Dummy",
+      "rank": "boss"
     },
     {
       "id": "nythraxis_heroic_priest_add",

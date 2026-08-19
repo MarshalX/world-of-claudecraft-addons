@@ -30,4 +30,4 @@ export const API_VERSION = 1;
  * member changing shape or leaving moves API_VERSION instead. An addon declares
  * the minor it needs and runs on any loader implementing that or more.
  */
-export const API_MINOR = 7;
+export const API_MINOR = 8;

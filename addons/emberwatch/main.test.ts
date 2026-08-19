@@ -265,6 +265,14 @@ interface StartOpts {
   storage?: FakeStorage;
   /** True puts the player in a duel, which is what `world.match` reads as a bout. */
   bout?: boolean;
+  /**
+   * Aura ids the game ships a painting for, or undefined to leave the manifest unread.
+   *
+   * Undefined is the default and is the state most of this suite wants: `icon.aura` answers
+   * null until the manifest lands, so every row falls through to the two older routes and
+   * the tests written before game 0.39.0 still describe what they always did.
+   */
+  auraArt?: readonly string[];
 }
 
 interface BusRecord {
@@ -375,6 +383,31 @@ function dataFor(text: string | null): Record<string, string> {
   return { 'rules.json': text };
 }
 
+/**
+ * How the harness reads the art manifests, for a scenario that wants the aura family answered.
+ *
+ * Nothing at all when no ids were named, which leaves the harness default in place: every art
+ * read never settles, so `icon.aura` stays null and rows fall through to the two older routes.
+ * Only the aura manifest is answered even then, because the ability and item builders are
+ * OPTIMISTIC before their manifests land and every assertion here was written against that.
+ */
+function artOptionFor(auraIds: readonly string[] | undefined) {
+  if (auraIds === undefined) {
+    return {};
+  }
+  const auraManifest = {
+    family: 'auras',
+    assets: auraIds.map((auraId) => ({ auraId, output: `${auraId}.webp` })),
+  };
+  const fetchJson = (url: string): Promise<unknown> => {
+    if (url === '/ui/auras/mapping.json') {
+      return Promise.resolve(auraManifest);
+    }
+    return new Promise<unknown>(() => undefined);
+  };
+  return { fetchJson };
+}
+
 async function start(opts: StartOpts = {}): Promise<Harness> {
   const { live, members, selection, world } = buildWorld(opts.cls ?? 'warlock', opts.bout === true);
   const text = rulesTextFor(opts);
@@ -385,6 +418,7 @@ async function start(opts: StartOpts = {}): Promise<Harness> {
     settings: opts.settings ?? {},
     data: dataFor(text),
     game: Promise.resolve({ world }),
+    ...artOptionFor(opts.auraArt),
   });
   teardown.push(harness.dispose);
 
@@ -523,12 +557,13 @@ describe('its manifest', () => {
   // minor 4: `ui.list` for both the strip and the pins, `fmt.titleCase` for a party row's
   // derived name, `fmt.duration` for the countdown in a square's corner, and a frame's
   // `toggleKey`. The rest are minor 2: `woc.data`, `woc.onFrame`, `world.harmful`,
-  // `world.dispellable`, `world.match` and the unit form of `ui.anchor3d`. `ui.units` is the
-  // one at 6, which is what solves the box back for a square under the caption band. A
-  // manifest claiming less than it calls loads against a loader that has none of them and
-  // throws.
+  // `world.dispellable`, `world.match` and the unit form of `ui.anchor3d`. `ui.units` is at 6,
+  // which is what solves the box back for a square under the caption band. The two at 8 are
+  // `ui.icon.aura` and `ui.icon.preloadAuras`, which read the aura art manifest game 0.39.0
+  // added, and 8 is therefore what this declares. A manifest claiming less than it calls
+  // loads against a loader that has none of them and throws.
   it('declares the minor its reads arrived in', () => {
-    expect(manifest().apiMinor).toBe(6);
+    expect(manifest().apiMinor).toBe(8);
   });
 
   it('declares the rules table it reads', () => {
@@ -748,6 +783,39 @@ describe('the picture on a tile', () => {
     const mine = key('dot', 'target', 'corruption', ME);
     expect(h.artOf(mine)).toBe('/ui/skills/warlock/corruption.webp');
     expect(h.hover(mine)).not.toContain('Pictured');
+  });
+
+  // Game 0.39.0's aura art manifest, which covers the effects no ability id names. It is
+  // tried before the caster is even looked up, so the same effect draws the same picture
+  // whoever applied it, and nobody is pictured because it IS the effect's own icon.
+  it('carries the effect its own painting where the game ships one', async () => {
+    const h = await run({ rules: rulesFile([Silenced]), auraArt: ['silence_gnoll'] });
+    // The manifest read is a promise chain the addon starts and does not await, so the
+    // rows below have to be drawn after it has settled rather than beside it.
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+    h.afflict(ME, { ...Shriek, sourceId: FOE });
+    h.frame();
+
+    expect(h.artOf(FromFoe)).toBe('/ui/auras/silence_gnoll.webp');
+    expect(h.hover(FromFoe)).not.toContain('Pictured');
+  });
+
+  // The family is closed and small, so the portrait route carries most rows and has to keep
+  // working: an effect the manifest does not name falls straight back to it.
+  it('falls back to the portrait for an effect the manifest does not name', async () => {
+    const h = await run({ rules: rulesFile([Silenced]), auraArt: ['something_else'] });
+    // The manifest read is a promise chain the addon starts and does not await, so the
+    // rows below have to be drawn after it has settled rather than beside it.
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+    h.afflict(ME, { ...Shriek, sourceId: FOE });
+    h.frame();
+
+    expect(h.artOf(FromFoe)).toBe('/ui/mobs/gnoll.webp');
+    expect(h.hover(FromFoe)).toContain('Pictured: Grimjaw');
   });
 
   // The caster is the only route to a picture, so a source out of interest scope has none.

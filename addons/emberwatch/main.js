@@ -29,10 +29,14 @@
 // before it breaks. The soak and the per-hit chance never leave the server, and the wire
 // carries a bare presence marker in a field the published `Aura` does not declare.
 //
-// An effect a mob applied has no icon anywhere: the game composites aura icons at run time,
-// so the only ability file to point at is filed per player class. What a mob does have is a
-// PORTRAIT, so those squares carry the face of whatever applied the effect, said out loud in
-// the tooltip and in the accessible name rather than left to be read off the picture.
+// An effect has its OWN painting where the game ships one, which it did not before game
+// 0.39.0: that release added an aura art manifest covering the effects no ability names, the
+// mob families among them, and `woc.ui.icon.aura` reads it. What is still true is that the
+// family is closed and small, so most of what lands on a unit resolves through nothing: the
+// game composites the rest at run time, and the only ability file to point at is filed per
+// player class. What a mob does have is a PORTRAIT, so a square with no painting of its own
+// carries the face of whatever applied the effect, said out loud in the tooltip and in the
+// accessible name rather than left to be read off the picture.
 //
 // `world.abilities` is deliberately not consulted for a name. An entity's aura carries one
 // on the wire; a party row carries none, and a spellbook would answer for your own kit and
@@ -203,17 +207,31 @@ function reassemble() {
 /**
  * The picture for an alert, and whose face it is when it is not the effect's own.
  *
- * Ability art is filed per player class, so an effect a mob applied resolves through nothing: the
- * game composites those icons on a canvas from a module no addon can reach, and a lockout id 404s.
- * A mob's PORTRAIT is a file, and every catalogued template ships one, so the square is filled by
- * the thing that applied the effect rather than left blank. `castBy` is what makes that honest:
- * the tooltip and the accessible name both say whose face it is, because a portrait answers a
- * different question from an ability icon and a square that does not say which is a guess.
+ * Three routes, tried in the order the game's own resolver uses them. The effect's OWN painting
+ * comes first, from the aura art manifest game 0.39.0 added: that family is exactly the effects no
+ * ability id names, so a mob's aura, an encounter mechanic and a battleground rune are in it, and
+ * a square filled from it needs no disclosure because it IS the effect's icon.
+ *
+ * The family is closed and covers a fraction of what a fight applies, so the two older routes
+ * still carry most rows. Ability art is filed per player class, so an effect a mob applied
+ * resolves through nothing there: the game composites those icons on a canvas from a module no
+ * addon can reach, and a lockout id 404s. A mob's PORTRAIT is a file, and every catalogued
+ * template ships one, so the square is filled by the thing that applied the effect rather than
+ * left blank. `castBy` is what makes that honest: the tooltip and the accessible name both say
+ * whose face it is, because a portrait answers a different question from an ability icon and a
+ * square that does not say which is a guess.
  *
  * An npc is deliberately not portrayed. The game draws a crest for one rather than a portrait, so
  * `/ui/mobs/` would 404 and the slot would go back to being empty by a longer route.
  */
 function artOf(auraId, sourceId) {
+  // The effect's own painting answers for whoever applied it, so this is asked before the
+  // caster is even looked up: an aura in that family is the same picture on a mob, on a
+  // stranger and on you.
+  const own = woc.ui.icon.aura(auraId);
+  if (own !== null) {
+    return { art: own, castBy: null };
+  }
   const caster = woc.world.entities.get(sourceId);
   if (caster === undefined) {
     return { art: null, castBy: null };
@@ -1098,6 +1116,15 @@ fillPane();
 
 boot().catch((err) => {
   woc.error('could not read the starter rules, so only your own rows will fire', err);
+});
+
+// `icon.aura` answers null until the manifest lands, unlike the ability and item builders, so
+// this is read at start rather than on the first row. An alert is drawn at the moment the
+// effect appears, so a row that raced the read would keep the caster's face for as long as it
+// was up; starting the read here is what keeps that to the first moments of a session.
+woc.ui.icon.preloadAuras().catch(() => {
+  // Documented never to reject. Caught anyway, because a broken promise here would be an
+  // unhandled rejection in the page the game is running in.
 });
 
 load();

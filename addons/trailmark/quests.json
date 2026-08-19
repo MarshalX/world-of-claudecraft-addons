@@ -1,5 +1,5 @@
 {
-  "gameVersion": "0.38.2",
+  "gameVersion": "0.39.0",
   "source": "src/sim/data.ts, src/sim/quest_targets.ts, src/sim/types.ts, src/sim/content/*.ts",
   "zones": [
     {
@@ -3976,9 +3976,9 @@
     },
     {
       "mob": "topiary_wolf",
-      "x": 294,
-      "z": 906,
-      "radius": 10
+      "x": 302,
+      "z": 898,
+      "radius": 6
     },
     {
       "mob": "topiary_wolf",
@@ -4204,8 +4204,8 @@
     },
     {
       "mob": "hedge_knight",
-      "x": 276,
-      "z": 886,
+      "x": 306,
+      "z": 872,
       "radius": 8
     },
     {
@@ -4369,6 +4369,24 @@
       "x": 441,
       "z": 2380,
       "radius": 7
+    },
+    {
+      "mob": "friendly_player_dummy",
+      "x": -42,
+      "z": 648,
+      "radius": 0
+    },
+    {
+      "mob": "normal_boss_dummy",
+      "x": -38,
+      "z": 648,
+      "radius": 0
+    },
+    {
+      "mob": "heroic_boss_dummy",
+      "x": -36,
+      "z": 648,
+      "radius": 0
     }
   ],
   "objects": [
@@ -4534,7 +4552,7 @@
     },
     {
       "item": "evergarden_statue_rubbing",
-      "positions": [[280, 922], [452, 930], [274, 1012], [426, 1118]]
+      "positions": [[277, 912], [452, 930], [274, 1012], [426, 1118]]
     },
     {
       "item": "hedgewick_tool_cart",

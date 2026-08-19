@@ -24,6 +24,7 @@ import type { AddonStorageApi } from '../loader/src/runtime/api/storage.ts';
 import type { UiApi } from '../loader/src/runtime/api/ui.ts';
 import type { WorldApi } from '../loader/src/runtime/api/world.ts';
 import type { EventPayloads } from '../loader/src/runtime/net/events.ts';
+import type { IconUrls } from '../loader/src/runtime/ui/kit/icons.ts';
 import type {
   BattlegroundMatch,
   BattlegroundStandings,
@@ -63,7 +64,7 @@ import type { KeysApi as PublicKeysApi } from '../packages/types/keys.js';
 import type { NetApi as PublicNetApi } from '../packages/types/net.js';
 import type { SoundApi as PublicSoundApi } from '../packages/types/sound.js';
 import type { StorageApi as PublicStorageApi } from '../packages/types/storage.js';
-import type { UiApi as PublicUiApi } from '../packages/types/ui.js';
+import type { IconUrls as PublicIconUrls, UiApi as PublicUiApi } from '../packages/types/ui.js';
 import type {
   Reaction as PublicReaction,
   WorldApi as PublicWorldApi,
@@ -112,6 +113,18 @@ type EventFieldDrift = {
 /** Each of these is a compile error the moment the two shapes disagree. */
 const uiIsPublished: Assignable<UiApi, PublicUiApi> = true;
 const publishedIsUi: Assignable<PublicUiApi, UiApi> = true;
+
+/**
+ * `ui.icon` had no check of its own, which is the silence this file exists to
+ * stop rather than a pass. The pair above compares the whole `UiApi`, so it does
+ * reach `icon` and would catch a REQUIRED member added to one side alone; what it
+ * cannot see is an OPTIONAL one, and that is how every member this surface has
+ * gained arrived. Game 0.39.0 added the aura art manifest and `aura` with it,
+ * which is what made the gap worth closing.
+ */
+const iconsArePublished: Assignable<IconUrls, PublicIconUrls> = true;
+const publishedAreIcons: Assignable<PublicIconUrls, IconUrls> = true;
+const iconFieldsAgree: SameFields<IconUrls, PublicIconUrls> = true;
 
 /**
  * `net` was the one surface with no check at all, which is how its published
@@ -369,6 +382,9 @@ describe('the published types', () => {
     expect([
       uiIsPublished,
       publishedIsUi,
+      iconsArePublished,
+      publishedAreIcons,
+      iconFieldsAgree,
       netIsPublished,
       publishedIsNet,
       soundIsPublished,
