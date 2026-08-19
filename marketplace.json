@@ -2,7 +2,7 @@
   "schema": 1,
   "name": "Official Marketplace",
   "maintainer": "MarshalX",
-  "generated": "2026-08-16T16:20:55.000Z",
+  "generated": "2026-08-19T20:20:08.000Z",
   "addons": [
     {
       "id": "cadence",
@@ -226,9 +226,9 @@
     {
       "id": "dev-harness",
       "name": "Dev Harness",
-      "version": "1.10.0",
+      "version": "1.11.0",
       "apiVersion": 1,
-      "apiMinor": 7,
+      "apiMinor": 8,
       "author": "MarshalX",
       "description": "Exercises every part of the addon API and reports what worked, repainting as the world moves, so a loader change can be checked in the game rather than only in a test.",
       "entry": "main.js",
@@ -301,9 +301,9 @@
     {
       "id": "emberwatch",
       "name": "Emberwatch",
-      "version": "1.2.0",
+      "version": "1.3.0",
       "apiVersion": 1,
-      "apiMinor": 6,
+      "apiMinor": 8,
       "author": "MarshalX",
       "description": "A rules engine for effects and procs: name an effect on a unit and get a tile, a cue and a banner when it lands, stacks up or runs out. Ships a starter set for your class, and takes rules of your own captured off your target with a keybind.",
       "entry": "main.js",
@@ -567,7 +567,7 @@
     {
       "id": "ledgerline",
       "name": "Ledgerline",
-      "version": "1.6.0",
+      "version": "1.7.0",
       "apiVersion": 1,
       "apiMinor": 7,
       "author": "MarshalX",
@@ -663,7 +663,7 @@
     {
       "id": "longwatch",
       "name": "Longwatch",
-      "version": "1.3.0",
+      "version": "1.4.0",
       "apiVersion": 1,
       "apiMinor": 4,
       "author": "MarshalX",
@@ -741,7 +741,7 @@
     {
       "id": "lorebind",
       "name": "Lorebind",
-      "version": "1.3.0",
+      "version": "1.4.0",
       "apiVersion": 1,
       "apiMinor": 7,
       "author": "MarshalX",
@@ -1020,7 +1020,7 @@
     {
       "id": "trailmark",
       "name": "Trailmark",
-      "version": "1.2.2",
+      "version": "1.3.0",
       "apiVersion": 1,
       "apiMinor": 4,
       "author": "MarshalX",
