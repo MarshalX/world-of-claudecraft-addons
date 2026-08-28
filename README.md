@@ -56,7 +56,7 @@ The per-browser procedure lives on the site rather than here, because two copies
 
 **[Trailmark](addons/trailmark)** — Where the thing your quest wants actually is: the zone, the distance, the way to turn and a world pin for every objective in your log, and who takes each quest that is ready.
 
-<img src="addons/trailmark/preview.png" width="440" alt="a panel of the outstanding objectives in your quest log, each a bar saying how far along it is, where it is and which way to turn, with pins in the world below" />
+<img src="addons/trailmark/preview.png" width="350" alt="a panel of the outstanding objectives in your quest log, each a bar saying how far along it is, where it is and which way to turn, with pins in the world below" />
 
 **[Ledgerline](addons/ledgerline)** — A price history for a market that keeps almost none, and a scanner over it: every page you read at the Merchant is written down, each listing is judged against the vendor's floor, the page's own second-cheapest and your recorded prices, what is worth buying is ranked by what you would clear on the resale.
 
