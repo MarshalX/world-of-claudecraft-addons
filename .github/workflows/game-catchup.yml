@@ -36,14 +36,18 @@ jobs:
       version: ${{ steps.tags.outputs.version }}
       gate: ${{ steps.gate.outcome }}
       changed: ${{ steps.patch.outputs.changed }}
-    env:
-      GAME: ${{ runner.temp }}/game
-      CATCHUP: ${{ runner.temp }}/catchup
     steps:
+      - name: Set the scratch paths
+        run: |
+          echo "GAME=$RUNNER_TEMP/game" >> "$GITHUB_ENV"
+          echo "CATCHUP=$RUNNER_TEMP/catchup" >> "$GITHUB_ENV"
+
       - name: Refuse a catch-up off main
         if: github.ref_name != 'main'
+        env:
+          REF: ${{ github.ref_name }}
         run: |
-          echo "::error::dispatched on ${{ github.ref_name }}; the catch-up branches from main"
+          echo "::error::dispatched on $REF; the catch-up branches from main"
           exit 1
 
       - uses: actions/checkout@v5
@@ -73,14 +77,15 @@ jobs:
 
           stamped=$(sed -n '1p' packages/types/aura-kinds.generated.d.ts | grep -oE '[0-9]+\.[0-9]+\.[0-9]+')
           from=${IN_FROM:-v$stamped}
-          to=${IN_TO:-$(git ls-remote --tags --refs --sort=-v:refname "$GAME_REMOTE" 'v*' | head -1 | sed 's#.*refs/tags/##')}
+          to=${IN_TO:-$(git ls-remote --tags --refs --sort=-v:refname "$GAME_REMOTE" 'v*' | sed -n '1s#.*refs/tags/##p')}
 
           [ -n "$to" ] || { echo "::error::could not read the game's tags"; exit 1; }
           [ "$from" != "$to" ] || { echo "::error::$from is already the newest tag"; exit 1; }
 
           for h in worldofclaudecraft.com pbe.worldofclaudecraft.com pbe2.worldofclaudecraft.com; do
-            v=$(curl -s --max-time 20 "https://$h/" | grep -oE 'v[0-9]+\.[0-9]+\.[0-9]+' | head -1 || true)
-            echo "- $h ${v:-unreadable}" >> "$CATCHUP/channels.md"
+            page=$(curl -s --max-time 20 "https://$h/" || true)
+            if [[ $page =~ v[0-9]+\.[0-9]+\.[0-9]+ ]]; then v=${BASH_REMATCH[0]}; else v=unreadable; fi
+            echo "- $h $v" >> "$CATCHUP/channels.md"
           done
 
           {
@@ -125,6 +130,7 @@ jobs:
         timeout-minutes: 330
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
           claude_args: |
             --model opus
             --allowedTools "Bash,Read,Glob,Grep,WebFetch,Write,Edit,TodoWrite,Skill"
@@ -188,6 +194,7 @@ jobs:
           name: catchup-notes
           path: ${{ runner.temp }}/catchup
           if-no-files-found: warn
+          overwrite: true
 
   propose:
     needs: audit
@@ -238,6 +245,10 @@ jobs:
 
           body=notes/report.md
           [ -s "$body" ] || echo "The run produced no report; read the step summaries." > "$body"
+          if [ "$(wc -c < "$body")" -gt 55000 ]; then
+            { head -c 55000 "$body"; echo; echo "_Truncated. The whole report is in the run's catchup-notes artifact._"; } > "$body.short"
+            body="$body.short"
+          fi
           {
             echo
             echo "---"
