@@ -1,0 +1,52 @@
+name: Game release watch
+
+# Dispatches the catch-up when the game ships a tag this tree has not audited.
+# The FROM end is the stamp every generator writes into its output, so there is
+# no state file. AGENTS.md, "The game catch-up run", has the rest.
+
+on:
+  schedule:
+    - cron: '0 6 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: write
+  pull-requests: read
+
+jobs:
+  watch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Dispatch the catch-up if the game moved
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GAME_REMOTE: https://github.com/levy-street/world-of-claudecraft.git
+        run: |
+          set -euo pipefail
+
+          stamped=$(sed -n '1p' packages/types/aura-kinds.generated.d.ts | grep -oE '[0-9]+\.[0-9]+\.[0-9]+')
+          from="v$stamped"
+          to=$(git ls-remote --tags --refs --sort=-v:refname "$GAME_REMOTE" 'v*' | head -1 | sed 's#.*refs/tags/##')
+
+          if [ -z "$to" ]; then
+            echo "::warning::could not read the game's tags"
+            exit 0
+          fi
+
+          if [ "$from" = "$to" ]; then
+            echo "## Game is at $to and the tree is caught up" >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          open=$(gh pr list --state open --json headRefName \
+            --jq '[.[].headRefName | select(startswith("game-catchup/"))] | join(", ")')
+          if [ -n "$open" ]; then
+            echo "## Game is at $to; a catch-up is already open ($open)" >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          gh workflow run game-catchup.yml --ref main -f "from=$from" -f "to=$to"
+          echo "## Dispatched a catch-up, $from to $to" >> "$GITHUB_STEP_SUMMARY"

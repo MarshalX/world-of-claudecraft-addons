@@ -1,0 +1,275 @@
+name: Game catch-up
+
+# Runs .claude/skills/woc-game-catchup against a new game release and opens a
+# draft pull request. AGENTS.md, "The game catch-up run", says why it is shaped
+# this way: read that before changing anything here.
+
+on:
+  workflow_dispatch:
+    inputs:
+      to:
+        description: 'Game tag to catch up TO (blank: the newest tag)'
+        required: false
+        type: string
+      from:
+        description: 'Game tag to audit FROM (blank: the stamp on the generated files)'
+        required: false
+        type: string
+
+concurrency:
+  group: game-catchup
+  cancel-in-progress: false
+
+env:
+  GAME_REMOTE: https://github.com/levy-street/world-of-claudecraft.git
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    environment: game-catchup
+    timeout-minutes: 360
+    permissions:
+      contents: read
+    outputs:
+      from: ${{ steps.tags.outputs.from }}
+      to: ${{ steps.tags.outputs.to }}
+      version: ${{ steps.tags.outputs.version }}
+      gate: ${{ steps.gate.outcome }}
+      changed: ${{ steps.patch.outputs.changed }}
+    env:
+      GAME: ${{ runner.temp }}/game
+      CATCHUP: ${{ runner.temp }}/catchup
+    steps:
+      - name: Refuse a catch-up off main
+        if: github.ref_name != 'main'
+        run: |
+          echo "::error::dispatched on ${{ github.ref_name }}; the catch-up branches from main"
+          exit 1
+
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - run: corepack enable
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - run: pnpm exec playwright install --with-deps chromium
+
+      - name: Resolve the tag range
+        id: tags
+        env:
+          IN_FROM: ${{ inputs.from }}
+          IN_TO: ${{ inputs.to }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$CATCHUP"
+
+          stamped=$(sed -n '1p' packages/types/aura-kinds.generated.d.ts | grep -oE '[0-9]+\.[0-9]+\.[0-9]+')
+          from=${IN_FROM:-v$stamped}
+          to=${IN_TO:-$(git ls-remote --tags --refs --sort=-v:refname "$GAME_REMOTE" 'v*' | head -1 | sed 's#.*refs/tags/##')}
+
+          [ -n "$to" ] || { echo "::error::could not read the game's tags"; exit 1; }
+          [ "$from" != "$to" ] || { echo "::error::$from is already the newest tag"; exit 1; }
+
+          for h in worldofclaudecraft.com pbe.worldofclaudecraft.com pbe2.worldofclaudecraft.com; do
+            v=$(curl -s --max-time 20 "https://$h/" | grep -oE 'v[0-9]+\.[0-9]+\.[0-9]+' | head -1 || true)
+            echo "- $h ${v:-unreadable}" >> "$CATCHUP/channels.md"
+          done
+
+          {
+            echo "from=$from"
+            echo "to=$to"
+            echo "version=${to#v}"
+          } >> "$GITHUB_OUTPUT"
+
+          {
+            echo "# Catch-up inputs"
+            echo
+            echo "- Range: \`$from..$to\`"
+            echo "- Game checkout: \`$GAME\` (sparse: src, server)"
+            echo "- Scratch: \`$CATCHUP\`"
+            echo "- Deployed now:"
+            sed 's/^/  /' "$CATCHUP/channels.md"
+          } > "$CATCHUP/inputs.md"
+
+          {
+            echo "## Catching up $from to $to"
+            echo
+            cat "$CATCHUP/channels.md"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Clone the game, blobless and sparse
+        env:
+          FROM: ${{ steps.tags.outputs.from }}
+          TO: ${{ steps.tags.outputs.to }}
+        run: |
+          set -euo pipefail
+          git init -q "$GAME"
+          git -C "$GAME" remote add origin "$GAME_REMOTE"
+          git -C "$GAME" sparse-checkout set --cone src server
+          git -C "$GAME" fetch --depth 1 --filter=blob:none origin tag "$FROM" tag "$TO"
+          git -C "$GAME" checkout -q "$TO"
+          git -C "$GAME" diff --stat "$FROM" "$TO" -- src server > "$CATCHUP/diff.stat"
+          git -C "$GAME" diff --name-only "$FROM" "$TO" -- src server > "$CATCHUP/diff.files"
+          echo "- $(tail -1 "$CATCHUP/diff.stat")" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Run the catch-up
+        uses: anthropics/claude-code-action@v1
+        timeout-minutes: 330
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          claude_args: |
+            --model opus
+            --allowedTools "Bash,Read,Glob,Grep,WebFetch,Write,Edit,TodoWrite,Skill"
+            --disallowedTools "Bash(git commit:*),Bash(git push:*),Bash(git add:*),Bash(git checkout:*),Bash(git reset:*),Bash(git stash:*),Bash(git rebase:*),Bash(git merge:*)"
+          prompt: |
+            `$CATCHUP` and `$GAME` are set in your shell environment.
+
+            Read AGENTS.md, then .claude/skills/woc-game-catchup/SKILL.md, and run that pass end to
+            end. The skill is the procedure and nothing here repeats it. What follows is only what
+            is different about running in CI rather than at a developer's terminal.
+
+            The two inputs the skill opens by asking for are already resolved. $CATCHUP/inputs.md
+            holds the tag range, the game checkout path and what the three deployed channels are
+            serving. $CATCHUP/diff.stat and $CATCHUP/diff.files are computed; scope any further
+            diff to `-- src server`, since an unscoped one pulls hundreds of megabytes of asset
+            blobs to say the same thing about the two directories anything here reads.
+
+            There is nobody to ask. Where the skill says to stop for the user on a contentious
+            call, decide it, and put what you decided and what you rejected in the report.
+
+            You have no running client, so every by-hand verification the skill demands is OWED
+            rather than done. Name each one and say exactly where it is.
+
+            The preview capture changes environment with this run: the committed PNGs were taken
+            on a developer's Mac and this is headless Linux Chromium, so a first pass may rewrite
+            most of them for rendering reasons alone. Report that with the numbers rather than
+            restoring them.
+
+            Commit nothing and run no git write command. A later step commits what you leave in
+            the working tree.
+
+            Write the report to $CATCHUP/report.md, which becomes the body of the pull request.
+            And as you FINISH each phase, append one line to $GITHUB_STEP_SUMMARY saying what that
+            phase found: it is the only progress anybody watching this run can see.
+
+      - name: Gate
+        id: gate
+        continue-on-error: true
+        run: pnpm check
+
+      - name: Hand the work over as a patch
+        id: patch
+        run: |
+          set -euo pipefail
+
+          if [ -z "$(git status --porcelain)" ]; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "## Nothing changed" >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          git add -A
+          git diff --cached --binary > "$CATCHUP/catchup.patch"
+          echo "changed=true" >> "$GITHUB_OUTPUT"
+          echo "- Patch: $(wc -c < "$CATCHUP/catchup.patch") bytes" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Keep the working notes
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: catchup-notes
+          path: ${{ runner.temp }}/catchup
+          if-no-files-found: warn
+
+  propose:
+    needs: audit
+    if: needs.audit.outputs.changed == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: catchup-notes
+          path: notes
+
+      - name: Refuse a patch that edits a workflow, which GITHUB_TOKEN cannot push
+        run: |
+          if grep -qE '^\+\+\+ b/\.github/workflows/' notes/catchup.patch; then
+            echo "::error::the catch-up patch edits .github/workflows; refusing"
+            exit 1
+          fi
+
+      - name: Commit, branch and open the pull request
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          FROM: ${{ needs.audit.outputs.from }}
+          TO: ${{ needs.audit.outputs.to }}
+          VERSION: ${{ needs.audit.outputs.version }}
+          GATE: ${{ needs.audit.outputs.gate }}
+        run: |
+          set -euo pipefail
+
+          branch="game-catchup/$TO"
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -b "$branch"
+          git apply --binary --index notes/catchup.patch
+          git commit -F - <<MSG
+          Catch the loader up to game $VERSION
+
+          Audited $FROM..$TO against the surfaces checklist, regenerated everything
+          that reads the game, and carried the addons through what the release moved.
+          Opened by .github/workflows/game-catchup.yml, which cannot verify anything
+          against a running client; the pull request says what that leaves owed.
+          MSG
+          git push --force origin "$branch"
+
+          body=notes/report.md
+          [ -s "$body" ] || echo "The run produced no report; read the step summaries." > "$body"
+          {
+            echo
+            echo "---"
+            echo
+            echo "\`pnpm check\` in the run: **$GATE**."
+            echo
+            echo "Written by an agent with no write access to this repository. Read it as a"
+            echo "proposal: the citations are the point, and the owed section is the part no"
+            echo "runner could do."
+            echo
+            echo "A pull request opened with GITHUB_TOKEN starts no workflow run, so CI has not"
+            echo "looked at this branch. Push a commit to it to get one."
+          } >> "$body"
+
+          existing=$(gh pr list --state open --head "$branch" --json number --jq '.[0].number // empty')
+          if [ -n "$existing" ]; then
+            gh pr comment "$existing" --body-file "$body"
+            echo "## Re-ran onto pull request #$existing (gate: $GATE)" >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          gh pr create \
+            --draft \
+            --base main \
+            --head "$branch" \
+            --title "Catch the loader up to game $VERSION" \
+            --body-file "$body"
+
+          echo "## Draft pull request opened from $branch (gate: $GATE)" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Fail the run where the gate failed
+        if: needs.audit.outputs.gate == 'failure'
+        run: |
+          echo "::error::pnpm check failed; the pull request is open as a draft"
+          exit 1
