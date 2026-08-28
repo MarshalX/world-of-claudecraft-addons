@@ -1,36 +1,60 @@
 name: Release
 
-# The tag is the version. Nothing in the tree records a release number, so there
-# is no second place one can disagree from: `pnpm pkg set` stamps the tag into
-# package.json just before the build, vite-plugin-monkey reads it from there, and
-# the built metadata block is grepped afterwards to prove it took.
-#
-# A published release is IMMUTABLE. A defect found after publication is a new
-# patch tag, never a re-upload: a replaced asset under one tag means two
-# different files claiming one version, and every checksum, cache and mirror
-# that saw the first one is now wrong with nothing to indicate it. Deleting a
-# release is acceptable within minutes of publishing and before anyone could
-# have installed; after that it is a patch.
-
 on:
-  push:
-    tags:
-      # Loader releases only. `types-v*` tags @woc-addons/types on its own
-      # cadence and must not build a loader.
-      - 'v[0-9]+.[0-9]+.[0-9]+'
-
-permissions:
-  contents: write
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Loader version, e.g. 1.9.0'
+        required: true
+        type: string
 
 jobs:
   release:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
+      - name: Refuse a release off main
+        if: github.ref_name != 'main'
+        env:
+          REF: ${{ github.ref_name }}
+        run: |
+          echo "::error::dispatched on $REF; release runs on main"
+          exit 1
+
       - uses: actions/checkout@v5
         with:
-          # git-cliff reads the whole history and every tag. A shallow clone
-          # produces release notes containing one commit.
+          # git-cliff reads the whole history and every tag, and the version
+          # guard below compares against them. A shallow clone produces release
+          # notes containing one commit and a guard that sees no previous tag.
           fetch-depth: 0
+
+      - name: Guard the version
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+
+          if ! printf '%s' "$VERSION" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "::error::'$VERSION' is not a release version like 1.9.0"
+            exit 1
+          fi
+
+          if git rev-parse -q --verify "refs/tags/v$VERSION" >/dev/null; then
+            echo "::error::v$VERSION already exists; a release is immutable, so this is a new patch"
+            exit 1
+          fi
+
+          # sort -V is exact rather than approximate here: the pattern above
+          # admits numeric triples alone, so there is no prerelease for it to
+          # order the wrong way round.
+          latest=$(git tag --list 'v[0-9]*.[0-9]*.[0-9]*' | sed 's/^v//' | sort -V | tail -1)
+          if [ -n "$latest" ] && [ "$(printf '%s\n%s\n' "$latest" "$VERSION" | sort -V | tail -1)" != "$VERSION" ]; then
+            echo "::error::$VERSION is not newer than the current release $latest"
+            exit 1
+          fi
+
+          echo "releasing v$VERSION over ${latest:-nothing}"
 
       # Corepack must come before setup-node's pnpm cache, which needs pnpm on PATH.
       - name: Enable corepack
@@ -46,11 +70,34 @@ jobs:
       - name: Typecheck, lint, test, validate manifests
         run: pnpm check
 
-      - name: Stamp the version from the tag
+      - name: Refuse on generated-file drift
+        run: |
+          set -euo pipefail
+          cp marketplace.json /tmp/marketplace.committed.json
+          pnpm index -- --timestamp=0
+
+          if ! node -e "
+            const fs = require('node:fs');
+            const rows = (path) => {
+              const { generated, ...rest } = JSON.parse(fs.readFileSync(path, 'utf8'));
+              return JSON.stringify(rest);
+            };
+            process.exit(rows('/tmp/marketplace.committed.json') === rows('marketplace.json') ? 0 : 1);
+          "; then
+            echo '::error::marketplace.json is behind addons/*/addon.json; wait for the Generated files workflow'
+            exit 1
+          fi
+
+          git checkout -- marketplace.json
+          pnpm readme -- --check
+
+      - name: Stamp the version
         # After install, never before: the lockfile does not record the root
         # version, but there is no reason to hand --frozen-lockfile a tree that
         # differs from the committed one.
-        run: pnpm pkg set version="${GITHUB_REF_NAME#v}"
+        env:
+          VERSION: ${{ inputs.version }}
+        run: pnpm pkg set version="$VERSION"
 
       - run: pnpm build
 
@@ -63,9 +110,10 @@ jobs:
         # existing install is orphaned: the manager treats it as a different
         # script, with an empty GM store, so every player loses their addons,
         # settings, keybinds and window positions.
+        env:
+          VERSION: ${{ inputs.version }}
         run: |
           set -euo pipefail
-          version="${GITHUB_REF_NAME#v}"
 
           for file in loader/dist/woc-loader.user.js loader/dist/woc-loader.meta.js; do
             if [ ! -s "$file" ]; then
@@ -81,12 +129,12 @@ jobs:
               fi
             }
 
-            check version "$version"
+            check version "$VERSION"
             check name 'World of ClaudeCraft Addon Loader'
             check namespace 'woc-addons'
           done
 
-          echo "metadata block agrees with $GITHUB_REF_NAME"
+          echo "metadata block agrees with v$VERSION"
 
       - name: Checksum the assets
         # Not a supply-chain guarantee, since the checksums sit next to the files
@@ -97,6 +145,15 @@ jobs:
           cd loader/dist
           sha256sum woc-loader.user.js woc-loader.meta.js > SHA256SUMS
           cat SHA256SUMS
+
+      - name: Tag the release
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -a "v$VERSION" -m "Release v$VERSION"
 
       - name: Generate the release notes
         uses: orhun/git-cliff-action@v4
@@ -113,8 +170,14 @@ jobs:
           OUTPUT: RELEASE_NOTES.md
           GITHUB_REPO: ${{ github.repository }}
 
+      - name: Push the tag
+        env:
+          VERSION: ${{ inputs.version }}
+        run: git push origin "refs/tags/v$VERSION"
+
       - uses: softprops/action-gh-release@v3
         with:
+          tag_name: v${{ inputs.version }}
           body_path: RELEASE_NOTES.md
           files: |
             loader/dist/woc-loader.user.js
@@ -122,18 +185,113 @@ jobs:
             loader/dist/SHA256SUMS
           fail_on_unmatched_files: true
 
-  changelog:
-    # Separate from the release, and after it, deliberately. Publishing the
-    # artifact is the part that must not be held up by a push to a protected
-    # branch, and a failure here leaves a correct release in place that a re-run
-    # can catch the file up to.
+      - name: Summarize
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          {
+            echo "## Loader v$VERSION"
+            echo
+            echo '```'
+            cat loader/dist/SHA256SUMS
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  types:
     needs: release
     runs-on: ubuntu-latest
+    permissions:
+      # `id-token: write` is what npm's trusted publishing exchanges for a short-lived credential
+      contents: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          # Tags, for the types-v* tag this job pushes.
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+
+      - name: Check npm can do trusted publishing
+        run: |
+          set -euo pipefail
+          have=$(npm --version)
+          if [ "$(printf '%s\n%s\n' "$have" 11.5.1 | sort -V | head -1)" != "11.5.1" ]; then
+            echo "::error::npm $have cannot publish with OIDC; 11.5.1 or later is required"
+            exit 1
+          fi
+          echo "npm $have"
+
+      - id: decide
+        name: Compare the tree against the registry
+        run: |
+          set -euo pipefail
+          tree=$(node -p "require('./packages/types/package.json').version")
+          # A package that does not exist yet answers nothing rather than zero.
+          published=$(npm view @woc-addons/types version 2>/dev/null || echo '')
+
+          if [ -z "$published" ]; then
+            echo "publish=true" >> "$GITHUB_OUTPUT"
+          elif [ "$tree" = "$published" ]; then
+            echo "publish=false" >> "$GITHUB_OUTPUT"
+          elif [ "$(printf '%s\n%s\n' "$published" "$tree" | sort -V | tail -1)" != "$tree" ]; then
+            echo "::error::packages/types is at $tree and the registry is at $published; the tree is behind"
+            exit 1
+          else
+            echo "publish=true" >> "$GITHUB_OUTPUT"
+          fi
+
+          echo "version=$tree" >> "$GITHUB_OUTPUT"
+          echo "published=${published:-none}" >> "$GITHUB_OUTPUT"
+
+      - name: Publish @woc-addons/types
+        if: steps.decide.outputs.publish == 'true'
+        working-directory: packages/types
+        run: npm publish
+
+      - name: Tag the package version
+        if: steps.decide.outputs.publish == 'true'
+        env:
+          VERSION: ${{ steps.decide.outputs.version }}
+        run: |
+          set -euo pipefail
+          # cliff.toml restricts git-cliff to v[0-9]*, so this tag cannot end a
+          # loader release section and take its commits with it.
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -a "types-v$VERSION" -m "@woc-addons/types $VERSION"
+          git push origin "refs/tags/types-v$VERSION"
+
+      - name: Summarize
+        env:
+          PUBLISH: ${{ steps.decide.outputs.publish }}
+          VERSION: ${{ steps.decide.outputs.version }}
+          PUBLISHED: ${{ steps.decide.outputs.published }}
+        run: |
+          if [ "$PUBLISH" = "true" ]; then
+            echo "## @woc-addons/types $VERSION published (registry was $PUBLISHED)" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "## @woc-addons/types unchanged at $VERSION, nothing published" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+  changelog:
+    # Runs even where the publish was refused or skipped, because the changelog
+    # is about the release that DID happen. Skipped only where the release
+    # itself failed, since then there is nothing to write down.
+    needs: [release, types]
+    if: always() && needs.release.result == 'success'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      # For the site dispatch below.
+      actions: write
     steps:
       - uses: actions/checkout@v5
         with:
           # Checked out on main rather than on the tag: this job's only output is
-          # a commit to main, and the tag it was triggered by is fetched anyway.
+          # a commit to main, and the tag it is writing about is fetched anyway.
           ref: main
           fetch-depth: 0
 
@@ -147,6 +305,8 @@ jobs:
           GITHUB_REPO: ${{ github.repository }}
 
       - name: Commit if changed
+        env:
+          VERSION: ${{ inputs.version }}
         run: |
           set -euo pipefail
 
@@ -162,5 +322,12 @@ jobs:
 
           git config user.name  "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git commit -m "Regenerate the changelog for $GITHUB_REF_NAME."
+          git commit -m "Regenerate the changelog for v$VERSION."
           git push origin main
+
+      - name: Deploy the site
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh workflow run site.yml --ref main
+          echo "## Site deploy dispatched" >> "$GITHUB_STEP_SUMMARY"

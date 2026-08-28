@@ -1,12 +1,18 @@
 // `pnpm readme`: regenerate the addon section of README.md from the manifests.
 //
 // `--check` reports drift and writes nothing, for a person who wants to know
-// before running it. Nothing in CI uses it: the section is regenerated on main by
-// .github/workflows/marketplace.yml in the same commit as the marketplace index,
-// and, like the index, a contributor is never asked to run this before pushing.
-// A test comparing the committed file against a fresh render used to exist and
-// was removed, because it made a bot-owned file fail the build for the very
-// change the bot exists to handle.
+// before running it. No ordinary CI run uses it: the section is regenerated on
+// main by .github/workflows/marketplace.yml in the same commit as the
+// marketplace index, and, like the index, a contributor is never asked to run
+// this before pushing. A test comparing the committed file against a fresh
+// render used to exist and was removed, because it made a bot-owned file fail
+// the build for the very change the bot exists to handle.
+//
+// release.yml is the one caller, and it is not that test wearing another hat. It
+// asks a different question at a different moment: not "did this contributor
+// regenerate", but "has the bot caught up with the commit about to be tagged",
+// where the answer decides whether a release ships an index that does not
+// describe its own addons. The remedy is to wait rather than to regenerate.
 //
 // A README with NO markers is "nothing to generate here" rather than an error,
 // and that is about somebody else's repository rather than this one. The workflow

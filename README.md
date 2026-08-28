@@ -141,7 +141,9 @@ pnpm icons      # regenerate the skill-icon union from its per-class art manifes
 
 Develop against `pbe` or `pbe2`. They run ahead of live, so game drift shows up there first.
 
-`packages/types` is published by hand, from that directory: `npm publish`. It is versioned against the loader's `apiVersion` rather than against the loader, so it only needs a release when the addon API surface changes.
+A release is one button: Actions, Release, Run workflow, with the version typed into the form. The run gates the tree, builds and checksums the userscript, tags it, publishes the GitHub release, publishes `@woc-addons/types` if its version moved, regenerates `CHANGELOG.md` and redeploys the site.
+
+`packages/types` is versioned against the loader's `apiVersion` rather than against the loader, so it only needs a release when the addon API surface changes. Bump it in the commit that changes the surface; the release run publishes it whenever the tree is ahead of the registry, over npm trusted publishing, with no token anywhere.
 
 Working instructions are in [AGENTS.md](AGENTS.md), and the lint and type rules worth knowing before you write a module are in [STYLE.md](STYLE.md).
 
