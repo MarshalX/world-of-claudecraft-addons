@@ -22,6 +22,25 @@
 const MIN_DEVICE_WIDTH = 700;
 
 /**
+ * How far past the slot a capture has to clear before the smaller scale is
+ * accepted, in device pixels.
+ *
+ * Without it the rule has a cliff with no margin at all, and a difference far
+ * too small to be a layout change decides the resolution. `trailmark` is a 300px
+ * frame, so its crop is 348 CSS px and 2x lands at 696, four short: it captured
+ * at 3x. The same tree measured 350 under a different rasteriser, 2x landed on
+ * 700 exactly, and the preview came back at 2x, at half the pixels and with a
+ * quest row ellipsised that had fitted before. Two pixels.
+ *
+ * 16 because the differences that are not layout are the ones to absorb, and the
+ * ones measured between CoreText and FreeType over the same fonts, and between
+ * runs of one machine, are 2 to 12. Past that a width change is content, and
+ * changing scale for content is the rule working. The cliff cannot be removed
+ * from a discrete choice, only moved somewhere a renderer cannot reach.
+ */
+const SLOT_MARGIN = 16;
+
+/**
  * The scale factors a capture may use.
  *
  * Whole numbers only. A fractional one lands a 1px border on a half pixel and the
@@ -72,7 +91,7 @@ interface Rect {
  * real.
  */
 function scaleFor(cssWidth: number): number {
-  const enough = SCALES.find((scale) => cssWidth * scale >= MIN_DEVICE_WIDTH);
+  const enough = SCALES.find((scale) => fillsSlot(cssWidth, scale));
   return enough ?? (SCALES.at(-1) as number);
 }
 
@@ -113,9 +132,14 @@ function largerScale(scale: number): number | null {
   return SCALES[at + 1] ?? null;
 }
 
-/** Whether a capture fills the card slot it will be shown in. */
+/**
+ * Whether a capture fills the card slot it will be shown in.
+ *
+ * The one place the rule is spelled, because `scaleFor` predicting by one rule
+ * and the capture being accepted by another is how the two would drift apart.
+ */
 function fillsSlot(cssWidth: number, scale: number): boolean {
-  return cssWidth * scale >= MIN_DEVICE_WIDTH;
+  return cssWidth * scale >= MIN_DEVICE_WIDTH + SLOT_MARGIN;
 }
 
 /** Whether a capture is small enough for the manager to load it in game. */
@@ -326,6 +350,7 @@ export {
   previewAlt,
   renderManifest,
   SCALES,
+  SLOT_MARGIN,
   scaleFor,
   smallerScale,
   withinCap,

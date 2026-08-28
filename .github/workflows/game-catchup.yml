@@ -276,7 +276,10 @@ jobs:
             --base main \
             --head "$branch" \
             --title "Catch the loader up to game $VERSION" \
-            --body-file "$body"
+            --body-file "$body" || {
+            echo "::error::could not open the pull request. The work is pushed: open it from https://github.com/$GITHUB_REPOSITORY/pull/new/$branch"
+            exit 1
+          }
 
           echo "## Draft pull request opened from $branch (gate: $GATE)" >> "$GITHUB_STEP_SUMMARY"
 

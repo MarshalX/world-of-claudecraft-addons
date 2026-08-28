@@ -24,6 +24,7 @@ import {
   previewAlt,
   renderManifest,
   SCALES,
+  SLOT_MARGIN,
   scaleFor,
   smallerScale,
   withinCap,
@@ -136,8 +137,17 @@ describe('choosing a scale', () => {
     expect(fillsSlot(228, largerScale(3) as number)).toBe(true);
   });
 
-  it('holds a capture at exactly the slot width', () => {
-    expect(fillsSlot(MIN_DEVICE_WIDTH / 2, 2)).toBe(true);
+  it('sends a capture that only just reaches the slot up a scale', () => {
+    expect(fillsSlot(MIN_DEVICE_WIDTH / 2, 2)).toBe(false);
+    expect(scaleFor(MIN_DEVICE_WIDTH / 2)).toBe(3);
+  });
+
+  it('answers one scale either side of a rasteriser', () => {
+    expect(scaleFor(348)).toBe(scaleFor(350));
+  });
+
+  it('still drops a scale for a width no rasteriser could account for', () => {
+    expect(scaleFor(MIN_DEVICE_WIDTH / 2 + SLOT_MARGIN)).toBe(2);
   });
 });
 
