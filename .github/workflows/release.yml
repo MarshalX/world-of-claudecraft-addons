@@ -4,12 +4,13 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'Loader version, e.g. 1.9.0'
-        required: true
+        description: 'Loader version, e.g. 1.9.0. Blank publishes the types package alone.'
+        required: false
         type: string
 
 jobs:
   release:
+    if: inputs.version != ''
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -199,12 +200,21 @@ jobs:
 
   types:
     needs: release
+    if: always() && (needs.release.result == 'success' || needs.release.result == 'skipped')
     runs-on: ubuntu-latest
     permissions:
       # `id-token: write` is what npm's trusted publishing exchanges for a short-lived credential
       contents: write
       id-token: write
     steps:
+      - name: Refuse a publish off main
+        if: github.ref_name != 'main'
+        env:
+          REF: ${{ github.ref_name }}
+        run: |
+          echo "::error::dispatched on $REF; a publish runs on main"
+          exit 1
+
       - uses: actions/checkout@v5
         with:
           # Tags, for the types-v* tag this job pushes.
@@ -213,6 +223,7 @@ jobs:
       - uses: actions/setup-node@v5
         with:
           node-version-file: .nvmrc
+          package-manager-cache: false
 
       - name: Check npm can do trusted publishing
         run: |
