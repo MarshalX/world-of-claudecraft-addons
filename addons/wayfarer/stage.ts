@@ -14,7 +14,21 @@ import ATLAS from './atlas.json' with { type: 'json' };
 const DATA_FILE = 'atlas.json';
 const DATA = { [DATA_FILE]: JSON.stringify(ATLAS) };
 
-const STANDPOINT = { x: 0, y: 5, z: 60 };
+/**
+ * Sixty-three yards due north of Eastbrook, with the town in front of the camera. Re-derived at
+ * game 0.40.1: it was (0, 60), which was that same sixty-three yards north of where the town USED
+ * to stand, and the New Eastbrook program moved the town to (-14, -102). Left where it was, the
+ * panel photographed a stretch of road with no town in it at all.
+ *
+ * The four nearest are the graveyard, Wolf Run, the forge and the town's mailbox, which is still
+ * one row of each of four categories. TWO of them are pinned rather than four, and both halves of
+ * that are geometry rather than a fault: the camera looks down -z whatever the character faces,
+ * so Wolf Run and the forge are behind it, and the town's own pin lands within a few pixels of
+ * its mailbox's, which the pin thinning then drops. Standpoints that pin four were tried and each
+ * cost the town its row; a panel north of Eastbrook that does not name Eastbrook is the worse
+ * picture.
+ */
+const STANDPOINT = { x: -14, y: 5, z: -39 };
 
 /**
  * Radians, 0 at +z, so a half turn faces the town and the camera. It HAS to be stated:
@@ -23,10 +37,15 @@ const STANDPOINT = { x: 0, y: 5, z: 60 };
 const FACING_SOUTH = Math.PI;
 
 /**
- * The atlas's own `reliquary_hill`, given a height the atlas cannot carry. The prowler standing
- * on it is what makes that one pin a MEASUREMENT and its pillar dashed among three dotted ones.
+ * The atlas's own `gy_eastbrook`, given a height the atlas cannot carry. The prowler standing on
+ * it is what makes that one pin a MEASUREMENT and its pillar dashed among the dotted ones.
+ *
+ * It was `reliquary_hill` until game 0.40.1, which moved that poi from (-5, -52) to (-136, 112),
+ * a hundred and ninety yards behind this camera. The prowler went on standing at the old
+ * coordinate, where there is now no poi at all, so the height it was placed to measure belonged
+ * to nothing and every pillar in the picture came out dotted.
  */
-const HILL = { x: -5, y: 18, z: -52 };
+const HILL = { x: -2, y: 9, z: -70 };
 const PROWLER_ID = 4101;
 
 /** A real dungeon origin: `instanceOrigin(0, 0)` is x 100300, z -1250. */
@@ -130,9 +149,9 @@ async function ticked(stage: Stage): Promise<void> {
   stage.frame();
 }
 
-/** 180 characters. Say what it IS; the rows, distances and arrows are deliberately not in it. */
+/** Say what it IS; the rows, distances and arrows are deliberately not in it. */
 const VALE_ALT =
-  'four named pins standing over the world on thin pillars, each with its distance beside it, and a panel under them naming the zone and listing the nearest places in it.';
+  'two named pins standing over the world on thin pillars, each with its distance beside it, and a panel under them naming the zone and listing the nearest places in it.';
 
 const SCENARIOS: readonly Scenario[] = [
   {

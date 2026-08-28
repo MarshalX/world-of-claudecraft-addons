@@ -274,7 +274,6 @@ export type KnownCue =
   | 'ui_quest_done'
   | 'ui_ready_check'
   | 'ui_sheep'
-  | 'ui_vcup_kickoff'
   | 'ui_weapon_sheathe'
   | 'ui_weapon_unsheathe'
   | 'ui_whisper'

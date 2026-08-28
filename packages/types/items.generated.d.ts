@@ -18,7 +18,7 @@
 // loader reads the manifest from the host the player is on and this union is open
 // where it is used.
 //
-// Ids with a file: 823
+// Ids with a file: 829
 
 export type KnownItemIcon =
   | 'abyssal_loop'
@@ -508,6 +508,7 @@ export type KnownItemIcon =
   | 'morthens_cryptforged_hauberk'
   | 'mosshide_vest'
   | 'mossy_handwraps'
+  | 'mother_of_pearl'
   | 'mudfin_scale'
   | 'murloc_hut'
   | 'necromancers_legwraps'
@@ -558,6 +559,11 @@ export type KnownItemIcon =
   | 'pristine_hide'
   | 'pristine_silk'
   | 'pristine_venom_gland'
+  | 'ps_briny_lure'
+  | 'ps_castaway_crate'
+  | 'ps_ferry_bell'
+  | 'ps_lustrous_pearl'
+  | 'ps_passing_stone'
   | 'quilted_trousers'
   | 'raw_bog_eel'
   | 'raw_frostgill_trout'

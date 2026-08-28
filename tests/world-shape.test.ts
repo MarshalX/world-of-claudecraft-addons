@@ -104,6 +104,8 @@ describe('the shape table', () => {
       name: true,
       level: true,
       guild: true,
+      pledgeGuild: true,
+      guildTier: true,
       title: true,
       pos: true,
       prevPos: true,

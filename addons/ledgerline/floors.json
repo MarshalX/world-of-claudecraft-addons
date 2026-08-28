@@ -1,5 +1,5 @@
 {
-  "gameVersion": "0.39.0",
+  "gameVersion": "0.40.1",
   "generatedFrom": ["src/sim/data.ts"],
   "fields": "the three item facts that decide what a market listing is worth against something other than another listing: sellValue, the flat per-unit copper a vendor pays, which is the only absolute price in the game; buyValue, the vendor shop price, present ONLY where some NPC actually stocks the id, which makes it a ceiling an ask above can never sell over; and noVendorSell, which voids the floor. An item the server refuses to list (quest, noMarketList, soulbound) is absent, as is one declaring none of the three. See src/sim/market.ts for the listing gate.",
   "items": [
@@ -1610,6 +1610,10 @@
     {
       "id": "mossy_handwraps",
       "sellValue": 140
+    },
+    {
+      "id": "mother_of_pearl",
+      "sellValue": 50
     },
     {
       "id": "mudfin_scale",

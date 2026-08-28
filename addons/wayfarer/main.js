@@ -129,10 +129,10 @@ function readPoi(value) {
   if (typeof value !== 'object' || value === null) {
     return null;
   }
-  const { id, label, x, z, town } = value;
+  const { id, label, x, z, town, hidden } = value;
   const named = typeof id === 'string' && id.length > NONE && typeof label === 'string';
   if (named && label.length > NONE && Number.isFinite(x) && Number.isFinite(z)) {
-    return { id, label, x, z, town: town === true };
+    return { id, label, x, z, town: town === true, hidden: hidden === true };
   }
   return null;
 }
@@ -324,7 +324,14 @@ function buildFixed(atlas) {
   const built = [];
   for (const zone of zones) {
     for (const poi of zone.pois) {
-      built.push(poiEntry(zone, poi));
+      // A hidden poi is one the game stopped drawing on its own map because the
+      // place no longer reads as a landmark (game 0.40.1 put the harbor-town
+      // plat over the Sowfield). Walking somebody to one is this addon's worst
+      // failure, so it is left out of the list. It stays in the exploration
+      // tally below, where the game still counts it.
+      if (!poi.hidden) {
+        built.push(poiEntry(zone, poi));
+      }
     }
   }
   for (const place of keep(atlas.graveyards, readPlace, 'graveyard')) {

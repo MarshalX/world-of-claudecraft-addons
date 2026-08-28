@@ -1,5 +1,5 @@
 {
-  "gameVersion": "0.39.0",
+  "gameVersion": "0.40.1",
   "source": "src/sim/data.ts, src/sim/quest_targets.ts, src/sim/types.ts, src/sim/content/*.ts",
   "zones": [
     {
@@ -111,6 +111,14 @@
       "name": "The Farshore",
       "xMin": 180,
       "xMax": 540,
+      "zMin": -180,
+      "zMax": 180
+    },
+    {
+      "id": "proving_shore",
+      "name": "The Proving Shore",
+      "xMin": -540,
+      "xMax": -180,
       "zMin": -180,
       "zMax": 180
     }
@@ -3125,19 +3133,165 @@
           "mob": "sundered_horror"
         }
       ]
+    },
+    {
+      "id": "q_ps_the_gauntlet",
+      "name": "Run the Gauntlet",
+      "giver": "warden_tam",
+      "turnIn": ["overseer_pell"],
+      "objectives": [
+        {
+          "type": "interact",
+          "count": 3,
+          "label": "Gauntlet flag passed",
+          "object": "ps_gauntlet_flag"
+        }
+      ]
+    },
+    {
+      "id": "q_ps_strike_true",
+      "name": "Strike True",
+      "giver": "overseer_pell",
+      "turnIn": ["drillmaster_rook"],
+      "objectives": [
+        {
+          "type": "kill",
+          "count": 1,
+          "label": "Training Effigy felled",
+          "mob": "training_effigy"
+        }
+      ]
+    },
+    {
+      "id": "q_ps_hone_the_edge",
+      "name": "Hone the Edge",
+      "giver": "drillmaster_rook",
+      "turnIn": ["drillmaster_rook"],
+      "objectives": [
+        {
+          "type": "interact",
+          "count": 3,
+          "label": "Ability landed on an effigy",
+          "object": "ps_ability_drill"
+        }
+      ]
+    },
+    {
+      "id": "q_ps_shell_and_claw",
+      "name": "Shell and Claw",
+      "giver": "drillmaster_rook",
+      "turnIn": ["tidewarden_nel"],
+      "objectives": [
+        {
+          "type": "kill",
+          "count": 3,
+          "label": "Shore Scuttler culled",
+          "mob": "shore_scuttler"
+        }
+      ]
+    },
+    {
+      "id": "q_ps_mother_of_pearl",
+      "name": "Mother of Pearl",
+      "giver": "tidewarden_nel",
+      "turnIn": ["tidewarden_nel"],
+      "objectives": [
+        {
+          "type": "kill",
+          "count": 1,
+          "label": "Mister Crabs slain",
+          "mob": "mister_crabs"
+        },
+        {
+          "type": "collect",
+          "count": 1,
+          "label": "Lustrous Pearl claimed",
+          "item": "ps_lustrous_pearl"
+        }
+      ]
+    },
+    {
+      "id": "q_ps_the_wreck_line",
+      "name": "The Wreck Line",
+      "giver": "tidewarden_nel",
+      "turnIn": ["quartermaster_finch"],
+      "objectives": [
+        {
+          "type": "interact",
+          "count": 6,
+          "label": "Castaway Crate opened",
+          "object": "ps_castaway_crate"
+        }
+      ]
+    },
+    {
+      "id": "q_ps_pouch_and_purse",
+      "name": "Pouch and Purse",
+      "giver": "quartermaster_finch",
+      "turnIn": ["instructor_maren"],
+      "objectives": [
+        {
+          "type": "collect",
+          "count": 1,
+          "label": "Linen Pouch bought",
+          "item": "linen_pouch"
+        }
+      ]
+    },
+    {
+      "id": "q_ps_the_signpost",
+      "name": "Word on the Wind",
+      "giver": "instructor_maren",
+      "turnIn": ["instructor_maren"],
+      "objectives": [
+        {
+          "type": "interact",
+          "count": 1,
+          "label": "Guild signpost read",
+          "object": "ps_guild_signpost"
+        }
+      ]
+    },
+    {
+      "id": "q_ps_the_long_walk",
+      "name": "The Long Walk",
+      "giver": "instructor_maren",
+      "turnIn": ["instructor_maren"],
+      "objectives": [
+        {
+          "type": "interact",
+          "count": 1,
+          "label": "Walked back from the dead",
+          "object": "ps_passing_stone"
+        }
+      ]
+    },
+    {
+      "id": "q_ps_set_sail",
+      "name": "Set Sail",
+      "giver": "instructor_maren",
+      "turnIn": ["ferryman_odo"],
+      "objectives": [
+        {
+          "type": "interact",
+          "count": 1,
+          "label": "Report to Ferryman Odo",
+          "npc": "ferryman_odo"
+        }
+      ]
     }
   ],
   "camps": [
     {
       "mob": "forest_wolf",
-      "x": -27,
-      "z": 71,
+      "x": -10,
+      "z": 6,
       "radius": 28.5
     },
     {
       "mob": "forest_wolf",
-      "x": 24,
-      "z": 70,
+      "x": 12,
+      "z": 52,
       "radius": 26
     },
     {
@@ -3148,14 +3302,14 @@
     },
     {
       "mob": "wild_boar",
-      "x": 63,
-      "z": 16,
+      "x": 58,
+      "z": -72,
       "radius": 26
     },
     {
       "mob": "wild_boar",
-      "x": 84,
-      "z": -27,
+      "x": 97,
+      "z": -43,
       "radius": 23.5
     },
     {
@@ -3166,7 +3320,7 @@
     },
     {
       "mob": "webwood_spider",
-      "x": -68,
+      "x": -70,
       "z": 2,
       "radius": 28.5
     },
@@ -3178,26 +3332,26 @@
     },
     {
       "mob": "tunnel_rat",
-      "x": -82,
-      "z": -62,
+      "x": -32,
+      "z": 144,
       "radius": 33
     },
     {
       "mob": "vale_bandit",
-      "x": 50,
-      "z": -72,
+      "x": 80,
+      "z": 15,
       "radius": 28.5
     },
     {
       "mob": "vale_bandit",
-      "x": 90,
-      "z": -90,
+      "x": 115,
+      "z": 42,
       "radius": 16
     },
     {
       "mob": "gorrak",
-      "x": 92,
-      "z": -92,
+      "x": 118,
+      "z": 45,
       "radius": 2
     },
     {
@@ -3574,8 +3728,8 @@
     },
     {
       "mob": "grix_the_tunnelking",
-      "x": -95,
-      "z": -78,
+      "x": -45,
+      "z": 128,
       "radius": 4
     },
     {
@@ -4372,21 +4526,69 @@
     },
     {
       "mob": "friendly_player_dummy",
-      "x": -42,
-      "z": 648,
+      "x": -40,
+      "z": 642,
       "radius": 0
     },
     {
       "mob": "normal_boss_dummy",
-      "x": -38,
-      "z": 648,
+      "x": -40,
+      "z": 654,
       "radius": 0
     },
     {
       "mob": "heroic_boss_dummy",
-      "x": -36,
-      "z": 648,
+      "x": -40,
+      "z": 660,
       "radius": 0
+    },
+    {
+      "mob": "training_effigy",
+      "x": -336,
+      "z": -14,
+      "radius": 4
+    },
+    {
+      "mob": "training_effigy",
+      "x": -341,
+      "z": -17,
+      "radius": 4
+    },
+    {
+      "mob": "training_effigy",
+      "x": -331,
+      "z": -11,
+      "radius": 4
+    },
+    {
+      "mob": "training_effigy",
+      "x": -334,
+      "z": -20,
+      "radius": 4
+    },
+    {
+      "mob": "training_effigy",
+      "x": -339,
+      "z": -9,
+      "radius": 4
+    },
+    {
+      "mob": "shore_scuttler",
+      "x": -380,
+      "z": -42,
+      "radius": 4
+    },
+    {
+      "mob": "shore_scuttler",
+      "x": -372,
+      "z": -48,
+      "radius": 4
+    },
+    {
+      "mob": "shore_scuttler",
+      "x": -390,
+      "z": -40,
+      "radius": 4
     }
   ],
   "objects": [
@@ -4569,98 +4771,106 @@
     {
       "item": "gullhaven_watchbell",
       "positions": [[256, 0], [318, 94], [442, 64]]
+    },
+    {
+      "item": "ps_castaway_crate",
+      "positions": [[-362, -8], [-352, -2], [-345, 4], [-334, 17], [-327, 24], [-320, 31]]
+    },
+    {
+      "item": "ps_ferry_bell",
+      "positions": [[-279, -10], [-7.5, -100]]
     }
   ],
   "npcs": [
     {
       "id": "the_merchant",
       "name": "The Merchant",
-      "x": -4.376409317062264,
-      "z": 7.967830304040863
+      "x": -19.333512834321652,
+      "z": -95.49976921301501
     },
     {
       "id": "marshal_redbrook",
       "name": "Marshal Redbrook",
-      "x": 4.5,
-      "z": 5.5
+      "x": -58,
+      "z": -102
     },
     {
       "id": "trader_wilkes",
       "name": "Trader Wilkes",
-      "x": -7.125851435200138,
-      "z": 0.812357418766734
+      "x": -17.833512834321652,
+      "z": -106.50023078698499
     },
     {
       "id": "apothecary_lin",
       "name": "Apothecary Lin",
-      "x": 2.8431593444121797,
-      "z": 9.717148252611294
+      "x": -72,
+      "z": -96
     },
     {
       "id": "brother_aldric",
       "name": "Brother Aldric",
-      "x": -16.59147045515334,
-      "z": -1.3973000209293893
+      "x": 5.181980515339464,
+      "z": -74.81801948466054
     },
     {
       "id": "smith_haldren",
       "name": "Smith Haldren",
-      "x": 5.617914034868791,
-      "z": 15.074687401746273
+      "x": -3.4,
+      "z": -112.5
     },
     {
       "id": "fisherman_brandt",
       "name": "Fisherman Brandt",
-      "x": -22,
-      "z": 4
+      "x": -95,
+      "z": -50
     },
     {
       "id": "foreman_odell",
       "name": "Foreman Odell",
-      "x": -8,
-      "z": -9.5
+      "x": -84,
+      "z": -63
     },
     {
       "id": "bursar_fernando",
       "name": "Bursar Fernando",
-      "x": 14.156943251329539,
-      "z": 8.685223202016726
+      "x": 8.49982143312659,
+      "z": -97.50017856687342
     },
     {
       "id": "card_master",
       "name": "Card Master",
-      "x": 10.5,
-      "z": 1
+      "x": 20,
+      "z": -98
     },
     {
       "id": "chronicler_saul",
       "name": "Saul the Chronicler",
-      "x": 0,
-      "z": -14.5
+      "x": 10.2,
+      "z": -87.5
     },
     {
       "id": "forgemistress_darva",
       "name": "Forgemistress Darva",
-      "x": 1.7573530626642033,
-      "z": 16.121620532318982
+      "x": -8.171547617899419,
+      "z": -120.39003105620014
     },
     {
       "id": "cook_marlow",
       "name": "Cook Marlow",
-      "x": -12.780764037489869,
-      "z": 10.316661779002187
+      "x": -42.62589170715949,
+      "z": -92.23189846640925
     },
     {
       "id": "weaver_ottilie",
       "name": "Weaver Ottilie",
-      "x": -4.171032337012701,
-      "z": -18.01874944082567
+      "x": -27.278889744907204,
+      "z": -126.68721665810318
     },
     {
       "id": "tinker_gizzel",
       "name": "Tinker Gizzel",
-      "x": 6.999944260671105,
-      "z": -13.825962484617639
+      "x": -16.277350098112613,
+      "z": -122.64714310642654
     },
     {
       "id": "warden_fenwick",
@@ -4791,8 +5001,8 @@
     {
       "id": "brother_halven",
       "name": "Brother Halven",
-      "x": -5,
-      "z": -52
+      "x": -136,
+      "z": 112
     },
     {
       "id": "brother_halven_marsh",
@@ -5087,44 +5297,98 @@
       "name": "Frightened Nell",
       "x": 296,
       "z": 80
+    },
+    {
+      "id": "wayfarer_bryn",
+      "name": "Wayfarer Bryn",
+      "x": 6,
+      "z": -7
+    },
+    {
+      "id": "instructor_maren",
+      "name": "Instructor Maren",
+      "x": -299,
+      "z": 49
+    },
+    {
+      "id": "quartermaster_finch",
+      "name": "Quartermaster Finch",
+      "x": -312,
+      "z": 57.2
+    },
+    {
+      "id": "bursar_wick",
+      "name": "Bursar Wick",
+      "x": -325,
+      "z": 42
+    },
+    {
+      "id": "ferryman_odo",
+      "name": "Ferryman Odo",
+      "x": -284,
+      "z": -9
+    },
+    {
+      "id": "warden_tam",
+      "name": "Warden Tam",
+      "x": -283,
+      "z": -21
+    },
+    {
+      "id": "overseer_pell",
+      "name": "Overseer Pell",
+      "x": -337,
+      "z": -33
+    },
+    {
+      "id": "drillmaster_rook",
+      "name": "Drillmaster Rook",
+      "x": -345,
+      "z": -11
+    },
+    {
+      "id": "tidewarden_nel",
+      "name": "Tidewarden Nel",
+      "x": -371,
+      "z": -13
     }
   ],
   "nodes": [
     {
       "type": "ore",
       "item": "copper_ore",
-      "x": -70,
-      "z": -53
+      "x": -20,
+      "z": 153
     },
     {
       "type": "ore",
       "item": "copper_ore",
-      "x": -73,
-      "z": -49
+      "x": -23,
+      "z": 157
     },
     {
       "type": "ore",
       "item": "copper_ore",
-      "x": -67,
-      "z": -57
+      "x": -17,
+      "z": 149
     },
     {
       "type": "ore",
       "item": "copper_ore",
-      "x": -92,
-      "z": -48
+      "x": -42,
+      "z": 158
     },
     {
       "type": "ore",
       "item": "copper_ore",
-      "x": -87,
-      "z": -45
+      "x": -37,
+      "z": 161
     },
     {
       "type": "ore",
       "item": "copper_ore",
-      "x": -65,
-      "z": -69
+      "x": -15,
+      "z": 137
     },
     {
       "type": "wood",
@@ -5165,7 +5429,7 @@
     {
       "type": "herb",
       "item": "silverleaf_herb",
-      "x": -59,
+      "x": -58,
       "z": 91
     },
     {
@@ -5183,8 +5447,8 @@
     {
       "type": "herb",
       "item": "silverleaf_herb",
-      "x": 6,
-      "z": -69
+      "x": 12,
+      "z": -63
     },
     {
       "type": "herb",
@@ -6299,6 +6563,11 @@
       "quest": "q_fs_steel_for_the_redoubt",
       "item": "breakscarred_steel",
       "mobs": ["breach_wretch"]
+    },
+    {
+      "quest": "q_ps_mother_of_pearl",
+      "item": "ps_lustrous_pearl",
+      "mobs": ["mister_crabs"]
     }
   ]
 }

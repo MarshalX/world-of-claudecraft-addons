@@ -1,5 +1,5 @@
 {
-  "gameVersion": "0.39.0",
+  "gameVersion": "0.40.1",
   "source": "src/sim/data.ts, src/ui/i18n.resolved.generated/en.ts",
   "mobs": [
     {
@@ -213,6 +213,11 @@
       "name": "Mirejaw the Ravenous",
       "rank": "elite",
       "rare": true
+    },
+    {
+      "id": "mister_crabs",
+      "name": "Mister Crabs",
+      "requiresQuestId": "q_ps_mother_of_pearl"
     },
     {
       "id": "mogger",

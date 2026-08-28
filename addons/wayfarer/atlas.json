@@ -1,6 +1,6 @@
 {
   "source": {
-    "game": "0.39.0",
+    "game": "0.40.1",
     "files": [
       "src/sim/data.ts (ZONES, WORLD_SIZE, INSTANCE_X_BASE, PORTALS)",
       "src/sim/content/*.ts (one ZoneDef and one PortalDef[] per zone)",
@@ -12,7 +12,8 @@
       "Crafting stations are deliberately NOT here. world.stations is published and carries the game's own placements with their zone ids, so a copy would be a second table to keep in step with nothing gained.",
       "A poi id is FROZEN game content: the exploration deed marks key on it as poi:<zoneId>:<poiId>. A poi label is display-only and the game re-words them freely, which is why the_statuary_walk is labelled The Parterre Walk and the_rose_wilds is labelled Dawnhold Castle.",
       "A town flag marks the poi that stands on its zone's own hub. The game authors the hub separately, with a name and a radius; every zone's hub name is also a poi label, so the flag carries the fact without a duplicate row.",
-      "Most mailboxes have no id and no name in the game: MAILBOXES is a bare list of points, and only the two towns with their own layout name theirs (mailbox_eastbrook and mailbox_fenbridge). Every id and every label here is derived from the hub of the zone the point falls in, which is the one rule that covers all fourteen and which agrees with the game on both of the named ones. The game also nudges a mailbox clear of buildings at spawn (findSafePos), so a point here is where it was authored rather than exactly where it stands.",
+      "A hidden flag carries the game's own hideOnMap, which drops a poi's label from the world map for a place that no longer reads as a landmark. It is carried rather than dropped because the exploration deed sweep does NOT consult the flag: a hidden poi is still walked to and still marks, so it still counts toward a zone's exploration even though nothing lists it.",
+      "Most mailboxes have no id and no name in the game: MAILBOXES is a bare list of points, and only the two towns with their own layout name theirs (mailbox_eastbrook and mailbox_fenbridge). Every id and every label here is derived from the hub of the zone the point falls in, which is the one rule that covers all fifteen and which agrees with the game on both of the named ones. The game also nudges a mailbox clear of buildings at spawn (findSafePos), so a point here is where it was authored rather than exactly where it stands.",
       "A portal has no display name in the game either. The label here is title-cased from the frozen id.",
       "No y anywhere, because the game authors none: ground height is a function of the world seed, which no addon can call and no server sends."
     ]
@@ -33,21 +34,21 @@
         {
           "id": "eastbrook",
           "label": "Eastbrook",
-          "x": 0,
-          "z": -3,
+          "x": -14,
+          "z": -102,
           "town": true
         },
         {
           "id": "wolf_run",
           "label": "Wolf Run",
-          "x": -2,
-          "z": 70
+          "x": 2,
+          "z": -4
         },
         {
           "id": "boar_meadow",
           "label": "Boar Meadow",
-          "x": 65,
-          "z": 0
+          "x": 60,
+          "z": -64
         },
         {
           "id": "mirror_lake",
@@ -64,14 +65,14 @@
         {
           "id": "copper_dig",
           "label": "Copper Dig",
-          "x": -84,
-          "z": -64
+          "x": -34,
+          "z": 142
         },
         {
           "id": "bandit_camp",
           "label": "Bandit Camp",
-          "x": 76,
-          "z": -76
+          "x": 98,
+          "z": 28
         },
         {
           "id": "fallen_chapel",
@@ -82,8 +83,8 @@
         {
           "id": "reliquary_hill",
           "label": "Reliquary Hill",
-          "x": -5,
-          "z": -52
+          "x": -136,
+          "z": 112
         },
         {
           "id": "brightwood_glade",
@@ -95,13 +96,20 @@
           "id": "the_sowfield",
           "label": "The Sowfield",
           "x": -11,
-          "z": -112
+          "z": -112,
+          "hidden": true
         },
         {
           "id": "the_farshore_causeway",
           "label": "The Farshore Causeway",
           "x": 150,
           "z": -46
+        },
+        {
+          "id": "eastbrook_docks",
+          "label": "Eastbrook Docks",
+          "x": -101,
+          "z": -54
         }
       ]
     },
@@ -816,20 +824,62 @@
           "z": 58
         }
       ]
+    },
+    {
+      "id": "proving_shore",
+      "name": "The Proving Shore",
+      "zMin": -180,
+      "zMax": 180,
+      "xMin": -540,
+      "xMax": -180,
+      "levelRange": [1, 2],
+      "pois": [
+        {
+          "id": "dawnrest_camp",
+          "label": "Dawnrest Camp",
+          "x": -300,
+          "z": 50,
+          "town": true
+        },
+        {
+          "id": "the_old_pier",
+          "label": "The Old Pier",
+          "x": -280,
+          "z": 0
+        },
+        {
+          "id": "the_practice_yard",
+          "label": "The Practice Yard",
+          "x": -336,
+          "z": -14
+        },
+        {
+          "id": "the_wreck_line",
+          "label": "The Wreck Line",
+          "x": -380,
+          "z": -42
+        },
+        {
+          "id": "the_gauntlet",
+          "label": "The Gauntlet",
+          "x": -306,
+          "z": -22
+        }
+      ]
     }
   ],
   "graveyards": [
     {
       "id": "gy_eastbrook",
       "label": "Eastbrook Rest",
-      "x": -14,
-      "z": -14
+      "x": -2,
+      "z": -70
     },
     {
-      "id": "gy_vale_chapel",
-      "label": "Vale Chapel Yard",
-      "x": 4,
-      "z": -56
+      "id": "gy_vale_north",
+      "label": "Dig Road Graves",
+      "x": -22,
+      "z": 118
     },
     {
       "id": "gy_fenbridge",
@@ -926,14 +976,20 @@
       "label": "Amberfall Rest",
       "x": -336,
       "z": 2050
+    },
+    {
+      "id": "gy_proving_shore",
+      "label": "Dawnrest Graves",
+      "x": -324,
+      "z": 58
     }
   ],
   "mailboxes": [
     {
       "id": "mailbox_eastbrook",
       "label": "Eastbrook",
-      "x": 0,
-      "z": -7.5
+      "x": -10,
+      "z": -98
     },
     {
       "id": "mailbox_fenbridge",
@@ -1012,6 +1068,12 @@
       "label": "Gullhaven",
       "x": 299,
       "z": 76
+    },
+    {
+      "id": "mailbox_dawnrest_camp",
+      "label": "Dawnrest Camp",
+      "x": -306,
+      "z": 56
     }
   ],
   "portals": [

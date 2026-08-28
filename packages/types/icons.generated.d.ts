@@ -19,10 +19,10 @@
 //   mage: 69
 //   paladin: 51
 //   priest: 25
-//   rogue: 37
+//   rogue: 39
 //   shaman: 29
 //   warlock: 29
-//   warrior: 73
+//   warrior: 63
 
 export type SkillIconClass =
   | 'druid'
@@ -258,6 +258,7 @@ export type KnownSkillIcon =
   | 'maul'
   | 'measured_fury'
   | 'measured_shot'
+  | 'melting_acid'
   | 'mend_pet'
   | 'mercy_lance'
   | 'metamorphosis'
@@ -272,6 +273,7 @@ export type KnownSkillIcon =
   | 'moonseed'
   | 'mortal_strike'
   | 'multi_shot'
+  | 'nightshade_coating'
   | 'oath_chain'
   | 'overbloom'
   | 'overflowing_power'
@@ -358,16 +360,6 @@ export type KnownSkillIcon =
   | 'solar_step'
   | 'spell_lock'
   | 'spellsteal'
-  | 'sport_boot'
-  | 'sport_dive'
-  | 'sport_feint'
-  | 'sport_hoof'
-  | 'sport_kick'
-  | 'sport_pass'
-  | 'sport_punt'
-  | 'sport_second_wind'
-  | 'sport_shoot'
-  | 'sport_shoulder'
   | 'sprint'
   | 'stampede'
   | 'starfire'

@@ -32,6 +32,7 @@ import type {
 import type { ProfessionInfo, ToolEffectSlot } from '../loader/src/runtime/world/character.ts';
 import type { CivicService, Recipe, Station } from '../loader/src/runtime/world/content.ts';
 import type { Entity, HeldSlot, InvSlot } from '../loader/src/runtime/world/game-types.ts';
+import type { CorpseView, DeathZone } from '../loader/src/runtime/world/ground.ts';
 import type { HeldItemInstance } from '../loader/src/runtime/world/items.ts';
 import type { MarketInfo } from '../loader/src/runtime/world/market.ts';
 import type { Reaction } from '../loader/src/runtime/world/reaction.ts';
@@ -69,6 +70,10 @@ import type {
   Reaction as PublicReaction,
   WorldApi as PublicWorldApi,
 } from '../packages/types/world.js';
+import type {
+  CorpseView as PublicCorpseView,
+  DeathZone as PublicDeathZone,
+} from '../packages/types/world-ground.js';
 import type {
   HeldSlot as PublicHeldSlot,
   InvSlot as PublicInvSlot,
@@ -206,6 +211,24 @@ const publishedIsEntity: Assignable<PublicEntity, Entity> = true;
  * how every field the game has added to an existing EVENT has arrived.
  */
 const entityFieldsAgree: SameFields<Entity, PublicEntity> = true;
+/**
+ * The two ground shapes, which had no assertion of their own until game 0.40.1
+ * put a field on one of them.
+ *
+ * `WorldApi` reaches both through `corpseLoot` and `deathZones`, so a REQUIRED
+ * field on one side alone already fails a direction. That is not enough here for
+ * the reason the entity pair gives: `LootSlot` next door carries three optional
+ * fields already, so this family is one an optional arrival is likely on, and
+ * two-way assignability is blind to exactly that. `decayed` was the first field
+ * either shape had gained since it was written, and nothing named them.
+ */
+const corpseIsPublished: Assignable<CorpseView, PublicCorpseView> = true;
+const publishedIsCorpse: Assignable<PublicCorpseView, CorpseView> = true;
+const corpseFieldsAgree: SameFields<CorpseView, PublicCorpseView> = true;
+const deathZoneIsPublished: Assignable<DeathZone, PublicDeathZone> = true;
+const publishedIsDeathZone: Assignable<PublicDeathZone, DeathZone> = true;
+const deathZoneFieldsAgree: SameFields<DeathZone, PublicDeathZone> = true;
+
 const valuesArePublished: Assignable<WorldValues, PublicWorldValues> = true;
 const publishedAreValues: Assignable<PublicWorldValues, WorldValues> = true;
 
@@ -416,6 +439,12 @@ describe('the published types', () => {
       entityIsPublished,
       publishedIsEntity,
       entityFieldsAgree,
+      corpseIsPublished,
+      publishedIsCorpse,
+      corpseFieldsAgree,
+      deathZoneIsPublished,
+      publishedIsDeathZone,
+      deathZoneFieldsAgree,
       professionsArePublished,
       publishedAreProfessions,
       professionFieldsAgree,

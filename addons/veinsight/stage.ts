@@ -14,9 +14,15 @@
 // one 320px column, and the crop is the panel's width rather than the panel plus the world.
 //
 // That is also what caps the list at seven rows here. Nine put the crop past the portrait
-// threshold; seven stays under it. Four rows are what actually get drawn, because the reach that
+// threshold; seven stays under it. THREE rows are what actually get drawn, because the reach that
 // keeps the pins legible no longer holds seven nodes: `list-length` stays at seven so the cap is
 // still the one that was measured, and the reach is the number that moved. See CIRCUIT.
+//
+// It was four until game 0.40.1. The relocated Copper Dig is a pure ore cluster: the nearest wood
+// stand is 44 yards off and there is no herb at all, where the old site had `wood_eastbrook_2`
+// nineteen yards away. So the row that carried the logging art is gone and is not replaceable
+// from here without giving up a pin. What the three still cover is the whole range of states the
+// pane is for, a running timer, a node that is yours now, and one about to come back.
 //
 // The three pillars are the point of the pins, and each is produced by its own cause rather than
 // asserted:
@@ -63,8 +69,14 @@ const PROSPECTOR = 820;
  * South and east of the ore. South so the veins are in front of the camera; EAST is the half
  * that is not obvious and is why the three pins are legible, since from anywhere on the
  * cluster's own axis the tiles overlap and standing west collapses all three onto one point.
+ *
+ * Every point in this scenario moved by (+50, +206) at game 0.40.1, which is exactly how far
+ * the New Eastbrook program carried the Copper Dig. It is a pure TRANSLATION of the cluster, so
+ * each of the three pins keeps the cause it was placed by and the reasoning above stands
+ * unchanged; the numbers moved and nothing else did. Left where they were, the panel
+ * photographed one row and no pins at all, and nothing in the gate warns about that.
  */
-const STANDPOINT = { x: -60, y: 5, z: -25 };
+const STANDPOINT = { x: -10, y: 5, z: 181 };
 
 /**
  * Which way the character is facing, and it is not a detail. The bearing column is measured
@@ -74,26 +86,26 @@ const STANDPOINT = { x: -60, y: 5, z: -25 };
 const FACING = Math.PI;
 
 /** The vein the player mined, from `nodes.json`, and the ground it stands on. */
-const HARVESTED = { id: 'ore_eastbrook_2', x: -73, z: -49, y: 5.6 };
+const HARVESTED = { id: 'ore_eastbrook_2', x: -23, z: 157, y: 5.6 };
 
 /**
  * Where the digger is standing, which is two yards off `ore_eastbrook_1`. Off the point rather
  * than on it, because that is what standing near a rock looks like and the addon takes anything
  * within six yards. Its own y is the whole of what the sampled pin is placed by.
  */
-const PROSPECTOR_POS = { x: -71, y: 6.2, z: -51.5 };
+const PROSPECTOR_POS = { x: -21, y: 6.2, z: 154.5 };
 
 /**
  * What was already on this character's timers when the addon woke up, in seconds.
  *
- * The third is absent ON PURPOSE: it belongs to the vein mined during the scenario, and a
- * harvest is what starts one. The nearly-ready one is a vein because `wood_eastbrook_1` falls
- * three hundredths of a yard outside the reach that keeps the pins legible.
+ * The other is absent ON PURPOSE: it belongs to the vein mined during the scenario, and a
+ * harvest is what starts one.
+ *
+ * There was a second entry here, `wood_eastbrook_2` at 61 seconds, until game 0.40.1 moved the
+ * dig away from it. A timer on a node outside the reach draws nothing at all, so it was a
+ * fixture line that had quietly stopped meaning anything rather than a row in the picture.
  */
-const COOLING: ReadonlyArray<readonly [string, number]> = [
-  ['wood_eastbrook_2', 61],
-  ['ore_eastbrook_3', 9],
-];
+const COOLING: ReadonlyArray<readonly [string, number]> = [['ore_eastbrook_3', 9]];
 
 /** Neither round nor the full 240: both are readings a player catches for one tick, so either
  * pictures the moment a timer started rather than a circuit being walked.

@@ -1,5 +1,5 @@
 {
-  "gameVersion": "0.39.0",
+  "gameVersion": "0.40.1",
   "generatedFrom": [
     "src/sim/data.ts (the ITEMS merge)",
     "src/sim/content/items.ts",
@@ -24,6 +24,7 @@
     "src/sim/content/galecrest.ts",
     "src/sim/content/farshore.ts",
     "src/sim/content/wildheart.ts",
+    "src/sim/content/proving_shore.ts",
     "src/sim/content/dungeons.ts"
   ],
   "fields": "what the game's own item tooltip draws, plus the two prices it does not: id, name and kind always, then quality, slot, armorType, heroicOf, uniqueEquipped, itemLevel, stats, pvpOffenseRating, pvpDefenseRating, spellPower, critRating, hasteRating, hitRating, weapon, blockValue, foodHp, drinkMana, potionHp, potionMana, elixir, bagSlots, requiredLevel, requiredClass, set, soulbound, sellValue and priceHonor wherever the game declares or derives one",
@@ -1592,7 +1593,7 @@
       },
       "hitRating": 20,
       "requiredLevel": 20,
-      "requiredClass": ["warrior", "paladin"],
+      "requiredClass": ["warrior", "paladin", "shaman"],
       "set": "Bonewrought Regalia",
       "sellValue": 12000
     },
@@ -1610,7 +1611,7 @@
         "armor": 180
       },
       "requiredLevel": 20,
-      "requiredClass": ["warrior", "paladin"],
+      "requiredClass": ["warrior", "paladin", "shaman"],
       "set": "Bonewrought Regalia",
       "sellValue": 3600
     },
@@ -1628,7 +1629,7 @@
         "armor": 150
       },
       "requiredLevel": 20,
-      "requiredClass": ["warrior", "paladin"],
+      "requiredClass": ["warrior", "paladin", "shaman"],
       "set": "Bonewrought Regalia",
       "sellValue": 3600
     },
@@ -1647,7 +1648,7 @@
       },
       "hitRating": 20,
       "requiredLevel": 20,
-      "requiredClass": ["warrior", "paladin"],
+      "requiredClass": ["warrior", "paladin", "shaman"],
       "set": "Bonewrought Regalia",
       "sellValue": 12000
     },
@@ -4216,7 +4217,7 @@
       "critRating": 20,
       "hitRating": 55,
       "requiredLevel": 20,
-      "requiredClass": ["warrior", "paladin"],
+      "requiredClass": ["warrior", "paladin", "shaman"],
       "set": "Bonewrought Regalia",
       "sellValue": 12000
     },
@@ -4237,7 +4238,7 @@
       "critRating": 20,
       "hitRating": 55,
       "requiredLevel": 20,
-      "requiredClass": ["warrior", "paladin"],
+      "requiredClass": ["warrior", "paladin", "shaman"],
       "set": "Bonewrought Regalia",
       "sellValue": 12000
     },
@@ -6999,6 +7000,22 @@
       "sellValue": 140
     },
     {
+      "id": "mother_of_pearl",
+      "name": "Mother of Pearl",
+      "kind": "armor",
+      "quality": "uncommon",
+      "slot": "ring",
+      "itemLevel": 3,
+      "stats": {
+        "str": 1,
+        "agi": 1,
+        "sta": 1,
+        "int": 1,
+        "spi": 1
+      },
+      "sellValue": 50
+    },
+    {
       "id": "mudfin_scale",
       "name": "Slimy Mudfin Scale",
       "kind": "junk",
@@ -7643,6 +7660,31 @@
       "quality": "rare",
       "requiredLevel": 12,
       "sellValue": 30
+    },
+    {
+      "id": "ps_briny_lure",
+      "name": "Briny Lure",
+      "kind": "quest"
+    },
+    {
+      "id": "ps_castaway_crate",
+      "name": "Castaway Crate",
+      "kind": "quest"
+    },
+    {
+      "id": "ps_ferry_bell",
+      "name": "Ferry Bell",
+      "kind": "quest"
+    },
+    {
+      "id": "ps_lustrous_pearl",
+      "name": "Lustrous Pearl",
+      "kind": "quest"
+    },
+    {
+      "id": "ps_passing_stone",
+      "name": "Passing Stone",
+      "kind": "quest"
     },
     {
       "id": "quilted_trousers",

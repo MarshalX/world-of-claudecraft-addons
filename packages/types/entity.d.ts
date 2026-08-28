@@ -254,6 +254,22 @@ export interface Entity {
   name: string;
   level: number;
   guild: string;
+  /**
+   * The guild this character has publicly pledged to JOIN, '' for none.
+   *
+   * Always '' for a guilded player: joining any guild clears the pledge
+   * server-side. Sent as `pg` on the identity record beside `guild` itself, so
+   * it is world-visible on every player in range rather than only on you.
+   */
+  pledgeGuild: string;
+  /**
+   * The guild colour tier, 0 for the base look and for the unguilded.
+   *
+   * Derived by the game from the guild's collective lifetime XP, and taken from
+   * the PLEDGED guild for a player who has pledged to one. Display only: it says
+   * how a name is coloured, not what the guild has done.
+   */
+  guildTier: number;
   /** A Book of Deeds deed id, never display text. Absent for the untitled. */
   title?: string | null;
 

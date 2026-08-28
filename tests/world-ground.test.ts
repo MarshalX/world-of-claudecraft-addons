@@ -104,6 +104,53 @@ describe('deathZonesOf', () => {
 });
 
 describe('corpseViewOf', () => {
+  // The game's own rule, added at 0.40.1 (src/game/corpse_loot_availability.ts):
+  // once the loot window elapses nobody can open the corpse, whatever their
+  // rights. The entity keeps its whole loot record and stays in the entity map,
+  // so without this the loader goes on offering slots off a body the game has
+  // already dropped from its own pickable view.
+  it('offers nothing off a corpse whose loot window has elapsed, even to its tapper', () => {
+    const slot = { itemId: 'iron_ore', count: 3 };
+    const dead = corpse({
+      tappedById: ME,
+      dead: true,
+      corpseTimer: 0,
+      loot: { copper: 480, items: [slot] },
+    });
+
+    const view = corpseViewOf(dead, 41, viewer());
+
+    expect(view?.decayed).toBe(true);
+    expect(view?.sharedRights).toBe(true);
+    expect(view?.mine).toEqual([]);
+    expect(view?.copper).toBe(0);
+    // `all` still says what the wire carried, which is what `all` is for.
+    expect(view?.all).toEqual([slot]);
+  });
+
+  // The client builds every entity with `corpseTimer` at 0 and only the dynamic
+  // decode ever writes it, so the timer alone says nothing: read without `dead`
+  // it would call every living mob's body decayed.
+  it('does not read a living mob as decayed on the timer alone', () => {
+    const slot = { itemId: 'iron_ore', count: 3 };
+    const alive = corpse({ tappedById: ME, corpseTimer: 0, loot: { copper: 480, items: [slot] } });
+
+    const view = corpseViewOf(alive, 41, viewer());
+
+    expect(view?.decayed).toBe(false);
+    expect(view?.mine).toEqual([slot]);
+  });
+
+  // An unreadable timer is deliberately NOT the game's own default of 0. Guessing
+  // decayed would blank a live corpse; guessing open leaves the reading as it was
+  // before the rule existed.
+  it('treats a corpse with no readable timer as still inside its window', () => {
+    const slot = { itemId: 'iron_ore', count: 3 };
+    const unread = corpse({ tappedById: ME, dead: true, loot: { copper: 0, items: [slot] } });
+
+    expect(corpseViewOf(unread, 41, viewer())?.decayed).toBe(false);
+  });
+
   it('shows a slot reserved for somebody else and does not offer it', () => {
     const slot = { itemId: 'sealed_missive', count: 1, personalFor: [STRANGER] };
     const view = corpseViewOf(corpse({ loot: { copper: 0, items: [slot] } }), 41, viewer());
@@ -259,6 +306,20 @@ describe('corpseSignature', () => {
     const before = corpseSignature(view({}));
 
     expect(corpseSignature(view({ harvestClaimedBy: STRANGER }))).not.toBe(before);
+  });
+
+  // The corpse decaying is the one change here that can move NOTHING else. It
+  // empties `mine` and `copper`, and `mine` is deliberately not in the signature
+  // while `copper` was already 0 for a viewer with no rights, so on a corpse
+  // somebody else tapped the whole reading is byte-identical across the moment
+  // the game stops letting anyone open it. That is a published field arriving
+  // correctly and never firing its `world.on`, which is why it is asserted on a
+  // corpse with nothing takeable rather than on a full one.
+  it('moves when the loot window elapses on a corpse holding nothing takeable', () => {
+    const slot = { itemId: 'iron_ore', count: 3 };
+    const before = corpseSignature(view({ all: [slot], copper: 0, decayed: false }));
+
+    expect(corpseSignature(view({ all: [slot], copper: 0, decayed: true }))).not.toBe(before);
   });
 });
 

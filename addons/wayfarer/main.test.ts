@@ -54,13 +54,13 @@ const TICK_MS = 1000;
 const SETTLE_TURNS = 12;
 
 /** What the shipped atlas has to carry, asserted so a hand edit cannot quietly thin it. */
-const ZONE_COUNT = 14;
-const POI_COUNT = 106;
-const GRAVEYARD_COUNT = 18;
-const MAILBOX_COUNT = 14;
+const ZONE_COUNT = 15;
+const POI_COUNT = 112;
+const GRAVEYARD_COUNT = 19;
+const MAILBOX_COUNT = 15;
 const PORTAL_COUNT = 1;
-/** Nine zones are grid columns with their own x bounds; five are the full-width strip. */
-const COLUMN_ZONE_COUNT = 9;
+/** Ten zones are grid columns with their own x bounds; five are the full-width strip. */
+const COLUMN_ZONE_COUNT = 10;
 
 /** The base of the instanced plane, `INSTANCE_X_BASE` in `src/sim/data.ts`. */
 const INSTANCE_X_BASE = 99_400;
@@ -88,7 +88,7 @@ interface Atlas {
     name: string;
     xMin?: number;
     xMax?: number;
-    pois: { id: string; label: string; x: number; z: number; town?: boolean }[];
+    pois: { id: string; label: string; x: number; z: number; town?: boolean; hidden?: boolean }[];
   }[];
   graveyards: { id: string; label: string; x: number; z: number }[];
   mailboxes: { id: string; label: string }[];
@@ -121,6 +121,9 @@ if (EASTBROOK_HUB === undefined) {
   throw new Error('the shipped atlas has no town in Eastbrook Vale');
 }
 const HUB_ID = `town:eastbrook_vale:${EASTBROOK_HUB.id}`;
+
+/** How far east of the hub the distance case stands, so the figure it reads is its own. */
+const WALKED_YARDS = 3;
 
 /** One of the two pois whose label the game has re-worded away from its frozen id. */
 const PARTERRE = { zone: 'evergarden', id: 'the_statuary_walk', x: 360, z: 875 };
@@ -441,7 +444,7 @@ describe('the atlas it carries', () => {
     expect(ATLAS.portals).toHaveLength(PORTAL_COUNT);
   });
 
-  // This is not fourteen plain rectangles: five zones are the original full-width strip and
+  // This is not fifteen plain rectangles: five zones are the original full-width strip and
   // carry no x bounds at all, so the world-width constants have to travel with the table.
   it('carries the world strip constants beside the nine zones that need them', () => {
     const columns = ATLAS.zones.filter((zone) => zone.xMin !== undefined);
@@ -746,11 +749,18 @@ describe("the game's own label", () => {
 
 // The list: what is near you, in the zone you are in, nearest first.
 describe('the list of what is around', () => {
+  // These three stand the player on Eastbrook's own hub, read out of the atlas, rather
+  // than at the world origin. They used to stand at (0, 0) because the town happened to
+  // be three yards from it; game 0.40.1's New Eastbrook program moved the town to
+  // (-14, -102) and all three failed at once, on distances rather than on anything they
+  // were about. Anchored to the hub they measure what they name, whatever the game does
+  // with the town next.
   it('lists the nearest points first', async () => {
     const h = await run();
 
-    // Standing at the origin: Eastbrook town is 3 yards away, its graveyard 20, its
-    // mailbox 7.5, and Reliquary Hill 52.
+    h.walkTo(EASTBROOK_HUB.x, EASTBROOK_HUB.z);
+    h.tick();
+
     expect(h.labels()[0]).toBe('Eastbrook');
   });
 
@@ -763,6 +773,9 @@ describe('the list of what is around', () => {
 
   it('leaves out a point outside the draw distance', async () => {
     const h = await run({ 'draw-distance': 40, 'list-length': 20 });
+
+    h.walkTo(EASTBROOK_HUB.x, EASTBROOK_HUB.z);
+    h.tick();
 
     expect(h.labels()).toContain('Eastbrook');
     expect(h.labels()).not.toContain('Reliquary Hill');
@@ -790,7 +803,10 @@ describe('the list of what is around', () => {
   it('measures the distance from the player to the point', async () => {
     const h = await run({ 'list-length': 20 });
 
-    expect(h.figureOf('town:eastbrook_vale:eastbrook')).toBe('3 yd');
+    h.walkTo(EASTBROOK_HUB.x + WALKED_YARDS, EASTBROOK_HUB.z);
+    h.tick();
+
+    expect(h.figureOf('town:eastbrook_vale:eastbrook')).toBe(`${String(WALKED_YARDS)} yd`);
   });
 
   // The list is the CURRENT zone's, which is what makes its heading true. A point 30
@@ -888,6 +904,29 @@ describe('the points this character has visited', () => {
     ]);
 
     expect(h.note()).toContain(`2/${String(EASTBROOK.pois.length)} explored`);
+  });
+
+  // The two halves of a hidden poi, which pull opposite ways and are both the game's
+  // own behaviour. `hideOnMap` takes the label off the game's world map
+  // (src/ui/map_window_view.ts), so listing it would walk a player to a place the game
+  // has stopped calling a landmark: game 0.40.1 put the harbor-town plat over the
+  // Sowfield. The exploration sweep in src/sim/deeds.ts does NOT consult the flag, so
+  // the same poi is still walked to and still marks, and dropping the row would leave
+  // every Eastbrook character permanently one short of a total they cannot reach.
+  //
+  // The count above is the second half and is asserted against the whole poi list on
+  // purpose: it is Eastbrook Vale that carries the hidden one, so a denominator that
+  // had learned to skip it would fail there.
+  it('leaves a hidden point out of the list and in the exploration total', async () => {
+    const hidden = EASTBROOK.pois.filter((poi) => poi.hidden === true);
+    expect(hidden).toHaveLength(1);
+
+    const h = await run({ 'list-length': 20 }, undefined, [`poi:eastbrook_vale:${hidden[0]?.id}`]);
+    h.walkTo(hidden[0]?.x ?? 0, hidden[0]?.z ?? 0);
+    h.tick();
+
+    expect(h.labels()).not.toContain(hidden[0]?.label);
+    expect(h.note()).toContain(`1/${String(EASTBROOK.pois.length)} explored`);
   });
 
   // An empty visited set cannot say whether it is empty because the character has
