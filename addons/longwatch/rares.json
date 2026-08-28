@@ -1,5 +1,5 @@
 {
-  "gameVersion": "0.39.0",
+  "gameVersion": "0.40.1",
   "source": "src/sim/data.ts, src/sim/respawn_policy.ts, src/ui/i18n.resolved.generated/en.ts",
   "rares": [
     {
@@ -38,8 +38,8 @@
       "id": "grix_the_tunnelking",
       "name": "Grix the Tunnelking",
       "zone": "eastbrook_vale",
-      "x": -95,
-      "z": -78,
+      "x": -45,
+      "z": 128,
       "respawn": 900,
       "respawnMax": 1800
     },

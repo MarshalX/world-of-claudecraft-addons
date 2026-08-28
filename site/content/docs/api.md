@@ -179,6 +179,8 @@ woc.world.corpse          // where your own body lies while your spirit is a gho
 
 `world.corpses` is what to watch for a corpse becoming lootable, because that is a field change on an entity that already existed and so is invisible to `world.on('entities')`. Use `world.corpseLoot(id)` rather than `entity.loot` for anything you draw: the wire carries a corpse's whole contents to every player in range, personal slots included, and the game's own loot window filters on read. The unfiltered list shows people things they cannot have.
 
+A corpse also stops being openable before it stops being an entity, and `decayed` is the only thing that says so. When the loot window elapses the game refuses the corpse to everyone, including whoever killed it, and drops it from its own pickable view, but the entity stays in `world.entities` carrying its whole `loot` record. `mine` is empty and `copper` is 0 on a decayed corpse, so a display built on those is already right; one built on `all` has to check the flag, or it goes on listing bodies that are no longer there to loot.
+
 `world.nodeCooldowns` is per player rather than shared, so a node another player just took is still yours to take. A node with no entry is ready.
 
 Competitive play and the group finder:

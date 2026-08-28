@@ -64,6 +64,19 @@ interface CorpseView {
   /** The owner lock has lapsed, so anyone may take the shared pool. */
   ffa: boolean;
   /**
+   * The loot window has elapsed, so NOBODY can open this corpse any more.
+   *
+   * New at game 0.40.1, and it is the one arm of the game's own rule that has no
+   * rights in it: `corpseLootAvailability` returns before it looks at the tap
+   * lock at all. The corpse is still in `world.entities` and still carries its
+   * whole `loot` record, so this is the only thing that distinguishes it from a
+   * corpse you could walk up to and open, and the game's own renderer has
+   * already dropped it from the pickable view by the time this is true. `mine`
+   * is empty and `copper` is 0 whenever it is set; `all` still reports what the
+   * wire carried, because that is what `all` is for.
+   */
+  decayed: boolean;
+  /**
    * The player who already took the profession harvest, null when nobody has.
    *
    * Whether the corpse is harvestable AT ALL is bundled content with no served
@@ -102,6 +115,21 @@ const NO_VIEWER: LootViewer = Object.freeze({ pid: null, partyPids: Object.freez
  * as "locked" or an unread corpse would offer its shared pool to anybody.
  */
 const LOCK_HELD = Number.POSITIVE_INFINITY;
+
+/**
+ * An unreadable corpse timer is a corpse still INSIDE its window, which is the
+ * safe direction rather than the game's own default.
+ *
+ * `corpseTimer` is not published, for the reason `lootFfaTimer` above is not:
+ * online it is a synthetic sentinel rather than a countdown, 0 once the server's
+ * one-shot `cd` flag has fired and 1 while the window is open, and a published
+ * field named for seconds that only ever holds 0 or 1 is a field whose name
+ * lies. The client initialises it to 0, which reads as DECAYED, so an absent
+ * reading is deliberately not treated as the game treats it: guessing decayed
+ * would blank a live corpse's loot, and guessing open leaves the display exactly
+ * as it was before this rule existed.
+ */
+const WINDOW_OPEN = 1;
 
 function deathZoneSource(world: unknown): DeathZoneSource | null {
   if (!isRecord(world)) {
@@ -188,12 +216,42 @@ function isTakeable(slot: unknown, pid: number | null, sharedRights: boolean): b
   return sharedRights && count > 0;
 }
 
-/** Copper is part of the shared pool, so no rights means none of it is yours. */
-function takeableCopper(loot: unknown, sharedRights: boolean): number {
-  if (!sharedRights) {
+/**
+ * The game's own `corpseHasDecayed`, over the same pair it reads.
+ *
+ * Both halves are required. `dead` alone is every corpse, and the timer alone is
+ * 0 on a living mob too, since the client builds every entity with it at 0 and
+ * only the dynamic decode ever writes it.
+ */
+function hasDecayed(entity: unknown): boolean {
+  if (fieldValue(entity, 'dead') !== true) {
+    return false;
+  }
+  return (fieldNumber(entity, 'corpseTimer') ?? WINDOW_OPEN) <= 0;
+}
+
+/**
+ * Copper is part of the shared pool, so no rights means none of it is yours, and
+ * a decayed corpse means none of it is anyone's.
+ */
+function takeableCopper(loot: unknown, sharedRights: boolean, decayed: boolean): number {
+  if (decayed || !sharedRights) {
     return 0;
   }
   return fieldNumber(loot, 'copper') ?? 0;
+}
+
+/** The slots this viewer could take, which is none of them once the window has elapsed. */
+function takeableSlots(
+  all: readonly LootSlot[],
+  viewer: LootViewer,
+  sharedRights: boolean,
+  decayed: boolean,
+): readonly LootSlot[] {
+  if (decayed) {
+    return [];
+  }
+  return all.filter((slot) => isTakeable(slot, viewer.pid, sharedRights));
 }
 
 /** Who is looking, resolved off the world object. */
@@ -259,15 +317,17 @@ function corpseViewOf(
   const tappedBy = fieldNumber(entity, 'tappedById');
   const ffa = (fieldNumber(entity, 'lootFfaTimer') ?? LOCK_HELD) <= 0;
   const sharedRights = hasSharedRights(viewer, tappedBy, ffa);
+  const decayed = hasDecayed(entity);
   const all = fieldArray(loot, 'items') as readonly LootSlot[];
   return {
     entityId,
     all,
-    mine: all.filter((slot) => isTakeable(slot, viewer.pid, sharedRights)),
-    copper: takeableCopper(loot, sharedRights),
+    mine: takeableSlots(all, viewer, sharedRights, decayed),
+    copper: takeableCopper(loot, sharedRights, decayed),
     sharedRights,
     tappedBy,
     ffa,
+    decayed,
     harvestClaimedBy: fieldNumber(entity, 'harvestClaimedBy'),
   };
 }

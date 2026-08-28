@@ -51,6 +51,21 @@ export interface CorpseView {
   /** The owner lock has lapsed, so anyone may take the shared pool. */
   ffa: boolean;
   /**
+   * The loot window has elapsed, so NOBODY can open this corpse any more.
+   *
+   * New at game 0.40.1, and the one arm of the game's own rule with no rights in
+   * it: it refuses before the tap lock is looked at, so this is true even on a
+   * corpse you killed yourself. The entity stays in `world.entities` carrying
+   * its whole `loot` record, and the game's own renderer has already dropped it
+   * from the pickable view, so this is the only thing that tells it from a
+   * corpse you could walk up to and open. `mine` is empty and `copper` is 0
+   * whenever it is set; `all` still reports what the wire carried.
+   *
+   * A display that lists corpses worth walking to has to read this, or it goes
+   * on offering bodies that are no longer there to be looted.
+   */
+  decayed: boolean;
+  /**
    * The player who already took the profession harvest, null when nobody has.
    *
    * Whether the corpse is harvestable AT ALL is bundled content with no served

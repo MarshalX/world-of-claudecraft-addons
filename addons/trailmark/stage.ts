@@ -49,8 +49,16 @@ const CODFATHER = 'q_the_codfather';
  * Where this is photographed from: level with the boar camps, north of both. North because the
  * camera looks down -z, so anything pinned has to be in front of it, and level in x because that
  * is what keeps the two tiles in one column.
+ *
+ * Both halves are RE-DERIVED against game 0.40.1 rather than nudged. The New Eastbrook program
+ * moved the two wild boar camps from (63, 16) and (84, -27) to (58, -72) and (97, -43), which is
+ * not a translation: they spread in x and moved south together. So the x is the new pair's own
+ * midpoint and the z is what puts the far camp back inside the reach below. Left at (73.5, 120)
+ * the nearer camp sat at 165 yards against a 160 yard reach, and the picture came out with NO
+ * PINS AT ALL while its alt text went on promising them. Nothing failed; only the capture shows
+ * it.
  */
-const STANDPOINT = { x: 73.5, y: 5, z: 120 };
+const STANDPOINT = { x: 77.5, y: 5, z: 74 };
 
 /**
  * Which way the character is looking, and it is not a detail. The arrow on a row is measured
@@ -59,7 +67,14 @@ const STANDPOINT = { x: 73.5, y: 5, z: 120 };
  */
 const FACING = Math.PI;
 
-/** How far a camp may be and still be pinned. The two boar camps, and nothing else. */
+/**
+ * How far a camp may be and still be pinned. The two boar camps, and nothing else.
+ *
+ * Still 160 after the camps moved, and it is a tighter fit than it was: from the standpoint the
+ * far boar camp is at 147 yards and the nearest camp belonging to any other row (a mire prowler)
+ * is at 157, so the window is ten yards wide. The prowler quest is a turn-in and pins its NPC
+ * rather than its camp, which is what keeps it out of the picture even so.
+ */
 const REACH = { 'pin-distance': 160 };
 
 /**

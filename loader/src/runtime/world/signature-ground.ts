@@ -70,11 +70,18 @@ function deathZoneSignature(zones: unknown): string {
 }
 
 /**
- * Which corpses are lootable, what each holds, and whether the lock has lapsed.
+ * Which corpses are lootable, what each holds, whether the lock has lapsed, and
+ * whether the loot window has.
  *
  * `mine` is deliberately left out. It is derived from what is already here plus
  * the party roster, so including it would fire this key on every party change,
  * and an addon watching corpses is watching the ground rather than the group.
+ *
+ * `decayed` has to be in, and it is the one field here that cannot be inferred
+ * from the rest. Decay empties `mine` and zeroes `copper`, and `mine` is out for
+ * the reason above while `copper` was already 0 for anybody without shared
+ * rights, so on a corpse somebody else tapped this reading was byte-identical
+ * either side of the moment the game stopped letting anyone open it.
  */
 function corpseSignature(corpses: unknown): string {
   if (!(corpses instanceof Map)) {
@@ -85,7 +92,8 @@ function corpseSignature(corpses: unknown): string {
     rows.push(
       `${String(id)}:${String(countOf(fieldValue(view, 'all')))}` +
         `:${String(fieldNumber(view, 'copper') ?? 0)}` +
-        `:${String(fieldValue(view, 'ffa'))}:${String(fieldValue(view, 'harvestClaimedBy'))}`,
+        `:${String(fieldValue(view, 'ffa'))}:${String(fieldValue(view, 'decayed'))}` +
+        `:${String(fieldValue(view, 'harvestClaimedBy'))}`,
     );
   }
   return rows.sort(byCodePoint).join(',');

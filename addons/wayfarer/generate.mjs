@@ -33,7 +33,7 @@
 // exists rather than a paste:
 //
 //  - The zone table is NOT a set of plain rectangles. Five zones carry no x bounds
-//    at all and are the original full-width strip; nine carry them and are grid
+//    at all and are the original full-width strip; ten carry them and are grid
 //    columns beside it. So the strip's own width has to travel with the table, and
 //    it is derived here exactly as `src/sim/data.ts` derives it, from
 //    WORLD_SIZE. A release that widens the world moves it.
@@ -47,16 +47,22 @@
 //
 //  - A zone's `pois` array is pure literals. An entry built from an identifier or a
 //    call would fail to evaluate here, loudly.
+//  - A zone's own `{...}` may SPREAD a constant declared beside it in the same
+//    module, which game 0.40.1 is the first release to do: the Proving Shore keeps
+//    its four bounds in one `PROVING_SHORE_RECT` shared with the island's own
+//    containment predicate. Only OBJECT constants are expanded, and only for the
+//    zone block, because the array spreads (`...MOAT,` inside Willowfen's lakes)
+//    sit under properties this script does not read.
 //  - Every zone has exactly one `hub`, and a hub's `name` is also one of that
 //    zone's poi labels. That pairing is what marks a poi as a TOWN, and it holds
-//    for all fourteen zones today. A zone whose hub name matches no poi simply gets
+//    for all fifteen zones today. A zone whose hub name matches no poi simply gets
 //    no town, which is the safe direction.
 //  - Every mailbox lies inside exactly one zone rectangle, and its label is taken
 //    from that zone's hub. Most mailboxes have no id and no name in the game at all,
 //    so the ids emitted here are this addon's own, derived from the hub name. Where
 //    a town layout DOES name its own (`mailbox_eastbrook`, `mailbox_fenbridge`) the
 //    derivation happens to agree, and it is the derivation that is emitted, because
-//    it is the one rule that covers all fourteen.
+//    it is the one rule that covers all fifteen.
 //  - A table row, or a zone's hub, may read a town layout as `<NAME>_LAYOUT.a.b.c`,
 //    either spread for a point or read for a scalar. The module holding that layout
 //    is followed from the READING module's own import, so a town rebuilt into a new
@@ -121,6 +127,14 @@ const LAYOUT_SPREAD = /\.\.\.(\w+_LAYOUT)((?:\.\w+)+)/g;
 /** `FENBRIDGE_LAYOUT.services.graveyard.id`, read for a scalar rather than spread. */
 const LAYOUT_READ = /(\w+_LAYOUT)((?:\.\w+)+)/g;
 /**
+ * `...PROVING_SHORE_RECT,`: a spread of a constant declared in the SAME module.
+ *
+ * The trailing comma is part of the match on purpose. It is what tells this apart
+ * from `...FENBRIDGE_LAYOUT.services.mailbox.position,`, which LAYOUT_SPREAD owns
+ * and which carries a dot where this wants the comma.
+ */
+const LOCAL_SPREAD = /\.\.\.([A-Z][A-Z0-9_]*),/g;
+/**
  * A bare identifier standing in for a block, e.g. `services: SERVICES,`.
  *
  * Deliberately only SCREAMING_SNAKE, which is what the game writes its layout tables
@@ -134,7 +148,8 @@ const NOTES = [
   "Crafting stations are deliberately NOT here. world.stations is published and carries the game's own placements with their zone ids, so a copy would be a second table to keep in step with nothing gained.",
   'A poi id is FROZEN game content: the exploration deed marks key on it as poi:<zoneId>:<poiId>. A poi label is display-only and the game re-words them freely, which is why the_statuary_walk is labelled The Parterre Walk and the_rose_wilds is labelled Dawnhold Castle.',
   "A town flag marks the poi that stands on its zone's own hub. The game authors the hub separately, with a name and a radius; every zone's hub name is also a poi label, so the flag carries the fact without a duplicate row.",
-  'Most mailboxes have no id and no name in the game: MAILBOXES is a bare list of points, and only the two towns with their own layout name theirs (mailbox_eastbrook and mailbox_fenbridge). Every id and every label here is derived from the hub of the zone the point falls in, which is the one rule that covers all fourteen and which agrees with the game on both of the named ones. The game also nudges a mailbox clear of buildings at spawn (findSafePos), so a point here is where it was authored rather than exactly where it stands.',
+  "A hidden flag carries the game's own hideOnMap, which drops a poi's label from the world map for a place that no longer reads as a landmark. It is carried rather than dropped because the exploration deed sweep does NOT consult the flag: a hidden poi is still walked to and still marks, so it still counts toward a zone's exploration even though nothing lists it.",
+  'Most mailboxes have no id and no name in the game: MAILBOXES is a bare list of points, and only the two towns with their own layout name theirs (mailbox_eastbrook and mailbox_fenbridge). Every id and every label here is derived from the hub of the zone the point falls in, which is the one rule that covers all fifteen and which agrees with the game on both of the named ones. The game also nudges a mailbox clear of buildings at spawn (findSafePos), so a point here is where it was authored rather than exactly where it stands.',
   'A portal has no display name in the game either. The label here is title-cased from the frozen id.',
   'No y anywhere, because the game authors none: ground height is a function of the world seed, which no addon can call and no server sends.',
 ];
@@ -291,8 +306,20 @@ function propBlock(block, name, open, close) {
  * transform that handled all three would be a parser. It is deliberately narrow:
  * anything referring to an identifier throws here, which is the loud failure a
  * content release restructuring a table should produce.
+ *
+ * An ABSENT value is refused here rather than at each call site, because the
+ * quiet failure is the one this reader is most exposed to: `propText` answers
+ * null for a property the game no longer writes on its own line, and
+ * `new Function('return (null);')` evaluates that to null perfectly happily. So
+ * a zone that stopped declaring `zMin` inline came out with a null bound instead
+ * of a refusal, and the first thing to notice was a mailbox three functions away
+ * that fell inside no rectangle. Every caller that has a legitimately optional
+ * property (xMin, xMax) already null-checks before calling.
  */
 function literal(text, what) {
+  if (text === null || text === undefined) {
+    throw new Error(`${what} is no longer declared where this reads it`);
+  }
   try {
     return new Function(`return (${text});`)();
   } catch (err) {
@@ -373,11 +400,23 @@ function hubOf(block, ident, layouts) {
   return literal(withLayoutValues(text.replace(HUB_RADIUS, ''), layouts), `${ident} hub`);
 }
 
-/** One point of interest, with the town flag present only when it is true. */
+/**
+ * One point of interest, with each flag present only when it is true.
+ *
+ * `hidden` carries the game's own `hideOnMap`, which drops a label from the world
+ * map while leaving the place and its exploration mark alive. Carried rather than
+ * dropped because those are two different questions: the deed sweep in
+ * `src/sim/deeds.ts` marks a visit without consulting the flag, so a hidden poi
+ * still counts toward a zone's exploration, and a table that had left the row out
+ * would make that tally short by one forever.
+ */
 function poiOf(poi, hub) {
   const built = { id: poi.id, label: poi.label, x: poi.x, z: poi.z };
   if (poi.label === hub.name) {
     built.town = true;
+  }
+  if (poi.hideOnMap === true) {
+    built.hidden = true;
   }
   return built;
 }
@@ -391,11 +430,9 @@ function poiOf(poi, hub) {
  * on Farshore Isle into Eastbrook Vale.
  */
 function zoneOf(root, module, ident) {
-  const block = blockAt(
-    module.text,
-    openerAt(module.text, `export const ${ident}: ZoneDef`, '{'),
-    '{',
-    '}',
+  const block = withLocalSpreads(
+    blockAt(module.text, openerAt(module.text, `export const ${ident}: ZoneDef`, '{'), '{', '}'),
+    module,
   );
   const hub = hubOf(block, ident, layoutsFor(root, module));
   const pois = literal(propBlock(block, 'pois', '[', ']'), `${ident} pois`);
@@ -521,6 +558,57 @@ function layoutRef(layouts, whole, ident, dotted) {
 }
 
 /**
+ * Where a same-module `const IDENT = {` opens, or null when it is not an object.
+ *
+ * Not `openerAt`, which searches FORWARD for the first `= {` after its marker and
+ * would answer with an unrelated declaration further down the file for a constant
+ * that is not one. That is exactly the Willowfen case: `const MOAT = [` is an
+ * array, and an unbounded search found the next object in the module and read it
+ * as the moat. Null rather than a throw, because an array spread contributes no
+ * properties to look up: `...MOAT,` sits inside `lakes`, which this reader does
+ * not read, and refusing it would fail the whole table over a property that is
+ * none of this script's business.
+ */
+function objectConstAt(text, ident) {
+  const at = text.indexOf(`const ${ident}`);
+  if (at === NOT_FOUND) {
+    return null;
+  }
+  const assign = text.indexOf('=', at);
+  const open = text.indexOf('{', assign);
+  if (assign === NOT_FOUND || open === NOT_FOUND || text.slice(assign + 1, open).trim() !== '') {
+    return null;
+  }
+  return open;
+}
+
+/**
+ * Every `...IDENT,` spread of a same-module constant, replaced by its properties.
+ *
+ * Game 0.40.1 is what this is for: the Proving Shore declares its four zone bounds
+ * once, as `const PROVING_SHORE_RECT`, and spreads them into the ZoneDef, because
+ * the island's own `isOnProvingShore` predicate reads the same rectangle. Every
+ * other zone still writes the four inline.
+ *
+ * One property PER LINE, because `propText` reads a block line by line and four
+ * bounds on one line would hand `zMin` the whole run as its value. Re-emitted
+ * through the evaluated object rather than by splicing the source text, so a
+ * constant holding anything but scalars still comes out as syntax this can read.
+ */
+function withLocalSpreads(text, module) {
+  return text.replaceAll(LOCAL_SPREAD, (whole, ident) => {
+    const opener = objectConstAt(module.text, ident);
+    if (opener === null) {
+      return whole;
+    }
+    const body = literal(blockAt(module.text, opener, '{', '}'), `${ident} in ${module.name}`);
+    return Object.entries(body)
+      .map(([key, value]) => `${key}: ${JSON.stringify(value)},`)
+      .join('\n');
+  });
+}
+
+/**
  * Every layout reference in a table or a hub, replaced by the value it reads.
  *
  * The spreads go first, because a spread's own text is a read with three dots in
@@ -589,8 +677,21 @@ function readMailboxes(root, modules, zones, strip) {
       throw new Error(`the mailbox at ${String(box.x)}, ${String(box.z)} is in no zone`);
     }
     const label = home.hub.name;
-    return { id: `mailbox_${label.toLowerCase()}`, label, x: box.x, z: box.z };
+    return { id: `mailbox_${slug(label)}`, label, x: box.x, z: box.z };
   });
+}
+
+/**
+ * A hub name as an id fragment: `Dawnrest Camp` becomes `dawnrest_camp`.
+ *
+ * Every hub was one word until game 0.40.1 gave the Proving Shore a two-word one,
+ * and a bare `toLowerCase()` emitted `mailbox_dawnrest camp`, an id with a space
+ * in it sitting beside `mailbox_eastbrook`. Ids here are this addon's own, so the
+ * repair is ours to make; the two the game names itself are single words and are
+ * unaffected either way.
+ */
+function slug(label) {
+  return label.toLowerCase().split(' ').join('_');
 }
 
 /** `duskfall_passage` reads as `Duskfall Passage`. The game names a portal nothing. */

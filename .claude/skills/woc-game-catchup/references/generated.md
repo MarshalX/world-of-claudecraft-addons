@@ -58,7 +58,7 @@ Reads `src/sim/aura_classify.ts` from a checkout. Writes BOTH `packages/types/au
 
 Nine tables across eight addons: `emberwatch/rules.json`, `ledgerline/floors.json`, `longwatch/mobs.json`, `longwatch/rares.json`, `lorebind/items.json`, `tocsin/bosses.json`, `trailmark/quests.json`, `veinsight/nodes.json`, `wayfarer/atlas.json`.
 
-**The flag forms disagree.** Most take `--game=<path>` only; `emberwatch`, `ledgerline`, `tocsin` and `wayfarer` accept both forms. Passing the wrong one trips the required-argument error. `pnpm tables --game <checkout>` tries both spellings per generator and classifies every table, which is why it should be what runs them rather than eight invocations by hand.
+**The flag forms disagree.** Five take `--game=<path>` only (`longwatch`, `lorebind`, `trailmark`, `veinsight`, `wayfarer`); three accept both (`emberwatch`, `ledgerline`, `tocsin`). Passing the wrong one trips the required-argument error. `pnpm tables --game <checkout>` tries both spellings per generator and classifies every table, which is why it should be what runs them rather than eight invocations by hand. Measured at game 0.40.1 by RUNNING each one both ways: the previous reading here named `wayfarer` among the permissive ones and it is not, and reading the sources rather than running them is what produced that, since the parsers do not share an idiom.
 
 Zone layouts, gather nodes, rare spawns and quest text are in the game's own bundle and nothing serves them, so a table is the only alternative to hand-typing one or doing without. The data is fetched where the addon body is fetched and cached beside it, `.json` only, at most eight files at 512 kB each.
 

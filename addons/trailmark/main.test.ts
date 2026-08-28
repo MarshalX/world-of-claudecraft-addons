@@ -75,8 +75,19 @@ const TOOLWORKS_ORDER = 'q_prof_workorder_toolworks';
 const APOTHECARY_ORDER = 'q_prof_workorder_apothecary';
 
 const WOLVES_KEY = `${WOLVES}#0`;
-/** The nearer wolf camp's x. Standing at this x and a lower z is due south of it. */
-const WOLF_CAMP_X = 24;
+/**
+ * The nearer wolf camp's x. Standing at this x and a lower z is due south of it.
+ *
+ * It was 24 until game 0.40.1, whose New Eastbrook program moved both wolf camps: the nearer
+ * one is now authored at (-10, 6) with a 28.5 yard spawn radius, and the far one at (12, 52).
+ * Every standpoint in the bearing block below is chosen against those, because a case that
+ * says "due north" and no longer stands due north is asserting on an arrow by accident.
+ */
+const WOLF_CAMP_X = -10;
+/** The nearer wolf camp itself, for the standpoints that have to be placed against it. */
+const WOLF_CAMP = { x: -10, z: 6 };
+/** How far south or west of the camp a bearing case stands, far enough to read cleanly. */
+const BEARING_YARDS = 23;
 const BOARS_KEY = `${BOARS}#0`;
 const SUPPLIES_KEY = `${SUPPLIES}#0`;
 const HUNTSMAN_KEY = `${HUNTSMAN}#0`;
@@ -440,8 +451,8 @@ describe('resolving an objective to a place', () => {
     const h = await run({}, undefined, [{ questId: WOLVES, counts: [0] }]);
 
     expect(pinsOf(h, WOLVES_KEY)).toBe(WOLF_CAMPS);
-    // The nearer of the two wolf camps, at 24, 70.
-    expect(h.detailOf(WOLVES_KEY)).toBe('Eastbrook Vale, 74 yd ↑');
+    // The nearer of the two wolf camps, at -10, 6.
+    expect(h.detailOf(WOLVES_KEY)).toBe('Eastbrook Vale, 12 yd ↗');
   });
 
   // The join is on the loot entry's quest id, not on the item alone: the same
@@ -450,7 +461,8 @@ describe('resolving an objective to a place', () => {
     const h = await run({}, undefined, [{ questId: BOARS, counts: [0] }]);
 
     expect(pinsOf(h, BOARS_KEY)).toBe(WOLF_CAMPS);
-    expect(h.detailOf(BOARS_KEY)).toBe('Eastbrook Vale, 65 yd ←');
+    // The nearer wild boar camp, at 58, -72.
+    expect(h.detailOf(BOARS_KEY)).toBe('Eastbrook Vale, 92 yd ↙');
   });
 
   // Six crates scattered over the bandit camp become ONE circle: the centroid
@@ -761,13 +773,13 @@ describe('what a row says under the pointer', () => {
   }
 
   // The game pads a camp's own spawn radius by four yards, and the nearer wolf
-  // camp is authored at 26. A distance measured to the centre is ambiguous
-  // without this: 74 yards to a spot and 74 yards to a thirty yard sweep are
-  // different rides.
+  // camp is authored at 28.5. A distance measured to the centre is ambiguous
+  // without this: twelve yards to a spot and twelve yards to a thirty-three yard
+  // sweep are different rides.
   it('says how wide the nearest area is, with the game"s own padding on it', async () => {
     await run({}, undefined, [{ questId: WOLVES, counts: [0] }]);
 
-    expect(hover(WOLVES_KEY)).toContain('reaches 30 yd from that point');
+    expect(hover(WOLVES_KEY)).toContain('reaches 33 yd from that point');
   });
 
   it('says a lone point is the game"s six yard circle', async () => {
@@ -859,31 +871,35 @@ describe('which zone an objective is in', () => {
 // one thing here that cannot be caught by looking: an arrow that points consistently the wrong
 // way round reads as a working display right up until somebody follows it.
 describe('the bearing on a row', () => {
-  // The nearer wolf camp is at 24, 70, which is very nearly due north of a player
-  // standing at the origin, and `facing` starts at 0, which is +z.
+  // Walked due south of the nearer wolf camp, which puts it dead ahead of a character
+  // whose `facing` starts at 0, which is +z.
   it('points straight ahead for an objective the character is facing', async () => {
     const h = await run({}, undefined, [{ questId: WOLVES, counts: [0] }]);
 
-    expect(h.detailOf(WOLVES_KEY)).toBe('Eastbrook Vale, 74 yd ↑');
+    h.walkTo(WOLF_CAMP.x, WOLF_CAMP.z - BEARING_YARDS);
+    h.tick();
+
+    expect(h.detailOf(WOLVES_KEY)).toBe('Eastbrook Vale, 23 yd ↑');
   });
 
   it('turns the arrow when the character turns rather than when the camera does', async () => {
     const h = await run({}, undefined, [{ questId: WOLVES, counts: [0] }]);
 
+    h.walkTo(WOLF_CAMP.x, WOLF_CAMP.z - BEARING_YARDS);
     h.turnTo(Math.PI);
     h.tick();
 
-    expect(h.detailOf(WOLVES_KEY)).toBe('Eastbrook Vale, 74 yd ↓');
+    expect(h.detailOf(WOLVES_KEY)).toBe('Eastbrook Vale, 23 yd ↓');
   });
 
   // The sign. `facing` grows as the character turns left, so with the character looking up +z an
   // objective due +x is on their left, and the sectors have to run that way. Walked to
-  // twenty-three yards due west of the western wolf camp, at -27, 71, which puts that camp at +x
-  // and nothing else in the way of reading it.
+  // twenty-three yards due west of the nearer wolf camp, which puts that camp at +x and nothing
+  // else in the way of reading it.
   it('puts an objective at +x on the left of a character facing +z', async () => {
     const h = await run({}, undefined, [{ questId: WOLVES, counts: [0] }]);
 
-    h.walkTo(-50, 70);
+    h.walkTo(WOLF_CAMP.x - BEARING_YARDS, WOLF_CAMP.z);
     h.tick();
 
     expect(h.detailOf(WOLVES_KEY)).toBe('Eastbrook Vale, 23 yd ←');
@@ -918,7 +934,7 @@ describe('the bearing on a row', () => {
     h.turnTo(null);
     h.tick();
 
-    expect(h.detailOf(WOLVES_KEY)).toBe('Eastbrook Vale, 74 yd');
+    expect(h.detailOf(WOLVES_KEY)).toBe('Eastbrook Vale, 12 yd');
   });
 });
 

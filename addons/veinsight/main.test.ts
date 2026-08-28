@@ -71,12 +71,21 @@ const RESPAWN_SECONDS = (JSON.parse(TABLE_TEXT) as { respawnSeconds: { ore: numb
  * Rows out of the shipped table, by hand, so a case names a coordinate a reader can
  * go and check. Everything here was read out of `nodes.json`.
  */
-const ORE_1 = { id: 'ore_eastbrook_1', x: -70, z: -53 };
-const ORE_2 = { id: 'ore_eastbrook_2', x: -73, z: -49 };
-const ORE_3 = { id: 'ore_eastbrook_3', x: -67, z: -57 };
-const ORE_6 = { id: 'ore_eastbrook_6', x: -65, z: -69 };
+const ORE_1 = { id: 'ore_eastbrook_1', x: -20, z: 153 };
+const ORE_2 = { id: 'ore_eastbrook_2', x: -23, z: 157 };
+const ORE_3 = { id: 'ore_eastbrook_3', x: -17, z: 149 };
+const ORE_6 = { id: 'ore_eastbrook_6', x: -15, z: 137 };
 const WOOD_2 = { id: 'wood_eastbrook_2', x: -57, z: -6 };
-const HERB_1 = { id: 'herb_eastbrook_1', x: -59, z: 91 };
+/**
+ * The wood node nearest the dig, which is not WOOD_2 any more.
+ *
+ * The two cases that stand at ORE_1 and want a logging row beside a mining one used to reach
+ * for WOOD_2, because the old Copper Dig was 60 yards from it. Game 0.40.1 moved the dig 200
+ * yards north and left the tree where it was, putting it 163 yards off and out of the default
+ * draw distance. WOOD_2 is still what the bearing cases use, since those stand next to it.
+ */
+const WOOD_5 = { id: 'wood_eastbrook_5', x: 7, z: 140 };
+const HERB_1 = { id: 'herb_eastbrook_1', x: -58, z: 91 };
 /** Somebody else in the world, for the records the game broadcasts rather than sends. */
 const OTHER_PLAYER = 777;
 /** The nearest tier-2 node in the game, and the only kind a tier-1 tool refuses. */
@@ -88,9 +97,15 @@ const ORE_T2 = { id: 'ore_mirefen_t2', x: 36, z: 350 };
 const ORE_MIREFEN_T1 = { id: 'ore_mirefen_3', x: 35, z: 345 };
 
 /**
- * Every eastbrook node within the default 150 yard draw distance, nearest first from ORE_1,
- * which is the default standpoint. Twelve of the zone's eighteen: the six left out are 152 to
- * 248 yards off rather than absent.
+ * Every node within the default 150 yard draw distance, nearest first from ORE_1, which is the
+ * default standpoint. Thirteen of Eastbrook Vale's eighteen, and TWO MIREFEN ONES.
+ *
+ * Game 0.40.1 rewrote this list without touching a line of the addon, and the second half of
+ * that sentence is why it is worth a note. The New Eastbrook program moved the Copper Dig from
+ * (-84, -64) to (-34, 142), "northeast past Mirror Lake onto the Mirefen road", so the
+ * standpoint moved 200 yards north with its veins, a different set of wood and herb nodes
+ * became the nearest, and the dig now stands close enough to the border that two of the marsh's
+ * nodes are in range of it. That last part is what a list of eastbrook ids could not have said.
  */
 const NEAR_ORE_1 = [
   'ore_eastbrook_1',
@@ -99,12 +114,15 @@ const NEAR_ORE_1 = [
   'ore_eastbrook_6',
   'ore_eastbrook_5',
   'ore_eastbrook_4',
-  'wood_eastbrook_2',
-  'wood_eastbrook_1',
-  'wood_eastbrook_3',
-  'herb_eastbrook_4',
-  'herb_eastbrook_2',
+  'wood_eastbrook_5',
+  'herb_eastbrook_3',
+  'wood_eastbrook_4',
   'herb_eastbrook_1',
+  'herb_eastbrook_2',
+  'wood_mirefen_4',
+  'wood_eastbrook_6',
+  'herb_mirefen_4',
+  'wood_eastbrook_3',
 ];
 
 /** The tool ids the shipped table files under each type, at the tiers they cover. */
@@ -768,7 +786,7 @@ describe('the tool gate', () => {
     const h = await run({ 'list-length': 20 }, undefined, { at: ORE_1 });
 
     expect(h.figureOf(ORE_1.id)).toBe('Tool');
-    expect(h.figureOf(WOOD_2.id)).toBe('Tool');
+    expect(h.figureOf(WOOD_5.id)).toBe('Tool');
   });
 
   // Bags nobody can read look exactly like bags with nothing in them, and only one of those is a
@@ -1070,7 +1088,7 @@ describe('what it says about itself', () => {
     const h = await run({ 'list-length': 3 }, undefined, { at: ORE_1 });
 
     expect(h.drawn()).toHaveLength(3);
-    expect(h.note()).toContain('9 more in range');
+    expect(h.note()).toContain('12 more in range');
   });
 
   it('says every type is off rather than reading as nothing being there', async () => {
@@ -1177,12 +1195,17 @@ describe('the zone filter', () => {
     expect(h.note()).toContain('No zone publisher is installed');
   });
 
+  // The two marsh nodes are what makes this a real case rather than a restatement of the list
+  // above. Since game 0.40.1 put the Copper Dig on the Mirefen road, standing at it has two of
+  // the marsh's nodes in range, so a zone filter that did nothing would be indistinguishable
+  // from one that worked until this release.
   it('keeps the nodes of a zone a publisher named', async () => {
     const h = await run({ 'list-length': 20, 'this-zone-only': true }, undefined, { at: ORE_1 });
 
     h.publishZone('eastbrook_vale');
 
-    expect(h.drawn()).toEqual(NEAR_ORE_1);
+    expect(h.drawn()).toEqual(NEAR_ORE_1.filter((id) => !id.includes('mirefen')));
+    expect(h.drawn()).not.toContain('wood_mirefen_4');
   });
 });
 
@@ -1419,7 +1442,7 @@ describe('what a node still teaches you', () => {
       proficiency: { mining: GAIN_STEP * GRAY_STEPS },
     });
 
-    expect(h.tipOf(WOOD_2.id)).toContain('raises your logging by 1');
+    expect(h.tipOf(WOOD_5.id)).toContain('raises your logging by 1');
   });
 });
 

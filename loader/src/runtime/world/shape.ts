@@ -43,6 +43,8 @@ const SHAPE: Record<keyof Entity, FieldSpec> = {
   name: { kind: 'string' },
   level: { kind: 'number' },
   guild: { kind: 'string' },
+  pledgeGuild: { kind: 'string' },
+  guildTier: { kind: 'number' },
   title: { kind: 'string', nullable: true, optional: true },
 
   pos: { kind: 'vec3' },
