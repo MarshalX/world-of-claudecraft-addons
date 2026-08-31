@@ -2,7 +2,7 @@
   "schema": 1,
   "name": "Official Marketplace",
   "maintainer": "MarshalX",
-  "generated": "2026-08-28T20:13:05.000Z",
+  "generated": "2026-08-31T18:48:40.000Z",
   "addons": [
     {
       "id": "cadence",
@@ -567,7 +567,7 @@
     {
       "id": "ledgerline",
       "name": "Ledgerline",
-      "version": "1.7.1",
+      "version": "1.7.2",
       "apiVersion": 1,
       "apiMinor": 7,
       "author": "MarshalX",
@@ -663,7 +663,7 @@
     {
       "id": "longwatch",
       "name": "Longwatch",
-      "version": "1.4.1",
+      "version": "1.4.2",
       "apiVersion": 1,
       "apiMinor": 4,
       "author": "MarshalX",
@@ -741,7 +741,7 @@
     {
       "id": "lorebind",
       "name": "Lorebind",
-      "version": "1.4.1",
+      "version": "1.4.2",
       "apiVersion": 1,
       "apiMinor": 7,
       "author": "MarshalX",
@@ -1020,7 +1020,7 @@
     {
       "id": "trailmark",
       "name": "Trailmark",
-      "version": "1.4.0",
+      "version": "1.4.1",
       "apiVersion": 1,
       "apiMinor": 4,
       "author": "MarshalX",
