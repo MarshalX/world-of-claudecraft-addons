@@ -1,5 +1,5 @@
 {
-  "gameVersion": "0.40.1",
+  "gameVersion": "0.41.0",
   "generatedFrom": [
     "src/sim/data.ts (the ITEMS merge)",
     "src/sim/content/items.ts",
@@ -10,6 +10,7 @@
     "src/sim/content/delves/items.ts",
     "src/sim/content/heroic_vendor.ts",
     "src/sim/content/heroic_loot.ts",
+    "src/sim/content/ignivar_loot.ts",
     "src/sim/content/pvp_honor.ts",
     "src/sim/content/rift/items.ts",
     "src/sim/content/realm.ts",
@@ -25,7 +26,9 @@
     "src/sim/content/farshore.ts",
     "src/sim/content/wildheart.ts",
     "src/sim/content/proving_shore.ts",
-    "src/sim/content/dungeons.ts"
+    "src/sim/content/dungeons.ts",
+    "src/sim/content/ignivar_drops.ts",
+    "src/sim/content/crucible_professions.ts"
   ],
   "fields": "what the game's own item tooltip draws, plus the two prices it does not: id, name and kind always, then quality, slot, armorType, heroicOf, uniqueEquipped, itemLevel, stats, pvpOffenseRating, pvpDefenseRating, spellPower, critRating, hasteRating, hitRating, weapon, blockValue, foodHp, drinkMana, potionHp, potionMana, elixir, bagSlots, requiredLevel, requiredClass, set, soulbound, sellValue and priceHonor wherever the game declares or derives one",
   "items": [
@@ -133,6 +136,49 @@
       "foodHp": 552,
       "requiredLevel": 20,
       "sellValue": 60
+    },
+    {
+      "id": "anvilguard_blade",
+      "name": "Anvilguard Blade",
+      "kind": "weapon",
+      "quality": "epic",
+      "slot": "mainhand",
+      "itemLevel": 35,
+      "stats": {
+        "str": 11,
+        "sta": 14
+      },
+      "critRating": 70,
+      "hitRating": 30,
+      "weapon": {
+        "min": 36,
+        "max": 54,
+        "speed": 2.6
+      },
+      "requiredLevel": 20,
+      "requiredClass": ["warrior", "rogue", "hunter", "shaman", "paladin"],
+      "soulbound": true,
+      "sellValue": 14000
+    },
+    {
+      "id": "anvilstance_sabatons",
+      "name": "Anvilstance Sabatons",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "feet",
+      "armorType": "mail",
+      "itemLevel": 35,
+      "stats": {
+        "str": 7,
+        "sta": 9,
+        "armor": 255
+      },
+      "critRating": 60,
+      "hasteRating": 25,
+      "requiredLevel": 20,
+      "requiredClass": ["warrior", "paladin", "shaman"],
+      "soulbound": true,
+      "sellValue": 10000
     },
     {
       "id": "apprentice_robe",
@@ -266,6 +312,46 @@
       "requiredLevel": 20,
       "soulbound": true,
       "priceHonor": 275
+    },
+    {
+      "id": "ashenbark_treads",
+      "name": "Ashenbark Treads",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "feet",
+      "armorType": "leather",
+      "itemLevel": 35,
+      "stats": {
+        "agi": 7,
+        "sta": 9,
+        "armor": 145
+      },
+      "critRating": 60,
+      "hasteRating": 25,
+      "requiredLevel": 20,
+      "requiredClass": ["druid"],
+      "soulbound": true,
+      "sellValue": 10000
+    },
+    {
+      "id": "ashrunner_boots",
+      "name": "Ashrunner Boots",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "feet",
+      "armorType": "leather",
+      "itemLevel": 35,
+      "stats": {
+        "agi": 11,
+        "sta": 5,
+        "armor": 145
+      },
+      "critRating": 60,
+      "hasteRating": 25,
+      "requiredLevel": 20,
+      "requiredClass": ["rogue", "hunter", "druid"],
+      "soulbound": true,
+      "sellValue": 10000
     },
     {
       "id": "ashstalker_cowl",
@@ -408,6 +494,111 @@
       "priceHonor": 450
     },
     {
+      "id": "ashveil_chest",
+      "name": "Ashveil Tunic",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "chest",
+      "armorType": "leather",
+      "itemLevel": 35,
+      "stats": {
+        "agi": 17,
+        "sta": 8,
+        "armor": 215
+      },
+      "critRating": 60,
+      "hasteRating": 25,
+      "requiredLevel": 20,
+      "requiredClass": ["rogue"],
+      "set": "Ashveil Garb",
+      "soulbound": true,
+      "sellValue": 16000
+    },
+    {
+      "id": "ashveil_gloves",
+      "name": "Ashveil Grips",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "gloves",
+      "armorType": "leather",
+      "itemLevel": 35,
+      "stats": {
+        "agi": 11,
+        "sta": 6,
+        "armor": 150
+      },
+      "critRating": 60,
+      "hasteRating": 25,
+      "requiredLevel": 20,
+      "requiredClass": ["rogue"],
+      "set": "Ashveil Garb",
+      "soulbound": true,
+      "sellValue": 10000
+    },
+    {
+      "id": "ashveil_helmet",
+      "name": "Ashveil Cowl",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "helmet",
+      "armorType": "leather",
+      "itemLevel": 35,
+      "stats": {
+        "agi": 14,
+        "sta": 7,
+        "armor": 185
+      },
+      "critRating": 60,
+      "hasteRating": 25,
+      "requiredLevel": 20,
+      "requiredClass": ["rogue"],
+      "set": "Ashveil Garb",
+      "soulbound": true,
+      "sellValue": 14000
+    },
+    {
+      "id": "ashveil_legs",
+      "name": "Ashveil Breeches",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "legs",
+      "armorType": "leather",
+      "itemLevel": 35,
+      "stats": {
+        "agi": 15,
+        "sta": 7,
+        "armor": 195
+      },
+      "critRating": 60,
+      "hasteRating": 25,
+      "requiredLevel": 20,
+      "requiredClass": ["rogue"],
+      "set": "Ashveil Garb",
+      "soulbound": true,
+      "sellValue": 15000
+    },
+    {
+      "id": "ashveil_shoulder",
+      "name": "Ashveil Spaulders",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "shoulder",
+      "armorType": "leather",
+      "itemLevel": 35,
+      "stats": {
+        "agi": 12,
+        "sta": 6,
+        "armor": 165
+      },
+      "critRating": 60,
+      "hasteRating": 25,
+      "requiredLevel": 20,
+      "requiredClass": ["rogue"],
+      "set": "Ashveil Garb",
+      "soulbound": true,
+      "sellValue": 12000
+    },
+    {
       "id": "ashwood_axe",
       "name": "Ashwood Axe",
       "kind": "tool",
@@ -442,6 +633,22 @@
       "quality": "common",
       "foodHp": 61,
       "sellValue": 6
+    },
+    {
+      "id": "band_of_marked_strikes",
+      "name": "Band of Marked Strikes",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "ring",
+      "itemLevel": 35,
+      "stats": {
+        "str": 8,
+        "agi": 7
+      },
+      "hitRating": 25,
+      "requiredLevel": 20,
+      "soulbound": true,
+      "sellValue": 8000
     },
     {
       "id": "bandit_bandana",
@@ -495,6 +702,111 @@
       "kind": "quest"
     },
     {
+      "id": "benison_dawnweave_chest",
+      "name": "Dawnweave Robe",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "chest",
+      "armorType": "cloth",
+      "itemLevel": 35,
+      "stats": {
+        "int": 13,
+        "spi": 12,
+        "armor": 105
+      },
+      "critRating": 60,
+      "hasteRating": 25,
+      "requiredLevel": 20,
+      "requiredClass": ["priest"],
+      "set": "Benison Dawnweave",
+      "soulbound": true,
+      "sellValue": 16000
+    },
+    {
+      "id": "benison_dawnweave_gloves",
+      "name": "Dawnweave Handwraps",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "gloves",
+      "armorType": "cloth",
+      "itemLevel": 35,
+      "stats": {
+        "int": 9,
+        "spi": 8,
+        "armor": 75
+      },
+      "critRating": 60,
+      "hasteRating": 25,
+      "requiredLevel": 20,
+      "requiredClass": ["priest"],
+      "set": "Benison Dawnweave",
+      "soulbound": true,
+      "sellValue": 10000
+    },
+    {
+      "id": "benison_dawnweave_helmet",
+      "name": "Dawnweave Hood",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "helmet",
+      "armorType": "cloth",
+      "itemLevel": 35,
+      "stats": {
+        "int": 11,
+        "spi": 10,
+        "armor": 90
+      },
+      "critRating": 60,
+      "hasteRating": 25,
+      "requiredLevel": 20,
+      "requiredClass": ["priest"],
+      "set": "Benison Dawnweave",
+      "soulbound": true,
+      "sellValue": 14000
+    },
+    {
+      "id": "benison_dawnweave_legs",
+      "name": "Dawnweave Leggings",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "legs",
+      "armorType": "cloth",
+      "itemLevel": 35,
+      "stats": {
+        "int": 11,
+        "spi": 11,
+        "armor": 95
+      },
+      "critRating": 60,
+      "hasteRating": 25,
+      "requiredLevel": 20,
+      "requiredClass": ["priest"],
+      "set": "Benison Dawnweave",
+      "soulbound": true,
+      "sellValue": 15000
+    },
+    {
+      "id": "benison_dawnweave_shoulder",
+      "name": "Dawnweave Mantle",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "shoulder",
+      "armorType": "cloth",
+      "itemLevel": 35,
+      "stats": {
+        "int": 9,
+        "spi": 9,
+        "armor": 80
+      },
+      "critRating": 60,
+      "hasteRating": 25,
+      "requiredLevel": 20,
+      "requiredClass": ["priest"],
+      "set": "Benison Dawnweave",
+      "soulbound": true,
+      "sellValue": 12000
+    },
+    {
       "id": "blackwater_vanguard_chest",
       "name": "Blackwater Vanguard Chestguard",
       "kind": "armor",
@@ -533,7 +845,7 @@
         "sta": 9,
         "armor": 315
       },
-      "hitRating": 40,
+      "critRating": 40,
       "requiredLevel": 20,
       "requiredClass": ["warrior", "paladin", "shaman"],
       "sellValue": 12000
@@ -640,7 +952,7 @@
       "kind": "weapon",
       "quality": "rare",
       "slot": "mainhand",
-      "itemLevel": 17,
+      "itemLevel": 21,
       "stats": {
         "agi": 7,
         "sta": 3
@@ -944,6 +1256,26 @@
       "sellValue": 2000
     },
     {
+      "id": "bulwark_of_the_inner_crucible",
+      "name": "Bulwark of the Inner Crucible",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "offhand",
+      "armorType": "mail",
+      "itemLevel": 35,
+      "stats": {
+        "str": 8,
+        "sta": 10,
+        "armor": 760
+      },
+      "critRating": 25,
+      "blockValue": 30,
+      "requiredLevel": 20,
+      "requiredClass": ["warrior", "paladin", "shaman"],
+      "soulbound": true,
+      "sellValue": 12000
+    },
+    {
       "id": "bulwark_rusted_pauldrons",
       "name": "Bulwark-Rusted Pauldrons",
       "kind": "armor",
@@ -956,6 +1288,14 @@
       },
       "requiredClass": ["warrior", "paladin", "shaman"],
       "sellValue": 210
+    },
+    {
+      "id": "burlap_reagent_pouch",
+      "name": "Burlap Reagent Pouch",
+      "kind": "bag",
+      "quality": "common",
+      "bagSlots": 8,
+      "sellValue": 250
     },
     {
       "id": "canopy_silk_hank",
@@ -1056,9 +1396,132 @@
       "sellValue": 12000
     },
     {
+      "id": "chronoweave_chest",
+      "name": "Aetherweave Robe",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "chest",
+      "armorType": "cloth",
+      "itemLevel": 35,
+      "stats": {
+        "int": 13,
+        "spi": 12,
+        "armor": 105
+      },
+      "critRating": 25,
+      "hasteRating": 60,
+      "requiredLevel": 20,
+      "requiredClass": ["mage"],
+      "set": "Aetherweave Vestments",
+      "soulbound": true,
+      "sellValue": 16000
+    },
+    {
+      "id": "chronoweave_gloves",
+      "name": "Aetherweave Handwraps",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "gloves",
+      "armorType": "cloth",
+      "itemLevel": 35,
+      "stats": {
+        "int": 9,
+        "spi": 8,
+        "armor": 75
+      },
+      "critRating": 25,
+      "hasteRating": 60,
+      "requiredLevel": 20,
+      "requiredClass": ["mage"],
+      "set": "Aetherweave Vestments",
+      "soulbound": true,
+      "sellValue": 10000
+    },
+    {
+      "id": "chronoweave_helmet",
+      "name": "Aetherweave Hood",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "helmet",
+      "armorType": "cloth",
+      "itemLevel": 35,
+      "stats": {
+        "int": 11,
+        "spi": 10,
+        "armor": 90
+      },
+      "critRating": 25,
+      "hasteRating": 60,
+      "requiredLevel": 20,
+      "requiredClass": ["mage"],
+      "set": "Aetherweave Vestments",
+      "soulbound": true,
+      "sellValue": 14000
+    },
+    {
+      "id": "chronoweave_legs",
+      "name": "Aetherweave Leggings",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "legs",
+      "armorType": "cloth",
+      "itemLevel": 35,
+      "stats": {
+        "int": 11,
+        "spi": 11,
+        "armor": 95
+      },
+      "critRating": 25,
+      "hasteRating": 60,
+      "requiredLevel": 20,
+      "requiredClass": ["mage"],
+      "set": "Aetherweave Vestments",
+      "soulbound": true,
+      "sellValue": 15000
+    },
+    {
+      "id": "chronoweave_shoulder",
+      "name": "Aetherweave Mantle",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "shoulder",
+      "armorType": "cloth",
+      "itemLevel": 35,
+      "stats": {
+        "int": 9,
+        "spi": 9,
+        "armor": 80
+      },
+      "critRating": 25,
+      "hasteRating": 60,
+      "requiredLevel": 20,
+      "requiredClass": ["mage"],
+      "set": "Aetherweave Vestments",
+      "soulbound": true,
+      "sellValue": 12000
+    },
+    {
       "id": "chunk_of_ore",
       "name": "Chunk of Ore",
       "kind": "quest"
+    },
+    {
+      "id": "cinder_of_the_first_design",
+      "name": "Cinder of the First Design",
+      "kind": "held_offhand",
+      "quality": "epic",
+      "slot": "offhand",
+      "itemLevel": 35,
+      "stats": {
+        "int": 12,
+        "spi": 6
+      },
+      "spellPower": 14,
+      "critRating": 25,
+      "requiredLevel": 20,
+      "requiredClass": ["mage", "priest", "warlock", "druid"],
+      "soulbound": true,
+      "sellValue": 12000
     },
     {
       "id": "cinder_sigil_pendant",
@@ -1077,6 +1540,285 @@
       "requiredLevel": 20,
       "soulbound": true,
       "priceHonor": 400
+    },
+    {
+      "id": "cinderbark_chest",
+      "name": "Cinderbark Tunic",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "chest",
+      "armorType": "leather",
+      "itemLevel": 35,
+      "stats": {
+        "str": 6,
+        "agi": 5,
+        "sta": 14,
+        "armor": 215
+      },
+      "critRating": 60,
+      "hasteRating": 25,
+      "requiredLevel": 20,
+      "requiredClass": ["druid"],
+      "set": "Cinderbark Ward",
+      "soulbound": true,
+      "sellValue": 16000
+    },
+    {
+      "id": "cinderbark_cinch",
+      "name": "Cinderbark Cinch",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "waist",
+      "armorType": "leather",
+      "itemLevel": 35,
+      "stats": {
+        "agi": 8,
+        "sta": 9,
+        "armor": 150
+      },
+      "critRating": 25,
+      "hitRating": 60,
+      "requiredLevel": 20,
+      "requiredClass": ["druid"],
+      "soulbound": true,
+      "sellValue": 10000
+    },
+    {
+      "id": "cinderbark_gloves",
+      "name": "Cinderbark Grips",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "gloves",
+      "armorType": "leather",
+      "itemLevel": 35,
+      "stats": {
+        "str": 4,
+        "agi": 4,
+        "sta": 9,
+        "armor": 150
+      },
+      "critRating": 60,
+      "hasteRating": 25,
+      "requiredLevel": 20,
+      "requiredClass": ["druid"],
+      "set": "Cinderbark Ward",
+      "soulbound": true,
+      "sellValue": 10000
+    },
+    {
+      "id": "cinderbark_helmet",
+      "name": "Cinderbark Cowl",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "helmet",
+      "armorType": "leather",
+      "itemLevel": 35,
+      "stats": {
+        "str": 5,
+        "agi": 5,
+        "sta": 11,
+        "armor": 185
+      },
+      "critRating": 60,
+      "hasteRating": 25,
+      "requiredLevel": 20,
+      "requiredClass": ["druid"],
+      "set": "Cinderbark Ward",
+      "soulbound": true,
+      "sellValue": 14000
+    },
+    {
+      "id": "cinderbark_legs",
+      "name": "Cinderbark Breeches",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "legs",
+      "armorType": "leather",
+      "itemLevel": 35,
+      "stats": {
+        "str": 5,
+        "agi": 5,
+        "sta": 12,
+        "armor": 195
+      },
+      "critRating": 60,
+      "hasteRating": 25,
+      "requiredLevel": 20,
+      "requiredClass": ["druid"],
+      "set": "Cinderbark Ward",
+      "soulbound": true,
+      "sellValue": 15000
+    },
+    {
+      "id": "cinderbark_shoulder",
+      "name": "Cinderbark Spaulders",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "shoulder",
+      "armorType": "leather",
+      "itemLevel": 35,
+      "stats": {
+        "str": 4,
+        "agi": 4,
+        "sta": 10,
+        "armor": 165
+      },
+      "critRating": 60,
+      "hasteRating": 25,
+      "requiredLevel": 20,
+      "requiredClass": ["druid"],
+      "set": "Cinderbark Ward",
+      "soulbound": true,
+      "sellValue": 12000
+    },
+    {
+      "id": "cinderfang_chest",
+      "name": "Cinderfang Tunic",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "chest",
+      "armorType": "leather",
+      "itemLevel": 35,
+      "stats": {
+        "agi": 17,
+        "sta": 8,
+        "armor": 215
+      },
+      "critRating": 60,
+      "hasteRating": 25,
+      "requiredLevel": 20,
+      "requiredClass": ["rogue"],
+      "set": "Cinderfang Shroud",
+      "soulbound": true,
+      "sellValue": 16000
+    },
+    {
+      "id": "cinderfang_gloves",
+      "name": "Cinderfang Grips",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "gloves",
+      "armorType": "leather",
+      "itemLevel": 35,
+      "stats": {
+        "agi": 11,
+        "sta": 6,
+        "armor": 150
+      },
+      "critRating": 60,
+      "hasteRating": 25,
+      "requiredLevel": 20,
+      "requiredClass": ["rogue"],
+      "set": "Cinderfang Shroud",
+      "soulbound": true,
+      "sellValue": 10000
+    },
+    {
+      "id": "cinderfang_helmet",
+      "name": "Cinderfang Cowl",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "helmet",
+      "armorType": "leather",
+      "itemLevel": 35,
+      "stats": {
+        "agi": 14,
+        "sta": 7,
+        "armor": 185
+      },
+      "critRating": 60,
+      "hasteRating": 25,
+      "requiredLevel": 20,
+      "requiredClass": ["rogue"],
+      "set": "Cinderfang Shroud",
+      "soulbound": true,
+      "sellValue": 14000
+    },
+    {
+      "id": "cinderfang_kris",
+      "name": "Cinderfang Kris",
+      "kind": "weapon",
+      "quality": "epic",
+      "slot": "mainhand",
+      "itemLevel": 35,
+      "stats": {
+        "agi": 17,
+        "sta": 8
+      },
+      "critRating": 70,
+      "hitRating": 30,
+      "weapon": {
+        "min": 25,
+        "max": 37,
+        "speed": 1.8
+      },
+      "requiredLevel": 20,
+      "requiredClass": ["rogue", "hunter"],
+      "soulbound": true,
+      "sellValue": 14000
+    },
+    {
+      "id": "cinderfang_legs",
+      "name": "Cinderfang Breeches",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "legs",
+      "armorType": "leather",
+      "itemLevel": 35,
+      "stats": {
+        "agi": 15,
+        "sta": 7,
+        "armor": 195
+      },
+      "critRating": 60,
+      "hasteRating": 25,
+      "requiredLevel": 20,
+      "requiredClass": ["rogue"],
+      "set": "Cinderfang Shroud",
+      "soulbound": true,
+      "sellValue": 15000
+    },
+    {
+      "id": "cinderfang_shoulder",
+      "name": "Cinderfang Spaulders",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "shoulder",
+      "armorType": "leather",
+      "itemLevel": 35,
+      "stats": {
+        "agi": 12,
+        "sta": 6,
+        "armor": 165
+      },
+      "critRating": 60,
+      "hasteRating": 25,
+      "requiredLevel": 20,
+      "requiredClass": ["rogue"],
+      "set": "Cinderfang Shroud",
+      "soulbound": true,
+      "sellValue": 12000
+    },
+    {
+      "id": "cindersoaked_slippers",
+      "name": "Cindersoaked Slippers",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "feet",
+      "armorType": "cloth",
+      "itemLevel": 35,
+      "stats": {
+        "int": 11,
+        "spi": 5,
+        "armor": 70
+      },
+      "spellPower": 4,
+      "critRating": 60,
+      "hasteRating": 25,
+      "requiredLevel": 20,
+      "requiredClass": ["mage", "priest", "warlock"],
+      "soulbound": true,
+      "sellValue": 10000
     },
     {
       "id": "cinderwalk_treads",
@@ -1241,6 +1983,128 @@
       "priceHonor": 550
     },
     {
+      "id": "circle_of_cinders",
+      "name": "Circle of Cinders",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "ring",
+      "itemLevel": 35,
+      "stats": {
+        "int": 10,
+        "spi": 5
+      },
+      "spellPower": 4,
+      "hitRating": 25,
+      "requiredLevel": 20,
+      "soulbound": true,
+      "sellValue": 8000
+    },
+    {
+      "id": "coldsight_trackers_chest",
+      "name": "Coldsight Tunic",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "chest",
+      "armorType": "leather",
+      "itemLevel": 35,
+      "stats": {
+        "agi": 17,
+        "sta": 8,
+        "armor": 215
+      },
+      "critRating": 60,
+      "hasteRating": 25,
+      "requiredLevel": 20,
+      "requiredClass": ["hunter"],
+      "set": "Coldsight Trackers",
+      "soulbound": true,
+      "sellValue": 16000
+    },
+    {
+      "id": "coldsight_trackers_gloves",
+      "name": "Coldsight Grips",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "gloves",
+      "armorType": "leather",
+      "itemLevel": 35,
+      "stats": {
+        "agi": 11,
+        "sta": 6,
+        "armor": 150
+      },
+      "critRating": 60,
+      "hasteRating": 25,
+      "requiredLevel": 20,
+      "requiredClass": ["hunter"],
+      "set": "Coldsight Trackers",
+      "soulbound": true,
+      "sellValue": 10000
+    },
+    {
+      "id": "coldsight_trackers_helmet",
+      "name": "Coldsight Cowl",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "helmet",
+      "armorType": "leather",
+      "itemLevel": 35,
+      "stats": {
+        "agi": 14,
+        "sta": 7,
+        "armor": 185
+      },
+      "critRating": 60,
+      "hasteRating": 25,
+      "requiredLevel": 20,
+      "requiredClass": ["hunter"],
+      "set": "Coldsight Trackers",
+      "soulbound": true,
+      "sellValue": 14000
+    },
+    {
+      "id": "coldsight_trackers_legs",
+      "name": "Coldsight Breeches",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "legs",
+      "armorType": "leather",
+      "itemLevel": 35,
+      "stats": {
+        "agi": 15,
+        "sta": 7,
+        "armor": 195
+      },
+      "critRating": 60,
+      "hasteRating": 25,
+      "requiredLevel": 20,
+      "requiredClass": ["hunter"],
+      "set": "Coldsight Trackers",
+      "soulbound": true,
+      "sellValue": 15000
+    },
+    {
+      "id": "coldsight_trackers_shoulder",
+      "name": "Coldsight Spaulders",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "shoulder",
+      "armorType": "leather",
+      "itemLevel": 35,
+      "stats": {
+        "agi": 12,
+        "sta": 6,
+        "armor": 165
+      },
+      "critRating": 60,
+      "hasteRating": 25,
+      "requiredLevel": 20,
+      "requiredClass": ["hunter"],
+      "set": "Coldsight Trackers",
+      "soulbound": true,
+      "sellValue": 12000
+    },
+    {
       "id": "conjured_bread",
       "name": "Conjured Oatcake",
       "kind": "food",
@@ -1370,6 +2234,27 @@
         "armor": 38
       },
       "sellValue": 40
+    },
+    {
+      "id": "cord_of_the_last_flame",
+      "name": "Cord of the Last Flame",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "waist",
+      "armorType": "cloth",
+      "itemLevel": 35,
+      "stats": {
+        "int": 11,
+        "spi": 6,
+        "armor": 75
+      },
+      "spellPower": 4,
+      "critRating": 25,
+      "hitRating": 60,
+      "requiredLevel": 20,
+      "requiredClass": ["mage", "priest", "warlock"],
+      "soulbound": true,
+      "sellValue": 10000
     },
     {
       "id": "corpse_candle_focus",
@@ -1591,7 +2476,7 @@
         "sta": 9,
         "armor": 310
       },
-      "hitRating": 20,
+      "critRating": 20,
       "requiredLevel": 20,
       "requiredClass": ["warrior", "paladin", "shaman"],
       "set": "Bonewrought Regalia",
@@ -1646,7 +2531,7 @@
         "sta": 8,
         "armor": 260
       },
-      "hitRating": 20,
+      "critRating": 20,
       "requiredLevel": 20,
       "requiredClass": ["warrior", "paladin", "shaman"],
       "set": "Bonewrought Regalia",
@@ -1793,6 +2678,111 @@
       "quality": "uncommon"
     },
     {
+      "id": "dawnforged_chest",
+      "name": "Dawnforged Hauberk",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "chest",
+      "armorType": "mail",
+      "itemLevel": 35,
+      "stats": {
+        "int": 13,
+        "spi": 12,
+        "armor": 380
+      },
+      "critRating": 25,
+      "hasteRating": 60,
+      "requiredLevel": 20,
+      "requiredClass": ["paladin"],
+      "set": "Dawnforged Vestments",
+      "soulbound": true,
+      "sellValue": 16000
+    },
+    {
+      "id": "dawnforged_gloves",
+      "name": "Dawnforged Gauntlets",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "gloves",
+      "armorType": "mail",
+      "itemLevel": 35,
+      "stats": {
+        "int": 9,
+        "spi": 8,
+        "armor": 270
+      },
+      "critRating": 25,
+      "hasteRating": 60,
+      "requiredLevel": 20,
+      "requiredClass": ["paladin"],
+      "set": "Dawnforged Vestments",
+      "soulbound": true,
+      "sellValue": 10000
+    },
+    {
+      "id": "dawnforged_helmet",
+      "name": "Dawnforged Helm",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "helmet",
+      "armorType": "mail",
+      "itemLevel": 35,
+      "stats": {
+        "int": 11,
+        "spi": 10,
+        "armor": 325
+      },
+      "critRating": 25,
+      "hasteRating": 60,
+      "requiredLevel": 20,
+      "requiredClass": ["paladin"],
+      "set": "Dawnforged Vestments",
+      "soulbound": true,
+      "sellValue": 14000
+    },
+    {
+      "id": "dawnforged_legs",
+      "name": "Dawnforged Legguards",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "legs",
+      "armorType": "mail",
+      "itemLevel": 35,
+      "stats": {
+        "int": 11,
+        "spi": 11,
+        "armor": 345
+      },
+      "critRating": 25,
+      "hasteRating": 60,
+      "requiredLevel": 20,
+      "requiredClass": ["paladin"],
+      "set": "Dawnforged Vestments",
+      "soulbound": true,
+      "sellValue": 15000
+    },
+    {
+      "id": "dawnforged_shoulder",
+      "name": "Dawnforged Pauldrons",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "shoulder",
+      "armorType": "mail",
+      "itemLevel": 35,
+      "stats": {
+        "int": 9,
+        "spi": 9,
+        "armor": 290
+      },
+      "critRating": 25,
+      "hasteRating": 60,
+      "requiredLevel": 20,
+      "requiredClass": ["paladin"],
+      "set": "Dawnforged Vestments",
+      "soulbound": true,
+      "sellValue": 12000
+    },
+    {
       "id": "dawnhold_posy",
       "name": "Dawnhold Garden Posy",
       "kind": "junk",
@@ -1861,15 +2851,16 @@
       "quality": "legendary",
       "slot": "mainhand",
       "uniqueEquipped": true,
-      "itemLevel": 33,
+      "itemLevel": 49,
       "stats": {
-        "sta": 13,
-        "int": 14,
-        "spi": 17
+        "sta": 19,
+        "int": 21,
+        "spi": 25
       },
+      "spellPower": 25,
       "weapon": {
-        "min": 42,
-        "max": 68,
+        "min": 52,
+        "max": 85,
         "speed": 3.2
       },
       "requiredLevel": 20,
@@ -1970,6 +2961,26 @@
       "kind": "junk",
       "quality": "poor",
       "sellValue": 600
+    },
+    {
+      "id": "dewfall_moccasins",
+      "name": "Dewfall Moccasins",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "feet",
+      "armorType": "leather",
+      "itemLevel": 35,
+      "stats": {
+        "int": 8,
+        "spi": 8,
+        "armor": 145
+      },
+      "critRating": 25,
+      "hasteRating": 60,
+      "requiredLevel": 20,
+      "requiredClass": ["druid"],
+      "soulbound": true,
+      "sellValue": 10000
     },
     {
       "id": "direfang_greatblade",
@@ -2335,12 +3346,21 @@
       "sellValue": 340
     },
     {
+      "id": "duskweave_bag",
+      "name": "Duskweave Bag",
+      "kind": "bag",
+      "quality": "rare",
+      "bagSlots": 12,
+      "requiredLevel": 20,
+      "sellValue": 450
+    },
+    {
       "id": "duskwhisper",
       "name": "Duskwhisper",
       "kind": "weapon",
       "quality": "epic",
       "slot": "mainhand",
-      "itemLevel": 26,
+      "itemLevel": 28,
       "stats": {
         "agi": 12,
         "sta": 6
@@ -2613,6 +3633,26 @@
       "sellValue": 20
     },
     {
+      "id": "ember_wardens_barrier",
+      "name": "Ember Warden's Barrier",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "offhand",
+      "armorType": "mail",
+      "itemLevel": 35,
+      "stats": {
+        "int": 9,
+        "spi": 9,
+        "armor": 760
+      },
+      "hasteRating": 25,
+      "blockValue": 22,
+      "requiredLevel": 20,
+      "requiredClass": ["paladin", "shaman"],
+      "soulbound": true,
+      "sellValue": 12000
+    },
+    {
       "id": "emberfang_warblade",
       "name": "Emberfang Warblade",
       "kind": "weapon",
@@ -2668,6 +3708,111 @@
       "sellValue": 16000
     },
     {
+      "id": "emberfury_chest",
+      "name": "Emberfury Hauberk",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "chest",
+      "armorType": "mail",
+      "itemLevel": 35,
+      "stats": {
+        "str": 17,
+        "sta": 8,
+        "armor": 380
+      },
+      "critRating": 25,
+      "hasteRating": 60,
+      "requiredLevel": 20,
+      "requiredClass": ["warrior"],
+      "set": "Emberfury Harness",
+      "soulbound": true,
+      "sellValue": 16000
+    },
+    {
+      "id": "emberfury_gloves",
+      "name": "Emberfury Gauntlets",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "gloves",
+      "armorType": "mail",
+      "itemLevel": 35,
+      "stats": {
+        "str": 11,
+        "sta": 6,
+        "armor": 270
+      },
+      "critRating": 25,
+      "hasteRating": 60,
+      "requiredLevel": 20,
+      "requiredClass": ["warrior"],
+      "set": "Emberfury Harness",
+      "soulbound": true,
+      "sellValue": 10000
+    },
+    {
+      "id": "emberfury_helmet",
+      "name": "Emberfury Helm",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "helmet",
+      "armorType": "mail",
+      "itemLevel": 35,
+      "stats": {
+        "str": 14,
+        "sta": 7,
+        "armor": 325
+      },
+      "critRating": 25,
+      "hasteRating": 60,
+      "requiredLevel": 20,
+      "requiredClass": ["warrior"],
+      "set": "Emberfury Harness",
+      "soulbound": true,
+      "sellValue": 14000
+    },
+    {
+      "id": "emberfury_legs",
+      "name": "Emberfury Legguards",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "legs",
+      "armorType": "mail",
+      "itemLevel": 35,
+      "stats": {
+        "str": 15,
+        "sta": 7,
+        "armor": 345
+      },
+      "critRating": 25,
+      "hasteRating": 60,
+      "requiredLevel": 20,
+      "requiredClass": ["warrior"],
+      "set": "Emberfury Harness",
+      "soulbound": true,
+      "sellValue": 15000
+    },
+    {
+      "id": "emberfury_shoulder",
+      "name": "Emberfury Pauldrons",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "shoulder",
+      "armorType": "mail",
+      "itemLevel": 35,
+      "stats": {
+        "str": 12,
+        "sta": 6,
+        "armor": 290
+      },
+      "critRating": 25,
+      "hasteRating": 60,
+      "requiredLevel": 20,
+      "requiredClass": ["warrior"],
+      "set": "Emberfury Harness",
+      "soulbound": true,
+      "sellValue": 12000
+    },
+    {
       "id": "emberglass_warstaff",
       "name": "Emberglass Warstaff",
       "kind": "weapon",
@@ -2690,6 +3835,111 @@
       "requiredClass": ["mage", "priest", "warlock", "shaman", "paladin", "druid"],
       "soulbound": true,
       "priceHonor": 1200
+    },
+    {
+      "id": "emberscreed_chest",
+      "name": "Creed of Embers Robe",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "chest",
+      "armorType": "cloth",
+      "itemLevel": 35,
+      "stats": {
+        "int": 13,
+        "spi": 12,
+        "armor": 105
+      },
+      "critRating": 25,
+      "hasteRating": 60,
+      "requiredLevel": 20,
+      "requiredClass": ["priest"],
+      "set": "Creed of Embers Vestments",
+      "soulbound": true,
+      "sellValue": 16000
+    },
+    {
+      "id": "emberscreed_gloves",
+      "name": "Creed of Embers Handwraps",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "gloves",
+      "armorType": "cloth",
+      "itemLevel": 35,
+      "stats": {
+        "int": 9,
+        "spi": 8,
+        "armor": 75
+      },
+      "critRating": 25,
+      "hasteRating": 60,
+      "requiredLevel": 20,
+      "requiredClass": ["priest"],
+      "set": "Creed of Embers Vestments",
+      "soulbound": true,
+      "sellValue": 10000
+    },
+    {
+      "id": "emberscreed_helmet",
+      "name": "Creed of Embers Hood",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "helmet",
+      "armorType": "cloth",
+      "itemLevel": 35,
+      "stats": {
+        "int": 11,
+        "spi": 10,
+        "armor": 90
+      },
+      "critRating": 25,
+      "hasteRating": 60,
+      "requiredLevel": 20,
+      "requiredClass": ["priest"],
+      "set": "Creed of Embers Vestments",
+      "soulbound": true,
+      "sellValue": 14000
+    },
+    {
+      "id": "emberscreed_legs",
+      "name": "Creed of Embers Leggings",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "legs",
+      "armorType": "cloth",
+      "itemLevel": 35,
+      "stats": {
+        "int": 11,
+        "spi": 11,
+        "armor": 95
+      },
+      "critRating": 25,
+      "hasteRating": 60,
+      "requiredLevel": 20,
+      "requiredClass": ["priest"],
+      "set": "Creed of Embers Vestments",
+      "soulbound": true,
+      "sellValue": 15000
+    },
+    {
+      "id": "emberscreed_shoulder",
+      "name": "Creed of Embers Mantle",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "shoulder",
+      "armorType": "cloth",
+      "itemLevel": 35,
+      "stats": {
+        "int": 9,
+        "spi": 9,
+        "armor": 80
+      },
+      "critRating": 25,
+      "hasteRating": 60,
+      "requiredLevel": 20,
+      "requiredClass": ["priest"],
+      "set": "Creed of Embers Vestments",
+      "soulbound": true,
+      "sellValue": 12000
     },
     {
       "id": "emberwing_cinderscale",
@@ -3155,10 +4405,190 @@
       "sellValue": 5
     },
     {
+      "id": "foragers_haversack",
+      "name": "Forager's Haversack",
+      "kind": "bag",
+      "quality": "uncommon",
+      "bagSlots": 12,
+      "sellValue": 200
+    },
+    {
       "id": "forest_pink_armor_plate",
       "name": "Forest Pink",
       "kind": "tool",
       "quality": "uncommon"
+    },
+    {
+      "id": "forgefathers_warhammer",
+      "name": "Forgefather's Warhammer",
+      "kind": "weapon",
+      "quality": "epic",
+      "slot": "mainhand",
+      "itemLevel": 35,
+      "stats": {
+        "str": 17,
+        "sta": 8
+      },
+      "critRating": 70,
+      "hitRating": 30,
+      "weapon": {
+        "min": 36,
+        "max": 54,
+        "speed": 2.6
+      },
+      "requiredLevel": 20,
+      "requiredClass": ["warrior", "rogue", "hunter", "shaman", "paladin"],
+      "soulbound": true,
+      "sellValue": 14000
+    },
+    {
+      "id": "forgefire_spire",
+      "name": "Forgefire Spire",
+      "kind": "weapon",
+      "quality": "epic",
+      "slot": "mainhand",
+      "itemLevel": 35,
+      "stats": {
+        "int": 22,
+        "spi": 11
+      },
+      "spellPower": 34,
+      "critRating": 70,
+      "hitRating": 30,
+      "weapon": {
+        "min": 51,
+        "max": 76,
+        "speed": 3.2
+      },
+      "requiredLevel": 20,
+      "requiredClass": ["mage", "priest", "warlock", "shaman", "paladin", "druid"],
+      "soulbound": true,
+      "sellValue": 16000
+    },
+    {
+      "id": "forgewall_chest",
+      "name": "Forgewall Hauberk",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "chest",
+      "armorType": "mail",
+      "itemLevel": 35,
+      "stats": {
+        "str": 11,
+        "sta": 14,
+        "armor": 380
+      },
+      "critRating": 60,
+      "hasteRating": 25,
+      "requiredLevel": 20,
+      "requiredClass": ["warrior"],
+      "set": "Forgewall Aegis",
+      "soulbound": true,
+      "sellValue": 16000
+    },
+    {
+      "id": "forgewall_girdle",
+      "name": "Forgewall Girdle",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "waist",
+      "armorType": "mail",
+      "itemLevel": 35,
+      "stats": {
+        "str": 8,
+        "sta": 9,
+        "armor": 270
+      },
+      "critRating": 25,
+      "hitRating": 60,
+      "requiredLevel": 20,
+      "requiredClass": ["warrior", "paladin", "shaman"],
+      "soulbound": true,
+      "sellValue": 10000
+    },
+    {
+      "id": "forgewall_gloves",
+      "name": "Forgewall Gauntlets",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "gloves",
+      "armorType": "mail",
+      "itemLevel": 35,
+      "stats": {
+        "str": 8,
+        "sta": 9,
+        "armor": 270
+      },
+      "critRating": 60,
+      "hasteRating": 25,
+      "requiredLevel": 20,
+      "requiredClass": ["warrior"],
+      "set": "Forgewall Aegis",
+      "soulbound": true,
+      "sellValue": 10000
+    },
+    {
+      "id": "forgewall_helmet",
+      "name": "Forgewall Helm",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "helmet",
+      "armorType": "mail",
+      "itemLevel": 35,
+      "stats": {
+        "str": 10,
+        "sta": 11,
+        "armor": 325
+      },
+      "critRating": 60,
+      "hasteRating": 25,
+      "requiredLevel": 20,
+      "requiredClass": ["warrior"],
+      "set": "Forgewall Aegis",
+      "soulbound": true,
+      "sellValue": 14000
+    },
+    {
+      "id": "forgewall_legs",
+      "name": "Forgewall Legguards",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "legs",
+      "armorType": "mail",
+      "itemLevel": 35,
+      "stats": {
+        "str": 10,
+        "sta": 12,
+        "armor": 345
+      },
+      "critRating": 60,
+      "hasteRating": 25,
+      "requiredLevel": 20,
+      "requiredClass": ["warrior"],
+      "set": "Forgewall Aegis",
+      "soulbound": true,
+      "sellValue": 15000
+    },
+    {
+      "id": "forgewall_shoulder",
+      "name": "Forgewall Pauldrons",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "shoulder",
+      "armorType": "mail",
+      "itemLevel": 35,
+      "stats": {
+        "str": 8,
+        "sta": 10,
+        "armor": 290
+      },
+      "critRating": 60,
+      "hasteRating": 25,
+      "requiredLevel": 20,
+      "requiredClass": ["warrior"],
+      "set": "Forgewall Aegis",
+      "soulbound": true,
+      "sellValue": 12000
     },
     {
       "id": "fountain_court_mantle",
@@ -3206,6 +4636,136 @@
       },
       "requiredLevel": 20,
       "sellValue": 2200
+    },
+    {
+      "id": "frostquench_chest",
+      "name": "Frostquench Robe",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "chest",
+      "armorType": "cloth",
+      "itemLevel": 35,
+      "stats": {
+        "int": 17,
+        "spi": 8,
+        "armor": 105
+      },
+      "spellPower": 8,
+      "critRating": 25,
+      "hasteRating": 60,
+      "requiredLevel": 20,
+      "requiredClass": ["mage"],
+      "set": "Frostquench Weave",
+      "soulbound": true,
+      "sellValue": 16000
+    },
+    {
+      "id": "frostquench_gloves",
+      "name": "Frostquench Handwraps",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "gloves",
+      "armorType": "cloth",
+      "itemLevel": 35,
+      "stats": {
+        "int": 11,
+        "spi": 6,
+        "armor": 75
+      },
+      "spellPower": 5,
+      "critRating": 25,
+      "hasteRating": 60,
+      "requiredLevel": 20,
+      "requiredClass": ["mage"],
+      "set": "Frostquench Weave",
+      "soulbound": true,
+      "sellValue": 10000
+    },
+    {
+      "id": "frostquench_helmet",
+      "name": "Frostquench Hood",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "helmet",
+      "armorType": "cloth",
+      "itemLevel": 35,
+      "stats": {
+        "int": 14,
+        "spi": 7,
+        "armor": 90
+      },
+      "spellPower": 7,
+      "critRating": 25,
+      "hasteRating": 60,
+      "requiredLevel": 20,
+      "requiredClass": ["mage"],
+      "set": "Frostquench Weave",
+      "soulbound": true,
+      "sellValue": 14000
+    },
+    {
+      "id": "frostquench_legs",
+      "name": "Frostquench Leggings",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "legs",
+      "armorType": "cloth",
+      "itemLevel": 35,
+      "stats": {
+        "int": 15,
+        "spi": 7,
+        "armor": 95
+      },
+      "spellPower": 7,
+      "critRating": 25,
+      "hasteRating": 60,
+      "requiredLevel": 20,
+      "requiredClass": ["mage"],
+      "set": "Frostquench Weave",
+      "soulbound": true,
+      "sellValue": 15000
+    },
+    {
+      "id": "frostquench_shoulder",
+      "name": "Frostquench Mantle",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "shoulder",
+      "armorType": "cloth",
+      "itemLevel": 35,
+      "stats": {
+        "int": 12,
+        "spi": 6,
+        "armor": 80
+      },
+      "spellPower": 5,
+      "critRating": 25,
+      "hasteRating": 60,
+      "requiredLevel": 20,
+      "requiredClass": ["mage"],
+      "set": "Frostquench Weave",
+      "soulbound": true,
+      "sellValue": 12000
+    },
+    {
+      "id": "furnace_march_greaves",
+      "name": "Furnace March Greaves",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "feet",
+      "armorType": "mail",
+      "itemLevel": 35,
+      "stats": {
+        "str": 11,
+        "sta": 5,
+        "armor": 255
+      },
+      "critRating": 60,
+      "hasteRating": 25,
+      "requiredLevel": 20,
+      "requiredClass": ["warrior", "paladin", "shaman"],
+      "soulbound": true,
+      "sellValue": 10000
     },
     {
       "id": "furyforged_gauntlets",
@@ -3623,6 +5183,116 @@
       "sellValue": 1000
     },
     {
+      "id": "gravebrand_chest",
+      "name": "Gravebrand Robe",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "chest",
+      "armorType": "cloth",
+      "itemLevel": 35,
+      "stats": {
+        "int": 17,
+        "spi": 8,
+        "armor": 105
+      },
+      "spellPower": 8,
+      "critRating": 60,
+      "hasteRating": 25,
+      "requiredLevel": 20,
+      "requiredClass": ["warlock"],
+      "set": "Gravebrand Regalia",
+      "soulbound": true,
+      "sellValue": 16000
+    },
+    {
+      "id": "gravebrand_gloves",
+      "name": "Gravebrand Handwraps",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "gloves",
+      "armorType": "cloth",
+      "itemLevel": 35,
+      "stats": {
+        "int": 11,
+        "spi": 6,
+        "armor": 75
+      },
+      "spellPower": 5,
+      "critRating": 60,
+      "hasteRating": 25,
+      "requiredLevel": 20,
+      "requiredClass": ["warlock"],
+      "set": "Gravebrand Regalia",
+      "soulbound": true,
+      "sellValue": 10000
+    },
+    {
+      "id": "gravebrand_helmet",
+      "name": "Gravebrand Hood",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "helmet",
+      "armorType": "cloth",
+      "itemLevel": 35,
+      "stats": {
+        "int": 14,
+        "spi": 7,
+        "armor": 90
+      },
+      "spellPower": 7,
+      "critRating": 60,
+      "hasteRating": 25,
+      "requiredLevel": 20,
+      "requiredClass": ["warlock"],
+      "set": "Gravebrand Regalia",
+      "soulbound": true,
+      "sellValue": 14000
+    },
+    {
+      "id": "gravebrand_legs",
+      "name": "Gravebrand Leggings",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "legs",
+      "armorType": "cloth",
+      "itemLevel": 35,
+      "stats": {
+        "int": 15,
+        "spi": 7,
+        "armor": 95
+      },
+      "spellPower": 7,
+      "critRating": 60,
+      "hasteRating": 25,
+      "requiredLevel": 20,
+      "requiredClass": ["warlock"],
+      "set": "Gravebrand Regalia",
+      "soulbound": true,
+      "sellValue": 15000
+    },
+    {
+      "id": "gravebrand_shoulder",
+      "name": "Gravebrand Mantle",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "shoulder",
+      "armorType": "cloth",
+      "itemLevel": 35,
+      "stats": {
+        "int": 12,
+        "spi": 6,
+        "armor": 80
+      },
+      "spellPower": 5,
+      "critRating": 60,
+      "hasteRating": 25,
+      "requiredLevel": 20,
+      "requiredClass": ["warlock"],
+      "set": "Gravebrand Regalia",
+      "soulbound": true,
+      "sellValue": 12000
+    },
+    {
       "id": "gravecaller_blade",
       "name": "Gravecaller's Broadblade",
       "kind": "weapon",
@@ -3692,7 +5362,7 @@
         "sta": 6,
         "armor": 224
       },
-      "hitRating": 40,
+      "critRating": 40,
       "requiredLevel": 20,
       "requiredClass": ["warrior", "paladin", "shaman"],
       "sellValue": 9500
@@ -3981,6 +5651,131 @@
       "sellValue": 110
     },
     {
+      "id": "grovespring_chest",
+      "name": "Grovespring Tunic",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "chest",
+      "armorType": "leather",
+      "itemLevel": 35,
+      "stats": {
+        "int": 13,
+        "spi": 12,
+        "armor": 215
+      },
+      "critRating": 25,
+      "hasteRating": 60,
+      "requiredLevel": 20,
+      "requiredClass": ["druid"],
+      "set": "Grovespring Raiment",
+      "soulbound": true,
+      "sellValue": 16000
+    },
+    {
+      "id": "grovespring_gloves",
+      "name": "Grovespring Grips",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "gloves",
+      "armorType": "leather",
+      "itemLevel": 35,
+      "stats": {
+        "int": 9,
+        "spi": 8,
+        "armor": 150
+      },
+      "critRating": 25,
+      "hasteRating": 60,
+      "requiredLevel": 20,
+      "requiredClass": ["druid"],
+      "set": "Grovespring Raiment",
+      "soulbound": true,
+      "sellValue": 10000
+    },
+    {
+      "id": "grovespring_helmet",
+      "name": "Grovespring Cowl",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "helmet",
+      "armorType": "leather",
+      "itemLevel": 35,
+      "stats": {
+        "int": 11,
+        "spi": 10,
+        "armor": 185
+      },
+      "critRating": 25,
+      "hasteRating": 60,
+      "requiredLevel": 20,
+      "requiredClass": ["druid"],
+      "set": "Grovespring Raiment",
+      "soulbound": true,
+      "sellValue": 14000
+    },
+    {
+      "id": "grovespring_legs",
+      "name": "Grovespring Breeches",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "legs",
+      "armorType": "leather",
+      "itemLevel": 35,
+      "stats": {
+        "int": 11,
+        "spi": 11,
+        "armor": 195
+      },
+      "critRating": 25,
+      "hasteRating": 60,
+      "requiredLevel": 20,
+      "requiredClass": ["druid"],
+      "set": "Grovespring Raiment",
+      "soulbound": true,
+      "sellValue": 15000
+    },
+    {
+      "id": "grovespring_shoulder",
+      "name": "Grovespring Spaulders",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "shoulder",
+      "armorType": "leather",
+      "itemLevel": 35,
+      "stats": {
+        "int": 9,
+        "spi": 9,
+        "armor": 165
+      },
+      "critRating": 25,
+      "hasteRating": 60,
+      "requiredLevel": 20,
+      "requiredClass": ["druid"],
+      "set": "Grovespring Raiment",
+      "soulbound": true,
+      "sellValue": 12000
+    },
+    {
+      "id": "grovetender_belt",
+      "name": "Grovetender Belt",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "waist",
+      "armorType": "leather",
+      "itemLevel": 35,
+      "stats": {
+        "int": 9,
+        "spi": 8,
+        "armor": 150
+      },
+      "hasteRating": 25,
+      "hitRating": 60,
+      "requiredLevel": 20,
+      "requiredClass": ["druid"],
+      "soulbound": true,
+      "sellValue": 10000
+    },
+    {
       "id": "grovewardens_grips",
       "name": "Grovewarden's Grips",
       "kind": "armor",
@@ -4048,18 +5843,41 @@
       "sellValue": 32
     },
     {
+      "id": "heart_of_the_end_greatblade",
+      "name": "Heart of the End Greatblade",
+      "kind": "weapon",
+      "quality": "epic",
+      "slot": "mainhand",
+      "itemLevel": 35,
+      "stats": {
+        "str": 22,
+        "sta": 11
+      },
+      "critRating": 70,
+      "hitRating": 30,
+      "weapon": {
+        "min": 55,
+        "max": 83,
+        "speed": 3.5
+      },
+      "requiredLevel": 20,
+      "requiredClass": ["warrior", "hunter", "shaman", "paladin"],
+      "soulbound": true,
+      "sellValue": 16000
+    },
+    {
       "id": "heart_of_the_rift",
       "name": "Heart of the Rift",
       "kind": "armor",
       "quality": "legendary",
       "slot": "neck",
       "uniqueEquipped": true,
-      "itemLevel": 37,
+      "itemLevel": 49,
       "stats": {
-        "str": 6,
-        "agi": 6,
-        "sta": 14,
-        "int": 6
+        "str": 8,
+        "agi": 8,
+        "sta": 18,
+        "int": 8
       },
       "requiredLevel": 20,
       "sellValue": 50000
@@ -4083,6 +5901,22 @@
         "armor": 58
       },
       "sellValue": 900
+    },
+    {
+      "id": "heartspring_amulet",
+      "name": "Heartspring Amulet",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "neck",
+      "itemLevel": 35,
+      "stats": {
+        "int": 8,
+        "spi": 8
+      },
+      "hasteRating": 25,
+      "requiredLevel": 20,
+      "soulbound": true,
+      "sellValue": 8000
     },
     {
       "id": "hedgewick_shears",
@@ -4214,8 +6048,8 @@
         "sta": 11,
         "armor": 310
       },
-      "critRating": 20,
-      "hitRating": 55,
+      "critRating": 55,
+      "hitRating": 20,
       "requiredLevel": 20,
       "requiredClass": ["warrior", "paladin", "shaman"],
       "set": "Bonewrought Regalia",
@@ -4235,8 +6069,8 @@
         "sta": 9,
         "armor": 260
       },
-      "critRating": 20,
-      "hitRating": 55,
+      "critRating": 55,
+      "hitRating": 20,
       "requiredLevel": 20,
       "requiredClass": ["warrior", "paladin", "shaman"],
       "set": "Bonewrought Regalia",
@@ -4250,17 +6084,18 @@
       "slot": "mainhand",
       "heroicOf": "deathless_heartwood",
       "uniqueEquipped": true,
-      "itemLevel": 37,
+      "itemLevel": 53,
       "stats": {
-        "sta": 14,
-        "int": 16,
-        "spi": 19
+        "sta": 19,
+        "int": 21,
+        "spi": 25
       },
+      "spellPower": 25,
       "critRating": 30,
       "hasteRating": 70,
       "weapon": {
-        "min": 43,
-        "max": 70,
+        "min": 52,
+        "max": 85,
         "speed": 3.2
       },
       "requiredLevel": 20,
@@ -4636,7 +6471,7 @@
       "slot": "mainhand",
       "heroicOf": "kingsbane_last_oath",
       "uniqueEquipped": true,
-      "itemLevel": 37,
+      "itemLevel": 53,
       "stats": {
         "str": 17,
         "agi": 17,
@@ -4848,8 +6683,8 @@
         "sta": 8,
         "armor": 190
       },
-      "critRating": 20,
-      "hitRating": 55,
+      "critRating": 55,
+      "hitRating": 20,
       "requiredLevel": 20,
       "requiredClass": ["rogue", "hunter", "druid"],
       "set": "Direfang Pelt",
@@ -4869,8 +6704,8 @@
         "sta": 7,
         "armor": 165
       },
-      "critRating": 20,
-      "hitRating": 55,
+      "critRating": 55,
+      "hitRating": 20,
       "requiredLevel": 20,
       "requiredClass": ["rogue", "hunter", "druid"],
       "set": "Direfang Pelt",
@@ -4925,8 +6760,8 @@
         "int": 13,
         "armor": 105
       },
-      "hasteRating": 20,
-      "hitRating": 55,
+      "critRating": 20,
+      "hasteRating": 55,
       "requiredLevel": 20,
       "requiredClass": ["mage", "priest", "warlock", "druid"],
       "set": "Wraithfire Regalia",
@@ -4946,8 +6781,8 @@
         "int": 10,
         "armor": 92
       },
-      "hasteRating": 20,
-      "hitRating": 55,
+      "critRating": 20,
+      "hasteRating": 55,
       "requiredLevel": 20,
       "requiredClass": ["mage", "priest", "warlock", "druid"],
       "set": "Wraithfire Regalia",
@@ -5358,6 +7193,116 @@
       "sellValue": 2000
     },
     {
+      "id": "hexthread_chest",
+      "name": "Hexthread Robe",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "chest",
+      "armorType": "cloth",
+      "itemLevel": 35,
+      "stats": {
+        "int": 17,
+        "spi": 8,
+        "armor": 105
+      },
+      "spellPower": 8,
+      "critRating": 25,
+      "hasteRating": 60,
+      "requiredLevel": 20,
+      "requiredClass": ["warlock"],
+      "set": "Hexthread Shroud",
+      "soulbound": true,
+      "sellValue": 16000
+    },
+    {
+      "id": "hexthread_gloves",
+      "name": "Hexthread Handwraps",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "gloves",
+      "armorType": "cloth",
+      "itemLevel": 35,
+      "stats": {
+        "int": 11,
+        "spi": 6,
+        "armor": 75
+      },
+      "spellPower": 5,
+      "critRating": 25,
+      "hasteRating": 60,
+      "requiredLevel": 20,
+      "requiredClass": ["warlock"],
+      "set": "Hexthread Shroud",
+      "soulbound": true,
+      "sellValue": 10000
+    },
+    {
+      "id": "hexthread_helmet",
+      "name": "Hexthread Hood",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "helmet",
+      "armorType": "cloth",
+      "itemLevel": 35,
+      "stats": {
+        "int": 14,
+        "spi": 7,
+        "armor": 90
+      },
+      "spellPower": 7,
+      "critRating": 25,
+      "hasteRating": 60,
+      "requiredLevel": 20,
+      "requiredClass": ["warlock"],
+      "set": "Hexthread Shroud",
+      "soulbound": true,
+      "sellValue": 14000
+    },
+    {
+      "id": "hexthread_legs",
+      "name": "Hexthread Leggings",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "legs",
+      "armorType": "cloth",
+      "itemLevel": 35,
+      "stats": {
+        "int": 15,
+        "spi": 7,
+        "armor": 95
+      },
+      "spellPower": 7,
+      "critRating": 25,
+      "hasteRating": 60,
+      "requiredLevel": 20,
+      "requiredClass": ["warlock"],
+      "set": "Hexthread Shroud",
+      "soulbound": true,
+      "sellValue": 15000
+    },
+    {
+      "id": "hexthread_shoulder",
+      "name": "Hexthread Mantle",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "shoulder",
+      "armorType": "cloth",
+      "itemLevel": 35,
+      "stats": {
+        "int": 12,
+        "spi": 6,
+        "armor": 80
+      },
+      "spellPower": 5,
+      "critRating": 25,
+      "hasteRating": 60,
+      "requiredLevel": 20,
+      "requiredClass": ["warlock"],
+      "set": "Hexthread Shroud",
+      "soulbound": true,
+      "sellValue": 12000
+    },
+    {
       "id": "hickory_shortstaff",
       "name": "Hickory Shortstaff",
       "kind": "weapon",
@@ -5572,6 +7517,22 @@
         "speed": 1.8
       },
       "sellValue": 600
+    },
+    {
+      "id": "ignivars_ember_choker",
+      "name": "Ignivar's Ember Choker",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "neck",
+      "itemLevel": 35,
+      "stats": {
+        "str": 8,
+        "agi": 8
+      },
+      "hitRating": 25,
+      "requiredLevel": 20,
+      "soulbound": true,
+      "sellValue": 8000
     },
     {
       "id": "imperial_crimson_armor_plate",
@@ -5823,7 +7784,7 @@
       "quality": "legendary",
       "slot": "mainhand",
       "uniqueEquipped": true,
-      "itemLevel": 33,
+      "itemLevel": 49,
       "stats": {
         "str": 15,
         "agi": 15,
@@ -5890,6 +7851,14 @@
       "requiredLevel": 20,
       "soulbound": true,
       "priceHonor": 275
+    },
+    {
+      "id": "lastflame_core",
+      "name": "Core of the Last Flame",
+      "kind": "junk",
+      "quality": "epic",
+      "requiredLevel": 20,
+      "sellValue": 5000
     },
     {
       "id": "lesser_healing_potion",
@@ -6038,6 +8007,48 @@
         "armor": 44
       },
       "sellValue": 215
+    },
+    {
+      "id": "locket_of_the_last_flame",
+      "name": "Locket of the Last Flame",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "neck",
+      "itemLevel": 35,
+      "stats": {
+        "int": 11,
+        "spi": 5
+      },
+      "spellPower": 4,
+      "critRating": 25,
+      "requiredLevel": 20,
+      "soulbound": true,
+      "sellValue": 8000
+    },
+    {
+      "id": "loombound_reagent_satchel",
+      "name": "Loombound Reagent Satchel",
+      "kind": "bag",
+      "quality": "epic",
+      "bagSlots": 24,
+      "requiredLevel": 20,
+      "sellValue": 1200
+    },
+    {
+      "id": "loop_of_quiet_springs",
+      "name": "Loop of Quiet Springs",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "ring",
+      "itemLevel": 35,
+      "stats": {
+        "int": 8,
+        "spi": 7
+      },
+      "hitRating": 25,
+      "requiredLevel": 20,
+      "soulbound": true,
+      "sellValue": 8000
     },
     {
       "id": "lost_caravan_goods",
@@ -6213,7 +8224,7 @@
       "kind": "weapon",
       "quality": "epic",
       "slot": "mainhand",
-      "itemLevel": 26,
+      "itemLevel": 29,
       "stats": {
         "agi": 13,
         "sta": 5
@@ -6895,6 +8906,137 @@
       "sellValue": 700
     },
     {
+      "id": "moonscorch_chest",
+      "name": "Moonscorch Tunic",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "chest",
+      "armorType": "leather",
+      "itemLevel": 35,
+      "stats": {
+        "int": 17,
+        "spi": 8,
+        "armor": 215
+      },
+      "spellPower": 8,
+      "critRating": 60,
+      "hasteRating": 25,
+      "requiredLevel": 20,
+      "requiredClass": ["druid"],
+      "set": "Moonscorch Raiment",
+      "soulbound": true,
+      "sellValue": 16000
+    },
+    {
+      "id": "moonscorch_gloves",
+      "name": "Moonscorch Grips",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "gloves",
+      "armorType": "leather",
+      "itemLevel": 35,
+      "stats": {
+        "int": 11,
+        "spi": 6,
+        "armor": 150
+      },
+      "spellPower": 5,
+      "critRating": 60,
+      "hasteRating": 25,
+      "requiredLevel": 20,
+      "requiredClass": ["druid"],
+      "set": "Moonscorch Raiment",
+      "soulbound": true,
+      "sellValue": 10000
+    },
+    {
+      "id": "moonscorch_helmet",
+      "name": "Moonscorch Cowl",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "helmet",
+      "armorType": "leather",
+      "itemLevel": 35,
+      "stats": {
+        "int": 14,
+        "spi": 7,
+        "armor": 185
+      },
+      "spellPower": 7,
+      "critRating": 60,
+      "hasteRating": 25,
+      "requiredLevel": 20,
+      "requiredClass": ["druid"],
+      "set": "Moonscorch Raiment",
+      "soulbound": true,
+      "sellValue": 14000
+    },
+    {
+      "id": "moonscorch_legs",
+      "name": "Moonscorch Breeches",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "legs",
+      "armorType": "leather",
+      "itemLevel": 35,
+      "stats": {
+        "int": 15,
+        "spi": 7,
+        "armor": 195
+      },
+      "spellPower": 7,
+      "critRating": 60,
+      "hasteRating": 25,
+      "requiredLevel": 20,
+      "requiredClass": ["druid"],
+      "set": "Moonscorch Raiment",
+      "soulbound": true,
+      "sellValue": 15000
+    },
+    {
+      "id": "moonscorch_shoulder",
+      "name": "Moonscorch Spaulders",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "shoulder",
+      "armorType": "leather",
+      "itemLevel": 35,
+      "stats": {
+        "int": 12,
+        "spi": 6,
+        "armor": 165
+      },
+      "spellPower": 5,
+      "critRating": 60,
+      "hasteRating": 25,
+      "requiredLevel": 20,
+      "requiredClass": ["druid"],
+      "set": "Moonscorch Raiment",
+      "soulbound": true,
+      "sellValue": 12000
+    },
+    {
+      "id": "moonscorch_waistwrap",
+      "name": "Moonscorch Waistwrap",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "waist",
+      "armorType": "leather",
+      "itemLevel": 35,
+      "stats": {
+        "int": 11,
+        "spi": 6,
+        "armor": 150
+      },
+      "spellPower": 4,
+      "critRating": 25,
+      "hitRating": 60,
+      "requiredLevel": 20,
+      "requiredClass": ["druid"],
+      "soulbound": true,
+      "sellValue": 10000
+    },
+    {
       "id": "moonshroud_breastplate",
       "name": "Moonwrack Breastplate",
       "kind": "armor",
@@ -6963,7 +9105,7 @@
         "sta": 10,
         "armor": 335
       },
-      "hitRating": 40,
+      "critRating": 40,
       "requiredLevel": 20,
       "requiredClass": ["warrior", "paladin", "shaman"],
       "sellValue": 14000
@@ -7044,6 +9186,15 @@
       "requiredClass": ["mage", "priest", "warlock", "druid"],
       "set": "Mournweave Raiment",
       "sellValue": 9000
+    },
+    {
+      "id": "necromancers_reagent_satchel",
+      "name": "Necromancer's Reagent Satchel",
+      "kind": "bag",
+      "quality": "rare",
+      "bagSlots": 20,
+      "requiredLevel": 20,
+      "sellValue": 4200
     },
     {
       "id": "necromancers_soulspire_mantle",
@@ -7222,7 +9373,7 @@
         "sta": 7,
         "armor": 190
       },
-      "hitRating": 20,
+      "critRating": 20,
       "requiredLevel": 20,
       "requiredClass": ["rogue", "hunter", "druid"],
       "set": "Direfang Pelt",
@@ -7259,7 +9410,7 @@
         "sta": 6,
         "armor": 165
       },
-      "hitRating": 20,
+      "critRating": 20,
       "requiredLevel": 20,
       "requiredClass": ["rogue", "hunter", "druid"],
       "set": "Direfang Pelt",
@@ -7344,6 +9495,111 @@
       "sellValue": 200
     },
     {
+      "id": "oathpyre_chest",
+      "name": "Oathpyre Hauberk",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "chest",
+      "armorType": "mail",
+      "itemLevel": 35,
+      "stats": {
+        "str": 11,
+        "sta": 14,
+        "armor": 380
+      },
+      "critRating": 60,
+      "hasteRating": 25,
+      "requiredLevel": 20,
+      "requiredClass": ["paladin"],
+      "set": "Oathpyre Bastion",
+      "soulbound": true,
+      "sellValue": 16000
+    },
+    {
+      "id": "oathpyre_gloves",
+      "name": "Oathpyre Gauntlets",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "gloves",
+      "armorType": "mail",
+      "itemLevel": 35,
+      "stats": {
+        "str": 8,
+        "sta": 9,
+        "armor": 270
+      },
+      "critRating": 60,
+      "hasteRating": 25,
+      "requiredLevel": 20,
+      "requiredClass": ["paladin"],
+      "set": "Oathpyre Bastion",
+      "soulbound": true,
+      "sellValue": 10000
+    },
+    {
+      "id": "oathpyre_helmet",
+      "name": "Oathpyre Helm",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "helmet",
+      "armorType": "mail",
+      "itemLevel": 35,
+      "stats": {
+        "str": 10,
+        "sta": 11,
+        "armor": 325
+      },
+      "critRating": 60,
+      "hasteRating": 25,
+      "requiredLevel": 20,
+      "requiredClass": ["paladin"],
+      "set": "Oathpyre Bastion",
+      "soulbound": true,
+      "sellValue": 14000
+    },
+    {
+      "id": "oathpyre_legs",
+      "name": "Oathpyre Legguards",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "legs",
+      "armorType": "mail",
+      "itemLevel": 35,
+      "stats": {
+        "str": 10,
+        "sta": 12,
+        "armor": 345
+      },
+      "critRating": 60,
+      "hasteRating": 25,
+      "requiredLevel": 20,
+      "requiredClass": ["paladin"],
+      "set": "Oathpyre Bastion",
+      "soulbound": true,
+      "sellValue": 15000
+    },
+    {
+      "id": "oathpyre_shoulder",
+      "name": "Oathpyre Pauldrons",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "shoulder",
+      "armorType": "mail",
+      "itemLevel": 35,
+      "stats": {
+        "str": 8,
+        "sta": 10,
+        "armor": 290
+      },
+      "critRating": 60,
+      "hasteRating": 25,
+      "requiredLevel": 20,
+      "requiredClass": ["paladin"],
+      "set": "Oathpyre Bastion",
+      "soulbound": true,
+      "sellValue": 12000
+    },
+    {
       "id": "ogre_bonecharm_staff",
       "name": "Ogre Bonecharm Staff",
       "kind": "weapon",
@@ -7410,6 +9666,23 @@
       "quality": "uncommon"
     },
     {
+      "id": "orb_of_the_last_spring",
+      "name": "Orb of the Last Spring",
+      "kind": "held_offhand",
+      "quality": "epic",
+      "slot": "offhand",
+      "itemLevel": 35,
+      "stats": {
+        "int": 9,
+        "spi": 9
+      },
+      "hasteRating": 25,
+      "requiredLevel": 20,
+      "requiredClass": ["priest", "mage", "druid", "paladin", "shaman"],
+      "soulbound": true,
+      "sellValue": 12000
+    },
+    {
       "id": "orchard_sapbinder_grips",
       "name": "Sapbinder Grips",
       "kind": "armor",
@@ -7463,6 +9736,111 @@
         "armor": 55
       },
       "sellValue": 130
+    },
+    {
+      "id": "packlord_emberhide_chest",
+      "name": "Packlord's Tunic",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "chest",
+      "armorType": "leather",
+      "itemLevel": 35,
+      "stats": {
+        "agi": 17,
+        "sta": 8,
+        "armor": 215
+      },
+      "critRating": 60,
+      "hasteRating": 25,
+      "requiredLevel": 20,
+      "requiredClass": ["hunter"],
+      "set": "Packlord's Emberhide",
+      "soulbound": true,
+      "sellValue": 16000
+    },
+    {
+      "id": "packlord_emberhide_gloves",
+      "name": "Packlord's Grips",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "gloves",
+      "armorType": "leather",
+      "itemLevel": 35,
+      "stats": {
+        "agi": 11,
+        "sta": 6,
+        "armor": 150
+      },
+      "critRating": 60,
+      "hasteRating": 25,
+      "requiredLevel": 20,
+      "requiredClass": ["hunter"],
+      "set": "Packlord's Emberhide",
+      "soulbound": true,
+      "sellValue": 10000
+    },
+    {
+      "id": "packlord_emberhide_helmet",
+      "name": "Packlord's Cowl",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "helmet",
+      "armorType": "leather",
+      "itemLevel": 35,
+      "stats": {
+        "agi": 14,
+        "sta": 7,
+        "armor": 185
+      },
+      "critRating": 60,
+      "hasteRating": 25,
+      "requiredLevel": 20,
+      "requiredClass": ["hunter"],
+      "set": "Packlord's Emberhide",
+      "soulbound": true,
+      "sellValue": 14000
+    },
+    {
+      "id": "packlord_emberhide_legs",
+      "name": "Packlord's Breeches",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "legs",
+      "armorType": "leather",
+      "itemLevel": 35,
+      "stats": {
+        "agi": 15,
+        "sta": 7,
+        "armor": 195
+      },
+      "critRating": 60,
+      "hasteRating": 25,
+      "requiredLevel": 20,
+      "requiredClass": ["hunter"],
+      "set": "Packlord's Emberhide",
+      "soulbound": true,
+      "sellValue": 15000
+    },
+    {
+      "id": "packlord_emberhide_shoulder",
+      "name": "Packlord's Spaulders",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "shoulder",
+      "armorType": "leather",
+      "itemLevel": 35,
+      "stats": {
+        "agi": 12,
+        "sta": 6,
+        "armor": 165
+      },
+      "critRating": 60,
+      "hasteRating": 25,
+      "requiredLevel": 20,
+      "requiredClass": ["hunter"],
+      "set": "Packlord's Emberhide",
+      "soulbound": true,
+      "sellValue": 12000
     },
     {
       "id": "pactbound_vestments",
@@ -7570,6 +9948,22 @@
       "requiredLevel": 16,
       "requiredClass": ["paladin", "shaman"],
       "sellValue": 1700
+    },
+    {
+      "id": "pendant_of_the_first_tempering",
+      "name": "Pendant of the First Tempering",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "neck",
+      "itemLevel": 35,
+      "stats": {
+        "str": 7,
+        "sta": 9
+      },
+      "critRating": 25,
+      "requiredLevel": 20,
+      "soulbound": true,
+      "sellValue": 8000
     },
     {
       "id": "pilgrims_leggings",
@@ -7685,6 +10079,116 @@
       "id": "ps_passing_stone",
       "name": "Passing Stone",
       "kind": "quest"
+    },
+    {
+      "id": "pyroclast_chest",
+      "name": "Pyroclast Robe",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "chest",
+      "armorType": "cloth",
+      "itemLevel": 35,
+      "stats": {
+        "int": 17,
+        "spi": 8,
+        "armor": 105
+      },
+      "spellPower": 8,
+      "critRating": 60,
+      "hasteRating": 25,
+      "requiredLevel": 20,
+      "requiredClass": ["mage"],
+      "set": "Pyroclast Regalia",
+      "soulbound": true,
+      "sellValue": 16000
+    },
+    {
+      "id": "pyroclast_gloves",
+      "name": "Pyroclast Handwraps",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "gloves",
+      "armorType": "cloth",
+      "itemLevel": 35,
+      "stats": {
+        "int": 11,
+        "spi": 6,
+        "armor": 75
+      },
+      "spellPower": 5,
+      "critRating": 60,
+      "hasteRating": 25,
+      "requiredLevel": 20,
+      "requiredClass": ["mage"],
+      "set": "Pyroclast Regalia",
+      "soulbound": true,
+      "sellValue": 10000
+    },
+    {
+      "id": "pyroclast_helmet",
+      "name": "Pyroclast Hood",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "helmet",
+      "armorType": "cloth",
+      "itemLevel": 35,
+      "stats": {
+        "int": 14,
+        "spi": 7,
+        "armor": 90
+      },
+      "spellPower": 7,
+      "critRating": 60,
+      "hasteRating": 25,
+      "requiredLevel": 20,
+      "requiredClass": ["mage"],
+      "set": "Pyroclast Regalia",
+      "soulbound": true,
+      "sellValue": 14000
+    },
+    {
+      "id": "pyroclast_legs",
+      "name": "Pyroclast Leggings",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "legs",
+      "armorType": "cloth",
+      "itemLevel": 35,
+      "stats": {
+        "int": 15,
+        "spi": 7,
+        "armor": 95
+      },
+      "spellPower": 7,
+      "critRating": 60,
+      "hasteRating": 25,
+      "requiredLevel": 20,
+      "requiredClass": ["mage"],
+      "set": "Pyroclast Regalia",
+      "soulbound": true,
+      "sellValue": 15000
+    },
+    {
+      "id": "pyroclast_shoulder",
+      "name": "Pyroclast Mantle",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "shoulder",
+      "armorType": "cloth",
+      "itemLevel": 35,
+      "stats": {
+        "int": 12,
+        "spi": 6,
+        "armor": 80
+      },
+      "spellPower": 5,
+      "critRating": 60,
+      "hasteRating": 25,
+      "requiredLevel": 20,
+      "requiredClass": ["mage"],
+      "set": "Pyroclast Regalia",
+      "soulbound": true,
+      "sellValue": 12000
     },
     {
       "id": "quilted_trousers",
@@ -7863,6 +10367,14 @@
       "kind": "mount",
       "quality": "rare",
       "requiredLevel": 20
+    },
+    {
+      "id": "reins_rickshaw_mount",
+      "name": "Bound Reins: Bonebound Rickshaw",
+      "kind": "mount",
+      "quality": "epic",
+      "requiredLevel": 18,
+      "soulbound": true
     },
     {
       "id": "reins_shadowjump_toad",
@@ -8044,6 +10556,15 @@
       "quality": "rare",
       "requiredLevel": 12,
       "sellValue": 40
+    },
+    {
+      "id": "resonant_weave_bag",
+      "name": "Resonantweave Bag",
+      "kind": "bag",
+      "quality": "epic",
+      "bagSlots": 16,
+      "requiredLevel": 20,
+      "sellValue": 900
     },
     {
       "id": "restless_skull",
@@ -8291,6 +10812,116 @@
       "kind": "quest"
     },
     {
+      "id": "ruincaller_chest",
+      "name": "Ruincaller Robe",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "chest",
+      "armorType": "cloth",
+      "itemLevel": 35,
+      "stats": {
+        "int": 17,
+        "spi": 8,
+        "armor": 105
+      },
+      "spellPower": 8,
+      "critRating": 60,
+      "hasteRating": 25,
+      "requiredLevel": 20,
+      "requiredClass": ["warlock"],
+      "set": "Ruincaller Vestments",
+      "soulbound": true,
+      "sellValue": 16000
+    },
+    {
+      "id": "ruincaller_gloves",
+      "name": "Ruincaller Handwraps",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "gloves",
+      "armorType": "cloth",
+      "itemLevel": 35,
+      "stats": {
+        "int": 11,
+        "spi": 6,
+        "armor": 75
+      },
+      "spellPower": 5,
+      "critRating": 60,
+      "hasteRating": 25,
+      "requiredLevel": 20,
+      "requiredClass": ["warlock"],
+      "set": "Ruincaller Vestments",
+      "soulbound": true,
+      "sellValue": 10000
+    },
+    {
+      "id": "ruincaller_helmet",
+      "name": "Ruincaller Hood",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "helmet",
+      "armorType": "cloth",
+      "itemLevel": 35,
+      "stats": {
+        "int": 14,
+        "spi": 7,
+        "armor": 90
+      },
+      "spellPower": 7,
+      "critRating": 60,
+      "hasteRating": 25,
+      "requiredLevel": 20,
+      "requiredClass": ["warlock"],
+      "set": "Ruincaller Vestments",
+      "soulbound": true,
+      "sellValue": 14000
+    },
+    {
+      "id": "ruincaller_legs",
+      "name": "Ruincaller Leggings",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "legs",
+      "armorType": "cloth",
+      "itemLevel": 35,
+      "stats": {
+        "int": 15,
+        "spi": 7,
+        "armor": 95
+      },
+      "spellPower": 7,
+      "critRating": 60,
+      "hasteRating": 25,
+      "requiredLevel": 20,
+      "requiredClass": ["warlock"],
+      "set": "Ruincaller Vestments",
+      "soulbound": true,
+      "sellValue": 15000
+    },
+    {
+      "id": "ruincaller_shoulder",
+      "name": "Ruincaller Mantle",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "shoulder",
+      "armorType": "cloth",
+      "itemLevel": 35,
+      "stats": {
+        "int": 12,
+        "spi": 6,
+        "armor": 80
+      },
+      "spellPower": 5,
+      "critRating": 60,
+      "hasteRating": 25,
+      "requiredLevel": 20,
+      "requiredClass": ["warlock"],
+      "set": "Ruincaller Vestments",
+      "soulbound": true,
+      "sellValue": 12000
+    },
+    {
       "id": "runed_bone_shard",
       "name": "Runed Bone Shard",
       "kind": "quest"
@@ -8455,6 +11086,27 @@
       "kind": "quest"
     },
     {
+      "id": "scorchgrove_striders",
+      "name": "Scorchgrove Striders",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "feet",
+      "armorType": "leather",
+      "itemLevel": 35,
+      "stats": {
+        "int": 11,
+        "spi": 5,
+        "armor": 145
+      },
+      "spellPower": 4,
+      "critRating": 60,
+      "hasteRating": 25,
+      "requiredLevel": 20,
+      "requiredClass": ["druid"],
+      "soulbound": true,
+      "sellValue": 10000
+    },
+    {
       "id": "scourgehide_carapace",
       "name": "Scourgehide Carapace",
       "kind": "armor",
@@ -8469,6 +11121,22 @@
       "requiredLevel": 20,
       "requiredClass": ["rogue", "hunter", "druid"],
       "sellValue": 14000
+    },
+    {
+      "id": "seal_of_the_forgewall",
+      "name": "Seal of the Forgewall",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "ring",
+      "itemLevel": 35,
+      "stats": {
+        "str": 7,
+        "sta": 8
+      },
+      "hitRating": 25,
+      "requiredLevel": 20,
+      "soulbound": true,
+      "sellValue": 8000
     },
     {
       "id": "seal_of_the_nine_oaths",
@@ -8663,6 +11331,141 @@
       "requiredLevel": 20,
       "requiredClass": ["mage", "priest", "warlock", "druid"],
       "sellValue": 14000
+    },
+    {
+      "id": "sigil_anvil_chest",
+      "name": "Robe Sigil of the Anvil",
+      "kind": "tool",
+      "quality": "epic",
+      "requiredLevel": 20,
+      "requiredClass": ["warrior", "druid", "mage"],
+      "soulbound": true
+    },
+    {
+      "id": "sigil_anvil_gloves",
+      "name": "Grip Sigil of the Anvil",
+      "kind": "tool",
+      "quality": "epic",
+      "requiredLevel": 20,
+      "requiredClass": ["warrior", "druid", "mage"],
+      "soulbound": true
+    },
+    {
+      "id": "sigil_anvil_helmet",
+      "name": "Helm Sigil of the Anvil",
+      "kind": "tool",
+      "quality": "epic",
+      "requiredLevel": 20,
+      "requiredClass": ["warrior", "druid", "mage"],
+      "soulbound": true
+    },
+    {
+      "id": "sigil_anvil_legs",
+      "name": "Legging Sigil of the Anvil",
+      "kind": "tool",
+      "quality": "epic",
+      "requiredLevel": 20,
+      "requiredClass": ["warrior", "druid", "mage"],
+      "soulbound": true
+    },
+    {
+      "id": "sigil_anvil_shoulder",
+      "name": "Mantle Sigil of the Anvil",
+      "kind": "tool",
+      "quality": "epic",
+      "requiredLevel": 20,
+      "requiredClass": ["warrior", "druid", "mage"],
+      "soulbound": true
+    },
+    {
+      "id": "sigil_ember_chest",
+      "name": "Robe Sigil of the Ember",
+      "kind": "tool",
+      "quality": "epic",
+      "requiredLevel": 20,
+      "requiredClass": ["paladin", "hunter", "priest"],
+      "soulbound": true
+    },
+    {
+      "id": "sigil_ember_gloves",
+      "name": "Grip Sigil of the Ember",
+      "kind": "tool",
+      "quality": "epic",
+      "requiredLevel": 20,
+      "requiredClass": ["paladin", "hunter", "priest"],
+      "soulbound": true
+    },
+    {
+      "id": "sigil_ember_helmet",
+      "name": "Helm Sigil of the Ember",
+      "kind": "tool",
+      "quality": "epic",
+      "requiredLevel": 20,
+      "requiredClass": ["paladin", "hunter", "priest"],
+      "soulbound": true
+    },
+    {
+      "id": "sigil_ember_legs",
+      "name": "Legging Sigil of the Ember",
+      "kind": "tool",
+      "quality": "epic",
+      "requiredLevel": 20,
+      "requiredClass": ["paladin", "hunter", "priest"],
+      "soulbound": true
+    },
+    {
+      "id": "sigil_ember_shoulder",
+      "name": "Mantle Sigil of the Ember",
+      "kind": "tool",
+      "quality": "epic",
+      "requiredLevel": 20,
+      "requiredClass": ["paladin", "hunter", "priest"],
+      "soulbound": true
+    },
+    {
+      "id": "sigil_tempest_chest",
+      "name": "Robe Sigil of the Tempest",
+      "kind": "tool",
+      "quality": "epic",
+      "requiredLevel": 20,
+      "requiredClass": ["shaman", "rogue", "warlock"],
+      "soulbound": true
+    },
+    {
+      "id": "sigil_tempest_gloves",
+      "name": "Grip Sigil of the Tempest",
+      "kind": "tool",
+      "quality": "epic",
+      "requiredLevel": 20,
+      "requiredClass": ["shaman", "rogue", "warlock"],
+      "soulbound": true
+    },
+    {
+      "id": "sigil_tempest_helmet",
+      "name": "Helm Sigil of the Tempest",
+      "kind": "tool",
+      "quality": "epic",
+      "requiredLevel": 20,
+      "requiredClass": ["shaman", "rogue", "warlock"],
+      "soulbound": true
+    },
+    {
+      "id": "sigil_tempest_legs",
+      "name": "Legging Sigil of the Tempest",
+      "kind": "tool",
+      "quality": "epic",
+      "requiredLevel": 20,
+      "requiredClass": ["shaman", "rogue", "warlock"],
+      "soulbound": true
+    },
+    {
+      "id": "sigil_tempest_shoulder",
+      "name": "Mantle Sigil of the Tempest",
+      "kind": "tool",
+      "quality": "epic",
+      "requiredLevel": 20,
+      "requiredClass": ["shaman", "rogue", "warlock"],
+      "soulbound": true
     },
     {
       "id": "silk_sash",
@@ -8866,6 +11669,260 @@
       "sellValue": 2000
     },
     {
+      "id": "slagbreaker_chest",
+      "name": "Slagbreaker Hauberk",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "chest",
+      "armorType": "mail",
+      "itemLevel": 35,
+      "stats": {
+        "str": 17,
+        "sta": 8,
+        "armor": 380
+      },
+      "critRating": 60,
+      "hasteRating": 25,
+      "requiredLevel": 20,
+      "requiredClass": ["warrior"],
+      "set": "Slagbreaker Battlegear",
+      "soulbound": true,
+      "sellValue": 16000
+    },
+    {
+      "id": "slagbreaker_gloves",
+      "name": "Slagbreaker Gauntlets",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "gloves",
+      "armorType": "mail",
+      "itemLevel": 35,
+      "stats": {
+        "str": 11,
+        "sta": 6,
+        "armor": 270
+      },
+      "critRating": 60,
+      "hasteRating": 25,
+      "requiredLevel": 20,
+      "requiredClass": ["warrior"],
+      "set": "Slagbreaker Battlegear",
+      "soulbound": true,
+      "sellValue": 10000
+    },
+    {
+      "id": "slagbreaker_helmet",
+      "name": "Slagbreaker Helm",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "helmet",
+      "armorType": "mail",
+      "itemLevel": 35,
+      "stats": {
+        "str": 14,
+        "sta": 7,
+        "armor": 325
+      },
+      "critRating": 60,
+      "hasteRating": 25,
+      "requiredLevel": 20,
+      "requiredClass": ["warrior"],
+      "set": "Slagbreaker Battlegear",
+      "soulbound": true,
+      "sellValue": 14000
+    },
+    {
+      "id": "slagbreaker_legs",
+      "name": "Slagbreaker Legguards",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "legs",
+      "armorType": "mail",
+      "itemLevel": 35,
+      "stats": {
+        "str": 15,
+        "sta": 7,
+        "armor": 345
+      },
+      "critRating": 60,
+      "hasteRating": 25,
+      "requiredLevel": 20,
+      "requiredClass": ["warrior"],
+      "set": "Slagbreaker Battlegear",
+      "soulbound": true,
+      "sellValue": 15000
+    },
+    {
+      "id": "slagbreaker_shoulder",
+      "name": "Slagbreaker Pauldrons",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "shoulder",
+      "armorType": "mail",
+      "itemLevel": 35,
+      "stats": {
+        "str": 12,
+        "sta": 6,
+        "armor": 290
+      },
+      "critRating": 60,
+      "hasteRating": 25,
+      "requiredLevel": 20,
+      "requiredClass": ["warrior"],
+      "set": "Slagbreaker Battlegear",
+      "soulbound": true,
+      "sellValue": 12000
+    },
+    {
+      "id": "slagrender_cleaver",
+      "name": "Slagrender Cleaver",
+      "kind": "weapon",
+      "quality": "epic",
+      "slot": "mainhand",
+      "itemLevel": 35,
+      "stats": {
+        "str": 9,
+        "agi": 9,
+        "sta": 7
+      },
+      "critRating": 70,
+      "hitRating": 30,
+      "weapon": {
+        "min": 33,
+        "max": 50,
+        "speed": 2.4
+      },
+      "requiredLevel": 20,
+      "requiredClass": ["warrior", "rogue", "hunter", "shaman", "paladin"],
+      "soulbound": true,
+      "sellValue": 14000
+    },
+    {
+      "id": "slagsnare_chest",
+      "name": "Slagsnare Tunic",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "chest",
+      "armorType": "leather",
+      "itemLevel": 35,
+      "stats": {
+        "agi": 17,
+        "sta": 8,
+        "armor": 215
+      },
+      "critRating": 25,
+      "hasteRating": 60,
+      "requiredLevel": 20,
+      "requiredClass": ["hunter"],
+      "set": "Slagsnare Trappings",
+      "soulbound": true,
+      "sellValue": 16000
+    },
+    {
+      "id": "slagsnare_gloves",
+      "name": "Slagsnare Grips",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "gloves",
+      "armorType": "leather",
+      "itemLevel": 35,
+      "stats": {
+        "agi": 11,
+        "sta": 6,
+        "armor": 150
+      },
+      "critRating": 25,
+      "hasteRating": 60,
+      "requiredLevel": 20,
+      "requiredClass": ["hunter"],
+      "set": "Slagsnare Trappings",
+      "soulbound": true,
+      "sellValue": 10000
+    },
+    {
+      "id": "slagsnare_helmet",
+      "name": "Slagsnare Cowl",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "helmet",
+      "armorType": "leather",
+      "itemLevel": 35,
+      "stats": {
+        "agi": 14,
+        "sta": 7,
+        "armor": 185
+      },
+      "critRating": 25,
+      "hasteRating": 60,
+      "requiredLevel": 20,
+      "requiredClass": ["hunter"],
+      "set": "Slagsnare Trappings",
+      "soulbound": true,
+      "sellValue": 14000
+    },
+    {
+      "id": "slagsnare_legs",
+      "name": "Slagsnare Breeches",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "legs",
+      "armorType": "leather",
+      "itemLevel": 35,
+      "stats": {
+        "agi": 15,
+        "sta": 7,
+        "armor": 195
+      },
+      "critRating": 25,
+      "hasteRating": 60,
+      "requiredLevel": 20,
+      "requiredClass": ["hunter"],
+      "set": "Slagsnare Trappings",
+      "soulbound": true,
+      "sellValue": 15000
+    },
+    {
+      "id": "slagsnare_shoulder",
+      "name": "Slagsnare Spaulders",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "shoulder",
+      "armorType": "leather",
+      "itemLevel": 35,
+      "stats": {
+        "agi": 12,
+        "sta": 6,
+        "armor": 165
+      },
+      "critRating": 25,
+      "hasteRating": 60,
+      "requiredLevel": 20,
+      "requiredClass": ["hunter"],
+      "set": "Slagsnare Trappings",
+      "soulbound": true,
+      "sellValue": 12000
+    },
+    {
+      "id": "slagstalker_belt",
+      "name": "Slagstalker Belt",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "waist",
+      "armorType": "leather",
+      "itemLevel": 35,
+      "stats": {
+        "agi": 11,
+        "sta": 6,
+        "armor": 150
+      },
+      "critRating": 25,
+      "hitRating": 60,
+      "requiredLevel": 20,
+      "requiredClass": ["rogue", "hunter", "druid"],
+      "soulbound": true,
+      "sellValue": 10000
+    },
+    {
       "id": "sloomtooth_tidefang",
       "name": "Sloomtooth's Tidefang",
       "kind": "weapon",
@@ -8899,6 +11956,111 @@
       "quality": "common",
       "foodHp": 432,
       "sellValue": 60
+    },
+    {
+      "id": "smolderstrike_chest",
+      "name": "Smolderstrike Tunic",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "chest",
+      "armorType": "leather",
+      "itemLevel": 35,
+      "stats": {
+        "agi": 17,
+        "sta": 8,
+        "armor": 215
+      },
+      "critRating": 25,
+      "hasteRating": 60,
+      "requiredLevel": 20,
+      "requiredClass": ["rogue"],
+      "set": "Smolderstrike Leathers",
+      "soulbound": true,
+      "sellValue": 16000
+    },
+    {
+      "id": "smolderstrike_gloves",
+      "name": "Smolderstrike Grips",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "gloves",
+      "armorType": "leather",
+      "itemLevel": 35,
+      "stats": {
+        "agi": 11,
+        "sta": 6,
+        "armor": 150
+      },
+      "critRating": 25,
+      "hasteRating": 60,
+      "requiredLevel": 20,
+      "requiredClass": ["rogue"],
+      "set": "Smolderstrike Leathers",
+      "soulbound": true,
+      "sellValue": 10000
+    },
+    {
+      "id": "smolderstrike_helmet",
+      "name": "Smolderstrike Cowl",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "helmet",
+      "armorType": "leather",
+      "itemLevel": 35,
+      "stats": {
+        "agi": 14,
+        "sta": 7,
+        "armor": 185
+      },
+      "critRating": 25,
+      "hasteRating": 60,
+      "requiredLevel": 20,
+      "requiredClass": ["rogue"],
+      "set": "Smolderstrike Leathers",
+      "soulbound": true,
+      "sellValue": 14000
+    },
+    {
+      "id": "smolderstrike_legs",
+      "name": "Smolderstrike Breeches",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "legs",
+      "armorType": "leather",
+      "itemLevel": 35,
+      "stats": {
+        "agi": 15,
+        "sta": 7,
+        "armor": 195
+      },
+      "critRating": 25,
+      "hasteRating": 60,
+      "requiredLevel": 20,
+      "requiredClass": ["rogue"],
+      "set": "Smolderstrike Leathers",
+      "soulbound": true,
+      "sellValue": 15000
+    },
+    {
+      "id": "smolderstrike_shoulder",
+      "name": "Smolderstrike Spaulders",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "shoulder",
+      "armorType": "leather",
+      "itemLevel": 35,
+      "stats": {
+        "agi": 12,
+        "sta": 6,
+        "armor": 165
+      },
+      "critRating": 25,
+      "hasteRating": 60,
+      "requiredLevel": 20,
+      "requiredClass": ["rogue"],
+      "set": "Smolderstrike Leathers",
+      "soulbound": true,
+      "sellValue": 12000
     },
     {
       "id": "soft_down",
@@ -8975,7 +12137,7 @@
         "int": 11,
         "armor": 105
       },
-      "hitRating": 20,
+      "hasteRating": 20,
       "requiredLevel": 20,
       "requiredClass": ["mage", "priest", "warlock", "druid"],
       "set": "Wraithfire Regalia",
@@ -9012,7 +12174,7 @@
         "int": 9,
         "armor": 92
       },
-      "hitRating": 20,
+      "hasteRating": 20,
       "requiredLevel": 20,
       "requiredClass": ["mage", "priest", "warlock", "druid"],
       "set": "Wraithfire Regalia",
@@ -9103,6 +12265,174 @@
       "sellValue": 6
     },
     {
+      "id": "springbinder_sash",
+      "name": "Springbinder Sash",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "waist",
+      "armorType": "cloth",
+      "itemLevel": 35,
+      "stats": {
+        "int": 9,
+        "spi": 8,
+        "armor": 75
+      },
+      "hasteRating": 25,
+      "hitRating": 60,
+      "requiredLevel": 20,
+      "requiredClass": ["mage", "priest"],
+      "soulbound": true,
+      "sellValue": 10000
+    },
+    {
+      "id": "springmender_chest",
+      "name": "Springmender Hauberk",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "chest",
+      "armorType": "mail",
+      "itemLevel": 35,
+      "stats": {
+        "int": 13,
+        "spi": 12,
+        "armor": 380
+      },
+      "critRating": 25,
+      "hasteRating": 60,
+      "requiredLevel": 20,
+      "requiredClass": ["shaman"],
+      "set": "Springmender Scale",
+      "soulbound": true,
+      "sellValue": 16000
+    },
+    {
+      "id": "springmender_gloves",
+      "name": "Springmender Gauntlets",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "gloves",
+      "armorType": "mail",
+      "itemLevel": 35,
+      "stats": {
+        "int": 9,
+        "spi": 8,
+        "armor": 270
+      },
+      "critRating": 25,
+      "hasteRating": 60,
+      "requiredLevel": 20,
+      "requiredClass": ["shaman"],
+      "set": "Springmender Scale",
+      "soulbound": true,
+      "sellValue": 10000
+    },
+    {
+      "id": "springmender_helmet",
+      "name": "Springmender Helm",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "helmet",
+      "armorType": "mail",
+      "itemLevel": 35,
+      "stats": {
+        "int": 11,
+        "spi": 10,
+        "armor": 325
+      },
+      "critRating": 25,
+      "hasteRating": 60,
+      "requiredLevel": 20,
+      "requiredClass": ["shaman"],
+      "set": "Springmender Scale",
+      "soulbound": true,
+      "sellValue": 14000
+    },
+    {
+      "id": "springmender_legs",
+      "name": "Springmender Legguards",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "legs",
+      "armorType": "mail",
+      "itemLevel": 35,
+      "stats": {
+        "int": 11,
+        "spi": 11,
+        "armor": 345
+      },
+      "critRating": 25,
+      "hasteRating": 60,
+      "requiredLevel": 20,
+      "requiredClass": ["shaman"],
+      "set": "Springmender Scale",
+      "soulbound": true,
+      "sellValue": 15000
+    },
+    {
+      "id": "springmender_shoulder",
+      "name": "Springmender Pauldrons",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "shoulder",
+      "armorType": "mail",
+      "itemLevel": 35,
+      "stats": {
+        "int": 9,
+        "spi": 9,
+        "armor": 290
+      },
+      "critRating": 25,
+      "hasteRating": 60,
+      "requiredLevel": 20,
+      "requiredClass": ["shaman"],
+      "set": "Springmender Scale",
+      "soulbound": true,
+      "sellValue": 12000
+    },
+    {
+      "id": "springtouched_crozier",
+      "name": "Springtouched Crozier",
+      "kind": "weapon",
+      "quality": "epic",
+      "slot": "mainhand",
+      "itemLevel": 35,
+      "stats": {
+        "int": 13,
+        "spi": 12
+      },
+      "hasteRating": 70,
+      "hitRating": 30,
+      "weapon": {
+        "min": 33,
+        "max": 50,
+        "speed": 2.4
+      },
+      "requiredLevel": 20,
+      "requiredClass": ["mage", "priest", "warlock", "shaman", "paladin", "druid"],
+      "soulbound": true,
+      "sellValue": 14000
+    },
+    {
+      "id": "springwarden_sabatons",
+      "name": "Springwarden Sabatons",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "feet",
+      "armorType": "mail",
+      "itemLevel": 35,
+      "stats": {
+        "int": 8,
+        "spi": 8,
+        "armor": 255
+      },
+      "critRating": 25,
+      "hasteRating": 60,
+      "requiredLevel": 20,
+      "requiredClass": ["paladin", "shaman"],
+      "soulbound": true,
+      "sellValue": 10000
+    },
+    {
       "id": "sprung_trap",
       "name": "Sprung Fen Trap",
       "kind": "quest"
@@ -9145,6 +12475,29 @@
       "requiredLevel": 20,
       "requiredClass": ["mage", "priest", "warlock", "shaman", "paladin", "druid"],
       "sellValue": 8000
+    },
+    {
+      "id": "staff_of_the_last_spring",
+      "name": "Staff of the Last Spring",
+      "kind": "weapon",
+      "quality": "epic",
+      "slot": "mainhand",
+      "itemLevel": 35,
+      "stats": {
+        "int": 17,
+        "spi": 16
+      },
+      "hasteRating": 70,
+      "hitRating": 30,
+      "weapon": {
+        "min": 51,
+        "max": 76,
+        "speed": 3.2
+      },
+      "requiredLevel": 20,
+      "requiredClass": ["mage", "priest", "warlock", "shaman", "paladin", "druid"],
+      "soulbound": true,
+      "sellValue": 16000
     },
     {
       "id": "staff_of_velkhar",
@@ -9195,6 +12548,131 @@
       "name": "Steel Orange",
       "kind": "tool",
       "quality": "uncommon"
+    },
+    {
+      "id": "steps_of_quiet_water",
+      "name": "Steps of Quiet Water",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "feet",
+      "armorType": "cloth",
+      "itemLevel": 35,
+      "stats": {
+        "int": 8,
+        "spi": 8,
+        "armor": 70
+      },
+      "critRating": 25,
+      "hasteRating": 60,
+      "requiredLevel": 20,
+      "requiredClass": ["mage", "priest"],
+      "soulbound": true,
+      "sellValue": 10000
+    },
+    {
+      "id": "stonehearth_chest",
+      "name": "Stonehearth Hauberk",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "chest",
+      "armorType": "mail",
+      "itemLevel": 35,
+      "stats": {
+        "str": 11,
+        "sta": 14,
+        "armor": 380
+      },
+      "critRating": 60,
+      "hasteRating": 25,
+      "requiredLevel": 20,
+      "requiredClass": ["shaman"],
+      "set": "Stonehearth Bastion",
+      "soulbound": true,
+      "sellValue": 16000
+    },
+    {
+      "id": "stonehearth_gloves",
+      "name": "Stonehearth Gauntlets",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "gloves",
+      "armorType": "mail",
+      "itemLevel": 35,
+      "stats": {
+        "str": 8,
+        "sta": 9,
+        "armor": 270
+      },
+      "critRating": 60,
+      "hasteRating": 25,
+      "requiredLevel": 20,
+      "requiredClass": ["shaman"],
+      "set": "Stonehearth Bastion",
+      "soulbound": true,
+      "sellValue": 10000
+    },
+    {
+      "id": "stonehearth_helmet",
+      "name": "Stonehearth Helm",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "helmet",
+      "armorType": "mail",
+      "itemLevel": 35,
+      "stats": {
+        "str": 10,
+        "sta": 11,
+        "armor": 325
+      },
+      "critRating": 60,
+      "hasteRating": 25,
+      "requiredLevel": 20,
+      "requiredClass": ["shaman"],
+      "set": "Stonehearth Bastion",
+      "soulbound": true,
+      "sellValue": 14000
+    },
+    {
+      "id": "stonehearth_legs",
+      "name": "Stonehearth Legguards",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "legs",
+      "armorType": "mail",
+      "itemLevel": 35,
+      "stats": {
+        "str": 10,
+        "sta": 12,
+        "armor": 345
+      },
+      "critRating": 60,
+      "hasteRating": 25,
+      "requiredLevel": 20,
+      "requiredClass": ["shaman"],
+      "set": "Stonehearth Bastion",
+      "soulbound": true,
+      "sellValue": 15000
+    },
+    {
+      "id": "stonehearth_shoulder",
+      "name": "Stonehearth Pauldrons",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "shoulder",
+      "armorType": "mail",
+      "itemLevel": 35,
+      "stats": {
+        "str": 8,
+        "sta": 10,
+        "armor": 290
+      },
+      "critRating": 60,
+      "hasteRating": 25,
+      "requiredLevel": 20,
+      "requiredClass": ["shaman"],
+      "set": "Stonehearth Bastion",
+      "soulbound": true,
+      "sellValue": 12000
     },
     {
       "id": "storm_core",
@@ -9477,6 +12955,137 @@
         "armor": 50
       },
       "sellValue": 460
+    },
+    {
+      "id": "stormkindled_chain",
+      "name": "Stormkindled Chain",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "waist",
+      "armorType": "mail",
+      "itemLevel": 35,
+      "stats": {
+        "int": 11,
+        "spi": 6,
+        "armor": 270
+      },
+      "spellPower": 4,
+      "critRating": 25,
+      "hitRating": 60,
+      "requiredLevel": 20,
+      "requiredClass": ["shaman"],
+      "soulbound": true,
+      "sellValue": 10000
+    },
+    {
+      "id": "stormkindled_chest",
+      "name": "Stormkindled Hauberk",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "chest",
+      "armorType": "mail",
+      "itemLevel": 35,
+      "stats": {
+        "int": 17,
+        "spi": 8,
+        "armor": 380
+      },
+      "spellPower": 8,
+      "critRating": 60,
+      "hasteRating": 25,
+      "requiredLevel": 20,
+      "requiredClass": ["shaman"],
+      "set": "Stormkindled Regalia",
+      "soulbound": true,
+      "sellValue": 16000
+    },
+    {
+      "id": "stormkindled_gloves",
+      "name": "Stormkindled Gauntlets",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "gloves",
+      "armorType": "mail",
+      "itemLevel": 35,
+      "stats": {
+        "int": 11,
+        "spi": 6,
+        "armor": 270
+      },
+      "spellPower": 5,
+      "critRating": 60,
+      "hasteRating": 25,
+      "requiredLevel": 20,
+      "requiredClass": ["shaman"],
+      "set": "Stormkindled Regalia",
+      "soulbound": true,
+      "sellValue": 10000
+    },
+    {
+      "id": "stormkindled_helmet",
+      "name": "Stormkindled Helm",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "helmet",
+      "armorType": "mail",
+      "itemLevel": 35,
+      "stats": {
+        "int": 14,
+        "spi": 7,
+        "armor": 325
+      },
+      "spellPower": 7,
+      "critRating": 60,
+      "hasteRating": 25,
+      "requiredLevel": 20,
+      "requiredClass": ["shaman"],
+      "set": "Stormkindled Regalia",
+      "soulbound": true,
+      "sellValue": 14000
+    },
+    {
+      "id": "stormkindled_legs",
+      "name": "Stormkindled Legguards",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "legs",
+      "armorType": "mail",
+      "itemLevel": 35,
+      "stats": {
+        "int": 15,
+        "spi": 7,
+        "armor": 345
+      },
+      "spellPower": 7,
+      "critRating": 60,
+      "hasteRating": 25,
+      "requiredLevel": 20,
+      "requiredClass": ["shaman"],
+      "set": "Stormkindled Regalia",
+      "soulbound": true,
+      "sellValue": 15000
+    },
+    {
+      "id": "stormkindled_shoulder",
+      "name": "Stormkindled Pauldrons",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "shoulder",
+      "armorType": "mail",
+      "itemLevel": 35,
+      "stats": {
+        "int": 12,
+        "spi": 6,
+        "armor": 290
+      },
+      "spellPower": 5,
+      "critRating": 60,
+      "hasteRating": 25,
+      "requiredLevel": 20,
+      "requiredClass": ["shaman"],
+      "set": "Stormkindled Regalia",
+      "soulbound": true,
+      "sellValue": 12000
     },
     {
       "id": "stormreel_fishing_rod",
@@ -9784,7 +13393,7 @@
         "str": 6,
         "agi": 6
       },
-      "hitRating": 25,
+      "hasteRating": 25,
       "requiredLevel": 20,
       "sellValue": 6000
     },
@@ -10093,6 +13702,27 @@
       "sellValue": 2100
     },
     {
+      "id": "thundershock_treads",
+      "name": "Thundershock Treads",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "feet",
+      "armorType": "mail",
+      "itemLevel": 35,
+      "stats": {
+        "int": 11,
+        "spi": 5,
+        "armor": 255
+      },
+      "spellPower": 4,
+      "critRating": 60,
+      "hasteRating": 25,
+      "requiredLevel": 20,
+      "requiredClass": ["shaman"],
+      "soulbound": true,
+      "sellValue": 10000
+    },
+    {
       "id": "thunderward_legguards",
       "name": "Thunderward Legguards",
       "kind": "armor",
@@ -10107,6 +13737,26 @@
       },
       "requiredLevel": 17,
       "sellValue": 2000
+    },
+    {
+      "id": "tidebinder_links",
+      "name": "Tidebinder Links",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "waist",
+      "armorType": "mail",
+      "itemLevel": 35,
+      "stats": {
+        "int": 9,
+        "spi": 8,
+        "armor": 270
+      },
+      "hasteRating": 25,
+      "hitRating": 60,
+      "requiredLevel": 20,
+      "requiredClass": ["paladin", "shaman"],
+      "soulbound": true,
+      "sellValue": 10000
     },
     {
       "id": "tidebound_spaulders",
@@ -10275,7 +13925,7 @@
         "sta": 6,
         "armor": 212
       },
-      "hitRating": 40,
+      "critRating": 40,
       "requiredLevel": 20,
       "requiredClass": ["warrior", "paladin", "shaman"],
       "sellValue": 9500
@@ -10536,6 +14186,47 @@
       "requiredLevel": 18
     },
     {
+      "id": "varkhul_emberward",
+      "name": "Emberward, Bulwark of Varkhul",
+      "kind": "armor",
+      "quality": "legendary",
+      "slot": "offhand",
+      "armorType": "mail",
+      "uniqueEquipped": true,
+      "itemLevel": 55,
+      "stats": {
+        "str": 23,
+        "sta": 32,
+        "armor": 1584
+      },
+      "blockValue": 70,
+      "requiredLevel": 20,
+      "requiredClass": ["warrior", "paladin", "shaman"],
+      "sellValue": 20000
+    },
+    {
+      "id": "varkhul_forgebreaker",
+      "name": "Forgebreaker, Engine of Varkhul",
+      "kind": "weapon",
+      "quality": "legendary",
+      "slot": "mainhand",
+      "uniqueEquipped": true,
+      "itemLevel": 55,
+      "stats": {
+        "str": 44,
+        "agi": 19,
+        "sta": 32
+      },
+      "weapon": {
+        "min": 77,
+        "max": 115,
+        "speed": 3.6
+      },
+      "requiredLevel": 20,
+      "requiredClass": ["warrior", "paladin", "shaman", "druid"],
+      "sellValue": 26000
+    },
+    {
       "id": "varric_shadow_cowl",
       "name": "Varric's Shadow Cowl",
       "kind": "armor",
@@ -10658,6 +14349,116 @@
       "sellValue": 880
     },
     {
+      "id": "vesperash_chest",
+      "name": "Vesperash Robe",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "chest",
+      "armorType": "cloth",
+      "itemLevel": 35,
+      "stats": {
+        "int": 17,
+        "spi": 8,
+        "armor": 105
+      },
+      "spellPower": 8,
+      "critRating": 60,
+      "hasteRating": 25,
+      "requiredLevel": 20,
+      "requiredClass": ["priest"],
+      "set": "Vesperash Shroud",
+      "soulbound": true,
+      "sellValue": 16000
+    },
+    {
+      "id": "vesperash_gloves",
+      "name": "Vesperash Handwraps",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "gloves",
+      "armorType": "cloth",
+      "itemLevel": 35,
+      "stats": {
+        "int": 11,
+        "spi": 6,
+        "armor": 75
+      },
+      "spellPower": 5,
+      "critRating": 60,
+      "hasteRating": 25,
+      "requiredLevel": 20,
+      "requiredClass": ["priest"],
+      "set": "Vesperash Shroud",
+      "soulbound": true,
+      "sellValue": 10000
+    },
+    {
+      "id": "vesperash_helmet",
+      "name": "Vesperash Hood",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "helmet",
+      "armorType": "cloth",
+      "itemLevel": 35,
+      "stats": {
+        "int": 14,
+        "spi": 7,
+        "armor": 90
+      },
+      "spellPower": 7,
+      "critRating": 60,
+      "hasteRating": 25,
+      "requiredLevel": 20,
+      "requiredClass": ["priest"],
+      "set": "Vesperash Shroud",
+      "soulbound": true,
+      "sellValue": 14000
+    },
+    {
+      "id": "vesperash_legs",
+      "name": "Vesperash Leggings",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "legs",
+      "armorType": "cloth",
+      "itemLevel": 35,
+      "stats": {
+        "int": 15,
+        "spi": 7,
+        "armor": 95
+      },
+      "spellPower": 7,
+      "critRating": 60,
+      "hasteRating": 25,
+      "requiredLevel": 20,
+      "requiredClass": ["priest"],
+      "set": "Vesperash Shroud",
+      "soulbound": true,
+      "sellValue": 15000
+    },
+    {
+      "id": "vesperash_shoulder",
+      "name": "Vesperash Mantle",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "shoulder",
+      "armorType": "cloth",
+      "itemLevel": 35,
+      "stats": {
+        "int": 12,
+        "spi": 6,
+        "armor": 80
+      },
+      "spellPower": 5,
+      "critRating": 60,
+      "hasteRating": 25,
+      "requiredLevel": 20,
+      "requiredClass": ["priest"],
+      "set": "Vesperash Shroud",
+      "soulbound": true,
+      "sellValue": 12000
+    },
+    {
       "id": "vestments_of_the_waking_grove",
       "name": "Vestments of the Waking Grove",
       "kind": "armor",
@@ -10719,12 +14520,13 @@
       "quality": "legendary",
       "slot": "mainhand",
       "uniqueEquipped": true,
-      "itemLevel": 37,
+      "itemLevel": 49,
       "stats": {
-        "sta": 13,
-        "int": 19,
-        "spi": 17
+        "sta": 17,
+        "int": 25,
+        "spi": 23
       },
+      "spellPower": 25,
       "weapon": {
         "min": 15,
         "max": 25,
@@ -10784,6 +14586,30 @@
         "armor": 28
       },
       "sellValue": 150
+    },
+    {
+      "id": "wand_of_quenched_sparks",
+      "name": "Wand of Quenched Sparks",
+      "kind": "weapon",
+      "quality": "epic",
+      "slot": "mainhand",
+      "itemLevel": 35,
+      "stats": {
+        "int": 17,
+        "spi": 8
+      },
+      "spellPower": 20,
+      "critRating": 70,
+      "hitRating": 30,
+      "weapon": {
+        "min": 21,
+        "max": 31,
+        "speed": 1.5
+      },
+      "requiredLevel": 20,
+      "requiredClass": ["mage", "priest", "warlock", "shaman", "paladin", "druid"],
+      "soulbound": true,
+      "sellValue": 12000
     },
     {
       "id": "wanderers_chestguard",
@@ -10851,9 +14677,143 @@
       "sellValue": 440
     },
     {
+      "id": "warforged_waistguard",
+      "name": "Warforged Waistguard",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "waist",
+      "armorType": "mail",
+      "itemLevel": 35,
+      "stats": {
+        "str": 11,
+        "sta": 6,
+        "armor": 270
+      },
+      "critRating": 25,
+      "hitRating": 60,
+      "requiredLevel": 20,
+      "requiredClass": ["warrior", "paladin", "shaman"],
+      "soulbound": true,
+      "sellValue": 10000
+    },
+    {
+      "id": "warspirit_emberscale_chest",
+      "name": "Emberscale Hauberk",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "chest",
+      "armorType": "mail",
+      "itemLevel": 35,
+      "stats": {
+        "str": 17,
+        "sta": 8,
+        "armor": 380
+      },
+      "critRating": 25,
+      "hasteRating": 60,
+      "requiredLevel": 20,
+      "requiredClass": ["shaman"],
+      "set": "Warspirit Emberscale",
+      "soulbound": true,
+      "sellValue": 16000
+    },
+    {
+      "id": "warspirit_emberscale_gloves",
+      "name": "Emberscale Gauntlets",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "gloves",
+      "armorType": "mail",
+      "itemLevel": 35,
+      "stats": {
+        "str": 11,
+        "sta": 6,
+        "armor": 270
+      },
+      "critRating": 25,
+      "hasteRating": 60,
+      "requiredLevel": 20,
+      "requiredClass": ["shaman"],
+      "set": "Warspirit Emberscale",
+      "soulbound": true,
+      "sellValue": 10000
+    },
+    {
+      "id": "warspirit_emberscale_helmet",
+      "name": "Emberscale Helm",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "helmet",
+      "armorType": "mail",
+      "itemLevel": 35,
+      "stats": {
+        "str": 14,
+        "sta": 7,
+        "armor": 325
+      },
+      "critRating": 25,
+      "hasteRating": 60,
+      "requiredLevel": 20,
+      "requiredClass": ["shaman"],
+      "set": "Warspirit Emberscale",
+      "soulbound": true,
+      "sellValue": 14000
+    },
+    {
+      "id": "warspirit_emberscale_legs",
+      "name": "Emberscale Legguards",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "legs",
+      "armorType": "mail",
+      "itemLevel": 35,
+      "stats": {
+        "str": 15,
+        "sta": 7,
+        "armor": 345
+      },
+      "critRating": 25,
+      "hasteRating": 60,
+      "requiredLevel": 20,
+      "requiredClass": ["shaman"],
+      "set": "Warspirit Emberscale",
+      "soulbound": true,
+      "sellValue": 15000
+    },
+    {
+      "id": "warspirit_emberscale_shoulder",
+      "name": "Emberscale Pauldrons",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "shoulder",
+      "armorType": "mail",
+      "itemLevel": 35,
+      "stats": {
+        "str": 12,
+        "sta": 6,
+        "armor": 290
+      },
+      "critRating": 25,
+      "hasteRating": 60,
+      "requiredLevel": 20,
+      "requiredClass": ["shaman"],
+      "set": "Warspirit Emberscale",
+      "soulbound": true,
+      "sellValue": 12000
+    },
+    {
       "id": "waterlogged_idol",
       "name": "Waterlogged Idol",
       "kind": "quest"
+    },
+    {
+      "id": "wayfarers_backpack",
+      "name": "Wayfarer's Backpack",
+      "kind": "bag",
+      "quality": "rare",
+      "bagSlots": 16,
+      "requiredLevel": 17,
+      "sellValue": 3800
     },
     {
       "id": "wayfarers_hood",
@@ -10956,6 +14916,111 @@
       "id": "widowsilk_skein",
       "name": "Widowsilk Skein",
       "kind": "quest"
+    },
+    {
+      "id": "wildfang_emberhide_chest",
+      "name": "Wildfang Tunic",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "chest",
+      "armorType": "leather",
+      "itemLevel": 35,
+      "stats": {
+        "str": 17,
+        "sta": 8,
+        "armor": 215
+      },
+      "critRating": 60,
+      "hasteRating": 25,
+      "requiredLevel": 20,
+      "requiredClass": ["druid"],
+      "set": "Wildfang Emberhide",
+      "soulbound": true,
+      "sellValue": 16000
+    },
+    {
+      "id": "wildfang_emberhide_gloves",
+      "name": "Wildfang Grips",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "gloves",
+      "armorType": "leather",
+      "itemLevel": 35,
+      "stats": {
+        "str": 11,
+        "sta": 6,
+        "armor": 150
+      },
+      "critRating": 60,
+      "hasteRating": 25,
+      "requiredLevel": 20,
+      "requiredClass": ["druid"],
+      "set": "Wildfang Emberhide",
+      "soulbound": true,
+      "sellValue": 10000
+    },
+    {
+      "id": "wildfang_emberhide_helmet",
+      "name": "Wildfang Cowl",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "helmet",
+      "armorType": "leather",
+      "itemLevel": 35,
+      "stats": {
+        "str": 14,
+        "sta": 7,
+        "armor": 185
+      },
+      "critRating": 60,
+      "hasteRating": 25,
+      "requiredLevel": 20,
+      "requiredClass": ["druid"],
+      "set": "Wildfang Emberhide",
+      "soulbound": true,
+      "sellValue": 14000
+    },
+    {
+      "id": "wildfang_emberhide_legs",
+      "name": "Wildfang Breeches",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "legs",
+      "armorType": "leather",
+      "itemLevel": 35,
+      "stats": {
+        "str": 15,
+        "sta": 7,
+        "armor": 195
+      },
+      "critRating": 60,
+      "hasteRating": 25,
+      "requiredLevel": 20,
+      "requiredClass": ["druid"],
+      "set": "Wildfang Emberhide",
+      "soulbound": true,
+      "sellValue": 15000
+    },
+    {
+      "id": "wildfang_emberhide_shoulder",
+      "name": "Wildfang Spaulders",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "shoulder",
+      "armorType": "leather",
+      "itemLevel": 35,
+      "stats": {
+        "str": 12,
+        "sta": 6,
+        "armor": 165
+      },
+      "critRating": 60,
+      "hasteRating": 25,
+      "requiredLevel": 20,
+      "requiredClass": ["druid"],
+      "set": "Wildfang Emberhide",
+      "soulbound": true,
+      "sellValue": 12000
     },
     {
       "id": "wildgrove_cinch",
@@ -11393,6 +15458,111 @@
       "hasteRating": 25,
       "requiredLevel": 20,
       "sellValue": 6000
+    },
+    {
+      "id": "zealfire_chest",
+      "name": "Zealfire Hauberk",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "chest",
+      "armorType": "mail",
+      "itemLevel": 35,
+      "stats": {
+        "str": 17,
+        "sta": 8,
+        "armor": 380
+      },
+      "critRating": 60,
+      "hasteRating": 25,
+      "requiredLevel": 20,
+      "requiredClass": ["paladin"],
+      "set": "Zealfire Warplate",
+      "soulbound": true,
+      "sellValue": 16000
+    },
+    {
+      "id": "zealfire_gloves",
+      "name": "Zealfire Gauntlets",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "gloves",
+      "armorType": "mail",
+      "itemLevel": 35,
+      "stats": {
+        "str": 11,
+        "sta": 6,
+        "armor": 270
+      },
+      "critRating": 60,
+      "hasteRating": 25,
+      "requiredLevel": 20,
+      "requiredClass": ["paladin"],
+      "set": "Zealfire Warplate",
+      "soulbound": true,
+      "sellValue": 10000
+    },
+    {
+      "id": "zealfire_helmet",
+      "name": "Zealfire Helm",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "helmet",
+      "armorType": "mail",
+      "itemLevel": 35,
+      "stats": {
+        "str": 14,
+        "sta": 7,
+        "armor": 325
+      },
+      "critRating": 60,
+      "hasteRating": 25,
+      "requiredLevel": 20,
+      "requiredClass": ["paladin"],
+      "set": "Zealfire Warplate",
+      "soulbound": true,
+      "sellValue": 14000
+    },
+    {
+      "id": "zealfire_legs",
+      "name": "Zealfire Legguards",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "legs",
+      "armorType": "mail",
+      "itemLevel": 35,
+      "stats": {
+        "str": 15,
+        "sta": 7,
+        "armor": 345
+      },
+      "critRating": 60,
+      "hasteRating": 25,
+      "requiredLevel": 20,
+      "requiredClass": ["paladin"],
+      "set": "Zealfire Warplate",
+      "soulbound": true,
+      "sellValue": 15000
+    },
+    {
+      "id": "zealfire_shoulder",
+      "name": "Zealfire Pauldrons",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "shoulder",
+      "armorType": "mail",
+      "itemLevel": 35,
+      "stats": {
+        "str": 12,
+        "sta": 6,
+        "armor": 290
+      },
+      "critRating": 60,
+      "hasteRating": 25,
+      "requiredLevel": 20,
+      "requiredClass": ["paladin"],
+      "set": "Zealfire Warplate",
+      "soulbound": true,
+      "sellValue": 12000
     },
     {
       "id": "zealotsbane_blade",

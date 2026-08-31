@@ -1,5 +1,5 @@
 {
-  "gameVersion": "0.40.1",
+  "gameVersion": "0.41.0",
   "source": "src/sim/data.ts, src/sim/quest_targets.ts, src/sim/types.ts, src/sim/content/*.ts",
   "zones": [
     {
@@ -3277,6 +3277,54 @@
           "count": 1,
           "label": "Report to Ferryman Odo",
           "npc": "ferryman_odo"
+        }
+      ]
+    },
+    {
+      "id": "q_ignivar_echoes_in_iron",
+      "name": "Echoes in Iron",
+      "giver": "archivist_maelin_emberward",
+      "turnIn": ["archivist_maelin_ember_projection"],
+      "objectives": [
+        {
+          "type": "kill",
+          "count": 2,
+          "label": "Ember Sentinels destroyed",
+          "mob": "ignivar_ember_sentinel"
+        },
+        {
+          "type": "kill",
+          "count": 2,
+          "label": "Crucible Wardens destroyed",
+          "mob": "ignivar_crucible_warden"
+        }
+      ]
+    },
+    {
+      "id": "q_ignivar_heralds_heart",
+      "name": "The Herald's Heart",
+      "giver": "archivist_maelin_ember_projection",
+      "turnIn": ["archivist_maelin_ember_projection"],
+      "objectives": [
+        {
+          "type": "kill",
+          "count": 1,
+          "label": "Ignivar defeated",
+          "mob": "ignivar_herald_of_the_last_flame"
+        }
+      ]
+    },
+    {
+      "id": "q_ignivar_the_forgefather",
+      "name": "The Forgefather",
+      "giver": "archivist_maelin_ember_projection",
+      "turnIn": ["archivist_maelin_ember_projection"],
+      "objectives": [
+        {
+          "type": "kill",
+          "count": 1,
+          "label": "Varkhul defeated",
+          "mob": "varkhul_forgefather_of_the_last_flame"
         }
       ]
     }

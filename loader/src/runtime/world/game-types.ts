@@ -73,6 +73,23 @@ export interface Aura {
    * it is on the wire as `ub` for exactly that reason.
    */
   unbreakableControl?: boolean;
+  /**
+   * A penalty only its own timer takes off: dispel, purge and cleanse all skip
+   * it. The recovery sicknesses are the family.
+   *
+   * On the wire as `und` and decoded presence-only, so absent means "not one"
+   * rather than "unknown".
+   */
+  undispellable?: boolean;
+  /**
+   * An aura with no natural expiry, which the game refuses to dispel or steal
+   * whatever its polarity.
+   *
+   * On the wire as `perm`. Note the wire ALSO rewrites `rem` and `dur` to a
+   * sentinel for one of these, so a duration read off a permanent aura is not a
+   * countdown.
+   */
+  permanent?: boolean;
 }
 
 /**
@@ -344,6 +361,11 @@ export interface Entity {
   autoAttack: boolean;
   attackPower: number;
   spellPower: number;
+  /**
+   * Spell power plus the flat Healing Power affix, which heals read and damage
+   * does not. Sent as `hpw` from game 0.41.0.
+   */
+  healPower: number;
   spellHaste: number;
   critChance: number;
   dodgeChance: number;
@@ -354,6 +376,17 @@ export interface Entity {
   savedMana: number;
   stats: CoreStats;
   weapon: WeaponInfo;
+  /**
+   * The offhand weapon, or null when nothing is dual-wielded.
+   *
+   * Sent from game 0.41.0 and not before, which is why it was on the
+   * not-on-the-wire list until this release. Null is a REAL answer here rather
+   * than an absence, and the game says so by giving this field the one explicit
+   * presence check in its own mirror: every other self scalar falls back to the
+   * previous value, and this one must not, or an unequipped offhand would keep
+   * the last weapon forever (src/net/combat_scalar_wire.ts).
+   */
+  offhandWeapon: WeaponInfo | null;
   /**
    * Ability id to its charge pool, for the few abilities that have one.
    *

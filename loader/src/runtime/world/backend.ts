@@ -215,6 +215,10 @@ function tailReads(world: unknown, entities: () => ReadonlyMap<number, Entity>, 
       return readCharacterKey(deps.realm(), world);
     },
 
+    get spectating(): string | null {
+      return readAs<string>(world, 'spectating') ?? null;
+    },
+
     raw: world,
   };
 }
@@ -249,6 +253,12 @@ export interface WorldBackend
    * change an addon has to be told about.
    */
   readonly characterKey: string | null;
+  /**
+   * The character being spectated, or null when the session is watching itself.
+   *
+   * The reason `characterKey` can be null mid-session: see character-key.ts.
+   */
+  readonly spectating: string | null;
   /** One entity's hate table, measured against the player. */
   readonly threat: (entityId: number) => ThreatTable;
   /** One corpse's contents filtered to what the player could take, or null. */

@@ -187,6 +187,7 @@ export function watchHarness(): WatchHarness {
     // way `hazards` and `markers` already are.
     equipmentInstances: null,
     characterKey: null,
+    spectating: null,
     match: null,
     arena: null,
     battleground: null,

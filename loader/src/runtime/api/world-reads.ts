@@ -137,6 +137,10 @@ export function selfReads(hub: WorldHub) {
       return fromBackend(hub, (backend) => backend.characterKey);
     },
 
+    get spectating(): string | null {
+      return fromBackend(hub, (backend) => backend.spectating);
+    },
+
     get bags(): readonly (string | null)[] | null {
       return fromBackend(hub, (backend) => backend.bags);
     },

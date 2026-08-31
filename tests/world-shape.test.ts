@@ -154,6 +154,7 @@ describe('the shape table', () => {
       autoAttack: true,
       attackPower: true,
       spellPower: true,
+      healPower: true,
       spellHaste: true,
       critChance: true,
       dodgeChance: true,
@@ -163,6 +164,7 @@ describe('the shape table', () => {
       savedMana: true,
       stats: true,
       weapon: true,
+      offhandWeapon: true,
       abilityCharges: true,
     };
 

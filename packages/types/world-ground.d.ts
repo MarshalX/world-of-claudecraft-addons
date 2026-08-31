@@ -94,15 +94,39 @@ export interface DeathZone {
   remaining: number;
 }
 
-export type HazardKind = 'frostRing' | 'temporalHourglass';
+/**
+ * Which ground effect a `Hazard` is.
+ *
+ * Closed rather than open, because a hazard is drawn from the snapshot rather
+ * than named by content: a kind exists here only once the loader reads the list
+ * that carries it. The last three arrived with the Ignivar and Varkhul
+ * encounters in game 0.41.0, in API minor 10.
+ */
+export type HazardKind =
+  | 'frostRing'
+  | 'temporalHourglass'
+  /** The falling bodies Ignivar calls down, while the ground still shows a mark. */
+  | 'ignivarMeteor'
+  /** Varkhul's forgestorm, in the window between the warning and the wave. */
+  | 'varkhulForgestorm'
+  /** The meteors Varkhul's anvil strike brings down. */
+  | 'varkhulAnvilMeteor';
 
 /**
  * A ground effect with a position, a radius and a life.
  *
- * These two are the only ground effects whose geometry rides the snapshot, and
- * they arrive filtered to what is near you. Every other ground AoE announces
- * itself once as a `spellfxAt` event and then lives only in the renderer, so
- * tracking those means keeping your own list from the events.
+ * These are the only ground effects whose geometry rides the snapshot, and they
+ * arrive filtered to what is near you. Every other ground AoE announces itself
+ * once as a `spellfxAt` event and then lives only in the renderer, so tracking
+ * those means keeping your own list from the events.
+ *
+ * TWO OF VARKHUL'S OWN GROUND EFFECTS ARE NOT HERE, which is worth knowing
+ * before building a display of that fight. Its cinder FIRES have no remaining
+ * time at all, since they burn until the encounter puts them out, and every
+ * field on this shape would have to become optional to admit one. Its cinder
+ * ORBS are travelling rather than placed, so a disc drawn at the position on
+ * the snapshot marks where the orb has been. Both are visible in the game's own
+ * render and neither is readable as a hazard.
  *
  * A rift boss death zone is the one exception the loader closes for you, and it
  * is a `DeathZone` on `world.deathZones` rather than a third `HazardKind`. It

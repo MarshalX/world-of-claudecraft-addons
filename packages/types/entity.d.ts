@@ -538,6 +538,19 @@ export interface Entity {
   autoAttack: boolean;
   attackPower: number;
   spellPower: number;
+  /**
+   * What your healing scales with: spell power plus the flat Healing Power
+   * affix from gear and set bonuses.
+   *
+   * Not a second name for `spellPower`, and the difference is directional. Spell
+   * Power feeds healing, so it is inside this number; Healing Power never feeds
+   * damage, so this number is never what a damage figure scales with. A healer's
+   * readout wants this one and a damage readout wants `spellPower`, and on a
+   * healer in healing gear they are different values.
+   *
+   * Added in game 0.41.0 and in API minor 10.
+   */
+  healPower: number;
   spellHaste: number;
   critChance: number;
   dodgeChance: number;
@@ -557,6 +570,19 @@ export interface Entity {
   savedMana: number;
   stats: CoreStats;
   weapon: WeaponInfo;
+  /**
+   * The offhand weapon you are dual-wielding, or null when there is none.
+   *
+   * Null is a real answer rather than a gap, so `offhandWeapon !== null` is how
+   * you ask whether the player is dual-wielding; there is no separate flag,
+   * because the game derives its own from exactly that comparison.
+   *
+   * Added in game 0.41.0 and in API minor 10. Before that release the server
+   * never sent it, and the client filled it with null on every entity: a
+   * dual-wielding rogue read as holding nothing. That is why this is a new
+   * member rather than one that was always here.
+   */
+  offhandWeapon: WeaponInfo | null;
   /**
    * Ability id to its charge pool, for the few abilities that have one.
    *

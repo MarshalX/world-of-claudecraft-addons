@@ -89,16 +89,29 @@ function isHarmful(aura: Pick<Aura, 'kind'> & { value?: number; neg?: 1 }): bool
 /**
  * Whether an effect can be removed, and in which direction.
  *
- * Three clauses, all the game's: not encounter-owned control, not the physical
- * school, and the polarity the direction asks for. `offensive` strips a BENEFIT
- * off an enemy; the other direction strips a harmful effect off an ally.
+ * Five clauses, all the game's (`isDispellableAura` and `isPlayerRemovableAura`
+ * in src/sim/aura_classify.ts): not permanent, not unbreakable control, not an
+ * undispellable penalty, not the physical school, and the polarity the direction
+ * asks for. `offensive` strips a BENEFIT off an enemy; the other direction
+ * strips a harmful effect off an ally.
+ *
+ * THE ONE CLAUSE THIS CANNOT IMPLEMENT is `encounterOwned`, added at game
+ * 0.41.0 and checked by the game ahead of all of these. It is a Varkhul and
+ * Ignivar raid mechanic and `wireAura` never sends it (server/
+ * snapshot_timer_wire.ts:508 emits `perm`, `ub`, `und` and `bt` and nothing
+ * else), so no client can tell one from an ordinary effect. This therefore
+ * answers TRUE for an encounter-owned mechanic the game will refuse. Reading
+ * the flag off the aura would be reading a field that is never present; the
+ * only fix is the game sending it.
  *
  * Deliberately takes the FULL aura only. A party row carries neither a school
- * nor `unbreakableControl`, and those are the two clauses whose absence costs a
- * player a global cooldown, so a row is refused rather than answered
- * optimistically.
+ * nor these flags, and those are the clauses whose absence costs a player a
+ * global cooldown, so a row is refused rather than answered optimistically.
  */
 function isDispellable(aura: Aura, offensive: boolean): boolean {
+  if (aura.permanent === true || aura.undispellable === true) {
+    return false;
+  }
   if (aura.unbreakableControl === true || aura.school === PHYSICAL) {
     return false;
   }

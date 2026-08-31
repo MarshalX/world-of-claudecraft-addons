@@ -7,6 +7,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { characterId, OFFLINE_REALM } from '../loader/src/runtime/character.ts';
+import { readCharacterKey } from '../loader/src/runtime/world/character-key.ts';
 import { characterScope } from '../loader/src/shared/hosts.ts';
 
 describe('characterId', () => {
@@ -35,5 +36,36 @@ describe('characterId', () => {
     const id = characterId('Claudemoon', 'Marshal') as string;
 
     expect(characterScope('pbe', id)).not.toBe(characterScope('live', id));
+  });
+});
+
+// The read over the live world, as opposed to the string arithmetic above.
+//
+// The case that matters is a SPECTATE, because it is the one moment the game
+// hands over a player entity that is not the person at the keyboard.
+describe('readCharacterKey', () => {
+  it('is the live player when nobody is being spectated', () => {
+    expect(readCharacterKey('Claudemoon', { player: { name: 'Marshal' }, spectating: null })).toBe(
+      'Claudemoon/Marshal',
+    );
+  });
+
+  // A moderator spectate repoints the client's own playerId at the WATCHED
+  // character (src/net/online.ts applySnapshot), so `world.player` stops being
+  // the session owner while it runs. Keyed off that name, this addon's storage,
+  // the loader's frame state and the `characterKey` watchers would all quietly
+  // move to somebody else's file, and move back when the spectate ended.
+  it('refuses to answer with the watched character while spectating', () => {
+    expect(
+      readCharacterKey('Claudemoon', { player: { name: 'Someone' }, spectating: 'Someone' }),
+    ).toBeNull();
+  });
+
+  // Offline carries the field as an explicit null, so a world that has it and a
+  // world too old to have it must read the same.
+  it('is unaffected by a world that carries no spectating field', () => {
+    expect(readCharacterKey('Claudemoon', { player: { name: 'Marshal' } })).toBe(
+      'Claudemoon/Marshal',
+    );
   });
 });

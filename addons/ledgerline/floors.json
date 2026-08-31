@@ -1,5 +1,5 @@
 {
-  "gameVersion": "0.40.1",
+  "gameVersion": "0.41.0",
   "generatedFrom": ["src/sim/data.ts"],
   "fields": "the three item facts that decide what a market listing is worth against something other than another listing: sellValue, the flat per-unit copper a vendor pays, which is the only absolute price in the game; buyValue, the vendor shop price, present ONLY where some NPC actually stocks the id, which makes it a ceiling an ask above can never sell over; and noVendorSell, which voids the floor. An item the server refuses to list (quest, noMarketList, soulbound) is absent, as is one declaring none of the three. See src/sim/market.ts for the listing gate.",
   "items": [
@@ -217,6 +217,11 @@
     {
       "id": "bulwark_rusted_pauldrons",
       "sellValue": 210
+    },
+    {
+      "id": "burlap_reagent_pouch",
+      "sellValue": 250,
+      "buyValue": 1000
     },
     {
       "id": "cantors_drowned_sash",
@@ -502,6 +507,10 @@
       "sellValue": 340
     },
     {
+      "id": "duskweave_bag",
+      "sellValue": 450
+    },
+    {
       "id": "duskwhisper",
       "sellValue": 9000
     },
@@ -710,6 +719,10 @@
     {
       "id": "footpad_jerkin",
       "sellValue": 5
+    },
+    {
+      "id": "foragers_haversack",
+      "sellValue": 200
     },
     {
       "id": "fountain_court_mantle",
@@ -1317,6 +1330,10 @@
       "sellValue": 25
     },
     {
+      "id": "lastflame_core",
+      "sellValue": 5000
+    },
+    {
       "id": "lesser_healing_potion",
       "sellValue": 16,
       "buyValue": 85
@@ -1366,6 +1383,10 @@
     {
       "id": "litany_shoulder",
       "sellValue": 215
+    },
+    {
+      "id": "loombound_reagent_satchel",
+      "sellValue": 1200
     },
     {
       "id": "lunar_choir_leggings",
@@ -1622,6 +1643,10 @@
     {
       "id": "necromancers_legwraps",
       "sellValue": 9000
+    },
+    {
+      "id": "necromancers_reagent_satchel",
+      "sellValue": 4200
     },
     {
       "id": "necromancers_soulspire_mantle",
@@ -1915,6 +1940,10 @@
     {
       "id": "resonant_timber",
       "sellValue": 40
+    },
+    {
+      "id": "resonant_weave_bag",
+      "sellValue": 900
     },
     {
       "id": "revenant_silk_robe",
@@ -2487,6 +2516,14 @@
       "buyValue": 1400
     },
     {
+      "id": "varkhul_emberward",
+      "sellValue": 20000
+    },
+    {
+      "id": "varkhul_forgebreaker",
+      "sellValue": 26000
+    },
+    {
       "id": "varric_shadow_cowl",
       "sellValue": 540
     },
@@ -2563,6 +2600,10 @@
     {
       "id": "wardweave_cowl",
       "sellValue": 440
+    },
+    {
+      "id": "wayfarers_backpack",
+      "sellValue": 3800
     },
     {
       "id": "wayfarers_hood",
