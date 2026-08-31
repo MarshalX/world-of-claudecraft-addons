@@ -141,8 +141,11 @@ describe('the harmful clause on an entity query', () => {
 });
 
 describe('isDispellable', () => {
-  // One case per clause, because each of the three is the difference between a
-  // cast that does something and a global cooldown thrown away.
+  // One case per clause, because each is the difference between a cast that does
+  // something and a global cooldown thrown away. There is no case for the fifth
+  // clause the GAME has, `encounterOwned`, and there cannot be: the wire does not
+  // carry it, so a fixture setting it would be asserting on a field no client
+  // ever sees.
   it('refuses control an encounter owns, whatever else is true of it', () => {
     expect(
       isDispellable(aura({ kind: 'stun', school: 'shadow', unbreakableControl: true }), false),
@@ -151,6 +154,30 @@ describe('isDispellable', () => {
 
   it('refuses the physical school, which no dispel reaches', () => {
     expect(isDispellable(aura({ kind: 'bleed_vuln', school: 'physical' }), false)).toBe(false);
+  });
+
+  // The recovery sicknesses. On the wire as `und` since well before game
+  // 0.41.0 and read by nothing here until this pass, so the loader was
+  // promising a dispel the game refuses.
+  it('refuses an undispellable penalty', () => {
+    expect(isDispellable(aura({ kind: 'dot', school: 'shadow', undispellable: true }), false)).toBe(
+      false,
+    );
+  });
+
+  // A permanent aura has no natural expiry and the game refuses it in BOTH
+  // directions, so the offensive half has to be pinned too: polarity is the
+  // clause that would otherwise let a permanent buff through.
+  it('refuses a permanent aura in either direction', () => {
+    const permanentBuff = aura({
+      kind: 'buff_haste',
+      school: 'arcane',
+      value: 0.2,
+      permanent: true,
+    });
+
+    expect(isDispellable(permanentBuff, true)).toBe(false);
+    expect(isDispellable(permanentBuff, false)).toBe(false);
   });
 
   it('accepts a magic-school harmful effect on the friendly direction', () => {

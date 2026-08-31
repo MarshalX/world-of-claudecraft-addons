@@ -31,6 +31,7 @@ import type {
 } from '../loader/src/runtime/world/battleground.ts';
 import type { ProfessionInfo, ToolEffectSlot } from '../loader/src/runtime/world/character.ts';
 import type { CivicService, Recipe, Station } from '../loader/src/runtime/world/content.ts';
+import type { Hazard, HazardKind } from '../loader/src/runtime/world/derived.ts';
 import type { Entity, HeldSlot, InvSlot } from '../loader/src/runtime/world/game-types.ts';
 import type { CorpseView, DeathZone } from '../loader/src/runtime/world/ground.ts';
 import type { HeldItemInstance } from '../loader/src/runtime/world/items.ts';
@@ -73,6 +74,8 @@ import type {
 import type {
   CorpseView as PublicCorpseView,
   DeathZone as PublicDeathZone,
+  Hazard as PublicHazard,
+  HazardKind as PublicHazardKind,
 } from '../packages/types/world-ground.js';
 import type {
   HeldSlot as PublicHeldSlot,
@@ -228,6 +231,23 @@ const corpseFieldsAgree: SameFields<CorpseView, PublicCorpseView> = true;
 const deathZoneIsPublished: Assignable<DeathZone, PublicDeathZone> = true;
 const publishedIsDeathZone: Assignable<PublicDeathZone, DeathZone> = true;
 const deathZoneFieldsAgree: SameFields<DeathZone, PublicDeathZone> = true;
+/**
+ * The THIRD ground shape, which had no assertion of its own until game 0.41.0
+ * put three new kinds on it, and was the silence the two above were written to
+ * end.
+ *
+ * The KIND pair is the load-bearing half and it is separate on purpose. The
+ * loader derives `HazardKind` from the `HAZARD_SOURCES` table it actually
+ * reads, so the two unions agreeing is the statement that the loader publishes
+ * a name for every list it reads and reads a list for every name it publishes.
+ * `SameFields` cannot see it, for the reason the reaction union below gives:
+ * it compares keys and a union of string literals has none.
+ */
+const hazardIsPublished: Assignable<Hazard, PublicHazard> = true;
+const publishedIsHazard: Assignable<PublicHazard, Hazard> = true;
+const hazardFieldsAgree: SameFields<Hazard, PublicHazard> = true;
+const hazardKindIsPublished: Assignable<HazardKind, PublicHazardKind> = true;
+const publishedIsHazardKind: Assignable<PublicHazardKind, HazardKind> = true;
 
 const valuesArePublished: Assignable<WorldValues, PublicWorldValues> = true;
 const publishedAreValues: Assignable<PublicWorldValues, WorldValues> = true;
@@ -445,6 +465,11 @@ describe('the published types', () => {
       deathZoneIsPublished,
       publishedIsDeathZone,
       deathZoneFieldsAgree,
+      hazardIsPublished,
+      publishedIsHazard,
+      hazardFieldsAgree,
+      hazardKindIsPublished,
+      publishedIsHazardKind,
       professionsArePublished,
       publishedAreProfessions,
       professionFieldsAgree,

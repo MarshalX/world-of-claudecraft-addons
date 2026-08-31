@@ -109,6 +109,7 @@ const SHAPE: Record<keyof Entity, FieldSpec> = {
   autoAttack: { kind: 'boolean' },
   attackPower: { kind: 'number' },
   spellPower: { kind: 'number' },
+  healPower: { kind: 'number' },
   spellHaste: { kind: 'number' },
   critChance: { kind: 'number' },
   dodgeChance: { kind: 'number' },
@@ -118,6 +119,9 @@ const SHAPE: Record<keyof Entity, FieldSpec> = {
   savedMana: { kind: 'number' },
   stats: { kind: 'object' },
   weapon: { kind: 'object' },
+  // Null on anything not dual-wielding, which is most entities most of the
+  // time, so the nullable mark is the ordinary case here rather than drift.
+  offhandWeapon: { kind: 'object', nullable: true },
   // Created on the first snapshot that carried a charge pool, rather than
   // blank-filled, so its absence is the ordinary case and not drift.
   abilityCharges: { kind: 'object', optional: true },

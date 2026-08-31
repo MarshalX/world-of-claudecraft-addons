@@ -65,6 +65,7 @@ woc.world.bagCapacity     // total slots; used slots is inventory.length
 woc.world.copper          // money
 woc.world.zone            // the zone name the game is displaying
 woc.world.characterKey    // who is playing, as an opaque per-character key
+woc.world.spectating      // the character being watched, or null
 ```
 
 `world.equipmentInstances` is keyed the same way `equipment` is and is sparse: a plain piece has no key at all, so an absent slot means nothing is on it rather than nothing is worn. It is the untrimmed payload for your OWN gear. The same read off another player's entity, `entity.equippedInstances`, is the public projection the server sends about them: the signer, the enchant and the roll, and nothing else.
@@ -72,6 +73,8 @@ woc.world.characterKey    // who is playing, as an opaque per-character key
 Another player's gear is readable too, off the entity rather than off `world`: `equippedItems`, `equippedInstances`, `mainhandItemId`, `offhandItemId`, `weaponSkinId` and `mountKey`. All six are sent for a PLAYER only, so check `entity.kind === 'player'` before reading one: on a mob they exist and hold an inert default. `mainhandItemId` is not `equippedItems.mainhand`, and the difference is real: the server fills it only when the equipped mainhand is a weapon, so read one for what is held and the other for what is worn.
 
 `world.characterKey` is the same identity `woc.storage.character` files its keys under, published so two addons keeping their own per-character records cannot disagree about whose they are. It is OPAQUE: do not parse it. Watch it, because a character switch inside one page load is real.
+
+`world.spectating` is the one thing that makes `world.player` somebody else. A moderator spectate repoints the game's own player at the character being watched, so while it runs `player`, the class on it and everything derived from either describe the watched character rather than the person at the keyboard. Most addons can ignore that, because most addons show what is in front of the player and that IS the watched character. The ones that cannot are the ones filing something under an identity, and for those `characterKey` is null for the whole spectate and `woc.storage.character` refuses to write, so an addon using the loader's own per-character storage inherits the rule instead of implementing it. Read `spectating` when you keep your own records and want to say WHY you have stopped.
 
 An item id does not resolve to a **name**, a quality, or any stats. That content ships inside the client bundle and is reachable from nothing the loader can see, so what an id gets you is its icon through `ui.icon.item`, and the ability to tell one item from another. Names arrive only where an event carries one.
 

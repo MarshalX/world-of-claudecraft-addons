@@ -19,9 +19,10 @@
 //   src/sim/professions/gathering.ts      NODE_TYPE_BY_PROFESSION, which is what
 //                                         files a tool under the node type it opens,
 //                                         NODE_HARVEST_TABLE for the respawn length
-//                                         of each type, NODE_MATERIAL_TABLE for what
-//                                         a zone's node of each type yields, and
-//                                         GATHER_GAIN_TIER_STEP
+//                                         of each type, and GATHER_GAIN_TIER_STEP
+//   src/sim/professions/gathering_materials.ts  NODE_MATERIAL_TABLE, for what a
+//                                         zone's node of each type yields. Split out
+//                                         of gathering.ts at game 0.41.0
 //   src/sim/professions/wield_gate.ts     WIELD_REQUIREMENT_BY_TIER, the proficiency
 //                                         each tool tier needs before it will swing
 //   src/sim/professions/wheel.ts          the two reduced-gain multipliers
@@ -81,6 +82,11 @@ const GAME_PACKAGE_NAME = 'world-of-claudecraft';
 const NODES_FILE = 'src/sim/content/gather_nodes.ts';
 const ITEMS_FILE = 'src/sim/content/items.ts';
 const GATHERING_FILE = 'src/sim/professions/gathering.ts';
+// NODE_MATERIAL_TABLE alone lives here. Game 0.41.0 split it out of
+// gathering.ts, which failed this generator outright rather than silently:
+// `objectAfter` fails on a missing export, so the table could not go stale
+// behind a source that had moved.
+const MATERIALS_FILE = 'src/sim/professions/gathering_materials.ts';
 const WIELD_FILE = 'src/sim/professions/wield_gate.ts';
 const WHEEL_FILE = 'src/sim/professions/wheel.ts';
 const GRADES_FILE = 'src/sim/professions/material_grades.ts';
@@ -91,7 +97,10 @@ const CONTENT_DIR = 'src/sim/content';
 /** Every count the shipped table is expected to carry, asserted after the parse. */
 const EXPECTED_TYPES = 3;
 const EXPECTED_NODES = 156;
-const EXPECTED_ZONES = 14;
+// 15 since before game 0.40.1: the committed table has carried 15 zones while
+// this said 14, so every run printed a count warning that was already answered.
+// Corrected so the next one that fires means something.
+const EXPECTED_ZONES = 15;
 const EXPECTED_TOOLS = 15;
 const EXPECTED_WIELD_RUNGS = 5;
 /** Three types across fourteen zones, which is every cell of the material matrix. */
@@ -464,16 +473,16 @@ function readGain(gatheringSource, wheelSource) {
  * panel of nodes has nowhere honest to put one.
  */
 function readMaterials(source, types) {
-  const literal = objectAfter(source, 'export const NODE_MATERIAL_TABLE', GATHERING_FILE);
+  const literal = objectAfter(source, 'export const NODE_MATERIAL_TABLE', MATERIALS_FILE);
   const byType = {};
   for (const type of types) {
-    const block = memberObject(literal, type, GATHERING_FILE);
+    const block = memberObject(literal, type, MATERIALS_FILE);
     const byZone = {};
     for (const row of block.matchAll(MATERIAL_ROW_RE)) {
       byZone[row[ONE]] = row[2];
     }
     if (Object.keys(byZone).length === NONE) {
-      fail(`${GATHERING_FILE}: NODE_MATERIAL_TABLE lists no zone for ${type}`);
+      fail(`${MATERIALS_FILE}: NODE_MATERIAL_TABLE lists no zone for ${type}`);
     }
     byType[type] = byZone;
   }
@@ -701,7 +710,10 @@ function build(root) {
   const gatheringSource = readOrFail(join(root, GATHERING_FILE), 'the profession map');
   const itemSource = readOrFail(join(root, ITEMS_FILE), 'the item table');
   const typeByProfession = readTypeByProfession(gatheringSource);
-  const materials = readMaterials(gatheringSource, types);
+  const materials = readMaterials(
+    readOrFail(join(root, MATERIALS_FILE), 'the node material table'),
+    types,
+  );
   const grades = readGrades(readOrFail(join(root, GRADES_FILE), 'the material grades'));
   const table = {
     gameVersion,

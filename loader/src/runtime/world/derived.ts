@@ -17,10 +17,30 @@
 import { fieldNumber, fieldString, fieldValue } from '../net/frames.ts';
 import type { Entity } from './game-types.ts';
 
-/** Both ground effects the wire carries a position for. */
+/**
+ * Every ground effect the wire carries a position for.
+ *
+ * The three raid warnings arrived with the Ignivar and Varkhul encounters at
+ * game 0.41.0 and carry the same id/x/z/radius/duration/remaining shape the
+ * first two do, which is why they cost a row each rather than a reader.
+ *
+ * TWO OF THAT RELEASE'S FAMILIES ARE DELIBERATELY ABSENT, and both would look
+ * like omissions. `activeVarkhulCinderFires` carries no `remaining` at all,
+ * because a cinder fire burns until the encounter clears it; `toHazard` refuses
+ * an entry without one, so listing it would add a kind that can never produce a
+ * row. Making `remaining` optional to fit it would change a published field's
+ * shape for every hazard that has one. `activeVarkhulCinderOrbProjectiles` is a
+ * MOVING orb with its own dirX/dirZ heading, so drawn as a static disc it marks
+ * where the orb was when the snapshot left rather than where it is.
+ */
 const HAZARD_SOURCES = Object.freeze([
   ['frostRing', 'activeFrostRings'],
   ['temporalHourglass', 'activeTemporalHourglasses'],
+  ['ignivarMeteor', 'activeIgnivarMeteors'],
+  // biome-ignore lint/security/noSecrets: a member name copied from the game, which the entropy heuristic cannot tell from a token
+  ['varkhulForgestorm', 'activeVarkhulForgestormWarnings'],
+  // biome-ignore lint/security/noSecrets: a member name copied from the game, which the entropy heuristic cannot tell from a token
+  ['varkhulAnvilMeteor', 'activeVarkhulAnvilMeteors'],
 ] as const);
 
 /**
@@ -66,8 +86,8 @@ export type HazardKind = (typeof HAZARD_SOURCES)[number][0];
 /**
  * A ground effect with a position, a radius and a life.
  *
- * These two are the only ground effects whose geometry rides the snapshot, and
- * they are interest-filtered around the player. Every other ground AoE announces
+ * These are the only ground effects whose geometry rides the snapshot, and they
+ * are interest-filtered around the player. Every other ground AoE announces
  * itself as a `spellfxAt` event and then exists only in the renderer, so an addon
  * that wants those has to track the events itself.
  */

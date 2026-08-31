@@ -1,5 +1,5 @@
 {
-  "gameVersion": "0.40.1",
+  "gameVersion": "0.41.0",
   "source": "src/sim/data.ts, src/ui/i18n.resolved.generated/en.ts",
   "mobs": [
     {
@@ -86,6 +86,11 @@
       "name": "Deathstalker Voss",
       "rank": "elite",
       "rare": true
+    },
+    {
+      "id": "derelict_mech",
+      "name": "Derelict Mech",
+      "rank": "elite"
     },
     {
       "id": "drakemaw_broodlord",
@@ -177,6 +182,31 @@
       "rank": "elite"
     },
     {
+      "id": "ignivar_cinder_artificer",
+      "name": "Cinder Artificer",
+      "rank": "elite"
+    },
+    {
+      "id": "ignivar_crucible_warden",
+      "name": "Crucible Warden",
+      "rank": "elite"
+    },
+    {
+      "id": "ignivar_ember_sentinel",
+      "name": "Ember Sentinel",
+      "rank": "elite"
+    },
+    {
+      "id": "ignivar_heart_of_the_end",
+      "name": "Ignivar Ashcaller",
+      "rank": "elite"
+    },
+    {
+      "id": "ignivar_herald_of_the_last_flame",
+      "name": "Ignivar, Herald of the Last Flame",
+      "rank": "boss"
+    },
+    {
       "id": "ironvein_foreman",
       "name": "Ironvein Foreman",
       "rank": "elite",
@@ -213,11 +243,6 @@
       "name": "Mirejaw the Ravenous",
       "rank": "elite",
       "rare": true
-    },
-    {
-      "id": "mister_crabs",
-      "name": "Mister Crabs",
-      "requiresQuestId": "q_ps_mother_of_pearl"
     },
     {
       "id": "mogger",
@@ -542,6 +567,11 @@
     {
       "id": "vael_the_mistcaller",
       "name": "Vael the Fogbinder",
+      "rank": "boss"
+    },
+    {
+      "id": "varkhul_forgefather_of_the_last_flame",
+      "name": "Varkhul, Forgefather of the Last Flame",
       "rank": "boss"
     },
     {

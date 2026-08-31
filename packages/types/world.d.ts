@@ -227,8 +227,34 @@ export interface WorldApi {
    * clones and removes its HUD rather than reloading, so an addon holding a
    * per-character view has to be told when it is looking at somebody else. Added
    * in API minor 2.
+   *
+   * ALSO NULL WHILE SPECTATING, for the reason `spectating` gives. There is no
+   * key for a moderator watching somebody else, because the only name in reach
+   * is the watched character's.
    */
   readonly characterKey: string | null;
+
+  /**
+   * The character this session is watching, or null when it is watching itself.
+   *
+   * Read this before you trust `world.player` to describe the person at the
+   * keyboard. A moderator spectate repoints the client's own player at the
+   * watched character, so for as long as it runs `player`, the class on it and
+   * everything derived from either answer for somebody else. The game carries
+   * the same field for the same reason.
+   *
+   * Almost every addon can ignore it, because almost every addon shows what is
+   * in front of the player and that IS the watched character. The ones that
+   * cannot are the ones filing something under an identity: a per-character
+   * record, a session total, anything a player would be upset to find under the
+   * wrong name. `woc.storage.character` already refuses to write while this is
+   * non-null, so an addon using it inherits the rule rather than implementing
+   * it.
+   *
+   * Null on offline play, where there is nobody else to watch. Added in game
+   * 0.41.0 and in API minor 10.
+   */
+  readonly spectating: string | null;
 
   /**
    * Your progression, deeds and title. Null before world entry.
@@ -540,16 +566,25 @@ export interface WorldApi {
   /**
    * Whether an effect can be removed, and in which direction.
    *
-   * Three clauses, all from the game: not encounter-owned control, not the
-   * physical school, and the polarity the direction asks for. `offensive` strips
-   * a BENEFIT off an enemy; the default, false, strips a harmful effect off an
-   * ally.
+   * Five clauses, all from the game: not permanent, not unbreakable control,
+   * not an undispellable penalty, not the physical school, and the polarity the
+   * direction asks for. `offensive` strips a BENEFIT off an enemy; the default,
+   * false, strips a harmful effect off an ally.
    *
-   * A party ROW cannot answer this and is refused rather than guessed at: a row
-   * carries neither a school nor `unbreakableControl`, and those are the two
+   * IT ANSWERS TRUE FOR A RAID MECHANIC THE GAME WILL REFUSE, and no client can
+   * do better. Game 0.41.0 added an `encounterOwned` class of aura, checked by
+   * the game ahead of every clause above and used throughout the Ignivar and
+   * Varkhul encounters, and the wire does not carry it: the aura the server
+   * sends has room for permanent, unbreakable and undispellable and nothing for
+   * this one. So inside those two fights a true here means "nothing the client
+   * can see forbids it" rather than "it will work".
+   *
+   * A party ROW cannot answer this at all and is refused rather than guessed
+   * at: a row carries neither a school nor any of the flags, and those are the
    * clauses that cost a player a global cooldown when skipped. Read the member's
    * entity through `world.aurasOn('partyN')` for a member near enough to have
-   * one. Added in API minor 2.
+   * one. Added in API minor 2; the permanent and undispellable clauses in
+   * minor 10.
    */
   dispellable: (aura: Aura, offensive?: boolean) => boolean;
 

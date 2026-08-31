@@ -125,6 +125,13 @@ export interface WorldApi {
    * they are. OPAQUE: do not parse it. Null before world entry.
    */
   readonly characterKey: string | null;
+  /**
+   * The character this session is watching, or null when it is watching itself.
+   *
+   * Non-null means `player` is somebody else, so anything filed under the
+   * person at the keyboard has to stop while it is.
+   */
+  readonly spectating: string | null;
   /** Progression, deeds and titles. Null before world entry. */
   readonly character: CharacterInfo | null;
   readonly talents: TalentInfo | null;
