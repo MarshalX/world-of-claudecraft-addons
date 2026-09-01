@@ -14,11 +14,11 @@
 // manifest from the host the player is on and this union is open where it is used.
 //
 // Ids with a file, per class:
-//   druid: 48
+//   druid: 50
 //   hunter: 40
 //   mage: 69
 //   paladin: 51
-//   priest: 25
+//   priest: 26
 //   rogue: 39
 //   shaman: 29
 //   warlock: 29
@@ -202,6 +202,7 @@ export type KnownSkillIcon =
   | 'gouge'
   | 'grace_devotion'
   | 'greater_invisibility'
+  | 'grove_awakening'
   | 'growl'
   | 'guardian_covenant'
   | 'hammer_of_grace'
@@ -290,6 +291,7 @@ export type KnownSkillIcon =
   | 'power_word_fortitude'
   | 'power_word_shield'
   | 'prayer_of_healing'
+  | 'prayer_of_returning'
   | 'preparation'
   | 'presence_of_mind'
   | 'primal_exaltation'
@@ -426,6 +428,7 @@ export type KnownSkillIcon =
   | 'warspirit_cadence'
   | 'whirlwind'
   | 'wildheart'
+  | 'wildwake'
   | 'wing_clip'
   | 'wrath'
   | 'wyvern_sting';

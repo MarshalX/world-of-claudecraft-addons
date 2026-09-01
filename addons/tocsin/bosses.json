@@ -1,5 +1,5 @@
 {
-  "gameVersion": "0.41.0",
+  "gameVersion": "0.41.1",
   "source": "src/sim/data.ts, src/sim/content/dungeons.ts, src/sim/types.ts, src/sim/mob/healer_channel.ts, src/sim/encounters/nythraxis.ts",
   "encounters": [
     {
