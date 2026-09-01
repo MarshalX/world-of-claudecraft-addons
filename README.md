@@ -46,7 +46,7 @@ The per-browser procedure lives on the site rather than here, because two copies
 
 <img src="addons/combat-meter/preview.png" width="440" alt="On the left, The fight you are in, the Combat Meter on its Damage tab, the fight strip reading Current: six ability rows tinted by damage school under a per-second total, above the attack table. On the right, One you already had, the same panel paged back one fight, the strip naming the mob and marking page two of three, above that earlier fight and its own rows." />
 
-**[Satchel](addons/satchel)** — One list of everything you own, across every character. Bags, bank and mailbox are recorded as they are read, so an item is one row with a total however many stacks and characters hold it, and hovering says who has how many and where. What a vendor would pay for a bag, a bank and the whole account.
+**[Satchel](addons/satchel)** — Everything you own, on every character: bags, bank, Materials Vault and mailbox pooled into one row an item; hover for who holds how many where. Vault materials against their cap, and vendor value.
 
 <img src="addons/satchel/preview.png" width="440" alt="On the left, Everything you own, one row an item, pooled across every character and searchable, sortable and filterable by who holds it, each name coloured by its tier, with what the whole list goes for at the Merchant along the bottom On the right, One character, live, the bags of the character in play, as a grid of squares bordered by item tier, one of them padlocked" />
 
@@ -64,14 +64,14 @@ The per-browser procedure lives on the site rather than here, because two copies
 
 ### The other 11
 
-- **[Cadence](addons/cadence)** — The four timings a rotation is played against, on one thin strip: your swing, the global cooldown, your cast with a latency band, and your resource with combo points as pips.
+- **[Cadence](addons/cadence)** — Your swing, the global cooldown, your cast with a latency band, and your resource with combo points as pips, on one strip.
 - **[Cooldown Bars](addons/cooldown-bars)** — A draining bar for every ability you have on cooldown, soonest ready first, measured against the real length of anything in your own spellbook.
-- **[Emberwatch](addons/emberwatch)** — A rules engine for effects and procs: name an effect on a unit and get a tile, a cue and a banner when it lands, stacks up or runs out.
-- **[Foretell](addons/foretell)** — A cast bar for everything casting near you, soonest to land first, as a borderless column or floating over each caster.
+- **[Emberwatch](addons/emberwatch)** — Name an effect on a unit and get a tile, a cue and a banner when it lands, stacks or fades.
+- **[Foretell](addons/foretell)** — A cast bar for every cast near you, soonest first, as a column or floating over each caster.
 - **[Longwatch](addons/longwatch)** — The rare spawns, where they live and when they are due back.
 - **[Lorebind](addons/lorebind)** — A browser for every item in the game, and the name service every other addon subscribes to.
-- **[Purelight](addons/purelight)** — Every effect in front of you that can actually be removed, worst first: on you, your pet, your group and your target, each tile naming who carries it.
-- **[Tocsin](addons/tocsin)** — What a raid boss is about to do, and what the group has to answer: a timer per mechanic, plus who is marked, what nobody is channelling, and the tank stacks.
+- **[Purelight](addons/purelight)** — Every effect in front of you that can be removed, worst first: on you, your pet, your group and your target, each tile naming who carries it.
+- **[Tocsin](addons/tocsin)** — What a raid boss is about to do and what the group must answer, for Nythraxis, Ignivar and Varkhul: a timer per mechanic, who is marked, who is short on a soak, which water is left, and tank stacks.
 - **[Veinsight](addons/veinsight)** — Every ore vein, wood stand and herb patch in the world, pinned where it stands and listed nearest first with a distance, a bearing and your own respawn timer.
 - **[Wayfarer](addons/wayfarer)** — An atlas: where everything is, how far, and which way.
 - **[Wayline](addons/wayline)** — How far the next level is in time rather than in numbers: experience per hour over a rolling window, the kills and the time left to reach it, and a derived virtual level past the cap.

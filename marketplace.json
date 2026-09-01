@@ -2,16 +2,16 @@
   "schema": 1,
   "name": "Official Marketplace",
   "maintainer": "MarshalX",
-  "generated": "2026-09-01T16:51:56.000Z",
+  "generated": "2026-09-01T22:10:29.000Z",
   "addons": [
     {
       "id": "cadence",
       "name": "Cadence",
-      "version": "1.2.0",
+      "version": "1.3.0",
       "apiVersion": 1,
-      "apiMinor": 6,
+      "apiMinor": 10,
       "author": "MarshalX",
-      "description": "The four timings a rotation is played against, on one thin strip: your swing, the global cooldown, your cast with a latency band, and your resource with combo points as pips.",
+      "description": "Your swing, the global cooldown, your cast with a latency band, and your resource with combo points as pips, on one strip. Optional rows add your offhand swing, your target's swing and your speed.",
       "entry": "main.js",
       "preview": {
         "file": "preview.png",
@@ -43,6 +43,18 @@
           "default": true
         },
         {
+          "id": "show-offhand-swing",
+          "type": "boolean",
+          "label": "Show your offhand swing timer while dual-wielding",
+          "default": false
+        },
+        {
+          "id": "show-target-swing",
+          "type": "boolean",
+          "label": "Show your target's swing timer, under your own",
+          "default": false
+        },
+        {
           "id": "show-gcd",
           "type": "boolean",
           "label": "Show the global cooldown",
@@ -53,6 +65,12 @@
           "type": "boolean",
           "label": "Show the cast bar",
           "default": true
+        },
+        {
+          "id": "show-speed",
+          "type": "boolean",
+          "label": "Show your movement speed when something is affecting it",
+          "default": false
         },
         {
           "id": "show-power",
@@ -226,9 +244,9 @@
     {
       "id": "dev-harness",
       "name": "Dev Harness",
-      "version": "1.11.0",
+      "version": "1.12.0",
       "apiVersion": 1,
-      "apiMinor": 8,
+      "apiMinor": 10,
       "author": "MarshalX",
       "description": "Exercises every part of the addon API and reports what worked, repainting as the world moves, so a loader change can be checked in the game rather than only in a test.",
       "entry": "main.js",
@@ -301,11 +319,11 @@
     {
       "id": "emberwatch",
       "name": "Emberwatch",
-      "version": "1.3.0",
+      "version": "1.4.0",
       "apiVersion": 1,
       "apiMinor": 8,
       "author": "MarshalX",
-      "description": "A rules engine for effects and procs: name an effect on a unit and get a tile, a cue and a banner when it lands, stacks up or runs out. Ships a starter set for your class, and takes rules of your own captured off your target with a keybind.",
+      "description": "Name an effect on a unit and get a tile, a cue and a banner when it lands, stacks or fades. Ships rules for your class and the Ignivar and Varkhul raid, and captures your own off your target.",
       "entry": "main.js",
       "preview": {
         "file": "preview.png",
@@ -317,6 +335,7 @@
       "homepage": "https://github.com/MarshalX/world-of-claudecraft-addons",
       "tags": [
         "combat",
+        "raid",
         "interface"
       ],
       "permissions": [
@@ -494,11 +513,11 @@
     {
       "id": "foretell",
       "name": "Foretell",
-      "version": "1.1.0",
+      "version": "1.2.0",
       "apiVersion": 1,
-      "apiMinor": 6,
+      "apiMinor": 10,
       "author": "MarshalX",
-      "description": "A cast bar for everything casting near you, soonest to land first, as a borderless column or floating over each caster. Reads the world's own cast state, so a boss mechanic that raises no cast event still gets a bar.",
+      "description": "A cast bar for every cast near you, soonest first, as a column or floating over each caster. Reads the world's cast state, so a silent boss mechanic still gets a bar, and charged casts count stages.",
       "entry": "main.js",
       "preview": {
         "file": "preview.png",
@@ -741,7 +760,7 @@
     {
       "id": "lorebind",
       "name": "Lorebind",
-      "version": "1.4.3",
+      "version": "1.5.0",
       "apiVersion": 1,
       "apiMinor": 7,
       "author": "MarshalX",
@@ -806,16 +825,19 @@
     {
       "id": "purelight",
       "name": "Purelight",
-      "version": "1.2.0",
+      "version": "1.3.0",
       "apiVersion": 1,
       "apiMinor": 6,
       "author": "MarshalX",
-      "description": "Every effect in front of you that can actually be removed, worst first: on you, your pet, your group and your target, each tile naming who carries it.",
+      "description": "Every effect in front of you that can be removed, worst first: on you, your pet, your group and your target, each tile naming who carries it. What a raid encounter owns is held back and counted.",
       "entry": "main.js",
       "preview": {
         "file": "preview.png",
         "alt": "a strip of five square tiles, each a countdown over the art with the name of whoever carries the effect under it. The borders colour by school, and one tile has no art at all."
       },
+      "data": [
+        "refused.json"
+      ],
       "homepage": "https://github.com/MarshalX/world-of-claudecraft-addons",
       "tags": [
         "healing",
@@ -876,16 +898,19 @@
     {
       "id": "satchel",
       "name": "Satchel",
-      "version": "1.4.0",
+      "version": "1.5.0",
       "apiVersion": 1,
-      "apiMinor": 7,
+      "apiMinor": 10,
       "author": "MarshalX",
-      "description": "One list of everything you own, across every character. Bags, bank and mailbox are recorded as they are read, so an item is one row with a total however many stacks and characters hold it, and hovering says who has how many and where. What a vendor would pay for a bag, a bank and the whole account.",
+      "description": "Everything you own, on every character: bags, bank, Materials Vault and mailbox pooled into one row an item; hover for who holds how many where. Vault materials against their cap, and vendor value.",
       "entry": "main.js",
       "preview": {
         "file": "preview.png",
         "alt": "On the left, Everything you own, one row an item, pooled across every character and searchable, sortable and filterable by who holds it, each name coloured by its tier, with what the whole list goes for at the Merchant along the bottom On the right, One character, live, the bags of the character in play, as a grid of squares bordered by item tier, one of them padlocked"
       },
+      "data": [
+        "bags.json"
+      ],
       "companions": [
         "lorebind",
         "ledgerline"
@@ -918,7 +943,7 @@
         {
           "id": "warn-free",
           "type": "number",
-          "label": "Warn when this many slots are left",
+          "label": "Warn when this many slots are left that anything will fit in",
           "default": 4,
           "min": 0,
           "max": 20
@@ -941,15 +966,15 @@
     {
       "id": "tocsin",
       "name": "Tocsin",
-      "version": "1.1.0",
+      "version": "1.2.0",
       "apiVersion": 1,
-      "apiMinor": 4,
+      "apiMinor": 10,
       "author": "MarshalX",
-      "description": "What a raid boss is about to do, and what the group has to answer: a timer per mechanic, plus who is marked, what nobody is channelling, and the tank stacks.",
+      "description": "What a raid boss is about to do and what the group must answer, for Nythraxis, Ignivar and Varkhul: a timer per mechanic, who is marked, who is short on a soak, which water is left, and tank stacks.",
       "entry": "main.js",
       "preview": {
         "file": "preview.png",
-        "alt": "On the left, A wardstone nobody is on, A raid panel: mechanic timers with Deathless Rage casting live, and the three wardstones in all three states, one done and named with who held it, one being channelled, and the third drawn red and reading UNHELD. On the right, Marks, stacks and adds, The same panel with no cast in flight: three Soul Rend marks, two stacked and one drawn red standing alone, the tank at six stacks with the other tank not yet clear, and the heroic court listed interrupt first."
+        "alt": "Panel 1 of 3, A wardstone nobody is on, A raid panel: mechanic timers with Deathless Rage casting live, and the three wardstones in all three states, one done and named with who held it, one being channelled, and the third drawn red and reading UNHELD. Panel 2 of 3, Marks, stacks and adds, The same panel with no cast in flight: three Soul Rend marks, two stacked and one drawn red standing alone, the tank at six stacks with the other tank not yet clear, and the heroic court listed interrupt first. Panel 3 of 3, A countdown to the wipe, A raid panel during Ignivar’s last phase, in three sections and nine rows. The mechanic timers: Brand of the Pyre in three seconds, Revolving Inferno in fourteen, Falling Cinders drawn red at one, and the alternating Searing Torrent or Rain of Cinders slot in five. Under them an Enrage row reading Last Inferno, 27 seconds, nine percent left and then the raid dies. Under that the four water conduits: North East running with three seconds of water, North West spent, South East ready, and South West spent."
       },
       "data": [
         "bosses.json"
