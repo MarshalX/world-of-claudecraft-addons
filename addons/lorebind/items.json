@@ -1,5 +1,5 @@
 {
-  "gameVersion": "0.41.0",
+  "gameVersion": "0.41.1",
   "generatedFrom": [
     "src/sim/data.ts (the ITEMS merge)",
     "src/sim/content/items.ts",
@@ -157,7 +157,6 @@
       },
       "requiredLevel": 20,
       "requiredClass": ["warrior", "rogue", "hunter", "shaman", "paladin"],
-      "soulbound": true,
       "sellValue": 14000
     },
     {
@@ -177,7 +176,6 @@
       "hasteRating": 25,
       "requiredLevel": 20,
       "requiredClass": ["warrior", "paladin", "shaman"],
-      "soulbound": true,
       "sellValue": 10000
     },
     {
@@ -330,7 +328,6 @@
       "hasteRating": 25,
       "requiredLevel": 20,
       "requiredClass": ["druid"],
-      "soulbound": true,
       "sellValue": 10000
     },
     {
@@ -350,7 +347,6 @@
       "hasteRating": 25,
       "requiredLevel": 20,
       "requiredClass": ["rogue", "hunter", "druid"],
-      "soulbound": true,
       "sellValue": 10000
     },
     {
@@ -647,7 +643,6 @@
       },
       "hitRating": 25,
       "requiredLevel": 20,
-      "soulbound": true,
       "sellValue": 8000
     },
     {
@@ -1272,7 +1267,6 @@
       "blockValue": 30,
       "requiredLevel": 20,
       "requiredClass": ["warrior", "paladin", "shaman"],
-      "soulbound": true,
       "sellValue": 12000
     },
     {
@@ -1520,7 +1514,6 @@
       "critRating": 25,
       "requiredLevel": 20,
       "requiredClass": ["mage", "priest", "warlock", "druid"],
-      "soulbound": true,
       "sellValue": 12000
     },
     {
@@ -1580,7 +1573,6 @@
       "hitRating": 60,
       "requiredLevel": 20,
       "requiredClass": ["druid"],
-      "soulbound": true,
       "sellValue": 10000
     },
     {
@@ -1754,7 +1746,6 @@
       },
       "requiredLevel": 20,
       "requiredClass": ["rogue", "hunter"],
-      "soulbound": true,
       "sellValue": 14000
     },
     {
@@ -1817,7 +1808,6 @@
       "hasteRating": 25,
       "requiredLevel": 20,
       "requiredClass": ["mage", "priest", "warlock"],
-      "soulbound": true,
       "sellValue": 10000
     },
     {
@@ -1996,7 +1986,6 @@
       "spellPower": 4,
       "hitRating": 25,
       "requiredLevel": 20,
-      "soulbound": true,
       "sellValue": 8000
     },
     {
@@ -2253,7 +2242,6 @@
       "hitRating": 60,
       "requiredLevel": 20,
       "requiredClass": ["mage", "priest", "warlock"],
-      "soulbound": true,
       "sellValue": 10000
     },
     {
@@ -2979,7 +2967,6 @@
       "hasteRating": 60,
       "requiredLevel": 20,
       "requiredClass": ["druid"],
-      "soulbound": true,
       "sellValue": 10000
     },
     {
@@ -3649,7 +3636,6 @@
       "blockValue": 22,
       "requiredLevel": 20,
       "requiredClass": ["paladin", "shaman"],
-      "soulbound": true,
       "sellValue": 12000
     },
     {
@@ -4438,7 +4424,6 @@
       },
       "requiredLevel": 20,
       "requiredClass": ["warrior", "rogue", "hunter", "shaman", "paladin"],
-      "soulbound": true,
       "sellValue": 14000
     },
     {
@@ -4462,7 +4447,6 @@
       },
       "requiredLevel": 20,
       "requiredClass": ["mage", "priest", "warlock", "shaman", "paladin", "druid"],
-      "soulbound": true,
       "sellValue": 16000
     },
     {
@@ -4503,7 +4487,6 @@
       "hitRating": 60,
       "requiredLevel": 20,
       "requiredClass": ["warrior", "paladin", "shaman"],
-      "soulbound": true,
       "sellValue": 10000
     },
     {
@@ -4764,7 +4747,6 @@
       "hasteRating": 25,
       "requiredLevel": 20,
       "requiredClass": ["warrior", "paladin", "shaman"],
-      "soulbound": true,
       "sellValue": 10000
     },
     {
@@ -5772,7 +5754,6 @@
       "hitRating": 60,
       "requiredLevel": 20,
       "requiredClass": ["druid"],
-      "soulbound": true,
       "sellValue": 10000
     },
     {
@@ -5862,7 +5843,6 @@
       },
       "requiredLevel": 20,
       "requiredClass": ["warrior", "hunter", "shaman", "paladin"],
-      "soulbound": true,
       "sellValue": 16000
     },
     {
@@ -5915,7 +5895,6 @@
       },
       "hasteRating": 25,
       "requiredLevel": 20,
-      "soulbound": true,
       "sellValue": 8000
     },
     {
@@ -7531,7 +7510,6 @@
       },
       "hitRating": 25,
       "requiredLevel": 20,
-      "soulbound": true,
       "sellValue": 8000
     },
     {
@@ -8022,7 +8000,6 @@
       "spellPower": 4,
       "critRating": 25,
       "requiredLevel": 20,
-      "soulbound": true,
       "sellValue": 8000
     },
     {
@@ -8047,7 +8024,6 @@
       },
       "hitRating": 25,
       "requiredLevel": 20,
-      "soulbound": true,
       "sellValue": 8000
     },
     {
@@ -9033,7 +9009,6 @@
       "hitRating": 60,
       "requiredLevel": 20,
       "requiredClass": ["druid"],
-      "soulbound": true,
       "sellValue": 10000
     },
     {
@@ -9679,7 +9654,6 @@
       "hasteRating": 25,
       "requiredLevel": 20,
       "requiredClass": ["priest", "mage", "druid", "paladin", "shaman"],
-      "soulbound": true,
       "sellValue": 12000
     },
     {
@@ -9962,7 +9936,6 @@
       },
       "critRating": 25,
       "requiredLevel": 20,
-      "soulbound": true,
       "sellValue": 8000
     },
     {
@@ -11103,7 +11076,6 @@
       "hasteRating": 25,
       "requiredLevel": 20,
       "requiredClass": ["druid"],
-      "soulbound": true,
       "sellValue": 10000
     },
     {
@@ -11135,7 +11107,6 @@
       },
       "hitRating": 25,
       "requiredLevel": 20,
-      "soulbound": true,
       "sellValue": 8000
     },
     {
@@ -11794,7 +11765,6 @@
       },
       "requiredLevel": 20,
       "requiredClass": ["warrior", "rogue", "hunter", "shaman", "paladin"],
-      "soulbound": true,
       "sellValue": 14000
     },
     {
@@ -11919,7 +11889,6 @@
       "hitRating": 60,
       "requiredLevel": 20,
       "requiredClass": ["rogue", "hunter", "druid"],
-      "soulbound": true,
       "sellValue": 10000
     },
     {
@@ -12281,7 +12250,6 @@
       "hitRating": 60,
       "requiredLevel": 20,
       "requiredClass": ["mage", "priest"],
-      "soulbound": true,
       "sellValue": 10000
     },
     {
@@ -12409,7 +12377,6 @@
       },
       "requiredLevel": 20,
       "requiredClass": ["mage", "priest", "warlock", "shaman", "paladin", "druid"],
-      "soulbound": true,
       "sellValue": 14000
     },
     {
@@ -12429,7 +12396,6 @@
       "hasteRating": 60,
       "requiredLevel": 20,
       "requiredClass": ["paladin", "shaman"],
-      "soulbound": true,
       "sellValue": 10000
     },
     {
@@ -12496,7 +12462,6 @@
       },
       "requiredLevel": 20,
       "requiredClass": ["mage", "priest", "warlock", "shaman", "paladin", "druid"],
-      "soulbound": true,
       "sellValue": 16000
     },
     {
@@ -12566,7 +12531,6 @@
       "hasteRating": 60,
       "requiredLevel": 20,
       "requiredClass": ["mage", "priest"],
-      "soulbound": true,
       "sellValue": 10000
     },
     {
@@ -12974,7 +12938,6 @@
       "hitRating": 60,
       "requiredLevel": 20,
       "requiredClass": ["shaman"],
-      "soulbound": true,
       "sellValue": 10000
     },
     {
@@ -13719,7 +13682,6 @@
       "hasteRating": 25,
       "requiredLevel": 20,
       "requiredClass": ["shaman"],
-      "soulbound": true,
       "sellValue": 10000
     },
     {
@@ -13755,7 +13717,6 @@
       "hitRating": 60,
       "requiredLevel": 20,
       "requiredClass": ["paladin", "shaman"],
-      "soulbound": true,
       "sellValue": 10000
     },
     {
@@ -14608,7 +14569,6 @@
       },
       "requiredLevel": 20,
       "requiredClass": ["mage", "priest", "warlock", "shaman", "paladin", "druid"],
-      "soulbound": true,
       "sellValue": 12000
     },
     {
@@ -14693,7 +14653,6 @@
       "hitRating": 60,
       "requiredLevel": 20,
       "requiredClass": ["warrior", "paladin", "shaman"],
-      "soulbound": true,
       "sellValue": 10000
     },
     {

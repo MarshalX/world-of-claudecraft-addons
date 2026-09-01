@@ -1,5 +1,5 @@
 {
-  "gameVersion": "0.41.0",
+  "gameVersion": "0.41.1",
   "generatedFrom": ["src/sim/data.ts"],
   "fields": "the three item facts that decide what a market listing is worth against something other than another listing: sellValue, the flat per-unit copper a vendor pays, which is the only absolute price in the game; buyValue, the vendor shop price, present ONLY where some NPC actually stocks the id, which makes it a ceiling an ask above can never sell over; and noVendorSell, which voids the floor. An item the server refuses to list (quest, noMarketList, soulbound) is absent, as is one declaring none of the three. See src/sim/market.ts for the listing gate.",
   "items": [
@@ -26,6 +26,14 @@
     {
       "id": "anglers_feast_platter",
       "sellValue": 60
+    },
+    {
+      "id": "anvilguard_blade",
+      "sellValue": 14000
+    },
+    {
+      "id": "anvilstance_sabatons",
+      "sellValue": 10000
     },
     {
       "id": "apprentice_robe",
@@ -69,6 +77,14 @@
       "sellValue": 60
     },
     {
+      "id": "ashenbark_treads",
+      "sellValue": 10000
+    },
+    {
+      "id": "ashrunner_boots",
+      "sellValue": 10000
+    },
+    {
       "id": "ashwood_axe",
       "sellValue": 60
     },
@@ -84,6 +100,10 @@
       "id": "baked_bread",
       "sellValue": 6,
       "buyValue": 25
+    },
+    {
+      "id": "band_of_marked_strikes",
+      "sellValue": 8000
     },
     {
       "id": "bandit_bandana",
@@ -215,6 +235,10 @@
       "sellValue": 2000
     },
     {
+      "id": "bulwark_of_the_inner_crucible",
+      "sellValue": 12000
+    },
+    {
       "id": "bulwark_rusted_pauldrons",
       "sellValue": 210
     },
@@ -248,8 +272,28 @@
       "sellValue": 12000
     },
     {
+      "id": "cinder_of_the_first_design",
+      "sellValue": 12000
+    },
+    {
+      "id": "cinderbark_cinch",
+      "sellValue": 10000
+    },
+    {
+      "id": "cinderfang_kris",
+      "sellValue": 14000
+    },
+    {
+      "id": "cindersoaked_slippers",
+      "sellValue": 10000
+    },
+    {
       "id": "cinderwalk_treads",
       "sellValue": 900
+    },
+    {
+      "id": "circle_of_cinders",
+      "sellValue": 8000
     },
     {
       "id": "cooking_salt",
@@ -275,6 +319,10 @@
     {
       "id": "coppermail_sabatons",
       "sellValue": 40
+    },
+    {
+      "id": "cord_of_the_last_flame",
+      "sellValue": 10000
     },
     {
       "id": "corpse_candle_focus",
@@ -425,6 +473,10 @@
     {
       "id": "deepfen_pearl",
       "sellValue": 600
+    },
+    {
+      "id": "dewfall_moccasins",
+      "sellValue": 10000
     },
     {
       "id": "direfang_greatblade",
@@ -593,6 +645,10 @@
       "sellValue": 20
     },
     {
+      "id": "ember_wardens_barrier",
+      "sellValue": 12000
+    },
+    {
       "id": "emberfang_warblade",
       "sellValue": 2400
     },
@@ -725,6 +781,18 @@
       "sellValue": 200
     },
     {
+      "id": "forgefathers_warhammer",
+      "sellValue": 14000
+    },
+    {
+      "id": "forgefire_spire",
+      "sellValue": 16000
+    },
+    {
+      "id": "forgewall_girdle",
+      "sellValue": 10000
+    },
+    {
       "id": "fountain_court_mantle",
       "sellValue": 2400
     },
@@ -739,6 +807,10 @@
     {
       "id": "frostmane_mantle",
       "sellValue": 2200
+    },
+    {
+      "id": "furnace_march_greaves",
+      "sellValue": 10000
     },
     {
       "id": "game_meat",
@@ -899,6 +971,10 @@
       "sellValue": 110
     },
     {
+      "id": "grovetender_belt",
+      "sellValue": 10000
+    },
+    {
       "id": "grovewardens_grips",
       "sellValue": 7500
     },
@@ -916,12 +992,20 @@
       "buyValue": 170
     },
     {
+      "id": "heart_of_the_end_greatblade",
+      "sellValue": 16000
+    },
+    {
       "id": "heart_of_the_rift",
       "sellValue": 50000
     },
     {
       "id": "hearthlined_treads",
       "sellValue": 900
+    },
+    {
+      "id": "heartspring_amulet",
+      "sellValue": 8000
     },
     {
       "id": "herbed_marsh_pike",
@@ -1251,6 +1335,10 @@
       "buyValue": 6000
     },
     {
+      "id": "ignivars_ember_choker",
+      "sellValue": 8000
+    },
+    {
       "id": "inert_storm_shard",
       "sellValue": 28
     },
@@ -1385,8 +1473,16 @@
       "sellValue": 215
     },
     {
+      "id": "locket_of_the_last_flame",
+      "sellValue": 8000
+    },
+    {
       "id": "loombound_reagent_satchel",
       "sellValue": 1200
+    },
+    {
+      "id": "loop_of_quiet_springs",
+      "sellValue": 8000
     },
     {
       "id": "lunar_choir_leggings",
@@ -1609,6 +1705,10 @@
       "sellValue": 700
     },
     {
+      "id": "moonscorch_waistwrap",
+      "sellValue": 10000
+    },
+    {
       "id": "moonshroud_breastplate",
       "sellValue": 2400
     },
@@ -1734,6 +1834,10 @@
       "sellValue": 300
     },
     {
+      "id": "orb_of_the_last_spring",
+      "sellValue": 12000
+    },
+    {
       "id": "orchard_sapbinder_grips",
       "sellValue": 950
     },
@@ -1777,6 +1881,10 @@
     {
       "id": "pearlward_aegis",
       "sellValue": 1700
+    },
+    {
+      "id": "pendant_of_the_first_tempering",
+      "sellValue": 8000
     },
     {
       "id": "pilgrims_leggings",
@@ -2028,8 +2136,16 @@
       "sellValue": 16000
     },
     {
+      "id": "scorchgrove_striders",
+      "sellValue": 10000
+    },
+    {
       "id": "scourgehide_carapace",
       "sellValue": 14000
+    },
+    {
+      "id": "seal_of_the_forgewall",
+      "sellValue": 8000
     },
     {
       "id": "seal_of_the_nine_oaths",
@@ -2152,6 +2268,14 @@
       "sellValue": 2000
     },
     {
+      "id": "slagrender_cleaver",
+      "sellValue": 14000
+    },
+    {
+      "id": "slagstalker_belt",
+      "sellValue": 10000
+    },
+    {
       "id": "sloomtooth_tidefang",
       "sellValue": 1400
     },
@@ -2224,12 +2348,28 @@
       "buyValue": 25
     },
     {
+      "id": "springbinder_sash",
+      "sellValue": 10000
+    },
+    {
+      "id": "springtouched_crozier",
+      "sellValue": 14000
+    },
+    {
+      "id": "springwarden_sabatons",
+      "sellValue": 10000
+    },
+    {
       "id": "staff_of_drowned_prayers",
       "sellValue": 300
     },
     {
       "id": "staff_of_the_gravewyrm",
       "sellValue": 8000
+    },
+    {
+      "id": "staff_of_the_last_spring",
+      "sellValue": 16000
     },
     {
       "id": "staff_of_velkhar",
@@ -2243,6 +2383,10 @@
       "id": "stalkerhide_jerkin",
       "sellValue": 600,
       "buyValue": 6000
+    },
+    {
+      "id": "steps_of_quiet_water",
+      "sellValue": 10000
     },
     {
       "id": "stormbark_mantle",
@@ -2271,6 +2415,10 @@
     {
       "id": "stormchant_gauntlets",
       "sellValue": 460
+    },
+    {
+      "id": "stormkindled_chain",
+      "sellValue": 10000
     },
     {
       "id": "stormreel_fishing_rod",
@@ -2407,8 +2555,16 @@
       "sellValue": 2100
     },
     {
+      "id": "thundershock_treads",
+      "sellValue": 10000
+    },
+    {
       "id": "thunderward_legguards",
       "sellValue": 2000
+    },
+    {
+      "id": "tidebinder_links",
+      "sellValue": 10000
     },
     {
       "id": "tidebound_spaulders",
@@ -2585,6 +2741,10 @@
       "sellValue": 150
     },
     {
+      "id": "wand_of_quenched_sparks",
+      "sellValue": 12000
+    },
+    {
       "id": "wanderers_chestguard",
       "sellValue": 150
     },
@@ -2600,6 +2760,10 @@
     {
       "id": "wardweave_cowl",
       "sellValue": 440
+    },
+    {
+      "id": "warforged_waistguard",
+      "sellValue": 10000
     },
     {
       "id": "wayfarers_backpack",

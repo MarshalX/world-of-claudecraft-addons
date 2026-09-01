@@ -44,6 +44,8 @@ The game builds every entity with defaults and fills in whatever the snapshot ca
 
 The published types mark which fields ride the self record and omit the ones that are never sent, but the types are a claim about another repository rather than a derivation from it. When a value matters, check it against a live session before you build on it.
 
+The game's two spell queues are the version of this that survives a careful reading. The melee on-next-swing queue is sent and you can see it; the cast queue, which the game finished building in 0.41.1 so that a press during the tail of a global cooldown fires when the cooldown clears, is sent by nothing. They are declared eleven lines apart, they are both called a queue, and exactly one of them reaches you. So "I checked, the queue is on the wire" is not a finding about the queue you meant, and a next-cast display built on the wrong one is blank in every session forever without ever raising anything.
+
 ## You never write cleanup, but you do write `woc.onDispose`
 
 Everything the API creates goes into a disposal bag: frames, subscriptions, key bindings, timers, sounds, tooltips. Disabling an addon drains it.
