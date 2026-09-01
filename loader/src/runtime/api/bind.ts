@@ -80,6 +80,8 @@ function createUiSurface(
     doc: shared.doc,
     kit: shared.kit,
     fqid: addon.fqid,
+    // For the arrange-mode chip alone. See api/ui.ts.
+    addonName: addon.manifest.name,
     bag: addon.bag,
     onError: (where, err) => {
       log.error(`${where} threw`, err);

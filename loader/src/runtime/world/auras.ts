@@ -13,7 +13,7 @@
 // the query a row accepts is deliberately narrower than the entity one rather
 // than accepting `mine` and quietly ignoring it.
 
-import { DEBUFF_AURA_KINDS } from '../../shared/aura-kinds.generated.ts';
+import { DEBUFF_AURA_KINDS, UNDISPELLABLE_AURA_IDS } from '../../shared/aura-kinds.generated.ts';
 import type { Aura } from './game-types.ts';
 import type { PartyMemberAura } from './party-types.ts';
 
@@ -89,11 +89,13 @@ function isHarmful(aura: Pick<Aura, 'kind'> & { value?: number; neg?: 1 }): bool
 /**
  * Whether an effect can be removed, and in which direction.
  *
- * Five clauses, all the game's (`isDispellableAura` and `isPlayerRemovableAura`
- * in src/sim/aura_classify.ts): not permanent, not unbreakable control, not an
- * undispellable penalty, not the physical school, and the polarity the direction
- * asks for. `offensive` strips a BENEFIT off an enemy; the other direction
- * strips a harmful effect off an ally.
+ * Six clauses, all the game's (`isDispellableAura` and `isPlayerRemovableAura`
+ * in src/sim/aura_classify.ts): not one of the ids the game refuses outright,
+ * not permanent, not unbreakable control, not an undispellable penalty, not the
+ * physical school, and the polarity the direction asks for. `offensive` strips a
+ * BENEFIT off an enemy; the other direction strips a harmful effect off an ally.
+ * `UNDISPELLABLE_AURA_IDS` is generated from that file by `pnpm aura-kinds`, never
+ * transcribed by hand.
  *
  * THE ONE CLAUSE THIS CANNOT IMPLEMENT is `encounterOwned`, added at game
  * 0.41.0 and checked by the game ahead of all of these. It is a Varkhul and
@@ -102,13 +104,18 @@ function isHarmful(aura: Pick<Aura, 'kind'> & { value?: number; neg?: 1 }): bool
  * else), so no client can tell one from an ordinary effect. This therefore
  * answers TRUE for an encounter-owned mechanic the game will refuse. Reading
  * the flag off the aura would be reading a field that is never present; the
- * only fix is the game sending it.
+ * only fix is the game sending it. On a game release, diff the game's FUNCTION
+ * against this one rather than checking that the fields it reads still exist: a
+ * predicate that is too generous costs a global cooldown and never fails a test.
  *
  * Deliberately takes the FULL aura only. A party row carries neither a school
  * nor these flags, and those are the clauses whose absence costs a player a
  * global cooldown, so a row is refused rather than answered optimistically.
  */
 function isDispellable(aura: Aura, offensive: boolean): boolean {
+  if (UNDISPELLABLE_AURA_IDS.has(aura.id)) {
+    return false;
+  }
   if (aura.permanent === true || aura.undispellable === true) {
     return false;
   }

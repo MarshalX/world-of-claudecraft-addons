@@ -4,17 +4,24 @@
 //
 // Nothing about one encounter is written here. The shipped table declares each encounter's
 // mechanics and the block KINDS its state is made of, and this file carries one renderer per
-// kind, so a second encounter reusing a shape is a table change alone.
+// kind, so a second encounter reusing a shape is a table change alone. The table's own
+// vocabulary is three lists: a CONDITION is a question about the boss, an ANCHOR is an edge
+// that re-arms a cadence, and a SEED is a clock the game rewrites at a phase change.
 //
-// Two readings are inferences and both say so on screen. DIFFICULTY is not on the wire, so
-// heroic is latched from a tell and until one lands the figures are the normal ones. A
-// CHANNEL's outcome has no completion flag: the live reading is a fact, and the post-mortem
-// is read from the boss's cast ending early, which is the game confirming every channel
-// landed.
+// Three readings are inferences and all three say so on screen. DIFFICULTY is not on the wire,
+// so heroic is latched from a tell and until one lands the figures are the normal ones. A
+// CHANNEL's outcome has no completion flag: the live reading is a fact, and the post-mortem is
+// read from the boss's cast ending early, which is the game confirming every channel landed.
+// And a PREDICTION is drawn with a leading `~` for the whole of its life, because the addon is
+// counting its own clock rather than reading the game's.
 //
 // Predictions are only honest because these encounters are SCRIPTED: their driver runs every
 // tick, where a template boss counts down on melee contact alone. Nothing here models a
 // template boss and it must not be pointed at one.
+//
+// TWO KNOWN GAPS, neither closable from a client: Varkhul clears his cast bar while he walks
+// to the anvil, and his forgestorm sets no cast at all, so in those windows this counts down
+// where the game holds still.
 
 const TABLE_FILE = 'bosses.json';
 const FRAME_WIDTH = 300;
@@ -46,10 +53,10 @@ const DONE_SECONDS = 0.5;
  * Most severe first.
  *
  * There is one banner slot loader-wide, so severity is decided here rather than by whichever
- * handler ran last. An unanswered channel outranks everything because its failure is the
- * whole raid rather than one player.
+ * handler ran last. The two soak shapes outrank everything because their failure is the whole
+ * raid rather than one player.
  */
-const ALERT_RANK = ['channels', 'marks', 'enrage', 'interrupt', 'tank', 'mechanic'];
+const ALERT_RANK = ['channels', 'soak', 'marks', 'enrage', 'interrupt', 'tank', 'mechanic'];
 
 const ASSUMED_NORMAL = 'Normal figures: nothing on the wire says which difficulty this is.';
 
@@ -57,22 +64,44 @@ const ASSUMED_NORMAL = 'Normal figures: nothing on the wire says which difficult
 const ENRAGE_WATCH_MULT = 2;
 
 /**
+ * How far above its threshold a gate starts being drawn, as a share of maximum health.
+ * Additive rather than the enrage block's multiple: a gate at 65% times two is on screen from
+ * the pull.
+ */
+const GATE_BAND = 0.15;
+
+/**
  * Drawn in this order whatever order the table declares them, so the layout never moves.
  *
  * An enrage is first because it is only ever on screen for the last stretch of a fight, and
- * for that stretch it is the line to read before any of the others.
+ * for that stretch it is the line to read before any of the others. The gates block is second
+ * for the same reason in reverse: it is a fight's next hard change, and it is empty otherwise.
  */
-const BLOCK_ORDER = ['enrage', 'channels', 'marks', 'tankStacks', 'adds'];
+const BLOCK_ORDER = [
+  'enrage',
+  'gates',
+  'channels',
+  'soak',
+  'marks',
+  'debuffs',
+  'stations',
+  'tankStacks',
+  'adds',
+];
 
 let encounters = [];
 let pull = null;
 let lastTick = woc.now();
 /**
- * The boss this addon last saw standing with nobody on it, which is the only way to tell a
- * pull it WATCHED START from a fight it walked in on. Module level rather than on `pull`,
- * because `drawIdle` clears that on the same frames this has to survive.
+ * The boss this addon last saw standing with nobody on it, which is one of the two ways to
+ * tell a pull it WATCHED START from a fight it walked in on. Module level rather than on
+ * `pull`, because `drawIdle` clears that on the same frames this has to survive.
  */
 let idleBossId = null;
+/** The other way: the boss whose own engage line this session heard. */
+let pullYellFor = null;
+/** How the last attempt ended, kept across the boss leaving so the idle line can say so. */
+let lastResult = null;
 
 /**
  * `woc.data` hands back `unknown`: the loader checks the file parses as JSON and nothing
@@ -108,8 +137,28 @@ function activeNow() {
   return null;
 }
 
+function pullSubject() {
+  if (pull === null) {
+    return null;
+  }
+  const entity = woc.world.entities.get(pull.bossId);
+  if (entity === undefined || entity.dead) {
+    return null;
+  }
+  return { row: pull.row, entity };
+}
+
 function auraOn(entity, id) {
   return entity?.auras?.find((aura) => aura.id === id) ?? null;
+}
+
+function bossCast(entity) {
+  return woc.world.casts.get(entity.id) ?? null;
+}
+
+/** Interest-filtered around the player, so an empty list is "none near me". */
+function hazardsOf(kind) {
+  return (woc.world.hazards ?? []).filter((one) => one.kind === kind);
 }
 
 /** The boss's target, which is the tank for every reading here. */
@@ -148,6 +197,45 @@ function apart(a, b) {
 }
 
 /**
+ * An unrecognised kind answers false: a newer table then draws a mechanic it should have
+ * hidden, which is visible, where true would hide one it should have drawn.
+ */
+function conditionHolds(condition, entity) {
+  if (condition?.kind === 'aura') {
+    return auraOn(entity, condition.id) !== null;
+  }
+  if (condition?.kind === 'cast') {
+    return bossCast(entity)?.ability === condition.id;
+  }
+  if (condition?.kind === 'hazard') {
+    return hazardsOf(condition.id).length > 0;
+  }
+  if (condition?.kind === 'belowHp') {
+    return healthFraction(entity) <= condition.hp;
+  }
+  return false;
+}
+
+function anyHolds(conditions, entity) {
+  return (conditions ?? []).some((one) => conditionHolds(one, entity));
+}
+
+/**
+ * Everything the game does at a phase change happens on an edge, so a re-seed read from
+ * presence would fire on every frame. THE FIRST SAMPLE IS NEVER AN EDGE: walking into a room
+ * where a conduit is already running, or the boss is already in its last phase, would
+ * otherwise read as that having just happened.
+ */
+function edgeOf(key, holds) {
+  const was = pull.edges.get(key);
+  pull.edges.set(key, holds);
+  if (was === undefined) {
+    return { rising: false, falling: false };
+  }
+  return { rising: holds && !was, falling: was && !holds };
+}
+
+/**
  * Latched for the pull rather than sampled: every tell is a transient, since an add dies and
  * an aura falls off, while a difficulty does not change mid-fight.
  */
@@ -162,17 +250,18 @@ function heroic() {
 }
 
 /**
- * The game starts every clock the moment the fight does, so a pull watched from the boss
- * standing idle needs nothing observed to count the first of anything. A fight walked in on
- * gets no seeds: the addon has no idea how far through it is, and a made-up figure is worse
+ * A pull this addon saw begin (the boss stood idle, or its engage line arrived) is seeded from
+ * the game's own opening clocks. A fight walked in on gets no seeds: a made-up figure is worse
  * than the row saying it has not seen one yet.
  */
 function seedPull(row) {
-  if (idleBossId !== pull.bossId) {
+  if (idleBossId !== pull.bossId && pullYellFor !== pull.bossId) {
     return;
   }
   idleBossId = null;
-  seedTimers(row.pullSeeds ?? {});
+  pullYellFor = null;
+  pull.seeded = true;
+  applySeeds(row.pullSeeds, woc.world.entities.get(pull.bossId));
 }
 
 function startPull(found) {
@@ -183,7 +272,9 @@ function startPull(found) {
   pull = {
     bossId: found.entity.id,
     encounterId: found.row.id,
+    row: found.row,
     heroic: false,
+    seeded: false,
     transitionSeenAt: null,
     phaseTwoAt: null,
     seenSpawns: new Set(),
@@ -191,6 +282,8 @@ function startPull(found) {
     woundedAt: null,
     enraged: false,
     timers,
+    edges: new Map(),
+    stations: new Map(),
     channels: null,
     outcome: null,
     alert: null,
@@ -226,15 +319,14 @@ function encounterReset(entity) {
   return pull.woundedAt !== null;
 }
 
-function bossCast(entity) {
-  return woc.world.casts.get(entity.id) ?? null;
-}
-
 /**
  * The transition is an AURA rather than a health fraction, which is what makes it a fact: a
  * fraction is a guess about which side of a threshold one snapshot landed on. The fraction is
  * the fallback for a fight this addon joined after the transition, which is what `phaseTwoAt`
  * distinguishes.
+ *
+ * `phases` models a scripted intermission with a hard boundary on either side; a phase that IS
+ * an aura the boss wears is a condition on the mechanic instead.
  */
 function phaseOf(row, entity) {
   const { phases } = row;
@@ -258,21 +350,40 @@ function inPhase(mechanic, phase) {
   return declared === 'both' || declared === phase;
 }
 
+/** Whether a mechanic exists at all right now, which is separate from when it is next due. */
+function mechanicShown(mechanic, entity, phase) {
+  if (!inPhase(mechanic, phase)) {
+    return false;
+  }
+  if (mechanic.when !== undefined && !anyHolds(mechanic.when, entity)) {
+    return false;
+  }
+  return !anyHolds(mechanic.unless, entity);
+}
+
 /**
- * Every declared condition returns early from the game's own per-tick driver, so nothing in
- * the kit advances while one holds. Counting through them drifts by a whole mechanic a cycle.
+ * Applied where a cadence is ARMED and never to a clock already running, which is what the
+ * game does: a clock armed before the phase opened keeps its length.
  */
-function frozen(row, entity) {
-  const cast = bossCast(entity);
-  for (const condition of row.freeze ?? []) {
-    if (condition.kind === 'aura' && auraOn(entity, condition.id) !== null) {
-      return true;
-    }
-    if (condition.kind === 'cast' && cast !== null && cast.ability === condition.id) {
-      return true;
+function rateNow(row, entity) {
+  let rate = 1;
+  for (const rule of row.rates ?? []) {
+    if (conditionHolds(rule.when, entity)) {
+      rate = rule.multiplier;
     }
   }
-  return false;
+  return rate;
+}
+
+/** The LAST matching override wins, as in the game's own cadence function. */
+function cadenceFor(row, mechanic, entity) {
+  let { every } = mechanic;
+  for (const rule of mechanic.cadences ?? []) {
+    if (conditionHolds(rule.when, entity)) {
+      ({ every } = rule);
+    }
+  }
+  return every / Math.max(rateNow(row, entity), Number.EPSILON);
 }
 
 /**
@@ -280,10 +391,10 @@ function frozen(row, entity) {
  * `dueAt` on every frame it holds, so a call already made cannot be recognised by the time it
  * was made for.
  */
-function fired(id, every) {
-  const timer = pull?.timers[id];
+function fired(row, mechanic, entity) {
+  const timer = pull?.timers[mechanic.id];
   if (timer !== undefined) {
-    timer.dueAt = woc.now() + every * MS;
+    timer.dueAt = woc.now() + cadenceFor(row, mechanic, entity) * MS;
     timer.cycle += 1;
   }
 }
@@ -296,41 +407,95 @@ function dueIn(timer) {
   return Math.max((timer.dueAt - woc.now()) / MS, 0);
 }
 
-function holdTimers(elapsed) {
-  for (const timer of Object.values(pull.timers)) {
-    if (timer.dueAt !== null) {
+/**
+ * Per mechanic rather than one flag on the pull: Ignivar's four paced abilities keep ticking
+ * through each other's casts while the brand and the tank strike do not.
+ */
+function holdTimers(row, entity, elapsed) {
+  const globally = anyHolds(row.freeze, entity);
+  for (const mechanic of row.mechanics) {
+    const timer = pull.timers[mechanic.id];
+    const held = globally || anyHolds(mechanic.freeze, entity);
+    if (held && timer !== undefined && timer.dueAt !== null) {
       timer.dueAt += elapsed;
     }
   }
 }
 
-/** The only way to count the first of anything down before it has ever been seen fire. */
-function seedTimers(seeds) {
-  const now = woc.now();
-  for (const [id, seconds] of Object.entries(seeds)) {
-    const timer = pull.timers[id];
+/**
+ * `floor` and `cap` are `Math.max` and `Math.min` at the game's own call site, bounding a
+ * clock it is still running; setting outright would move a prediction the game left alone. A
+ * clock never seeded has no bound to apply, so both fall back to a set.
+ */
+function writeSeed(timer, seed) {
+  const at = woc.now() + seed.seconds * MS;
+  timer.cycle += 1;
+  if (timer.dueAt === null || seed.mode === undefined || seed.mode === 'set') {
+    timer.dueAt = at;
+    return;
+  }
+  if (seed.mode === 'floor') {
+    timer.dueAt = Math.max(timer.dueAt, at);
+    return;
+  }
+  timer.dueAt = Math.min(timer.dueAt, at);
+}
+
+function applySeeds(seeds, entity) {
+  if (entity === undefined) {
+    return;
+  }
+  for (const seed of seeds ?? []) {
+    const timer = pull.timers[seed.id];
     if (timer !== undefined) {
-      timer.dueAt = now + seconds * MS;
-      timer.cycle += 1;
+      writeSeed(timer, seed);
     }
   }
 }
 
 function seedPhase(row) {
-  seedTimers(row.phases?.seeds ?? {});
+  applySeeds(row.phases?.seeds, woc.world.entities.get(pull.bossId));
   pull.phaseTwoAt = woc.now();
 }
 
-function trackSpawns(row) {
+function trackPhase(row, phase) {
+  if (phase === 'transition') {
+    pull.transitionSeenAt = woc.now();
+    return;
+  }
+  if (pull.transitionSeenAt !== null && pull.phaseTwoAt === null) {
+    seedPhase(row);
+  }
+}
+
+/**
+ * A mechanic hidden by a gate is armed anyway: Ignivar's last phase alternates the same two
+ * casts it paces normally, and the one off screen is the one whose clock has to be right
+ * when it comes back.
+ */
+function armAnchored(row, entity, kind, id) {
   for (const mechanic of row.mechanics) {
-    const templateId = mechanic.anchor?.spawn;
-    if (typeof templateId === 'string') {
-      for (const entity of livingOf(templateId)) {
-        if (!pull.seenSpawns.has(entity.id)) {
-          pull.seenSpawns.add(entity.id);
-          fired(mechanic.id, mechanic.every);
-        }
+    if ((mechanic.anchor ?? []).some((one) => one.kind === kind && one.id === id)) {
+      fired(row, mechanic, entity);
+    }
+  }
+}
+
+function trackSpawns(row, entity) {
+  for (const mechanic of row.mechanics) {
+    for (const anchor of mechanic.anchor ?? []) {
+      if (anchor.kind === 'spawn') {
+        watchSpawn(row, entity, mechanic, anchor.id);
       }
+    }
+  }
+}
+
+function watchSpawn(row, entity, mechanic, templateId) {
+  for (const spawned of livingOf(templateId)) {
+    if (!pull.seenSpawns.has(spawned.id)) {
+      pull.seenSpawns.add(spawned.id);
+      fired(row, mechanic, entity);
     }
   }
 }
@@ -346,52 +511,106 @@ function trackSpawns(row) {
  */
 function trackCasts(row, entity) {
   const ability = bossCast(entity)?.ability ?? null;
-  const began = ability !== null && ability !== pull.castAbility;
+  const before = pull.castAbility;
   pull.castAbility = ability;
-  if (!began) {
+  if (before !== null && before !== ability) {
+    spaceAfter(row, entity, before);
+  }
+  if (ability !== null && ability !== before) {
+    armAnchored(row, entity, 'cast', ability);
+  }
+}
+
+/**
+ * The gap the game leaves after any one of a group resolves; without it every prediction in
+ * the group reads up to that gap early. A floor rather than a set, for the reason `writeSeed`
+ * gives.
+ */
+function spaceAfter(row, entity, endedAbility) {
+  const { spacing } = row;
+  if (spacing === undefined) {
     return;
   }
+  const ended = row.mechanics.find(
+    (one) =>
+      one.group === spacing.group &&
+      (one.anchor ?? []).some((a) => a.kind === 'cast' && a.id === endedAbility),
+  );
+  if (ended === undefined) {
+    return;
+  }
+  const seeds = row.mechanics
+    .filter((one) => one.group === spacing.group)
+    .map((one) => ({ id: one.id, seconds: spacing.seconds, mode: 'floor' }));
+  applySeeds(seeds, entity);
+}
+
+/**
+ * Neither hazard mechanic sets a cast, and both deal damage only to whoever failed to move,
+ * so damage would leave the clock dead on exactly the cycles the raid answered. The list is
+ * interest-filtered, so an out-of-range warning is missed rather than wrong.
+ */
+function trackHazards(row, entity) {
   for (const mechanic of row.mechanics) {
-    if (mechanic.anchor?.cast === ability) {
-      fired(mechanic.id, mechanic.every);
+    for (const anchor of mechanic.anchor ?? []) {
+      if (anchor.kind === 'hazard') {
+        const edge = edgeOf(`hazard:${mechanic.id}:${anchor.id}`, hazardsOf(anchor.id).length > 0);
+        if (edge.rising) {
+          fired(row, mechanic, entity);
+        }
+      }
     }
   }
 }
 
-function trackPhase(row, phase) {
-  if (phase === 'transition') {
-    pull.transitionSeenAt = woc.now();
-    return;
-  }
-  if (pull.transitionSeenAt !== null && pull.phaseTwoAt === null) {
-    seedPhase(row);
+/** A state the boss enters, for a mechanic whose start has no cast and no ground warning. */
+function trackBossAnchors(row, entity) {
+  for (const mechanic of row.mechanics) {
+    for (const anchor of mechanic.anchor ?? []) {
+      if (anchor.kind === 'boss') {
+        const edge = edgeOf(`boss:${mechanic.id}`, conditionHolds(anchor.when, entity));
+        if (edge.rising) {
+          fired(row, mechanic, entity);
+        }
+      }
+    }
   }
 }
 
-function predictionRow(mechanic, timer) {
+function trackReseeds(row, entity) {
+  (row.reseeds ?? []).forEach((rule, index) => {
+    const edge = edgeOf(`reseed:${String(index)}`, conditionHolds(rule.on, entity));
+    const wanted = rule.edge === 'leaves';
+    if ((wanted && edge.falling) || (!wanted && edge.rising)) {
+      applySeeds(rule.seeds, entity);
+    }
+  });
+}
+
+function predictionRow(row, mechanic, timer, entity) {
   const left = dueIn(timer);
   if (left === null) {
     return { id: mechanic.id, label: mechanic.label, detail: 'armed, not seen yet', value: '' };
   }
-  const row = {
+  const built = {
     id: mechanic.id,
     label: mechanic.label,
     detail: mechanic.detail ?? '',
     value: `~${left.toFixed(DECIMALS)}s`,
-    fraction: left / Math.max(mechanic.every, 1),
+    fraction: left / Math.max(cadenceFor(row, mechanic, entity), 1),
     seconds: left,
   };
   if (left <= IMPACT_SECONDS) {
-    row.tone = 'danger';
+    built.tone = 'danger';
   }
-  return row;
+  return built;
 }
 
 /**
  * A charged mechanic never counts to a fire. The game arms it on a timer and then holds the
  * charge through every miss, dodge and parry, so the release is the next landed swing.
  */
-function chargedRow(mechanic, timer) {
+function chargedRow(row, mechanic, timer, entity) {
   const left = dueIn(timer);
   if (left !== null && left <= 0) {
     return {
@@ -402,7 +621,7 @@ function chargedRow(mechanic, timer) {
       tone: 'warn',
     };
   }
-  return predictionRow(mechanic, timer);
+  return predictionRow(row, mechanic, timer, entity);
 }
 
 /** The game's own remaining time, so this row is drawn solid rather than as a prediction. */
@@ -418,19 +637,38 @@ function liveRow(mechanic, cast) {
   };
 }
 
+/** A mechanic's cast ANCHOR is also its live cast: it re-arms the cadence and draws the bar. */
+function liveCastOf(mechanic, cast) {
+  if (cast === null) {
+    return null;
+  }
+  const matched = (mechanic.anchor ?? []).some(
+    (one) => one.kind === 'cast' && one.id === cast.ability,
+  );
+  if (matched) {
+    return cast;
+  }
+  return null;
+}
+
+function mechanicRow(row, mechanic, entity, cast) {
+  const timer = pull.timers[mechanic.id];
+  const live = liveCastOf(mechanic, cast);
+  if (live !== null) {
+    return liveRow(mechanic, live);
+  }
+  if (mechanic.charge === true) {
+    return chargedRow(row, mechanic, timer, entity);
+  }
+  return predictionRow(row, mechanic, timer, entity);
+}
+
 function mechanicRows(row, entity, phase) {
   const cast = bossCast(entity);
   const rows = [];
   for (const mechanic of row.mechanics) {
-    const timer = pull.timers[mechanic.id];
-    if (inPhase(mechanic, phase) && timer !== undefined) {
-      if (cast !== null && mechanic.liveCast === cast.ability) {
-        rows.push(liveRow(mechanic, cast));
-      } else if (mechanic.charge === true) {
-        rows.push(chargedRow(mechanic, timer));
-      } else {
-        rows.push(predictionRow(mechanic, timer));
-      }
+    if (mechanicShown(mechanic, entity, phase) && pull.timers[mechanic.id] !== undefined) {
+      rows.push(mechanicRow(row, mechanic, entity, cast));
     }
   }
   return rows;
@@ -446,7 +684,9 @@ function mechanicRows(row, entity, phase) {
  */
 function shortLabels(names) {
   const parts = names.map((name) => name.split(' '));
-  while (parts.every((one) => one.length > 1)) {
+  // `every` is true on an empty list, so without the length check the loop reads `parts[0]`
+  // of nothing.
+  while (parts.length > 0 && parts.every((one) => one.length > 1)) {
     const tail = parts[0].at(-1);
     if (!parts.every((one) => one.at(-1) === tail)) {
       break;
@@ -456,6 +696,20 @@ function shortLabels(names) {
     }
   }
   return parts.map((one) => one.join(' '));
+}
+
+/**
+ * A COSMETIC derivation, the only one in this file: the conduits are named for their corner
+ * in snake_case, so `north_west` becomes `North West`.
+ */
+const WORD_BREAK = /[\s_]+/;
+
+function humanLabel(name) {
+  return name
+    .split(WORD_BREAK)
+    .filter((word) => word.length > 0)
+    .map((word) => `${word.slice(0, 1).toUpperCase()}${word.slice(1)}`)
+    .join(' ');
 }
 
 function startChannelWatch(block) {
@@ -647,22 +901,31 @@ function outcomeRows() {
   return rows;
 }
 
+/**
+ * Three rows where the encounter has four objects reads as a complete answer, and an object
+ * out of interest range cannot be read at all, so the count says so rather than the list
+ * quietly standing in for it.
+ */
+function rangeRow(declared, shown) {
+  if (typeof declared !== 'number' || declared <= shown) {
+    return null;
+  }
+  return {
+    id: 'out-of-range',
+    label: `${String(shown)} of ${String(declared)} in range`,
+    detail: 'the rest are too far away to read',
+    tone: 'warn',
+  };
+}
+
 function channelsBlockRows(block) {
   if (pull.channels === null) {
     return outcomeRows();
   }
   const rows = pull.channels.slots.map((slot) => channelRow(slot, block));
-  const declared = (block.objects ?? []).length;
-  // Three rows where the encounter has four objects reads as a complete answer. An object out
-  // of interest range cannot be read at all, so the count says so rather than the list
-  // quietly standing in for it.
-  if (declared > rows.length) {
-    rows.push({
-      id: 'out-of-range',
-      label: `${String(rows.length)} of ${String(declared)} in range`,
-      detail: 'the rest are too far away to read',
-      tone: 'warn',
-    });
+  const short = rangeRow((block.objects ?? []).length, rows.length);
+  if (short !== null) {
+    rows.push(short);
   }
   return rows;
 }
@@ -672,22 +935,23 @@ function channelsBlockRows(block) {
  * reads: a row exists for every member and carries a position. The exact remaining time comes
  * off the entity when there is one, since a row's strip is whole seconds.
  */
-function marksNow(block) {
-  const marks = [];
+function carriersOf(auraId) {
+  const found = [];
   for (const row of roster()) {
-    const [compact] = woc.world.partyAuras(row.pid, { id: block.aura });
+    const [compact] = woc.world.partyAuras(row.pid, { id: auraId });
     if (compact !== undefined) {
-      const exact = auraOn(woc.world.entities.get(row.pid), block.aura);
-      marks.push({
+      const exact = auraOn(woc.world.entities.get(row.pid), auraId);
+      found.push({
         pid: row.pid,
         name: row.name,
         x: row.x,
         z: row.z,
         remaining: exact?.remaining ?? compact.remaining ?? null,
+        aura: exact,
       });
     }
   }
-  return marks;
+  return found;
 }
 
 /** Counting itself, because that is the divisor the game applies. */
@@ -724,12 +988,182 @@ function markRow(mark, marks, block) {
 }
 
 function marksBlockRows(block) {
-  const marks = marksNow(block);
+  const marks = carriersOf(block.aura);
   if (marks.length > block.count) {
     noteHeroic();
   }
   markAlert(marks, block);
   return marks.map((mark) => markRow(mark, marks, block));
+}
+
+/**
+ * Measured against the WHOLE roster, not the other carriers: Ignivar's brand pulses on any
+ * pair inside its radius, marked or not.
+ */
+function nearestOther(carrier) {
+  let best = null;
+  for (const row of roster()) {
+    const gap = apart(carrier, row);
+    if (row.pid !== carrier.pid && (best === null || gap < best.gap)) {
+      best = { name: row.name, gap };
+    }
+  }
+  return best;
+}
+
+function crowdingDetail(carrier, block) {
+  const near = nearestOther(carrier);
+  if (near === null) {
+    return { detail: 'nobody else in the group is near enough to read' };
+  }
+  if (near.gap <= block.apart) {
+    return { detail: `${near.name} is ${near.gap.toFixed(DECIMALS)}yd away`, tone: 'danger' };
+  }
+  return { detail: `${block.note ?? 'clear'} ${String(block.apart)}yd` };
+}
+
+/**
+ * No `durationSeconds` is a decision: a mark removed by an action rather than by expiring has
+ * no share to draw, and a bar under it would sit full all fight.
+ */
+function debuffRow(carrier, block) {
+  const row = { id: String(carrier.pid), label: carrier.name, detail: block.note ?? '' };
+  if (block.apart !== undefined) {
+    Object.assign(row, crowdingDetail(carrier, block));
+  }
+  if (typeof block.durationSeconds === 'number' && carrier.remaining !== null) {
+    row.value = `${carrier.remaining.toFixed(0)}s`;
+    row.fraction = carrier.remaining / Math.max(block.durationSeconds, 1);
+  }
+  return row;
+}
+
+function debuffsBlockRows(block) {
+  const carriers = carriersOf(block.aura);
+  return carriers.map((carrier) => debuffRow(carrier, block));
+}
+
+/**
+ * The game puts the bodies it wants in `stacks` and the damage it will split in `value2`, so
+ * both are read off the AURA. The table's copies are the fallback for a carrier outside
+ * interest range, where only the party strip's compact aura is available.
+ */
+function soakRow(carrier, block) {
+  const { aura } = carrier;
+  const wanted = aura?.stacks ?? block.required;
+  const total = aura?.value2 ?? block.total;
+  const soakers = roster().filter((one) => apart(carrier, one) <= block.radius).length;
+  const row = {
+    id: String(carrier.pid),
+    label: carrier.name,
+    value: `${String(soakers)} of ${String(wanted)}`,
+    fraction: soakers / Math.max(wanted, 1),
+    detail: `${asPercent(total / Math.max(soakers, 1))} of health each`,
+  };
+  if (soakers < wanted) {
+    const missing = wanted - soakers;
+    const raid = asPercent(missing * (block.perMissing ?? 0));
+    row.detail = `${row.detail}, and ${raid} to everyone`;
+    row.tone = 'danger';
+  }
+  return row;
+}
+
+function soakBlockRows(block) {
+  const carriers = carriersOf(block.aura);
+  const rows = carriers.map((carrier) => soakRow(carrier, block));
+  soakAlert(carriers, block);
+  return rows;
+}
+
+/** Which of a station's three template ids it is wearing, which is the whole of its state. */
+function stationState(entity, block) {
+  if (entity.templateId === block.active) {
+    return 'active';
+  }
+  if (entity.templateId === block.ready) {
+    return 'ready';
+  }
+  return 'spent';
+}
+
+/**
+ * A station's TEMPLATE changes and the id is an identity field, diffed per tick and
+ * re-broadcast on change, so the swap reaches every viewer in range; that re-send is the edge
+ * the countdown stands on.
+ */
+function stationsSeen(block) {
+  const found = [
+    ...livingOf(block.ready),
+    ...livingOf(block.active),
+    ...livingOf(block.spent),
+  ].sort((a, b) => a.name.localeCompare(b.name));
+  const short = shortLabels(found.map((one) => one.name));
+  return found.map((entity, index) => {
+    const state = stationState(entity, block);
+    const key = `station:${String(entity.id)}`;
+    const edge = edgeOf(key, state === 'active');
+    if (edge.rising) {
+      pull.stations.set(entity.id, woc.now());
+    }
+    return { entity, state, label: humanLabel(short[index] ?? entity.name) };
+  });
+}
+
+/**
+ * A live station's own seconds are NOT on the wire, so this counts from the swap this addon
+ * saw, and a station already running on arrival says so instead of inventing one.
+ */
+function activeStationRow(station, block) {
+  const startedAt = pull.stations.get(station.entity.id);
+  if (startedAt === undefined) {
+    return {
+      id: String(station.entity.id),
+      label: station.label,
+      detail: 'running, started before this was watching',
+      value: 'LIVE',
+      tone: 'warn',
+    };
+  }
+  const left = Math.max(block.activeSeconds - (woc.now() - startedAt) / MS, 0);
+  return {
+    id: String(station.entity.id),
+    label: station.label,
+    detail: block.use ?? '',
+    value: `~${left.toFixed(DECIMALS)}s`,
+    fraction: left / Math.max(block.activeSeconds, 1),
+    tone: 'warn',
+  };
+}
+
+function stationRow(station, block) {
+  if (station.state === 'active') {
+    return activeStationRow(station, block);
+  }
+  if (station.state === 'ready') {
+    return {
+      id: String(station.entity.id),
+      label: station.label,
+      detail: 'waiting to be lit',
+      value: 'READY',
+    };
+  }
+  return {
+    id: String(station.entity.id),
+    label: station.label,
+    detail: 'used up for this attempt',
+    value: 'SPENT',
+  };
+}
+
+function stationsBlockRows(block) {
+  const stations = stationsSeen(block);
+  const rows = stations.map((station) => stationRow(station, block));
+  const short = rangeRow(block.count, rows.length);
+  if (short !== null) {
+    rows.push(short);
+  }
+  return rows;
 }
 
 function describeRemaining(remaining) {
@@ -818,6 +1252,42 @@ function toneForAnswer(answer) {
 }
 
 /**
+ * An add whose CAST is the thing to race: it channels a raid wipe, so the cast bar is the
+ * headline and its health the supporting figure.
+ */
+function addCountdownRow(add, entity) {
+  const cast = woc.world.casts.get(entity.id);
+  if (cast === undefined) {
+    return null;
+  }
+  return {
+    id: String(entity.id),
+    label: entity.name,
+    detail: `${asPercent(healthFraction(entity))} health, ${add.note ?? add.answer}`,
+    value: `${cast.remaining.toFixed(DECIMALS)}s`,
+    fraction: cast.remaining / Math.max(cast.total, 1),
+    tone: 'danger',
+  };
+}
+
+function addRow(add, entity) {
+  if (add.castCountdown === true) {
+    const racing = addCountdownRow(add, entity);
+    if (racing !== null) {
+      return racing;
+    }
+  }
+  return {
+    id: String(entity.id),
+    label: entity.name,
+    detail: add.note ?? add.answer,
+    value: asPercent(healthFraction(entity)),
+    fraction: healthFraction(entity),
+    tone: toneForAnswer(add.answer),
+  };
+}
+
+/**
  * Table order rather than health or distance: several adds can look nearly identical on
  * screen and want different things done to them, and the one that cannot be out-damaged has
  * to be the row read first.
@@ -830,41 +1300,84 @@ function addsBlockRows(block) {
         noteHeroic();
       }
       interruptAlert(add, entity);
-      rows.push({
-        id: String(entity.id),
-        label: entity.name,
-        detail: add.note ?? add.answer,
-        value: asPercent(healthFraction(entity)),
-        fraction: healthFraction(entity),
-        tone: toneForAnswer(add.answer),
-      });
+      rows.push(addRow(add, entity));
+    }
+  }
+  return rows;
+}
+
+/** Drawn only inside `GATE_BAND` above the threshold, and off the game's own bar while it casts. */
+function gateRow(gate, entity) {
+  const cast = bossCast(entity);
+  if (gate.cast !== undefined && cast !== null && cast.ability === gate.cast) {
+    return {
+      id: gate.id,
+      label: gate.name,
+      detail: gate.detail ?? '',
+      value: `${cast.remaining.toFixed(DECIMALS)}s`,
+      fraction: cast.remaining / Math.max(cast.total, 1),
+      tone: 'danger',
+    };
+  }
+  const left = healthFraction(entity);
+  if (left <= gate.hp || left - gate.hp > GATE_BAND) {
+    return null;
+  }
+  return {
+    id: gate.id,
+    label: gate.name,
+    detail: gate.detail ?? '',
+    value: `at ${asPercent(gate.hp)}`,
+    fraction: left,
+    tone: 'warn',
+  };
+}
+
+function gatesBlockRows(block, entity) {
+  const rows = [];
+  for (const gate of block.rows ?? []) {
+    const row = gateRow(gate, entity);
+    if (row !== null) {
+      rows.push(row);
     }
   }
   return rows;
 }
 
 /**
- * The one state on this fight nothing is DONE about, which is why it is drawn from the boss's
+ * The one state on a fight nothing is DONE about, which is why it is drawn from the boss's
  * own health rather than from a clock: knowing it is close is the whole of the answer.
  *
  * The aura runs to the end of the fight once it lands, so the call is made on it ARRIVING.
  * Made on its presence it would be the same call every re-warn floor until the boss died.
  */
-function enrageBlockRows(block, entity) {
+function enragedRow(block, entity, aura) {
   const left = healthFraction(entity);
-  if (auraOn(entity, block.aura) !== null) {
-    enrageAlert(left);
-    return [
-      {
-        id: 'enrage',
-        label: block.name,
-        detail: `${asPercent(left)} left`,
-        value: 'ENRAGED',
-        fraction: left,
-        tone: 'danger',
-      },
-    ];
+  enrageAlert(left);
+  const row = {
+    id: 'enrage',
+    label: block.name,
+    detail: `${asPercent(left)} left`,
+    value: 'ENRAGED',
+    fraction: left,
+    tone: 'danger',
+  };
+  // Where the table says `countdown`, the enrage ends in a wipe and the game keeps the length
+  // on the aura itself, so the row draws those seconds rather than a health share.
+  if (block.countdown === true && typeof aura.remaining === 'number') {
+    row.value = `${aura.remaining.toFixed(0)}s`;
+    row.detail = `${asPercent(left)} left, then the raid dies`;
+    row.fraction = aura.remaining / Math.max(block.seconds ?? 1, 1);
   }
+  return row;
+}
+
+function enrageBlockRows(block, entity) {
+  const aura = auraOn(entity, block.aura);
+  if (aura !== null) {
+    return [enragedRow(block, entity, aura)];
+  }
+  const left = healthFraction(entity);
   if (left > block.hp * ENRAGE_WATCH_MULT) {
     return [];
   }
@@ -883,8 +1396,12 @@ function enrageBlockRows(block, entity) {
 const BLOCK_RENDERERS = new Map([
   ['channels', (block) => channelsBlockRows(block)],
   ['marks', (block) => marksBlockRows(block)],
+  ['debuffs', (block) => debuffsBlockRows(block)],
+  ['soak', (block) => soakBlockRows(block)],
+  ['stations', (block) => stationsBlockRows(block)],
   ['tankStacks', (block, entity) => tankStacksBlockRows(block, entity)],
   ['adds', (block) => addsBlockRows(block)],
+  ['gates', (block, entity) => gatesBlockRows(block, entity)],
   ['enrage', (block, entity) => enrageBlockRows(block, entity)],
 ]);
 
@@ -989,6 +1506,23 @@ function markNames(marks) {
   return ['You', ...others].join(', ');
 }
 
+function soakAlert(carriers, block) {
+  for (const carrier of carriers) {
+    const wanted = carrier.aura?.stacks ?? block.required;
+    const soakers = roster().filter((row) => apart(carrier, row) <= block.radius).length;
+    const left = carrier.remaining;
+    const late = left === null || left <= woc.settings['alert-lead'];
+    if (soakers < wanted && late) {
+      warn({
+        key: 'soak',
+        text: `SOAK ${carrier.name}`,
+        detail: `${String(soakers)} of ${String(wanted)}`,
+        lethal: true,
+      });
+    }
+  }
+}
+
 /**
  * The game's `quietMechanics` flag silences an add's barks, so a lethal channel on an add
  * nobody is targeting has a cast bar and no other notice at all.
@@ -1065,18 +1599,60 @@ function mechanicAlert(rows) {
  * `ability` is a display NAME rather than an id, and matching on one is safe only because the
  * game CARRIES the label on the record rather than it being derived here. These reach this
  * client because they land on the group, which is the whole raid in a boss room.
+ *
+ * A raid wipe arrives here and nowhere else: ordinary damage of a hundred times a player's
+ * health under the mechanic's own label, with no lifecycle event beside it.
  */
 woc.net.onEvent('damage', (event) => {
-  if (pull === null) {
+  const found = pullSubject();
+  if (found === null) {
     return;
   }
-  const row = encounters.find((one) => one.id === pull.encounterId);
-  for (const mechanic of row?.mechanics ?? []) {
-    if (mechanic.anchor?.damage === event.ability) {
-      fired(mechanic.id, mechanic.every);
-    }
+  if ((found.row.wipes ?? []).some((one) => one.ability === event.ability)) {
+    lastResult = { at: woc.now(), text: `${found.row.name} wiped the raid on ${event.ability}.` };
+  }
+  armAnchored(found.row, found.entity, 'damage', event.ability);
+});
+
+/**
+ * The brand's damage label is worn by its tick and its proximity pulse too, so damage would
+ * re-arm it several times a second; the aura gain is the one clean edge.
+ */
+woc.net.onEvent('aura', (event) => {
+  const found = pullSubject();
+  if (found !== null && event.gained) {
+    armAnchored(found.row, found.entity, 'partyAura', event.name);
   }
 });
+
+/**
+ * A boss's own line is the only EXACT pull edge the wire carries. It is range-gated, so a
+ * player out of yell range gets unseeded clocks and the health backstop still catches the
+ * fight starting.
+ */
+woc.net.onEvent('chat', (event) => {
+  if (event.channel !== 'yell') {
+    return;
+  }
+  const found = activeNow();
+  if (found === null || event.entityId !== found.entity.id) {
+    return;
+  }
+  const yell = (found.row.yells ?? []).find((one) => one.text === event.text);
+  if (yell?.edge === 'pull') {
+    notePullYell(found);
+  }
+  if (yell?.edge === 'kill') {
+    lastResult = { at: woc.now(), text: `${found.row.name} is down.` };
+  }
+});
+
+function notePullYell(found) {
+  pullYellFor = found.entity.id;
+  if (pull !== null && pull.bossId === found.entity.id && !pull.seeded) {
+    seedPull(found.row);
+  }
+}
 
 const frame = woc.ui.frame({
   id: 'raid',
@@ -1116,8 +1692,8 @@ function createRow(row) {
  * and the layout is the same fight to fight. The heading is whatever the active encounter
  * calls that block.
  */
-function section(id) {
-  const wrap = woc.ui.column({ parent: body });
+function section(id, parent) {
+  const wrap = woc.ui.column({ parent });
   wrap.dataset.block = id;
   const heading = woc.ui.line({ parent: wrap, tone: 'muted' });
   const rows = woc.ui.list({
@@ -1129,9 +1705,40 @@ function section(id) {
   return { wrap, heading, rows };
 }
 
-const mechanicSection = section('mechanics');
-const blockSections = new Map(BLOCK_ORDER.map((kind) => [kind, section(kind)]));
+const mechanicSection = section('mechanics', body);
+/** Held open here so the sections built after the table is read land above `note`. */
+const blocksHost = woc.ui.column({ parent: body });
 const note = woc.ui.line({ parent: body, tone: 'muted' });
+
+/**
+ * Built once the table is read because an encounter may declare a kind twice (Varkhul has two
+ * debuff blocks), and one section per kind would draw the second over the first. The count is
+ * the widest any encounter needs, so switching fights never rebuilds.
+ */
+const blockSections = new Map();
+
+function buildSections(rows) {
+  for (const kind of BLOCK_ORDER) {
+    const needed = Math.max(0, ...rows.map((row) => countOfKind(row, kind)));
+    const made = [];
+    for (let index = 0; index < needed; index += 1) {
+      made.push(section(sectionId(kind, index), blocksHost));
+    }
+    blockSections.set(kind, made);
+  }
+}
+
+function countOfKind(row, kind) {
+  return (row.blocks ?? []).filter((block) => block.kind === kind).length;
+}
+
+/** The first of a kind keeps the bare name, so a selector for a single block is unchanged. */
+function sectionId(kind, index) {
+  if (index === 0) {
+    return kind;
+  }
+  return `${kind}-${String(index + 1)}`;
+}
 
 /** A block with nothing to say takes its heading with it, so the frame fits the fight. */
 function fill(block, label, rows) {
@@ -1146,9 +1753,11 @@ function fill(block, label, rows) {
 function hideAll() {
   mechanicSection.rows.clear();
   woc.ui.show(mechanicSection.wrap, false);
-  for (const block of blockSections.values()) {
-    block.rows.clear();
-    woc.ui.show(block.wrap, false);
+  for (const made of blockSections.values()) {
+    for (const block of made) {
+      block.rows.clear();
+      woc.ui.show(block.wrap, false);
+    }
   }
   woc.ui.show(note, false);
 }
@@ -1156,9 +1765,20 @@ function hideAll() {
 /** Which silence this is, because an empty panel reads as a measurement of nothing. */
 function drawIdle(reason) {
   pull = null;
-  emptyLine.textContent = reason;
+  emptyLine.textContent = idleLine(reason);
   woc.ui.show(emptyLine, true);
   hideAll();
+}
+
+/**
+ * A kill and a wipe both take the boss out of the readable state within seconds, so without
+ * this the panel answers "did that work" by going blank.
+ */
+function idleLine(reason) {
+  if (lastResult !== null && woc.now() - lastResult.at <= POSTMORTEM_MS) {
+    return `${lastResult.text} ${reason}`;
+  }
+  return reason;
 }
 
 /**
@@ -1168,12 +1788,15 @@ function drawIdle(reason) {
  */
 function buildBlocks(row, entity) {
   const built = [];
+  const taken = new Map();
   for (const block of row.blocks ?? []) {
     const render = BLOCK_RENDERERS.get(block.kind);
-    if (render === undefined || !blockSections.has(block.kind)) {
+    const at = taken.get(block.kind) ?? 0;
+    taken.set(block.kind, at + 1);
+    if (render === undefined || (blockSections.get(block.kind)?.length ?? 0) <= at) {
       woc.warn(`no renderer for block kind '${String(block.kind)}', so it is not drawn`);
     } else {
-      built.push({ kind: block.kind, label: block.label, rows: render(block, entity) });
+      built.push({ kind: block.kind, at, label: block.label, rows: render(block, entity) });
     }
   }
   return built;
@@ -1182,16 +1805,18 @@ function buildBlocks(row, entity) {
 function paintBlocks(built) {
   const drawn = new Set();
   for (const one of built) {
-    const target = blockSections.get(one.kind);
+    const target = blockSections.get(one.kind)?.[one.at];
     if (target !== undefined) {
-      drawn.add(one.kind);
+      drawn.add(sectionId(one.kind, one.at));
       fill(target, one.label, one.rows);
     }
   }
-  for (const [kind, target] of blockSections) {
-    if (!drawn.has(kind)) {
-      fill(target, '', []);
-    }
+  for (const [kind, made] of blockSections) {
+    made.forEach((target, index) => {
+      if (!drawn.has(sectionId(kind, index))) {
+        fill(target, '', []);
+      }
+    });
   }
 }
 
@@ -1204,12 +1829,19 @@ function trackBlocks(row, entity) {
   }
 }
 
-function drawFight(row, entity) {
-  const phase = phaseOf(row, entity);
+function trackFight(row, entity, phase) {
   trackPhase(row, phase);
   trackBlocks(row, entity);
-  trackSpawns(row);
+  trackSpawns(row, entity);
   trackCasts(row, entity);
+  trackHazards(row, entity);
+  trackBossAnchors(row, entity);
+  trackReseeds(row, entity);
+}
+
+function drawFight(row, entity) {
+  const phase = phaseOf(row, entity);
+  trackFight(row, entity, phase);
   const rows = mechanicRows(row, entity, phase);
   const showMechanics = woc.settings.mechanics && rows.length > 0;
   woc.ui.show(mechanicSection.wrap, showMechanics);
@@ -1249,9 +1881,7 @@ woc.onFrame(() => {
   if (pull === null || pull.bossId !== found.entity.id || encounterReset(found.entity)) {
     startPull(found);
   }
-  if (frozen(found.row, found.entity)) {
-    holdTimers(elapsed);
-  }
+  holdTimers(found.row, found.entity, elapsed);
   drawFight(found.row, found.entity);
 });
 
@@ -1261,6 +1891,7 @@ async function boot() {
   if (encounters.length === 0) {
     throw new Error(`${TABLE_FILE} carries no encounter this can read`);
   }
+  buildSections(encounters);
 }
 
 boot().catch((err) => {

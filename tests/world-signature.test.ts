@@ -61,6 +61,8 @@ describe('world keys', () => {
       'mail',
       'mailUnread',
       'bank',
+      'vault',
+      'craftVaultStock',
       'buyback',
     ]);
   });

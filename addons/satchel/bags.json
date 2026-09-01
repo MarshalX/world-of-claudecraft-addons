@@ -1,0 +1,257 @@
+{
+  "gameVersion": "0.41.1",
+  "source": "src/sim/data.ts (ITEMS), src/sim/bags.ts (BACKPACK_SLOTS, BAG_SOCKETS), src/sim/bag_pools.ts (isMaterialsOnlyBag, bagSlotsOf), src/sim/material_ids.ts (MATERIAL_ITEM_IDS)",
+  "note": "The carried pool split. A general pool is backpackSlots plus every non-materialsOnly equipped bag; a materials pool is every materialsOnly one. A non-material item can only take general headroom; a material takes materials headroom first and spills into general. materials lists every id the game counts as one, derived rather than approximated by kind.",
+  "backpackSlots": 16,
+  "bagSockets": 4,
+  "bags": [
+    {
+      "id": "burlap_reagent_pouch",
+      "name": "Burlap Reagent Pouch",
+      "slots": 8,
+      "materialsOnly": true
+    },
+    {
+      "id": "duskweave_bag",
+      "name": "Duskweave Bag",
+      "slots": 12,
+      "materialsOnly": false
+    },
+    {
+      "id": "foragers_haversack",
+      "name": "Forager's Haversack",
+      "slots": 12,
+      "materialsOnly": true
+    },
+    {
+      "id": "gravewoven_bag",
+      "name": "Gravewoven Bag",
+      "slots": 12,
+      "materialsOnly": false
+    },
+    {
+      "id": "linen_pouch",
+      "name": "Linen Pouch",
+      "slots": 6,
+      "materialsOnly": false
+    },
+    {
+      "id": "loombound_reagent_satchel",
+      "name": "Loombound Reagent Satchel",
+      "slots": 24,
+      "materialsOnly": true
+    },
+    {
+      "id": "mistcallers_duffel",
+      "name": "Fogbinder's Duffel",
+      "slots": 14,
+      "materialsOnly": false
+    },
+    {
+      "id": "necromancers_reagent_satchel",
+      "name": "Necromancer's Reagent Satchel",
+      "slots": 20,
+      "materialsOnly": true
+    },
+    {
+      "id": "resonant_weave_bag",
+      "name": "Resonantweave Bag",
+      "slots": 16,
+      "materialsOnly": false
+    },
+    {
+      "id": "silkspun_satchel",
+      "name": "Silkspun Satchel",
+      "slots": 10,
+      "materialsOnly": false
+    },
+    {
+      "id": "travelers_knapsack",
+      "name": "Traveler's Knapsack",
+      "slots": 8,
+      "materialsOnly": false
+    },
+    {
+      "id": "wayfarers_backpack",
+      "name": "Wayfarer's Backpack",
+      "slots": 16,
+      "materialsOnly": false
+    },
+    {
+      "id": "wolfhide_satchel",
+      "name": "Wolfhide Satchel",
+      "slots": 10,
+      "materialsOnly": false
+    }
+  ],
+  "materials": [
+    {
+      "id": "arcane_dust"
+    },
+    {
+      "id": "arcane_essence"
+    },
+    {
+      "id": "arcane_shard"
+    },
+    {
+      "id": "arcanite_bar"
+    },
+    {
+      "id": "ashwood_log"
+    },
+    {
+      "id": "bone_fragments"
+    },
+    {
+      "id": "cooking_salt"
+    },
+    {
+      "id": "copper_ore"
+    },
+    {
+      "id": "curved_tusk"
+    },
+    {
+      "id": "elderwood_log"
+    },
+    {
+      "id": "fine_ashwood_log"
+    },
+    {
+      "id": "fine_copper_ore"
+    },
+    {
+      "id": "fine_elderwood_log"
+    },
+    {
+      "id": "fine_goldleaf_herb"
+    },
+    {
+      "id": "fine_iron_ore"
+    },
+    {
+      "id": "fine_ironbark_log"
+    },
+    {
+      "id": "fine_silverleaf_herb"
+    },
+    {
+      "id": "fine_sunpetal_herb"
+    },
+    {
+      "id": "fine_thorium_ore"
+    },
+    {
+      "id": "game_meat"
+    },
+    {
+      "id": "glass_vial"
+    },
+    {
+      "id": "glimmerfin_koi"
+    },
+    {
+      "id": "goldleaf_herb"
+    },
+    {
+      "id": "homespun_cloth"
+    },
+    {
+      "id": "iron_ore"
+    },
+    {
+      "id": "ironbark_log"
+    },
+    {
+      "id": "lastflame_core"
+    },
+    {
+      "id": "linen_scrap"
+    },
+    {
+      "id": "prime_cut"
+    },
+    {
+      "id": "pristine_claw"
+    },
+    {
+      "id": "pristine_hide"
+    },
+    {
+      "id": "pristine_silk"
+    },
+    {
+      "id": "pristine_venom_gland"
+    },
+    {
+      "id": "raw_bog_eel"
+    },
+    {
+      "id": "raw_frostgill_trout"
+    },
+    {
+      "id": "raw_marsh_pike"
+    },
+    {
+      "id": "raw_mirror_trout"
+    },
+    {
+      "id": "raw_river_perch"
+    },
+    {
+      "id": "raw_stonescale_carp"
+    },
+    {
+      "id": "resonant_hide"
+    },
+    {
+      "id": "resonant_links"
+    },
+    {
+      "id": "resonant_steel"
+    },
+    {
+      "id": "resonant_thread"
+    },
+    {
+      "id": "resonant_timber"
+    },
+    {
+      "id": "rough_hide"
+    },
+    {
+      "id": "sharp_claw"
+    },
+    {
+      "id": "silverleaf_herb"
+    },
+    {
+      "id": "smithing_flux"
+    },
+    {
+      "id": "spider_leg"
+    },
+    {
+      "id": "spider_silk"
+    },
+    {
+      "id": "spool_of_thread"
+    },
+    {
+      "id": "sunpetal_herb"
+    },
+    {
+      "id": "tanning_agent"
+    },
+    {
+      "id": "thorium_ore"
+    },
+    {
+      "id": "venom_gland"
+    },
+    {
+      "id": "wolf_fang"
+    }
+  ]
+}

@@ -14,12 +14,15 @@ import interact from 'interactjs';
 import {
   clampBox,
   type FrameBox,
+  LABEL_BELOW_CLASS,
+  labelBelow,
   MIN_HEIGHT,
   MIN_WIDTH,
   type SizeAxes,
   type SizeBounds,
   type Viewport,
 } from './geometry.ts';
+import { NO_SNAP, type ResizeEdges, snapPosition, snapResize } from './snap.ts';
 
 interface InteractiveFrameDeps {
   el: HTMLElement;
@@ -67,6 +70,12 @@ interface InteractiveFrameDeps {
    * manager's 360 by 220, which is a settings window rather than a HUD readout.
    */
   bounds?: SizeBounds;
+  /**
+   * The alignment grid a gesture lands on, read per gesture because both the setting
+   * and the arrange mode change under a frame built long before either did. Absent
+   * means off.
+   */
+  snapGrid?: () => number;
 }
 
 interface InteractiveFrame {
@@ -92,6 +101,8 @@ function paint(el: HTMLElement, box: FrameBox, axes: SizeAxes): void {
   el.setAttribute('data-positioned', 'true');
   el.style.left = `${box.x}px`;
   el.style.top = `${box.y}px`;
+  // Here because every box, the opening placement included, reaches the element here.
+  el.classList.toggle(LABEL_BELOW_CLASS, labelBelow(box.y));
   // Only the axes the box owns. Writing the other would pin a frame at whatever its
   // content happened to measure at the moment it was first painted.
   if (axes.w) {
@@ -163,6 +174,12 @@ function createBoxKeeper(deps: InteractiveFrameDeps, axes: SizeAxes): BoxKeeper 
   };
 }
 
+/**
+ * The half of the keeper a gesture listener uses, so a suite can drive the listeners
+ * without interactjs, which moves nothing under happy-dom.
+ */
+type BoxWriter = Pick<BoxKeeper, 'box' | 'move'>;
+
 /** What interactjs is told a resize may produce. Its own naming, not the kit's. */
 interface SizeLimit {
   width: number;
@@ -192,6 +209,59 @@ function restrictOpts(bounds: SizeBounds): RestrictSizeOpts {
   return opts;
 }
 
+/**
+ * The drag listener, carrying the sub-cell remainder a snapped drag leaves behind:
+ * interactjs reports deltas against a box already rounded onto a line, so without it
+ * every movement under half a cell rounds straight back and a slow drag never moves
+ * the frame. The remainder is bounded by half a cell by construction, so a frame
+ * clamped at the viewport edge owes nothing when the pointer comes back.
+ */
+function dragMover(
+  keeper: BoxWriter,
+  grid: () => number,
+): (event: { dx: number; dy: number }) => void {
+  const rest = { x: 0, y: 0 };
+  return (event) => {
+    const box = keeper.box();
+    const wanted = { ...box, x: box.x + rest.x + event.dx, y: box.y + rest.y + event.dy };
+    const next = snapPosition(wanted, grid());
+    rest.x = wanted.x - next.x;
+    rest.y = wanted.y - next.y;
+    keeper.move(next);
+  };
+}
+
+/** What interactjs reports a resize with. Its own naming, not the kit's. */
+interface ResizeEvent {
+  rect: { width: number; height: number };
+  deltaRect: { left: number };
+  edges: ResizeEdges;
+}
+
+/**
+ * The resize listener. The edges come off the event, since which one is dragged
+ * decides where the snap goes (see frame/snap.ts).
+ */
+function resizeMover(keeper: BoxWriter, grid: () => number): (event: ResizeEvent) => void {
+  return (event) => {
+    // A left-edge drag changes x and w together. deltaRect carries the origin
+    // shift; without it the window grows leftward and then jumps.
+    const box = keeper.box();
+    keeper.move(
+      snapResize(
+        {
+          x: box.x + event.deltaRect.left,
+          y: box.y,
+          w: event.rect.width,
+          h: event.rect.height,
+        },
+        event.edges,
+        grid(),
+      ),
+    );
+  };
+}
+
 /** What a caller may do to the gestures once they are attached. */
 interface Gestures {
   /** Both of them at once: a frame nobody may move is not one they may resize. */
@@ -212,18 +282,14 @@ function attachGestures(deps: InteractiveFrameDeps, keeper: BoxKeeper, axes: Siz
     deps.onCommit(keeper.box());
   };
 
+  const grid = (): number => deps.snapGrid?.() ?? NO_SNAP;
+
   const instance = interact(deps.el).draggable({
     // Only the title bar starts a drag, so a click on a tab is a click on a
     // tab. `ignoreFrom` covers the close button living inside the handle.
     allowFrom: deps.handle,
     ignoreFrom: 'button, input, select, textarea',
-    listeners: {
-      move: (event: { dx: number; dy: number }) => {
-        const box = keeper.box();
-        keeper.move({ ...box, x: box.x + event.dx, y: box.y + event.dy });
-      },
-      end: commit,
-    },
+    listeners: { move: dragMover(keeper, grid), end: commit },
   });
 
   const resizable = axes.w || axes.h;
@@ -234,20 +300,7 @@ function attachGestures(deps: InteractiveFrameDeps, keeper: BoxKeeper, axes: Siz
       // three are per axis, so a frame that owns only its width has no bottom edge
       // to grab and cannot be dragged into a height nothing will write.
       edges: { top: false, left: axes.w, right: axes.w, bottom: axes.h },
-      listeners: {
-        move: (event: { rect: { width: number; height: number }; deltaRect: { left: number } }) => {
-          // A left-edge drag changes x and w together. deltaRect carries the
-          // origin shift; without it the window grows leftward and then jumps.
-          const box = keeper.box();
-          keeper.move({
-            x: box.x + event.deltaRect.left,
-            y: box.y,
-            w: event.rect.width,
-            h: event.rect.height,
-          });
-        },
-        end: commit,
-      },
+      listeners: { move: resizeMover(keeper, grid), end: commit },
       modifiers: [interact.modifiers.restrictSize(restrictOpts(keeper.bounds))],
     });
   }
@@ -290,5 +343,5 @@ function makeFrameInteractive(deps: InteractiveFrameDeps): InteractiveFrame {
   };
 }
 
-export type { InteractiveFrame, InteractiveFrameDeps };
-export { makeFrameInteractive };
+export type { BoxWriter, InteractiveFrame, InteractiveFrameDeps, ResizeEvent };
+export { dragMover, makeFrameInteractive, resizeMover };

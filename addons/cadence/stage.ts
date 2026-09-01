@@ -138,6 +138,114 @@ async function comboPoints(stage: Stage): Promise<void> {
   stage.frame();
 }
 
+/** Ratcatcher Shiv. A different speed from the mainhand, or the two bars photograph in step. */
+const ROGUE_OFFHAND = { min: 9, max: 15, speed: 1.2, dagger: true };
+const ROGUE_OFFHAND_ITEM = 'ratcatcher_shiv';
+
+/** A rogue dual-wielding, the only state the offhand row draws in. */
+function aDualWieldRogue(draft: WorldDraft): void {
+  aRogue(draft);
+  draft.set(draft.player, 'offhandWeapon', ROGUE_OFFHAND);
+  draft.set(draft.player, 'offhandItemId', ROGUE_OFFHAND_ITEM);
+}
+
+/**
+ * The two hands out of step. The offhand is watched through its own reset, since the
+ * published `offhandWeapon.speed` is an unhasted base: 1.2 seeded, 1.0 observed.
+ */
+async function bothHands(stage: Stage): Promise<void> {
+  const { player } = stage;
+  stage.set(player, 'swingTimer', 1.9);
+  stage.set(player, 'gcdRemaining', 0.6);
+  stage.set(player, 'offhandSwingTimer', 0.2);
+  stage.poll();
+  await stage.settle();
+  stage.frame();
+  stage.set(player, 'offhandSwingTimer', 1);
+  stage.frame();
+  stage.set(player, 'swingTimer', 1.4);
+  stage.set(player, 'offhandSwingTimer', 0.7);
+  stage.frame();
+}
+
+const BOSS_ID = 4101;
+const BOSS_NAME = 'Ignivar';
+/** The first frame's guess, and what the reset teaches. */
+const BOSS_FIRST_SEEN = 2.9;
+const BOSS_PERIOD = 3.6;
+
+/**
+ * A hunter with a boss selected. The mob must be auto-attacking: the server sends a swing
+ * only for an entity that is swinging, so a boss standing still photographs as 'off'.
+ */
+function aBossFight(draft: WorldDraft): void {
+  aHunter(draft);
+  draft.mob(BOSS_ID, {
+    name: BOSS_NAME,
+    level: 62,
+    autoAttack: true,
+    swingTimer: BOSS_FIRST_SEEN,
+  });
+  draft.set(draft.player, 'targetId', BOSS_ID);
+}
+
+/**
+ * The boss's swing through one reset: the guess, the swing landing, and the corrected bar
+ * draining against the length it just learned.
+ */
+async function bossSwing(stage: Stage): Promise<void> {
+  const { player } = stage;
+  const boss = stage.entities.get(BOSS_ID) as Record<string, unknown>;
+  stage.set(player, 'swingTimer', 0.7);
+  stage.set(player, 'gcdRemaining', 0.5);
+  stage.poll();
+  await stage.settle();
+  stage.frame();
+  stage.set(boss, 'swingTimer', BOSS_PERIOD);
+  stage.frame();
+  stage.set(boss, 'swingTimer', BOSS_PERIOD / 2);
+  stage.set(player, 'swingTimer', 1.9);
+  stage.frame();
+}
+
+/**
+ * The movement multiplier as a live v2 session carries it. All three fields: the loader
+ * answers null unless the session negotiated movement wire 2 and is not spectating.
+ */
+function statedSpeed(draft: WorldDraft, mult: number): void {
+  draft.set(draft.world, 'spectating', null);
+  draft.set(draft.world, 'movementWireVersion', 2);
+  draft.set(draft.world, 'reconMoveSpeedMult', mult);
+}
+
+/** A hunter kited at 40% speed. */
+function aSnaredHunter(draft: WorldDraft): void {
+  aHunter(draft);
+  statedSpeed(draft, 0.4);
+}
+
+/**
+ * A rogue in Stealth, which the row must NOT draw: the game folds stealth into the same
+ * `Math.min` as a snare and a rogue's Stealth is value 0.5, so the number cannot tell them apart.
+ */
+function aStealthedRogue(draft: WorldDraft): void {
+  aRogue(draft);
+  statedSpeed(draft, 0.5);
+  draft.set(draft.player, 'auras', [
+    { id: 'stealth', kind: 'stealth', value: 0.5, remaining: 3600 },
+  ]);
+}
+
+/** The rows running under whichever speed the world was drafted with. */
+async function moving(stage: Stage): Promise<void> {
+  const { player } = stage;
+  stage.set(player, 'swingTimer', 1.6);
+  stage.set(player, 'gcdRemaining', 0.7);
+  stage.poll();
+  await stage.settle();
+  stage.frame();
+}
+
 const CAST_ALT = 'four thin bars on a bare strip: swing, global cooldown, cast, resource.';
 
 const COMBO_ALT = 'the same four on a rogue, over a row of combo pips.';
@@ -161,6 +269,64 @@ const SCENARIOS: readonly Scenario[] = [
     frames: { strip: ROGUE_BOX },
     world: aRogue,
     run: comboPoints,
+  },
+  {
+    // NOT a preview panel, nor any below: the committed picture and its alt describe four bars.
+    id: 'snared',
+    label: 'A hunter kited',
+    settings: { 'show-speed': true },
+    world: aSnaredHunter,
+    run: moving,
+  },
+  {
+    // The same 0.5 a hard snare gives, on a rogue in Stealth: the row draws nothing.
+    id: 'stealthed',
+    label: 'A rogue stealthed, which is not a snare',
+    settings: { 'show-speed': true },
+    world: aStealthedRogue,
+    run: moving,
+  },
+  {
+    id: 'offhand',
+    label: 'A rogue weaving two weapons',
+    settings: { 'show-offhand-swing': true },
+    world: aDualWieldRogue,
+    run: bothHands,
+  },
+  {
+    // The setting on and nothing in the offhand: the row takes no line.
+    id: 'offhand-empty',
+    label: 'The offhand row with no offhand held',
+    settings: { 'show-offhand-swing': true },
+    world: aHunter,
+    run: async (stage) => {
+      stage.set(stage.player, 'swingTimer', 1.4);
+      stage.set(stage.player, 'gcdRemaining', 0.6);
+      stage.poll();
+      await stage.settle();
+      stage.frame();
+    },
+  },
+  {
+    id: 'target',
+    label: 'A boss to watch',
+    settings: { 'show-target-swing': true },
+    world: aBossFight,
+    run: bossSwing,
+  },
+  {
+    // Nothing selected: the row reads 'no target' rather than an empty bar, which would mean
+    // a swing of zero.
+    id: 'no-target',
+    label: 'The target row with nothing selected',
+    settings: { 'show-target-swing': true },
+    world: aHunter,
+    run: async (stage) => {
+      stage.set(stage.player, 'swingTimer', 1.4);
+      stage.poll();
+      await stage.settle();
+      stage.frame();
+    },
   },
   {
     // Standing about, which is most of a session. Every row has nothing to say and every row is

@@ -66,15 +66,26 @@ woc.world.copper          // money
 woc.world.zone            // the zone name the game is displaying
 woc.world.characterKey    // who is playing, as an opaque per-character key
 woc.world.spectating      // the character being watched, or null
+woc.world.moveSpeedMult   // how fast you are actually moving, or null
 ```
 
 `world.equipmentInstances` is keyed the same way `equipment` is and is sparse: a plain piece has no key at all, so an absent slot means nothing is on it rather than nothing is worn. It is the untrimmed payload for your OWN gear. The same read off another player's entity, `entity.equippedInstances`, is the public projection the server sends about them: the signer, the enchant and the roll, and nothing else.
 
 Another player's gear is readable too, off the entity rather than off `world`: `equippedItems`, `equippedInstances`, `mainhandItemId`, `offhandItemId`, `weaponSkinId` and `mountKey`. All six are sent for a PLAYER only, so check `entity.kind === 'player'` before reading one: on a mob they exist and hold an inert default. `mainhandItemId` is not `equippedItems.mainhand`, and the difference is real: the server fills it only when the equipped mainhand is a weapon, so read one for what is held and the other for what is worn.
 
+`entity.autoAttack` and `entity.swingTimer` ride EVERY entity's record as of game 0.41.0, so a target's swing bar is possible; against an older server both hold their inert default on everybody but you. The server omits the swing field for an entity that is not attacking and the client reads that as `autoAttack: false`, so false is an answer rather than a gap. **`weapon.speed` is not the period, on anybody, including you.** The game resets the clock to the weapon speed multiplied by every haste effect on the swinger, and melee haste is not on the wire, so a bar seeded from the raw speed on a hasted character is wrong by exactly the haste and looks like a working bar. Learn the period from the reset edge: when the value jumps upward, the height of the jump is the period, and the weapon speed is at most a first-frame seed.
+
+`entity.offhandSwingTimer` is self-only. **Read it only while `autoAttack` is true**: the game drains this clock before checking whether you are attacking, so with auto-attack off it sits at 0 and reads as a swing about to land. Its period is unreadable for the same reason the mainhand's is; measure the edge.
+
+Ask `offhandWeapon !== null` for whether there is an offhand swing at all, which is what the game derives `dualWielding` from. **Not `offhandItemId`**: the game fills that for a shield and for a held-only item too, so gating on it draws a swing bar for a shield.
+
 `world.characterKey` is the same identity `woc.storage.character` files its keys under, published so two addons keeping their own per-character records cannot disagree about whose they are. It is OPAQUE: do not parse it. Watch it, because a character switch inside one page load is real.
 
 `world.spectating` is the one thing that makes `world.player` somebody else. A moderator spectate repoints the game's own player at the character being watched, so while it runs `player`, the class on it and everything derived from either describe the watched character rather than the person at the keyboard. Most addons can ignore that, because most addons show what is in front of the player and that IS the watched character. The ones that cannot are the ones filing something under an identity, and for those `characterKey` is null for the whole spectate and `woc.storage.character` refuses to write, so an addon using the loader's own per-character storage inherits the rule instead of implementing it. Read `spectating` when you keep your own records and want to say WHY you have stopped.
+
+`world.moveSpeedMult` is the server's own movement multiplier, every slow, haste, mount and form effect folded into one number, so a display built on it agrees with what your character does; re-deriving it from visible auras misses anything applied without one. Self-only. Added in game 0.41.0.
+
+1 means nothing is affecting you and null means nobody said. Null arrives four ways and they are handled as one: before the world is up, offline where the field does not exist, while spectating, and on a session that negotiated the older movement wire, where the value would otherwise sit at a permanent 1 and lie about a snared player. Guard with `mult === null`, never a falsy test, and substitute no default.
 
 An item id does not resolve to a **name**, a quality, or any stats. That content ships inside the client bundle and is reachable from nothing the loader can see, so what an id gets you is its icon through `ui.icon.item`, and the ability to tell one item from another. Names arrive only where an event carries one.
 
@@ -216,12 +227,14 @@ The counters you walk up to, and the two badges that outlive them:
 woc.world.market          // the Merchant's book, one browsed page
 woc.world.mail            // the Ravenpost mailbox
 woc.world.bank            // the deposit box
+woc.world.vault           // the Materials Vault beside it
 woc.world.marketCollectPending  // gold or goods waiting at the Merchant
 woc.world.mailUnread      // delivered letters you have not read
+woc.world.craftVaultStock // what crafting may draw from the vault HERE
 woc.world.buyback         // what you sold to a vendor and can still take back
 ```
 
-The first three exist only while you are STANDING at the counter, so they answer a status rather than a value:
+The first four exist only while you are STANDING at the counter, so they answer a status rather than a value:
 
 ```js
 const market = woc.world.market;
@@ -232,6 +245,14 @@ for (const row of market.info.listings) { /* ... */ }
 That shape exists because the obvious alternative is a bug. On a nullable value the reading everyone writes is `world.market?.listings ?? []`, which answers the empty array BOTH when the filter matched nothing and when you are nowhere near a Merchant. Those are opposite facts, and an addon that confuses them reports an empty market to a player standing in a town. On the closed arms there is no `listings` to reach for, so the wrong reading cannot be written.
 
 `world.marketCollectPending` and `world.mailUnread` are deliberately not inside them: a badge exists for the moment you are NOT at the counter, so both stream everywhere. `world.mail` carries its own `unread` over the same letters, which is the mailbox pane's figure; do not derive either from the other. `world.buyback` is ungated too, most recent first, because standing at a vendor is what lets you use the ring rather than what lets you see it.
+
+`world.bank.info.capacity` is a display total, never a fit answer. The bank's budget is split into a general pool and a materials pool, so a deposit can be refused while the other pool has room; use `generalCapacity - generalUsed` for what a non-material stack can go into, floored at 0, because unsocketing a bag shrinks a pool without destroying anything and a `used / capacity` meter has to survive a fraction over 1. Two invariants hold, since the game's decoder rejects a snapshot without them: `generalCapacity + materialsCapacity === capacity` and `generalUsed + materialsUsed === slots.length`.
+
+Four bag sockets sit above the copper slot ladder and `world.on('bank', ...)` fires on all of it. Unlocking a socket adds no slots, so `capacity` does not move and `socketsUnlocked` is the only thing that reports the purchase; swapping one bag for another of the same size moves only `socketBags`. `nextRungClaudiumPrice` is ABSENT rather than null when there is none; test it against `undefined`.
+
+`world.vault` is the Materials Vault, banker-gated like the bank and read the same way. There is no slot budget and no cell: every material has its own count against one shared `perMaterialCap`, and a full vault is a sentence about one material. Check `upgrades > 0` before dividing by that cap, because a locked vault reports 0 for both. Sort `stock` before rendering: the record round-trips through the server's database online and comes back re-ordered, so an unsorted list shuffles between sessions. A material that is not a key is held at zero. `special` is the rows that carry an identity and cannot collapse into a count; `craftedRecipeId` on a `HeldSlot` tells two of the same item id apart.
+
+`world.craftVaultStock` is what crafting may draw from the vault where the player is standing. It is not banker-gated and has three states: a record means the draw is allowed, an empty record means allowed and empty, and `null` means refused here, which is inside a battleground, arena, delve, dungeon, raid or rift. A "you have no reagents" message built on emptiness is therefore wrong for a player in a dungeon. It is also null before the first snapshot, so gate on `world.ready` if the difference matters. It is not a field on `world.vault` because it is live exactly where the vault is closed.
 
 There is no price history anywhere and there never was: the server keeps no record of a completed sale and offers no query for one. A price series is something your addon builds, by recording each page its player browses.
 
@@ -256,6 +277,28 @@ label.textContent = said.known ? said.name : `${said.name}?`;
 ```
 
 It covers YOUR OWN known kit, so an ability a mob casts is not in it and `byName` answers null. It is empty rather than absent before world entry, and its `cost`, `castTime` and `cooldown` are resolved after your talents rather than the ability's base figures.
+
+Three fields on an `AbilityInfo` come off the ability's own definition and are untouched by talents. `channel` is the length and tick count of a channel, absent when the ability is not one; its duration is pre-haste, and a channelled ability's `castTime` is 0, so it reads as instant unless you look here. `offGcd` marks an ability that costs no global cooldown, absent rather than false. `empowerStages` is the stage count of a hold-to-charge spell; the stage itself is on no wire, and the game derives it from the cast clock:
+
+```js
+// Both guards are the game's own. Keep both.
+function empowerStage(entity, stages) {
+  if (stages <= 1) return 1;                                  // the game's floor
+  if (entity.castTotal <= 0) return stages;                   // no clock: fully charged
+  const done = (entity.castTotal - entity.castRemaining) / entity.castTotal;
+  const progress = Math.max(0, Math.min(1, done));
+  return Math.min(stages, Math.floor(progress * stages) + 1);
+}
+
+const info = woc.world.abilities.byId(entity.castingAbility);
+const stage = info?.empowerStages ? empowerStage(entity, info.empowerStages) : null;
+```
+
+**The `castTotal` guard has to come before the division, and the clamp does not replace it.** `castTotal` is zero-filled by the client, so a record can carry a `castingAbility` with no total; divide by it and NaN survives `Math.max(0, Math.min(1, NaN))`, and a NaN written to a style property drops the declaration silently, so the bar looks stuck.
+
+Both inputs ride every entity record, so this works for any caster in interest range. The limit is the spellbook: there is no other route to the divisor for an ability you have not learned.
+
+**Nothing on the wire marks a cast as empowered.** A cast with no stage count may be an empowered one whose ability you do not know, so build two appearances, a staged cast and a cast, and no "stage unknown" state. `Aura.empowerAbilities` is the scope of a next-cast empowerment buff, not a charge stage.
 
 `abilities.describe` is the third question, and the one with a right answer for an id that is not yours. `byId` returns null there, which leaves every caller title-casing the id itself, so the loader does it once and says that it did: `known: false` means the name was DERIVED from the id rather than looked up. For this game that is a guess that is often wrong, since `arcane_shot` derives to "Arcane Shot" for the ability every screen in the game calls Fell Shot. It never returns null and never throws, including on the landing page, where everything comes back derived.
 
@@ -311,6 +354,8 @@ woc.world.dispellable(aura, true);  // ...or strip it off an enemy
 `mine` is the filter a dot tracker needs and the one most often forgotten. Two players can carry the same debuff on one target, and without it a display shows a full timer while your own effect quietly expires.
 
 `world.harmful` and `world.dispellable` are functions rather than fields on the aura, and that is worth knowing rather than working around: the loader hands you the game's own aura objects rather than copies, so a field could only exist by writing onto state the game's HUD reads from the same array, or by copying every aura on every read, which would break the object identity you use to track one effect across frames. `world.harmful` accepts a party row as well as a full aura. `world.dispellable` refuses a row, because a row carries neither a school nor the encounter-control flag and those are the two clauses whose absence costs a player a global cooldown.
+
+`world.dispellable` refuses two auras BY ID that nothing visible on the aura would tell you about: a paladin's Divine Ascension charges and a shaman's Stormsurge proc window, states the game draws as auras rather than effects anything can transfer. One clause no client can run: `encounterOwned` is checked by the game ahead of everything else and never sent on the wire, and it is on most of the Ignivar and Varkhul mechanics, so inside those fights `true` means "nothing a client can see forbids it" rather than "this will work". There is no heuristic worth substituting.
 
 Authored content, which ships in the client rather than arriving on the wire:
 

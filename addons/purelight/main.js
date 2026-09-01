@@ -7,11 +7,21 @@
 // what is worth a global and the player spends it.
 //
 // Removability is the game's own rule, published as `world.dispellable(aura, offensive)`
-// and never worked out here. Its three clauses are that the effect is not control an
-// encounter owns, that its school is not physical, and that its polarity points the way
-// the direction asks; the first separates a scripted mechanic's stun from an ordinary
-// one, and skipping it costs a global. The direction is per unit, from `Entity.hostile`,
-// so one strip covers lifting a debuff off a friend and stripping a buff off an enemy.
+// and never worked out here: not permanent, not unbreakable control, not an undispellable
+// penalty, not the physical school, and the polarity the direction asks for. The direction
+// is per unit, from `Entity.hostile`, so one strip covers lifting a debuff off a friend
+// and stripping a buff off an enemy.
+//
+// THAT RULE HAS A HOLE THE GAME OPENED AT 0.41.0 AND NO CLIENT CAN CLOSE. Its classifier
+// refuses an `encounterOwned` aura ahead of every clause above, and `wireAura` does not
+// send the flag (`perm`, `ub`, `und` and `bt` and nothing else), so `dispellable` answers
+// true for most of what the Ignivar and Varkhul fights put on a raid. `refused.json` is
+// every aura id the game refuses for a reason the wire cannot carry, read out of a checkout
+// by `generate.mjs`, and those are held back rather than drawn.
+//
+// The holding is SAID, on a held tile naming the game version the table was read at: a
+// strip that quietly went empty mid-fight would read as a measurement of zero, and a list
+// read at one version cannot cover a mechanic added after it.
 //
 // Only an ENTITY is read, never a party row: a row exists for a member across the map
 // where an entity does not, and it carries neither school nor `unbreakableControl`,
@@ -62,8 +72,13 @@ const DAMAGE_RANK = 1;
 const ORDINARY_RANK = 0;
 
 /** Why a tile is here, in the direction the unit carrying it points. */
-const DISPEL_REASON = 'Removable: harmful, not physical, and no encounter owns it.';
+const DISPEL_REASON = 'Removable: harmful, not physical, and nothing known holds it.';
 const PURGE_REASON = 'Removable: a benefit on a hostile unit, and not physical.';
+
+/** The table of ids the game refuses for a reason the wire does not carry. */
+const REFUSED_TABLE = 'refused.json';
+/** What the held tile is captioned, in the band a name goes in on every other cell. */
+const HELD_CAPTION = 'held';
 
 /**
  * The tails the game appends when an ability's effect becomes a control aura, read out of
@@ -102,10 +117,50 @@ let primed = false;
 /** Whether this reading built a cell. Set from `createCell`, which is what knows. */
 let arrived = false;
 
+/**
+ * The ids the game refuses whatever `world.dispellable` says, and the game version they were
+ * read at. Empty until the table lands, which is before any player is in front of anything.
+ */
+const refused = new Set();
+let refusedAt = null;
+
+/**
+ * Take the table in. A malformed one is logged and the strip goes back to offering encounter
+ * effects, with the held tile never appearing to imply otherwise.
+ */
+function readRefused(table) {
+  const rows = table?.auras;
+  if (!Array.isArray(rows)) {
+    woc.error(`${REFUSED_TABLE} carries no aura list; effects an encounter owns will be offered`);
+    return;
+  }
+  for (const row of rows) {
+    if (typeof row?.id === 'string') {
+      refused.add(row.id);
+    }
+  }
+  if (typeof table.gameVersion === 'string') {
+    refusedAt = table.gameVersion;
+  }
+}
+
+woc.data(REFUSED_TABLE).then(readRefused, (err) => {
+  woc.error(`could not read ${REFUSED_TABLE}: ${String(err)}`);
+});
+
+/**
+ * The row the tiles sit in. The held tile is a sibling of `list` rather than a child, since the
+ * kit owns `list`'s children and would reorder a foreign one; `display: contents` keeps one row.
+ */
+const strip = document.createElement('div');
+strip.className = 'woc-pl-strip';
+strip.style.display = 'flex';
+strip.style.gap = '4px';
+
 const list = document.createElement('div');
 list.className = 'woc-pl-list';
-list.style.display = 'flex';
-list.style.gap = '4px';
+list.style.display = 'contents';
+strip.appendChild(list);
 
 /**
  * One cell per aura, the whole reading held and `shown` cutting it to the tile budget: a
@@ -158,7 +213,7 @@ const frame = woc.ui.frame({
     resize(box.h);
   },
 });
-frame.body.appendChild(list);
+frame.body.appendChild(strip);
 
 /**
  * Follow the strip's height, which is one square and the caption under it. The box comes
@@ -313,13 +368,20 @@ function effectFrom(unit, aura, key) {
   };
 }
 
-/** One filter and no join: the whole rule is the game's own classifier. */
-function removableOn(unit) {
+/**
+ * The game's own classifier, then the one answer it cannot give. The floor is applied HERE so
+ * an effect too short to have been drawn is not counted as held either.
+ */
+function removableOn(unit, floor, tally) {
   const seen = new Map();
   const found = [];
   for (const aura of unit.auras ?? []) {
-    if (woc.world.dispellable(aura, unit.hostile)) {
-      found.push(effectFrom(unit, aura, keyFor(unit, aura, seen)));
+    if (woc.world.dispellable(aura, unit.hostile) && aura.remaining >= floor) {
+      if (refused.has(aura.id)) {
+        tally.held += 1;
+      } else {
+        found.push(effectFrom(unit, aura, keyFor(unit, aura, seen)));
+      }
     }
   }
   return found;
@@ -348,18 +410,15 @@ function worstFirst(a, b) {
   return b.remaining - a.remaining;
 }
 
-/** Everything removable in front of you right now, worst first. */
+/** Everything removable in front of you right now, worst first, and how much was held back. */
 function reading() {
   const floor = woc.settings['min-seconds'];
+  const tally = { held: 0 };
   const found = [];
   for (const unit of units()) {
-    for (const effect of removableOn(unit)) {
-      if (effect.remaining >= floor) {
-        found.push(effect);
-      }
-    }
+    found.push(...removableOn(unit, floor, tally));
   }
-  return found.sort(worstFirst);
+  return { effects: found.sort(worstFirst), held: tally.held };
 }
 
 /** Stacks in the corner, or nothing at all for the ordinary single application. */
@@ -394,7 +453,7 @@ function reasonFor(effect) {
  * the same debuff on one unit apart.
  */
 function tooltipFor(key) {
-  const effect = reading().find((row) => row.key === key);
+  const effect = reading().effects.find((row) => row.key === key);
   if (effect === undefined) {
     return 'This effect has gone.';
   }
@@ -430,20 +489,14 @@ function labelFor(effect) {
 }
 
 /**
- * The caption is not something the kit draws, since a tile's whole face is art and
- * `label` is only how it is announced. A healer needs to read who is carrying the effect
- * by eye.
+ * A square with a caption band under it, which is the one column shape on the strip. The
+ * caption is not something the kit draws, since a tile's whole face is art and `label` is
+ * only how it is announced, and a healer needs to read who is carrying the effect by eye.
+ * Shared with the held tile because the band's height is what the drag solves back for.
  */
-function createCell(effect) {
-  const tile = woc.ui.tile({
-    label: labelFor(effect),
-    icon: effect.icon,
-    school: effect.school,
-    className: 'woc-pl-tile',
-  });
+function createColumn(tile, className) {
   const cell = document.createElement('div');
-  cell.className = 'woc-pl-cell';
-  cell.dataset.effect = effect.key;
+  cell.className = className;
   cell.style.display = 'flex';
   cell.style.flexDirection = 'column';
   cell.style.alignItems = 'center';
@@ -461,14 +514,25 @@ function createCell(effect) {
   // and the drag solves back for the square.
   name.style.height = `${String(CAPTION_HEIGHT)}px`;
   name.style.lineHeight = `${String(CAPTION_HEIGHT)}px`;
-  name.textContent = effect.who;
   cell.append(tile.el, name);
-  const built = { ui: tile, el: cell, name, size: 0, destroy: tile.destroy };
+  return { ui: tile, el: cell, name, size: 0, destroy: tile.destroy };
+}
+
+function createCell(effect) {
+  const tile = woc.ui.tile({
+    label: labelFor(effect),
+    icon: effect.icon,
+    school: effect.school,
+    className: 'woc-pl-tile',
+  });
+  const built = createColumn(tile, 'woc-pl-cell');
+  built.el.dataset.effect = effect.key;
+  built.name.textContent = effect.who;
   // Whatever the strip is at now, so a tile appearing mid-fight matches its neighbours.
   // It is sized here as well as on every reading, because a cell built while the strip is
   // hidden is never painted and would otherwise open at the kit's own default.
   sizeCell(built);
-  woc.ui.tooltip(cell, () => tooltipFor(effect.key));
+  woc.ui.tooltip(built.el, () => tooltipFor(effect.key));
   arrived = true;
   return built;
 }
@@ -498,6 +562,73 @@ function paintCell(cell, effect) {
   });
 }
 
+/**
+ * What the held tile says on hover. It names the game version rather than describing it, and
+ * says "the game refuses" rather than "an encounter owns" because the table carries a second
+ * kind of refusal as well.
+ */
+function heldTooltip(count) {
+  let read = 'an unknown game version';
+  if (refusedAt !== null) {
+    read = `game ${refusedAt}`;
+  }
+  return {
+    title: `${effectsSaid(count)} held back`,
+    lines: [
+      'The game refuses these, so no dispel of any kind will take them off. Most are mechanics a raid encounter owns.',
+      {
+        text: `Nothing on the wire says which effects those are, so this is a list of ids read at ${read}. Anything the game has added since is still offered above.`,
+        tone: 'muted',
+      },
+    ],
+  };
+}
+
+/** "1 effect" or "3 effects". */
+function effectsSaid(count) {
+  if (count === 1) {
+    return '1 effect';
+  }
+  return `${String(count)} effects`;
+}
+
+/** What the last reading held, so the tooltip answers for the strip as it is drawn. */
+let lastHeld = 0;
+
+/**
+ * The one column that is not an effect: how many were held back. No art and no school, so it
+ * cannot be misread as something to act on; the count goes in `value` rather than `count`,
+ * which is the stacks corner and badge-sized.
+ */
+const heldCell = createColumn(
+  woc.ui.tile({ label: null, className: 'woc-pl-held' }),
+  'woc-pl-cell woc-pl-held-cell',
+);
+heldCell.name.textContent = HELD_CAPTION;
+heldCell.el.dataset.held = HELD_CAPTION;
+heldCell.el.style.display = 'none';
+heldCell.el.style.opacity = '0.75';
+woc.ui.tooltip(heldCell.el, () => heldTooltip(lastHeld));
+strip.appendChild(heldCell.el);
+
+/** Put the held tile where the reading left it, or take it off the strip entirely. */
+function paintHeld(count) {
+  lastHeld = count;
+  if (count === 0) {
+    heldCell.el.style.display = 'none';
+    return;
+  }
+  heldCell.el.style.display = 'flex';
+  if (!frame.visible) {
+    return;
+  }
+  sizeCell(heldCell);
+  heldCell.ui.update({
+    label: `${effectsSaid(count)} held back, which no dispel will remove`,
+    value: String(count),
+  });
+}
+
 /** One chime for a reading that brought news, however many effects landed in it. */
 function chime() {
   if (primed && woc.settings.cue) {
@@ -509,10 +640,14 @@ function chime() {
  * Apply one reading. A cell already up is kept rather than rebuilt, so a tile does not
  * lose a hover or a tooltip every time anything else in front of the player changes. The
  * whole reading goes in, past the tile budget included; see `cells`.
+ *
+ * The held count is deliberately NOT chimed: the cue means something worth a global landed.
  */
 function resync() {
   arrived = false;
-  cells.sync(reading());
+  const now = reading();
+  cells.sync(now.effects);
+  paintHeld(now.held);
   if (arrived) {
     chime();
   }

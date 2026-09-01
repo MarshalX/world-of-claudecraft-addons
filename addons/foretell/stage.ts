@@ -73,6 +73,18 @@ const KNOWN = Object.freeze([
     rank: 3,
   },
   { def: { id: 'frostbolt', name: 'Rimelance', school: 'frost', requiresTarget: true }, rank: 4 },
+  {
+    // The game's own four-stage frost cone, from `src/sim/content/classes.ts`; `empowerStages`
+    // sits on the DEF, where the game declares it.
+    def: {
+      id: 'glacial_front',
+      name: 'Glacial Front',
+      school: 'frost',
+      requiresTarget: false,
+      empowerStages: 4,
+    },
+    rank: 1,
+  },
 ]);
 
 /** A cast in progress, as the wire spells it. */
@@ -177,6 +189,43 @@ function aContestedRift(draft: WorldDraft): void {
   }
 }
 
+/** Room for exactly the charged panel's three rows and no fourth. */
+const CHARGED_BOX = { x: 60, y: 60, w: 380, h: 117 };
+
+/**
+ * Ilvane is 1.05 seconds from full on a 2.4 second charge, stage 3 of 4: past halfway and
+ * outside the last second, so the stage counts in the school colour rather than going red.
+ * Sorrelin casts an ordinary frostbolt, named and tinted from the same spellbook with no stage.
+ */
+const CHARGERS: readonly Enemy[] = [
+  {
+    id: ILVANE,
+    name: 'Ilvane',
+    cls: 'mage',
+    pos: { x: 2.3, y: 0, z: -13 },
+    cast: { ability: 'glacial_front', remaining: 1.05, total: 2.4 },
+  },
+  {
+    id: SORRELIN,
+    name: 'Sorrelin',
+    cls: 'mage',
+    pos: { x: -3.4, y: 0, z: -11 },
+    cast: { ability: 'frostbolt', remaining: 1.6, total: 2.2 },
+  },
+];
+
+/**
+ * The same rift around the charge. `rift_thunderhead` is in nobody's spellbook, so the boss's
+ * row is an ordinary cast bar carrying the mark.
+ */
+function aChargedFront(draft: WorldDraft): void {
+  aMage(draft);
+  addBoss(draft);
+  for (const enemy of CHARGERS) {
+    addEnemy(draft, enemy);
+  }
+}
+
 /**
  * Let the frame come back, then read the world once and draw it. The settle is not optional: a
  * frame that saves its visibility starts hidden and shows once storage has answered, and this
@@ -205,6 +254,15 @@ const SCENARIOS: readonly Scenario[] = [
     alt: 'the same four casts as bars floating over the units casting them, scattered where those casters stand rather than ordered by anything: the boss bar highest, over a model twice the height of the rest, and the warlock nearest the camera and lowest. None of them names its caster, because each bar is already over the one it belongs to. The two mages stand together, so their bars would have landed in one place: the nearer keeps its position and the farther is lifted clear above it and takes its caster name, Sorrelin, back as a second line, which is the only thing saying that bar is no longer over anybody.',
     settings: { layout: 'anchors' },
     world: aContestedRift,
+    run: look,
+  },
+  {
+    // Not `preview: true`: the committed picture and its alt describe the column above.
+    id: 'charged',
+    label: 'A hold-to-charge cast',
+    alt: 'three cast bars in a borderless column. The top one reads "Glacial Front 3/4", a stage counted out of the cast clock for an ability this mage knows; the second reads "Rimelance", known and tinted and carrying no stage because it has none; the third reads "Rift Thunderhead?" with the question mark that marks a name worked out from a cast id, and no stage, because the stage count comes off your own spellbook and nothing on the wire says whether that cast is being charged.',
+    frames: { casts: { box: CHARGED_BOX, visible: true } },
+    world: aChargedFront,
     run: look,
   },
   {

@@ -19,6 +19,7 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import process from 'node:process';
 import { fileURLToPath } from 'node:url';
+import { undispellableIds } from './aura-ids-core.ts';
 import {
   debuffKinds,
   GENERATED_TYPES,
@@ -81,15 +82,19 @@ function gameVersion(checkout) {
 
 function main() {
   const checkout = gameArg();
-  const kinds = debuffKinds(read(`${checkout}/${SOURCE}`));
+  // One read for both parses, so the two sets cannot describe two states of the source.
+  const source = read(`${checkout}/${SOURCE}`);
+  const kinds = debuffKinds(source);
+  const ids = undispellableIds(source);
   const version = gameVersion(checkout);
 
-  writeFileSync(new URL(GENERATED_VALUES, `file://${ROOT}`), renderKindValues(kinds, version));
+  writeFileSync(new URL(GENERATED_VALUES, `file://${ROOT}`), renderKindValues(kinds, ids, version));
   writeFileSync(new URL(GENERATED_TYPES, `file://${ROOT}`), renderKindTypes(kinds, version));
 
   console.log(
-    `aura-kinds: wrote ${String(kinds.length)} harmful kinds from game ${version} to ` +
-      `${GENERATED_VALUES} and ${GENERATED_TYPES}`,
+    `aura-kinds: wrote ${String(kinds.length)} harmful kinds and ` +
+      `${String(ids.length)} undispellable ids from game ${version} to ` +
+      `${GENERATED_VALUES}, and the kinds to ${GENERATED_TYPES}`,
   );
 }
 

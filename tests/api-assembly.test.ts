@@ -9,6 +9,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createAddonApi } from '../loader/src/runtime/api/index.ts';
 import { DisposalBag } from '../loader/src/runtime/disposal.ts';
+import { LABEL_ATTR } from '../loader/src/runtime/ui/kit/frame-chrome.ts';
 import { API_VERSION } from '../loader/src/shared/api-version.ts';
 import type { AddonManifest } from '../loader/src/shared/schema.ts';
 import { configNamespace, SETTINGS_KEY } from '../loader/src/shared/storage-keys.ts';
@@ -61,6 +62,16 @@ describe('what an addon is handed', () => {
     // A surface added to bind.ts but not to the Pick would be absent here and
     // present in the published types, which is the drift nothing else catches.
     expect(api.woc.data).toBeTypeOf('function');
+  });
+
+  // api-ui.test.ts proves a passed name reaches the frame; this is what says the
+  // name passed is the MANIFEST's, since the chip falls back to the fqid quietly.
+  it("labels a frame with the manifest's name, not the fqid", () => {
+    const { api } = open();
+
+    const frame = api.woc.ui.frame({ id: 'meter', title: 'DPS' });
+
+    expect(frame.el.getAttribute(LABEL_ATTR)).toBe(`${MANIFEST.name} · DPS`);
   });
 
   it('has the documented top-level members', () => {

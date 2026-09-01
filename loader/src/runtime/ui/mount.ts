@@ -28,6 +28,7 @@ import type { AddonStatus } from '../supervisor.ts';
 import type { UnitPointResolver } from '../world/anchor-point.ts';
 import type { Projector } from '../world/project.ts';
 import { ANCHORS, ANCHORS_REQUIRED_IN_GAME } from './anchors.ts';
+import { followGameUnlock } from './game-unlock.ts';
 import { type ArrangeHint, createArrangeHint } from './kit/arrange-hint.ts';
 import { createAuraArt } from './kit/aura-art.ts';
 import { createFrameRoster, type FrameRoster } from './kit/frame-roster.ts';
@@ -42,6 +43,7 @@ import type { GeometryStorage } from './manager/geometry-store.ts';
 import { type Manager, type ManagerRegistry, mountManager } from './manager/index.tsx';
 import { type AddonRoot, mountRoot, NO_HUD_CLASS } from './root.ts';
 import { addLoaderRoutes } from './routes.ts';
+import { createSnapStore, type SnapStore } from './snap-store.ts';
 import { buildSurfaces, type Surfaces } from './surfaces.ts';
 
 /**
@@ -82,6 +84,8 @@ interface UiParts {
   /** The root and its two stacking bands. See runtime/ui/root.ts. */
   root: AddonRoot;
   unlock: UnlockMode;
+  /** Whether an arranged frame lands on the grid. See ui/snap-store.ts. */
+  snap: SnapStore;
   stacking: Stacking;
   /**
    * The shared surfaces, built BEFORE the manager rather than with the rest of the kit.
@@ -179,7 +183,15 @@ function buildKit(deps: UiDeps, parts: UiParts, manager: Manager): UiKit {
   const { surfaces } = parts;
   const roster = createFrameRoster();
 
-  addLoaderRoutes({ doc: deps.doc, injector, menus: surfaces.menus, roster, unlock, onOpen });
+  addLoaderRoutes({
+    doc: deps.doc,
+    injector,
+    menus: surfaces.menus,
+    roster,
+    unlock,
+    snap: parts.snap,
+    onOpen,
+  });
   const icons = createIconUrls(
     createSkillArt({ fetchJson: deps.fetchJson }),
     createItemArt({ fetchJson: deps.fetchJson }),
@@ -196,6 +208,7 @@ function buildKit(deps: UiDeps, parts: UiParts, manager: Manager): UiKit {
     roster,
     icons,
     unlock,
+    snap: parts.snap,
     arrangeHint: createArrangeHint({ toaster: surfaces.toaster }),
     project: deps.project,
     unitPoint: deps.unitPoint,
@@ -297,6 +310,12 @@ export interface UiKit extends Surfaces {
    */
   unlock: UnlockMode;
   /**
+   * Whether an arranged frame lands on the game's alignment grid. Shared like the mode
+   * and kept off the addon API like it: an addon has no business deciding how a
+   * player's panels line up.
+   */
+  snap: SnapStore;
+  /**
    * What a player is told when a frameless overlay refuses to move, said once a
    * session. Shared for the reason the mode is: the refusal belongs to the mode
    * rather than to any one frame.
@@ -323,13 +342,20 @@ export function mountUi(deps: UiDeps): MountedUi {
   // Built here rather than inside either half, because BOTH need the same one:
   // the manager draws the switch, the loader's keybind flips it, and two
   // instances would mean a checkbox that disagrees with the screen.
-  const unlock = createUnlockMode(root.el);
+  // Ahead of the mode, which reads it.
+  const snap = createSnapStore({ storage: deps.storage, channel: deps.channel });
+  // Fire and forget: until it answers, nothing snaps, which is the default.
+  snap.load().catch(() => undefined);
+  const unlock = createUnlockMode(root.el, () => snap.enabled);
+  // One way only: ui/game-unlock.ts says why.
+  const followGame = followGameUnlock({ doc: deps.doc, unlock });
   // Ahead of both halves, because both raise through it: the manager when it is
   // shown, and every addon frame when it is built or shown. It needs only the
   // root, so nothing about the order costs anything.
   const parts: UiParts = {
     root,
     unlock,
+    snap,
     stacking: createStacking({ root: root.el }),
     surfaces: buildSurfaces(deps, root),
   };
@@ -341,6 +367,7 @@ export function mountUi(deps: UiDeps): MountedUi {
     config,
     kit,
     dispose: () => {
+      followGame();
       kit.injector.dispose();
       kit.tooltips.dispose();
       kit.menus.dispose();

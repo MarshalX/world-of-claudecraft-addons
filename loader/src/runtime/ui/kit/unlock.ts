@@ -18,6 +18,7 @@
 // class on the root. Nothing here measures or positions anything.
 
 import type { Teardown } from '../../disposal.ts';
+import { NO_SNAP, SNAP_GRID } from '../frame/snap.ts';
 
 /**
  * On the root while the mode is on.
@@ -34,6 +35,12 @@ interface UnlockMode {
   set: (next: boolean) => void;
   toggle: () => void;
   /**
+   * The alignment grid a gesture lands on right now, or 0 for none. On the mode rather
+   * than on a frame or the setting because snapping applies to an arranging drag and
+   * nothing else: outside the mode there are no lines on screen to explain a quantized drag.
+   */
+  grid: () => number;
+  /**
    * Follow the mode.
    *
    * The manager's own control needs this: the mode can be switched by a keybind
@@ -44,7 +51,12 @@ interface UnlockMode {
   dispose: () => void;
 }
 
-function createUnlockMode(root: HTMLElement): UnlockMode {
+/**
+ * The mode, and optionally the player's standing answer about snapping, read live
+ * because it changes all session. ui/snap-store.ts owns the boolean and is built
+ * first; absent is no snapping.
+ */
+function createUnlockMode(root: HTMLElement, snapping?: () => boolean): UnlockMode {
   const handlers = new Set<UnlockHandler>();
   let unlocked = false;
 
@@ -65,6 +77,13 @@ function createUnlockMode(root: HTMLElement): UnlockMode {
     },
 
     set: apply,
+
+    grid: () => {
+      if (unlocked && snapping?.() === true) {
+        return SNAP_GRID;
+      }
+      return NO_SNAP;
+    },
 
     toggle: () => {
       apply(!unlocked);

@@ -1,12 +1,13 @@
 {
   "id": "purelight",
   "name": "Purelight",
-  "version": "1.2.0",
+  "version": "1.3.0",
   "apiVersion": 1,
   "apiMinor": 6,
   "author": "MarshalX",
-  "description": "Every effect in front of you that can actually be removed, worst first: on you, your pet, your group and your target, each tile naming who carries it.",
+  "description": "Every effect in front of you that can be removed, worst first: on you, your pet, your group and your target, each tile naming who carries it. What a raid encounter owns is held back and counted.",
   "entry": "main.js",
+  "data": ["refused.json"],
   "preview": {
     "file": "preview.png",
     "alt": "a strip of five square tiles, each a countdown over the art with the name of whoever carries the effect under it. The borders colour by school, and one tile has no art at all."

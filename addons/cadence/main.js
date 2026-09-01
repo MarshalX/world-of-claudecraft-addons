@@ -1,19 +1,24 @@
 /// <reference types="@woc-addons/types" />
 
-// Cadence: the four timings a rotation is played against, on one strip.
+// Cadence: the timings a rotation is played against, on one strip.
 //
-// Everything it reads rides the SELF record. `swingTimer`, `gcdRemaining`, `autoAttack`
-// and `comboPoints` are sent on your own entity and nowhere else, so pointed at a target
-// this would draw a swing that never swings and raise nothing.
+// `gcdRemaining`, `comboPoints`, `offhandSwingTimer` and `offhandWeapon` ride the SELF
+// record and nowhere else. `swingTimer` rides every auto-attacking entity in interest range
+// since game 0.41.0, omitted entirely on one that is not swinging, and the client derives
+// `autoAttack` from its presence; on an older server a target reads `autoAttack: false`
+// forever and the row stands at 'off'.
 //
-// Neither the swing nor the global cooldown publishes its length. The cooldown's is
-// arithmetic with every term published (`gcdLength`); the swing's is learned from its
-// reset (`relearn`, `swingSeed`), which rides the self record rather than the `damage`
-// event, since the event lands a round trip later.
+// No swing publishes its length. The global cooldown's is arithmetic (`gcdLength`); every
+// swing's is learned from its reset (`relearn`), off the record rather than the `damage`
+// event, which lands a round trip later. The mainhand seeds from `weapon.speed` and the
+// offhand from `offhandWeapon.speed`, both unhasted bases the game multiplies by
+// `swingIntervalMult(p)`; a target seeds from nothing, since no weapon speed rides a
+// non-self record.
 //
 // Rows are built once and hidden rather than removed, so nothing moves under the eye at
-// the moment a cast starts. Combo pips run over as many slots as the most points seen
-// this session: nothing on the wire carries a maximum.
+// the moment a cast starts; `LATE_ROWS` are the two whose subject may not exist. Combo
+// pips run over as many slots as the most points seen this session: nothing on the wire
+// carries a maximum.
 
 const FRAME_WIDTH = 190;
 const DECIMALS = 1;
@@ -40,6 +45,8 @@ const ROW_GAP = 2;
 const MIN_FRAME_WIDTH = 96;
 /** Below this share left, a row goes warm: the thing it counts to is about to land. */
 const NEARLY_DONE = 0.25;
+/** No length to start from: `relearn` then falls back to the remaining time itself. */
+const NO_SEED = 0;
 const PIP_INSET = 4;
 const MIN_PIP_PX = 4;
 /** Tighter than the row gap: a run of pips is one reading rather than a list. */
@@ -56,10 +63,20 @@ const BAND_COLOR = 'rgb(255 143 133 / 30%)';
 // rather than an object, because the setting ids are the manifest's names.
 const ROW_SPECS = [
   ['swing', 'show-swing', 'Swing'],
+  ['oswing', 'show-offhand-swing', 'Offhand'],
+  ['tswing', 'show-target-swing', 'Target'],
   ['gcd', 'show-gcd', 'GCD'],
   ['cast', 'show-cast', 'Cast'],
+  ['speed', 'show-speed', 'Speed'],
   ['power', 'show-power', 'Power'],
 ];
+
+/**
+ * Rows that open HIDDEN: whether an offhand is held or movement is affected is unknowable
+ * before world entry, so the box is stated without them and `showRow` redivides it when one
+ * has something to say.
+ */
+const LATE_ROWS = ['oswing', 'speed'];
 
 /**
  * `ResourceType` is exactly these four. The fallback covers a kind a release adds.
@@ -77,6 +94,12 @@ const RESOURCE_LABELS = [
 
 /** What the swing counts down FROM, which is the one length nothing publishes. */
 const swing = { total: 0, seen: null };
+
+/** The same for the target, keyed on WHOSE: a period learned on one entity is wrong on another. */
+const targetSwing = { total: 0, seen: null, id: null };
+
+/** The same for the offhand, keyed on WHICH item: a period from one weapon is wrong on another. */
+const offhandSwing = { total: 0, seen: null, item: null };
 
 /** The last cast looked up, so the spellbook is not walked on every frame. */
 const castMemo = { id: null, label: 'Cast', school: null };
@@ -122,8 +145,22 @@ function stackHeight(height, lines) {
   return lines * height + (lines - 1) * ROW_GAP;
 }
 
+/**
+ * The lines the strip OPENS with, without `LATE_ROWS`: a height stated for a hidden row is a
+ * dead line at the bottom of every strip that never shows it.
+ */
+function openLines() {
+  let count = 0;
+  for (const [key, setting] of ROW_SPECS) {
+    if (woc.settings[setting] && !LATE_ROWS.includes(key)) {
+      count += 1;
+    }
+  }
+  return Math.max(count, 1);
+}
+
 function stripHeight(height) {
-  return stackHeight(height, wantedRows());
+  return stackHeight(height, openLines());
 }
 
 /**
@@ -315,7 +352,12 @@ function createPip() {
 function buildRows() {
   for (const [key, setting, label] of ROW_SPECS) {
     if (woc.settings[setting]) {
-      rows.set(key, createRow(key, label));
+      const row = createRow(key, label);
+      // See `LATE_ROWS`: no line until a frame finds something to put in it.
+      if (LATE_ROWS.includes(key)) {
+        woc.ui.show(row.bar.el, false);
+      }
+      rows.set(key, row);
     }
   }
   if (rows.has('power')) {
@@ -398,12 +440,14 @@ function hastened(total, value) {
 }
 
 /**
- * What the first swing of a session is measured against. The melee haste stat is NOT on
- * the wire and `spellHaste` cannot stand in for it, so this runs long for a player
- * carrying it until the first observed reset replaces it.
+ * What the first swing of a session is measured against, from a hand's own base speed.
+ *
+ * Melee haste and a warrior's stance mastery are NOT on the wire, and the game applies both
+ * to either hand (`offhand.speed * swingIntervalMult(p)`), so an offhand `speed` is a seed
+ * like the mainhand's rather than a period, and both run long until the first observed reset.
  */
-function swingSeed(me) {
-  const period = foldAuras(me, SWING_SLOW_KINDS, numberOf(me.weapon?.speed), stretched);
+function swingSeed(me, speed) {
+  const period = foldAuras(me, SWING_SLOW_KINDS, numberOf(speed), stretched);
   const haste = foldAuras(me, SWING_HASTE_KINDS, 0, hastened);
   return period / (1 + Math.max(0, haste));
 }
@@ -414,13 +458,178 @@ function swingSeed(me) {
  */
 function paintSwing(row, me) {
   const remaining = numberOf(me.swingTimer);
-  const total = relearn(swing, remaining, swingSeed(me));
+  const total = relearn(swing, remaining, swingSeed(me, me.weapon?.speed));
   if (me.autoAttack !== true) {
     row.bar.update({ fraction: 0, value: 'off', tone: 'default' });
     return;
   }
   const fraction = share(remaining, total);
   row.bar.update({ fraction, value: seconds(remaining), tone: toneFor(fraction) });
+}
+
+/**
+ * Hold an offhand, throwing away anything learned from the last one. Keyed on the held ITEM
+ * rather than the weapon's speed, so a swap between two weapons of one speed still relearns;
+ * null covers an unequip.
+ */
+function hold(itemId) {
+  if (offhandSwing.item === itemId) {
+    return;
+  }
+  offhandSwing.item = itemId;
+  offhandSwing.total = 0;
+  offhandSwing.seen = null;
+}
+
+/** Show or hide a row, redividing the box when that changed how many lines there are. */
+function showRow(row, on) {
+  if (!row.bar.el.hidden === on) {
+    return;
+  }
+  woc.ui.show(row.bar.el, on);
+  fitLines();
+}
+
+/**
+ * The offhand swing, drawn only while one is held.
+ *
+ * `offhandWeapon !== null` is the dual-wield question and `offhandItemId` is not: a shield
+ * fills the id and leaves the weapon null. `offhandSwingTimer` drains to zero and stays
+ * there with the swing off, so read straight it would sit at 0.0s, hence 'off'.
+ */
+function paintOffhandSwing(row, me) {
+  const offhand = me.offhandWeapon ?? null;
+  showRow(row, offhand !== null);
+  if (offhand === null) {
+    hold(null);
+    return;
+  }
+  hold(me.offhandItemId ?? null);
+  const remaining = numberOf(me.offhandSwingTimer);
+  const total = relearn(offhandSwing, remaining, swingSeed(me, offhand.speed));
+  if (me.autoAttack !== true) {
+    row.bar.update({ fraction: 0, value: 'off', tone: 'default' });
+    return;
+  }
+  const fraction = share(remaining, total);
+  row.bar.update({ fraction, value: seconds(remaining), tone: toneFor(fraction) });
+}
+
+/**
+ * Point the row at an entity, throwing away anything learned from the last one. Null for
+ * "nothing to count", so a target that dies or leaves range discards the period as a switch does.
+ */
+function aimAt(id) {
+  if (targetSwing.id === id) {
+    return;
+  }
+  targetSwing.id = id;
+  targetSwing.total = 0;
+  targetSwing.seen = null;
+}
+
+/** Why the target row cannot count, or null when it can. `object` is the game's own exclusion. */
+function targetStand(target) {
+  if (target === null) {
+    return 'no target';
+  }
+  if (target.dead === true) {
+    return 'dead';
+  }
+  if (target.kind === 'object' || target.autoAttack !== true) {
+    return 'off';
+  }
+  return null;
+}
+
+/** So the row says which entity the period on it was learned from. */
+function targetName(target) {
+  if (typeof target.name === 'string' && target.name.length > 0) {
+    return target.name;
+  }
+  return 'Target';
+}
+
+/**
+ * The target's swing, read live since a target may have been replaced since the last frame.
+ * `NO_SEED` because no weapon speed rides a non-self record; do not guess from the mob
+ * template, since a mob's swing is its weapon times a haste multiplier under three clamps.
+ */
+function paintTargetSwing(row) {
+  const target = woc.world.unit('target');
+  const stood = targetStand(target);
+  if (stood !== null) {
+    aimAt(null);
+    row.bar.update({ label: 'Target', fraction: 0, value: stood, tone: 'default' });
+    return;
+  }
+  aimAt(target.id);
+  const remaining = numberOf(target.swingTimer);
+  const fraction = share(remaining, relearn(targetSwing, remaining, NO_SEED));
+  row.bar.update({
+    label: targetName(target),
+    fraction,
+    value: seconds(remaining),
+    tone: toneFor(fraction),
+  });
+}
+
+/** Whether one of your own effects is of this kind. The array is the game's. */
+function hasKind(me, kind) {
+  const carried = me.auras;
+  if (!Array.isArray(carried)) {
+    return false;
+  }
+  return carried.some((aura) => aura?.kind === kind);
+}
+
+/**
+ * The movement multiplier when it is worth saying, or null when it is not.
+ *
+ * `world.moveSpeedMult` carries no breakdown, so the row names no cause. Null is "no answer"
+ * (before world entry, offline, spectating, or on the older movement wire) and is tested by
+ * kind, since 0 is a real reading. Exactly 1 is also what a slow-immune player carrying a
+ * snare computes. A ghost is a flat 1.25 with no aura behind it, a mount adds 60% to 80%,
+ * and stealth is folded into the same `Math.min` as a snare (a rogue's is 0.5), so none of
+ * the three can be told from a snare or a rush by the number.
+ */
+function speedToShow(me) {
+  const mult = woc.world.moveSpeedMult;
+  if (typeof mult !== 'number' || !Number.isFinite(mult) || mult === 1) {
+    return null;
+  }
+  if (me.ghost === true || hasKind(me, 'stealth')) {
+    return null;
+  }
+  if (typeof me.mountKey === 'string' && me.mountKey.length > 0) {
+    return null;
+  }
+  return mult;
+}
+
+/** Slowed is the reading worth catching. At or above your normal speed is not. */
+function speedTone(mult) {
+  if (mult < 1) {
+    return 'warn';
+  }
+  return 'default';
+}
+
+/**
+ * The fill is the share of your NORMAL speed; above 1 the kit clamps it to a full bar and
+ * the figure beside it carries the excess.
+ */
+function paintSpeed(row, me) {
+  const mult = speedToShow(me);
+  showRow(row, mult !== null);
+  if (mult === null) {
+    return;
+  }
+  row.bar.update({
+    fraction: mult,
+    value: `${String(Math.round(mult * PERCENT))}%`,
+    tone: speedTone(mult),
+  });
 }
 
 /** The unhasted base, which the game gives one class alone a shorter one of. */
@@ -559,6 +768,15 @@ function rowTip(key) {
       ],
     };
   }
+  if (key === 'oswing') {
+    return offhandTip();
+  }
+  if (key === 'speed') {
+    return speedTip();
+  }
+  if (key === 'tswing') {
+    return targetTip();
+  }
   if (key === 'gcd') {
     return { title: 'Global cooldown', lines: ['Empty means your next press goes through.'] };
   }
@@ -566,6 +784,50 @@ function rowTip(key) {
     return { title: castMemo.label, lines: [latencyLine()] };
   }
   return { title: 'Resource', lines: powerLines() };
+}
+
+function offhandTip() {
+  return {
+    title: 'Offhand swing',
+    lines: [
+      'Counts to your offhand auto-attack, which runs on its own clock.',
+      {
+        text: 'Your weapon speed is the unhasted one, so the length starts as an estimate and is corrected by watching one swing, exactly as the mainhand above is.',
+        tone: 'muted',
+      },
+    ],
+  };
+}
+
+function speedTip() {
+  return {
+    title: 'Movement speed',
+    lines: [
+      'The share of your normal speed the server says you are moving at.',
+      {
+        text: 'One net figure over everything affecting you, with no breakdown, so this names no cause. There is no yards-per-second anywhere on the wire.',
+        tone: 'muted',
+      },
+      {
+        text: 'Silent while mounted, stealthed or a ghost: each of those reads exactly like a snare or a rush and is not one.',
+        tone: 'muted',
+      },
+    ],
+  };
+}
+
+function targetTip() {
+  return {
+    title: 'Target swing',
+    lines: [
+      "Counts to your target's next auto-attack.",
+      {
+        text: 'No weapon speed is sent for anyone but you, so the length is learned by watching this target swing once. Until then the bar starts full.',
+        tone: 'muted',
+      },
+      { text: 'Switching target throws that away rather than carrying it over.', tone: 'muted' },
+    ],
+  };
 }
 
 /** The pips are mentioned only once there are any, since most classes have none. */
@@ -598,8 +860,11 @@ function paintRow(key, paint, me) {
 
 function draw(me) {
   paintRow('swing', paintSwing, me);
+  paintRow('oswing', paintOffhandSwing, me);
+  paintRow('tswing', paintTargetSwing, me);
   paintRow('gcd', paintGcd, me);
   paintRow('cast', paintCast, me);
+  paintRow('speed', paintSpeed, me);
   paintRow('power', paintPower, me);
 }
 
@@ -621,6 +886,8 @@ function applyVisibility() {
 /** Forget the last SAMPLE, so the frame that resumes records rather than relearns. */
 function stand() {
   swing.seen = null;
+  offhandSwing.seen = null;
+  targetSwing.seen = null;
 }
 
 buildRows();

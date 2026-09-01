@@ -17,7 +17,14 @@ import {
   type InteractiveFrameDeps,
   makeFrameInteractive,
 } from '../frame/interactive.ts';
-import { buildChrome, type Chrome, type FrameChrome, type FrameOpts } from './frame-chrome.ts';
+import {
+  buildChrome,
+  type Chrome,
+  type FrameChrome,
+  type FrameOpts,
+  frameLabel,
+  LABEL_ATTR,
+} from './frame-chrome.ts';
 import { type FrameArrange, gateFor } from './frame-gestures.ts';
 import { applyWidth, defaultSize, resizeAxes, sizeBounds } from './frame-size.ts';
 import type { FrameState, FrameStateStore } from './frame-state.ts';
@@ -63,6 +70,8 @@ interface FrameDeps {
    */
   raise?: (el: HTMLElement) => void;
   fqid: string;
+  /** The owning addon's name, for the arrange-mode chip. See kit/frame-chrome.ts. */
+  addonName?: string | undefined;
   chrome: FrameChrome;
   opts: FrameOpts;
   /**
@@ -114,6 +123,10 @@ function gestureDeps(
   // undefined, and an addon that wants no callback must not install one.
   if (deps.opts.onMove !== undefined) {
     gestures.onBox = deps.opts.onMove;
+  }
+  // The mode's grid, never a per-frame one: one answer for the whole screen. See kit/unlock.ts.
+  if (deps.arrange !== undefined) {
+    gestures.snapGrid = deps.arrange.unlock.grid;
   }
   return gestures;
 }
@@ -293,6 +306,8 @@ function createAddonFrame(deps: FrameDeps): AddonFrame {
     setTitle: (title) => {
       chrome.title.textContent = title;
       chrome.el.setAttribute('aria-label', title);
+      // The arrange chip names the frame by its title, so a rename has to reach it too.
+      chrome.el.setAttribute(LABEL_ATTR, frameLabel(deps.addonName ?? deps.fqid, title));
     },
 
     destroy: () => {
@@ -310,4 +325,6 @@ function frameTeardown(frame: AddonFrame): Teardown {
 }
 
 export type { AddonFrame, FrameDeps };
-export { createAddonFrame, frameTeardown };
+// `gestureDeps` is exported for its suite alone: interactjs moves nothing under
+// happy-dom, so the line handing the mode's grid to the gesture layer cannot be reached by dragging.
+export { createAddonFrame, frameTeardown, gestureDeps };

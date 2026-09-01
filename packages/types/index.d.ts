@@ -22,7 +22,12 @@ declare global {
   const woc: WocApi;
 }
 
-export type { AbilityDescription, AbilityIndex, AbilityInfo } from './abilities.js';
+export type {
+  AbilityChannel,
+  AbilityDescription,
+  AbilityIndex,
+  AbilityInfo,
+} from './abilities.js';
 export type { AddonInfo, GameInfo, Unsubscribe } from './addon.js';
 export type {
   ArenaFormat,
@@ -53,9 +58,6 @@ export type { CivicService, Recipe, Station } from './content.js';
 export type { KnownCue } from './cues.generated.js';
 export type {
   Absent,
-  BankBonusSource,
-  BankInfo,
-  BankState,
   MailInfo,
   MailKind,
   MailMessage,
@@ -66,6 +68,13 @@ export type {
   Near,
   ProximityState,
 } from './economy.js';
+export type {
+  BankBonusSource,
+  BankInfo,
+  BankState,
+  VaultInfo,
+  VaultState,
+} from './economy-storage.js';
 export type {
   AbilityCharge,
   Aura,

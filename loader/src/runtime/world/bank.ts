@@ -27,7 +27,12 @@ interface BankBonusSource {
 interface BankInfo {
   /** The pooled contents. Order is the game's; there are no fixed cells. */
   slots: readonly HeldSlot[];
-  /** Total budget: the base allowance plus purchased plus bonus. */
+  /**
+   * Total budget: the base allowance, purchased, bonus, and every socketed bag.
+   *
+   * A display total, never a fit answer: the budget is split into two pools, so
+   * `capacity - slots.length` reports space a general deposit can be refused.
+   */
   capacity: number;
   /** Copper-bought slots. */
   purchasedSlots: number;
@@ -37,6 +42,25 @@ interface BankInfo {
   nextExpansionCost: number | null;
   /** The per-source breakdown behind `bonusSlots`. Always empty offline. */
   bonusSources: readonly BankBonusSource[];
+  /** How many of the bag sockets are open. Game 0.41.0. */
+  socketsUnlocked: number;
+  /** One entry per socket, always four, null where the socket is empty. */
+  socketBags: readonly (string | null)[];
+  /** Copper price of the next socket, null once every socket is open. */
+  nextSocketCost: number | null;
+  /**
+   * The Claudium price of the next expansion rung. ABSENT rather than null when
+   * there is not one: the wire omits the key, and the offline sim never has it.
+   */
+  nextRungClaudiumPrice?: number;
+  /** The general half of the split budget. Sums with `materialsCapacity` to `capacity`. */
+  generalCapacity: number;
+  /** The materials half of the split budget. */
+  materialsCapacity: number;
+  /** Stacks charged against the general pool. Sums with `materialsUsed` to `slots.length`. */
+  generalUsed: number;
+  /** Stacks charged against the materials pool. */
+  materialsUsed: number;
 }
 
 /** The deposit box, or why there is not one. */

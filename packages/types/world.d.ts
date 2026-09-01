@@ -10,7 +10,8 @@ import type { ArenaStandings } from './arena.js';
 import type { BattlegroundStandings } from './battleground.js';
 import type { CharacterInfo, ProfessionInfo, TalentInfo } from './character.js';
 import type { CivicService, Recipe, Station } from './content.js';
-import type { BankState, MailState, MarketState } from './economy.js';
+import type { MailState, MarketState } from './economy.js';
+import type { BankState, VaultState } from './economy-storage.js';
 import type { Aura, Entity, EquipSlot, ItemInstance, Vec3 } from './entity.js';
 import type { FinderInfo, FinderListingRow } from './finder.js';
 import type { EncounterInfo, GroupInfo, ThreatTable } from './group.js';
@@ -257,6 +258,22 @@ export interface WorldApi {
   readonly spectating: string | null;
 
   /**
+   * How fast you are actually moving, as a multiplier the SERVER computed with
+   * every slow, snare, haste, mount and form effect folded in. Do not re-derive
+   * it from the auras you can see; that misses effects applied without an aura.
+   *
+   * 1 IS A REAL READING and means nothing is affecting you. NULL is "no answer":
+   * before the world is up, in offline play, while SPECTATING, and on a session
+   * that negotiated the older movement wire. Guard with `mult === null`, never a
+   * falsy test, and never substitute 1 for an unknown.
+   *
+   * Self only: the field rides the self wire alone, and `Entity.moveSpeed` is not
+   * published because the server never sends it. Added in game 0.41.0 and in API
+   * minor 10.
+   */
+  readonly moveSpeedMult: number | null;
+
+  /**
    * Your progression, deeds and title. Null before world entry.
    *
    * All of it rides your own self payload, so there is no equivalent for another
@@ -475,6 +492,30 @@ export interface WorldApi {
   readonly bank: BankState;
 
   /**
+   * The Materials Vault, or why there is not one. Read `status` first.
+   * Banker-gated like `world.bank`, on a separate gate. Added in API minor 10.
+   */
+  readonly vault: VaultState;
+
+  /**
+   * What crafting may draw FROM the vault where you are standing, or null where
+   * it may draw nothing.
+   *
+   * An EMPTY record means the draw is allowed and the vault holds nothing; NULL
+   * means the draw is refused where you are, which is inside a battleground,
+   * arena, delve, dungeon, raid or rift. A "you have no reagents" message built
+   * on emptiness is wrong for a player in a dungeon.
+   *
+   * Not a `ProximityState`: it is live everywhere in the open world, where
+   * `world.vault` is closed, and no amount of walking fixes its null. Null also
+   * before the first snapshot, which the wire cannot separate from a refusal;
+   * gate on `world.ready` if the difference matters. Key order means nothing, as
+   * on `VaultInfo.stock`, and a material that is not a key is held at zero.
+   * Added in API minor 10.
+   */
+  readonly craftVaultStock: Readonly<Record<string, number>> | null;
+
+  /**
    * The buyback ring: what you have sold to a vendor and can still take back.
    *
    * MOST RECENT FIRST. Ungated, unlike the three above: standing at a vendor is
@@ -566,10 +607,17 @@ export interface WorldApi {
   /**
    * Whether an effect can be removed, and in which direction.
    *
-   * Five clauses, all from the game: not permanent, not unbreakable control,
-   * not an undispellable penalty, not the physical school, and the polarity the
-   * direction asks for. `offensive` strips a BENEFIT off an enemy; the default,
-   * false, strips a harmful effect off an ally.
+   * Six clauses, all from the game: not one of the two auras it refuses BY ID,
+   * not permanent, not unbreakable control, not an undispellable penalty, not
+   * the physical school, and the polarity the direction asks for. `offensive`
+   * strips a BENEFIT off an enemy; the default, false, strips a harmful effect
+   * off an ally.
+   *
+   * The ids refused are states the game surfaces AS an aura rather than
+   * transferable effects (a paladin's Divine Ascension charges, a shaman's
+   * Stormsurge proc window drawn on the debuff surface), and nothing else on
+   * them says so: neither carries a permanent, unbreakable or undispellable
+   * mark. The set grows with the game.
    *
    * IT ANSWERS TRUE FOR A RAID MECHANIC THE GAME WILL REFUSE, and no client can
    * do better. Game 0.41.0 added an `encounterOwned` class of aura, checked by

@@ -30,6 +30,7 @@ import { createToaster } from '../../loader/src/runtime/ui/kit/toast.ts';
 import { createTooltips } from '../../loader/src/runtime/ui/kit/tooltip.ts';
 import { createUnlockMode, type UnlockMode } from '../../loader/src/runtime/ui/kit/unlock.ts';
 import { HUD_BAND_CLASS, OVERLAY_BAND_CLASS } from '../../loader/src/runtime/ui/root.ts';
+import { createSnapStore, type SnapStore } from '../../loader/src/runtime/ui/snap-store.ts';
 import { createWorldHub } from '../../loader/src/runtime/world/hub.ts';
 import { createFrameClock, type FrameClock } from './frame-loop.ts';
 import { createFakeStorage, type FakeStorage } from './storage.ts';
@@ -220,6 +221,15 @@ interface SharedOptions {
 }
 
 /**
+ * The arrange mode and its grid. Snapping starts off, so no drag is quantized
+ * unless a suite opts in.
+ */
+function arrangeParts(root: HTMLElement): { unlock: UnlockMode; snap: SnapStore } {
+  const snap = createSnapStore({ storage: null, channel: 'pbe' });
+  return { snap, unlock: createUnlockMode(root, () => snap.enabled) };
+}
+
+/**
  * @param hub the storage hub, so a suite can seed it or assert on it.
  */
 function createSharedServices(
@@ -293,7 +303,7 @@ function createSharedServices(
   const dispatcher = createKeyDispatcher({ target: keyTarget, doc });
   // Held rather than built inline, because the harness hands it back: nothing else
   // can turn the arrange mode on, and a bare frame's gestures are its to grant.
-  const unlock = createUnlockMode(root);
+  const { unlock, snap } = arrangeParts(root);
   const logs = createLogBuffer();
   const stacking = createStacking({ root });
   // Keyed on the pair, because two addons may legitimately declare the same
@@ -364,6 +374,7 @@ function createSharedServices(
       roster: createFrameRoster(),
       icons,
       unlock,
+      snap,
       arrangeHint: createArrangeHint({ toaster }),
       project,
       unitPoint,

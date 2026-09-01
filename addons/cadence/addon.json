@@ -1,11 +1,11 @@
 {
   "id": "cadence",
   "name": "Cadence",
-  "version": "1.2.0",
+  "version": "1.3.0",
   "apiVersion": 1,
-  "apiMinor": 6,
+  "apiMinor": 10,
   "author": "MarshalX",
-  "description": "The four timings a rotation is played against, on one thin strip: your swing, the global cooldown, your cast with a latency band, and your resource with combo points as pips.",
+  "description": "Your swing, the global cooldown, your cast with a latency band, and your resource with combo points as pips, on one strip. Optional rows add your offhand swing, your target's swing and your speed.",
   "entry": "main.js",
   "preview": {
     "file": "preview.png",
@@ -29,6 +29,18 @@
       "default": true
     },
     {
+      "id": "show-offhand-swing",
+      "type": "boolean",
+      "label": "Show your offhand swing timer while dual-wielding",
+      "default": false
+    },
+    {
+      "id": "show-target-swing",
+      "type": "boolean",
+      "label": "Show your target's swing timer, under your own",
+      "default": false
+    },
+    {
       "id": "show-gcd",
       "type": "boolean",
       "label": "Show the global cooldown",
@@ -39,6 +51,12 @@
       "type": "boolean",
       "label": "Show the cast bar",
       "default": true
+    },
+    {
+      "id": "show-speed",
+      "type": "boolean",
+      "label": "Show your movement speed when something is affecting it",
+      "default": false
     },
     {
       "id": "show-power",

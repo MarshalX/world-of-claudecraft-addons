@@ -1,18 +1,18 @@
 {
   "id": "emberwatch",
   "name": "Emberwatch",
-  "version": "1.3.0",
+  "version": "1.4.0",
   "apiVersion": 1,
   "apiMinor": 8,
   "author": "MarshalX",
-  "description": "A rules engine for effects and procs: name an effect on a unit and get a tile, a cue and a banner when it lands, stacks up or runs out. Ships a starter set for your class, and takes rules of your own captured off your target with a keybind.",
+  "description": "Name an effect on a unit and get a tile, a cue and a banner when it lands, stacks or fades. Ships rules for your class and the Ignivar and Varkhul raid, and captures your own off your target.",
   "entry": "main.js",
   "preview": {
     "file": "preview.png",
     "alt": "On the left, Alerts and rules, five square alert tiles above the rules panel that produced them. On the right, An alert, a STUNNED banner across the view, the alert strip shut."
   },
   "homepage": "https://github.com/MarshalX/world-of-claudecraft-addons",
-  "tags": ["combat", "interface"],
+  "tags": ["combat", "raid", "interface"],
   "permissions": ["world.read", "ui", "sound", "keys", "storage"],
   "data": ["rules.json"],
   "keybinds": [

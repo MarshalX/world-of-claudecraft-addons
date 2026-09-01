@@ -60,6 +60,8 @@ interface TableRow {
   quality?: string;
   slot?: string;
   armorType?: string;
+  set?: string;
+  requiredClass?: string[];
   heroicOf?: string;
   uniqueEquipped?: true;
   itemLevel?: number;
@@ -124,6 +126,12 @@ const PRICED = rowFor('abyssal_loop');
 const WARFARE = rowFor('furyforged_warhelm');
 const HEROIC = rowFor('heroic_direfang_quiver');
 const UNIQUE = rowFor('heroic_kingsbane_last_oath');
+
+/**
+ * A Crucible set piece, the only row shape carrying a set, an armor class and a class gate at
+ * once. Its id and its set NAME share no word: 'emberscreed' is 'Creed of Embers Vestments'.
+ */
+const SET_PIECE = rowFor('emberscreed_helmet');
 
 /** An id the shipped table does not carry, which is what a roll and the art file teach. */
 const UNKNOWN_ID = 'lorebind_not_in_the_table';
@@ -1089,6 +1097,9 @@ describe('what it puts on the bus', () => {
       quality: HELMET.quality,
       kind: HELMET.kind,
       slot: HELMET.slot,
+      armorType: HELMET.armorType,
+      set: HELMET.set,
+      requiredClass: HELMET.requiredClass,
       sellValue: HELMET.sellValue,
       source: 'table',
     });
@@ -1246,6 +1257,59 @@ describe('what it puts on the bus', () => {
     await h.settle();
 
     expect(h.sent[0]?.from).toBe('official/lorebind');
+  });
+});
+
+describe('what it says about a set piece', () => {
+  it('publishes the set, the armor class and the class gate a piece carries', async () => {
+    const h = await start();
+    await h.settle();
+
+    const record = publishedFor(h.sent, HELMET.id) ?? {};
+
+    expect(field(record, 'set')).toBe(HELMET.set);
+    expect(field(record, 'armorType')).toBe(HELMET.armorType);
+    expect(field(record, 'requiredClass')).toEqual(HELMET.requiredClass);
+    // The fixture is real content, so this pins that the row still has all three to publish.
+    expect(HELMET.requiredClass).toHaveLength(4);
+  });
+
+  // The game builds set bonuses and proc auras from the id ('emberscreed' procs
+  // `set_emberscreed_4pc`); every row here says 'Creed of Embers Vestments'.
+  it('publishes the set display name and not the game set id', async () => {
+    const h = await start();
+    await h.settle();
+
+    const record = publishedFor(h.sent, SET_PIECE.id) ?? {};
+
+    expect(field(record, 'set')).toBe('Creed of Embers Vestments');
+    expect(SET_PIECE.id.startsWith('emberscreed')).toBe(true);
+  });
+
+  // The bus freezes the envelope and not the payload, so a subscriber sorting in place would
+  // sort what every later subscriber reads.
+  it('publishes a copy of the class list rather than the row it holds', async () => {
+    const h = await start();
+    await h.settle();
+
+    const first = publishedFor(h.sent, HELMET.id) ?? {};
+    const classes = field(first, 'requiredClass') as string[];
+    classes.length = 0;
+    await open(h, HELMET.id);
+
+    expect(blockLines('gate')).toContain('Classes: Mage, Priest, Warlock, Druid');
+  });
+
+  // A subscriber testing `payload.requiredClass?.includes(myClass)` reads an empty list as
+  // "nobody".
+  it('leaves the class gate out for an item that has none', async () => {
+    const h = await start();
+    await h.settle();
+
+    expect(PRICED.requiredClass).toBeUndefined();
+    expect(publishedFor(h.sent, PRICED.id)).not.toHaveProperty('requiredClass');
+    expect(publishedFor(h.sent, PRICED.id)).not.toHaveProperty('set');
+    expect(publishedFor(h.sent, PRICED.id)).not.toHaveProperty('armorType');
   });
 });
 

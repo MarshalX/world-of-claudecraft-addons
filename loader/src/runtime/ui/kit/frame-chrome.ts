@@ -189,9 +189,31 @@ interface Chrome {
 interface ChromeDeps {
   doc: Document;
   fqid: string;
+  /**
+   * The owning addon's manifest name, for the arrange-mode chip. Absent falls back to
+   * the fqid: a poor label but a true one, where a title-cased id would be an invented name.
+   */
+  addonName?: string | undefined;
   chrome: FrameChrome;
   opts: FrameOpts;
 }
+
+/**
+ * What the arrange-mode chip says: whose frame this is, and which of theirs. Composed
+ * here and written to one attribute rather than assembled in the sheet from `attr()`,
+ * because the sheet can reach only the fqid and CSS text is unreadable from a Vitest suite.
+ */
+function frameLabel(addon: string, frame: string): string {
+  return `${addon} · ${frame}`;
+}
+
+/** The chip for one frame, from what its builder was given. */
+function labelFor(deps: ChromeDeps): string {
+  return frameLabel(deps.addonName ?? deps.fqid, deps.opts.title ?? deps.opts.id);
+}
+
+/** Where the chip's text lives, so `setTitle` can keep it in step. */
+const LABEL_ATTR = 'data-woc-label';
 
 /**
  * The class list, and the one place `panel` is decided.
@@ -267,6 +289,7 @@ function buildChrome(deps: ChromeDeps): Chrome {
   // 'main', and a duplicate id would make document.getElementById a coin flip.
   el.setAttribute('data-woc-addon', deps.fqid);
   el.setAttribute('data-woc-frame', opts.id);
+  el.setAttribute(LABEL_ATTR, labelFor(deps));
   el.setAttribute('role', roleFor(deps.chrome));
 
   const handle = doc.createElement('header');
@@ -301,4 +324,4 @@ function buildChrome(deps: ChromeDeps): Chrome {
 }
 
 export type { Chrome, ChromeDeps, FrameChrome, FrameDensity, FrameOpts, FramePointer };
-export { buildChrome };
+export { buildChrome, frameLabel, LABEL_ATTR };

@@ -10,14 +10,25 @@
 // source starts from a real file rather than a guess.
 
 /**
+ * The class the game puts on `document.body` while its HUD edit mode is on:
+ * `INTERFACE_UNLOCKED_BODY_CLASS` (`src/ui/interface_unlock.ts`), written on every
+ * flip and on every `refresh()`. Declared ahead of the table because `interfaceUnlocked`
+ * is composed from it, and the observer in ui/game-unlock.ts matches on the class alone.
+ */
+export const GAME_UNLOCKED_CLASS = 'interface-unlocked';
+
+/**
  * Everything from hudRoot through microOptions lives inside the game's
  * <template id="game-ui-template"> and does NOT exist until world entry clones
- * it into the document. Only gameVersion is in the live DOM from the start.
+ * it into the document. gameVersion and interfaceUnlocked are the two that are
+ * not, and they are not alike: the first is in the live DOM from the start, and
+ * the second is a MODE the player enters, absent until they do.
  * That is why the in-game injections wait (see ui/hud-mount.ts) rather than
  * looking their anchor up once.
  *
  * The keys are ordered as the loader uses them: the HUD root first, then the
- * game menu, then the micro-button rail, then the version readout.
+ * game menu, then the micro-button rail, then the version readout, then the
+ * game's own arrange mode.
  */
 export const ANCHORS = {
   /** The game's HUD root, and the marker for the whole clone having landed. */
@@ -43,8 +54,14 @@ export const ANCHORS = {
    * looking at" rather than an overworld zone.
    */
   zoneLabel: '#zone-label',
-  /** The footer build readout, and the only anchor here outside the HUD template. */
+  /** The footer build readout, which is in the live DOM from the start. */
   gameVersion: '#game-version',
+  /**
+   * The game's own HUD edit mode ("Edit Frames" in the options menu), on `document.body`
+   * rather than inside the HUD template. It resolves only while the mode is open, so a
+   * false with the mode off says nothing about drift.
+   */
+  interfaceUnlocked: `body.${GAME_UNLOCKED_CLASS}`,
 } as const;
 
 export type AnchorKey = keyof typeof ANCHORS;
@@ -57,7 +74,8 @@ export const ANCHOR_KEYS = Object.keys(ANCHORS) as AnchorKey[];
  * The three menu-internal ones are deliberately absent: `.opt-list` and
  * `.opt-version` exist only while the menu is open on its root view, and
  * `[data-back]` only on a sub-view, so none of them says anything about drift
- * when checked at an arbitrary moment.
+ * when checked at an arbitrary moment. `interfaceUnlocked` is absent for the same
+ * reason: it is a mode the player enters, false almost every time anyone looks.
  */
 export const ANCHORS_REQUIRED_IN_GAME: readonly AnchorKey[] = [
   'hudRoot',

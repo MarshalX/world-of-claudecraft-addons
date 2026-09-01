@@ -8,9 +8,15 @@
 
 import interact from 'interactjs';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { LABEL_BELOW_CLASS } from '../loader/src/runtime/ui/frame/geometry.ts';
+import { NO_SNAP, SNAP_GRID } from '../loader/src/runtime/ui/frame/snap.ts';
 import { CLOSE_PATH } from '../loader/src/runtime/ui/kit/close-glyph.ts';
-import { createAddonFrame } from '../loader/src/runtime/ui/kit/frame.ts';
-import { buildChrome, type FrameOpts } from '../loader/src/runtime/ui/kit/frame-chrome.ts';
+import { createAddonFrame, gestureDeps } from '../loader/src/runtime/ui/kit/frame.ts';
+import {
+  buildChrome,
+  type FrameOpts,
+  LABEL_ATTR,
+} from '../loader/src/runtime/ui/kit/frame-chrome.ts';
 import type { FrameArrange } from '../loader/src/runtime/ui/kit/frame-gestures.ts';
 import { createFrameStateStore } from '../loader/src/runtime/ui/kit/frame-state.ts';
 import { HIDDEN_CLASS } from '../loader/src/runtime/ui/kit/frame-visibility.ts';
@@ -1145,5 +1151,115 @@ describe('resizing one axis', () => {
     expect(frame.el.style.width).toBe('300px');
     expect(frame.el.style.height).toBe('');
     expect(interact(frame.el).resizable().enabled).toBe(false);
+  });
+});
+
+// The arrange-mode name chip, composed in TypeScript and written to one attribute
+// because CSS text is unreadable from a Vitest suite and the sheet could reach only the fqid.
+describe('the arrange-mode name chip', () => {
+  function label(el: HTMLElement): string | null {
+    return el.getAttribute(LABEL_ATTR);
+  }
+
+  function named(opts: FrameOpts, addonName?: string, view = VIEW) {
+    return createAddonFrame({
+      doc: document,
+      root: root(),
+      fqid: FQID,
+      addonName,
+      chrome: 'frame',
+      opts,
+      store: null,
+      viewport: () => view,
+      window: globalThis,
+    });
+  }
+
+  it('names the addon and the frame, so a screen of outlined boxes can be read', () => {
+    const frame = named({ id: 'main', title: 'Damage' }, 'Combat Meter');
+
+    expect(label(frame.el)).toBe('Combat Meter · Damage');
+  });
+
+  it('falls back to the frame id when the addon gave it no title', () => {
+    const frame = named({ id: 'main' }, 'Combat Meter');
+
+    expect(label(frame.el)).toBe('Combat Meter · main');
+  });
+
+  // A poor label but a true one; title-casing the id would invent a name.
+  it('falls back to the fqid when nothing passed the addon a name', () => {
+    const frame = named({ id: 'main', title: 'Damage' });
+
+    expect(label(frame.el)).toBe(`${FQID} · Damage`);
+  });
+
+  it('follows a rename', () => {
+    const frame = named({ id: 'main', title: 'Damage' }, 'Combat Meter');
+
+    frame.setTitle('Healing');
+
+    expect(label(frame.el)).toBe('Combat Meter · Healing');
+  });
+
+  // Above by default, where the chip covers nothing the frame drew.
+  it('stays above a frame with room for it', () => {
+    const frame = named({ id: 'main' }, 'Combat Meter');
+
+    expect(frame.el.classList.contains(LABEL_BELOW_CLASS)).toBe(false);
+  });
+
+  // Through the opening placement rather than by writing the class, since every
+  // box reaches the element through paint.
+  it('marks a frame whose top leaves no room for the chip', () => {
+    const frame = named({ id: 'main' }, 'Combat Meter', { w: 1280, h: 300 });
+
+    expect(frame.el.classList.contains(LABEL_BELOW_CLASS)).toBe(true);
+  });
+});
+
+// The grid reaches a frame through the mode alone. Driven directly because interactjs
+// moves nothing under happy-dom, and the one line handing the mode's grid to the
+// gesture layer fails silently without this.
+describe('the arrange grid reaching a frame', () => {
+  function gestures(arrange?: FrameArrange) {
+    const opts: FrameOpts = { id: 'main', width: 320, height: 200 };
+    const chrome = buildChrome({ doc: document, fqid: FQID, chrome: 'frame', opts });
+    return gestureDeps(
+      {
+        doc: document,
+        root: root(),
+        fqid: FQID,
+        chrome: 'frame',
+        opts,
+        store: null,
+        viewport: () => VIEW,
+        window: globalThis,
+        ...arrangeDep(arrange),
+      },
+      chrome,
+      { w: 320, h: 200 },
+      () => undefined,
+    );
+  }
+
+  function snapping(on: boolean): FrameArrange {
+    const el = document.createElement('div');
+    document.body.appendChild(el);
+    const unlock = createUnlockMode(el, () => on);
+    unlock.set(true);
+    return { unlock };
+  }
+
+  it('takes the grid from the mode the frame was given', () => {
+    expect(gestures(snapping(true)).snapGrid?.()).toBe(SNAP_GRID);
+  });
+
+  it('takes no grid from a mode whose player has snapping off', () => {
+    expect(gestures(snapping(false)).snapGrid?.()).toBe(NO_SNAP);
+  });
+
+  it('installs nothing at all for a frame with no mode', () => {
+    expect(gestures().snapGrid).toBeUndefined();
   });
 });

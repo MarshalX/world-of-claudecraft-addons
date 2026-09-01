@@ -35,6 +35,7 @@ import type {
 } from './game-types.ts';
 import { type CorpseView, corpseViewOf, viewerOf } from './ground.ts';
 import { readMatch } from './match.ts';
+import { readMoveSpeedMult } from './movement.ts';
 import type { PartyInfo } from './party-types.ts';
 import { type Reaction, reactionOf } from './reaction.ts';
 import { readonlyMapView } from './readonly-map.ts';
@@ -219,6 +220,10 @@ function tailReads(world: unknown, entities: () => ReadonlyMap<number, Entity>, 
       return readAs<string>(world, 'spectating') ?? null;
     },
 
+    get moveSpeedMult(): number | null {
+      return readMoveSpeedMult(world);
+    },
+
     raw: world,
   };
 }
@@ -259,6 +264,8 @@ export interface WorldBackend
    * The reason `characterKey` can be null mid-session: see character-key.ts.
    */
   readonly spectating: string | null;
+  /** The server's own movement-speed multiplier for the player, or null. See `movement.ts`. */
+  readonly moveSpeedMult: number | null;
   /** One entity's hate table, measured against the player. */
   readonly threat: (entityId: number) => ThreatTable;
   /** One corpse's contents filtered to what the player could take, or null. */

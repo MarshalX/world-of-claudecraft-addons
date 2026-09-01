@@ -1,15 +1,15 @@
 {
   "id": "tocsin",
   "name": "Tocsin",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "apiVersion": 1,
-  "apiMinor": 4,
+  "apiMinor": 10,
   "author": "MarshalX",
-  "description": "What a raid boss is about to do, and what the group has to answer: a timer per mechanic, plus who is marked, what nobody is channelling, and the tank stacks.",
+  "description": "What a raid boss is about to do and what the group must answer, for Nythraxis, Ignivar and Varkhul: a timer per mechanic, who is marked, who is short on a soak, which water is left, and tank stacks.",
   "entry": "main.js",
   "preview": {
     "file": "preview.png",
-    "alt": "On the left, A wardstone nobody is on, A raid panel: mechanic timers with Deathless Rage casting live, and the three wardstones in all three states, one done and named with who held it, one being channelled, and the third drawn red and reading UNHELD. On the right, Marks, stacks and adds, The same panel with no cast in flight: three Soul Rend marks, two stacked and one drawn red standing alone, the tank at six stacks with the other tank not yet clear, and the heroic court listed interrupt first."
+    "alt": "Panel 1 of 3, A wardstone nobody is on, A raid panel: mechanic timers with Deathless Rage casting live, and the three wardstones in all three states, one done and named with who held it, one being channelled, and the third drawn red and reading UNHELD. Panel 2 of 3, Marks, stacks and adds, The same panel with no cast in flight: three Soul Rend marks, two stacked and one drawn red standing alone, the tank at six stacks with the other tank not yet clear, and the heroic court listed interrupt first. Panel 3 of 3, A countdown to the wipe, A raid panel during Ignivar’s last phase, in three sections and nine rows. The mechanic timers: Brand of the Pyre in three seconds, Revolving Inferno in fourteen, Falling Cinders drawn red at one, and the alternating Searing Torrent or Rain of Cinders slot in five. Under them an Enrage row reading Last Inferno, 27 seconds, nine percent left and then the raid dies. Under that the four water conduits: North East running with three seconds of water, North West spent, South East ready, and South West spent."
   },
   "data": ["bosses.json"],
   "homepage": "https://github.com/MarshalX/world-of-claudecraft-addons",

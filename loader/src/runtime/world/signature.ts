@@ -76,6 +76,8 @@ const KEYS = [
   'mail',
   'mailUnread',
   'bank',
+  'vault',
+  'craftVaultStock',
   'buyback',
 ] as const;
 

@@ -30,6 +30,7 @@ const WORLD_MEMBERS: readonly string[] = [
   'copper',
   'craftingIdentity',
   'craftSkills',
+  'craftVaultStock',
   'deedsEarned',
   'deedStats',
   'delveClears',
@@ -67,6 +68,7 @@ const WORLD_MEMBERS: readonly string[] = [
   'talents',
   'talentSpec',
   'unlockedMilestones',
+  'vaultInfo',
   'vendorBuyback',
   'xp',
 ];

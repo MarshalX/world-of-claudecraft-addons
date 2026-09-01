@@ -33,6 +33,21 @@
 // find is a tile with no picture for a reason that has nothing to do with the game.
 
 import type { Scenario, Stage, WorldDraft } from '../../stage/src/stage.ts';
+import TABLE from './refused.json' with { type: 'json' };
+
+const TABLE_FILE = 'refused.json';
+const DATA = { [TABLE_FILE]: JSON.stringify(TABLE) };
+
+/**
+ * One id, checked against the shipped table: a regeneration that drops it turns a quietly wrong
+ * picture into a scenario that does not start.
+ */
+function mustBeRefused(id: string): string {
+  if (!TABLE.auras.some((row) => row.id === id)) {
+    throw new Error(`refused.json no longer carries ${id}, so this scenario is out of date`);
+  }
+  return id;
+}
 
 /** The local player's own entity id, which the shared fixture fixes at 661. */
 const PLAYER_ID = 661;
@@ -45,6 +60,10 @@ const SHAMAN = 703;
 /** The other side. Only the mage is selected; the warlock is here to be a caster. */
 const MAGE = 710;
 const WARLOCK = 711;
+
+/** The raid case's one enemy, whose template id is the one a portrait is filed under. */
+const BOSS = 720;
+const BOSS_TEMPLATE = 'ignivar_herald_of_the_last_flame';
 
 /** The class the player is, which is the directory their own art would come from. */
 const CLASS_ID = 'paladin';
@@ -113,6 +132,23 @@ function aSkirmish(draft: WorldDraft): void {
   draft.set(draft.player, 'name', 'Marshal');
   addGroup(draft);
   addEnemies(draft);
+}
+
+/**
+ * The same group, in front of a boss. The boss is a `mob`, so its effects draw its PORTRAIT: an
+ * aura carries no class to file art under.
+ */
+function aRaid(draft: WorldDraft): void {
+  draft.set(draft.player, 'templateId', CLASS_ID);
+  draft.set(draft.player, 'name', 'Marshal');
+  addGroup(draft);
+  draft.mob(BOSS, {
+    name: 'Ignivar, Herald of the Last Flame',
+    kind: 'mob',
+    hostile: true,
+    templateId: BOSS_TEMPLATE,
+    level: 25,
+  });
 }
 
 /**
@@ -199,14 +235,63 @@ async function midFight(stage: Stage): Promise<void> {
   await show(stage);
 }
 
+/**
+ * Two real Ignivar mechanics the game refuses beside an ordinary curse, so the picture is ONE
+ * tile to act on and a held tile counting two. Deliberately not the preview: the battleground
+ * shows both directions and is what the addon IS.
+ */
+async function inTheForge(stage: Stage): Promise<void> {
+  afflict(stage, TANK, {
+    id: mustBeRefused('ignivar_brand_of_the_pyre'),
+    name: 'Brand of the Pyre',
+    kind: 'dot',
+    school: 'fire',
+    remaining: 42,
+    duration: 600,
+    value: 180,
+    sourceId: BOSS,
+  });
+  // The boss's own haste: the purge direction, and refused too.
+  afflict(stage, BOSS, {
+    id: mustBeRefused('ignivar_last_inferno'),
+    name: 'Last Inferno',
+    kind: 'buff_haste',
+    school: 'fire',
+    remaining: 22.5,
+    duration: 30,
+    value: 1.2,
+    sourceId: BOSS,
+  });
+  afflict(stage, PRIEST, {
+    id: 'curse_of_agony',
+    name: 'Hex of Anguish',
+    kind: 'dot',
+    school: 'shadow',
+    remaining: 16.4,
+    duration: 24,
+    value: 9,
+    sourceId: BOSS,
+  });
+  stage.set(stage.player, 'targetId', BOSS);
+  await show(stage);
+}
+
 const SCENARIOS: readonly Scenario[] = [
   {
     id: 'skirmish',
     label: 'Both directions at once',
     preview: true,
     alt: 'a strip of five square tiles, each a countdown over the art with the name of whoever carries the effect under it. The borders colour by school, and one tile has no art at all.',
+    data: DATA,
     world: aSkirmish,
     run: midFight,
+  },
+  {
+    id: 'forge',
+    label: 'A fight that owns its own effects',
+    data: DATA,
+    world: aRaid,
+    run: inTheForge,
   },
   {
     // Most of a session, and the state nobody thinks to photograph. A bare frame
@@ -215,6 +300,7 @@ const SCENARIOS: readonly Scenario[] = [
     // off: the unlock outline is how a player finds it again to move it.
     id: 'clear',
     label: 'Nothing worth a global',
+    data: DATA,
     world: aSkirmish,
     run: show,
   },

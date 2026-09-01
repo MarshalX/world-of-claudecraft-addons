@@ -530,12 +530,34 @@ export interface Entity {
    */
   rangedPower: number;
 
+  /**
+   * Whether this entity is swinging its weapon at something.
+   *
+   * Rides every entity's record from game 0.41.0, so unlike the self-only block
+   * below it is real on your target; against an older server it is false on every
+   * entity but your own. The server omits the field for an entity that is not
+   * auto-attacking and the client reads that as false, so false is "not swinging"
+   * rather than "nobody said". Not a new member, so it needs no higher `apiMinor`.
+   */
+  autoAttack: boolean;
+  /**
+   * Seconds until this entity's next auto-attack swing lands. 0 when it is not
+   * auto-attacking. On every entity from game 0.41.0, like `autoAttack`.
+   *
+   * THE PERIOD IS NOT `weapon.speed`: the game resets this clock to the weapon
+   * speed multiplied by melee haste, which is not on the wire, so a bar seeded
+   * from the raw speed on a hasted character is wrong by exactly the haste.
+   * Learn the period from the RESET EDGE, the height of the upward jump, which is
+   * what the game's own swing bar does; `weapon.speed` is at best a first-frame
+   * seed.
+   */
+  swingTimer: number;
+
   // Yours alone: the server sends these on the SELF record and nowhere else, so
   // on any other entity they hold an inert default rather than a real value.
   /** Ability id to seconds remaining. An entry at 0 is not on cooldown. */
   cooldowns: Map<string, number>;
   gcdRemaining: number;
-  autoAttack: boolean;
   attackPower: number;
   spellPower: number;
   /**
@@ -555,8 +577,21 @@ export interface Entity {
   critChance: number;
   dodgeChance: number;
   blockChance: number;
-  /** Seconds until your next auto-attack swing lands. */
-  swingTimer: number;
+  /**
+   * Seconds until your OFFHAND swing lands, while dual-wielding. Self-only: on
+   * any other entity it is 0.
+   *
+   * READ IT ONLY WHILE `autoAttack` IS TRUE: the game drains this clock BEFORE it
+   * checks whether you are attacking, so with auto-attack off it sits at 0 and
+   * reads as a swing permanently about to land. `offhandWeapon.speed` is not the
+   * period, for the reason `swingTimer` gives; learn it from the reset edge.
+   *
+   * `offhandWeapon !== null` is the test for an offhand swing, and `offhandItemId`
+   * is not: the game fills that one for a shield and a held-only item too.
+   *
+   * Added in game 0.41.0 and in API minor 10.
+   */
+  offhandSwingTimer: number;
   comboPoints: number;
   /**
    * A druid's real mana pool, parked while a form runs the live bar on rage or
@@ -576,6 +611,10 @@ export interface Entity {
    * Null is a real answer rather than a gap, so `offhandWeapon !== null` is how
    * you ask whether the player is dual-wielding; there is no separate flag,
    * because the game derives its own from exactly that comparison.
+   *
+   * NOT `offhandItemId`: the game fills that one for a shield and for a held-only
+   * item as well as for a weapon. `speed` here is the UNHASTED base and is not
+   * the offhand swing period; see `offhandSwingTimer`.
    *
    * Added in game 0.41.0 and in API minor 10. Before that release the server
    * never sent it, and the client filled it with null on every entity: a

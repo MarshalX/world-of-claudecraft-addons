@@ -77,6 +77,47 @@ const TWO_ROWS: FrameBox = { x: 20, y: 20, w: 240, h: listHeight(2) };
 
 type Fake = Record<string, unknown>;
 
+/**
+ * The player's spellbook, in the game's own shape. `arcane_shot` is displayed as "Fell Shot"
+ * and its school is arcane, which is how a name and a tint are recovered at all.
+ *
+ * `glacial_front` is the game's own four-stage cone and `frostbolt` an ordinary cast, both
+ * from `src/sim/content/classes.ts`. `empowerStages` sits on the DEF and is ABSENT on an
+ * ordinary ability rather than 0.
+ */
+const SPELLBOOK = Object.freeze([
+  {
+    def: { id: 'arcane_shot', name: 'Fell Shot', school: 'arcane', requiresTarget: true },
+    rank: 3,
+    cost: 55,
+    castTime: 2,
+    cooldown: 5.4,
+  },
+  {
+    def: {
+      id: 'glacial_front',
+      name: 'Glacial Front',
+      school: 'frost',
+      requiresTarget: false,
+      empowerStages: 4,
+    },
+    rank: 1,
+    cost: 80,
+    castTime: 2.4,
+    cooldown: 12,
+  },
+  {
+    def: { id: 'frostbolt', name: 'Rimelance', school: 'frost', requiresTarget: true },
+    rank: 4,
+    cost: 30,
+    castTime: 2.2,
+    cooldown: 0,
+  },
+]);
+
+/** `glacial_front`'s stage count, the divisor every boundary below sits on. */
+const STAGES = 4;
+
 interface CastSpec {
   ability: string;
   remaining: number;
@@ -182,6 +223,7 @@ async function settleFrames(): Promise<void> {
 async function start(
   settings: Record<string, unknown> = {},
   frames: Record<string, { box: FrameBox; visible: boolean }> = {},
+  known: readonly unknown[] = SPELLBOOK,
 ): Promise<ForetellHarness> {
   const storage = createFakeStorage();
   await Promise.all(
@@ -191,18 +233,6 @@ async function start(
   );
   const player = liveEntity({ set: { templateId: 'hunter' } });
   const entities = new Map<number, Fake>([[PLAYER_ID, player]]);
-  // The spellbook in the game's own shape. `arcane_shot` is displayed as "Fell Shot"
-  // and its school is arcane, which is the one caster on this world whose school can
-  // be recovered at all.
-  const known = [
-    {
-      def: { id: 'arcane_shot', name: 'Fell Shot', school: 'arcane', requiresTarget: true },
-      rank: 3,
-      cost: 55,
-      castTime: 2,
-      cooldown: 5.4,
-    },
-  ];
   const world = { entities, player, known };
   const harness = await mountAddon({
     manifest: MANIFEST_TEXT,
@@ -260,8 +290,9 @@ async function start(
 async function run(
   settings: Record<string, unknown> = {},
   frames: Record<string, { box: FrameBox; visible: boolean }> = {},
+  known: readonly unknown[] = SPELLBOOK,
 ): Promise<ForetellHarness> {
-  const harness = await start(settings, frames);
+  const harness = await start(settings, frames, known);
   harness.poll();
   await settleFrames();
   return harness;
@@ -569,6 +600,195 @@ describe('the school tint', () => {
     h.poll();
 
     expect(h.classesOf(BOSS).some((name) => name.startsWith('woc-bar-school-'))).toBe(false);
+  });
+});
+
+// A charged cast's stage is on no wire, so every case drives it by moving `castRemaining`
+// alone; the count comes off the spellbook.
+describe('a charged cast', () => {
+  /** A hostile mage: the game's empowered abilities are a mage's. */
+  function aMage(h: ForetellHarness): Fake {
+    return h.caster(DUELIST, { kind: 'player', templateId: 'mage', name: 'Ilvane' });
+  }
+
+  it('counts the stage on the head line, beside the name', async () => {
+    const h = await run();
+    const mage = aMage(h);
+
+    h.casts(mage, { ability: 'glacial_front', remaining: 2.4, total: 2.4 });
+    h.poll();
+
+    expect(h.labelOf(DUELIST)).toBe(`Glacial Front 1/${String(STAGES)}`);
+  });
+
+  // The stage is live, so it cannot ride the ability-change guard; nothing polls, since only
+  // the clock inside one cast moved.
+  it('advances the stage on a frame, with no set change', async () => {
+    const h = await run();
+    const mage = aMage(h);
+    h.casts(mage, { ability: 'glacial_front', remaining: 4, total: 4 });
+    h.poll();
+    expect(h.labelOf(DUELIST)).toBe('Glacial Front 1/4');
+
+    h.casts(mage, { ability: 'glacial_front', remaining: 2, total: 4 });
+    h.frame();
+
+    expect(h.labelOf(DUELIST)).toBe('Glacial Front 3/4');
+  });
+
+  // A stage is the INTERVAL after its boundary: one hundredth short of a quarter is still
+  // below and exactly on it has moved up. Rounding, or dropping the `+ 1`, agrees with the
+  // game everywhere except here.
+  it.each([
+    [4, 1],
+    [3.01, 1],
+    [3, 2],
+    [2.01, 2],
+    [2, 3],
+    [1.01, 3],
+    [1, 4],
+    [0.01, 4],
+    [0, 4],
+  ])('is at stage %2$s of four with %1$s seconds left', async (remaining, stage) => {
+    const h = await run();
+    const mage = aMage(h);
+    h.casts(mage, { ability: 'glacial_front', remaining: 4, total: 4 });
+    h.poll();
+
+    h.casts(mage, { ability: 'glacial_front', remaining, total: 4 });
+    h.frame();
+
+    expect(h.labelOf(DUELIST)).toBe(`Glacial Front ${String(stage)}/4`);
+  });
+
+  // The game reads a cast with no length as fully charged; a NaN would reach a style
+  // property and drop silently.
+  it('reads a cast with no total as fully charged rather than dividing by zero', async () => {
+    const h = await run();
+    const mage = aMage(h);
+
+    h.casts(mage, { ability: 'glacial_front', remaining: 0, total: 0 });
+    h.poll();
+
+    expect(h.labelOf(DUELIST)).toBe('Glacial Front 4/4');
+    expect(h.labelOf(DUELIST)).not.toContain('NaN');
+    expect(h.fillOf(DUELIST)).toMatch(/^[\d.]+%$/);
+  });
+
+  it('leaves an ordinary cast out of your own spellbook exactly as it was', async () => {
+    const h = await run();
+    const mage = aMage(h);
+
+    h.casts(mage, { ability: 'frostbolt', remaining: 1.1, total: 2.2 });
+    h.frame();
+    h.poll();
+
+    expect(h.labelOf(DUELIST)).toBe('Rimelance');
+  });
+
+  // The game's release path returns on a count at or under zero and its stage function
+  // answers 1 for a count of one.
+  it.each([0, 1])('draws no stage for an ability declaring %s of them', async (stages) => {
+    const h = await run({}, {}, [
+      {
+        def: { id: 'frostbolt', name: 'Rimelance', school: 'frost', empowerStages: stages },
+        rank: 1,
+      },
+    ]);
+    const mage = aMage(h);
+
+    h.casts(mage, { ability: 'frostbolt', remaining: 1.1, total: 2.2 });
+    h.poll();
+
+    expect(h.labelOf(DUELIST)).toBe('Rimelance');
+  });
+
+  it('drops the stage when the same caster starts an ordinary cast', async () => {
+    const h = await run();
+    const mage = aMage(h);
+    h.casts(mage, { ability: 'glacial_front', remaining: 1, total: 4 });
+    h.poll();
+    expect(h.labelOf(DUELIST)).toBe('Glacial Front 4/4');
+
+    h.casts(mage, { ability: 'frostbolt', remaining: 2.2, total: 2.2 });
+    h.poll();
+
+    expect(h.labelOf(DUELIST)).toBe('Rimelance');
+  });
+
+  // The spellbook lookup that produced the name is the one that has to produce the count, or
+  // every change writes the line twice, once wrong.
+  it('writes the head line once when the caster switches to a charged ability', async () => {
+    const h = await run();
+    const mage = aMage(h);
+    h.casts(mage, { ability: 'frostbolt', remaining: 2.2, total: 2.2 });
+    h.poll();
+    const label = barFor(DUELIST)?.querySelector('.woc-bar-label') as HTMLElement;
+    const observer = new MutationObserver(() => undefined);
+    observer.observe(label, { childList: true, characterData: true, subtree: true });
+
+    h.casts(mage, { ability: 'glacial_front', remaining: 3, total: 4 });
+    h.poll();
+
+    // Every string the head line passed through: the intermediate VALUE is what would be
+    // wrong, not the record count.
+    const written = observer
+      .takeRecords()
+      .flatMap((record) => [...record.addedNodes].map((node) => node.textContent));
+    expect(label.textContent).toBe('Glacial Front 2/4');
+    expect(written).toEqual(['Glacial Front 2/4']);
+    observer.disconnect();
+  });
+
+  it('says on the row what the two figures mean', async () => {
+    const h = await run();
+    const mage = aMage(h);
+
+    h.casts(mage, { ability: 'glacial_front', remaining: 2, total: 4 });
+    h.poll();
+
+    const tip = tipOn(barFor(DUELIST));
+    expect(tip).toContain('stage 3 of 4');
+    expect(tip).toContain('latest this can land');
+  });
+});
+
+// `AbilityInfo` is YOUR OWN spellbook, so the stage count is reachable only for an ability
+// you know, and nothing on the wire says a cast is being charged at all.
+describe('a charged cast you have no spellbook for', () => {
+  it('draws as an ordinary cast rather than inventing a stage', async () => {
+    // An empty spellbook is every class but the caster's.
+    const h = await run({}, {}, []);
+    const boss = h.caster(BOSS, { name: 'Emberlord' });
+
+    h.casts(boss, { ability: 'glacial_front', remaining: 2, total: 4 });
+    h.poll();
+
+    expect(h.labelOf(BOSS)).toBe('Glacial Front?');
+    expect(h.labelOf(BOSS)).not.toContain('/');
+  });
+
+  it('shows no stage figure of any kind', async () => {
+    const h = await run({}, {}, []);
+    const boss = h.caster(BOSS);
+    h.casts(boss, { ability: 'glacial_front', remaining: 2, total: 4 });
+    h.poll();
+
+    h.casts(boss, { ability: 'glacial_front', remaining: 1, total: 4 });
+    h.frame();
+
+    expect(h.labelOf(BOSS)).toBe('Glacial Front?');
+    expect(h.leftOf(BOSS)).toBe('1.0s');
+  });
+
+  it('says on the guessed row that a stage is missing for the same reason the name is', async () => {
+    const h = await run({}, {}, []);
+    const boss = h.caster(BOSS);
+
+    h.casts(boss, { ability: 'glacial_front', remaining: 2, total: 4 });
+    h.poll();
+
+    expect(tipOn(barFor(BOSS))).toContain('charge stage');
   });
 });
 

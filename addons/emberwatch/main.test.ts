@@ -66,8 +66,14 @@ interface Effect {
   remaining: number;
   duration?: number;
   value?: number;
+  /** A second magnitude. On a soak it is the whole hit the people who turn up divide. */
+  value2?: number;
   sourceId?: number;
-  stacks?: number;
+  /**
+   * `| undefined` so a case can spread a base with the count knocked out, which
+   * `exactOptionalPropertyTypes` refuses otherwise.
+   */
+  stacks?: number | undefined;
   unbreakableControl?: boolean;
 }
 
@@ -80,6 +86,7 @@ interface FullAura {
   value: number;
   sourceId: number;
   school: string;
+  value2?: number;
   stacks?: number;
   unbreakableControl?: boolean;
 }
@@ -169,6 +176,7 @@ interface RuleSpec {
   banner?: boolean | undefined;
   cue?: string | undefined;
   threshold?: number | undefined;
+  counts?: string | undefined;
 }
 
 /** A rules file in the shape the shipped one is, so `readFile` accepts it. */
@@ -210,6 +218,10 @@ function fullAura(effect: Effect): FullAura {
     sourceId: effect.sourceId ?? MOB_SOURCE,
     school: effect.school ?? 'shadow',
   };
+  if (effect.value2 !== undefined) {
+    aura.value2 = effect.value2;
+  }
+  // Assigned only when the case named one: an absent count is a case this suite describes.
   if (effect.stacks !== undefined) {
     aura.stacks = effect.stacks;
   }
@@ -599,6 +611,15 @@ describe('the shipped starter rules', () => {
     expect(loose).toEqual([]);
   });
 
+  // A row carrying `counts` by accident is a badge that lies rather than a rule that fails.
+  it('reads a stack count as soakers on the one row that is a soak', () => {
+    const counting = shipped().filter((rule) => rule.counts !== undefined);
+
+    expect(counting.map((rule) => [rule.id, rule.counts])).toEqual([
+      ['raid-varkhul-shared-pyre', 'soakers'],
+    ]);
+  });
+
   it('draws only the rows for the class in play, plus the ones for every class', async () => {
     const h = await run({ rules: RULES_TEXT, cls: 'warlock' });
 
@@ -902,6 +923,202 @@ describe('a rule that watches a stack count', () => {
 
     expect(h.drawn()).toEqual([key('ramp', 'player', 'corruption')]);
     expect(h.countOf(key('ramp', 'player', 'corruption'))).toBe('3');
+  });
+});
+
+/** The two raid encounters game 0.41.0 added, and the one reading here that is not applications. */
+describe('the raid effects', () => {
+  /**
+   * Ignivar's brand as the wire carries it. The 600s duration is the game's own figure: the
+   * encounter takes the brand off by script.
+   */
+  const Brand: Effect = {
+    id: 'ignivar_brand_of_the_pyre',
+    name: 'Brand of the Pyre',
+    kind: 'dot',
+    school: 'fire',
+    remaining: 600,
+    duration: 600,
+    value: 50,
+  };
+
+  /** Ignivar's tank swap: +35% damage taken a stack, and the answer is to hand the boss over. */
+  const MoltenArmor: Effect = {
+    id: 'ignivar_molten_armor',
+    name: 'Molten Armor',
+    kind: 'vuln_source',
+    school: 'fire',
+    remaining: 26,
+    duration: 26,
+    value: 0.35,
+  };
+
+  /** On the BOSS, and its remaining is a live countdown to a hard wipe. */
+  const LastInferno: Effect = {
+    id: 'ignivar_last_inferno',
+    name: 'Last Inferno',
+    kind: 'buff_haste',
+    school: 'fire',
+    remaining: 41.5,
+    duration: 45,
+    value: 1.2,
+    sourceId: FOE,
+  };
+
+  /** Varkhul's soak: `stacks` is bodies required and `value2` is the whole hit they divide. */
+  const SharedPyre: Effect = {
+    id: 'varkhul_shared_pyre',
+    name: 'Shared Pyre',
+    kind: 'vulnerability',
+    school: 'fire',
+    remaining: 4.2,
+    duration: 6,
+    value: 0,
+    value2: 1.4,
+    stacks: 4,
+  };
+
+  const SoakKey = key('soak', 'player', 'varkhul_shared_pyre');
+  const PlainKey = key('plain', 'player', 'varkhul_shared_pyre');
+
+  const Soak: RuleSpec = {
+    id: 'soak',
+    label: 'Shared Pyre',
+    unit: 'player',
+    auraId: 'varkhul_shared_pyre',
+    on: 'gained',
+    counts: 'soakers',
+  };
+
+  /** The same aura under an ordinary rule, so one fixture answers both readings at once. */
+  const Plain: RuleSpec = { ...Soak, id: 'plain', counts: undefined };
+
+  async function soaked(effect: Effect): Promise<Harness> {
+    const h = await run({ rules: rulesFile([Soak, Plain]) });
+    h.afflict(ME, effect);
+    h.frame();
+    return h;
+  }
+
+  it('ships a rule for each mechanic and leaves them all switched on', async () => {
+    const h = await run({ rules: RULES_TEXT, cls: 'warlock' });
+
+    expect(h.paneRules().filter((id) => id.startsWith('raid-'))).toEqual([
+      'raid-ignivar-brand',
+      'raid-ignivar-last-inferno',
+      'raid-ignivar-molten-armor',
+      'raid-varkhul-cinder-orbs',
+      'raid-varkhul-makers-brand',
+      'raid-varkhul-red-hot-metal',
+      'raid-varkhul-shared-pyre',
+      'raid-varkhul-tempered-wound',
+    ]);
+  });
+
+  it('marks you the moment the brand lands, before it has ramped', async () => {
+    const h = await run({ rules: RULES_TEXT, cls: 'warlock' });
+
+    h.afflict(ME, Brand);
+    h.frame();
+
+    expect(h.drawn()).toEqual([key('raid-ignivar-brand', 'player', 'ignivar_brand_of_the_pyre')]);
+  });
+
+  // Nothing on the wire announces a ramp: the count grows on the aura as it ticks.
+  it('follows the brand up its ramp and hands three to the generic rule as well', async () => {
+    const h = await run({ rules: RULES_TEXT, cls: 'warlock' });
+    const branded = key('raid-ignivar-brand', 'player', 'ignivar_brand_of_the_pyre');
+    h.afflict(ME, Brand);
+    h.frame();
+    expect(h.countOf(branded)).toBe('');
+
+    h.stackTo(ME, 'ignivar_brand_of_the_pyre', 2);
+    h.frame();
+    expect(h.countOf(branded)).toBe('2');
+
+    h.stackTo(ME, 'ignivar_brand_of_the_pyre', 3);
+    h.frame();
+
+    expect(h.countOf(branded)).toBe('3');
+    expect(h.drawn()).toContain(key('stacking-on-you', 'player', 'ignivar_brand_of_the_pyre'));
+  });
+
+  it('calls the tank swap at two stacks of Molten Armor and not at one', async () => {
+    const h = await run({ rules: RULES_TEXT, cls: 'warlock' });
+    h.afflict(ME, { ...MoltenArmor, stacks: 1 });
+    h.frame();
+    expect(h.drawn()).toEqual([]);
+
+    h.stackTo(ME, 'ignivar_molten_armor', 2);
+    h.frame();
+
+    expect(h.drawn()).toEqual([key('raid-ignivar-molten-armor', 'player', 'ignivar_molten_armor')]);
+  });
+
+  it('reads the wipe countdown off the boss when the boss is what you have selected', async () => {
+    const h = await run({ rules: RULES_TEXT, cls: 'warlock' });
+    h.select(FOE);
+
+    h.afflict(FOE, LastInferno);
+    h.frame();
+
+    const inferno = key('raid-ignivar-last-inferno', 'target', 'ignivar_last_inferno', FOE);
+    expect(h.drawn()).toEqual([inferno]);
+    expect(h.valueOf(inferno)).toBe('42');
+  });
+
+  it('draws a soak count of one and an application count of one differently', async () => {
+    const h = await soaked({ ...SharedPyre, stacks: 1 });
+
+    expect(h.countOf(SoakKey)).toBe('1');
+    expect(h.countOf(PlainKey)).toBe('');
+  });
+
+  it('says what the count is counting and how much they divide', async () => {
+    const h = await soaked(SharedPyre);
+
+    expect(h.countOf(SoakKey)).toBe('4');
+    expect(h.hover(SoakKey)).toContain('Needs 4 players standing in it.');
+    expect(h.hover(SoakKey)).toContain("They divide 140% of one player's maximum health.");
+  });
+
+  // The wire omits a stack count below two, so absent is a state this row really reaches.
+  it('draws no soak count where the wire carried none, and says it is missing', async () => {
+    const h = await soaked({ ...SharedPyre, stacks: undefined });
+
+    expect(h.countOf(SoakKey)).toBe('');
+    expect(h.hover(SoakKey)).toContain('How many have to stand in it did not reach this reading.');
+  });
+
+  it('says the soak count in the accessible name', async () => {
+    const h = await soaked(SharedPyre);
+
+    expect(h.labelOf(SoakKey)).toContain('needing 4 players');
+    expect(h.labelOf(PlainKey)).not.toContain('needing');
+  });
+
+  it('says out loud that only the marked player sees it', async () => {
+    const h = await soaked(SharedPyre);
+
+    expect(h.hover(SoakKey)).toContain('Only whoever is marked sees this');
+  });
+
+  it('leaves every other rule counting applications', async () => {
+    const h = await soaked(SharedPyre);
+
+    expect(h.hover(PlainKey)).not.toContain('standing in it');
+    expect(h.hover(PlainKey)).not.toContain('maximum health');
+  });
+
+  // Never to soakers: a typo must not change what a number on screen MEANS.
+  it('falls back to applications for a counts value it does not know', async () => {
+    const h = await run({ rules: rulesFile([{ ...Soak, counts: 'bodies' }]) });
+
+    h.afflict(ME, { ...SharedPyre, stacks: 1 });
+    h.frame();
+
+    expect(h.countOf(SoakKey)).toBe('');
+    expect(h.hover(SoakKey)).not.toContain('standing in it');
   });
 });
 

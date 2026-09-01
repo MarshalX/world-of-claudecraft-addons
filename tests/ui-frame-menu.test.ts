@@ -13,6 +13,7 @@ import {
   type MenuActions,
   OPEN_LABEL,
   SHOWN_SUFFIX,
+  SNAP_LABEL,
   UNLOCK_LABEL,
 } from '../loader/src/runtime/ui/frame-menu.ts';
 import { createFrameRoster, rostered } from '../loader/src/runtime/ui/kit/frame-roster.ts';
@@ -49,6 +50,8 @@ function actions(over: Partial<MenuActions> = {}): MenuActions {
     openManager: () => undefined,
     unlocked: () => false,
     toggleUnlock: () => undefined,
+    snapping: () => false,
+    toggleSnap: () => undefined,
     ...over,
   };
 }
@@ -136,6 +139,7 @@ describe('the menu the rail button opens', () => {
     expect(labels(items)).toEqual([
       OPEN_LABEL,
       UNLOCK_LABEL,
+      SNAP_LABEL,
       'longwatch: Rares',
       'satchel: Bags',
       'longwatch: Pins',
@@ -213,7 +217,13 @@ describe('the menu the rail button opens', () => {
     });
     const items = frameMenuItems([entry('Rares'), entry('Pins')], actions());
 
-    expect(items.map((item) => item.separator === true)).toEqual([false, false, true, false]);
+    expect(items.map((item) => item.separator === true)).toEqual([
+      false,
+      false,
+      false,
+      true,
+      false,
+    ]);
   });
 });
 
@@ -277,5 +287,40 @@ describe('the roster behind it', () => {
     frame.destroy();
 
     expect(state.destroyed).toBe(true);
+  });
+});
+
+// A tick rather than the flipping label the unlock row carries: snapping does
+// nothing until the next drag, so "Turn on snapping" would look like it had failed.
+describe('the snap row', () => {
+  it('sits directly under the arrange switch, which is the only time it matters', () => {
+    const items = frameMenuItems([], actions());
+
+    expect(labels(items).slice(0, 3)).toEqual([OPEN_LABEL, UNLOCK_LABEL, SNAP_LABEL]);
+  });
+
+  it('carries the setting as a tick rather than in its wording', () => {
+    const off = frameMenuItems([], actions({ snapping: () => false }));
+    const on = frameMenuItems([], actions({ snapping: () => true }));
+
+    expect(off[2]?.checked).toBe(false);
+    expect(on[2]?.checked).toBe(true);
+    expect(on[2]?.label).toBe(SNAP_LABEL);
+  });
+
+  it('flips the setting when it is chosen', () => {
+    let flipped = 0;
+    const items = frameMenuItems(
+      [],
+      actions({
+        toggleSnap: () => {
+          flipped += 1;
+        },
+      }),
+    );
+
+    items[2]?.onSelect();
+
+    expect(flipped).toBe(1);
   });
 });

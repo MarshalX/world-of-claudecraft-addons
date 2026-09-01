@@ -92,10 +92,17 @@ export interface Heal2Event extends PersonalEvent {
    * overhealing.
    *
    * Absent does NOT mean nothing was absorbed anywhere, only that this record is
-   * not reporting any. The direct heal path is the one that fills it: a heal over
-   * time's periodic tick bypasses absorb shields entirely, and one redirect path
-   * (Chronomancy's Temporal Echo) consumes the shield without reporting it and
-   * emits no record at all when the shield eats the whole heal.
+   * not reporting any. A direct heal, a heal-over-time tick and a damage-over-time
+   * leech report it (from game 0.41.0 for the periodic two; an older server
+   * reports none on a tick). A channel's own self-heal tick never touches a
+   * shield. A tick entirely eaten by a shield arrives as `amount: 0` carrying
+   * `absorbed`.
+   *
+   * TWO REDIRECT PATHS drain the shield without reporting it: Chronomancy's
+   * Temporal Echo and the paladin's Beacon of Light transfer emit a `heal2` with
+   * `overheal` and no `absorbed`, and no record at all when the shield eats the
+   * whole heal. A meter that totals drained shields undercounts every beacon
+   * transfer into a shielded target.
    *
    * Genuinely ABSENT rather than null, which is worth saying because the adjacent
    * `DamageEvent.abilityId` is the opposite: that one rides every record and is
@@ -116,14 +123,17 @@ export interface Heal2Event extends PersonalEvent {
    * much. It is computed AFTER absorb consumption, so `absorbed` and `overheal`
    * describe different lost healing and adding them double-counts nothing.
    *
-   * IT REPORTS PARTIAL OVERHEALING ONLY, and a total built on it is wrong.
-   * Every emit site still fires only when some healing actually landed, so a
-   * tick that overheals COMPLETELY emits no record at all: there is nothing to
-   * carry the field, and the healing it wasted is invisible. An "overheal
-   * percentage" summed from this field therefore counts the partial waste
-   * against a total that excludes the full waste, and reads lower than the
-   * truth by an amount that grows the longer the target sits at full health.
-   * Present it as "overhealing seen on landed heals", not as a percentage.
+   * WHICH WASTE IT SEES DEPENDS ON HOW THE HEALING WAS DELIVERED. A DIRECT HEAL
+   * always emits, so a cast into a full-health target arrives as `amount: 0`
+   * carrying the whole cast as `overheal`. A PERIODIC TICK (a heal-over-time
+   * tick, or a damage-over-time leech) emits only when some healing landed or a
+   * shield was drained, so a tick into an unshielded full-health target is
+   * invisible. DERIVED HEALING (a beacon transfer, a cascade, a channel's
+   * self-heal) emits nothing when nothing landed.
+   *
+   * So a percentage summed from this field reads LOW by an amount that grows the
+   * longer a target sits at full health. Present it as "overhealing seen on
+   * landed heals", or restrict the figure to direct heals, where it is exact.
    */
   overheal?: number;
   /**
@@ -198,13 +208,31 @@ export interface CastStartEvent extends PersonalEvent {
    * An ability ID, unlike the display name a damage record carries, OR an
    * activity sentinel.
    *
-   * The sentinel is a fixed marker naming the activity rather than any ability:
-   * gathering and fishing were the first two, and the crafting family
-   * (crafting, disenchanting, enchanting, salvaging, tool recharge) followed.
-   * THE SET GROWS WITH THE GAME, so match the ones you care about by name and
-   * let an unrecognised value fall through as an ability id rather than
-   * enumerating the sentinels and assuming the list is complete. A sentinel
-   * never resolves in `world.abilities` and never has icon art.
+   * The sentinel is a fixed marker naming the activity rather than any ability.
+   * MATCH THE LITERAL: `'enchanting'` and `'tool recharge'` never fire.
+   *
+   * ```js
+   * const ACTIVITIES = new Set([
+   *   'fishing',
+   *   'gathering',
+   *   'crafting',
+   *   'disenchanting',
+   *   'enchanting_apply',
+   *   'salvaging',
+   *   'tool_recharge',
+   *   'demon_heal',
+   * ]);
+   * ```
+   *
+   * THE SET GROWS WITH THE GAME, so match the ones you care about and let an
+   * unrecognised value fall through as an ability id rather than treating the
+   * list as complete. A sentinel never resolves in `world.abilities` and never
+   * has icon art.
+   *
+   * `demon_heal` is a real cast, the warlock's channel that heals their own
+   * demon, and the game keeps it out of its own activity bundle. It is listed
+   * here because it has no ability definition, so it never resolves in
+   * `world.abilities` and has no art: handle it as a sentinel.
    */
   ability: string;
   /** Cast length in seconds. */

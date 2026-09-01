@@ -45,11 +45,12 @@ import { isWorldKey, WORLD_KEYS, type WorldKey } from '../world/signature.ts';
 import type { ThreatTable } from '../world/threat.ts';
 import type { UnitToken } from '../world/units.ts';
 import type { WorldValues } from '../world/values.ts';
+import type { VaultState } from '../world/vault.ts';
 import { contentReads } from './world-content.ts';
+import { economyReads } from './world-economy-reads.ts';
 import { geometryReads, lookups } from './world-lookups.ts';
 import {
   derivedReads,
-  economyReads,
   fromBackend,
   gameReads,
   groundReads,
@@ -132,6 +133,11 @@ export interface WorldApi {
    * person at the keyboard has to stop while it is.
    */
   readonly spectating: string | null;
+  /**
+   * The server's own movement-speed multiplier for the player, or null. Null is
+   * "nobody said" and 1 is a real reading; see `world/movement.ts`.
+   */
+  readonly moveSpeedMult: number | null;
   /** Progression, deeds and titles. Null before world entry. */
   readonly character: CharacterInfo | null;
   readonly talents: TalentInfo | null;
@@ -285,6 +291,16 @@ export interface WorldApi {
 
   /** The deposit box, or why there is not one. Read `status` first, like `market`. */
   readonly bank: BankState;
+
+  /** The Materials Vault, or why there is not one. Banker-gated, like `bank`. */
+  readonly vault: VaultState;
+
+  /**
+   * What crafting may draw from the vault where the player stands, or null.
+   * Not a `ProximityState`: null means an instance refuses the draw, which
+   * walking does not fix, and an EMPTY record is a real answer.
+   */
+  readonly craftVaultStock: Readonly<Record<string, number>> | null;
 
   /**
    * The buyback ring: what you have sold to a vendor and can still take back.

@@ -1,9 +1,9 @@
 {
   "id": "dev-harness",
   "name": "Dev Harness",
-  "version": "1.11.0",
+  "version": "1.12.0",
   "apiVersion": 1,
-  "apiMinor": 8,
+  "apiMinor": 10,
   "author": "MarshalX",
   "description": "Exercises every part of the addon API and reports what worked, repainting as the world moves, so a loader change can be checked in the game rather than only in a test.",
   "entry": "main.js",

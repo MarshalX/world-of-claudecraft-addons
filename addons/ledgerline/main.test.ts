@@ -138,6 +138,13 @@ const MAX_LISTINGS = 9;
 /** How long the addon holds a page after a reconnect before believing the away. */
 const RESYNC_GRACE_MS = 2000;
 
+/**
+ * A real listable legendary, so the thin-series cases run against the shipped floor table. Its
+ * vendor floor is 20000 with no shop price, so a listing can sit above the certain arm and below
+ * a recorded median.
+ */
+const LEGENDARY = 'varkhul_emberward';
+
 const teardown: Array<() => void> = [];
 
 beforeEach(() => {
@@ -2780,6 +2787,72 @@ describe('what a resale is priced against', () => {
     // stack cost. Believing the lone 5000 ask instead would report 3650, thirty times as much.
     expect(figureOf('deals', '1')).toContain('1 silver, 16 copper');
     expect(detailOf('deals', '1')).toContain('3 visits');
+  });
+});
+
+/**
+ * The thinnest series this ledger holds, which is a legendary: posted a handful of times a
+ * month, so the only question it asks of the price model is what a median over two readings may
+ * claim against one over thirty. The Crucible tier's 145 class-set pieces and 15 sigils are
+ * soulbound at game 0.41.1 and the other 41 are listable, which is the shape the first case pins.
+ */
+describe('a legendary, and a series too thin to be one', () => {
+  it('carries the legendaries and the 41 the patch unbound, and none of the 160 still bound', () => {
+    const rows = (JSON.parse(FLOORS_TEXT) as { items: { id: string }[] }).items;
+    const ids = new Set(rows.map((row) => row.id));
+
+    expect(ids.has(LEGENDARY)).toBe(true);
+    expect(ids.has('varkhul_forgebreaker')).toBe(true);
+    // A class-set piece and a sigil, both soulbound at 0.41.1; the generator refuses a soulbound
+    // item as the game's market gate does.
+    for (const bound of ['emberscreed_helmet', 'sigil_ember_helmet']) {
+      expect(ids.has(bound)).toBe(false);
+    }
+    // An off-set weapon, unbound at 0.41.1, so a regeneration from an older checkout fails here.
+    expect(ids.has('forgefathers_warhammer')).toBe(true);
+    expect(ids.has('voidsong_dirk')).toBe(true);
+    expect(ids.has('kingsbane_last_oath')).toBe(true);
+  });
+
+  // No row rather than a profit against one reading: a deal list is a ranking, and a figure with
+  // nothing behind it sorts among the measured rows.
+  it('will not price a resale against a single earlier reading', async () => {
+    const h = await start({ settings: { 'min-profit': 0 } });
+    h.send({ market: page([listing({ id: 80, itemId: LEGENDARY, price: 60_000 })]) });
+    await h.settle();
+    h.send({ market: null });
+    await h.settle();
+    h.setWallClock(WALL_CLOCK_MS + VISIT_WINDOW_MS + HOUR_MS);
+
+    // Alone on the page, so no rival to anchor on, and 3 gold is over the 2 the vendor pays, so
+    // the certain arm cannot fire.
+    h.send({ market: page([listing({ id: 1, itemId: LEGENDARY, price: 30_000 })]) });
+    await h.settle();
+
+    expect(keysIn('deals')).toEqual([]);
+  });
+
+  // The visit count is on the row rather than under the pointer, because a ranked list is read
+  // by scanning it.
+  it('names the two readings a thin median rests on', async () => {
+    const h = await start({ settings: { 'min-profit': 0 } });
+    const earlier = [60_000, 50_000];
+    await inSeries(earlier.entries(), async ([at, price]) => {
+      h.setWallClock(WALL_CLOCK_MS + at * (VISIT_WINDOW_MS + HOUR_MS));
+      h.send({ market: page([listing({ id: 80 + at, itemId: LEGENDARY, price })]) });
+      await h.settle();
+      h.send({ market: null });
+      await h.settle();
+    });
+    h.setWallClock(WALL_CLOCK_MS + earlier.length * (VISIT_WINDOW_MS + HOUR_MS));
+
+    h.send({ market: page([listing({ id: 1, itemId: LEGENDARY, price: 30_000 })]) });
+    await h.settle();
+
+    // 5 gold 50 is the median of the two readings, which clears 5 gold 11 silver 50 at the
+    // suite's cut, so 2 gold 11 silver 50 over the 3 gold the listing costs.
+    expect(figureOf('deals', '1')).toContain('2 gold, 11 silver, 50 copper');
+    expect(detailOf('deals', '1')).toContain('2 visits');
   });
 });
 

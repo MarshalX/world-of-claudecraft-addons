@@ -87,6 +87,55 @@ export interface AbilityInfo {
    * modifier that happens to be neutral". Added in API minor 2.
    */
   threatMult?: number;
+
+  /**
+   * How many charge stages a hold-to-charge ability has. Absent when it has none.
+   *
+   * THE COUNT, NOT THE LIVE STAGE. The stage is on no wire; the game derives it
+   * from `castTotal` and `castRemaining`, which ride every entity record, in two
+   * functions in its `combat/glacial_front.ts`. Keep both of their guards: progress
+   * answers 1 when the total is not positive (the client zero-fills `castTotal`,
+   * and a 0 total divides to a NaN that a style property drops silently), and the
+   * stage answers 1 when the count is not above one.
+   *
+   * Nothing on the wire marks a cast as empowered, so a cast with no stage count
+   * cannot be told from a plain cast. `AbilityIndex` is YOUR OWN spellbook, so a
+   * hostile caster charging an ability you have not learned gives you a cast
+   * clock and no divisor. `Aura.empowerAbilities` is the scope of a next-cast
+   * empowerment buff, not a charge stage.
+   *
+   * Added in API minor 10.
+   */
+  empowerStages?: number;
+
+  /**
+   * The channel's length and tick count. Absent when the ability is not channelled;
+   * presence is the flag, and `castTime` is 0 on a channel, so do not read that as
+   * instant.
+   *
+   * DO NOT DRIVE A LIVE BAR FROM `duration`. It is PRE-HASTE: the haste-resolved
+   * length is `castTotal` on the caster's entity record, counting down in
+   * `castRemaining` with `channeling` true. Added in API minor 10.
+   */
+  channel?: AbilityChannel;
+
+  /**
+   * Usable without spending the global cooldown. ABSENT rather than false when
+   * the ability is ordinary, so test for presence; a false never arrives, which
+   * is what the `true` type says. Added in API minor 10.
+   */
+  offGcd?: true;
+}
+
+/**
+ * How long a channel runs and how many times it ticks, as AUTHORED: haste
+ * shortens the whole channel, and at least one ability fires more ticks than its
+ * authored count under the right resource state. For anything live, read
+ * `castTotal` and `castRemaining` off the caster. Added in API minor 10.
+ */
+export interface AbilityChannel {
+  duration: number;
+  ticks: number;
 }
 
 /**

@@ -199,6 +199,58 @@ describe('the ability memo', () => {
   });
 });
 
+/** The three fields read off the DEF, which talent resolution never touches. */
+describe('the ability shape read off the def', () => {
+  it('publishes the charge stage count, which makes the live stage computable', () => {
+    const read = createAbilityReader();
+    const charged = resolved({
+      def: { id: 'glacial_front', name: 'Glacial Front', castTime: 2.4, empowerStages: 4 },
+    });
+
+    const info = read(world([charged])).byId('glacial_front');
+
+    expect(info?.empowerStages).toBe(4);
+    expect(read(world([resolved()])).byId('arcane_shot')?.empowerStages).toBeUndefined();
+  });
+
+  it('publishes a channel as its length and tick count, not as a flag', () => {
+    const read = createAbilityReader();
+    const channelled = resolved({
+      def: {
+        id: 'arcane_missiles',
+        name: 'Aether Darts',
+        castTime: 0,
+        channel: { duration: 3, ticks: 3 },
+      },
+    });
+
+    const info = read(world([channelled])).byId('arcane_missiles');
+
+    expect(info?.channel).toEqual({ duration: 3, ticks: 3 });
+    // A channel's castTime is 0, so without the channel it reads as instant.
+    expect(info?.castTime).toBe(0);
+  });
+
+  it('refuses a channel carrying only one of its two figures', () => {
+    const read = createAbilityReader();
+    const half = resolved({
+      def: { id: 'arcane_missiles', name: 'Aether Darts', channel: { duration: 3 } },
+    });
+
+    expect(read(world([half])).byId('arcane_missiles')?.channel).toBeUndefined();
+  });
+
+  it('marks an off-global-cooldown ability by presence', () => {
+    const read = createAbilityReader();
+    const instant = resolved({
+      def: { id: 'aimed_shot', name: 'Measured Shot', offGcd: true },
+    });
+
+    expect(read(world([instant])).byId('aimed_shot')?.offGcd).toBe(true);
+    expect(read(world([resolved()])).byId('arcane_shot')?.offGcd).toBeUndefined();
+  });
+});
+
 describe('the ability signature', () => {
   it('changes on rank, and not on a resolved figure moving', () => {
     expect(abilityIndexSignature({ known: [{ id: 'a', rank: 1 }] })).toBe('a#1');

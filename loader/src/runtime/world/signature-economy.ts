@@ -20,6 +20,8 @@ const ECONOMY_KEYS = [
   'mail',
   'mailUnread',
   'bank',
+  'vault',
+  'craftVaultStock',
   'buyback',
 ] as const;
 
@@ -189,7 +191,37 @@ function mailSignature(state: unknown): string {
   return `near|${counts}|${rows}`;
 }
 
-/** The contents, the budget, and where the next expansion stands. */
+/** An empty socket, as a mark that cannot collide with a bag id. */
+function bagMark(bag: unknown): string {
+  if (typeof bag === 'string') {
+    return bag;
+  }
+  return '-';
+}
+
+/**
+ * How many bag sockets are open and what is in each, in socket order. Neither
+ * moves `capacity`: an unlocked socket is empty, and a bag swapped for another
+ * of the same size changes nothing but this list.
+ */
+function socketsOf(info: unknown): string {
+  const bags = fieldArray(info, 'socketBags').map(bagMark).join(',');
+  return `${fieldNumber(info, 'socketsUnlocked') ?? 0}:${bags}`;
+}
+
+/**
+ * The two-pool split and what sits in each. `capacity` is their sum, so a
+ * general bag swapped for a materials bag of equal size, or a stack recharged
+ * against the other pool, moves nothing else in this signature.
+ */
+function poolsOf(info: unknown): string {
+  return (
+    `${fieldNumber(info, 'generalCapacity') ?? 0}/${fieldNumber(info, 'generalUsed') ?? 0}` +
+    `|${fieldNumber(info, 'materialsCapacity') ?? 0}/${fieldNumber(info, 'materialsUsed') ?? 0}`
+  );
+}
+
+/** The contents, both budgets, the sockets, and what the next rung costs. */
 function bankSignature(state: unknown): string {
   const away = closed(state);
   if (away !== null) {
@@ -198,19 +230,64 @@ function bankSignature(state: unknown): string {
   const info = fieldValue(state, 'info');
   const budget =
     `${fieldNumber(info, 'capacity') ?? 0}|${fieldNumber(info, 'purchasedSlots') ?? 0}` +
-    `|${fieldNumber(info, 'bonusSlots') ?? 0}|${fieldNumber(info, 'nextExpansionCost') ?? ''}`;
+    `|${fieldNumber(info, 'bonusSlots') ?? 0}|${fieldNumber(info, 'nextExpansionCost') ?? ''}` +
+    `|${fieldNumber(info, 'nextSocketCost') ?? ''}` +
+    `|${fieldNumber(info, 'nextRungClaudiumPrice') ?? ''}`;
   const bonus = fieldArray(info, 'bonusSources')
     .map((row) => `${fieldString(row, 'id') ?? ''}=${fieldNumber(row, 'slots') ?? 0}`)
     .join(',');
-  return `near|${budget}|${bonus}|${slotsOf(info, 'slots')}`;
+  return `near|${budget}|${socketsOf(info)}|${poolsOf(info)}|${bonus}|${slotsOf(info, 'slots')}`;
+}
+
+/** A material-to-count record, sorted by id. Shared by the vault and `craftVaultStock`. */
+function stockSignature(stock: unknown): string {
+  if (typeof stock !== 'object' || stock === null) {
+    return '';
+  }
+  return Object.entries(stock as Record<string, unknown>)
+    .map(([itemId, count]) => `${itemId}x${String(count)}`)
+    .sort()
+    .join(',');
 }
 
 /**
- * The three keys the player stands at, and the three they carry with them.
+ * The vault, by what is in it and how much of it is bought.
  *
- * The gated three answer their STATUS when there is nothing to walk, so the walk
- * over a page, a mailbox or a bank happens only while the player is at the
- * counter.
+ * The stock is sorted by id, unlike the market page and the buyback ring: the
+ * record round-trips through Postgres jsonb online and comes back re-ordered, so
+ * signing key order would fire on every re-serialization of an unchanged store.
+ * `special` keeps its array order, because the player selects those rows by index.
+ */
+function vaultSignature(state: unknown): string {
+  const away = closed(state);
+  if (away !== null) {
+    return away;
+  }
+  const info = fieldValue(state, 'info');
+  const budget =
+    `${fieldNumber(info, 'upgrades') ?? 0}|${fieldNumber(info, 'perMaterialCap') ?? 0}` +
+    `|${fieldNumber(info, 'nextUpgradeCost') ?? ''}`;
+  return `near|${budget}|${stockSignature(fieldValue(info, 'stock'))}|${slotsOf(info, 'special')}`;
+}
+
+/**
+ * The drawable craft stock, a record or null rather than a gated state. Null
+ * (the draw is refused here) needs its own mark, or a player walking into a
+ * delve with an empty vault would sign the same as one who stayed outside.
+ */
+function craftStockSignature(stock: unknown): string {
+  if (stock === null || stock === undefined) {
+    return 'none';
+  }
+  return `here|${stockSignature(stock)}`;
+}
+
+/**
+ * The four keys the player stands at, and the four they carry with them.
+ *
+ * The gated four answer their STATUS when there is nothing to walk, so the walk
+ * over a page, a mailbox, a bank or a vault happens only while the player is at
+ * the counter.
  */
 function economyCapture(key: EconomyKey, value: unknown): string {
   if (key === 'market') {
@@ -222,6 +299,12 @@ function economyCapture(key: EconomyKey, value: unknown): string {
   if (key === 'bank') {
     return bankSignature(value);
   }
+  if (key === 'vault') {
+    return vaultSignature(value);
+  }
+  if (key === 'craftVaultStock') {
+    return craftStockSignature(value);
+  }
   // The ring's ORDER is meaningful: a sale unshifts and a re-sale moves a stack
   // back to the front, so the array-ordered join is the reading, not a shortcut.
   if (key === 'buyback') {
@@ -231,4 +314,12 @@ function economyCapture(key: EconomyKey, value: unknown): string {
 }
 
 export type { EconomyKey };
-export { bankSignature, economyCapture, isEconomyKey, mailSignature, marketSignature };
+export {
+  bankSignature,
+  craftStockSignature,
+  economyCapture,
+  isEconomyKey,
+  mailSignature,
+  marketSignature,
+  vaultSignature,
+};

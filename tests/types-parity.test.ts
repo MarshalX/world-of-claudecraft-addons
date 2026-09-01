@@ -25,6 +25,8 @@ import type { UiApi } from '../loader/src/runtime/api/ui.ts';
 import type { WorldApi } from '../loader/src/runtime/api/world.ts';
 import type { EventPayloads } from '../loader/src/runtime/net/events.ts';
 import type { IconUrls } from '../loader/src/runtime/ui/kit/icons.ts';
+import type { AbilityInfo } from '../loader/src/runtime/world/abilities.ts';
+import type { BankInfo } from '../loader/src/runtime/world/bank.ts';
 import type {
   BattlegroundMatch,
   BattlegroundStandings,
@@ -39,6 +41,8 @@ import type { MarketInfo } from '../loader/src/runtime/world/market.ts';
 import type { Reaction } from '../loader/src/runtime/world/reaction.ts';
 import type { WorldKey } from '../loader/src/runtime/world/signature.ts';
 import type { WorldValues } from '../loader/src/runtime/world/values.ts';
+import type { VaultInfo, VaultState } from '../loader/src/runtime/world/vault.ts';
+import type { AbilityInfo as PublicAbilityInfo } from '../packages/types/abilities.js';
 import type { AddonInfo, GameInfo } from '../packages/types/addon.js';
 import type {
   BattlegroundMatch as PublicBattlegroundMatch,
@@ -55,6 +59,11 @@ import type {
   Station as PublicStation,
 } from '../packages/types/content.js';
 import type { MarketInfo as PublicMarketInfo } from '../packages/types/economy.js';
+import type {
+  BankInfo as PublicBankInfo,
+  VaultInfo as PublicVaultInfo,
+  VaultState as PublicVaultState,
+} from '../packages/types/economy-storage.js';
 import type {
   Entity as PublicEntity,
   HeldItemInstance as PublicHeldItemInstance,
@@ -294,6 +303,33 @@ const publishedIsMarket: Assignable<PublicMarketInfo, MarketInfo> = true;
 const marketFieldsAgree: SameFields<MarketInfo, PublicMarketInfo> = true;
 
 /**
+ * The two stores, and the vault's own state wrapper.
+ *
+ * `nextRungClaudiumPrice` is OPTIONAL, so dropping it from either side alone
+ * leaves the other a superset and only `SameFields` catches it. `VaultState` is
+ * asserted as well as `VaultInfo` because a wrapper over the wrong payload, or
+ * over a nullable instead of the status union, is a change the `VaultInfo` pair
+ * cannot see; `BankState` is reached through `WorldValues` below.
+ */
+const bankIsPublished: Assignable<BankInfo, PublicBankInfo> = true;
+const publishedIsBank: Assignable<PublicBankInfo, BankInfo> = true;
+const bankFieldsAgree: SameFields<BankInfo, PublicBankInfo> = true;
+const vaultIsPublished: Assignable<VaultInfo, PublicVaultInfo> = true;
+const publishedIsVault: Assignable<PublicVaultInfo, VaultInfo> = true;
+const vaultFieldsAgree: SameFields<VaultInfo, PublicVaultInfo> = true;
+const vaultStateIsPublished: Assignable<VaultState, PublicVaultState> = true;
+const publishedIsVaultState: Assignable<PublicVaultState, VaultState> = true;
+
+/**
+ * The spellbook row. `WorldApi` reaches it only through `AbilityIndex`, which
+ * reports a break against the whole world surface rather than the field, and
+ * every field this shape gains is OPTIONAL, which only `SameFields` catches.
+ */
+const abilityIsPublished: Assignable<AbilityInfo, PublicAbilityInfo> = true;
+const publishedIsAbility: Assignable<PublicAbilityInfo, AbilityInfo> = true;
+const abilityFieldsAgree: SameFields<AbilityInfo, PublicAbilityInfo> = true;
+
+/**
  * The three authored content tables.
  *
  * They had no pair at all until the 0.38.2 catch-up added the third, which is the
@@ -487,6 +523,17 @@ describe('the published types', () => {
       marketIsPublished,
       publishedIsMarket,
       marketFieldsAgree,
+      bankIsPublished,
+      publishedIsBank,
+      bankFieldsAgree,
+      vaultIsPublished,
+      publishedIsVault,
+      vaultFieldsAgree,
+      vaultStateIsPublished,
+      publishedIsVaultState,
+      abilityIsPublished,
+      publishedIsAbility,
+      abilityFieldsAgree,
       recipeIsPublished,
       publishedIsRecipe,
       recipeFieldsAgree,

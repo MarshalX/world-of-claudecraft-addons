@@ -1,6 +1,6 @@
 {
   "gameVersion": "0.41.1",
-  "source": "src/sim/data.ts, src/sim/content/dungeons.ts, src/sim/types.ts, src/sim/mob/healer_channel.ts, src/sim/encounters/nythraxis.ts",
+  "source": "src/sim/data.ts, src/sim/content/dungeons.ts, src/sim/types.ts, src/sim/mob/healer_channel.ts, src/sim/encounters/nythraxis.ts, src/sim/encounters/ignivar.ts, src/sim/encounters/varkhul.ts, src/sim/ignivar_arena.ts, src/sim/ignivar_meteors.ts, src/sim/ignivar_forge_wave.ts, src/sim/ignivar_forge_judgment.ts, src/sim/ignivar_raid_ids.ts, src/sim/varkhul_shared_pyre.ts, src/sim/varkhul_cinder_artificer.ts, src/sim/varkhul_forge_intermission.ts, src/sim/encounters/*_dialogue.ts",
   "encounters": [
     {
       "id": "nythraxis",
@@ -14,18 +14,39 @@
       "phases": {
         "transitionAura": "nythraxis_transition_pause",
         "phaseTwoHp": 0.7,
-        "seeds": {
-          "gravebreaker": 3,
-          "soul-rend": 5,
-          "deathless": 20
+        "seeds": [
+          {
+            "id": "gravebreaker",
+            "seconds": 3
+          },
+          {
+            "id": "soul-rend",
+            "seconds": 5
+          },
+          {
+            "id": "deathless",
+            "seconds": 20
+          }
+        ]
+      },
+      "pullSeeds": [
+        {
+          "id": "gravebreaker",
+          "seconds": 12
+        },
+        {
+          "id": "raise-fallen",
+          "seconds": 30
+        },
+        {
+          "id": "soul-rend",
+          "seconds": 30
+        },
+        {
+          "id": "deathless",
+          "seconds": 45
         }
-      },
-      "pullSeeds": {
-        "gravebreaker": 12,
-        "raise-fallen": 30,
-        "soul-rend": 30,
-        "deathless": 45
-      },
+      ],
       "freeze": [
         {
           "kind": "aura",
@@ -52,9 +73,12 @@
           "detail": "11yd frontal cone",
           "phase": "both",
           "charge": true,
-          "anchor": {
-            "damage": "Gravebreaker"
-          }
+          "anchor": [
+            {
+              "kind": "damage",
+              "id": "Gravebreaker"
+            }
+          ]
         },
         {
           "id": "raise-fallen",
@@ -62,9 +86,12 @@
           "every": 30,
           "detail": "no crowd control, kill them",
           "phase": "one",
-          "anchor": {
-            "spawn": "nythraxis_skeleton_warrior"
-          }
+          "anchor": [
+            {
+              "kind": "spawn",
+              "id": "nythraxis_skeleton_warrior"
+            }
+          ]
         },
         {
           "id": "soul-rend",
@@ -72,9 +99,12 @@
           "every": 30,
           "detail": "marks stack up",
           "phase": "two",
-          "anchor": {
-            "damage": "Soul Rend"
-          }
+          "anchor": [
+            {
+              "kind": "damage",
+              "id": "Soul Rend"
+            }
+          ]
         },
         {
           "id": "deathless",
@@ -82,10 +112,12 @@
           "every": 45,
           "detail": "three wardstones, three different players",
           "phase": "two",
-          "liveCast": "nythraxis_deathless_rage",
-          "anchor": {
-            "cast": "nythraxis_deathless_rage"
-          },
+          "anchor": [
+            {
+              "kind": "cast",
+              "id": "nythraxis_deathless_rage"
+            }
+          ],
           "lethal": true
         }
       ],
@@ -185,6 +217,715 @@
               "ccImmune": true,
               "answer": "kill",
               "note": "no crowd control, kill it"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ignivar",
+      "templateId": "ignivar_herald_of_the_last_flame",
+      "name": "Ignivar, Herald of the Last Flame",
+      "arenaId": "ignivar_raid_arena",
+      "bossSpawn": {
+        "x": 0,
+        "z": 4
+      },
+      "yells": [
+        {
+          "text": "Ignivar Ashcaller awakens. Let the world burn!",
+          "edge": "pull"
+        },
+        {
+          "text": "Varkhul... the seal is broken.",
+          "edge": "kill"
+        }
+      ],
+      "wipes": [
+        {
+          "ability": "Apocalypse"
+        },
+        {
+          "ability": "Last Inferno"
+        }
+      ],
+      "pullSeeds": [
+        {
+          "id": "brand",
+          "seconds": 2
+        },
+        {
+          "id": "forge-strike",
+          "seconds": 12
+        },
+        {
+          "id": "searing",
+          "seconds": 8
+        },
+        {
+          "id": "skyfire",
+          "seconds": 16
+        },
+        {
+          "id": "meteors",
+          "seconds": 13
+        },
+        {
+          "id": "rays",
+          "seconds": 30
+        },
+        {
+          "id": "forge-wave",
+          "seconds": 50
+        },
+        {
+          "id": "last-flame",
+          "seconds": 0
+        }
+      ],
+      "freeze": [
+        {
+          "kind": "cast",
+          "id": "Judgment of the Forge"
+        }
+      ],
+      "spacing": {
+        "group": "major",
+        "seconds": 6
+      },
+      "reseeds": [
+        {
+          "on": {
+            "kind": "cast",
+            "id": "Judgment of the Forge"
+          },
+          "edge": "leaves",
+          "seeds": [
+            {
+              "id": "brand",
+              "seconds": 8,
+              "mode": "cap"
+            },
+            {
+              "id": "searing",
+              "seconds": 4,
+              "mode": "floor"
+            },
+            {
+              "id": "skyfire",
+              "seconds": 7,
+              "mode": "floor"
+            },
+            {
+              "id": "meteors",
+              "seconds": 7,
+              "mode": "floor"
+            },
+            {
+              "id": "rays",
+              "seconds": 16,
+              "mode": "floor"
+            },
+            {
+              "id": "forge-wave",
+              "seconds": 20,
+              "mode": "floor"
+            }
+          ]
+        },
+        {
+          "on": {
+            "kind": "aura",
+            "id": "ignivar_last_inferno"
+          },
+          "edge": "enters",
+          "seeds": [
+            {
+              "id": "brand",
+              "seconds": 4
+            },
+            {
+              "id": "last-flame",
+              "seconds": 6
+            },
+            {
+              "id": "meteors",
+              "seconds": 2,
+              "mode": "cap"
+            },
+            {
+              "id": "rays",
+              "seconds": 15,
+              "mode": "cap"
+            }
+          ]
+        }
+      ],
+      "mechanics": [
+        {
+          "id": "brand",
+          "label": "Brand of the Pyre",
+          "every": 28,
+          "detail": "3 marked, stay 4.5yd from everyone",
+          "cadences": [
+            {
+              "when": {
+                "kind": "belowHp",
+                "hp": 0.45
+              },
+              "every": 20
+            },
+            {
+              "when": {
+                "kind": "aura",
+                "id": "ignivar_last_inferno"
+              },
+              "every": 12
+            }
+          ],
+          "freeze": [
+            {
+              "kind": "cast",
+              "id": "Searing Torrent"
+            },
+            {
+              "kind": "cast",
+              "id": "Rain of Cinders"
+            },
+            {
+              "kind": "cast",
+              "id": "Revolving Inferno"
+            },
+            {
+              "kind": "cast",
+              "id": "Forge Wave"
+            }
+          ],
+          "anchor": [
+            {
+              "kind": "partyAura",
+              "id": "Brand of the Pyre"
+            }
+          ]
+        },
+        {
+          "id": "forge-strike",
+          "label": "Forge Strike",
+          "every": 14,
+          "detail": "tank hit, one more stack of Molten Armor",
+          "charge": true,
+          "unless": [
+            {
+              "kind": "aura",
+              "id": "ignivar_last_inferno"
+            }
+          ],
+          "freeze": [
+            {
+              "kind": "cast",
+              "id": "Searing Torrent"
+            },
+            {
+              "kind": "cast",
+              "id": "Rain of Cinders"
+            },
+            {
+              "kind": "cast",
+              "id": "Revolving Inferno"
+            },
+            {
+              "kind": "cast",
+              "id": "Forge Wave"
+            }
+          ],
+          "anchor": [
+            {
+              "kind": "damage",
+              "id": "Forge Strike"
+            }
+          ]
+        },
+        {
+          "id": "searing",
+          "label": "Searing Torrent",
+          "every": 28,
+          "detail": "36yd cone, 3s cast",
+          "unless": [
+            {
+              "kind": "aura",
+              "id": "ignivar_last_inferno"
+            }
+          ],
+          "group": "major",
+          "anchor": [
+            {
+              "kind": "cast",
+              "id": "Searing Torrent"
+            }
+          ]
+        },
+        {
+          "id": "skyfire",
+          "label": "Rain of Cinders",
+          "every": 20,
+          "detail": "3 cones out to 30yd",
+          "unless": [
+            {
+              "kind": "aura",
+              "id": "ignivar_last_inferno"
+            }
+          ],
+          "group": "major",
+          "anchor": [
+            {
+              "kind": "cast",
+              "id": "Rain of Cinders"
+            }
+          ]
+        },
+        {
+          "id": "rays",
+          "label": "Revolving Inferno",
+          "every": 44,
+          "detail": "2s windup then 8s of turning beams",
+          "cadences": [
+            {
+              "when": {
+                "kind": "aura",
+                "id": "ignivar_last_inferno"
+              },
+              "every": 24
+            }
+          ],
+          "group": "major",
+          "anchor": [
+            {
+              "kind": "cast",
+              "id": "Revolving Inferno"
+            }
+          ]
+        },
+        {
+          "id": "forge-wave",
+          "label": "Forge Wave",
+          "every": 60,
+          "detail": "expanding ring with one gap in it",
+          "unless": [
+            {
+              "kind": "aura",
+              "id": "ignivar_last_inferno"
+            }
+          ],
+          "group": "major",
+          "anchor": [
+            {
+              "kind": "cast",
+              "id": "Forge Wave"
+            }
+          ]
+        },
+        {
+          "id": "meteors",
+          "label": "Falling Cinders",
+          "every": 17,
+          "detail": "5 marked circles, 2.5s to land",
+          "cadences": [
+            {
+              "when": {
+                "kind": "aura",
+                "id": "ignivar_last_inferno"
+              },
+              "every": 9
+            }
+          ],
+          "anchor": [
+            {
+              "kind": "hazard",
+              "id": "ignivarMeteor"
+            }
+          ]
+        },
+        {
+          "id": "last-flame",
+          "label": "Searing Torrent or Rain of Cinders",
+          "every": 8,
+          "detail": "alternating, with no room left between them",
+          "when": [
+            {
+              "kind": "aura",
+              "id": "ignivar_last_inferno"
+            }
+          ],
+          "group": "major",
+          "anchor": [
+            {
+              "kind": "cast",
+              "id": "Searing Torrent"
+            },
+            {
+              "kind": "cast",
+              "id": "Rain of Cinders"
+            }
+          ],
+          "lethal": true
+        }
+      ],
+      "blocks": [
+        {
+          "kind": "gates",
+          "label": "Ahead",
+          "rows": [
+            {
+              "id": "apocalypse",
+              "name": "Apocalypse",
+              "hp": 0.65,
+              "detail": "a 20s channel that wipes the raid"
+            },
+            {
+              "id": "judgment",
+              "name": "Judgment of the Forge",
+              "hp": 0.45,
+              "cast": "Judgment of the Forge",
+              "detail": "3 shelters, one of them safe"
+            }
+          ]
+        },
+        {
+          "kind": "enrage",
+          "label": "Enrage",
+          "name": "Last Inferno",
+          "aura": "ignivar_last_inferno",
+          "hp": 0.2,
+          "countdown": true,
+          "seconds": 45
+        },
+        {
+          "kind": "debuffs",
+          "label": "Brand of the Pyre",
+          "aura": "ignivar_brand_of_the_pyre",
+          "apart": 4.5,
+          "note": "nobody within"
+        },
+        {
+          "kind": "stations",
+          "label": "Water conduits",
+          "ready": "ignivar_water_conduit_ready",
+          "active": "ignivar_water_conduit_active",
+          "spent": "ignivar_water_conduit_cooldown",
+          "activeSeconds": 10,
+          "count": 4,
+          "use": "stand within 3.25yd to wash the Brand off"
+        },
+        {
+          "kind": "tankStacks",
+          "label": "Tank",
+          "aura": "ignivar_molten_armor",
+          "perStack": 0.35,
+          "maxStacks": 3
+        },
+        {
+          "kind": "adds",
+          "label": "Adds",
+          "rows": [
+            {
+              "templateId": "ignivar_heart_of_the_end",
+              "name": "Ignivar Ashcaller",
+              "ccImmune": true,
+              "answer": "kill",
+              "note": "kill it before Apocalypse finishes",
+              "castCountdown": true
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "varkhul",
+      "templateId": "varkhul_forgefather_of_the_last_flame",
+      "name": "Varkhul, Forgefather of the Last Flame",
+      "arenaId": "ignivar_inner_crucible",
+      "bossSpawn": {
+        "x": 0,
+        "z": 16
+      },
+      "wipes": [
+        {
+          "ability": "Masterpiece Unbound"
+        }
+      ],
+      "yells": [
+        {
+          "text": "I am Varkhul, Forgefather of the Last Flame. Raise your weapons, little sparks.",
+          "edge": "pull"
+        },
+        {
+          "text": "Master... I have failed you.",
+          "edge": "kill"
+        }
+      ],
+      "pullSeeds": [
+        {
+          "id": "makers-brand",
+          "seconds": 14
+        },
+        {
+          "id": "sweep",
+          "seconds": 13
+        },
+        {
+          "id": "orbs",
+          "seconds": 8
+        },
+        {
+          "id": "forgestorm",
+          "seconds": 20
+        },
+        {
+          "id": "pyre",
+          "seconds": 20
+        },
+        {
+          "id": "anvil",
+          "seconds": 32
+        },
+        {
+          "id": "beam",
+          "seconds": 17
+        }
+      ],
+      "freeze": [
+        {
+          "kind": "aura",
+          "id": "varkhul_masters_assembly"
+        },
+        {
+          "kind": "cast",
+          "id": "Forgefather's Sweep"
+        },
+        {
+          "kind": "cast",
+          "id": "Cinder Orbs"
+        },
+        {
+          "kind": "cast",
+          "id": "Tempering Ray"
+        },
+        {
+          "kind": "cast",
+          "id": "Shared Pyre"
+        },
+        {
+          "kind": "cast",
+          "id": "Anvil's Decree"
+        },
+        {
+          "kind": "hazard",
+          "id": "varkhulForgestorm"
+        }
+      ],
+      "rates": [
+        {
+          "when": {
+            "kind": "aura",
+            "id": "varkhul_masterpiece_unbound"
+          },
+          "multiplier": 1.25
+        }
+      ],
+      "mechanics": [
+        {
+          "id": "makers-brand",
+          "label": "Maker's Brand",
+          "every": 14,
+          "detail": "tank hit, swap at 2 stacks",
+          "charge": true,
+          "anchor": [
+            {
+              "kind": "damage",
+              "id": "Maker's Brand"
+            }
+          ]
+        },
+        {
+          "id": "sweep",
+          "label": "Forgefather's Sweep",
+          "every": 26,
+          "detail": "42yd cone, 2.5s cast",
+          "anchor": [
+            {
+              "kind": "cast",
+              "id": "Forgefather's Sweep"
+            }
+          ]
+        },
+        {
+          "id": "orbs",
+          "label": "Cinder Orbs",
+          "every": 34,
+          "detail": "3 marked, spread out",
+          "anchor": [
+            {
+              "kind": "cast",
+              "id": "Cinder Orbs"
+            }
+          ]
+        },
+        {
+          "id": "beam",
+          "label": "Tempering Ray",
+          "every": 32,
+          "detail": "the first body in the line takes it",
+          "anchor": [
+            {
+              "kind": "cast",
+              "id": "Tempering Ray"
+            }
+          ]
+        },
+        {
+          "id": "forgestorm",
+          "label": "Forgestorm",
+          "every": 38,
+          "detail": "3 waves, 2.5s of warning each",
+          "anchor": [
+            {
+              "kind": "hazard",
+              "id": "varkhulForgestorm"
+            }
+          ]
+        },
+        {
+          "id": "pyre",
+          "label": "Shared Pyre",
+          "every": 38,
+          "detail": "4 bodies on the mark",
+          "anchor": [
+            {
+              "kind": "cast",
+              "id": "Shared Pyre"
+            }
+          ],
+          "lethal": true
+        },
+        {
+          "id": "anvil",
+          "label": "Anvil's Decree",
+          "every": 42,
+          "detail": "3 strikes, 2s apart",
+          "anchor": [
+            {
+              "kind": "cast",
+              "id": "Anvil's Decree"
+            }
+          ]
+        },
+        {
+          "id": "assembly",
+          "label": "The Master's Assembly",
+          "every": 60,
+          "detail": "he is immune, the forge is not",
+          "when": [
+            {
+              "kind": "aura",
+              "id": "varkhul_masters_assembly"
+            }
+          ],
+          "anchor": [
+            {
+              "kind": "boss",
+              "when": {
+                "kind": "aura",
+                "id": "varkhul_masters_assembly"
+              }
+            }
+          ]
+        }
+      ],
+      "blocks": [
+        {
+          "kind": "gates",
+          "label": "Ahead",
+          "rows": [
+            {
+              "id": "assembly",
+              "name": "The Master's Assembly",
+              "hp": 0.5,
+              "detail": "60s of adds while he is immune"
+            },
+            {
+              "id": "masterpiece",
+              "name": "Masterpiece Unbound",
+              "hp": 0.2,
+              "detail": "everything he does comes faster"
+            }
+          ]
+        },
+        {
+          "kind": "enrage",
+          "label": "Enrage",
+          "name": "Masterpiece Unbound",
+          "aura": "varkhul_masterpiece_unbound",
+          "hp": 0.2,
+          "countdown": true,
+          "seconds": 45
+        },
+        {
+          "kind": "soak",
+          "label": "Shared Pyre",
+          "aura": "varkhul_shared_pyre",
+          "radius": 5.5,
+          "seconds": 6,
+          "required": 4,
+          "total": 1.4,
+          "perMissing": 0.15
+        },
+        {
+          "kind": "debuffs",
+          "label": "Cinder Orbs",
+          "aura": "varkhul_cinder_orbs",
+          "durationSeconds": 4,
+          "count": 3,
+          "note": "spread out"
+        },
+        {
+          "kind": "debuffs",
+          "label": "Tempered Wound",
+          "aura": "varkhul_tempered_wound",
+          "durationSeconds": 30,
+          "note": "+50% damage taken"
+        },
+        {
+          "kind": "tankStacks",
+          "label": "Tank",
+          "aura": "varkhul_makers_brand",
+          "perStack": 0.35,
+          "maxStacks": 3
+        },
+        {
+          "kind": "adds",
+          "label": "Adds",
+          "rows": [
+            {
+              "templateId": "ignivar_cinder_artificer",
+              "name": "Cinder Artificer",
+              "ccImmune": false,
+              "answer": "interrupt",
+              "note": "Recalibrate, a 6s channel that repairs the forge",
+              "interruptCast": "cinder_recalibrate"
+            },
+            {
+              "templateId": "ignivar_crucible_warden",
+              "name": "Crucible Warden",
+              "ccImmune": false,
+              "answer": "tank",
+              "note": "Crucible Quake, 2.5s, 10yd around it"
+            },
+            {
+              "templateId": "ignivar_ember_sentinel",
+              "name": "Ember Sentinel",
+              "ccImmune": false,
+              "answer": "kill",
+              "note": "kill it before the next wave"
             }
           ]
         }

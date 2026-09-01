@@ -353,12 +353,23 @@ export interface Entity {
    */
   rangedPower: number;
 
+  /**
+   * Whether this entity is swinging, and how long until the swing lands. Both
+   * ride `dynamicFields` (game 0.41.0), so they are real on every entity; an
+   * omitted `swing` decodes as `autoAttack: false`, so false is an answer.
+   *
+   * No period rides with it and `weapon.speed` is not one: the reset multiplies
+   * by `meleeHaste`, which is on no wire. The period comes off the reset edge.
+   */
+  autoAttack: boolean;
+  /** Seconds until the next auto-attack swing lands. 0 when not swinging. */
+  swingTimer: number;
+
   // Yours alone: the server sends these on the SELF record and nowhere else, so
   // on any other entity they hold an inert default rather than a real value.
   /** Ability id to seconds remaining. An entry at 0 is not on cooldown. */
   cooldowns: Map<string, number>;
   gcdRemaining: number;
-  autoAttack: boolean;
   attackPower: number;
   spellPower: number;
   /**
@@ -370,8 +381,12 @@ export interface Entity {
   critChance: number;
   dodgeChance: number;
   blockChance: number;
-  /** Seconds until the next auto-attack swing lands. */
-  swingTimer: number;
+  /**
+   * Seconds until the offhand swing lands, sent as `swingOff` on the self payload
+   * alone. The sim decrements it BEFORE it tests `autoAttack` (auto_attack.ts),
+   * so with auto-attack off it sits at 0; read it only under that flag.
+   */
+  offhandSwingTimer: number;
   comboPoints: number;
   savedMana: number;
   stats: CoreStats;
@@ -447,6 +462,11 @@ export interface InvSlot {
  */
 export interface HeldSlot extends InvSlot {
   instance?: HeldItemInstance;
+  /**
+   * The recipe that minted this stack. Absent on almost everything. On `HeldSlot`
+   * because the public projection (`src/sim/market.ts`) does not carry it.
+   */
+  craftedRecipeId?: string;
 }
 
 export interface QuestProgress {

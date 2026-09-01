@@ -1,7 +1,10 @@
-// The counters you walk up to: the Merchant's market, the Ravenpost mailbox and
-// the bank, plus the two badges that stay live when you walk away from them.
+// The counters you walk up to: the Merchant's market and the Ravenpost mailbox,
+// plus the two badges that stay live when you walk away from them.
 //
-// Three of these reads only exist while you are STANDING at the counter. The
+// The bank and the Materials Vault are the same shape of read and live in
+// `economy-storage.d.ts`.
+//
+// Both reads here only exist while you are STANDING at the counter. The
 // server sends them on proximity alone and sends nothing at all when you are
 // more than a few paces away, so they are published as a status rather than as a
 // value that might be null:
@@ -31,7 +34,7 @@
 // the moment the player collects. Copy them out if you want to keep them.
 
 import type { PublicItemInstance } from './entity.js';
-import type { HeldSlot, InvSlot } from './world-items.js';
+import type { InvSlot } from './world-items.js';
 
 /** The open arm: you are at the counter and the reading is real. */
 export interface Near<T> {
@@ -255,34 +258,3 @@ export interface MailInfo {
 
 /** The mailbox, or why there is not one. Read `status` first, like `MarketState`. */
 export type MailState = ProximityState<MailInfo>;
-
-/** One row of the bonus-slot breakdown. The id list is append-only content. */
-export interface BankBonusSource {
-  /** A source id such as 'email' or 'referral'. Content, so not a closed set. */
-  id: string;
-  /** Slots this source grants right now. 0 means it is advertised, not earned. */
-  slots: number;
-  maxSlots: number;
-  /** Progress numerator, where the source has one. */
-  count?: number;
-  cap?: number;
-}
-
-/** The deposit box: one pooled list and the budget behind it. */
-export interface BankInfo {
-  /** The pooled contents. Order is the game's; there are no fixed cells. */
-  slots: readonly HeldSlot[];
-  /** Total budget: the base allowance plus purchased plus bonus. */
-  capacity: number;
-  /** Copper-bought slots. */
-  purchasedSlots: number;
-  /** Server-granted slots, recomputed at every login. */
-  bonusSlots: number;
-  /** Copper price of the next expansion, null once all of them are bought. */
-  nextExpansionCost: number | null;
-  /** The per-source breakdown behind `bonusSlots`. Always empty offline. */
-  bonusSources: readonly BankBonusSource[];
-}
-
-/** The deposit box, or why there is not one. Read `status` first, like `MarketState`. */
-export type BankState = ProximityState<BankInfo>;

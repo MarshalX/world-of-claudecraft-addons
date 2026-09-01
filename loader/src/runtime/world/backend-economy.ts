@@ -17,6 +17,7 @@ import type { InvSlot } from './game-types.ts';
 import type { MailInfo, MailState } from './mail.ts';
 import type { MarketInfo, MarketState } from './market.ts';
 import { proximityReader } from './proximity.ts';
+import type { VaultInfo, VaultState } from './vault.ts';
 
 interface EconomyReads {
   /** The Merchant's book, one page at a time. Gated on standing at the Merchant. */
@@ -29,6 +30,10 @@ interface EconomyReads {
   readonly mailUnread: number | null;
   /** The deposit box. Gated on standing at a banker. */
   readonly bank: BankState;
+  /** The Materials Vault. Gated on standing at a banker, like the bank. */
+  readonly vault: VaultState;
+  /** What crafting may draw from the vault HERE. Null where it may not. */
+  readonly craftVaultStock: Readonly<Record<string, number>> | null;
   /** The buyback ring, most recent first. Ungated. */
   readonly buyback: readonly InvSlot[] | null;
 }
@@ -70,6 +75,7 @@ function economyReads(world: unknown, hasSelf: () => boolean): EconomyReads {
   const market = proximityReader<MarketInfo>();
   const mail = proximityReader<MailInfo>();
   const bank = proximityReader<BankInfo>();
+  const vault = proximityReader<VaultInfo>();
 
   return {
     get market(): MarketState {
@@ -90,6 +96,17 @@ function economyReads(world: unknown, hasSelf: () => boolean): EconomyReads {
 
     get bank(): BankState {
       return bank(fieldValue(world, 'bankInfo'), hasSelf());
+    },
+
+    get vault(): VaultState {
+      return vault(fieldValue(world, 'vaultInfo'), hasSelf());
+    },
+
+    // A plain `readAs` rather than a proximity reader: null means an instance
+    // refuses the draw, which walking cannot fix, and an empty record is a real
+    // answer (the draw is allowed and the vault is empty).
+    get craftVaultStock(): Readonly<Record<string, number>> | null {
+      return readAs<Record<string, number>>(world, 'craftVaultStock');
     },
 
     get buyback(): readonly InvSlot[] | null {

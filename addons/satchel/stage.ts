@@ -16,14 +16,46 @@
 
 import { inSeries } from '../../loader/src/shared/sequence.ts';
 import type { FrameState, Scenario, Stage, WorldDraft } from '../../stage/src/stage.ts';
+import { choosePicker } from '../../tests/fakes/controls.ts';
 import { HELLO_FRAME } from '../../tests/fakes/frames.ts';
 import { WALL_CLOCK_MS } from '../../tests/fakes/shared-services.ts';
 import ITEMS from '../lorebind/items.json' with { type: 'json' };
+import BAGS from './bags.json' with { type: 'json' };
+
+/**
+ * The shipped bag table, on EVERY scenario: without it the panel falls back to the pooled free
+ * figure, the `Materials` chip goes, and a preview photographs the fallback with nothing on
+ * screen looking wrong.
+ */
+const BAG_DATA = { 'bags.json': JSON.stringify(BAGS) };
 
 const SILVER = 100;
 const GOLD = 100 * SILVER;
 const HOUR_MS = 60 * 60 * 1000;
 const DAY_MS = 24 * HOUR_MS;
+
+/**
+ * A vault's stock from entry pairs, since an object literal keyed by item ids fails
+ * `useNamingConvention`. See STYLE.md.
+ */
+function stockOf(rows: [string, number][]): Record<string, number> {
+  return Object.fromEntries(rows);
+}
+
+/**
+ * One reading behind both `vault.stock` and `craftVaultStock`, so the pane and the line under
+ * it cannot drift apart.
+ */
+const MARSHAL_STOCK = stockOf([
+  ['copper_ore', 400],
+  ['iron_ore', 265],
+  ['silverleaf_herb', 180],
+  ['goldleaf_herb', 92],
+  ['rough_hide', 340],
+  ['spider_silk', 55],
+  ['homespun_cloth', 210],
+  ['arcane_dust', 34],
+]);
 
 /** One stack as the game hands it over: `InvSlot`, with the placement hint. */
 interface Stack {
@@ -80,6 +112,22 @@ interface Session {
     deliverySeconds: number;
   };
   mailUnread: number;
+  /**
+   * The Materials Vault, read at the same bursar the bank is. Its own field rather than derived
+   * from `bank`: the gates are separate and a scenario can put one without the other.
+   */
+  vault?: {
+    stock: Record<string, number>;
+    special: Stack[];
+    upgrades: number;
+    perMaterialCap: number;
+    nextUpgradeCost: number | null;
+  };
+  /**
+   * What crafting may draw from the vault where this character is STANDING, which is not gated
+   * on a bursar at all: a record anywhere in the open world, null inside an instance.
+   */
+  craftVaultStock?: Record<string, number> | null;
 }
 
 /**
@@ -148,6 +196,17 @@ const SENA: Session = {
     bonusSlots: 0,
     nextExpansionCost: 40 * GOLD,
     bonusSources: [],
+  },
+  vault: {
+    stock: stockOf([
+      ['arcane_dust', 148],
+      ['silverleaf_herb', 96],
+      ['spider_silk', 40],
+    ]),
+    special: [],
+    upgrades: 1,
+    perMaterialCap: 200,
+    nextUpgradeCost: 60 * GOLD,
   },
   mailUnread: 0,
 };
@@ -280,6 +339,84 @@ const MARSHAL: Session = {
     deliverySeconds: 45,
   },
   mailUnread: 2,
+  /**
+   * One material AT the cap, since the full row is what the pane is for, and `resonant_steel`
+   * in `special` because a crafted stack keeps an identity and cannot collapse into a count.
+   */
+  vault: {
+    stock: MARSHAL_STOCK,
+    special: [{ itemId: 'resonant_steel', count: 4 }],
+    upgrades: 2,
+    perMaterialCap: 400,
+    nextUpgradeCost: 250 * GOLD,
+  },
+  // In the open world at a bursar, so the draw is allowed and reaches everything above.
+  craftVaultStock: MARSHAL_STOCK,
+};
+
+/**
+ * A general pool with nothing left in it and a reagent satchel seven cells open beside it. 16
+ * backpack plus a 6 cell Linen Pouch is 22 general, a 20 cell Necromancer's Reagent Satchel is
+ * 20 materials, 42 pooled; of the 35 cells in use, 13 are materials and pack into the satchel,
+ * and the other 22 fill the general pool exactly, so the strip reads 35 of 42 with nothing free
+ * and a `Materials` chip of seven.
+ *
+ * NOT a preview: the satchel is a game 0.41.0 id the stage's default channel can lack. Nothing
+ * here draws its art, so the picture is right on either channel, but a committed artifact must
+ * not depend on the id.
+ */
+const HAULING: Session = {
+  name: 'Marshal',
+  templateId: 'hunter',
+  copper: 1462 * GOLD + 38 * SILVER + 4,
+  bags: ['linen_pouch', 'necromancers_reagent_satchel', null, null],
+  bagCapacity: 42,
+  inventory: [
+    // 13 cells the game counts as materials, which is what the satchel will take.
+    { itemId: 'copper_ore', count: 20, slot: 0 },
+    { itemId: 'copper_ore', count: 20, slot: 1 },
+    { itemId: 'copper_ore', count: 7, slot: 2 },
+    { itemId: 'iron_ore', count: 20, slot: 3, instance: { locked: true } },
+    { itemId: 'iron_ore', count: 16, slot: 4 },
+    { itemId: 'silverleaf_herb', count: 20, slot: 5 },
+    { itemId: 'silverleaf_herb', count: 14, slot: 6 },
+    { itemId: 'goldleaf_herb', count: 6, slot: 7 },
+    { itemId: 'rough_hide', count: 20, slot: 8 },
+    { itemId: 'rough_hide', count: 10, slot: 9 },
+    { itemId: 'spider_silk', count: 11, slot: 10 },
+    { itemId: 'homespun_cloth', count: 20, slot: 11 },
+    { itemId: 'arcane_dust', count: 4, slot: 12 },
+    // 22 cells nothing but the general pool will take, which is exactly what it has.
+    { itemId: 'healing_potion', count: 5 },
+    { itemId: 'healing_potion', count: 5 },
+    { itemId: 'healing_potion', count: 5 },
+    { itemId: 'healing_potion', count: 2 },
+    { itemId: 'lesser_healing_potion', count: 12 },
+    { itemId: 'lesser_healing_potion', count: 12 },
+    { itemId: 'lesser_healing_potion', count: 4 },
+    { itemId: 'mana_potion', count: 5 },
+    { itemId: 'mana_potion', count: 5 },
+    { itemId: 'mana_potion', count: 3 },
+    { itemId: 'herbed_marsh_pike', count: 4 },
+    { itemId: 'herbed_marsh_pike', count: 4 },
+    { itemId: 'ghostly_essence', count: 3 },
+    { itemId: 'ghostly_essence', count: 1 },
+    { itemId: 'boar_hide', count: 20 },
+    { itemId: 'boar_hide', count: 20 },
+    { itemId: 'boar_hide', count: 9 },
+    { itemId: 'chunk_of_ore', count: 20 },
+    { itemId: 'chunk_of_ore', count: 6 },
+    { itemId: 'meltwater_flask', count: 2 },
+    { itemId: 'inert_storm_shard', count: 1 },
+    { itemId: 'mosshide_vest', count: 1 },
+  ],
+  equipment: {
+    chest: 'mosshide_vest',
+    head: 'ashstalker_cowl',
+    hands: 'shardfang_grips',
+    waist: 'silk_sash',
+  },
+  mailUnread: 0,
 };
 
 /** Stand a session's character in the world, counters and all. */
@@ -293,13 +430,27 @@ function beThem(draft: WorldDraft, who: Session): void {
   draft.set(world, 'copper', who.copper);
   draft.set(world, 'equipment', who.equipment);
   draft.set(world, 'bankInfo', who.bank ?? null);
+  draft.set(world, 'vaultInfo', who.vault ?? null);
   draft.set(world, 'mailInfo', who.mail ?? null);
   draft.set(world, 'mailUnread', who.mailUnread);
+  draft.set(world, 'craftVaultStock', who.craftVaultStock ?? null);
 }
 
-/** Walk away from a counter, which is a null payload and NOT an empty store. */
+/**
+ * Point the character selector at somebody through the real control: the picker is the kit's
+ * button and menu rather than a `<select>`, and a selector that matches nothing fails silently.
+ */
+function choosePicked(name: string): void {
+  choosePicker(document.querySelector('[data-role="picker"]') ?? document, name);
+}
+
+/**
+ * Walk away from a counter, which is a null payload and NOT an empty store. The vault is its
+ * own `set`, so a scenario can leave one without the other.
+ */
 function leaveCounters(draft: WorldDraft): void {
   draft.set(draft.world, 'bankInfo', null);
+  draft.set(draft.world, 'vaultInfo', null);
   draft.set(draft.world, 'mailInfo', null);
 }
 
@@ -550,6 +701,7 @@ const SCENARIOS: readonly Scenario[] = [
   {
     id: 'items',
     label: 'Every item on the account',
+    data: BAG_DATA,
     preview: true,
     caption: 'Everything you own',
     alt: 'one row an item, pooled across every character and searchable, sortable and filterable by who holds it, each name coloured by its tier, with what the whole list goes for at the Merchant along the bottom',
@@ -560,6 +712,7 @@ const SCENARIOS: readonly Scenario[] = [
   {
     id: 'bags',
     label: 'The bags, live',
+    data: BAG_DATA,
     preview: true,
     caption: 'One character, live',
     alt: 'the bags of the character in play, as a grid of squares bordered by item tier, one of them padlocked',
@@ -570,6 +723,7 @@ const SCENARIOS: readonly Scenario[] = [
   {
     id: 'bank',
     label: 'The bank, standing at one',
+    data: BAG_DATA,
     frames: framed(),
     world: asBruk,
     run: (stage) => onTab(stage, 'Bank'),
@@ -577,6 +731,7 @@ const SCENARIOS: readonly Scenario[] = [
   {
     id: 'mail',
     label: 'The mailbox, two unread',
+    data: BAG_DATA,
     frames: framed(),
     world: asBruk,
     run: (stage) => onTab(stage, 'Mail'),
@@ -584,6 +739,7 @@ const SCENARIOS: readonly Scenario[] = [
   {
     id: 'roster',
     label: 'Three characters',
+    data: BAG_DATA,
     frames: framed(),
     world: asBruk,
     run: (stage) => onTab(stage, 'Roster'),
@@ -593,6 +749,7 @@ const SCENARIOS: readonly Scenario[] = [
     // and has to say what it left out. Not a preview: the two above already picture the pair.
     id: 'priced-roster',
     label: 'The roster, with both companions',
+    data: BAG_DATA,
     frames: framed(),
     world: asBruk,
     run: (stage) => paired(stage, 'Roster'),
@@ -602,15 +759,12 @@ const SCENARIOS: readonly Scenario[] = [
     // draw at all, and the whole reason this addon keeps a record.
     id: 'alt-bank',
     label: "An alt's bank, from another character",
+    data: BAG_DATA,
     frames: framed(),
     world: asBruk,
     run: async (stage) => {
       await onTab(stage, 'Bank');
-      const picker = document.querySelector<HTMLSelectElement>('[data-role="picker"] select');
-      if (picker !== null) {
-        picker.value = 'Sena';
-        picker.dispatchEvent(new Event('change', { bubbles: true }));
-      }
+      choosePicked('Sena');
       stage.frame();
       await pause(SETTLE_MS);
     },
@@ -620,6 +774,7 @@ const SCENARIOS: readonly Scenario[] = [
     // of a session is spent in, and the one the three-state read exists for.
     id: 'away',
     label: 'Walked away from the counters',
+    data: BAG_DATA,
     frames: framed(),
     world: asBruk,
     run: async (stage) => {
@@ -629,10 +784,47 @@ const SCENARIOS: readonly Scenario[] = [
     },
   },
   {
+    // The vault at a bursar, live: one material at the cap and one crafted stack as a square.
+    id: 'vault',
+    label: 'The vault, at a bursar',
+    data: BAG_DATA,
+    frames: framed(),
+    world: asBruk,
+    run: (stage) => paired(stage, 'Vault'),
+  },
+  {
+    // An alt's vault, drawn while logged in as somebody else and nowhere near a bursar.
+    id: 'alt-vault',
+    label: "An alt's vault, from another character",
+    data: BAG_DATA,
+    frames: framed(),
+    world: asBruk,
+    run: async (stage) => {
+      await onTab(stage, 'Vault');
+      lorebindSpeaks(stage);
+      leaveCounters(stage);
+      choosePicked('Sena');
+      await drawn(stage);
+    },
+  },
+  {
+    // A full general pool with a reagent satchel open beside it. See `HAULING`.
+    id: 'pools',
+    label: 'Full bags with a reagent satchel open',
+    data: BAG_DATA,
+    frames: framed(),
+    world: (draft) => {
+      beThem(draft, HAULING);
+      leaveCounters(draft);
+    },
+    run: drawn,
+  },
+  {
     // The day the addon is installed: one character recorded, nothing else played yet, and
     // nowhere near a counter. The state nobody thinks to photograph.
     id: 'fresh',
     label: 'The day you install it',
+    data: BAG_DATA,
     frames: framed(),
     world: (draft) => {
       beThem(draft, MARSHAL);

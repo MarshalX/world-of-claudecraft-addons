@@ -32,9 +32,10 @@
 //
 // The bus is the product rather than the panel. `item` is one newly learned record, `items` is
 // the batch an ask is answered with, and both carry `{ id, name, source }` plus `quality`,
-// `kind`, `slot`, `heroicOf`, `sellValue`, `itemLevel` and `requiredLevel` where the table
-// states them, with anything unknown left OUT rather than sent empty or as a zero. A subscriber
-// on `item` alone hears its own ask answered and takes nothing from it: both topics or neither.
+// `kind`, `slot`, `armorType`, `set`, `heroicOf`, `requiredClass`, `sellValue`, `itemLevel` and
+// `requiredLevel` where the table states them, with anything unknown left OUT rather than sent
+// empty or as a zero. A subscriber on `item` alone hears its own ask answered and takes nothing
+// from it: both topics or neither.
 
 /** The frame, and the floor a resize may take it to: chrome plus exactly ONE row of art. */
 const FRAME_TITLE = 'Lorebind';
@@ -240,9 +241,19 @@ const NUMBER_FIELDS = [
  * unit the wire uses. `heroicOf` is what separates the 63 pairs that arrive as one name twice.
  * `uniqueEquipped` stays off: nothing draws equipment, and a published field with no reader is a
  * promise kept for nobody.
+ *
+ * `set` IS THE DISPLAY NAME AND NOT THE SET ID. The game names set bonuses and their proc auras
+ * from the id ('emberscreed' procs `set_emberscreed_4pc`) while this publishes 'Creed of Embers
+ * Vestments', so a consumer correlating a proc with a set must map name back to id itself.
  */
-const PUBLISHED_TEXT = ['quality', 'kind', 'slot', 'heroicOf'];
+const PUBLISHED_TEXT = ['quality', 'kind', 'slot', 'armorType', 'set', 'heroicOf'];
 const PUBLISHED_NUMBERS = ['sellValue', 'itemLevel', 'requiredLevel'];
+/**
+ * A LIST, so it is copied rather than handed over: the bus freezes the envelope and not the
+ * payload, and a subscriber writing into the array would rewrite the table row. Absent means
+ * wearable by everyone, never an empty list.
+ */
+const PUBLISHED_LISTS = ['requiredClass'];
 
 /** How long the game says a sat-down consumable takes, `CONSUME_DURATION` in its own sim. */
 const CONSUME_SECONDS = 18;
@@ -346,6 +357,16 @@ function copyText(row, value, keys) {
     const said = text(value[key]);
     if (said !== '') {
       row[key] = said;
+    }
+  }
+}
+
+/** A list the file states, copied so nothing downstream can write into the table's own row. */
+function copyLists(row, value, keys) {
+  for (const key of keys) {
+    const said = value[key];
+    if (Array.isArray(said) && said.length > 0) {
+      row[key] = [...said];
     }
   }
 }
@@ -541,6 +562,7 @@ function record(itemId) {
   const payload = { id: answer.id, name: answer.name, source: answer.source };
   copyText(payload, answer, PUBLISHED_TEXT);
   copyNumbers(payload, answer, PUBLISHED_NUMBERS);
+  copyLists(payload, answer, PUBLISHED_LISTS);
   return payload;
 }
 

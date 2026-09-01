@@ -500,10 +500,13 @@
   pointer-events: none;
 }
 
-/* The label comes off the attributes the frame already carries, so nothing has
-   to be measured, positioned, or kept in step with the frame it names. */
+/* The name chip: WHICH frame this is, since an outlined empty overlay is otherwise
+   an anonymous gold box. The game draws the same thing in its own edit mode
+   (`.tf-frame-label`), above the frame where it covers nothing the frame drew; the
+   text is composed in ui/kit/frame-chrome.ts, since CSS is unreadable from a Vitest
+   suite and the sheet could reach only the fqid. */
 #woc-addons.woc-unlocked .woc-addon-frame::before {
-  content: attr(data-woc-addon) " · " attr(data-woc-frame);
+  content: attr(data-woc-label);
   position: absolute;
   bottom: 100%;
   left: 0;
@@ -521,4 +524,16 @@
      must not be the thing that is hidden behind it. */
   box-shadow: 0 1px 4px rgb(0 0 0 / 0.6);
   pointer-events: none;
+}
+
+/* A frame parked at the top of the viewport has no room above it, so the chip hangs
+   underneath, on a class ui/frame/interactive.ts writes from the frame's own top (the
+   clearance is in ui/frame/geometry.ts). The game does the same with its own
+   `.tf-label-below`; both margins are restated because the base rule lifts the chip
+   with `margin-bottom`, and leaving it standing would offset the chip twice. */
+#woc-addons.woc-unlocked .woc-addon-frame.woc-label-below::before {
+  bottom: auto;
+  top: 100%;
+  margin-bottom: 0;
+  margin-top: 5px;
 }

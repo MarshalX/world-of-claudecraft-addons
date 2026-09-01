@@ -38,4 +38,12 @@ export interface InvSlot {
  */
 export interface HeldSlot extends InvSlot {
   instance?: HeldItemInstance;
+  /**
+   * The recipe that minted this stack. ABSENT on almost everything: the game
+   * records it only where the provenance matters. On `HeldSlot` rather than
+   * `InvSlot` because the server's public projection (a market row, a letter
+   * attachment, a guild bank row) drops it. It is what tells two
+   * `VaultInfo.special` rows of one item id apart. Added in API minor 10.
+   */
+  craftedRecipeId?: string;
 }

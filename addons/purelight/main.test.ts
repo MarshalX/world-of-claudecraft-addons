@@ -29,8 +29,36 @@ import { createFakeStorage } from '../../tests/fakes/storage.ts';
 import MANIFEST_TEXT from './addon.json?raw';
 // biome-ignore lint/correctness/noUnresolvedImports: Vite's ?raw suffix is a loader directive a static resolver does not model, and an addon file is a function BODY with no exports at all. Same reason as the cooldown-bars suite.
 import SOURCE from './main.js?raw';
+import TABLE_TEXT from './refused.json?raw';
 
 const MANIFEST_JSON: unknown = JSON.parse(MANIFEST_TEXT);
+
+/** One row of the shipped table: an aura id the game refuses, and why. */
+interface RefusedRow {
+  id: string;
+  reason: string;
+}
+
+interface RefusedTable {
+  gameVersion: string;
+  auras: RefusedRow[];
+}
+
+/** The shipped table, not a stub, so a case fails when what `generate.mjs` writes moves. */
+const TABLE = JSON.parse(TABLE_TEXT) as RefusedTable;
+
+function firstRefused(reason: string): string {
+  const row = TABLE.auras.find((one) => one.reason === reason);
+  if (row === undefined) {
+    throw new Error(`refused.json carries no ${reason} row to write a case against`);
+  }
+  return row.id;
+}
+
+/** A raid mechanic the game will refuse, taken from the shipped table. */
+const OWNED_ID = firstRefused('encounter');
+/** The other refusal that has no route on the wire: an id shown on the debuff surface. */
+const DISPLAY_ID = firstRefused('display');
 
 /** The storage namespace this addon's frame state is saved under. */
 const FQID = 'official/purelight';
@@ -319,6 +347,8 @@ interface StartOpts {
    * the same path a drag takes: the loader clamps the box and reports it through `onMove`.
    */
   frames?: Record<string, { box: FrameBox; visible: boolean }>;
+  /** A refusal table other than the shipped one, for the cases about a broken table. */
+  table?: string;
 }
 
 interface PurelightHarness extends SharedHarness {
@@ -348,6 +378,10 @@ interface PurelightHarness extends SharedHarness {
   countOf: (cellKey: string) => string;
   /** One tile's art, as the URL the kit pointed the image at. */
   artOf: (cellKey: string) => string;
+  /** The figure on the held tile, or '' when it is not on the strip at all. */
+  heldCount: () => string;
+  /** What the held tile is announced as, which is the only place the count is spelt out. */
+  heldLabel: () => string;
 }
 
 function cellFor(cellKey: string): Element | null {
@@ -429,6 +463,7 @@ async function start(opts: StartOpts = {}): Promise<PurelightHarness> {
     source: SOURCE,
     storage,
     settings: opts.settings ?? {},
+    data: { 'refused.json': opts.table ?? TABLE_TEXT },
     game: Promise.resolve({ world }),
   });
   teardown.push(harness.dispose);
@@ -473,8 +508,11 @@ async function start(opts: StartOpts = {}): Promise<PurelightHarness> {
       [...document.querySelectorAll('[data-effect]')].map(
         (el) => el.getAttribute('data-effect') ?? '',
       ),
+    // Scoped past the held tile, which wears the same caption band.
     captions: () =>
-      [...document.querySelectorAll('.woc-pl-name')].map((el) => el.textContent ?? ''),
+      [...document.querySelectorAll('.woc-pl-cell:not([data-held]) .woc-pl-name')].map(
+        (el) => el.textContent ?? '',
+      ),
     labelOf: (cellKey) =>
       cellFor(cellKey)?.querySelector('.woc-tile')?.getAttribute('aria-label') ?? '',
     valueOf: (cellKey) => textIn(cellKey, '.woc-tile-value'),
@@ -484,6 +522,16 @@ async function start(opts: StartOpts = {}): Promise<PurelightHarness> {
         ?.style.getPropertyValue('--woc-tile-sweep') ?? '',
     countOf: (cellKey) => textIn(cellKey, '.woc-tile-count'),
     artOf: (cellKey) => cellFor(cellKey)?.querySelector('.woc-tile-art')?.getAttribute('src') ?? '',
+    // Through the display style rather than presence: the tile is built once and hidden.
+    heldCount: () => {
+      const cell = document.querySelector<HTMLElement>('[data-held]');
+      if (cell === null || cell.style.display === 'none') {
+        return '';
+      }
+      return cell.querySelector('.woc-tile-value')?.textContent ?? '';
+    },
+    heldLabel: () =>
+      document.querySelector('[data-held] .woc-tile')?.getAttribute('aria-label') ?? '',
   };
 }
 
@@ -617,6 +665,136 @@ describe('whether an effect can actually be removed', () => {
     h.frame();
 
     expect(h.drawn()).toEqual([]);
+  });
+});
+
+// Every case here is GRAVEBIND, which the suite above proves is drawn, with nothing changed but
+// the id: `wireAura` does not send `encounterOwned`, so the id is all that separates a raid
+// mechanic from an ordinary debuff on the wire.
+describe('an effect the game will refuse for a reason the wire does not carry', () => {
+  it('holds a mechanic the encounter owns back off the strip', async () => {
+    const h = await run();
+
+    h.afflict(NEAR, { ...GRAVEBIND, id: OWNED_ID });
+    h.frame();
+
+    expect(h.drawn()).toEqual([]);
+  });
+
+  // Without this the case above passes for an addon that has stopped drawing anything.
+  it('still draws the same effect under an ordinary id', async () => {
+    const h = await run();
+
+    h.afflict(NEAR, GRAVEBIND);
+    h.frame();
+
+    expect(h.drawn()).toEqual([key(NEAR, 'gravebind')]);
+  });
+
+  // A display-override id is a BENEFIT, so the purge direction is the one that would offer it.
+  it('holds a display-override id back from a purge', async () => {
+    const h = await run();
+    h.select(RIVAL);
+
+    h.afflict(RIVAL, { ...BLESSING, id: DISPLAY_ID });
+    h.frame();
+
+    expect(h.drawn()).toEqual([]);
+  });
+
+  it('purges the same benefit under an ordinary id', async () => {
+    const h = await run();
+    h.select(RIVAL);
+
+    h.afflict(RIVAL, BLESSING);
+    h.frame();
+
+    expect(h.drawn()).toEqual([key(RIVAL, 'blessing')]);
+  });
+});
+
+describe('saying how much was held back', () => {
+  it('counts the held effects on a tile of their own', async () => {
+    const h = await run();
+
+    h.afflict(NEAR, { ...GRAVEBIND, id: OWNED_ID });
+    h.afflict(ME, { ...CORRUPTION, id: OWNED_ID });
+    h.frame();
+
+    expect(h.heldCount()).toBe('2');
+  });
+
+  // Pinned as the string a reader ANNOUNCES, which is why the figure appears twice: the kit says
+  // the label and then the value over the tile.
+  it('spells the count out in the accessible name', async () => {
+    const h = await run();
+
+    h.afflict(NEAR, { ...GRAVEBIND, id: OWNED_ID });
+    h.frame();
+
+    expect(h.heldLabel()).toBe('1 effect held back, which no dispel will remove, 1');
+  });
+
+  it('says nothing when nothing was held', async () => {
+    const h = await run();
+
+    h.afflict(NEAR, GRAVEBIND);
+    h.frame();
+
+    expect(h.heldCount()).toBe('');
+  });
+
+  it('takes the tile back down when the mechanic falls off', async () => {
+    const h = await run();
+    h.afflict(NEAR, { ...GRAVEBIND, id: OWNED_ID });
+    h.frame();
+
+    h.cure(NEAR, OWNED_ID);
+    h.frame();
+
+    expect(h.heldCount()).toBe('');
+  });
+
+  it('does not count a held effect the floor would have dropped anyway', async () => {
+    const h = await run({ settings: { 'min-seconds': 10 } });
+
+    h.afflict(NEAR, { ...GRAVEBIND, id: OWNED_ID, remaining: 3, duration: 8 });
+    h.frame();
+
+    expect(h.heldCount()).toBe('');
+  });
+});
+
+// An undeclared data file is REFUSED by the loader, which would leave the addon with an empty
+// set and no way to know.
+describe('the table it reads', () => {
+  it('is declared on the manifest', () => {
+    expect(manifest().data).toEqual(['refused.json']);
+  });
+
+  it('stamps the game version it was read at', () => {
+    expect(TABLE.gameVersion).toMatch(/^\d+\.\d+\.\d+$/);
+  });
+
+  it('carries an id and a known reason on every row', () => {
+    expect(TABLE.auras.length).toBeGreaterThan(0);
+    for (const row of TABLE.auras) {
+      expect(typeof row.id).toBe('string');
+      expect(row.id.length).toBeGreaterThan(0);
+      expect(['encounter', 'display']).toContain(row.reason);
+    }
+  });
+
+  // The held tile must not appear over an unreadable table: a tile saying nothing was held is a
+  // claim.
+  it('goes back to offering everything when the table is unreadable', async () => {
+    const h = await run({ table: '{"gameVersion":"0.41.0"}' });
+
+    h.afflict(NEAR, { ...GRAVEBIND, id: OWNED_ID });
+    h.frame();
+
+    expect(h.drawn()).toEqual([key(NEAR, OWNED_ID)]);
+    expect(h.heldCount()).toBe('');
   });
 });
 
@@ -1020,7 +1198,7 @@ describe('the tooltip on a tile', () => {
     expect(document.querySelector('.woc-tip-title')?.textContent).toBe('Gravebind');
     expect(said).toContain('On Bragg');
     expect(said).toContain('shadow');
-    expect(said).toContain('no encounter owns it');
+    expect(said).toContain('nothing known holds it');
   });
 
   // The reason is per direction, because the rule is. A tile on a hostile unit is

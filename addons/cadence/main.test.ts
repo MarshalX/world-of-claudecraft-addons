@@ -55,6 +55,18 @@ interface CadenceHarness extends SharedHarness {
   self: (fields: Record<string, unknown>) => void;
   /** Put a mob in scope whose hate table names the player, which IS combat. */
   pullMob: () => void;
+  /** Put a mob in scope and select it. */
+  target: (id: number, fields?: Record<string, unknown>) => void;
+  /** Write fields onto a mob already in scope. */
+  mob: (id: number, fields: Record<string, unknown>) => void;
+  /** Take an entity out of scope. */
+  drop: (id: number) => void;
+  /** Select nothing. */
+  untarget: () => void;
+  /** State the server's movement multiplier, or null for a session with no answer. */
+  speed: (mult: number | null) => void;
+  /** Watch somebody else, which nulls the multiplier. */
+  spectate: (who: string | null) => void;
   /** Report a round trip. It is stated rather than measured: see `netState`. */
   latency: (ms: number | null) => void;
   /** Re-read the world, which is what turns a state change into a handler call. */
@@ -145,7 +157,15 @@ async function start(
       cooldown: 5.4,
     },
   ];
-  const world = { entities, player, known };
+  // The movement read is gated on both `spectating` and the wire version: left unstated,
+  // every speed case passes on null.
+  const world: Record<string, unknown> = {
+    entities,
+    player,
+    known,
+    spectating: null,
+    movementWireVersion: 2,
+  };
   const harness = await mountAddon({
     manifest: MANIFEST_TEXT,
     source: SOURCE,
@@ -172,6 +192,39 @@ async function start(
           },
         }),
       );
+    },
+    // `world.unit('target')` reads the player's `targetId` against the entity map, so both
+    // halves are needed.
+    target: (id, fields = {}) => {
+      entities.set(
+        id,
+        liveEntity({
+          set: { id, kind: 'mob', name: `Mob${String(id)}`, hostile: true, ...fields },
+        }),
+      );
+      Object.assign(player, { targetId: id });
+    },
+    mob: (id, fields) => {
+      Object.assign(entities.get(id) as Record<string, unknown>, fields);
+    },
+    drop: (id) => {
+      entities.delete(id);
+    },
+    untarget: () => {
+      Object.assign(player, { targetId: null });
+    },
+    // The loader reads `reconMoveSpeedMult`, gated on the v2 movement wire and on not
+    // spectating, so all three are stated. Null is the field taken away, the offline shape.
+    speed: (mult) => {
+      Object.assign(world, { movementWireVersion: 2, spectating: null });
+      if (mult === null) {
+        Reflect.deleteProperty(world as Record<string, unknown>, 'reconMoveSpeedMult');
+        return;
+      }
+      Object.assign(world, { reconMoveSpeedMult: mult });
+    },
+    spectate: (who) => {
+      Object.assign(world, { spectating: who });
     },
     latency: (ms) => harness.netState({ latencyMs: ms }),
     poll: () => harness.shared.world.watcher.poll(),
@@ -233,8 +286,12 @@ describe('its manifest', () => {
   // for the cast label, and `toggleKey` on the frame options were minor 4; the two
   // that moved it to 6 are `size` on a bar, which is how a row is scaled now, and
   // `frame.box()`, which is where the height being divided comes from.
+  //
+  // The target row moves nothing: `world.unit`, `Entity.swingTimer` and `Entity.autoAttack`
+  // were published before 6. `Entity.offhandSwingTimer` and `Entity.offhandWeapon` are
+  // published at minor 10.
   it('declares the minor every member it reads is carried by', () => {
-    expect(parseManifest(MANIFEST_TEXT).apiMinor).toBe(6);
+    expect(parseManifest(MANIFEST_TEXT).apiMinor).toBe(10);
   });
 });
 
@@ -401,6 +458,549 @@ describe('the swing timer', () => {
 
     expect(h.valueOf('swing')).toBe('off');
     expect(h.fillOf('swing')).toBe('0.00%');
+  });
+});
+
+// `world.moveSpeedMult` is the server's net multiplier with no breakdown, new at game 0.41.0.
+describe('the movement speed row', () => {
+  const On = { 'show-speed': true };
+  const speedRow = (): HTMLElement => rowFor('speed') as HTMLElement;
+
+  it('is off by default', async () => {
+    const h = await run();
+
+    expect(h.drawn()).toEqual(['swing', 'gcd', 'cast', 'power']);
+  });
+
+  // Null is "no answer": before world entry, offline, spectating, or on the older movement
+  // wire, where a 1 would sit while the player really was snared.
+  it('says nothing at all when the field has no answer', async () => {
+    const h = await run(On);
+    h.speed(null);
+
+    h.frame();
+
+    expect(shown(speedRow())).toBe(false);
+  });
+
+  // A moderator spectate repoints the client's player at somebody else and the server skips
+  // the block carrying this field.
+  it('says nothing while spectating somebody else', async () => {
+    const h = await run(On);
+    h.speed(0.5);
+    h.frame();
+    expect(shown(speedRow())).toBe(true);
+
+    h.spectate('Someone-Else');
+    h.frame();
+
+    expect(shown(speedRow())).toBe(false);
+  });
+
+  it('stays quiet at exactly normal speed', async () => {
+    const h = await run(On);
+    h.speed(1);
+
+    h.frame();
+
+    expect(shown(speedRow())).toBe(false);
+  });
+
+  it('speaks up for a real snare, as a share of your normal speed', async () => {
+    const h = await run(On);
+    h.speed(0.6);
+
+    h.frame();
+
+    expect(shown(speedRow())).toBe(true);
+    expect(h.labelOf('speed')).toBe('Speed');
+    expect(h.valueOf('speed')).toBe('60%');
+    expect(h.fillOf('speed')).toBe('60.00%');
+  });
+
+  // The game folds stealth into the same `Math.min` as a snare, and a rogue's Stealth is 0.5.
+  it('stays quiet while stealthed, where 0.5 is the stealth and not a snare', async () => {
+    const h = await run(On);
+    h.speed(0.5);
+    h.self({ auras: [{ id: 'stealth', kind: 'stealth', value: 0.5, remaining: 3600 }] });
+
+    h.frame();
+
+    expect(shown(speedRow())).toBe(false);
+  });
+
+  // A mount is +60% to +80% for as long as the journey lasts.
+  it('stays quiet while mounted', async () => {
+    const h = await run(On);
+    h.speed(1.6);
+    h.self({ mountKey: 'galecrest_courser' });
+
+    h.frame();
+
+    expect(shown(speedRow())).toBe(false);
+  });
+
+  // Empty is the on-foot answer, so a falsy gate on it would silence the row for everybody.
+  it('still speaks on foot, where the mount key is empty rather than absent', async () => {
+    const h = await run(On);
+    h.speed(0.4);
+    h.self({ mountKey: '' });
+
+    h.frame();
+
+    expect(shown(speedRow())).toBe(true);
+    expect(h.valueOf('speed')).toBe('40%');
+  });
+
+  // A released spirit is a flat 1.25 returned before the aura scan, with no aura to explain it.
+  it('stays quiet for a ghost, whose 1.25 has no aura behind it', async () => {
+    const h = await run(On);
+    h.speed(1.25);
+    h.self({ ghost: true });
+
+    h.frame();
+
+    expect(shown(speedRow())).toBe(false);
+  });
+
+  // Slow immunity gates only the game's `slow` arm, so an immune player carrying a snare
+  // computes exactly 1.
+  it('is quiet for a slow-immune player carrying a snare, without a rule for it', async () => {
+    const h = await run(On);
+    h.speed(1);
+    h.self({
+      auras: [
+        { id: 'crippling_poison', kind: 'slow', value: 0.5, remaining: 8 },
+        { id: 'veilbound_march', kind: 'slow_immunity', value: 1, remaining: 8 },
+      ],
+    });
+
+    h.frame();
+
+    expect(shown(speedRow())).toBe(false);
+  });
+
+  it('speaks at a dead stop, which a falsy guard would swallow', async () => {
+    const h = await run(On);
+    h.speed(0);
+
+    h.frame();
+
+    expect(shown(speedRow())).toBe(true);
+    expect(h.valueOf('speed')).toBe('0%');
+  });
+
+  it('shows a rush with the bar pinned full and the figure carrying the excess', async () => {
+    const h = await run(On);
+    h.speed(1.4);
+
+    h.frame();
+
+    expect(h.valueOf('speed')).toBe('140%');
+    expect(h.fillOf('speed')).toBe('100.00%');
+  });
+
+  it('takes a line only while it is speaking, and gives it back', async () => {
+    const h = await run(On);
+    h.speed(1);
+    h.frame();
+    expect(heightFor('swing')).toBe('14');
+
+    h.speed(0.5);
+    h.frame();
+    expect(heightFor('swing')).toBe('10');
+
+    h.speed(1);
+    h.frame();
+
+    expect(heightFor('swing')).toBe('14');
+  });
+
+  it('opens at the same height as a strip without it', async () => {
+    await run(On);
+
+    expect((document.querySelector('[data-woc-frame="strip"]') as HTMLElement).style.height).toBe(
+      '62px',
+    );
+    expect(shown(speedRow())).toBe(false);
+  });
+
+  it('says it names no cause and publishes no speed', async () => {
+    const h = await run(On);
+    h.speed(0.6);
+    h.frame();
+
+    speedRow().dispatchEvent(new Event('pointerenter'));
+    const said = document.getElementById('woc-tooltip')?.textContent ?? '';
+
+    expect(said).toContain('no breakdown, so this names no cause');
+    expect(said).toContain('no yards-per-second');
+  });
+});
+
+// `offhandWeapon.speed` is the unhasted base and not the period: the game resets this clock
+// to `offhand.speed * swingIntervalMult(p)`, and neither melee haste nor the stance mastery
+// is on the wire.
+describe('the offhand swing timer', () => {
+  const On = { 'show-offhand-swing': true };
+  /** Duskfang Dirk, in the shape the self record carries a weapon. */
+  const Dirk = { min: 13, max: 21, speed: 1.6, dagger: true };
+  /** A second weapon of a DIFFERENT speed, so a stale period shows as a wrong fill. */
+  const Shiv = { min: 9, max: 15, speed: 1.2, dagger: true };
+  const dual = (weapon: Record<string, unknown>, itemId: string): Record<string, unknown> => ({
+    offhandWeapon: weapon,
+    offhandItemId: itemId,
+  });
+
+  it('is off by default, so a strip nobody asked to change keeps its shape', async () => {
+    const h = await run();
+
+    expect(h.drawn()).toEqual(['swing', 'gcd', 'cast', 'power']);
+  });
+
+  it('draws no row at all for a player holding nothing in the offhand', async () => {
+    const h = await run(On);
+
+    h.frame();
+
+    expect(shown(rowFor('oswing') as HTMLElement)).toBe(false);
+  });
+
+  // Asserted before any frame runs, since the first frame hides the row either way: the
+  // hidden row and the box stated for one fewer line have to agree.
+  it('opens at the same height as a strip without it, before any frame runs', async () => {
+    await run(On);
+
+    expect((document.querySelector('[data-woc-frame="strip"]') as HTMLElement).style.height).toBe(
+      '62px',
+    );
+    expect(shown(rowFor('oswing') as HTMLElement)).toBe(false);
+  });
+
+  // A shield fills `offhandItemId` and leaves the weapon null; the game derives dual-wield
+  // from the weapon alone.
+  it('draws no row for a shield, which fills the item id and not the weapon', async () => {
+    const h = await run(On);
+    h.self({ offhandWeapon: null, offhandItemId: 'bulwark_of_the_vale' });
+
+    h.frame();
+
+    expect(shown(rowFor('oswing') as HTMLElement)).toBe(false);
+  });
+
+  it('appears when an offhand is equipped mid-session', async () => {
+    const h = await run(On);
+    h.frame();
+    expect(shown(rowFor('oswing') as HTMLElement)).toBe(false);
+
+    h.self({ ...dual(Dirk, 'duskfang_dirk'), offhandSwingTimer: 1.6 });
+    h.frame();
+
+    expect(shown(rowFor('oswing') as HTMLElement)).toBe(true);
+    expect(h.labelOf('oswing')).toBe('Offhand');
+    expect(h.valueOf('oswing')).toBe('1.6s');
+  });
+
+  it('takes its line out of the box the other rows had', async () => {
+    const h = await run(On);
+    h.frame();
+    expect(heightFor('swing')).toBe('14');
+
+    h.self({ ...dual(Dirk, 'duskfang_dirk'), offhandSwingTimer: 1.6 });
+    h.frame();
+
+    // Five lines and their four gaps inside the 62px the frame opened at.
+    expect(heightFor('swing')).toBe('10');
+  });
+
+  it('runs its own clock, which is not the mainhand one', async () => {
+    const h = await run(On);
+
+    h.self({
+      ...dual(Dirk, 'duskfang_dirk'),
+      swingTimer: SWING_SPEED,
+      offhandSwingTimer: 0.8,
+    });
+    h.frame();
+
+    expect(h.valueOf('swing')).toBe('2.4s');
+    expect(h.valueOf('oswing')).toBe('0.8s');
+  });
+
+  // 1.6 seeded, 1.0 observed: without the relearn this bar tops out at five eighths.
+  it('learns the real period from the reset rather than trusting the weapon speed', async () => {
+    const h = await run(On);
+    h.self({ ...dual(Dirk, 'duskfang_dirk'), offhandSwingTimer: 0.8 });
+    h.frame();
+    expect(h.fillOf('oswing')).toBe('50.00%');
+
+    h.self({ offhandSwingTimer: 1 });
+    h.frame();
+    expect(h.fillOf('oswing')).toBe('100.00%');
+
+    h.self({ offhandSwingTimer: 0.25 });
+    h.frame();
+
+    expect(h.fillOf('oswing')).toBe('25.00%');
+  });
+
+  // The game decrements this clock BEFORE it checks whether you are attacking, so with the
+  // swing off it drains to zero and sits there.
+  it('says off when auto-attack is off, rather than sitting at zero', async () => {
+    const h = await run(On);
+
+    h.self({ ...dual(Dirk, 'duskfang_dirk'), offhandSwingTimer: 0, autoAttack: false });
+    h.frame();
+
+    expect(h.valueOf('oswing')).toBe('off');
+    expect(h.fillOf('oswing')).toBe('0.00%');
+  });
+
+  // The swap frame's timer must be LOWER than the frame before it: a timer jumping up reads
+  // as a swing landing and the relearn corrects it whether or not anything was discarded.
+  // 0.6 against the shiv's own 1.2 seed is half, and against the dirk's stale 1.6 is 37.5%.
+  it('throws the learned period away when the offhand is swapped', async () => {
+    const h = await run(On);
+    h.self({ ...dual(Dirk, 'duskfang_dirk'), offhandSwingTimer: 1.6 });
+    h.frame();
+    h.self({ offhandSwingTimer: 1.2 });
+    h.frame();
+    expect(h.fillOf('oswing')).toBe('75.00%');
+
+    h.self({ ...dual(Shiv, 'ratcatcher_shiv'), offhandSwingTimer: 0.6 });
+    h.frame();
+
+    expect(h.fillOf('oswing')).toBe('50.00%');
+  });
+
+  // The transition a key on the weapon's SPEED could not see. A discard falls back to the
+  // SEED, not a full bar: 0.4 remaining reads a quarter on a discard and a half on a period
+  // that survived.
+  it('throws it away across an unequip and a re-equip of the same weapon', async () => {
+    const h = await run(On);
+    h.self({ ...dual(Dirk, 'duskfang_dirk'), offhandSwingTimer: 0.2 });
+    h.frame();
+    // Jumping UP is the swing landing, and 0.8 is what this hand actually swings at.
+    h.self({ offhandSwingTimer: 0.8 });
+    h.frame();
+    h.self({ offhandSwingTimer: 0.4 });
+    h.frame();
+    expect(h.fillOf('oswing')).toBe('50.00%');
+
+    h.self({ offhandWeapon: null, offhandItemId: null });
+    h.frame();
+    h.self({ ...dual(Dirk, 'duskfang_dirk'), offhandSwingTimer: 0.4 });
+    h.frame();
+
+    expect(h.fillOf('oswing')).toBe('25.00%');
+  });
+
+  it('gives its line back when the offhand comes off', async () => {
+    const h = await run(On);
+    h.self({ ...dual(Dirk, 'duskfang_dirk'), offhandSwingTimer: 1.6 });
+    h.frame();
+    expect(heightFor('swing')).toBe('10');
+
+    h.self({ offhandWeapon: null, offhandItemId: null });
+    h.frame();
+
+    expect(shown(rowFor('oswing') as HTMLElement)).toBe(false);
+    expect(heightFor('swing')).toBe('14');
+  });
+
+  it('never reaches the target row', async () => {
+    const h = await run({ ...On, 'show-target-swing': true });
+    h.target(7003, { autoAttack: true, swingTimer: 3, offhandSwingTimer: 0.5 });
+
+    h.self({ ...dual(Dirk, 'duskfang_dirk'), offhandSwingTimer: 1.6 });
+    h.frame();
+
+    expect(h.drawn()).toEqual(['swing', 'oswing', 'tswing', 'gcd', 'cast', 'power']);
+    expect(h.valueOf('tswing')).toBe('3.0s');
+    expect(h.valueOf('oswing')).toBe('1.6s');
+  });
+
+  it('says the length starts as an estimate and is corrected by watching', async () => {
+    const h = await run(On);
+    h.self({ ...dual(Dirk, 'duskfang_dirk'), offhandSwingTimer: 1.6 });
+    h.frame();
+
+    rowFor('oswing')?.dispatchEvent(new Event('pointerenter'));
+    const said = document.getElementById('woc-tooltip')?.textContent ?? '';
+
+    expect(said).toContain('unhasted');
+    expect(said).toContain('corrected by watching one swing');
+  });
+});
+
+// The server sends `swing` only for an auto-attacking entity and the client reads presence
+// as `autoAttack`. No weapon speed rides it, so the row knows only what it watched.
+describe("the target's swing timer", () => {
+  const TargetId = 7001;
+  const SecondId = 7002;
+  const On = { 'show-target-swing': true };
+  /** A mob mid-swing: attacking, with time left on the clock. */
+  const swinging = (remaining: number): Record<string, unknown> => ({
+    autoAttack: true,
+    swingTimer: remaining,
+  });
+
+  it('is off by default, so an upgrade does not reshape a strip nobody asked to change', async () => {
+    const h = await run();
+
+    expect(h.drawn()).toEqual(['swing', 'gcd', 'cast', 'power']);
+  });
+
+  it('sits under your own swing when it is switched on', async () => {
+    const h = await run(On);
+
+    expect(h.drawn()).toEqual(['swing', 'tswing', 'gcd', 'cast', 'power']);
+  });
+
+  it('says there is no target rather than drawing a stalled bar', async () => {
+    const h = await run(On);
+
+    h.frame();
+
+    expect(h.valueOf('tswing')).toBe('no target');
+    expect(h.fillOf('tswing')).toBe('0.00%');
+    expect(h.labelOf('tswing')).toBe('Target');
+  });
+
+  // The server omits `swing` for an entity that is not auto-attacking, and so does every
+  // server older than 0.41.0.
+  it('says off for a target that is not auto-attacking', async () => {
+    const h = await run(On);
+    h.target(TargetId, { autoAttack: false, swingTimer: 0 });
+
+    h.frame();
+
+    expect(h.valueOf('tswing')).toBe('off');
+  });
+
+  // A corpse keeps its last swing value.
+  it('says dead for a target that has died mid-swing', async () => {
+    const h = await run(On);
+    h.target(TargetId, swinging(2));
+    h.frame();
+    expect(h.valueOf('tswing')).toBe('2.0s');
+
+    h.mob(TargetId, { dead: true });
+    h.frame();
+
+    expect(h.valueOf('tswing')).toBe('dead');
+  });
+
+  // A door is an entity with a swing field and no swing; the game excludes `object` by kind.
+  it('says off for a door or a crate', async () => {
+    const h = await run(On);
+    h.target(TargetId, { kind: 'object', autoAttack: true, swingTimer: 2 });
+
+    h.frame();
+
+    expect(h.valueOf('tswing')).toBe('off');
+  });
+
+  it('names the target, so the row says whose cadence it is measuring', async () => {
+    const h = await run(On);
+    h.target(TargetId, { name: 'Sableweb Lurker', ...swinging(2) });
+
+    h.frame();
+
+    expect(h.labelOf('tswing')).toBe('Sableweb Lurker');
+  });
+
+  it('starts full, since the length of a swing it has not seen is unknowable', async () => {
+    const h = await run(On);
+    h.target(TargetId, swinging(2.6));
+
+    h.frame();
+
+    expect(h.fillOf('tswing')).toBe('100.00%');
+  });
+
+  // Guessed 2.6, real 4: without the relearn this bar runs off the end of its own scale.
+  it('learns the real period from the reset edge and drains against it', async () => {
+    const h = await run(On);
+    h.target(TargetId, swinging(2.6));
+    h.frame();
+    h.mob(TargetId, swinging(0.2));
+    h.frame();
+
+    // The timer jumping UP is the swing landing, and the freshly armed value IS the period.
+    h.mob(TargetId, swinging(4));
+    h.frame();
+    expect(h.fillOf('tswing')).toBe('100.00%');
+
+    h.mob(TargetId, swinging(1));
+    h.frame();
+
+    expect(h.fillOf('tswing')).toBe('25.00%');
+  });
+
+  // Carrying 4 over would draw this add's full one-second swing as a quarter of a bar.
+  it('throws the learned period away when the target changes', async () => {
+    const h = await run(On);
+    h.target(TargetId, swinging(4));
+    h.frame();
+    h.mob(TargetId, swinging(2));
+    h.frame();
+    expect(h.fillOf('tswing')).toBe('50.00%');
+
+    h.target(SecondId, swinging(1));
+    h.frame();
+
+    expect(h.fillOf('tswing')).toBe('100.00%');
+    expect(h.labelOf('tswing')).toBe(`Mob${String(SecondId)}`);
+  });
+
+  it('throws it away when the target goes out of range and comes back', async () => {
+    const h = await run(On);
+    h.target(TargetId, swinging(4));
+    h.frame();
+
+    h.drop(TargetId);
+    h.frame();
+    expect(h.valueOf('tswing')).toBe('no target');
+
+    h.target(TargetId, swinging(1.5));
+    h.frame();
+
+    expect(h.fillOf('tswing')).toBe('100.00%');
+  });
+
+  it('goes back to saying nothing when the target is dropped', async () => {
+    const h = await run(On);
+    h.target(TargetId, swinging(2));
+    h.frame();
+
+    h.untarget();
+    h.frame();
+
+    expect(h.valueOf('tswing')).toBe('no target');
+    expect(h.fillOf('tswing')).toBe('0.00%');
+  });
+
+  // A row taking the player's swing would pass every case above that never sets one.
+  it('reads the target and not the player, when both are swinging', async () => {
+    const h = await run(On);
+    h.self({ swingTimer: SWING_SPEED });
+    h.target(TargetId, swinging(3));
+
+    h.frame();
+
+    expect(h.valueOf('swing')).toBe('2.4s');
+    expect(h.valueOf('tswing')).toBe('3.0s');
+  });
+
+  it('says the length is learned and that a switch discards it', async () => {
+    await run(On);
+
+    rowFor('tswing')?.dispatchEvent(new Event('pointerenter'));
+    const said = document.getElementById('woc-tooltip')?.textContent ?? '';
+
+    expect(said).toContain('No weapon speed is sent for anyone but you');
+    expect(said).toContain('Switching target throws that away');
   });
 });
 

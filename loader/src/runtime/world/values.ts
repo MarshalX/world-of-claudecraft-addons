@@ -34,6 +34,7 @@ import type { MailState } from './mail.ts';
 import type { MarketState } from './market.ts';
 import type { MatchInfo } from './match.ts';
 import type { PartyInfo } from './party-types.ts';
+import type { VaultState } from './vault.ts';
 
 export interface WorldValues {
   player: Entity | null;
@@ -141,6 +142,10 @@ export interface WorldValues {
   mailUnread: number | null;
   /** The deposit box, or why you cannot see it. Never null, like `market`. */
   bank: BankState;
+  /** The Materials Vault, or why you cannot see it. Banker-gated, like `bank`. */
+  vault: VaultState;
+  /** What crafting may draw from the vault where you stand, or null inside an instance. */
+  craftVaultStock: Readonly<Record<string, number>> | null;
   /** The buyback ring, most recent first. Ungated. */
   buyback: readonly InvSlot[] | null;
 }

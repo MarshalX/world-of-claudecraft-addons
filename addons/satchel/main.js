@@ -31,6 +31,14 @@
 // sends one anywhere else, so a parcel in the post is counted as unlocked and every line saying
 // so says which stores it counted. Nothing here can toggle one: `net` is read-only.
 //
+// THE VAULT IS A COUNT PER MATERIAL against one cap every material shares, with no slot budget,
+// no cell and no free-slot figure: only `special` is stacks, and nothing else in it may reach the
+// stack reader, or the Bags pane learns that a 400 stack exists and offers a merge into one. Its
+// counts fold into the Items pane, or every total there is short.
+//
+// THE BANK'S SPLIT IS SENT and the carried one is derived. `capacity - slots.length` offers room
+// the bank will refuse, so both panes go through one `freeSpace`, which prefers a sent split.
+//
 // A CELL is an entry and an ITEM is a total, and the two must never share an answer. Used slots
 // is `inventory.length` and never the sum of the counts, or a player carrying 300 ore is told
 // their 52 cells are overdrawn; the Items pane asks the opposite question and does sum.
@@ -46,6 +54,15 @@
 // alt's bags are drawn the way that alt arranged them. The observed stack maximum is a LOWER
 // BOUND and says so, since no published field carries one, which errs towards not promising room
 // that is not there.
+//
+// THAT ONE NUMBER IS NOT A FIT ANSWER: a carried bag is general or materials-only, so the cells
+// behind `bagCapacity` are two pools and a full general pool beside an empty reagent satchel
+// reads as room for anything. The game derives the split per render and stores it nowhere, so
+// `bags.json` (written by `generate.mjs`, regenerated on a game release) ships the facts behind
+// it: which bag ids are materials-only and how many cells each adds, and which item ids are
+// materials. `Free` is the general pool's headroom, what only a material can reach is its own
+// chip, and where the split cannot be derived the panel falls back to the pooled subtraction and
+// says so on the line.
 //
 // There is no sort and there cannot be one: sorting, merging, selling and withdrawing are all
 // commands and the loader sends none, so every tooltip describing something a player might want
@@ -91,11 +108,6 @@
 // only a kit widget can be told one. So the free-slot warning is carried twice: as a colour on
 // the figure, which is always on screen, and as the kit's own tone on the empty squares, which
 // are what the player is looking at when they wonder whether the next thing will fit.
-
-/** The backpack, the socket count and the ceiling, for the sentence that explains pooling. */
-const BACKPACK_SLOTS = 16;
-const BAG_SOCKETS = 4;
-const MAX_SLOTS = 72;
 
 /**
  * The square, and the floor a resize may take the grid to. No column count: the grid is a
@@ -162,8 +174,14 @@ const STAMP_REFRESH_MS = MINUTE_MS;
 /** One key per character per deployment; the rest is `characterKey()`. */
 const CHARACTER_PREFIX = 'char/';
 
-/** The three stores a character has, in the order every display lists them. */
-const SOURCES = ['bags', 'bank', 'mail'];
+/**
+ * The four stores a character has, in the order every display lists them. The vault is a count
+ * per material rather than a list of stacks: see `liveVault` and `addVaultPlaces`.
+ */
+const SOURCES = ['bags', 'bank', 'mail', 'vault'];
+
+/** Rungs the vault ladder has, which is what a bought count is out of. */
+const VAULT_RUNGS = 5;
 
 /**
  * The orders this pane can be read in, and every one of them exists because a question does.
@@ -293,6 +311,27 @@ const ART_NOTE = {
   text: 'Named from its art file, which is not always what the game calls it.',
   tone: 'muted',
 };
+
+/** The one kind of item this addon carries the game's own name for, and why it has one. */
+const BAG_NOTE = {
+  text: "Named from this addon's own bag table, read out of the game's item list.",
+  tone: 'muted',
+};
+
+/**
+ * The carried pool split, which no API here answers: see the header. Regenerate on a game
+ * release, because nothing on the wire, no 404 and no test says a bag's slot count moved.
+ */
+const POOLS_FILE = 'bags.json';
+/** Bag item id to what it adds and to which pool. Empty until the table lands. */
+const bagKinds = new Map();
+/** Every id the game counts as a material, which is what a materials-only bag will take. */
+const materialIds = new Set();
+/**
+ * The backpack's own cells, the socket count and the largest bag, zero until the table lands
+ * (`poolsKnown`). Never a literal here: a game release moves them and a stale one looks fine.
+ */
+const poolTable = { backpackSlots: 0, sockets: 0, biggest: 0, version: '' };
 
 /** Item id to what somebody published about it, plus who published it. */
 const names = new Map();
@@ -438,7 +477,8 @@ function lockedUnits(entry, count) {
 /**
  * The pooled total, or null before the world can answer. Read rather than derived: the only
  * way to compute one would be to know how many cells each equipped bag adds, which is item
- * content nothing here can reach.
+ * content nothing here can reach. It is still the right figure for `used / total`, which is a
+ * statement about how full the bags are rather than about what will fit in them.
  */
 function capacity() {
   const total = woc.world.bagCapacity;
@@ -448,12 +488,111 @@ function capacity() {
   return null;
 }
 
+/** Whether the shipped table has been read at all, which every split answer is gated on. */
+function poolsKnown() {
+  return poolTable.backpackSlots > 0 && bagKinds.size > 0;
+}
+
+function isMaterial(itemId) {
+  return materialIds.has(itemId);
+}
+
+/**
+ * The two pool budgets as the game splits them (src/sim/bag_pools.ts poolCapacityOf): the
+ * backpack plus every unrestricted bag is general, every materials-only bag is materials. Null
+ * on a bag id the table has no row for, never a guessed pool: that is a game release ahead of a
+ * regeneration, and the pane says so.
+ */
+function poolsOf(sockets) {
+  if (!poolsKnown()) {
+    return null;
+  }
+  const pools = { general: poolTable.backpackSlots, materials: 0, unknown: '' };
+  for (const itemId of sockets) {
+    if (itemId !== '') {
+      const bag = bagKinds.get(itemId);
+      if (bag === undefined) {
+        pools.unknown = itemId;
+      } else if (bag.materialsOnly) {
+        pools.materials += bag.slots;
+      } else {
+        pools.general += bag.slots;
+      }
+    }
+  }
+  return pools;
+}
+
+/**
+ * Which pool each cell in use is charged to, the way the game does it (src/sim/bag_pools.ts
+ * poolOccupancyOf): materials fill the materials pool first and the spill joins the general one.
+ */
+function occupancyOf(stacks, pools) {
+  let material = 0;
+  for (const stack of stacks) {
+    if (isMaterial(entryId(stack))) {
+      material += 1;
+    }
+  }
+  const materialsUsed = Math.min(material, pools.materials);
+  return { generalUsed: stacks.length - materialsUsed, materialsUsed };
+}
+
+/** One shape for every arm, so a caller reads the same five fields whichever answered. */
+function spaceOf(free, materials, reason, unknown) {
+  return { free, materials, split: reason === '', reason, unknown };
+}
+
+/**
+ * The free-slot answer for any store. `free` is the general pool's headroom, the smallest answer
+ * true of any item, and `materials` is the extra only a material reaches, kept apart because
+ * "nothing else fits and ore does" is a state one number cannot say. `split` is false when the
+ * pools could not be derived and `free` is then the pooled subtraction; `reason` says which of
+ * the four ways, since only the two stale-table ones are worth a sentence on screen.
+ */
+function freeSpace(snap) {
+  const pooled = Math.max(0, snap.total - snap.used);
+  // A sent split first, which is the bank's: nothing to derive and nothing to go stale.
+  const sent = snap.pools ?? null;
+  if (sent !== null) {
+    const free = Math.max(0, sent.general - sent.generalUsed);
+    return spaceOf(free, Math.max(0, sent.materials - sent.materialsUsed), '', '');
+  }
+  // Only the carried bags record `sockets`. The bank's are `socketBags`, because a bank list
+  // reaching this path is measured against the backpack's base and reads as a stale table.
+  if (!Array.isArray(snap.sockets)) {
+    return spaceOf(pooled, 0, 'no-sockets', '');
+  }
+  const pools = poolsOf(snap.sockets);
+  if (pools === null) {
+    return spaceOf(pooled, 0, 'no-table', '');
+  }
+  if (pools.unknown !== '') {
+    return spaceOf(pooled, 0, 'unknown-bag', pools.unknown);
+  }
+  // A derived budget that disagrees with the game's is a stale table, and which bag moved is
+  // not knowable from here.
+  if (pools.general + pools.materials !== snap.total) {
+    return spaceOf(pooled, 0, 'budget', '');
+  }
+  const used = occupancyOf(snap.stacks, pools);
+  const free = Math.max(0, pools.general - used.generalUsed);
+  return spaceOf(free, Math.max(0, pools.materials - used.materialsUsed), '', '');
+}
+
+/** The live bags' general headroom, which is what the warning is about. Null before the world. */
 function freeCells() {
   const total = capacity();
   if (total === null) {
     return null;
   }
-  return Math.max(0, total - inventory().length);
+  const stacks = inventory();
+  return freeSpace({
+    total,
+    used: stacks.length,
+    stacks,
+    sockets: parseSockets(woc.world.bags),
+  }).free;
 }
 
 /**
@@ -529,7 +668,19 @@ function artName(itemId) {
  * as a bug in the rows around it. The tooltip says which was used.
  */
 function nameOf(itemId) {
-  return known(itemId)?.name ?? artName(itemId) ?? woc.fmt.titleCase(itemId);
+  return known(itemId)?.name ?? bagName(itemId) ?? artName(itemId) ?? woc.fmt.titleCase(itemId);
+}
+
+/**
+ * A bag's own name from the shipped table. Ranked above the art name and below a publisher,
+ * because it is read from the game's item table rather than off a picture's file name.
+ */
+function bagName(itemId) {
+  const name = bagKinds.get(itemId)?.name ?? '';
+  if (name === '') {
+    return null;
+  }
+  return name;
 }
 
 /**
@@ -804,6 +955,12 @@ function parseStack(value) {
   if (value?.instance?.locked === true || value?.locked === true) {
     stack.locked = true;
   }
+  // The recipe that minted it, written only where present, like the lock: it is what tells two
+  // vault rows of one item id apart.
+  const recipe = text(value?.craftedRecipeId);
+  if (recipe !== '') {
+    stack.recipe = recipe;
+  }
   return stack;
 }
 
@@ -881,9 +1038,33 @@ function emptyBags() {
   return { ...baseSnapshot(), sockets: [] };
 }
 
-/** The bank's budget rides with it, since what an expansion costs depends on the character. */
+/**
+ * The bank's budget rides with it, since what an expansion costs depends on the character.
+ * `pools` is the split the server sends; null on a record stored before this addon read it,
+ * which reads back as the pooled figure with the pane saying so.
+ */
 function emptyBank() {
-  return { ...baseSnapshot(), bought: 0, granted: 0, next: null };
+  return {
+    ...baseSnapshot(),
+    bought: 0,
+    granted: 0,
+    next: null,
+    pools: null,
+    // Never `sockets`: `freeSpace` derives a split from that field against the backpack's base,
+    // and a bank list reaching it reports a stale table.
+    socketBags: [],
+    unlocked: 0,
+    nextSocket: null,
+  };
+}
+
+/**
+ * The one store with no slot budget: `stock` is a count per material against `cap`, one cap
+ * shared by all, and `stacks` holds the identity-bearing rows alone. `used` and `total` stay at
+ * zero, and every display reads `stock` instead.
+ */
+function emptyVault() {
+  return { ...baseSnapshot(), stock: [], upgrades: 0, cap: 0, next: null };
 }
 
 /** The mailbox's terms ride with it for the same reason the bank's do. */
@@ -897,6 +1078,7 @@ const SOURCE_EMPTY = new Map([
   ['bags', emptyBags],
   ['bank', emptyBank],
   ['mail', emptyMail],
+  ['vault', emptyVault],
 ]);
 
 function emptySource(source) {
@@ -921,6 +1103,59 @@ function parseBank(value) {
   const snap = parseBase(value, emptyBank());
   snap.bought = numberOr(value?.bought, 0);
   snap.granted = numberOr(value?.granted, 0);
+  snap.next = expansionCost(value?.next);
+  snap.pools = parsePools(value?.pools);
+  snap.socketBags = parseSockets(value?.socketBags);
+  snap.unlocked = numberOr(value?.unlocked, 0);
+  snap.nextSocket = expansionCost(value?.nextSocket);
+  return snap;
+}
+
+/**
+ * A recorded split, or null. All four numbers or none: a half-read split is a figure no store
+ * ever had.
+ */
+function parsePools(value) {
+  if (typeof value !== 'object' || value === null) {
+    return null;
+  }
+  const pools = {
+    general: numberOr(value.general, -1),
+    materials: numberOr(value.materials, -1),
+    generalUsed: numberOr(value.generalUsed, -1),
+    materialsUsed: numberOr(value.materialsUsed, -1),
+  };
+  if (Object.values(pools).some((one) => one < 0)) {
+    return null;
+  }
+  return pools;
+}
+
+/**
+ * One row of vault stock, checked. A zero count is dropped: the game holds an absent material at
+ * zero, so a zero row and no row are the same fact.
+ */
+function parseStockRow(value) {
+  const itemId = text(value?.itemId);
+  const count = numberOr(value?.count, 0);
+  if (itemId === '' || count <= 0) {
+    return null;
+  }
+  return { itemId, count };
+}
+
+function parseStock(value) {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value.map(parseStockRow).filter((row) => row !== null);
+}
+
+function parseVault(value) {
+  const snap = parseBase(value, emptyVault());
+  snap.stock = parseStock(value?.stock);
+  snap.upgrades = numberOr(value?.upgrades, 0);
+  snap.cap = numberOr(value?.cap, 0);
   snap.next = expansionCost(value?.next);
   return snap;
 }
@@ -950,6 +1185,7 @@ const SOURCE_PARSERS = new Map([
   ['bags', parseBags],
   ['bank', parseBank],
   ['mail', parseMail],
+  ['vault', parseVault],
 ]);
 
 function parseSource(source, value) {
@@ -984,7 +1220,12 @@ function emptyRecord(key) {
     copper: 0,
     at: 0,
     equipped: [],
-    sources: { bags: emptyBags(), bank: emptyBank(), mail: emptyMail() },
+    sources: {
+      bags: emptyBags(),
+      bank: emptyBank(),
+      mail: emptyMail(),
+      vault: emptyVault(),
+    },
   };
 }
 
@@ -1118,7 +1359,47 @@ function liveBank(info, now) {
   snap.bought = numberOr(info.purchasedSlots, 0);
   snap.granted = numberOr(info.bonusSlots, 0);
   snap.next = expansionCost(info.nextExpansionCost);
+  snap.pools = livePools(info);
+  snap.socketBags = parseSockets(info.socketBags);
+  snap.unlocked = numberOr(info.socketsUnlocked, 0);
+  snap.nextSocket = expansionCost(info.nextSocketCost);
   return snap;
+}
+
+/** The bank's own pool split, or null on a payload that does not carry one. */
+function livePools(info) {
+  return parsePools({
+    general: info.generalCapacity,
+    materials: info.materialsCapacity,
+    generalUsed: info.generalUsed,
+    materialsUsed: info.materialsUsed,
+  });
+}
+
+/**
+ * The vault, which the game sends as a record keyed by material id. Sorted by id on the way in
+ * rather than at paint: the record round-trips through the server's database and comes back
+ * re-ordered, and sorting here means the stored copy is sorted too. `special` alone becomes
+ * `stacks`: the counts in `stock` must never reach the stack maximum the Bags pane merges
+ * against.
+ */
+function liveVault(info, now) {
+  const snap = emptyVault();
+  snap.at = now;
+  snap.stacks = parseStacks(info.special);
+  snap.stock = stockRows(info.stock);
+  snap.upgrades = numberOr(info.upgrades, 0);
+  snap.cap = numberOr(info.perMaterialCap, 0);
+  snap.next = expansionCost(info.nextUpgradeCost);
+  return snap;
+}
+
+function stockRows(stock) {
+  if (typeof stock !== 'object' || stock === null) {
+    return [];
+  }
+  const rows = Object.entries(stock).map(([itemId, count]) => parseStockRow({ itemId, count }));
+  return rows.filter((row) => row !== null).sort((a, b) => a.itemId.localeCompare(b.itemId));
 }
 
 /**
@@ -1195,15 +1476,36 @@ function syncLive() {
     record.sources.mail = liveMail(mail.info, now);
     holdBodies(mail.info.messages);
   }
+  // Its own status, never the bank's: a vault payload the game cannot decode is dropped to null
+  // and arrives as `away` while the bank stays `near`, and a vault written off the bank's status
+  // records an empty vault over a full one.
+  const { vault } = woc.world;
+  if (vault.status === 'near' && vault.info !== null) {
+    record.sources.vault = liveVault(vault.info, now);
+  }
   records.set(key, record);
   keep(key, record);
 }
 
-/** One store's content, as a string that changes exactly when the content does. */
+/**
+ * One store's content, as a string that changes exactly when the content does. `stock` and the
+ * budget are in it because a vault has no `used` or `total` and rarely any `stacks`, so without
+ * them its signature is a constant and a deposit is never written down.
+ */
 function snapshotSignature(snap) {
   const stacks = snap.stacks.map((s) => `${s.itemId}x${String(s.count)}@${String(s.slot ?? -1)}`);
   const letters = snap.letters?.map((l) => `${l.id}:${String(l.read)}`) ?? [];
-  return `${String(snap.used)}/${String(snap.total)}|${stacks.join(',')}|${letters.join(',')}`;
+  const stock = snap.stock?.map((row) => `${row.itemId}x${String(row.count)}`) ?? [];
+  const budget = `${String(snap.cap ?? 0)}:${String(snap.upgrades ?? 0)}:${socketText(snap)}`;
+  return (
+    `${String(snap.used)}/${String(snap.total)}|${stacks.join(',')}|${letters.join(',')}` +
+    `|${stock.join(',')}|${budget}`
+  );
+}
+
+/** The bank's own bags and how many of its sockets are open, which nothing else here carries. */
+function socketText(snap) {
+  return `${String(snap.unlocked ?? 0)}:${(snap.socketBags ?? []).join('/')}`;
 }
 
 function recordSignature(record) {
@@ -1611,6 +1913,7 @@ const panes = new Map([
   ['items', fills(column('woc-satchel-pane'))],
   ['bags', fills(column('woc-satchel-pane'))],
   ['bank', fills(column('woc-satchel-pane'))],
+  ['vault', fills(column('woc-satchel-pane'))],
   ['mail', fills(column('woc-satchel-pane'))],
   ['roster', fills(column('woc-satchel-pane'))],
 ]);
@@ -1618,8 +1921,8 @@ for (const [name, pane] of panes) {
   pane.dataset.pane = name;
 }
 
-/** The three panes the character selector applies to. The other two span characters. */
-const DETAIL_PANES = new Set(['bags', 'bank', 'mail']);
+/** The four panes the character selector applies to. The other two span characters. */
+const DETAIL_PANES = new Set(['bags', 'bank', 'vault', 'mail']);
 
 /**
  * The character selector, above the panes it applies to. Rebuilt only when the list of
@@ -1641,6 +1944,8 @@ const tabs = woc.ui.tabs({
     { id: 'items', label: 'Items' },
     { id: 'bags', label: 'Bags' },
     { id: 'bank', label: 'Bank' },
+    // Beside the Bank, where the game puts it.
+    { id: 'vault', label: 'Vault' },
     { id: 'mail', label: 'Mail' },
     { id: 'roster', label: 'Roster' },
   ],
@@ -1775,11 +2080,16 @@ function paintPicker() {
 const itemsPane = panes.get('items');
 const bagsPane = panes.get('bags');
 const bankPane = panes.get('bank');
+const vaultPane = panes.get('vault');
 const mailPane = panes.get('mail');
 const rosterPane = panes.get('roster');
 
 const bagGrid = createGrid('bags');
 const bankGrid = createGrid('bank');
+/** The bank's own socketed bags, four squares, drawn as the item cells they are. */
+const bankSocketGrid = createGrid('bank-sockets');
+/** The vault's identity-bearing rows, which are the only part of a vault that IS stacks. */
+const vaultGrid = createGrid('vault');
 
 /**
  * Three controls on ONE wrapping line, which is lorebind's `findStrip` down to the flex
@@ -1924,6 +2234,12 @@ const bagsAgeLine = wrapping(line(bagsStrip, 'bags-age'));
 const slotsStat = stat(bagsStrip, 'slots', 'Slots');
 // The same pair of words the Roster strip uses for the same pair of figures.
 const freeStat = stat(bagsStrip, 'free', 'Free');
+/**
+ * Beside `Free` rather than added into it: `Free` is what anything will fit in, and a reagent
+ * satchel's headroom is not. Drawn only for a character carrying one, so a chip reading 0 is
+ * not a permanent answer to a question nobody asked.
+ */
+const materialsStat = stat(bagsStrip, 'materials', 'Materials');
 const marksStat = stat(bagsStrip, 'marks', 'Marked');
 const socketsStat = stat(bagsStrip, 'sockets', 'Sockets');
 const bagsWorthStat = stat(bagsStrip, 'bags-worth', 'Worth');
@@ -1956,9 +2272,33 @@ const bankWorthStat = stat(bankStrip, 'bank-worth', 'Worth');
 // context for a store that holds no money at all, and the pane that needs it most is an ALT's
 // bank, where the coin figure was three tabs away in the roster.
 const bankPurseStat = stat(bankStrip, 'bank-purse', 'Carrying');
-bankBody.appendChild(bankGrid.el);
+// The same two chips the Bags pane uses, read off the wire rather than derived.
+const bankMaterialsStat = stat(bankStrip, 'bank-materials', 'Materials');
+// Unlocking a socket adds no slots, so this chip is the only figure that reports the purchase.
+const bankSocketsStat = stat(bankStrip, 'bank-sockets', 'Sockets');
+bankBody.append(bankSocketGrid.el, bankGrid.el);
 bankPane.appendChild(bankBody);
 const bankNote = line(bankPane, 'bank-note');
+
+// The vault, laid out like the Bank. Two lists: a count per material against the shared cap is
+// a bar, and an identity-bearing stack is a square.
+const vaultBody = fills(column('woc-satchel-vault'));
+const vaultStrip = strip(vaultBody, 'vault-strip');
+const vaultAgeLine = wrapping(line(vaultStrip, 'vault-age'));
+const vaultKindsStat = stat(vaultStrip, 'vault-kinds', 'Materials');
+const vaultHeldStat = stat(vaultStrip, 'vault-held', 'Copies');
+const vaultCapStat = stat(vaultStrip, 'vault-cap', 'Cap each');
+const vaultRungsStat = stat(vaultStrip, 'vault-rungs', 'Rungs');
+const vaultTermsStat = stat(vaultStrip, 'vault-terms', 'Upgrade');
+const vaultWorthStat = stat(vaultStrip, 'vault-worth', 'Worth');
+const vaultRows = group('vault', (key) => vaultRowTip(key));
+scrolls(vaultRows.el);
+vaultBody.append(vaultRows.el, vaultGrid.el);
+vaultPane.appendChild(vaultBody);
+// Whether crafting can draw from the vault where the player is standing: live-only, never
+// stored, since it is about where somebody is rather than what they own.
+const vaultDrawLine = wrapping(line(vaultPane, 'vault-draw'));
+const vaultNote = line(vaultPane, 'vault-note');
 
 const mailStateLine = line(mailPane, 'mail-state');
 const mailRows = group('mail', (key) => mailTip(key));
@@ -2052,7 +2392,16 @@ rosterPane.appendChild(forget);
 
 fixed(tabs.el);
 fixed(pickerRow);
-frame.body.append(tabs.el, pickerRow, itemsPane, bagsPane, bankPane, mailPane, rosterPane);
+frame.body.append(
+  tabs.el,
+  pickerRow,
+  itemsPane,
+  bagsPane,
+  bankPane,
+  vaultPane,
+  mailPane,
+  rosterPane,
+);
 showPane(tabs.active());
 
 /**
@@ -2075,19 +2424,43 @@ function buildIndex() {
 function addPlaces(index, record, source) {
   const snap = record.sources[source];
   for (const [itemId, counts] of stacksIn(snap.stacks)) {
-    const row = index.get(itemId) ?? { total: 0, locked: 0, places: [] };
-    row.total += counts.held;
-    row.locked += counts.locked;
-    row.places.push({
-      key: record.key,
-      name: displayName(record),
-      source,
-      count: counts.held,
-      cells: counts.cells,
-      locked: counts.locked,
-      at: snap.at,
-    });
-    index.set(itemId, row);
+    addPlace(index, { record, source, snap, itemId }, counts);
+  }
+  if (source === 'vault') {
+    addVaultPlaces(index, record, snap);
+  }
+}
+
+/** One place under one row, which every store adds through so the totals cannot diverge. */
+function addPlace(index, at, counts) {
+  const row = index.get(at.itemId) ?? { total: 0, locked: 0, places: [] };
+  row.total += counts.held;
+  row.locked += counts.locked;
+  row.places.push({
+    key: at.record.key,
+    name: displayName(at.record),
+    source: at.source,
+    count: counts.held,
+    cells: counts.cells,
+    locked: counts.locked,
+    at: at.snap.at,
+  });
+  index.set(at.itemId, row);
+}
+
+/**
+ * The vault's counts, into the Items totals. NOT through `stacksIn`: it records the largest
+ * stack it sees and the Bags pane merges against that maximum, so a 400-copper count would offer
+ * a merge into a stack that cannot exist. `cells: 0` is exact, since a vault count occupies no
+ * cell, and nothing here can be locked.
+ */
+function addVaultPlaces(index, record, snap) {
+  for (const row of snap.stock) {
+    addPlace(
+      index,
+      { record, source: 'vault', snap, itemId: row.itemId },
+      { held: row.count, cells: 0, locked: 0 },
+    );
   }
 }
 
@@ -2321,9 +2694,20 @@ function lockedClause(locked) {
 function placeLines(places) {
   return places.map((spot) => ({
     text:
-      `${spot.name}, ${spot.source}: ${String(spot.count)} in ${woc.fmt.count(spot.cells, 'cell')}` +
+      `${spot.name}, ${spot.source}: ${String(spot.count)}${cellClause(spot)}` +
       `${lockedClause(spot.locked)}, read ${agoText(spot.at)}`,
   }));
+}
+
+/**
+ * How many cells the copies are spending. A vault count occupies none, so zero drops the clause
+ * rather than printing "in 0 cells"; tested on the figure rather than the source name.
+ */
+function cellClause(spot) {
+  if (spot.cells <= 0) {
+    return ' held';
+  }
+  return ` in ${woc.fmt.count(spot.cells, 'cell')}`;
 }
 
 /**
@@ -2648,30 +3032,79 @@ function heldTip() {
 }
 woc.ui.tooltip(heldStat.el, heldTip);
 
+/**
+ * How the budget is arrived at. Before the table lands there is no ceiling to state, so that
+ * half of the sentence is left off rather than guessed.
+ */
+function poolingLine() {
+  const start = `Pooled: ${String(poolTable.backpackSlots)} in the backpack plus whatever your ${String(poolTable.sockets)} bag sockets add`;
+  if (poolTable.biggest <= 0) {
+    return `${start}.`;
+  }
+  const ceiling = poolTable.backpackSlots + poolTable.sockets * poolTable.biggest;
+  return `${start}, up to ${String(ceiling)} with the largest bag in every one.`;
+}
+
 function capacityTip() {
-  return {
-    title: 'Slots',
-    lines: [
-      `Pooled: ${String(BACKPACK_SLOTS)} in the backpack plus whatever your ${String(BAG_SOCKETS)} bag sockets add, up to ${String(MAX_SLOTS)}.`,
-      { text: 'One cell is one stack, however much is in it.', tone: 'muted' },
-      { text: 'Every free cell is a dashed square in the grid below.', tone: 'muted' },
-      {
-        text: 'Nothing here can sort, move or sell: the loader never sends a command.',
-        tone: 'muted',
-      },
-    ],
-  };
+  const lines = [
+    { text: 'One cell is one stack, however much is in it.', tone: 'muted' },
+    { text: 'Every free cell is a dashed square in the grid below.', tone: 'muted' },
+    {
+      text: 'Nothing here can sort, move or sell: the loader never sends a command.',
+      tone: 'muted',
+    },
+  ];
+  if (poolsKnown()) {
+    lines.unshift(poolingLine());
+  }
+  return { title: 'Slots', lines };
 }
 woc.ui.tooltip(slotsStat.el, capacityTip);
 
+/**
+ * Which of the two readings the `Free` figure is; the pooled fallback is the one that has to
+ * announce itself.
+ */
+function freeReadingLine(space, source) {
+  if (space.split) {
+    return {
+      text: 'What anything will fit in. A reagent satchel holds materials only, and its room is counted separately.',
+      tone: 'muted',
+    };
+  }
+  if (source !== 'bags') {
+    // The bank's split is read, so only a record stored before this addon recorded one reaches
+    // here, and the sentence is about the reading rather than the store.
+    return {
+      text: 'Every cell. This reading was taken before this addon recorded the split, so a materials-only satchel socketed here is counted in with the rest.',
+      tone: 'muted',
+    };
+  }
+  return {
+    text: `Every cell pooled together, because ${unreadableReason(space)} So a reagent satchel's room is counted in here, and only materials can use it.`,
+    tone: 'muted',
+  };
+}
+
+/** Which of the three ways the split can be unavailable this is, named rather than generalised. */
+function unreadableReason(space) {
+  if (space.unknown !== '') {
+    return `this addon does not recognise ${nameOf(space.unknown)} and cannot say which pool it feeds.`;
+  }
+  if (!poolsKnown()) {
+    return 'the bag table this addon ships has not been read yet.';
+  }
+  return 'the bag table this addon ships disagrees with the game about how many cells these bags hold.';
+}
+
 /** What the colour on the free figure means, said in words for anyone who cannot see it. */
 function freeTipFor(source) {
-  const snap = viewedSource(source);
-  const free = Math.max(0, snap.total - snap.used);
+  const space = freeSpace(viewedSource(source));
   return {
     title: 'Free',
     lines: [
-      `${woc.fmt.count(free, 'cell')} with nothing in them.`,
+      `${woc.fmt.count(space.free, 'cell')} with nothing in them.`,
+      freeReadingLine(space, source),
       {
         text: `The figure turns at ${woc.fmt.count(threshold(), 'cell')} left, which is your own setting, and the last free squares in the grid turn with it.`,
         tone: 'muted',
@@ -2680,6 +3113,29 @@ function freeTipFor(source) {
   };
 }
 woc.ui.tooltip(freeStat.el, () => freeTipFor('bags'));
+
+/**
+ * What only a material can reach. The materials set is the game's derivation over its content
+ * tables rather than a rule a player can guess, so the tooltip gives the count.
+ */
+function materialsTip() {
+  const space = freeSpace(viewedSource('bags'));
+  return {
+    title: 'Materials',
+    lines: [
+      `${woc.fmt.count(space.materials, 'cell')} in a reagent satchel, which nothing but a material will go into.`,
+      {
+        text: `Ores, herbs, hides, cloth, logs, fish and reagents: ${String(materialIds.size)} items the game counts as materials, read from its own tables at ${poolTable.version}.`,
+        tone: 'muted',
+      },
+      {
+        text: 'A material takes one of these before it takes a general cell, so this room is spent first.',
+        tone: 'muted',
+      },
+    ],
+  };
+}
+woc.ui.tooltip(materialsStat.el, materialsTip);
 
 function socketLine(itemId, at) {
   const label = `Socket ${String(at + 1)}`;
@@ -2901,6 +3357,9 @@ function nameLines(itemId) {
   if (record !== null) {
     return [itemFacts(record), { text: `Named by ${record.from}`, tone: 'muted' }];
   }
+  if (bagName(itemId) !== null) {
+    return [BAG_NOTE];
+  }
   if (artName(itemId) !== null) {
     return [ART_NOTE];
   }
@@ -2970,10 +3429,23 @@ function priceLines(itemId, count) {
   ];
 }
 
+/**
+ * What made this stack, where the game kept it. The one thing that tells two vault squares of
+ * the same item id apart.
+ */
+function recipeLines(entry) {
+  const recipe = text(entry?.recipe);
+  if (recipe === '') {
+    return [];
+  }
+  return [{ text: `Crafted from ${woc.fmt.titleCase(recipe)}, which is why it is its own row.` }];
+}
+
 function itemTip(view, entry) {
   const itemId = entryId(entry);
   const count = entryCount(entry);
   const lines = [`Item id: ${itemId}`, `${String(count)} in this cell`];
+  lines.push(...recipeLines(entry));
   lines.push(...nameLines(itemId));
   lines.push(...priceLines(itemId, count));
   lines.push(...markLines(view, itemId));
@@ -3309,27 +3781,58 @@ function whoseText(record) {
   return `${displayName(record)}: `;
 }
 
+/**
+ * The `Materials` figure, or nothing, which takes the chip off the strip. No satchel and a
+ * satchel this addon cannot place both read blank, and the `Free` tooltip says which.
+ */
+function materialsText(space) {
+  if (!space.split || space.materials <= 0) {
+    return '';
+  }
+  return String(space.materials);
+}
+
 function paintBagsFigures(snap) {
-  const free = Math.max(0, snap.total - snap.used);
+  const space = freeSpace(snap);
   setStat(slotsStat, `${String(snap.used)} / ${String(snap.total)}`);
-  setStat(freeStat, String(free));
-  setStatTone(freeStat, toneFor(free));
+  setStat(freeStat, String(space.free));
+  setStatTone(freeStat, toneFor(space.free));
+  setStat(materialsStat, materialsText(space));
 }
 
 /** `1 / 4`, with what is in each of them one hover away. See `socketTip`. */
 function socketsText(snap) {
   const filled = snap.sockets.filter((itemId) => itemId !== '').length;
-  const total = Math.max(snap.sockets.length, BAG_SOCKETS);
+  const total = Math.max(snap.sockets.length, poolTable.sockets);
   return `${String(filled)} / ${String(total)}`;
+}
+
+// On the line rather than only in the tooltip: a figure a player acts on without hovering has
+// to carry its own qualification.
+const POOLED_TAIL = ', so the free count is every cell pooled together.';
+
+// Only the two stale-table reasons speak: no sockets owes no sentence, and a table still being
+// fetched resolves on its own.
+const SPLIT_NOTES = new Map([
+  ['unknown-bag', ` A bag here is not recognised${POOLED_TAIL}`],
+  [
+    'budget',
+    ` These bags hold a different number of cells than this addon's table says${POOLED_TAIL}`,
+  ],
+]);
+
+function splitNoteFor(snap) {
+  return SPLIT_NOTES.get(freeSpace(snap).reason) ?? '';
 }
 
 /** Nobody is playing, or nobody has been here: no figures and one sentence. */
 function clearBags() {
-  paintGrid(bagGrid, [], emptyView(), MAX_SLOTS);
+  // No cells to colour, so the free count the tone would come from is about nothing.
+  paintGrid(bagGrid, [], emptyView(), 0);
   say(bagsNote, noRecordText());
   say(bagsAgeLine, '');
   say(recentLine, '');
-  for (const chip of [slotsStat, freeStat, marksStat, socketsStat, bagsWorthStat]) {
+  for (const chip of [slotsStat, freeStat, materialsStat, marksStat, socketsStat, bagsWorthStat]) {
     setStat(chip, '');
   }
   woc.ui.show(purse.el, false);
@@ -3346,9 +3849,9 @@ function paintBags() {
   const snap = record.sources.bags;
   paintBagsFigures(snap);
   const view = readStore(snap.stacks, new Set(record.equipped), new Set());
-  paintGrid(bagGrid, cellPlan(snap), view, Math.max(0, snap.total - snap.used));
+  paintGrid(bagGrid, cellPlan(snap), view, freeSpace(snap).free);
   say(bagsNote, '');
-  say(bagsAgeLine, `${whoseText(record)}${ageText(snap, live)}`);
+  say(bagsAgeLine, `${whoseText(record)}${ageText(snap, live)}${splitNoteFor(snap)}`);
   setStat(marksStat, marksText(view));
   setStat(socketsStat, socketsText(snap));
   woc.ui.show(purse.el, true);
@@ -3391,8 +3894,21 @@ function expansionLines(snap) {
     lines.push('Every expansion has been bought.');
     return lines;
   }
-  lines.push(`The next expansion costs ${money(snap.next)}.`);
+  lines.push(`The next expansion costs ${money(snap.next)}${claudiumClause()}`);
   return lines;
+}
+
+/**
+ * The Claudium price beside the gold one. Absent rather than null on the wire, since the server
+ * joins it from a service that can be unreachable, and absent means the gold price is the only
+ * one to show, not that the rung cannot be bought. Live-only, never recorded.
+ */
+function claudiumClause() {
+  const price = woc.world.bank.info?.nextRungClaudiumPrice;
+  if (typeof price !== 'number' || !Number.isFinite(price)) {
+    return '.';
+  }
+  return `, or ${String(price)} Claudium.`;
 }
 
 /** The per-source breakdown, skipping a source that has granted nothing yet. */
@@ -3487,12 +4003,16 @@ function paintBank() {
   woc.ui.show(bankBody, drawn);
   say(bankNote, bankNoteText(record, snap, live));
   if (!drawn) {
-    paintGrid(bankGrid, [], emptyView(), MAX_SLOTS);
+    // No cells to colour, so the free count the tone would come from is about nothing.
+    paintGrid(bankGrid, [], emptyView(), 0);
     say(bankAgeLine, '');
+    paintGrid(bankSocketGrid, [], emptyView(), 0);
     for (const chip of [
       bankSlotsStat,
       bankFreeStat,
+      bankMaterialsStat,
       bankMarksStat,
+      bankSocketsStat,
       bankTermsStat,
       bankPurseStat,
       bankWorthStat,
@@ -3501,22 +4021,173 @@ function paintBank() {
     }
     return;
   }
-  const free = Math.max(0, snap.total - snap.used);
+  // Never `capacity - slots.length`: the game's own source says it is not a fit answer, since a
+  // general deposit can be refused while the materials pool still has room.
+  const space = freeSpace(snap);
   setStat(bankSlotsStat, `${String(snap.used)} / ${String(snap.total)}`);
-  setStat(bankFreeStat, String(free));
-  setStatTone(bankFreeStat, toneFor(free));
+  setStat(bankFreeStat, String(space.free));
+  setStatTone(bankFreeStat, toneFor(space.free));
+  setStat(bankMaterialsStat, materialsText(space));
   const carried = new Set(stacksIn(record.sources.bags.stacks).keys());
   const view = readStore(snap.stacks, new Set(record.equipped), carried);
-  paintGrid(bankGrid, cellPlan(snap), view, free);
+  paintGrid(bankGrid, cellPlan(snap), view, space.free);
+  paintGrid(bankSocketGrid, socketPlan(snap), emptyView(), 0);
   say(bankAgeLine, `${whoseText(record)}${ageText(snap, live && isNear(woc.world.bank))}`);
   setStat(bankMarksStat, marksText(view));
+  setStat(bankSocketsStat, bankSocketsText(snap));
   setStat(bankTermsStat, expansionText(snap));
   setStat(bankPurseStat, purseText(record));
   paintWorth(bankWorthStat, worthOf(storeCounts(snap.stacks, record.realm)));
 }
 
+/**
+ * The sockets as squares, every one, locked included: the index is the socket number, so a grid
+ * shortened to what is filled would move socket four's bag under socket two's label.
+ */
+function socketPlan(snap) {
+  return snap.socketBags.map((itemId) => {
+    if (itemId === '') {
+      return null;
+    }
+    return { itemId, count: 1 };
+  });
+}
+
+function bankSocketsText(snap) {
+  if (snap.socketBags.length === 0) {
+    return '';
+  }
+  return `${String(snap.unlocked)} / ${String(snap.socketBags.length)}`;
+}
+
+function bankSocketLine(itemId, at) {
+  const label = `Socket ${String(at + 1)}`;
+  if (itemId === '') {
+    return { text: `${label}: empty`, tone: 'muted' };
+  }
+  return `${label}: ${nameOf(itemId)}`;
+}
+
+function bankSocketsTip() {
+  const snap = viewedSource('bank');
+  const lines = snap.socketBags
+    .slice(0, snap.unlocked)
+    .map((itemId, at) => bankSocketLine(itemId, at));
+  const locked = snap.socketBags.length - snap.unlocked;
+  if (locked > 0) {
+    lines.push({ text: `${woc.fmt.count(locked, 'socket')} still locked.`, tone: 'muted' });
+  }
+  lines.push(bankSocketCostLine(snap));
+  lines.push({
+    text: 'Opening a socket adds no slots on its own: it is empty until a bag goes into it.',
+    tone: 'muted',
+  });
+  return { title: 'Sockets', lines: lines.filter((one) => one !== '') };
+}
+woc.ui.tooltip(bankSocketsStat.el, bankSocketsTip);
+
+function bankSocketCostLine(snap) {
+  if (snap.nextSocket === null) {
+    return { text: 'Every socket is open.', tone: 'muted' };
+  }
+  return `The next socket costs ${money(snap.nextSocket)}.`;
+}
+
+function bankMaterialsTip() {
+  const snap = viewedSource('bank');
+  const space = freeSpace(snap);
+  if (!space.split) {
+    return {
+      title: 'Materials',
+      lines: [
+        {
+          text: 'This reading was taken before this addon could read the bank\u2019s two pools, so there is no split to show.',
+          tone: 'muted',
+        },
+      ],
+    };
+  }
+  return {
+    title: 'Materials',
+    lines: [
+      `${woc.fmt.count(space.materials, 'slot')} that only a material will go into.`,
+      {
+        text: 'A socketed reagent satchel adds materials-only room here, exactly as one in a bag socket does for what you carry.',
+        tone: 'muted',
+      },
+      { text: 'Free beside it is what anything will fit in.', tone: 'muted' },
+    ],
+  };
+}
+woc.ui.tooltip(bankMaterialsStat.el, bankMaterialsTip);
+
 function isNear(state) {
   return state.status === 'near';
+}
+
+/**
+ * One stock row, as a bar against the shared cap. Over 1 is possible and deliberately not
+ * clamped: a stock read before its cap is a real state, and a clamped fill would say the vault
+ * was exactly full.
+ */
+function vaultEntry(row, cap) {
+  return {
+    key: row.itemId,
+    icon: woc.ui.icon.item(row.itemId),
+    update: {
+      label: nameOf(row.itemId),
+      quality: known(row.itemId)?.quality ?? '',
+      detail: vaultDetail(row, cap),
+      fraction: fractionOf(row.count, cap),
+      tone: vaultTone(row, cap),
+    },
+  };
+}
+
+function vaultDetail(row, cap) {
+  if (cap <= 0) {
+    return String(row.count);
+  }
+  return `${String(row.count)} / ${String(cap)}`;
+}
+
+/** Full is per material and the only urgency a row has. */
+function vaultTone(row, cap) {
+  if (cap > 0 && row.count >= cap) {
+    return 'danger';
+  }
+  return 'default';
+}
+
+function vaultRowTip(itemId) {
+  const snap = viewedSource('vault');
+  const row = snap.stock.find((one) => one.itemId === itemId);
+  if (row === undefined) {
+    return itemId;
+  }
+  return {
+    title: nameOf(itemId),
+    lines: [
+      vaultHeldLine(row, snap.cap),
+      ...nameLines(itemId),
+      worthLine(itemId, row.count),
+      {
+        text: 'One cap covers every material, so this one being full says nothing about the rest.',
+        tone: 'muted',
+      },
+      { text: 'Nothing here can deposit or withdraw: the loader sends no command.', tone: 'muted' },
+    ].filter((one) => one !== ''),
+  };
+}
+
+function vaultHeldLine(row, cap) {
+  if (cap <= 0) {
+    return `${String(row.count)} in the vault.`;
+  }
+  if (row.count >= cap) {
+    return `${String(row.count)} of ${String(cap)}: full, so the vault takes no more of this one.`;
+  }
+  return `${String(row.count)} of ${String(cap)}, with room for ${String(cap - row.count)} more.`;
 }
 
 /** Sentences joined with one space, skipping any that has nothing to say. */
@@ -3721,6 +4392,151 @@ function unreadLine(record, snap, live) {
  * `world.mail`, which exists only at a pillar. Neither is derived from the other, or the badge
  * would light only while the player is already looking at the box.
  */
+/** How many copies of everything the vault holds, counts and identity rows alike. */
+function vaultHeld(snap) {
+  const stock = snap.stock.reduce((sum, row) => sum + row.count, 0);
+  return snap.stacks.reduce((sum, entry) => sum + entryCount(entry), stock);
+}
+
+/** Both lists as the `[id, count, realm]` triples `worthOf` adds up. See `storeCounts`. */
+function vaultCounts(snap, realm) {
+  const counts = snap.stock.map((row) => [row.itemId, row.count, realm]);
+  return [...counts, ...storeCounts(snap.stacks, realm)];
+}
+
+function vaultKindsText(snap) {
+  return String(snap.stock.length + snap.stacks.length);
+}
+
+/** Bought out of the ladder, since a rung count alone says nothing about how far it goes. */
+function vaultRungsText(snap) {
+  return `${String(snap.upgrades)} / ${String(VAULT_RUNGS)}`;
+}
+
+function vaultTermsText(snap) {
+  if (snap.next === null) {
+    return 'bought';
+  }
+  return money(snap.next);
+}
+
+function vaultTermsTip() {
+  const snap = viewedSource('vault');
+  const lines = [`${vaultRungsText(snap)} rungs bought, each one raising the cap for everything.`];
+  if (snap.next === null) {
+    lines.push('Every rung has been bought.');
+  } else {
+    lines.push(`The next rung costs ${money(snap.next)}.`);
+  }
+  lines.push({ text: 'Nothing here can buy one.', tone: 'muted' });
+  return { title: 'Upgrade', lines };
+}
+woc.ui.tooltip(vaultTermsStat.el, vaultTermsTip);
+woc.ui.tooltip(vaultRungsStat.el, vaultTermsTip);
+
+function vaultCapTip() {
+  const snap = viewedSource('vault');
+  return {
+    title: 'Cap each',
+    lines: [
+      `${String(snap.cap)} of EVERY material, which is one ceiling shared by all of them.`,
+      {
+        text: 'So a full vault is a sentence about one material: room for iron and none for copper is ordinary.',
+        tone: 'muted',
+      },
+      { text: 'A row turns red at its own cap.', tone: 'muted' },
+    ],
+  };
+}
+woc.ui.tooltip(vaultCapStat.el, vaultCapTip);
+
+function vaultKindsTip() {
+  const snap = viewedSource('vault');
+  return {
+    title: 'Materials',
+    lines: [
+      `${woc.fmt.count(snap.stock.length, 'material')} held as a count, and ${woc.fmt.count(snap.stacks.length, 'stack')} that cannot be counted with them.`,
+      {
+        text: 'A crafted or signed stack keeps an identity, so it is its own square below rather than adding to a total.',
+        tone: 'muted',
+      },
+    ],
+  };
+}
+woc.ui.tooltip(vaultKindsStat.el, vaultKindsTip);
+
+/**
+ * Whether crafting may draw from the vault where the player is standing. Three states: an empty
+ * record means the draw is allowed and the vault is empty, and null means it is refused here, so
+ * emptiness must never read as "no reagents".
+ */
+function drawText(live) {
+  if (!live) {
+    return '';
+  }
+  const stock = woc.world.craftVaultStock;
+  if (stock === null) {
+    return 'Crafting cannot draw from the vault where you are: not in a battleground, arena, delve, dungeon, raid or rift.';
+  }
+  const kinds = Object.keys(stock).length;
+  if (kinds === 0) {
+    return 'Crafting can draw from the vault here, and there is nothing in it to draw.';
+  }
+  return `Crafting can draw ${woc.fmt.count(kinds, 'material')} from the vault here.`;
+}
+
+function vaultNoteText(record, snap, live) {
+  if (record === null) {
+    return noRecordText();
+  }
+  const gate = gateText(woc.world.vault.status, 'a banker', live, snap.at > 0);
+  if (snap.at > 0) {
+    return gate;
+  }
+  return sentences(['No vault reading yet. Stand at a banker once and it is recorded.', gate]);
+}
+
+function clearVault() {
+  vaultRows.rows.sync([]);
+  paintGrid(vaultGrid, [], emptyView(), 0);
+  say(vaultAgeLine, '');
+  for (const chip of [
+    vaultKindsStat,
+    vaultHeldStat,
+    vaultCapStat,
+    vaultRungsStat,
+    vaultTermsStat,
+    vaultWorthStat,
+  ]) {
+    setStat(chip, '');
+  }
+}
+
+/** Drawn from the last `near` reading whatever the status is, as the Bank pane is. */
+function paintVault() {
+  const record = viewedRecord();
+  const snap = viewedSource('vault');
+  const live = viewingSelf();
+  const drawn = record !== null && snap.at > 0;
+  woc.ui.show(vaultBody, drawn);
+  say(vaultNote, vaultNoteText(record, snap, live));
+  say(vaultDrawLine, drawText(live));
+  if (!drawn) {
+    clearVault();
+    return;
+  }
+  vaultRows.rows.sync(snap.stock.map((row) => vaultEntry(row, snap.cap)));
+  const carried = new Set(stacksIn(record.sources.bags.stacks).keys());
+  paintGrid(vaultGrid, snap.stacks, readStore(snap.stacks, new Set(record.equipped), carried), 0);
+  say(vaultAgeLine, `${whoseText(record)}${ageText(snap, live && isNear(woc.world.vault))}`);
+  setStat(vaultKindsStat, vaultKindsText(snap));
+  setStat(vaultHeldStat, String(vaultHeld(snap)));
+  setStat(vaultCapStat, String(snap.cap));
+  setStat(vaultRungsStat, vaultRungsText(snap));
+  setStat(vaultTermsStat, vaultTermsText(snap));
+  paintWorth(vaultWorthStat, worthOf(vaultCounts(snap, record.realm)));
+}
+
 function paintMail() {
   const record = viewedRecord();
   const snap = viewedSource('mail');
@@ -3806,7 +4622,6 @@ function rosterDetail(record, snap) {
  */
 function rosterEntry(record, here) {
   const snap = record.sources.bags;
-  const free = Math.max(0, snap.total - snap.used);
   return {
     key: record.key,
     icon: null,
@@ -3814,8 +4629,10 @@ function rosterEntry(record, here) {
       label: labelFor(record, here),
       value: { copper: record.copper },
       detail: rosterDetail(record, snap),
+      // The fill stays pooled, since it says how full the bags are; the tone is the free-slot
+      // warning and takes the general-pool reading the Bags pane does.
       fraction: fractionOf(snap.used, snap.total),
-      tone: toneFor(free),
+      tone: toneFor(freeSpace(snap).free),
     },
   };
 }
@@ -3827,8 +4644,19 @@ function storeLines(record) {
     if (snap.at <= 0) {
       return { text: `${source}: never read`, tone: 'muted' };
     }
-    return `${source}: ${String(snap.stacks.length)} stacks, read ${agoText(snap.at)}`;
+    return `${source}: ${storeSize(source, snap)}, read ${agoText(snap.at)}`;
   });
+}
+
+/**
+ * How much a store holds, in the unit that store has: a stack count would say a full vault held
+ * nothing.
+ */
+function storeSize(source, snap) {
+  if (source === 'vault') {
+    return `${woc.fmt.count(snap.stock.length + snap.stacks.length, 'material')}`;
+  }
+  return `${String(snap.stacks.length)} stacks`;
 }
 
 function rosterTip(key) {
@@ -3871,12 +4699,15 @@ function rosterNoteText() {
  * the rows keep their own stamps and the tooltip names the oldest.
  */
 function rosterTotals() {
-  const sums = { characters: 0, used: 0, total: 0, copper: 0, oldest: 0 };
+  // `free` is summed per character rather than taken as `total - used`, which disagree wherever
+  // anybody carries a reagent satchel.
+  const sums = { characters: 0, used: 0, total: 0, free: 0, copper: 0, oldest: 0 };
   for (const record of records.values()) {
     const snap = record.sources.bags;
     sums.characters += 1;
     sums.used += snap.used;
     sums.total += Math.max(snap.total, snap.used);
+    sums.free += freeSpace(snap).free;
     sums.copper += record.copper;
     if (snap.at > 0 && (sums.oldest === 0 || snap.at < sums.oldest)) {
       sums.oldest = snap.at;
@@ -3947,9 +4778,8 @@ function paintRosterTotals(sums) {
   paintWorth(accountWorthStat, worthOf(accountCounts()));
   setStat(rosterCountStat, String(sums.characters));
   setStat(rosterSlotsStat, `${String(sums.used)} / ${String(sums.total)}`);
-  const free = Math.max(0, sums.total - sums.used);
-  setStat(rosterFreeStat, String(free));
-  setStatTone(rosterFreeStat, toneFor(free));
+  setStat(rosterFreeStat, String(sums.free));
+  setStatTone(rosterFreeStat, toneFor(sums.free));
   setStat(postedStat, postedText());
 }
 
@@ -3967,6 +4797,7 @@ function draw() {
   paintItems();
   paintBags();
   paintBank();
+  paintVault();
   paintMail();
   paintRoster();
   paintTitle();
@@ -4023,13 +4854,18 @@ woc.world.on('copper', onWorldChange);
 woc.world.on('equipment', onWorldChange);
 woc.world.on('characterKey', onCharacterChange);
 
-// The two counters and the badge. `bank` and `mail` move when the player walks up to
+// The three counters and the badge. `bank`, `vault` and `mail` move when the player walks up to
 // one and away again, which is the moment a reading is worth recording; `mailUnread`
 // moves anywhere in the world, which is what makes the title badge work with the Mail
 // tab closed.
+//
+// The vault's own key rather than the bank's: nothing else fires on a deposit made standing still.
 woc.world.on('bank', schedulePaint);
+woc.world.on('vault', schedulePaint);
 woc.world.on('mail', schedulePaint);
 woc.world.on('mailUnread', schedulePaint);
+// Not a counter: it moves on entering or leaving an instance, which moves no other key here.
+woc.world.on('craftVaultStock', schedulePaint);
 
 // The two moments the game itself narrates. `world.on('inventory')` already reports
 // the change; what these add is the game's OWN line, which names the item that an
@@ -4083,6 +4919,66 @@ woc.onSettingsChange(() => {
 });
 
 /**
+ * One bag row from the shipped table. `woc.data` hands back `unknown`: the loader proves the
+ * file is JSON when it fetches it and says nothing at all about what is inside.
+ */
+function readBag(value) {
+  if (typeof value !== 'object' || value === null) {
+    return null;
+  }
+  const itemId = text(value.id);
+  const slots = numberOr(value.slots, 0);
+  if (itemId === '' || slots <= 0) {
+    return null;
+  }
+  return { id: itemId, name: text(value.name), slots, materialsOnly: value.materialsOnly === true };
+}
+
+/**
+ * The table, or null. A failure costs the pool split and nothing else: every pane still draws
+ * and the free figure falls back to the pooled reading, disclosed as such.
+ */
+function readPools(value) {
+  if (typeof value !== 'object' || value === null || !Array.isArray(value.bags)) {
+    return null;
+  }
+  const backpackSlots = numberOr(value.backpackSlots, 0);
+  const bags = value.bags.map(readBag).filter((bag) => bag !== null);
+  if (backpackSlots <= 0 || bags.length === 0 || !Array.isArray(value.materials)) {
+    return null;
+  }
+  return {
+    version: text(value.gameVersion),
+    backpackSlots,
+    sockets: numberOr(value.bagSockets, 0),
+    bags,
+    materials: value.materials.map((entry) => text(entry?.id)).filter((id) => id !== ''),
+  };
+}
+
+/** The two facts about a carried bag that no API here can answer. See `poolTable`. */
+async function learnPools() {
+  const table = readPools(await woc.data(POOLS_FILE));
+  if (table === null) {
+    throw new Error(`${POOLS_FILE} carries no "backpackSlots", "bags" and "materials"`);
+  }
+  if (!running.on) {
+    return;
+  }
+  poolTable.version = table.version;
+  poolTable.backpackSlots = table.backpackSlots;
+  poolTable.sockets = table.sockets;
+  for (const bag of table.bags) {
+    bagKinds.set(bag.id, bag);
+    poolTable.biggest = Math.max(poolTable.biggest, bag.slots);
+  }
+  for (const itemId of table.materials) {
+    materialIds.add(itemId);
+  }
+  schedulePaint();
+}
+
+/**
  * Both art answers are provisional until the manifest lands, so the first grid of a session is
  * optimistic pictures and no names. One request covers every item, and it never rejects.
  */
@@ -4094,8 +4990,8 @@ async function learnArt() {
 }
 
 // The one thing registered by hand. Everything else lives inside a kit widget or the frame
-// body and is drained on disable, but `startRecords` and `learnArt` are both awaiting
-// something and either continuation could otherwise resume against a torn-down frame.
+// body and is drained on disable, but these three are all awaiting something and any of the
+// continuations could otherwise resume against a torn-down frame.
 woc.onDispose(() => {
   running.on = false;
 });
@@ -4103,6 +4999,9 @@ woc.onDispose(() => {
 draw();
 startRecords().catch((err) => {
   woc.warn('satchel: the character records could not be started', err);
+});
+learnPools().catch((err) => {
+  woc.warn('satchel: the bag table could not be read, so the pool split is not drawn', err);
 });
 learnArt().catch((err) => {
   woc.warn('satchel: the item art manifest could not be read', err);

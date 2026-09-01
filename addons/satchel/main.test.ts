@@ -51,6 +51,7 @@ import {
 } from '../../tests/fakes/shared-services.ts';
 import { createFakeStorage, type FakeStorage } from '../../tests/fakes/storage.ts';
 import MANIFEST_TEXT from './addon.json?raw';
+import TABLE_TEXT from './bags.json?raw';
 // biome-ignore lint/correctness/noUnresolvedImports: Vite's ?raw suffix is a loader directive a static resolver does not model, and an addon file is a function BODY with no exports at all. Same reason as the cooldown-bars suite.
 import SOURCE from './main.js?raw';
 
@@ -85,20 +86,36 @@ const CHARACTER_PREFIX = 'char/';
 const HOUR_MS = 60 * 60 * 1000;
 const DAY_MS = 24 * HOUR_MS;
 
+/** The shipped pool table; every bag id and material id a case names is one of these. */
+const TABLE: {
+  backpackSlots: number;
+  bags: Array<{ id: string; name: string; slots: number; materialsOnly: boolean }>;
+  materials: Array<{ id: string }>;
+} = JSON.parse(TABLE_TEXT);
+
 /** The backpack every character has, before a single bag is equipped. */
-const BACKPACK_SLOTS = 16;
+const BACKPACK_SLOTS = TABLE.backpackSlots;
+
+/** A bag the shipped table has never heard of, for the unknown-bag case. */
+const FUTURE_BAG = 'sporebound_carryall';
+const FUTURE_BAG_SLOTS = 18;
+
 /**
- * What each bag in the fixture adds. The game's table, not the loader's: how many cells a bag
- * holds is item content, so nothing on the API can be asked and the fake carries its own copy.
- * That is why `world.bagCapacity` is read rather than derived by the addon.
- *
- * A Map from entry pairs because every key here is an item id, a name the game owns.
+ * What each bag in the fixture adds, from the shipped table rather than transcribed, so the fake
+ * world's `bagCapacity` and the addon's pool arithmetic read the same bag.
  */
 const BAG_SLOTS = new Map<string, number>([
-  ['bag_16', 16],
-  ['bag_12', 12],
-  ['bag_6', 6],
+  ...TABLE.bags.map((bag): [string, number] => [bag.id, bag.slots]),
+  [FUTURE_BAG, FUTURE_BAG_SLOTS],
 ]);
+
+/** A general bag, a smaller general bag, and a materials-only satchel, by what they do here. */
+const BIG_BAG = 'wayfarers_backpack';
+const MID_BAG = 'gravewoven_bag';
+const SMALL_BAG = 'linen_pouch';
+const REAGENT_BAG = 'burlap_reagent_pouch';
+/** An id the game counts as a material, which is the only thing a reagent satchel will take. */
+const MATERIAL = 'copper_ore';
 
 const teardown: Array<() => void> = [];
 
@@ -117,6 +134,8 @@ afterEach(() => {
 interface Cell {
   itemId: string;
   count: number;
+  /** The recipe that minted it. Absent on nearly all. */
+  craftedRecipeId?: string;
   /** The cell the player dragged it into. Absent for anything never placed by hand. */
   slot?: number;
   /**
@@ -134,6 +153,27 @@ interface BankPayload {
   bonusSlots: number;
   nextExpansionCost: number | null;
   bonusSources: Array<{ id: string; slots: number; maxSlots: number }>;
+  /**
+   * Every fixture honours the two decoder invariants rather than defending against them:
+   * general plus materials is `capacity`, and the two used counts sum to `slots.length`.
+   */
+  socketsUnlocked: number;
+  socketBags: (string | null)[];
+  nextSocketCost: number | null;
+  nextRungClaudiumPrice?: number;
+  generalCapacity: number;
+  materialsCapacity: number;
+  generalUsed: number;
+  materialsUsed: number;
+}
+
+/** `VaultInfo` as the game's own world object carries it, under its wire name. */
+interface VaultPayload {
+  stock: Record<string, number>;
+  special: Cell[];
+  upgrades: number;
+  perMaterialCap: number;
+  nextUpgradeCost: number | null;
 }
 
 interface Letter {
@@ -162,13 +202,22 @@ interface CarryState {
   equipment: Record<string, string>;
   copper: number;
   /**
-   * The two gated reads, where null is what the server sends: not "an empty bank" and not "no
+   * The three gated reads, where null is what the server sends: not "an empty bank" and not "no
    * bank", but a payload that is simply absent for a player who is not standing at the counter.
+   * The vault is its own gate, so a case can put a null vault beside a live bank, which is what
+   * an undecodable vault payload looks like.
    */
   bank: BankPayload | null;
+  vault: VaultPayload | null;
   mail: MailPayload | null;
   /** Ungated, so it is a plain number that is readable from anywhere in the world. */
   mailUnread: number;
+  /**
+   * What crafting may draw from the vault HERE. Not a proximity state and not banker-gated: a
+   * record means the draw is allowed, an empty record means allowed with nothing to draw, and
+   * null means refused where the player is standing.
+   */
+  craftVaultStock: Record<string, number> | null;
 }
 
 /** One stack as the addon writes it down, which is `InvSlot` unchanged. */
@@ -195,6 +244,14 @@ interface StoredSnapshot {
   used: number;
   total: number;
   stacks: StoredStack[];
+  /** The vault's counts, sorted by id on the way in so a stored copy is already ordered. */
+  stock?: Array<{ itemId: string; count: number }>;
+  upgrades?: number;
+  cap?: number;
+  pools?: { general: number; materials: number; generalUsed: number; materialsUsed: number };
+  socketBags?: string[];
+  unlocked?: number;
+  nextSocket?: number | null;
   sockets?: string[];
   bought?: number;
   granted?: number;
@@ -214,7 +271,12 @@ interface StoredRecord {
   equipped: string[];
   /** Which market this character's things sit on, which is what a published price applies to. */
   realm?: string;
-  sources: { bags: StoredSnapshot; bank: StoredSnapshot; mail: StoredSnapshot };
+  sources: {
+    bags: StoredSnapshot;
+    bank: StoredSnapshot;
+    mail: StoredSnapshot;
+    vault: StoredSnapshot;
+  };
 }
 
 function bagSlots(itemId: string | null): number {
@@ -250,20 +312,55 @@ function emptyCarry(): CarryState {
     equipment: {},
     copper: 0,
     bank: null,
+    vault: null,
     mail: null,
     mailUnread: 0,
+    craftVaultStock: null,
   };
 }
 
-/** A bank as the server sends one, with only the figures a case cares about named. */
+/**
+ * A bank as the server sends one, with only the figures a case cares about named. The split
+ * defaults to all general and the used counts to `slots`, so a case that says nothing about
+ * pools still obeys both decoder invariants.
+ */
 function bankPayload(patch: Partial<BankPayload> = {}): BankPayload {
+  const slots = patch.slots ?? [];
+  const capacity = patch.capacity ?? 24;
   return {
-    slots: [],
-    capacity: 24,
+    slots,
+    capacity,
     purchasedSlots: 0,
     bonusSlots: 0,
     nextExpansionCost: 1000,
     bonusSources: [],
+    socketsUnlocked: 0,
+    socketBags: [null, null, null, null],
+    nextSocketCost: 5000,
+    generalCapacity: capacity,
+    materialsCapacity: 0,
+    generalUsed: slots.length,
+    materialsUsed: 0,
+    ...patch,
+  };
+}
+
+/**
+ * A stock record from entry pairs, since an object literal keyed by item ids fails
+ * `useNamingConvention`. See STYLE.md.
+ */
+function stockOf(...rows: [string, number][]): Record<string, number> {
+  return Object.fromEntries(rows);
+}
+
+/** A vault as the server sends one. Locked is `upgrades: 0` with a cap of nothing. */
+function vaultPayload(patch: Partial<VaultPayload> = {}): VaultPayload {
+  return {
+    stock: {},
+    special: [],
+    upgrades: 2,
+    perMaterialCap: 400,
+    nextUpgradeCost: 25_000,
     ...patch,
   };
 }
@@ -307,7 +404,7 @@ function snapshot(patch: Partial<StoredSnapshot> = {}): StoredSnapshot {
  * suite is not logged in as. The bank and the mailbox default to `at: 0`, which is the ordinary
  * state: bags are recorded every login and a counter only if the character walked up to one.
  */
-function storedCharacter(name: string, patch: Partial<StoredRecord> = {}): StoredRecord {
+function storedCharacter(name: string, patch: StoredPatch = {}): StoredRecord {
   return {
     key: `${CHANNEL}/Claudemoon/${name}`,
     name,
@@ -315,10 +412,23 @@ function storedCharacter(name: string, patch: Partial<StoredRecord> = {}): Store
     at: WALL_CLOCK_MS,
     equipped: [],
     realm: REALM,
-    sources: { bags: snapshot(), bank: snapshot({ at: 0 }), mail: snapshot({ at: 0 }) },
     ...patch,
+    // Merged rather than replaced, so a case naming one store gets the other three at their
+    // ordinary state.
+    sources: {
+      bags: snapshot(),
+      bank: snapshot({ at: 0 }),
+      mail: snapshot({ at: 0 }),
+      vault: snapshot({ at: 0 }),
+      ...patch.sources,
+    },
   };
 }
+
+/** Everything a case may override, with the stores taken one at a time. */
+type StoredPatch = Omit<Partial<StoredRecord>, 'sources'> & {
+  sources?: Partial<StoredRecord['sources']>;
+};
 
 function seed(storage: FakeStorage, record: StoredRecord): void {
   storage.remote(NAMESPACE, `${CHARACTER_PREFIX}${record.key}`, record);
@@ -330,6 +440,11 @@ interface StartOptions {
   carry?: Partial<CarryState>;
   /** Leave the world out, which is where an addon's first line actually runs. */
   world?: boolean;
+  /**
+   * Leave the shipped pool table unserved, which is every session's first moment and what a
+   * failed read leaves behind.
+   */
+  table?: boolean;
 }
 
 interface SatchelHarness extends SharedHarness {
@@ -440,6 +555,16 @@ function statTone(role: string): string {
 
 function detailOf(list: string, key: string): string {
   return partOf(rowIn(list, key), '.woc-bar-detail');
+}
+
+/**
+ * A row's urgency, which the kit carries as a class; the colour behind it is a stylesheet rule a
+ * suite cannot read.
+ */
+function barTone(list: string, key: string): string {
+  const row = rowIn(list, key);
+  const found = [...(row?.classList ?? [])].find((one) => one.startsWith('woc-bar-'));
+  return found?.slice('woc-bar-'.length) ?? '';
 }
 
 function lineFor(role: string): string {
@@ -710,6 +835,12 @@ function fakeWorld(state: CarryState, player: unknown): Record<string, unknown> 
     get bankInfo(): BankPayload | null {
       return state.bank;
     },
+    get vaultInfo(): VaultPayload | null {
+      return state.vault;
+    },
+    get craftVaultStock(): Record<string, number> | null {
+      return state.craftVaultStock;
+    },
     get mailInfo(): MailPayload | null {
       return state.mail;
     },
@@ -730,6 +861,9 @@ async function start(options: StartOptions = {}): Promise<SatchelHarness> {
     settings: options.settings ?? {},
     storage,
   };
+  if (options.table !== false) {
+    input.data = { 'bags.json': TABLE_TEXT };
+  }
   if (options.world !== false) {
     input.game = Promise.resolve({ world: fakeWorld(state, player) });
   }
@@ -976,14 +1110,9 @@ describe('what is written down', () => {
     // The same realm and the same name as the character in play, on the other
     // deployment. A PBE copy is how a player ends up holding both.
     seed(storage, {
-      ...storedCharacter('Marshal'),
+      ...storedCharacter('Marshal', { sources: { bags: snapshot({ stacks: cells('gem', 1) }) } }),
       key: 'live/Claudemoon/Marshal',
       copper: 999,
-      sources: {
-        bags: snapshot({ stacks: cells('gem', 1) }),
-        bank: snapshot({ at: 0 }),
-        mail: snapshot({ at: 0 }),
-      },
     });
     const h = await start({ storage, carry: { inventory: cells('ore', 1, 5), copper: 12 } });
     await h.settle();
@@ -1040,10 +1169,12 @@ describe('reading another character', () => {
       storedCharacter('Alt', {
         copper: 900,
         sources: {
+          // 16 backpack plus the 12 cell bag socketed; a total that did not add up reads as a
+          // stale table on the line this case asserts.
           bags: snapshot({
-            total: 20,
+            total: 28,
             stacks: [{ itemId: 'ore', count: 20, slot: 5 }, ...cells('cloth', 5)],
-            sockets: ['bag_12', '', '', ''],
+            sockets: [MID_BAG, '', '', ''],
             at: WALL_CLOCK_MS - 3 * DAY_MS,
           }),
           bank: snapshot(),
@@ -1057,10 +1188,10 @@ describe('reading another character', () => {
     choose('Alt');
     await h.settle();
 
-    expect(gridCells()).toHaveLength(20);
+    expect(gridCells()).toHaveLength(28);
     expect(itemsInGrid()[5]).toBe('ore');
     expect(itemsInGrid()[0]).toBe('cloth');
-    expect(capacityValue()).toBe('2 / 20');
+    expect(capacityValue()).toBe('2 / 28');
     expect(lineFor('bags-age')).toBe('Alt: Last read 3 days ago.');
     expect(coinsAt('purse')).toBe('9 silver');
     expect(statFor('sockets')).toBe('1 / 4');
@@ -1401,6 +1532,414 @@ describe('the character selector', () => {
   });
 });
 
+/**
+ * Both vault keys are delta-omitted, so a snapshot that leaves the vault out means UNCHANGED
+ * rather than gone; the loader holds the last reading, and these cases prove the addon does not
+ * throw it away on its own.
+ */
+describe('the vault', () => {
+  it('records the vault while the player is standing at a bursar', async () => {
+    const h = await start({
+      carry: {
+        bank: bankPayload(),
+        vault: vaultPayload({ stock: stockOf(['copper_ore', 240], ['silverleaf_herb', 60]) }),
+      },
+    });
+    await h.settle();
+
+    const stored = storedFor(h).sources.vault;
+    expect(stored.at).toBe(WALL_CLOCK_MS);
+    expect(stored.stock).toEqual([
+      { itemId: 'copper_ore', count: 240 },
+      { itemId: 'silverleaf_herb', count: 60 },
+    ]);
+    expect(stored.cap).toBe(400);
+    expect(stored.upgrades).toBe(2);
+  });
+
+  // The record round-trips through the server's database and comes back re-ordered, so it is
+  // sorted on the way in and the stored copy is ordered too.
+  it('sorts the stock by id rather than trusting the order it arrived in', async () => {
+    const h = await start({
+      carry: {
+        vault: vaultPayload({
+          stock: stockOf(['thorium_ore', 5], ['arcane_dust', 9], ['iron_ore', 7]),
+        }),
+      },
+    });
+    await h.settle();
+
+    expect(storedFor(h).sources.vault.stock?.map((row) => row.itemId)).toEqual([
+      'arcane_dust',
+      'iron_ore',
+      'thorium_ore',
+    ]);
+    expect(keysIn('vault')).toEqual(['arcane_dust', 'iron_ore', 'thorium_ore']);
+  });
+
+  it('keeps a recorded vault when the player walks away from the bursar', async () => {
+    const h = await start({
+      carry: { vault: vaultPayload({ stock: stockOf(['copper_ore', 240]) }) },
+    });
+    await h.settle();
+    expect(storedFor(h).sources.vault.stock).toHaveLength(1);
+
+    h.carry({ vault: null });
+    await h.settle();
+
+    expect(storedFor(h).sources.vault.stock).toEqual([{ itemId: 'copper_ore', count: 240 }]);
+    expect(detailOf('vault', 'copper_ore')).toBe('240 / 400');
+  });
+
+  // An undecodable vault payload is dropped to null and arrives as 'away' while an undecodable
+  // bank payload leaves the previous one standing, so a null vault beside a live bank is real.
+  it('does not record an empty vault because the bank beside it is readable', async () => {
+    const h = await start({
+      carry: { bank: bankPayload(), vault: vaultPayload({ stock: stockOf(['copper_ore', 240]) }) },
+    });
+    await h.settle();
+
+    h.carry({ bank: bankPayload({ slots: cells('cloth', 5) }), vault: null });
+    await h.settle();
+
+    expect(storedFor(h).sources.bank.stacks).toHaveLength(1);
+    expect(storedFor(h).sources.vault.stock).toEqual([{ itemId: 'copper_ore', count: 240 }]);
+  });
+
+  // The bank is deliberately unchanged between the two settles, so only the vault's own key
+  // could have driven the repaint.
+  it('repaints and records off the vault key alone', async () => {
+    const h = await start({
+      carry: { bank: bankPayload(), vault: vaultPayload({ stock: stockOf(['copper_ore', 10]) }) },
+    });
+    await h.settle();
+    expect(detailOf('vault', 'copper_ore')).toBe('10 / 400');
+
+    h.carry({ vault: vaultPayload({ stock: stockOf(['copper_ore', 250], ['iron_ore', 8]) }) });
+    await h.settle();
+
+    expect(detailOf('vault', 'copper_ore')).toBe('250 / 400');
+    expect(keysIn('vault')).toEqual(['copper_ore', 'iron_ore']);
+    expect(storedFor(h).sources.vault.stock).toHaveLength(2);
+  });
+
+  it('says the vault has never been read rather than drawing an empty one', async () => {
+    const h = await start();
+    await h.settle();
+
+    expect(lineFor('vault-note')).toContain('No vault reading yet');
+    expect(statFor('vault-cap')).toBe('');
+  });
+
+  it('draws each material against the cap they all share', async () => {
+    const h = await start({
+      carry: {
+        vault: vaultPayload({
+          perMaterialCap: 400,
+          stock: stockOf(['copper_ore', 100], ['iron_ore', 400]),
+        }),
+      },
+    });
+    await h.settle();
+
+    expect(fillOf('vault', 'copper_ore')).toBe('25.00%');
+    expect(detailOf('vault', 'iron_ore')).toBe('400 / 400');
+    expect(statFor('vault-cap')).toBe('400');
+  });
+
+  it('marks a material at its cap and leaves the rest alone', async () => {
+    const h = await start({
+      carry: {
+        vault: vaultPayload({
+          perMaterialCap: 400,
+          stock: stockOf(['copper_ore', 400], ['iron_ore', 12]),
+        }),
+      },
+    });
+    await h.settle();
+
+    expect(barTone('vault', 'copper_ore')).toBe('danger');
+    expect(barTone('vault', 'iron_ore')).toBe('default');
+  });
+
+  it('draws an identity-bearing stack as a square rather than folding it into a count', async () => {
+    const h = await start({
+      carry: {
+        vault: vaultPayload({
+          stock: stockOf(['copper_ore', 40]),
+          special: [{ itemId: 'resonant_steel', count: 3 }],
+        }),
+      },
+    });
+    await h.settle();
+
+    expect(keysIn('vault')).toEqual(['copper_ore']);
+    expect(cellsIn('vault').map((el) => el.getAttribute('data-item'))).toEqual(['resonant_steel']);
+    expect(statFor('vault-kinds')).toBe('2');
+    expect(statFor('vault-held')).toBe('43');
+  });
+
+  // The one field that tells two identity-bearing rows of the same item id apart.
+  it('names what crafted an identity-bearing row', async () => {
+    const h = await start({
+      carry: {
+        vault: vaultPayload({
+          special: [
+            { itemId: 'resonant_steel', count: 4, craftedRecipeId: 'resonant_alloy' },
+            { itemId: 'resonant_steel', count: 2 },
+          ],
+        }),
+      },
+    });
+    await h.settle();
+
+    expect(tipOver(cellIn('vault', 0))).toContain('Crafted from Resonant Alloy');
+    expect(tipOver(cellIn('vault', 1))).not.toContain('Crafted from');
+  });
+
+  it("draws an alt's vault, read once and remembered", async () => {
+    const storage = createFakeStorage();
+    seed(
+      storage,
+      storedCharacter('Alt', {
+        sources: {
+          bags: snapshot(),
+          bank: snapshot({ at: 0 }),
+          mail: snapshot({ at: 0 }),
+          vault: snapshot({
+            at: WALL_CLOCK_MS - 3 * DAY_MS,
+            stock: [{ itemId: 'copper_ore', count: 380 }],
+            cap: 400,
+            upgrades: 2,
+          }),
+        },
+      }),
+    );
+    const h = await start({ storage });
+    await h.settle();
+
+    openTab('Vault');
+    choose('Alt');
+    await h.settle();
+
+    expect(detailOf('vault', 'copper_ore')).toBe('380 / 400');
+    expect(lineFor('vault-age')).toBe('Alt: Last read 3 days ago.');
+  });
+});
+
+/**
+ * Three states: an empty record means the draw is allowed and the vault is empty, and null
+ * means it is refused where the player is standing.
+ */
+describe('the crafting draw', () => {
+  it('says the draw is refused where it is refused', async () => {
+    const h = await start({ carry: { craftVaultStock: null } });
+    await h.settle();
+
+    expect(lineFor('vault-draw')).toContain('cannot draw');
+    expect(lineFor('vault-draw')).toContain('dungeon');
+  });
+
+  it('tells an empty vault apart from a place the draw is refused', async () => {
+    const h = await start({ carry: { craftVaultStock: {} } });
+    await h.settle();
+
+    const said = lineFor('vault-draw');
+
+    expect(said).toContain('can draw');
+    expect(said).toContain('nothing in it');
+  });
+
+  it('counts what the draw reaches where it is allowed', async () => {
+    const h = await start({
+      carry: { craftVaultStock: stockOf(['copper_ore', 240], ['iron_ore', 8]) },
+    });
+    await h.settle();
+
+    expect(lineFor('vault-draw')).toBe('Crafting can draw 2 materials from the vault here.');
+  });
+});
+
+// An item's total spans everything owned, so a stockpile outside bags and bank makes it short.
+describe('the Items pane and the vault', () => {
+  it('adds the vault into an item total rather than leaving it out', async () => {
+    const h = await start({
+      carry: {
+        inventory: cells('copper_ore', 20, 2),
+        bank: bankPayload({ slots: cells('copper_ore', 20) }),
+        vault: vaultPayload({ stock: stockOf(['copper_ore', 240]) }),
+      },
+    });
+    await h.settle();
+
+    // 40 in the bags, 20 in the bank, 240 in the vault.
+    expect(figureOf('items', 'copper_ore')).toBe('300');
+    expect(statFor('items-held')).toBe('300');
+  });
+
+  // The total counts the vault and the cells do not, on the same row.
+  it('spends no cell for what is in the vault', async () => {
+    const h = await start({
+      carry: {
+        inventory: cells('copper_ore', 20, 2),
+        vault: vaultPayload({ stock: stockOf(['copper_ore', 240]) }),
+      },
+    });
+    await h.settle();
+
+    chooseIn('sort', 'Cells');
+    await h.settle();
+
+    expect(detailOf('items', 'copper_ore')).toBe('280 in 2 cells');
+  });
+
+  it('names the vault under the row, without a cell clause it has no answer for', async () => {
+    const h = await start({
+      carry: {
+        inventory: cells('copper_ore', 20),
+        vault: vaultPayload({ stock: stockOf(['copper_ore', 240]) }),
+      },
+    });
+    await h.settle();
+
+    const said = tipOver(rowIn('items', 'copper_ore'));
+
+    expect(said).toContain('vault: 240 held');
+    expect(said).toContain('bags: 20 in 1 cell');
+    expect(said).not.toContain('in 0 cells');
+  });
+
+  // `stacksIn` records the largest stack it sees and the Bags pane merges against that maximum,
+  // and a vault count of 240 is not evidence that a 240 stack can exist.
+  it('does not learn a stack maximum from a pooled vault count', async () => {
+    const h = await start({
+      carry: {
+        inventory: cells('copper_ore', 20, 3),
+        vault: vaultPayload({ stock: stockOf(['copper_ore', 240]) }),
+      },
+    });
+    await h.settle();
+
+    // Three cells of twenty against a maximum of twenty frees nothing; a maximum of 240 would
+    // offer to merge them into one.
+    const said = tipOver(cellAt(0));
+
+    expect(said).toContain('Merging them would free nothing');
+  });
+});
+
+/**
+ * The bank's split is sent rather than derived; `capacity` stays one pooled number the game's
+ * own source says is never a fit answer.
+ */
+describe('the bank pools and sockets', () => {
+  it('reports what will fit rather than the pooled subtraction', async () => {
+    const h = await start({
+      carry: {
+        bank: bankPayload({
+          slots: cells('cloth', 5, 20),
+          capacity: 40,
+          generalCapacity: 20,
+          materialsCapacity: 20,
+          generalUsed: 20,
+          materialsUsed: 0,
+        }),
+      },
+    });
+    await h.settle();
+
+    // 20 of 40 in use and every free cell is materials-only, so the pooled twenty is zero for
+    // anything else.
+    expect(bankValue()).toBe('20 / 40');
+    expect(statFor('bank-free')).toBe('0');
+    expect(statTone('bank-free')).toBe('danger');
+    expect(statFor('bank-materials')).toBe('20');
+  });
+
+  it('draws no materials chip for a bank with no materials pool', async () => {
+    const h = await start({ carry: { bank: bankPayload({ slots: cells('cloth', 5, 4) }) } });
+    await h.settle();
+
+    expect(statFor('bank-free')).toBe('20');
+    expect(statFor('bank-materials')).toBe('');
+  });
+
+  // Unlocking a socket adds no slots, so this chip is the only figure that reports the purchase.
+  it('reports the open sockets, which the slot budget never shows', async () => {
+    const h = await start({
+      carry: {
+        bank: bankPayload({
+          socketsUnlocked: 2,
+          socketBags: ['gravewoven_bag', null, null, null],
+        }),
+      },
+    });
+    await h.settle();
+
+    expect(statFor('bank-sockets')).toBe('2 / 4');
+    expect(cellsIn('bank-sockets').map((el) => el.getAttribute('data-item'))).toEqual([
+      'gravewoven_bag',
+      '',
+      '',
+      '',
+    ]);
+  });
+
+  // A socket unlock moves no other figure, so a signature that leaves it out never notices one.
+  it('writes the record down for a socket unlock that moves nothing else', async () => {
+    const h = await start({ carry: { bank: bankPayload({ socketsUnlocked: 1 }) } });
+    await h.settle();
+    expect(storedFor(h).sources.bank.unlocked).toBe(1);
+
+    h.carry({ bank: bankPayload({ socketsUnlocked: 2 }) });
+    await h.settle();
+
+    expect(storedFor(h).sources.bank.unlocked).toBe(2);
+    expect(statFor('bank-sockets')).toBe('2 / 4');
+  });
+
+  // Absent rather than null on the wire, and absent means the gold price is the only one to
+  // show, not that the rung is unavailable.
+  it('shows a Claudium price beside the gold one where the game has one', async () => {
+    const h = await start({
+      carry: { bank: bankPayload({ nextExpansionCost: 1000, nextRungClaudiumPrice: 40 }) },
+    });
+    await h.settle();
+
+    expect(tipOver(document.querySelector('[data-role="bank-terms"]'))).toContain('or 40 Claudium');
+  });
+
+  it('says only the gold price where the Claudium one is absent', async () => {
+    const h = await start({ carry: { bank: bankPayload({ nextExpansionCost: 1000 }) } });
+    await h.settle();
+
+    const said = tipOver(document.querySelector('[data-role="bank-terms"]'));
+
+    expect(said).toContain('The next expansion costs');
+    expect(said).not.toContain('Claudium');
+  });
+
+  // Every socket, locked ones included: the index is the socket number.
+  it('draws four squares whatever the sockets hold', async () => {
+    const h = await start({
+      carry: {
+        bank: bankPayload({
+          socketsUnlocked: 4,
+          socketBags: [null, 'linen_pouch', null, 'burlap_reagent_pouch'],
+        }),
+      },
+    });
+    await h.settle();
+
+    expect(cellsIn('bank-sockets').map((el) => el.getAttribute('data-item'))).toEqual([
+      '',
+      'linen_pouch',
+      '',
+      'burlap_reagent_pouch',
+    ]);
+  });
+});
+
 describe('the roster', () => {
   it('lists every character with what they are carrying, this one marked', async () => {
     const storage = createFakeStorage();
@@ -1645,13 +2184,15 @@ describe('the status strip', () => {
     expect(said).toContain('Nothing here can send one');
   });
 
+  // The apostrophe is the proof the name was read from the shipped table rather than
+  // title-cased from the id.
   it('names what is in each bag socket under the pointer', async () => {
-    const h = await start({ carry: { bags: ['bag_16', null, null, null] } });
+    const h = await start({ carry: { bags: [BIG_BAG, null, null, null] } });
     await h.settle();
 
     const said = tipOver(document.querySelector('[data-role="sockets"]'));
 
-    expect(said).toContain('Socket 1: Bag 16');
+    expect(said).toContain("Socket 1: Wayfarer's Backpack");
     expect(said).toContain('Socket 2: empty');
   });
 });
@@ -1663,7 +2204,7 @@ describe('the free-slot count', () => {
     // 16 backpack + 16 + 0 (empty socket) + 12 + 6 = 50 cells.
     const h = await start({
       carry: {
-        bags: ['bag_16', null, 'bag_12', 'bag_6'],
+        bags: [BIG_BAG, null, MID_BAG, SMALL_BAG],
         // 10 cells of ore and 27 of cloth is 37 cells in use.
         inventory: [...cells('ore', 20, 10), ...cells('cloth', 4, 27)],
       },
@@ -1691,7 +2232,7 @@ describe('the free-slot count', () => {
     const h = await start({ carry: { inventory: cells('ore', 1, 4) } });
     expect(capacityValue()).toBe('4 / 16');
 
-    h.carry({ bags: ['bag_12', null, null, null] });
+    h.carry({ bags: [MID_BAG, null, null, null] });
     await h.settle();
 
     expect(capacityValue()).toBe('4 / 28');
@@ -1716,10 +2257,124 @@ describe('the free-slot count', () => {
   });
 
   it('counts the filled sockets rather than guessing what they hold', async () => {
-    const h = await start({ carry: { bags: ['bag_16', null, 'bag_6', null] } });
+    const h = await start({ carry: { bags: [BIG_BAG, null, SMALL_BAG, null] } });
     await h.settle();
 
     expect(statFor('sockets')).toBe('2 / 4');
+  });
+});
+
+/**
+ * The arithmetic is the game's own (src/sim/bag_pools.ts): materials pack into the materials
+ * pool first and spill into the general one, so `Free` is the general headroom and what only a
+ * material can reach is its own chip beside it.
+ */
+describe('the two carried pools', () => {
+  it('does not offer reagent-satchel room to a non-material', async () => {
+    // 16 backpack + 6 general = 22 general, plus an 8 cell reagent satchel = 30 pooled. 22
+    // swords fill the general pool exactly, so the pooled reading says 8 free and the honest
+    // answer is that nothing but a material fits at all.
+    const h = await start({
+      carry: {
+        bags: [SMALL_BAG, REAGENT_BAG, null, null],
+        inventory: cells('sword', 1, 22),
+      },
+    });
+    await h.settle();
+
+    expect(capacityValue()).toBe('22 / 30');
+    expect(statFor('free')).toBe('0');
+    expect(statTone('free')).toBe('danger');
+    expect(statFor('materials')).toBe('8');
+  });
+
+  it('spends a material out of the reagent pool rather than the general one', async () => {
+    // The same 22 general and 8 materials, holding 20 swords and 2 stacks of ore. The ore packs
+    // into the satchel first, so the general pool is 20 of 22 rather than 22 of 22.
+    const h = await start({
+      carry: {
+        bags: [SMALL_BAG, REAGENT_BAG, null, null],
+        inventory: [...cells('sword', 1, 20), ...cells(MATERIAL, 20, 2)],
+      },
+    });
+    await h.settle();
+
+    expect(capacityValue()).toBe('22 / 30');
+    expect(statFor('free')).toBe('2');
+    expect(statFor('materials')).toBe('6');
+  });
+
+  it('draws no materials chip for a character carrying no reagent satchel', async () => {
+    const h = await start({
+      carry: { bags: [SMALL_BAG, null, null, null], inventory: cells('sword', 1, 10) },
+    });
+    await h.settle();
+
+    expect(statFor('free')).toBe('12');
+    expect(statFor('materials')).toBe('');
+  });
+
+  it('falls back to the pooled figure and says so for a bag it does not recognise', async () => {
+    // 16 backpack + 18 unrecognised = 34 pooled, 30 cells in use.
+    const h = await start({
+      carry: { bags: [FUTURE_BAG, null, null, null], inventory: cells('sword', 1, 30) },
+    });
+    await h.settle();
+
+    expect(capacityValue()).toBe('30 / 34');
+    expect(statFor('free')).toBe('4');
+    expect(statFor('materials')).toBe('');
+    expect(lineFor('bags-age')).toContain('not recognised');
+  });
+
+  // A bag the table knows whose slot count the game changed: only the derived budget disagreeing
+  // with the world's can catch it, and which bag moved is not knowable.
+  it('gives up the split when its own budget disagrees with the world', async () => {
+    const h = await start({
+      carry: { bags: [REAGENT_BAG, null, null, null], inventory: cells('sword', 1, 22) },
+    });
+
+    // The world reports 32 pooled where the table accounts for 30.
+    const was = BAG_SLOTS.get(SMALL_BAG) ?? 0;
+    BAG_SLOTS.set(SMALL_BAG, was + 2);
+    teardown.push(() => BAG_SLOTS.set(SMALL_BAG, was));
+    h.carry({ bags: [SMALL_BAG, REAGENT_BAG, null, null] });
+    await h.settle();
+
+    expect(capacityValue()).toBe('22 / 32');
+    expect(statFor('free')).toBe('10');
+    expect(statFor('materials')).toBe('');
+    expect(lineFor('bags-age')).toContain('a different number of cells');
+  });
+
+  it('falls back the same way before the shipped table has been read', async () => {
+    const h = await start({
+      table: false,
+      carry: {
+        bags: [SMALL_BAG, REAGENT_BAG, null, null],
+        inventory: cells('sword', 1, 22),
+      },
+    });
+    await h.settle();
+
+    expect(statFor('free')).toBe('8');
+    expect(statFor('materials')).toBe('');
+  });
+
+  it('warns off the general pool rather than the pooled total', async () => {
+    const h = await start({
+      settings: { 'warn-free': 2 },
+      carry: { bags: [SMALL_BAG, REAGENT_BAG, null, null] },
+    });
+    const played = vi.spyOn(h.shared.sound, 'play');
+
+    // 21 of 22 general cells in use with the satchel empty: one free, under the two asked for,
+    // where the pooled reading says nine.
+    h.carry({ inventory: cells('sword', 1, 21) });
+    await h.settle();
+
+    expect(played).toHaveBeenCalledTimes(1);
+    expect(statTone('free')).toBe('warn');
   });
 });
 
@@ -1731,7 +2386,7 @@ describe('the bag grid', () => {
     await h.settle();
     expect(gridCells()).toHaveLength(16);
 
-    h.carry({ bags: ['bag_12', null, null, null] });
+    h.carry({ bags: [MID_BAG, null, null, null] });
     await h.settle();
 
     expect(gridCells()).toHaveLength(28);
@@ -2117,7 +2772,7 @@ describe('the free-slot warning', () => {
   it('leaves the figure alone while there is room', async () => {
     const h = await start({
       settings: { 'warn-free': 4 },
-      carry: { bags: ['bag_16', null, 'bag_12', 'bag_6'] },
+      carry: { bags: [BIG_BAG, null, MID_BAG, SMALL_BAG] },
     });
     await h.settle();
 

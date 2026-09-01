@@ -10,6 +10,8 @@ import {
   type FrameBox,
   initialBox,
   isFrameBox,
+  LABEL_CLEARANCE,
+  labelBelow,
   MIN_HEIGHT,
   MIN_WIDTH,
 } from '../loader/src/runtime/ui/frame/geometry.ts';
@@ -264,5 +266,18 @@ describe('a caller-supplied maximum', () => {
     const box = clampBox({ x: 0, y: 0, w: 120, h: 60 }, VIEW, { min: { w: 80, h: 40 } });
 
     expect(box).toMatchObject({ w: 120, h: 60 });
+  });
+});
+
+// A frame parked at the top of the viewport has no room above it for the name chip.
+describe('labelBelow', () => {
+  it('keeps the chip above a frame with room for it', () => {
+    expect(labelBelow(LABEL_CLEARANCE)).toBe(false);
+    expect(labelBelow(400)).toBe(false);
+  });
+
+  it('flips the chip under a frame parked against the top edge', () => {
+    expect(labelBelow(0)).toBe(true);
+    expect(labelBelow(LABEL_CLEARANCE - 1)).toBe(true);
   });
 });

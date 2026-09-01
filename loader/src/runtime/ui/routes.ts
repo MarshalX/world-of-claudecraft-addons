@@ -21,6 +21,7 @@ import type { GameInjector } from './kit/injections.ts';
 import type { Menus } from './kit/menu.ts';
 import type { UnlockMode } from './kit/unlock.ts';
 import { BUTTON_ID } from './micro-button.ts';
+import type { SnapStore } from './snap-store.ts';
 
 /** What both routes are called, in the rail and in the game menu. */
 const LABEL = 'Addons';
@@ -33,6 +34,8 @@ interface RouteDeps {
   roster: FrameRoster;
   /** The arrange-your-UI switch, which the menu offers alongside the frames. */
   unlock: UnlockMode;
+  /** Whether an arranged frame lands on the grid, offered under the switch. */
+  snap: SnapStore;
   /** Open the manager. */
   onOpen: () => void;
 }
@@ -66,6 +69,8 @@ function addLoaderRoutes(deps: RouteDeps): void {
           openManager: deps.onOpen,
           unlocked: () => deps.unlock.unlocked,
           toggleUnlock: deps.unlock.toggle,
+          snapping: () => deps.snap.enabled,
+          toggleSnap: deps.snap.toggle,
         }),
       );
     },

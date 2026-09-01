@@ -49,6 +49,13 @@ const UNLOCK_LABEL = 'Unlock frames';
 const LOCK_LABEL = 'Lock frames';
 
 /**
+ * One label with a tick rather than a flipping pair like the two above: snapping does
+ * nothing until the next drag, so a row saying "Turn on snapping" would look like it
+ * had failed. The game's own wording for the setting.
+ */
+const SNAP_LABEL = 'Snap to grid';
+
+/**
  * The addon half of an fqid, which is the only half worth a heading.
  *
  * A heading reading `official/longwatch` spends its width on the marketplace,
@@ -118,6 +125,9 @@ interface MenuActions {
   /** Read when the menu is built, so the row says what pressing it will do now. */
   unlocked: () => boolean;
   toggleUnlock: () => void;
+  /** Read when the menu is built, for the same reason. See ui/snap-store.ts. */
+  snapping: () => boolean;
+  toggleSnap: () => void;
 }
 
 /**
@@ -140,6 +150,8 @@ function frameMenuItems(entries: readonly RosterEntry[], deps: MenuActions): Men
     // is the one control that helps when a frame IS on screen and cannot be
     // found, which is the other half of the problem this menu exists for.
     { label: unlockLabel(deps.unlocked()), onSelect: deps.toggleUnlock },
+    // Directly under the switch, since it only means anything while that one is on.
+    { label: SNAP_LABEL, checked: deps.snapping(), onSelect: deps.toggleSnap },
   ];
   if (entries.length === 0) {
     items.push({ label: EMPTY_LABEL, disabled: true, separator: true, onSelect: () => undefined });
@@ -154,4 +166,13 @@ function frameMenuItems(entries: readonly RosterEntry[], deps: MenuActions): Men
 }
 
 export type { MenuActions };
-export { addonOf, EMPTY_LABEL, frameMenuItems, LOCK_LABEL, OPEN_LABEL, SHOWN_SUFFIX, UNLOCK_LABEL };
+export {
+  addonOf,
+  EMPTY_LABEL,
+  frameMenuItems,
+  LOCK_LABEL,
+  OPEN_LABEL,
+  SHOWN_SUFFIX,
+  SNAP_LABEL,
+  UNLOCK_LABEL,
+};

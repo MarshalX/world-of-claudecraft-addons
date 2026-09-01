@@ -142,6 +142,8 @@ const WORLD_KEYS = [
   'mail',
   'mailUnread',
   'bank',
+  'vault',
+  'craftVaultStock',
   'buyback',
 ];
 /**
@@ -166,9 +168,16 @@ const DATA_MARKER = 'dev-harness data file';
 const UNDECLARED_FILE = '../../secrets.json';
 
 /** The world reads gated on standing at something, which all share one shape. */
-const GATED_READS = ['market', 'mail', 'bank'];
+const GATED_READS = ['market', 'mail', 'bank', 'vault'];
 /** The three states one of those can be in, and there is no fourth. */
 const GATED_STATES = ['near', 'away', 'unknown'];
+
+/** Bag sockets a bank has, whatever it has bought: the index IS the socket number. */
+const BANK_SOCKETS = 4;
+/** Rungs a vault can buy, after which there is no next price to quote. */
+const VAULT_RUNGS = 5;
+/** A speed multiplier at one decimal rounds 1.15 to 1.2, which is a different snare. */
+const DECIMALS_MULT = 2;
 
 /** Epoch milliseconds at the start of 2020, which any real wall clock is past. */
 const EPOCH_FLOOR_MS = 1_577_836_800_000;
@@ -1366,6 +1375,88 @@ function checkDescribe() {
 }
 
 /**
+ * One ability against the three fields game 0.41.0 added, all ABSENT rather than false or
+ * zero when they do not apply. `offGcd` is deliberately not checked: the loader publishes it
+ * only where the game says true, so a check for a false could never fire.
+ */
+function abilityShapeFault(info) {
+  const { empowerStages: stages, channel } = info;
+  if (stages !== undefined && (!Number.isInteger(stages) || stages < 1)) {
+    return `${info.id} claims ${String(stages)} empower stages`;
+  }
+  if (channel === undefined) {
+    return null;
+  }
+  if (
+    !(Number.isFinite(channel.duration) && Number.isInteger(channel.ticks)) ||
+    channel.ticks < 1
+  ) {
+    return `${info.id} channels ${String(channel.duration)}s over ${String(channel.ticks)} ticks`;
+  }
+  // A channel's length is here rather than in `castTime`, so a channel carrying a cast time
+  // contradicts the published advice.
+  if (info.castTime !== 0) {
+    return `${info.id} is a channel and still carries a ${String(info.castTime)}s cast time`;
+  }
+  return null;
+}
+
+/**
+ * The three ability fields game 0.41.0 published, read off the player's own spellbook. All
+ * three are optional by contract, so a class with none of them is an ordinary reading rather
+ * than a missing surface, and `empowerStages` is the COUNT, since the live stage is on no wire.
+ */
+function checkAbilityShapes() {
+  const known = woc.world.abilities?.known ?? [];
+  if (known.length === 0) {
+    return result('ability shapes', true, 'no spellbook yet, so there is nothing to shape-check');
+  }
+  const faults = known.map(abilityShapeFault).filter((one) => one !== null);
+  if (faults.length > 0) {
+    return result('ability shapes', false, faults.slice(0, MAX_CONTRADICTIONS).join('; '));
+  }
+  const empower = known.filter((info) => info.empowerStages !== undefined).length;
+  const channels = known.filter((info) => info.channel !== undefined).length;
+  const instant = known.filter((info) => info.offGcd !== undefined).length;
+  return result(
+    'ability shapes',
+    true,
+    `of ${String(known.length)} known: ${String(empower)} empower, ` +
+      `${String(channels)} channel, ${String(instant)} off the global cooldown`,
+  );
+}
+
+/**
+ * How much of the null a reader can rule out. Only "no world" is separable from here; a live
+ * player answering null is where a renamed member would land, looking like an offline session.
+ */
+function noMultWord() {
+  if (woc.world.player === null) {
+    return 'no world yet, so the server has sent no multiplier';
+  }
+  return 'a live player and still no answer: offline, spectating, or the older movement wire';
+}
+
+/**
+ * The server's own movement multiplier. FOUR WAYS TO NULL, none a failure: before world entry,
+ * offline play, spectating (the server skips the block) and the older movement wire. A null
+ * must stay a null, since 1 is a real reading meaning nothing is affecting the player.
+ */
+function checkMoveSpeed() {
+  const mult = woc.world.moveSpeedMult;
+  if (mult === undefined) {
+    return result('move speed', false, 'world.moveSpeedMult never reached the object');
+  }
+  if (mult === null) {
+    return result('move speed', true, noMultWord());
+  }
+  if (!Number.isFinite(mult) || mult <= 0) {
+    return result('move speed', false, `the server sent a multiplier of ${String(mult)}`);
+  }
+  return result('move speed', true, `moving at ${mult.toFixed(DECIMALS_MULT)}x your base speed`);
+}
+
+/**
  * Only answerable while there is a player, and checked against the player's OWN position,
  * where the answers are known without a second source. A null from either while a player
  * is live means the surface is reading a position the loader does not have.
@@ -1613,20 +1704,27 @@ const LIVE_CHECKS = [
   checkWorld,
   checkAbilities,
   checkDescribe,
+  checkAbilityShapes,
   checkGeometry,
+  checkMoveSpeed,
   checkCombat,
   checkCombatRecords,
   checkMobTargeting,
   checkEntityStats,
+  checkSwings,
   checkUnits,
   checkReaction,
   checkAuraQueries,
   checkAuraPolarity,
   checkHoldings,
+  checkProvenance,
   checkCharacter,
   checkCharacterKey,
   checkContent,
   checkCounters,
+  checkVault,
+  checkCraftVault,
+  checkBankBudget,
   checkSaleLedger,
   checkGroup,
   checkCasts,
@@ -1938,6 +2036,226 @@ function checkCounters() {
     return result('counters', true, `${GATED_READS.join(', ')}: none of them in reach`);
   }
   return result('counters', true, `in reach: ${open.join(', ')}`);
+}
+
+/** A stock record, which the vault and the crafting draw both answer with. */
+function stockFault(stock) {
+  if (stock === null || typeof stock !== 'object' || Array.isArray(stock)) {
+    return `the stock came back as ${typeOf(stock)} rather than a record`;
+  }
+  for (const [itemId, count] of Object.entries(stock)) {
+    if (!Number.isFinite(count) || count < 0) {
+      return `${itemId} is held at ${String(count)}`;
+    }
+  }
+  return null;
+}
+
+/** The upgrade ladder: locked caps every material at nothing, fully bought quotes no next price. */
+function vaultRungFault(upgrades, cap, next) {
+  if (!Number.isInteger(upgrades) || upgrades < 0 || upgrades > VAULT_RUNGS) {
+    return `upgrades is ${String(upgrades)}, outside 0 to ${String(VAULT_RUNGS)}`;
+  }
+  if (upgrades === 0 && cap !== 0) {
+    return `a locked vault caps every material at ${String(cap)} rather than at nothing`;
+  }
+  if (upgrades === VAULT_RUNGS && next !== null) {
+    return `every rung is bought and the next still costs ${String(next)}`;
+  }
+  if (next !== null && !Number.isFinite(next)) {
+    return `nextUpgradeCost is ${String(next)}`;
+  }
+  return null;
+}
+
+/**
+ * The Materials Vault: one count per material against a cap they all share, with a missing
+ * key meaning zero, so keys count materials STOCKED. `checkCounters` already holds status to
+ * payload, so only the payload is checked, and `stock` is never sorted: key order is not a
+ * fact about it.
+ */
+function checkVault() {
+  const { vault } = woc.world;
+  if (vault === undefined) {
+    return result('vault', false, 'world.vault never reached the object an addon is handed');
+  }
+  if (vault.status !== 'near') {
+    return result('vault', true, `no banker in reach, so the vault reads "${vault.status}"`);
+  }
+  const { stock, special, upgrades, perMaterialCap, nextUpgradeCost } = vault.info;
+  const fault = stockFault(stock) ?? vaultRungFault(upgrades, perMaterialCap, nextUpgradeCost);
+  if (fault !== null) {
+    return result('vault', false, fault);
+  }
+  // Crafted or signed stacks, which cannot collapse into a count. Empty is the ordinary state.
+  if (!Array.isArray(special)) {
+    return result('vault', false, `special is ${typeOf(special)} rather than a list of stacks`);
+  }
+  return result(
+    'vault',
+    true,
+    `${String(Object.keys(stock).length)} materials stocked and ` +
+      `${String(special.length)} identity rows, ${String(upgrades)} rungs ` +
+      `at ${String(perMaterialCap)} each`,
+  );
+}
+
+/**
+ * What crafting may draw from the vault where the player stands: a ROOT read, not a gated
+ * one, since it is refused inside every instance and no banker changes that. An EMPTY record
+ * means allowed with nothing to draw, NULL means refused here, and undefined means unwired.
+ */
+function checkCraftVault() {
+  const stock = woc.world.craftVaultStock;
+  if (stock === undefined) {
+    return result('craft vault', false, 'world.craftVaultStock never reached the object');
+  }
+  if (stock === null) {
+    return result(
+      'craft vault',
+      true,
+      'no draw here: inside an instance, or before the first snapshot',
+    );
+  }
+  // A status would be advice that cannot be taken: "walk to a banker" is wrong in a dungeon.
+  if (stock.status !== undefined) {
+    return result('craft vault', false, `it came back gated, carrying "${String(stock.status)}"`);
+  }
+  const fault = stockFault(stock);
+  if (fault !== null) {
+    return result('craft vault', false, fault);
+  }
+  const held = Object.keys(stock).length;
+  if (held === 0) {
+    return result('craft vault', true, 'the draw is allowed and the vault holds nothing');
+  }
+  return result('craft vault', true, `${String(held)} materials drawable from where you stand`);
+}
+
+/**
+ * The bag sockets. ALWAYS FOUR ENTRIES, since the index IS the socket number and a short
+ * array renumbers every socket after the gap.
+ */
+function socketFault(info) {
+  const bags = info.socketBags;
+  const open = info.socketsUnlocked;
+  if (!Array.isArray(bags) || bags.length !== BANK_SOCKETS) {
+    return `socketBags holds ${String(bags?.length)} entries rather than ${String(BANK_SOCKETS)}`;
+  }
+  if (!Number.isInteger(open) || open < 0 || open > BANK_SOCKETS) {
+    return `socketsUnlocked is ${String(open)}, outside 0 to ${String(BANK_SOCKETS)}`;
+  }
+  const beyond = bags.slice(open).filter((bag) => bag !== null).length;
+  if (beyond > 0) {
+    return `${String(beyond)} bags sit past the ${String(open)} sockets that are open`;
+  }
+  if (open === BANK_SOCKETS && info.nextSocketCost !== null) {
+    return `every socket is open and the next still costs ${String(info.nextSocketCost)}`;
+  }
+  return null;
+}
+
+/**
+ * The two sums the published types say a consumer may RELY on; the game's own decoder refuses
+ * a snapshot where either fails.
+ */
+function budgetFault(info) {
+  const { capacity, generalCapacity, materialsCapacity, generalUsed, materialsUsed } = info;
+  if (generalCapacity + materialsCapacity !== capacity) {
+    return (
+      `${String(generalCapacity)} general and ${String(materialsCapacity)} materials ` +
+      `is not the ${String(capacity)} the bank reports`
+    );
+  }
+  if (generalUsed + materialsUsed !== info.slots.length) {
+    return (
+      `${String(generalUsed)} and ${String(materialsUsed)} charged ` +
+      `against ${String(info.slots.length)} stacks`
+    );
+  }
+  return null;
+}
+
+/** The Claudium rung price, which is ABSENT rather than null when there is not one. */
+function claudiumWord(price) {
+  if (price === undefined) {
+    return 'no Claudium price';
+  }
+  return `${String(price)} Claudium for the next rung`;
+}
+
+/**
+ * The split budget and the four bag sockets, from game 0.41.0. `capacity` is a DISPLAY TOTAL,
+ * never a fit answer, since a general deposit can be refused while the materials pool has
+ * room. A used count is deliberately not bounded by its capacity: unsocketing a bag shrinks a
+ * pool without destroying its contents, and the game tolerates the overflow.
+ */
+function checkBankBudget() {
+  const { bank } = woc.world;
+  if (bank.status !== 'near') {
+    return result('bank budget', true, `no banker in reach, so the bank reads "${bank.status}"`);
+  }
+  const { info } = bank;
+  const fault = socketFault(info) ?? budgetFault(info);
+  if (fault !== null) {
+    return result('bank budget', false, fault);
+  }
+  const claudium = info.nextRungClaudiumPrice;
+  if (claudium !== undefined && !Number.isFinite(claudium)) {
+    return result('bank budget', false, `nextRungClaudiumPrice arrived as ${String(claudium)}`);
+  }
+  const filled = info.socketBags.filter((bag) => bag !== null).length;
+  return result(
+    'bank budget',
+    true,
+    `${String(info.generalUsed)}/${String(info.generalCapacity)} general, ` +
+      `${String(info.materialsUsed)}/${String(info.materialsCapacity)} materials, ` +
+      `${String(filled)} of ${String(info.socketsUnlocked)} open sockets filled, ` +
+      claudiumWord(claudium),
+  );
+}
+
+/** Every stack of the player's OWN the session can currently reach, in one list. */
+function heldStacks() {
+  const { inventory, bank, vault } = woc.world;
+  const held = [...(inventory ?? [])];
+  if (bank.status === 'near') {
+    held.push(...bank.info.slots);
+  }
+  if (vault?.status === 'near') {
+    held.push(...vault.info.special);
+  }
+  return held;
+}
+
+/**
+ * `craftedRecipeId`, the recipe a stack was minted from. Only ever on a stack of the player's
+ * OWN: a market row, a letter attachment and a guild bank row are built field by field
+ * without it, so read off anything public it is an absence. Absent is the ordinary case, so
+ * the count is reported and never required.
+ */
+function checkProvenance() {
+  if (woc.world.inventory === null) {
+    return result('provenance', true, 'no world yet, so there are no stacks of your own to read');
+  }
+  const held = heldStacks();
+  const wrong = held.filter((slot) => {
+    const made = slot.craftedRecipeId;
+    return made !== undefined && (typeof made !== 'string' || made.length === 0);
+  });
+  if (wrong.length > 0) {
+    return result(
+      'provenance',
+      false,
+      `${String(wrong.length)} stacks carry a recipe id that is not one`,
+    );
+  }
+  const made = held.filter((slot) => slot.craftedRecipeId !== undefined).length;
+  return result(
+    'provenance',
+    true,
+    `${String(made)} of ${String(held.length)} stacks in reach record what minted them`,
+  );
 }
 
 /** Whether a published table is the frozen copy it claims to be. */
@@ -2301,6 +2619,58 @@ function checkEntityStats() {
     'entity stats',
     true,
     `yours ${String(player.rangedPower)}, ${armed.length} others carry ranged power, ${hidden.length} hide a helm`,
+  );
+}
+
+/**
+ * A shape fault, or a timer with no flag under it. The server omits the swing block for an
+ * entity that is not auto-attacking and the client reads that omission as false, so a timer
+ * without the flag is a bar counting down to nothing.
+ */
+function swingFault(entity) {
+  if (typeof entity.autoAttack !== 'boolean' || typeof entity.swingTimer !== 'number') {
+    return `autoAttack is ${typeOf(entity.autoAttack)}, swingTimer ${typeOf(entity.swingTimer)}`;
+  }
+  if (!entity.autoAttack && entity.swingTimer !== 0) {
+    return `a swing timer of ${String(entity.swingTimer)} on an entity that is not attacking`;
+  }
+  return null;
+}
+
+/**
+ * `autoAttack` and `swingTimer` ride every entity record as of game 0.41.0; an older server
+ * answers false and 0 on everybody but you, which looks like nobody fighting and is not
+ * failed. `offhandSwingTimer` is self-only, so a non-zero one on anyone else is the wire
+ * having moved.
+ */
+function checkSwings() {
+  const { player } = woc.world;
+  if (player === null) {
+    return result('swings', true, 'no player yet, so there is nothing swinging');
+  }
+  if (typeof player.offhandSwingTimer !== 'number') {
+    return result('swings', false, `offhandSwingTimer is ${typeOf(player.offhandSwingTimer)}`);
+  }
+  const all = [...woc.world.entities.values()];
+  const faulted = all.map(swingFault).filter((one) => one !== null);
+  if (faulted.length > 0) {
+    return result('swings', false, faulted.slice(0, MAX_CONTRADICTIONS).join('; '));
+  }
+  const others = all.filter((entity) => entity !== player);
+  const offhanded = others.filter((entity) => entity.offhandSwingTimer !== 0);
+  if (offhanded.length > 0) {
+    return result(
+      'swings',
+      false,
+      `${String(offhanded.length)} others carry an offhand timer, which rides your record alone`,
+    );
+  }
+  const swinging = others.filter((entity) => entity.autoAttack).length;
+  return result(
+    'swings',
+    true,
+    `${String(swinging)} of ${String(others.length)} others swinging, ` +
+      `your offhand ${player.offhandSwingTimer.toFixed(DECIMALS_YARDS)}s out`,
   );
 }
 

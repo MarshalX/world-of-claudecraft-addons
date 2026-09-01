@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { economyReads } from '../loader/src/runtime/api/world-reads.ts';
+import { economyReads } from '../loader/src/runtime/api/world-economy-reads.ts';
 import { createGameBackend } from '../loader/src/runtime/world/backend.ts';
 import type { WorldHub } from '../loader/src/runtime/world/hub.ts';
 import { capture } from '../loader/src/runtime/world/signature.ts';
@@ -70,13 +70,42 @@ const A_RING = [
   { itemId: 'linen', count: 4 },
 ];
 
-const A_VAULT = {
+/**
+ * The deposit box. Keep the game's decoder invariants when editing a case:
+ * `generalCapacity + materialsCapacity` is `capacity`, and
+ * `generalUsed + materialsUsed` is `slots.length`.
+ */
+const A_BANK = {
   slots: [{ itemId: 'linen', count: 8 }],
   capacity: 24,
   purchasedSlots: 0,
   bonusSlots: 0,
   nextExpansionCost: 500,
   bonusSources: [],
+  socketsUnlocked: 1,
+  socketBags: ['runecloth_bag', null, null, null],
+  nextSocketCost: 25_000,
+  generalCapacity: 16,
+  materialsCapacity: 8,
+  generalUsed: 1,
+  materialsUsed: 0,
+};
+
+/**
+ * A material-to-count record, built from pairs: the keys are the game's item ids,
+ * which `useNamingConvention` would flag as object-literal keys.
+ */
+function stock(...rows: readonly (readonly [string, number])[]): Record<string, number> {
+  return Object.fromEntries(rows);
+}
+
+/** The Materials Vault: per-material stock rather than a slot budget. */
+const A_VAULT = {
+  stock: stock(['copper_ore', 120], ['linen', 40]),
+  special: [{ itemId: 'sheenleaf_herb', count: 2, craftedRecipeId: 'tincture' }],
+  upgrades: 2,
+  perMaterialCap: 80,
+  nextUpgradeCost: 12_000,
 };
 
 /**
@@ -95,6 +124,8 @@ function gameWorld(over: Record<string, unknown> = {}): Record<string, unknown> 
       mailInfo: null,
       mailUnread: 0,
       bankInfo: null,
+      vaultInfo: null,
+      craftVaultStock: null,
       vendorBuyback: [],
       ...over,
     },
@@ -165,9 +196,42 @@ describe('the proximity-gated economy reads', () => {
     const game = gameWorld();
     const backend = backendOf(game);
 
-    setAt(at(game, 'world'), 'bankInfo', A_VAULT);
+    setAt(at(game, 'world'), 'bankInfo', A_BANK);
 
     expect(backend.bank.info?.capacity).toBe(24);
+  });
+});
+
+// The store is banker-gated and the craft draw is not; do not fold them into one shape.
+describe('the Materials Vault', () => {
+  it('gates the store on the banker, like the bank beside it', () => {
+    const away = backendOf(gameWorld({ bankInfo: A_BANK }));
+    const near = backendOf(gameWorld({ bankInfo: A_BANK, vaultInfo: A_VAULT }));
+
+    expect(away.vault).toEqual({ status: 'away', info: null });
+    expect(near.vault.status).toBe('near');
+    expect(near.vault.info?.perMaterialCap).toBe(80);
+  });
+
+  it('answers unknown before a snapshot has decoded, rather than away', () => {
+    const backend = backendOf(gameWorld({ entities: new Map<number, unknown>() }));
+
+    expect(backend.vault.status).toBe('unknown');
+  });
+
+  it('tells an empty craft draw from a refused one', () => {
+    const empty = backendOf(gameWorld({ craftVaultStock: {} }));
+    const refused = backendOf(gameWorld({ craftVaultStock: null }));
+
+    expect(empty.craftVaultStock).toEqual({});
+    expect(refused.craftVaultStock).toBeNull();
+  });
+
+  it('reads the craft draw with no banker anywhere', () => {
+    const backend = backendOf(gameWorld({ craftVaultStock: stock(['copper_ore', 120]) }));
+
+    expect(backend.vault.status).toBe('away');
+    expect(backend.craftVaultStock).toEqual(stock(['copper_ore', 120]));
   });
 });
 
@@ -298,15 +362,66 @@ describe('the economy signatures', () => {
   });
 
   it('fires when a bank expansion is bought', () => {
-    const wider = { ...A_VAULT, capacity: 30, purchasedSlots: 6, nextExpansionCost: 1000 };
+    const wider = { ...A_BANK, capacity: 30, purchasedSlots: 6, nextExpansionCost: 1000 };
 
-    expect(capture('bank', near(A_VAULT))).not.toBe(capture('bank', near(wider)));
+    expect(capture('bank', near(A_BANK))).not.toBe(capture('bank', near(wider)));
   });
 
   it('fires when a bank slot is filled', () => {
-    const stocked = { ...A_VAULT, slots: [{ itemId: 'linen', count: 9 }] };
+    const stocked = { ...A_BANK, slots: [{ itemId: 'linen', count: 9 }] };
 
-    expect(capture('bank', near(A_VAULT))).not.toBe(capture('bank', near(stocked)));
+    expect(capture('bank', near(A_BANK))).not.toBe(capture('bank', near(stocked)));
+  });
+
+  // Three ways the bag sockets move a bank without moving its capacity.
+  it('fires when an empty bag socket is unlocked', () => {
+    const unlocked = { ...A_BANK, socketsUnlocked: 2, nextSocketCost: 50_000 };
+
+    expect(capture('bank', near(A_BANK))).not.toBe(capture('bank', near(unlocked)));
+  });
+
+  it('fires when one bag is swapped for another of the same size', () => {
+    const swapped = { ...A_BANK, socketBags: ['mooncloth_bag', null, null, null] };
+
+    expect(capture('bank', near(A_BANK))).not.toBe(capture('bank', near(swapped)));
+  });
+
+  it('fires when a bag swap moves capacity between the two pools', () => {
+    const repooled = { ...A_BANK, generalCapacity: 8, materialsCapacity: 16 };
+
+    expect(capture('bank', near(A_BANK))).not.toBe(capture('bank', near(repooled)));
+  });
+
+  it('fires when the pool occupancy moves under an unchanged slot list', () => {
+    const recharged = { ...A_BANK, generalUsed: 0, materialsUsed: 1 };
+
+    expect(capture('bank', near(A_BANK))).not.toBe(capture('bank', near(recharged)));
+  });
+
+  it('fires when a material is deposited into the vault', () => {
+    const fuller = { ...A_VAULT, stock: stock(['copper_ore', 140], ['linen', 40]) };
+
+    expect(capture('vault', near(A_VAULT))).not.toBe(capture('vault', near(fuller)));
+  });
+
+  // The record round-trips through the server's database and comes back re-ordered.
+  it('stays quiet when the stock comes back in another key order', () => {
+    const shuffled = { ...A_VAULT, stock: stock(['linen', 40], ['copper_ore', 120]) };
+
+    expect(capture('vault', near(A_VAULT))).toBe(capture('vault', near(shuffled)));
+  });
+
+  it('fires when a vault rung is bought', () => {
+    const upgraded = { ...A_VAULT, upgrades: 3, perMaterialCap: 120, nextUpgradeCost: 24_000 };
+
+    expect(capture('vault', near(A_VAULT))).not.toBe(capture('vault', near(upgraded)));
+  });
+
+  it('tells a refused craft draw from an allowed but empty one', () => {
+    expect(capture('craftVaultStock', null)).not.toBe(capture('craftVaultStock', {}));
+    expect(capture('craftVaultStock', {})).not.toBe(
+      capture('craftVaultStock', stock(['copper_ore', 1])),
+    );
   });
 
   // Ordering is the only thing the ring tells an addon, so a sorted capture

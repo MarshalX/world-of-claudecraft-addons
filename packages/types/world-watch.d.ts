@@ -14,7 +14,8 @@ import type { AbilityIndex } from './abilities.js';
 import type { ArenaStandings } from './arena.js';
 import type { BattlegroundStandings } from './battleground.js';
 import type { CharacterInfo, ProfessionInfo, TalentInfo } from './character.js';
-import type { BankState, MailState, MarketState } from './economy.js';
+import type { MailState, MarketState } from './economy.js';
+import type { BankState, VaultState } from './economy-storage.js';
 import type { Aura, Entity, EquipSlot, ItemInstance, Vec3 } from './entity.js';
 import type { FinderInfo, FinderListingRow } from './finder.js';
 import type { EncounterInfo, GroupInfo } from './group.js';
@@ -79,8 +80,20 @@ export interface WorldValues {
   mail: MailState;
   /** Delivered and unread letters. Added in API minor 2. */
   mailUnread: number | null;
-  /** The deposit box, or why there is not one. Never null. Added in API minor 2. */
+  /**
+   * The deposit box, or why there is not one. Never null. Added in API minor 2.
+   * Fires on the pool split and the bag sockets as well as the contents, none of
+   * which moves `capacity`.
+   */
   bank: BankState;
+  /** The Materials Vault, or why there is not one. Never null. Added in API minor 10. */
+  vault: VaultState;
+  /**
+   * What crafting may draw from the vault where you stand. Fires on the GATE as
+   * well as the contents, so entering and leaving an instance each report.
+   * Added in API minor 10.
+   */
+  craftVaultStock: Readonly<Record<string, number>> | null;
   /** The buyback ring, most recent first. Added in API minor 2. */
   buyback: readonly InvSlot[] | null;
 }

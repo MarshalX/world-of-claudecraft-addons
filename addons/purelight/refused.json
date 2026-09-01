@@ -1,0 +1,66 @@
+{
+  "gameVersion": "0.41.1",
+  "source": "src/sim (every applyAura literal carrying encounterOwned), src/sim/aura_classify.ts",
+  "auras": [
+    {
+      "id": "ignivar_brand_of_the_pyre",
+      "reason": "encounter"
+    },
+    {
+      "id": "ignivar_forge_chains",
+      "reason": "encounter"
+    },
+    {
+      "id": "ignivar_last_inferno",
+      "reason": "encounter"
+    },
+    {
+      "id": "ignivar_molten_armor",
+      "reason": "encounter"
+    },
+    {
+      "id": "shaman_stormsurge_ready",
+      "reason": "display"
+    },
+    {
+      "id": "varkhul_cinder_orbs",
+      "reason": "encounter"
+    },
+    {
+      "id": "varkhul_crucible_exposure",
+      "reason": "encounter"
+    },
+    {
+      "id": "varkhul_forge_shattered",
+      "reason": "encounter"
+    },
+    {
+      "id": "varkhul_makers_brand",
+      "reason": "encounter"
+    },
+    {
+      "id": "varkhul_masterpiece_unbound",
+      "reason": "encounter"
+    },
+    {
+      "id": "varkhul_masters_assembly",
+      "reason": "encounter"
+    },
+    {
+      "id": "varkhul_red_hot_metal",
+      "reason": "encounter"
+    },
+    {
+      "id": "varkhul_red_hot_metal_absorb",
+      "reason": "encounter"
+    },
+    {
+      "id": "varkhul_shared_pyre",
+      "reason": "encounter"
+    },
+    {
+      "id": "varkhul_tempered_wound",
+      "reason": "encounter"
+    }
+  ]
+}

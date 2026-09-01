@@ -40,6 +40,20 @@ const HALF = 2;
 const KEEP_VISIBLE_X = 120;
 const TITLE_BAR_HEIGHT = 44;
 
+/**
+ * Room the arrange-mode name chip needs above a frame, derived from its rule in
+ * `ui/styles/chrome.css`: line height plus padding, border, lift and the outline
+ * offset. Change one and change the other, or a frame parked near the top loses its
+ * chip to the viewport edge.
+ */
+const LABEL_CLEARANCE = 32;
+
+/**
+ * On a frame whose chip has to hang below it. Written by `paint` in frame/interactive.ts
+ * and styled in `ui/styles/chrome.css`.
+ */
+const LABEL_BELOW_CLASS = 'woc-label-below';
+
 interface FrameBox {
   x: number;
   y: number;
@@ -188,6 +202,11 @@ function initialBox(viewport: Viewport, size: Viewport, bounds?: SizeBounds): Fr
   );
 }
 
+/** Whether the name chip hangs below the frame. Above is the default, where it covers nothing the frame drew. */
+function labelBelow(top: number, clearance: number = LABEL_CLEARANCE): boolean {
+  return top < clearance;
+}
+
 export type { FrameBox, SizeAxes, SizeBounds, Viewport };
 export {
   clampBox,
@@ -198,6 +217,9 @@ export {
   FLOOR_WIDTH,
   initialBox,
   isFrameBox,
+  LABEL_BELOW_CLASS,
+  LABEL_CLEARANCE,
+  labelBelow,
   MIN_HEIGHT,
   MIN_WIDTH,
 };

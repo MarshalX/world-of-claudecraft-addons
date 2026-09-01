@@ -25,6 +25,11 @@
 // An anchored bar is placed by UNIT, not by a point plus a guessed lift, since only the
 // renderer knows a model's height. Collisions are lifted clear rather than hidden, and a
 // lifted bar takes its caster's name back because it is no longer over them.
+//
+// A hold-to-charge ability's STAGE is on no wire, so it is derived the way the game derives
+// its own, from the cast clock and a stage count off `AbilityInfo`, which is YOUR OWN
+// spellbook. A cast you cannot name gives no signal that it is charged at all, so it draws as
+// an ordinary cast carrying the mark: do not invent a "charging, stage unknown" row.
 
 const DECIMALS = 1;
 const FRAME_WIDTH = 240;
@@ -128,21 +133,78 @@ function visible() {
 function describe(abilityId) {
   const found = woc.world.abilities.describe(abilityId);
   if (!found.known) {
-    return { label: `${found.name}${GUESS_MARK}`, school: null, guessed: true };
+    return { label: `${found.name}${GUESS_MARK}`, school: null, guessed: true, stages: 0 };
   }
-  return { label: found.name, school: found.school, guessed: false };
+  return { label: found.name, school: found.school, guessed: false, stages: stagesOf(abilityId) };
 }
 
 /**
- * The long version of the hedge the label already carries, and only on a listed row: an
- * anchor takes no pointer events, so an anchored bar has nothing to hover. Nothing at
- * all for a name that came out of your spellbook.
+ * How many charge stages this ability holds, or 0 for anything that is not one.
+ * `empowerStages` is absent on an ordinary ability rather than 0, and the game's release path
+ * treats a count at or under 1 as no charge, so both fall together here.
  */
-function guessLines(id) {
-  const row = bars.get(String(id));
-  if (row === undefined || !row.guessed) {
-    return '';
+function stagesOf(abilityId) {
+  const info = woc.world.abilities.byId(abilityId);
+  const stages = info?.empowerStages ?? 0;
+  if (stages <= 1) {
+    return 0;
   }
+  return stages;
+}
+
+/**
+ * How far into its charge a cast has got, 0 through 1: the game's own `empoweredCastProgress`,
+ * transcribed. A total of 0 answers 1 rather than dividing, as the game does; a NaN would
+ * reach a style property and drop the declaration silently.
+ */
+function castProgress(total, remaining) {
+  if (total <= 0) {
+    return 1;
+  }
+  return Math.max(0, Math.min(1, (total - remaining) / total));
+}
+
+/**
+ * How much of the cast is LEFT, with the same guard: a length-less cast draws a full bar.
+ * `castTotal` is zero-filled and `min-cast` admits 0, so the case is reachable.
+ */
+function castFraction(total, remaining) {
+  if (total <= 0) {
+    return 1;
+  }
+  return Math.max(0, Math.min(1, remaining / total));
+}
+
+/**
+ * Which stage that progress has reached, counting from 1: the game's own
+ * `empoweredStageForProgress`, clamp and `+1` included. A stage is the interval after its
+ * boundary, and the `min` keeps a finished cast at the last stage rather than one past it.
+ */
+function stageForProgress(progress, stageCount) {
+  if (stageCount <= 1) {
+    return 1;
+  }
+  const clamped = Math.max(0, Math.min(1, progress));
+  return Math.min(stageCount, Math.floor(clamped * stageCount) + 1);
+}
+
+/** The stage this row is showing right now, or 0 when it is not a charged cast at all. */
+function stageNow(row, cast) {
+  if (row.stages === 0) {
+    return 0;
+  }
+  return stageForProgress(castProgress(cast.total, cast.remaining), row.stages);
+}
+
+/** The head line: what is being cast, and how far it has been charged. */
+function headLine(row) {
+  if (row.stages === 0) {
+    return row.base;
+  }
+  return `${row.base} ${String(row.stage)}/${String(row.stages)}`;
+}
+
+function guessTip(row) {
   return {
     title: `${woc.fmt.titleCase(row.ability)}${GUESS_MARK}`,
     lines: [
@@ -154,8 +216,47 @@ function guessLines(id) {
         text: 'Untinted for the same reason: nothing on the wire says what school a cast is, so no colour here claims one.',
         tone: 'muted',
       },
+      {
+        text: 'And no charge stage, for the third time over: the stage count comes off your spellbook too, and nothing on the wire says a cast is being charged at all, so this row having no stage does not make it an ordinary cast.',
+        tone: 'muted',
+      },
     ],
   };
+}
+
+function chargeTip(row) {
+  return {
+    title: row.base,
+    lines: [
+      `Charging: stage ${String(row.stage)} of ${String(row.stages)}.`,
+      {
+        text: 'Hold to charge. The caster releases whenever they choose, so the countdown is the latest this can land rather than the earliest; left alone it goes off by itself at the last stage.',
+        tone: 'muted',
+      },
+      {
+        text: 'The stage is worked out from the cast clock, the way the game works out its own. It is here only because this ability is in your spellbook, which is where the stage count comes from and the only place it does.',
+        tone: 'muted',
+      },
+    ],
+  };
+}
+
+/**
+ * Only on a listed row: an anchor takes no pointer events, so an anchored bar has nothing to
+ * hover. Nothing for an ordinary cast your own spellbook named.
+ */
+function tipFor(id) {
+  const row = bars.get(String(id));
+  if (row === undefined) {
+    return '';
+  }
+  if (row.guessed) {
+    return guessTip(row);
+  }
+  if (row.stages > 0) {
+    return chargeTip(row);
+  }
+  return '';
 }
 
 /**
@@ -245,6 +346,12 @@ function createRow(entry) {
     anchor: null,
     ability: '',
     guessed: false,
+    /** The head line without the stage count, so one is not appended to itself. */
+    base: '',
+    /** 0 for a cast that is not charged. */
+    stages: 0,
+    /** The stage last drawn, so the label is rewritten when it moves and not per frame. */
+    stage: 0,
     lift: 0,
     // Read rather than captured, so one teardown covers both layouts.
     destroy: () => {
@@ -257,7 +364,7 @@ function createRow(entry) {
     row.anchor.el.style.width = `${ANCHOR_WIDTH}px`;
     row.anchor.el.appendChild(bar.el);
   } else {
-    woc.ui.tooltip(bar.el, () => guessLines(entry.id));
+    woc.ui.tooltip(bar.el, () => tipFor(entry.id));
   }
   return row;
 }
@@ -276,8 +383,11 @@ function name(row, entry) {
   row.ability = entry.cast.ability;
   const known = describe(entry.cast.ability);
   row.guessed = known.guessed;
+  row.base = known.label;
+  row.stages = known.stages;
+  row.stage = stageNow(row, entry.cast);
   const next = {
-    label: known.label,
+    label: headLine(row),
     icon: iconFor(entry.entity, entry.cast.ability),
     school: known.school,
   };
@@ -301,12 +411,27 @@ function toneFor(remaining) {
 }
 
 /**
+ * Recount the charge, rewriting the head line only when the stage moved: the stage is live,
+ * so it cannot ride the ability-change guard `name` uses.
+ */
+function recharge(row, cast) {
+  const stage = stageNow(row, cast);
+  if (stage === row.stage) {
+    return;
+  }
+  row.stage = stage;
+  row.bar.update({ label: headLine(row) });
+}
+
+/**
  * Where the cast has got to. The kit's fraction is how much is left, so the fill drains
- * toward the moment of impact rather than filling up to it.
+ * toward the moment of impact rather than filling up to it. On a charged cast that same
+ * drain is the charge filling up, and the countdown is when it goes off unreleased.
  */
 function paint(row, cast) {
+  recharge(row, cast);
   row.bar.update({
-    fraction: cast.remaining / cast.total,
+    fraction: castFraction(cast.total, cast.remaining),
     value: `${cast.remaining.toFixed(DECIMALS)}s`,
     tone: toneFor(cast.remaining),
   });

@@ -118,6 +118,11 @@ interface UiDeps {
   doc: Document;
   kit: UiKit;
   fqid: string;
+  /**
+   * The addon's manifest name, for the arrange-mode chip alone. Not on `woc`: an addon
+   * already knows its own name.
+   */
+  addonName: string;
   bag: DisposalBag;
   /** Report a throw from addon code the loader called. See `guarded`. */
   onError: (where: string, err: unknown) => void;
@@ -200,6 +205,7 @@ function addonFrame(deps: UiDeps, opts: FrameOpts, chrome: 'frame' | 'window'): 
     // own windows, which is the whole of why there are two bands. See ui/root.ts.
     root: deps.kit.hud,
     fqid: deps.fqid,
+    addonName: deps.addonName,
     chrome,
     opts: guarded(deps, opts),
     store: storeFor(deps, opts),

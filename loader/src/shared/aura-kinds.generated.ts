@@ -56,4 +56,15 @@ const DEBUFF_AURA_KINDS: ReadonlySet<string> = new Set([
   'vulnerability',
 ]);
 
-export { DEBUFF_AURA_KINDS };
+// Every aura id `isDispellableAura` refuses OUTRIGHT, whatever the flags and the
+// polarity on it say: one inline literal, and one set it consults for auras drawn
+// on the debuff surface that are not removable effects.
+//
+// NOT published as a type, unlike the kinds above: an addon compares `aura.kind`
+// and never has cause to name one of these.
+const UNDISPELLABLE_AURA_IDS: ReadonlySet<string> = new Set([
+  'divine_ascension',
+  'shaman_stormsurge_ready',
+]);
+
+export { DEBUFF_AURA_KINDS, UNDISPELLABLE_AURA_IDS };

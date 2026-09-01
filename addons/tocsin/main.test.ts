@@ -24,11 +24,32 @@ import SOURCE from './main.js?raw';
 const MANIFEST_JSON: unknown = JSON.parse(MANIFEST_TEXT);
 const TABLE = JSON.parse(TABLE_TEXT) as Table;
 
-/**
- * Written out with the keys this suite reads rather than as a `Record`, so a regenerated
- * table that drops one fails the TYPECHECK here instead of reading `undefined` into a fixture
- * and producing a case that quietly asserts nothing.
- */
+// The table's shape, written out with the keys this suite reads rather than as a `Record`, so
+// a regenerated table that drops one fails the TYPECHECK here instead of reading `undefined`
+// into a fixture and producing a case that quietly asserts nothing.
+
+type ConditionKind = 'aura' | 'cast' | 'hazard' | 'belowHp';
+
+interface Condition {
+  kind: ConditionKind;
+  id?: string;
+  hp?: number;
+}
+
+type AnchorKind = 'damage' | 'spawn' | 'cast' | 'partyAura' | 'hazard' | 'boss';
+
+interface Anchor {
+  kind: AnchorKind;
+  id?: string;
+  when?: Condition;
+}
+
+interface Seed {
+  id: string;
+  seconds: number;
+  mode?: 'floor' | 'cap';
+}
+
 interface Mechanic {
   id: string;
   label: string;
@@ -36,8 +57,12 @@ interface Mechanic {
   detail?: string;
   phase?: 'one' | 'two' | 'both';
   charge?: true;
-  liveCast?: string;
-  anchor?: { damage?: string; spawn?: string; cast?: string };
+  group?: string;
+  when?: Condition[];
+  unless?: Condition[];
+  freeze?: Condition[];
+  cadences?: Array<{ when: Condition; every: number }>;
+  anchor?: Anchor[];
 }
 
 interface ChannelsBlock {
@@ -93,17 +118,71 @@ interface EnrageBlock {
   name: string;
   aura: string;
   hp: number;
+  countdown?: true;
+  seconds?: number;
 }
 
-type Block = ChannelsBlock | MarksBlock | TankBlock | AddsBlock | EnrageBlock;
+interface DebuffsBlock {
+  kind: 'debuffs';
+  label: string;
+  aura: string;
+  durationSeconds?: number;
+  apart?: number;
+  count?: number;
+  note?: string;
+}
+
+interface SoakBlock {
+  kind: 'soak';
+  label: string;
+  aura: string;
+  radius: number;
+  seconds: number;
+  required: number;
+  total: number;
+  perMissing: number;
+}
+
+interface StationsBlock {
+  kind: 'stations';
+  label: string;
+  ready: string;
+  active: string;
+  spent: string;
+  activeSeconds: number;
+  count: number;
+  use: string;
+}
+
+interface GatesBlock {
+  kind: 'gates';
+  label: string;
+  rows: Array<{ id: string; name: string; hp: number; cast?: string; detail?: string }>;
+}
+
+type Block =
+  | ChannelsBlock
+  | MarksBlock
+  | TankBlock
+  | AddsBlock
+  | EnrageBlock
+  | DebuffsBlock
+  | SoakBlock
+  | StationsBlock
+  | GatesBlock;
 
 interface Encounter {
   id: string;
   templateId: string;
   name: string;
-  phases: { transitionAura: string; phaseTwoHp: number; seeds: Record<string, number> };
-  pullSeeds: Record<string, number>;
-  freeze: Array<{ kind: 'aura' | 'cast'; id: string }>;
+  phases?: { transitionAura: string; phaseTwoHp: number; seeds: Seed[] };
+  pullSeeds: Seed[];
+  freeze: Condition[];
+  spacing?: { group: string; seconds: number };
+  rates?: Array<{ when: Condition; multiplier: number }>;
+  reseeds?: Array<{ on: Condition; edge?: 'enters' | 'leaves'; seeds: Seed[] }>;
+  yells?: Array<{ text: string; edge: 'pull' | 'kill' }>;
+  wipes?: Array<{ ability: string }>;
   mechanics: Mechanic[];
   blocks: Block[];
 }
@@ -121,52 +200,84 @@ function only<T>(rows: T[], what: string): T {
   return row;
 }
 
-const ENCOUNTER: Encounter = only(TABLE.encounters, 'encounter');
-
-function blockOf<K extends Block['kind']>(kind: K): Extract<Block, { kind: K }> {
-  const found = ENCOUNTER.blocks.find((block) => block.kind === kind);
+/** By id rather than position, so a regenerated table can reorder. */
+function encounterOf(id: string): Encounter {
+  const found = TABLE.encounters.find((one) => one.id === id);
   if (found === undefined) {
-    throw new Error(`bosses.json declares no ${kind} block, so there is nothing to test`);
-  }
-  return found as Extract<Block, { kind: K }>;
-}
-
-/**
- * A helper rather than an index with a fallback: the key is a variable, which keeps the linter
- * and the compiler from asking for opposite things, and a missing seed throws by name rather
- * than defaulting to a zero that would make a case assert nothing.
- */
-function seedOf(id: string): number {
-  const found = ENCOUNTER.phases.seeds[id];
-  if (found === undefined) {
-    throw new Error(`bosses.json declares no phase-two seed for ${id}`);
+    throw new Error(`bosses.json carries no ${id} encounter, so there is nothing to test against`);
   }
   return found;
 }
 
+const ENCOUNTER: Encounter = encounterOf('nythraxis');
+const IGNIVAR: Encounter = encounterOf('ignivar');
+const VARKHUL: Encounter = encounterOf('varkhul');
+
+function blockIn<K extends Block['kind']>(row: Encounter, kind: K): Extract<Block, { kind: K }> {
+  const found = row.blocks.find((block) => block.kind === kind);
+  if (found === undefined) {
+    throw new Error(`bosses.json declares no ${kind} block on ${row.id}`);
+  }
+  return found as Extract<Block, { kind: K }>;
+}
+
+function blockOf<K extends Block['kind']>(kind: K): Extract<Block, { kind: K }> {
+  return blockIn(ENCOUNTER, kind);
+}
+
+/**
+ * A helper rather than a find with a fallback: a missing seed throws by name rather than
+ * defaulting to a zero that would make a case assert nothing.
+ */
+function seedIn(seeds: Seed[] | undefined, id: string, what: string): number {
+  const found = (seeds ?? []).find((one) => one.id === id);
+  if (found === undefined) {
+    throw new Error(`bosses.json declares no ${what} for ${id}`);
+  }
+  return found.seconds;
+}
+
+function seedOf(id: string): number {
+  return seedIn(ENCOUNTER.phases?.seeds, id, 'phase-two seed');
+}
+
 /** What the game's own initialiser starts a clock at, which is not always its cadence. */
 function pullSeedOf(id: string): number {
-  const found = ENCOUNTER.pullSeeds[id];
+  return seedIn(ENCOUNTER.pullSeeds, id, 'pull seed');
+}
+
+function mechanicIn(row: Encounter, id: string): Mechanic {
+  const found = row.mechanics.find((one) => one.id === id);
   if (found === undefined) {
-    throw new Error(`bosses.json declares no pull seed for ${id}`);
+    throw new Error(`bosses.json declares no ${id} mechanic on ${row.id}`);
   }
   return found;
 }
 
 function mechanicOf(id: string): Mechanic {
-  const found = ENCOUNTER.mechanics.find((one) => one.id === id);
-  if (found === undefined) {
-    throw new Error(`bosses.json declares no ${id} mechanic`);
+  return mechanicIn(ENCOUNTER, id);
+}
+
+function transitionAura(): string {
+  const { phases } = ENCOUNTER;
+  if (phases === undefined) {
+    throw new Error('bosses.json no longer gives nythraxis a transition to seed phase two from');
+  }
+  return phases.transitionAura;
+}
+
+const CHANNELS = blockOf('channels');
+function auraIdsIn(conditions: Condition[]): string[] {
+  const found: string[] = [];
+  for (const one of conditions) {
+    if (one.kind === 'aura' && one.id !== undefined) {
+      found.push(one.id);
+    }
   }
   return found;
 }
 
-const CHANNELS = blockOf('channels');
-/** What freezes every clock, and the seeds the next phase starts with. */
-const FREEZE_AURA = only(
-  ENCOUNTER.freeze.filter((one) => one.kind === 'aura').map((one) => one.id),
-  'freeze condition',
-);
+const FREEZE_AURA = only(auraIdsIn(ENCOUNTER.freeze), 'freeze condition');
 const SEED_GRAVEBREAKER = seedOf('gravebreaker');
 const PULL_GRAVEBREAKER = pullSeedOf('gravebreaker');
 const PULL_RAISE_FALLEN = pullSeedOf('raise-fallen');
@@ -217,6 +328,8 @@ interface Aura {
   sourceId: number;
   school: string;
   stacks?: number;
+  /** A second magnitude, which is where one mechanic puts the damage it will split. */
+  value2?: number;
 }
 
 interface MemberSpec {
@@ -600,20 +713,27 @@ describe('the shipped table', () => {
   });
 
   /**
-   * A live cast is NOT a way to start a clock, and accepting one here as if it were is how a
-   * mechanic shipped with nothing to seed its at all. `liveCast` draws the game's own bar
-   * while the cast runs and seeds nothing, so the cadence counted down once, clamped at zero
-   * and called the same banner every re-warn floor for the rest of the pull.
+   * A mechanic with neither an anchor nor a seed counts down once, clamps at zero and calls
+   * the same banner every re-warn floor for the rest of the pull. Drawing the game's own bar
+   * is NOT a way to start a clock; a cast ANCHOR both draws the bar and re-arms.
    */
-  it('gives every mechanic a way to start its clock, which a live cast is not', () => {
-    const stuck = ENCOUNTER.mechanics
-      .filter(
-        (one) =>
-          Object.values(one.anchor ?? {}).length === 0 &&
-          ENCOUNTER.pullSeeds[one.id] === undefined &&
-          ENCOUNTER.phases.seeds[one.id] === undefined,
-      )
-      .map((one) => one.id);
+  it('gives every mechanic a way to start its clock', () => {
+    const phaseSeeds = (row: Encounter): Seed[] => {
+      const { phases } = row;
+      if (phases === undefined) {
+        return [];
+      }
+      return phases.seeds;
+    };
+    const reseedSeeds = (row: Encounter): Seed[] =>
+      (row.reseeds ?? []).flatMap((rule) => rule.seeds);
+    const seeded = (row: Encounter, id: string): boolean =>
+      [...row.pullSeeds, ...phaseSeeds(row), ...reseedSeeds(row)].some((seed) => seed.id === id);
+    const stuck = TABLE.encounters.flatMap((row) =>
+      row.mechanics
+        .filter((one) => (one.anchor ?? []).length === 0 && !seeded(row, one.id))
+        .map((one) => `${row.id}/${one.id}`),
+    );
     expect(stuck).toEqual([]);
   });
 
@@ -1165,9 +1285,9 @@ describe('the banner', () => {
    */
   it('gives each mechanic its own floor rather than one between them all', async () => {
     const h = await start({ hp: 500, settings: { 'alert-lead': 4 } });
-    h.give(BOSS_ID, aura(ENCOUNTER.phases.transitionAura, { kind: 'stun', remaining: 21 }));
+    h.give(BOSS_ID, aura(transitionAura(), { kind: 'stun', remaining: 21 }));
     h.frame();
-    h.strip(BOSS_ID, ENCOUNTER.phases.transitionAura);
+    h.strip(BOSS_ID, transitionAura());
     h.frame();
     expect(banner()).toContain(GRAVEBREAKER.label);
     // Past the first card's own four seconds, so what is read here is the slot being free
@@ -1261,12 +1381,9 @@ describe('the mechanic timers', () => {
 
   it('seeds phase two from the transition ending, with the game’s own numbers', async () => {
     const h = await start({ hp: 500 });
-    h.give(
-      BOSS_ID,
-      aura(ENCOUNTER.phases.transitionAura, { kind: 'stun', remaining: 21, duration: 21 }),
-    );
+    h.give(BOSS_ID, aura(transitionAura(), { kind: 'stun', remaining: 21, duration: 21 }));
     h.frame();
-    h.strip(BOSS_ID, ENCOUNTER.phases.transitionAura);
+    h.strip(BOSS_ID, transitionAura());
     h.frame();
     expect(h.valueOf('mechanics', 'soul-rend')).toBe(`~${SEED_SOUL_REND.toFixed(1)}s`);
     const deathless = SEED_DEATHLESS;
@@ -1320,5 +1437,977 @@ describe('the mechanic timers', () => {
     clearCast(h.boss);
     h.frame();
     expect(h.valueOf('mechanics', 'deathless')).toBe(`~${DEATHLESS.every.toFixed(1)}s`);
+  });
+});
+
+// The two raid encounters. Three readings come off surfaces the dungeon boss never touches
+// (the ground-warning list, an aura EVENT rather than an aura, and the boss's own yell), and
+// each case drives the one its mechanic actually uses.
+
+const RAID_BOSS_ID = 800;
+const CONDUIT_IDS = [860, 861, 862, 863];
+const CONDUIT_NAMES = ['north_west', 'north_east', 'south_east', 'south_west'];
+const APOCALYPSE_ADD_ID = 870;
+
+const IG_STATIONS = blockIn(IGNIVAR, 'stations');
+const IG_BRAND = blockIn(IGNIVAR, 'debuffs');
+const IG_ENRAGE = blockIn(IGNIVAR, 'enrage');
+const IG_GATES = blockIn(IGNIVAR, 'gates');
+const IG_TANK = blockIn(IGNIVAR, 'tankStacks');
+const IG_ADDS = blockIn(IGNIVAR, 'adds');
+const IG_BRAND_MECHANIC = mechanicIn(IGNIVAR, 'brand');
+const IG_SEARING = mechanicIn(IGNIVAR, 'searing');
+const IG_RAYS = mechanicIn(IGNIVAR, 'rays');
+const IG_METEORS = mechanicIn(IGNIVAR, 'meteors');
+
+const VK_SOAK = blockIn(VARKHUL, 'soak');
+const VK_ENRAGE = blockIn(VARKHUL, 'enrage');
+const VK_SWEEP = mechanicIn(VARKHUL, 'sweep');
+const VK_ORBS = mechanicIn(VARKHUL, 'orbs');
+
+function castAnchorOf(mechanic: Mechanic): string {
+  const found = (mechanic.anchor ?? []).find((one) => one.kind === 'cast');
+  if (found?.id === undefined) {
+    throw new Error(`bosses.json no longer anchors ${mechanic.id} on a cast`);
+  }
+  return found.id;
+}
+
+function auraAnchorOf(mechanic: Mechanic): string {
+  const found = (mechanic.anchor ?? []).find((one) => one.kind === 'partyAura');
+  if (found?.id === undefined) {
+    throw new Error(`bosses.json no longer anchors ${mechanic.id} on an aura landing`);
+  }
+  return found.id;
+}
+
+function hazardAnchorOf(mechanic: Mechanic): string {
+  const found = (mechanic.anchor ?? []).find((one) => one.kind === 'hazard');
+  if (found?.id === undefined) {
+    throw new Error(`bosses.json no longer anchors ${mechanic.id} on a ground warning`);
+  }
+  return found.id;
+}
+
+function yellOf(row: Encounter, edge: 'pull' | 'kill'): string {
+  const found = (row.yells ?? []).find((one) => one.edge === edge);
+  if (found === undefined) {
+    throw new Error(`bosses.json declares no ${edge} yell for ${row.id}`);
+  }
+  return found.text;
+}
+
+function cadenceUnder(mechanic: Mechanic, auraId: string): number {
+  const found = (mechanic.cadences ?? []).find(
+    (one) => one.when.kind === 'aura' && one.when.id === auraId,
+  );
+  if (found === undefined) {
+    throw new Error(`bosses.json gives ${mechanic.id} no cadence under ${auraId}`);
+  }
+  return found.every;
+}
+
+function enrageAuraOf(block: EnrageBlock): string {
+  return block.aura;
+}
+
+interface RaidHarness extends TocsinHarness {
+  /** Put a ground warning of one kind on the snapshot, which is what the loader reads. */
+  hazard: (kind: string, count: number) => void;
+  /** Deliver an aura landing, which is the only clean edge Brand of the Pyre has. */
+  auraEvent: (name: string, targetId: number) => void;
+  /** Deliver a boss yell, the one exact pull edge the wire carries. */
+  yell: (text: string) => void;
+  /** The same, from some other entity, which is what a second instance's copy would be. */
+  yellFrom: (text: string, entityId: number) => void;
+  /** Swap one conduit's template, which is how its whole state reaches a client. */
+  conduit: (index: number, templateId: string) => void;
+  /** Deliver one damage record of any size, for the wipe cases. */
+  hit: (ability: string, amount: number) => void;
+}
+
+/** Which snapshot list the loader reads one ground-warning family from. */
+function hazardField(kind: string): string {
+  if (kind === 'ignivarMeteor') {
+    return 'activeIgnivarMeteors';
+  }
+  return 'activeVarkhulForgestormWarnings';
+}
+
+function raidTarget(opts: RaidOpts): number | null {
+  if (opts.engaged === false) {
+    return null;
+  }
+  return BRONN;
+}
+
+interface RaidOpts {
+  hp?: number;
+  engaged?: boolean;
+  settings?: Record<string, unknown>;
+  /** Whether the four conduits are in the room at all. */
+  conduits?: boolean;
+  /** What state each is in, in the arena's own order. Every one is ready by default. */
+  conduitStates?: readonly string[];
+}
+
+async function startRaid(row: Encounter, opts: RaidOpts = {}): Promise<RaidHarness> {
+  const entities = new Map<number, Fake>();
+  const rows = ROSTER.map(memberRow);
+  const player = liveEntity({ set: { id: PLAYER_ID, name: 'Marshal', templateId: 'warrior' } });
+  entities.set(PLAYER_ID, player);
+  for (const spec of ROSTER) {
+    if (spec.near === true && spec.pid !== PLAYER_ID) {
+      entities.set(
+        spec.pid,
+        liveEntity({
+          set: {
+            id: spec.pid,
+            name: spec.name,
+            kind: 'player',
+            pos: { x: spec.x, y: 0, z: spec.z },
+          },
+        }),
+      );
+    }
+  }
+  const boss = liveEntity({
+    set: {
+      id: RAID_BOSS_ID,
+      name: row.name,
+      kind: 'mob',
+      hostile: true,
+      templateId: row.templateId,
+      hp: opts.hp ?? 1000,
+      maxHp: 1000,
+      pos: { x: 0, y: 0, z: 0 },
+      aggroTargetId: raidTarget(opts),
+    },
+  });
+  entities.set(RAID_BOSS_ID, boss);
+  if (opts.conduits !== false) {
+    CONDUIT_IDS.forEach((id, index) => {
+      entities.set(
+        id,
+        liveEntity({
+          set: {
+            id,
+            name: `${CONDUIT_NAMES[index] ?? 'corner'} Water Conduit`,
+            kind: 'object',
+            templateId: opts.conduitStates?.[index] ?? IG_STATIONS.ready,
+            pos: { x: 0, y: 0, z: 0 },
+          },
+        }),
+      );
+    });
+  }
+  const world: Fake = {
+    entities,
+    player,
+    partyInfo: { leader: PLAYER_ID, raid: true, members: rows },
+    activeIgnivarMeteors: [] as unknown[],
+    activeVarkhulForgestormWarnings: [] as unknown[],
+  };
+  const harness = await mountAddon({
+    manifest: MANIFEST_TEXT,
+    source: SOURCE,
+    settings: opts.settings ?? {},
+    data: { 'bosses.json': TABLE_TEXT },
+    game: Promise.resolve({ world }),
+  });
+  teardown.push(harness.dispose);
+  await settle();
+
+  const entityOf = (pid: number): Fake => entities.get(pid) as Fake;
+  const base = {
+    ...harness,
+    boss,
+    entityOf,
+    spawn: (id: number, templateId: string, over: Fake = {}) => {
+      const entity = liveEntity({
+        set: { id, kind: 'mob', hostile: true, templateId, name: templateId, ...over },
+      });
+      entities.set(id, entity);
+      return entity;
+    },
+    setBossField: (field: string, value: unknown) => {
+      setField(boss, field, value);
+    },
+    despawn: (id: number) => {
+      entities.delete(id);
+    },
+    give: (pid: number, one: Aura) => {
+      const entity = entityOf(pid);
+      const held = readField<Aura[]>(entity, 'auras').filter((each) => each.id !== one.id);
+      setField(entity, 'auras', [...held, one]);
+    },
+    strip: (pid: number, id: string) => {
+      const entity = entityOf(pid);
+      setField(
+        entity,
+        'auras',
+        readField<Aura[]>(entity, 'auras').filter((each) => each.id !== id),
+      );
+    },
+    giveRow: (pid: number, id: string, remaining: number) => {
+      rows.find((each) => each.pid === pid)?.auras.push({ id, kind: 'vulnerability', remaining });
+    },
+    move: (pid: number, x: number, z: number) => {
+      const memberOf = rows.find((each) => each.pid === pid);
+      if (memberOf !== undefined) {
+        memberOf.x = x;
+        memberOf.z = z;
+      }
+      const entity = entities.get(pid);
+      if (entity !== undefined) {
+        setField(entity, 'pos', { x, y: 0, z });
+      }
+    },
+    channel: () => undefined,
+    damage: (ability: string) => {
+      harness.inbound(
+        eventsFrame([
+          { type: 'damage', sourceId: RAID_BOSS_ID, targetId: PLAYER_ID, amount: 10, ability },
+        ]),
+      );
+    },
+    frame: (times = 1) => {
+      for (let step = 0; step < times; step += 1) {
+        harness.frames.tick();
+      }
+    },
+    rows: (block: string) =>
+      [...(blockEl(block)?.querySelectorAll('[data-row]') ?? [])].map(
+        (el) => el.getAttribute('data-row') ?? '',
+      ),
+    labelOf: (block: string, one: string) => textIn(block, one, '.woc-bar-label'),
+    detailOf: (block: string, one: string) => textIn(block, one, '.woc-bar-detail'),
+    valueOf: (block: string, one: string) => textIn(block, one, '.woc-bar-value'),
+    shows: (block: string) => {
+      const el = blockEl(block);
+      return el !== null && !el.hasAttribute('hidden');
+    },
+    headingOf: (block: string) =>
+      blockEl(block)?.querySelector('.woc-layout-line')?.textContent ?? '',
+    warnings: () =>
+      harness.shared.logs
+        .tail(harness.fqid)
+        .filter((entry) => entry.level === 'warn')
+        .map((entry) => entry.text),
+    notes: () =>
+      [...document.querySelectorAll('.woc-layout-line')]
+        .filter((el) => !el.hasAttribute('hidden'))
+        .map((el) => el.textContent ?? '')
+        .filter(Boolean),
+  };
+  return {
+    ...base,
+    hazard: (kind, count) => {
+      const field = hazardField(kind);
+      setField(
+        world,
+        field,
+        Array.from({ length: count }, (_, index) => ({
+          id: `${kind}:${String(index)}`,
+          x: 0,
+          z: 0,
+          radius: 3,
+          innerRadius: 0,
+          duration: 2.5,
+          remaining: 2.5,
+        })),
+      );
+    },
+    auraEvent: (name, targetId) => {
+      harness.inbound(
+        eventsFrame([{ type: 'aura', targetId, name, gained: true, sourceId: RAID_BOSS_ID }]),
+      );
+    },
+    yell: (text) => {
+      harness.inbound(
+        eventsFrame([
+          {
+            type: 'chat',
+            fromPid: RAID_BOSS_ID,
+            from: row.name,
+            text,
+            channel: 'yell',
+            entityId: RAID_BOSS_ID,
+          },
+        ]),
+      );
+    },
+    yellFrom: (text, entityId) => {
+      harness.inbound(
+        eventsFrame([
+          { type: 'chat', fromPid: entityId, from: row.name, text, channel: 'yell', entityId },
+        ]),
+      );
+    },
+    conduit: (index, templateId) => {
+      const id = CONDUIT_IDS[index] ?? 0;
+      const entity = entities.get(id);
+      if (entity !== undefined) {
+        setField(entity, 'templateId', templateId);
+      }
+    },
+    hit: (ability, amount) => {
+      harness.inbound(
+        eventsFrame([
+          { type: 'damage', sourceId: RAID_BOSS_ID, targetId: PLAYER_ID, amount, ability },
+        ]),
+      );
+    },
+  };
+}
+
+describe('the raid rows in the shipped table', () => {
+  it('carries both encounters with the ids every reading joins on', () => {
+    expect(IGNIVAR.templateId).toBe('ignivar_herald_of_the_last_flame');
+    expect(VARKHUL.templateId).toBe('varkhul_forgefather_of_the_last_flame');
+    expect(IG_BRAND.aura).toBe('ignivar_brand_of_the_pyre');
+    expect(VK_SOAK.aura).toBe('varkhul_shared_pyre');
+  });
+
+  /** A kind added by a regenerated table lands here rather than in a silently blank panel. */
+  it('declares no block kind the addon has no renderer for', () => {
+    const kinds = new Set(TABLE.encounters.flatMap((row) => row.blocks.map((one) => one.kind)));
+    expect([...kinds].sort(byName)).toEqual([
+      'adds',
+      'channels',
+      'debuffs',
+      'enrage',
+      'gates',
+      'marks',
+      'soak',
+      'stations',
+      'tankStacks',
+    ]);
+  });
+
+  /**
+   * Its damage LABEL is worn by its own tick and by the proximity pulse too, so a damage
+   * anchor would re-arm it several times a second.
+   */
+  it('anchors the brand on the aura landing rather than on its damage label', () => {
+    expect((IG_BRAND_MECHANIC.anchor ?? []).map((one) => one.kind)).toEqual(['partyAura']);
+  });
+
+  /**
+   * Neither of these sets a cast on the boss and both deal damage only to whoever failed to
+   * move, so a damage anchor would leave the clock dead on exactly the cycles the raid
+   * answered correctly.
+   */
+  it('anchors the two silent mechanics on their ground warnings', () => {
+    expect(hazardAnchorOf(IG_METEORS)).toBe('ignivarMeteor');
+    expect(hazardAnchorOf(mechanicIn(VARKHUL, 'forgestorm'))).toBe('varkhulForgestorm');
+  });
+
+  it('ships normal tuning only, with no heroic-only mechanic in either row', () => {
+    const heroicOnly = [IGNIVAR, VARKHUL].flatMap((row) =>
+      row.mechanics.filter((one) => one.id.includes('chain') || one.id.includes('worldfire')),
+    );
+    expect(heroicOnly).toEqual([]);
+  });
+});
+
+describe('Ignivar', () => {
+  it('counts a mechanic down from the game’s own opening value on a pull it watched', async () => {
+    const h = await startRaid(IGNIVAR, { engaged: false });
+    h.frame();
+    h.setBossField('aggroTargetId', BRONN);
+    h.frame();
+    const opener = seedIn(IGNIVAR.pullSeeds, 'searing', 'pull seed');
+    expect(h.valueOf('mechanics', 'searing')).toBe(`~${opener.toFixed(1)}s`);
+  });
+
+  /** A yell is the only EXACT pull edge the wire carries: nobody watches a raid boss stand idle. */
+  it('seeds the clocks off the engage yell for a player who never saw the boss idle', async () => {
+    const h = await startRaid(IGNIVAR);
+    h.frame();
+    expect(h.detailOf('mechanics', 'searing')).toBe('armed, not seen yet');
+    h.yell(yellOf(IGNIVAR, 'pull'));
+    h.frame();
+    const opener = seedIn(IGNIVAR.pullSeeds, 'searing', 'pull seed');
+    expect(h.valueOf('mechanics', 'searing')).toBe(`~${opener.toFixed(1)}s`);
+  });
+
+  /**
+   * The same words from a second copy of the boss in another instance would otherwise seed
+   * this raid's clocks, so the line is matched against the entity as well as against the text.
+   */
+  it('ignores the engage line when it came from a different entity', async () => {
+    const h = await startRaid(IGNIVAR);
+    h.frame();
+    h.yellFrom(yellOf(IGNIVAR, 'pull'), RAID_BOSS_ID + 50);
+    h.frame();
+    expect(h.detailOf('mechanics', 'searing')).toBe('armed, not seen yet');
+  });
+
+  it('ignores a line this encounter does not declare', async () => {
+    const h = await startRaid(IGNIVAR);
+    h.frame();
+    h.yell(yellOf(VARKHUL, 'pull'));
+    h.frame();
+    expect(h.detailOf('mechanics', 'searing')).toBe('armed, not seen yet');
+  });
+
+  /**
+   * The four paced abilities keep ticking through each other's casts and the brand does not,
+   * because the game's driver returns before the brand's clock and after theirs.
+   */
+  it('holds the brand through a paced cast while the paced clocks keep running', async () => {
+    const h = await startRaid(IGNIVAR, { engaged: false });
+    h.frame();
+    h.setBossField('aggroTargetId', BRONN);
+    h.frame();
+    const brand = seedIn(IGNIVAR.pullSeeds, 'brand', 'pull seed');
+    const skyfire = seedIn(IGNIVAR.pullSeeds, 'skyfire', 'pull seed');
+    writeCast(h.boss, castAnchorOf(IG_SEARING), 3, 3);
+    h.frame();
+    h.advance(2000);
+    h.frame();
+    expect(h.valueOf('mechanics', 'brand')).toBe(`~${brand.toFixed(1)}s`);
+    expect(h.valueOf('mechanics', 'skyfire')).toBe(`~${(skyfire - 2).toFixed(1)}s`);
+  });
+
+  it('re-arms a paced mechanic from its own cast starting', async () => {
+    const h = await startRaid(IGNIVAR);
+    h.frame();
+    writeCast(h.boss, castAnchorOf(IG_SEARING), 3, 3);
+    h.frame();
+    clearCast(h.boss);
+    h.frame();
+    expect(h.valueOf('mechanics', 'searing')).toBe(`~${IG_SEARING.every.toFixed(1)}s`);
+  });
+
+  /**
+   * The game floors every paced ability at a fixed gap once any one resolves, so without this
+   * the other three read up to that gap early.
+   */
+  it('leaves the game’s own gap between one paced ability and the next', async () => {
+    const h = await startRaid(IGNIVAR, { engaged: false });
+    h.frame();
+    h.setBossField('aggroTargetId', BRONN);
+    h.frame();
+    const { spacing } = IGNIVAR;
+    if (spacing === undefined) {
+      throw new Error('bosses.json no longer spaces Ignivar’s paced abilities apart');
+    }
+    const gap = spacing.seconds;
+    // Run the skyfire clock down to under the gap, then resolve a DIFFERENT paced ability.
+    h.advance((seedIn(IGNIVAR.pullSeeds, 'skyfire', 'pull seed') - 1) * 1000);
+    writeCast(h.boss, castAnchorOf(IG_SEARING), 3, 3);
+    h.frame();
+    clearCast(h.boss);
+    h.frame();
+    expect(h.valueOf('mechanics', 'skyfire')).toBe(`~${gap.toFixed(1)}s`);
+  });
+
+  it('arms the brand from an aura landing and not from its own tick damage', async () => {
+    const h = await startRaid(IGNIVAR);
+    h.frame();
+    h.damage(auraAnchorOf(IG_BRAND_MECHANIC));
+    h.frame();
+    expect(h.detailOf('mechanics', 'brand')).toBe('armed, not seen yet');
+    h.auraEvent(auraAnchorOf(IG_BRAND_MECHANIC), PLAYER_ID);
+    h.frame();
+    expect(h.valueOf('mechanics', 'brand')).toBe(`~${IG_BRAND_MECHANIC.every.toFixed(1)}s`);
+  });
+
+  it('arms the meteor clock from a ground warning appearing, once per rain', async () => {
+    const h = await startRaid(IGNIVAR);
+    h.frame();
+    h.hazard('ignivarMeteor', 5);
+    h.frame();
+    expect(h.valueOf('mechanics', 'meteors')).toBe(`~${IG_METEORS.every.toFixed(1)}s`);
+    h.advance(2000);
+    // The same rain still on screen is not a second one, so nothing re-arms.
+    h.frame();
+    const left = IG_METEORS.every - 2;
+    expect(h.valueOf('mechanics', 'meteors')).toBe(`~${left.toFixed(1)}s`);
+  });
+
+  it('names who is branded and how close the nearest body is', async () => {
+    const h = await startRaid(IGNIVAR);
+    h.give(ALDREN, aura(IG_BRAND.aura, { kind: 'dot', remaining: 600, duration: 600 }));
+    h.giveRow(ALDREN, IG_BRAND.aura, 600);
+    h.move(ALDREN, 0, 0);
+    h.move(MALRIC, 1, 0);
+    h.frame();
+    expect(h.rows('debuffs')).toEqual([String(ALDREN)]);
+    expect(h.detailOf('debuffs', String(ALDREN))).toBe('Malric is 1.0yd away');
+  });
+
+  it('says the branded player is clear once everyone has moved off them', async () => {
+    const h = await startRaid(IGNIVAR);
+    h.give(ALDREN, aura(IG_BRAND.aura, { kind: 'dot', remaining: 600, duration: 600 }));
+    h.giveRow(ALDREN, IG_BRAND.aura, 600);
+    h.move(ALDREN, 0, 0);
+    for (const pid of [PLAYER_ID, VOSS, MALRIC, BRONN]) {
+      h.move(pid, 60, 60);
+    }
+    h.frame();
+    expect(h.detailOf('debuffs', String(ALDREN))).toBe(`nobody within ${String(IG_BRAND.apart)}yd`);
+  });
+
+  /** The brand is removed by water rather than by expiring, so a bar under it would sit full. */
+  it('draws no bar under a debuff that does not expire', () => {
+    expect(IG_BRAND.durationSeconds).toBeUndefined();
+  });
+});
+
+describe('the water conduits', () => {
+  it('draws every conduit in its own state, with the corner it is in', async () => {
+    const h = await startRaid(IGNIVAR);
+    h.conduit(1, IG_STATIONS.active);
+    h.conduit(2, IG_STATIONS.spent);
+    h.frame();
+    // Sorted by the game's own name, so the layout is the same every pull: north east, north
+    // west, south east, south west.
+    expect(h.rows('stations')).toEqual([861, 860, 862, 863].map(String));
+    expect(h.valueOf('stations', String(CONDUIT_IDS[0]))).toBe('READY');
+    expect(h.valueOf('stations', String(CONDUIT_IDS[2]))).toBe('SPENT');
+    expect(h.labelOf('stations', String(CONDUIT_IDS[0]))).toBe('North West');
+  });
+
+  /**
+   * A conduit's own seconds are not on the wire; the template swap is, because `templateId`
+   * is an identity field re-broadcast on change.
+   */
+  it('counts a conduit down from the swap it watched, not from a figure on the wire', async () => {
+    const h = await startRaid(IGNIVAR);
+    h.frame();
+    h.conduit(0, IG_STATIONS.active);
+    h.frame();
+    expect(h.valueOf('stations', String(CONDUIT_IDS[0]))).toBe(
+      `~${IG_STATIONS.activeSeconds.toFixed(1)}s`,
+    );
+    h.advance(4000);
+    h.frame();
+    const left = IG_STATIONS.activeSeconds - 4;
+    expect(h.valueOf('stations', String(CONDUIT_IDS[0]))).toBe(`~${left.toFixed(1)}s`);
+  });
+
+  it('says a conduit was already running rather than inventing a countdown for it', async () => {
+    const h = await startRaid(IGNIVAR);
+    h.conduit(0, IG_STATIONS.active);
+    h.frame(2);
+    expect(h.valueOf('stations', String(CONDUIT_IDS[0]))).toBe('LIVE');
+    expect(h.detailOf('stations', String(CONDUIT_IDS[0]))).toBe(
+      'running, started before this was watching',
+    );
+  });
+
+  it('says how many are out of range rather than letting a short list stand in', async () => {
+    const h = await startRaid(IGNIVAR, { conduits: false });
+    h.frame();
+    expect(h.rows('stations')).toEqual(['out-of-range']);
+    expect(h.labelOf('stations', 'out-of-range')).toBe(
+      `0 of ${String(IG_STATIONS.count)} in range`,
+    );
+  });
+});
+
+describe('Ignivar’s last phase', () => {
+  function enrage(h: RaidHarness, remaining: number): void {
+    h.give(
+      RAID_BOSS_ID,
+      aura(enrageAuraOf(IG_ENRAGE), {
+        kind: 'buff_haste',
+        remaining,
+        duration: IG_ENRAGE.seconds ?? 45,
+      }),
+    );
+  }
+
+  it('draws the game’s own countdown rather than a share of the boss’s health', async () => {
+    const h = await startRaid(IGNIVAR, { hp: 150 });
+    enrage(h, 31);
+    h.frame();
+    expect(h.valueOf('enrage', 'enrage')).toBe('31s');
+    expect(h.detailOf('enrage', 'enrage')).toBe('15% left, then the raid dies');
+  });
+
+  it('takes away the mechanics the phase replaces and puts up the one it adds', async () => {
+    const h = await startRaid(IGNIVAR, { hp: 150 });
+    h.frame();
+    expect(h.rows('mechanics')).toContain('forge-wave');
+    expect(h.rows('mechanics')).not.toContain('last-flame');
+    enrage(h, 40);
+    h.frame();
+    expect(h.rows('mechanics')).not.toContain('forge-wave');
+    expect(h.rows('mechanics')).toContain('last-flame');
+  });
+
+  it('re-arms what survives the phase at the phase’s own cadence, not the opening one', async () => {
+    const h = await startRaid(IGNIVAR, { hp: 150 });
+    enrage(h, 40);
+    h.frame();
+    writeCast(h.boss, castAnchorOf(IG_RAYS), 10, 10);
+    h.frame();
+    clearCast(h.boss);
+    h.frame();
+    const fast = cadenceUnder(IG_RAYS, enrageAuraOf(IG_ENRAGE));
+    expect(fast).toBeLessThan(IG_RAYS.every);
+    expect(h.valueOf('mechanics', 'rays')).toBe(`~${fast.toFixed(1)}s`);
+  });
+
+  /** The phase change rewrites several clocks at once, and it does it on an EDGE. */
+  it('re-seeds the clocks the game re-seeds when the phase opens', async () => {
+    const h = await startRaid(IGNIVAR, { hp: 150 });
+    h.frame();
+    enrage(h, 45);
+    h.frame();
+    const opening = (IGNIVAR.reseeds ?? []).find(
+      (rule) => rule.on.kind === 'aura' && rule.on.id === enrageAuraOf(IG_ENRAGE),
+    );
+    const brand = (opening?.seeds ?? []).find((seed) => seed.id === 'brand');
+    expect(brand).toBeDefined();
+    expect(h.valueOf('mechanics', 'brand')).toBe(`~${(brand?.seconds ?? 0).toFixed(1)}s`);
+  });
+});
+
+describe('the gates block', () => {
+  it('says nothing while the boss is a long way above the threshold', async () => {
+    const h = await startRaid(IGNIVAR, { hp: 1000 });
+    h.frame();
+    expect(h.shows('gates')).toBe(false);
+  });
+
+  it('names the next hard change once the boss is inside the band', async () => {
+    const gate = only(IG_GATES.rows, 'gate');
+    const h = await startRaid(IGNIVAR, { hp: Math.round((gate.hp + 0.05) * 1000) });
+    h.frame();
+    expect(h.rows('gates')).toContain(gate.id);
+    expect(h.labelOf('gates', gate.id)).toBe(gate.name);
+  });
+
+  it('goes live off the game’s own bar while the gate is casting', async () => {
+    const withCast = IG_GATES.rows.find((one) => one.cast !== undefined);
+    expect(withCast).toBeDefined();
+    const h = await startRaid(IGNIVAR, { hp: 1000 });
+    writeCast(h.boss, withCast?.cast ?? '', 7.5, 12);
+    h.frame();
+    expect(h.valueOf('gates', withCast?.id ?? '')).toBe('7.5s');
+  });
+});
+
+describe('the Apocalypse add', () => {
+  it('draws the cast it is racing rather than the health it happens to have', async () => {
+    const add = only(IG_ADDS.rows, 'add');
+    const h = await startRaid(IGNIVAR, { hp: 600 });
+    const entity = h.spawn(APOCALYPSE_ADD_ID, add.templateId, {
+      name: add.name,
+      hp: 400,
+      maxHp: 1000,
+    });
+    writeCast(entity, 'Apocalypse', 12.5, 20);
+    h.frame();
+    expect(h.valueOf('adds', String(APOCALYPSE_ADD_ID))).toBe('12.5s');
+    expect(h.detailOf('adds', String(APOCALYPSE_ADD_ID))).toContain('40% health');
+  });
+
+  it('falls back to its health when it is not channelling at all', async () => {
+    const add = only(IG_ADDS.rows, 'add');
+    const h = await startRaid(IGNIVAR, { hp: 600 });
+    h.spawn(APOCALYPSE_ADD_ID, add.templateId, { name: add.name, hp: 400, maxHp: 1000 });
+    h.frame();
+    expect(h.valueOf('adds', String(APOCALYPSE_ADD_ID))).toBe('40%');
+  });
+});
+
+describe('Ignivar’s tank stacks', () => {
+  it('reads Molten Armor off the boss’s own target with no heroic tell needed', async () => {
+    const h = await startRaid(IGNIVAR);
+    h.give(BRONN, aura(IG_TANK.aura, { kind: 'vuln_source', stacks: 2 }));
+    h.frame();
+    expect(h.valueOf('tankStacks', 'tank')).toBe('2 stacks');
+    expect(h.detailOf('tankStacks', 'tank')).toBe(
+      `+${String(Math.round(2 * IG_TANK.perStack * 100))}% damage taken`,
+    );
+  });
+});
+
+describe('a wipe and a reset', () => {
+  /**
+   * A raid wipe is ordinary damage of a hundred times a player's health under the mechanic's
+   * own label, with no lifecycle event beside it.
+   */
+  it('reads the wipe label off the damage record and says so once the boss is gone', async () => {
+    const wipe = only(IGNIVAR.wipes ?? [], 'wipe');
+    const h = await startRaid(IGNIVAR);
+    h.frame();
+    h.hit(wipe.ability, 100_000);
+    h.despawn(RAID_BOSS_ID);
+    h.frame();
+    expect(h.notes().join(' ')).toContain(`wiped the raid on ${wipe.ability}`);
+  });
+
+  it('says the boss is down when its own death line arrives', async () => {
+    const h = await startRaid(IGNIVAR);
+    h.frame();
+    h.yell(yellOf(IGNIVAR, 'kill'));
+    h.despawn(RAID_BOSS_ID);
+    h.frame();
+    expect(h.notes().join(' ')).toContain(`${IGNIVAR.name} is down.`);
+  });
+
+  /**
+   * A wipe restores the boss to full health and clears its threat, and it does NOT clear the
+   * target field, so without this the next attempt inherits the last one's clocks.
+   */
+  it('starts a fresh pull when the boss comes back to full health', async () => {
+    const h = await startRaid(IGNIVAR, { engaged: false });
+    h.frame();
+    h.setBossField('aggroTargetId', BRONN);
+    h.frame();
+    h.setBossField('hp', 500);
+    h.frame();
+    h.advance(4000);
+    h.setBossField('hp', 1000);
+    h.frame();
+    expect(h.detailOf('mechanics', 'searing')).toBe('armed, not seen yet');
+  });
+});
+
+describe('Varkhul’s Shared Pyre', () => {
+  function mark(h: RaidHarness, pid: number, stacks: number, total: number): void {
+    h.give(
+      pid,
+      aura(VK_SOAK.aura, {
+        kind: 'vulnerability',
+        remaining: VK_SOAK.seconds,
+        duration: VK_SOAK.seconds,
+        stacks,
+        value2: total,
+      }),
+    );
+    h.giveRow(pid, VK_SOAK.aura, VK_SOAK.seconds);
+  }
+
+  /**
+   * Deliberately given `stacks` and `value2` the table does NOT carry, so a reading that fell
+   * back to the table fails here.
+   */
+  it('reads how many bodies it wants and what it costs off the aura itself', async () => {
+    const h = await startRaid(VARKHUL);
+    h.move(ALDREN, 0, 0);
+    mark(h, ALDREN, 5, 2);
+    for (const pid of [PLAYER_ID, VOSS, MALRIC, BRONN]) {
+      h.move(pid, 60, 60);
+    }
+    h.frame();
+    expect(h.valueOf('soak', String(ALDREN))).toBe('1 of 5');
+    expect(h.detailOf('soak', String(ALDREN))).toContain('200% of health each');
+  });
+
+  it('counts the bodies inside the radius and says what is still missing', async () => {
+    const h = await startRaid(VARKHUL);
+    h.move(ALDREN, 0, 0);
+    mark(h, ALDREN, 4, 1.4);
+    h.move(PLAYER_ID, 1, 0);
+    h.move(VOSS, 2, 0);
+    h.move(MALRIC, 60, 60);
+    h.move(BRONN, 60, 60);
+    h.frame();
+    expect(h.valueOf('soak', String(ALDREN))).toBe('3 of 4');
+    expect(h.detailOf('soak', String(ALDREN))).toContain('to everyone');
+  });
+
+  it('says nothing more once the mark has the bodies it asked for', async () => {
+    const h = await startRaid(VARKHUL);
+    h.move(ALDREN, 0, 0);
+    mark(h, ALDREN, 2, 1.4);
+    h.move(PLAYER_ID, 1, 0);
+    for (const pid of [VOSS, MALRIC, BRONN]) {
+      h.move(pid, 60, 60);
+    }
+    h.frame();
+    expect(h.valueOf('soak', String(ALDREN))).toBe('2 of 2');
+    expect(h.detailOf('soak', String(ALDREN))).not.toContain('to everyone');
+  });
+
+  it('calls the soak on the banner while it is still short of bodies', async () => {
+    const h = await startRaid(VARKHUL, { settings: { 'alert-lead': 10 } });
+    h.move(ALDREN, 0, 0);
+    mark(h, ALDREN, 4, 1.4);
+    for (const pid of [PLAYER_ID, VOSS, MALRIC, BRONN]) {
+      h.move(pid, 60, 60);
+    }
+    h.frame();
+    expect(banner()).toContain('SOAK Aldren');
+    expect(banner()).toContain('1 of 4');
+  });
+});
+
+describe('Varkhul’s last phase', () => {
+  /** Applied where a cadence is ARMED rather than to a clock already running, as the game does. */
+  it('arms a cadence at the phase’s own rate rather than the declared one', async () => {
+    const rate = only(VARKHUL.rates ?? [], 'rate');
+    const h = await startRaid(VARKHUL, { hp: 150 });
+    h.give(RAID_BOSS_ID, aura(rate.when.id ?? '', { kind: 'enrage', remaining: 45, duration: 45 }));
+    h.frame();
+    writeCast(h.boss, castAnchorOf(VK_SWEEP), 2.5, 2.5);
+    h.frame();
+    clearCast(h.boss);
+    h.frame();
+    const faster = VK_SWEEP.every / rate.multiplier;
+    expect(h.valueOf('mechanics', 'sweep')).toBe(`~${faster.toFixed(1)}s`);
+  });
+
+  it('draws the enrage as the countdown the aura is actually carrying', async () => {
+    const h = await startRaid(VARKHUL, { hp: 150 });
+    h.give(
+      RAID_BOSS_ID,
+      aura(enrageAuraOf(VK_ENRAGE), {
+        kind: 'enrage',
+        remaining: 22,
+        duration: VK_ENRAGE.seconds ?? 45,
+      }),
+    );
+    h.frame();
+    expect(h.valueOf('enrage', 'enrage')).toBe('22s');
+  });
+});
+
+describe('Varkhul’s intermission', () => {
+  it('holds every clock while he is immune, and lets them run again after', async () => {
+    const held = only(
+      VARKHUL.freeze.filter((one) => one.kind === 'aura'),
+      'freeze aura',
+    );
+    const h = await startRaid(VARKHUL, { engaged: false });
+    h.frame();
+    h.setBossField('aggroTargetId', BRONN);
+    h.frame();
+    const opener = seedIn(VARKHUL.pullSeeds, 'orbs', 'pull seed');
+    h.give(RAID_BOSS_ID, aura(held.id ?? '', { kind: 'absorb', remaining: 999, duration: 999 }));
+    h.advance(6000);
+    h.frame();
+    expect(h.valueOf('mechanics', 'orbs')).toBe(`~${opener.toFixed(1)}s`);
+    h.strip(RAID_BOSS_ID, held.id ?? '');
+    h.advance(2000);
+    h.frame();
+    expect(h.valueOf('mechanics', 'orbs')).toBe(`~${(opener - 2).toFixed(1)}s`);
+  });
+
+  it('puts the intermission on screen as a mechanic only while it is running', async () => {
+    const held = only(
+      VARKHUL.freeze.filter((one) => one.kind === 'aura'),
+      'freeze aura',
+    );
+    const h = await startRaid(VARKHUL, { hp: 450 });
+    h.frame();
+    expect(h.rows('mechanics')).not.toContain('assembly');
+    h.give(RAID_BOSS_ID, aura(held.id ?? '', { kind: 'absorb', remaining: 999, duration: 999 }));
+    h.frame();
+    expect(h.rows('mechanics')).toContain('assembly');
+    expect(h.valueOf('mechanics', 'assembly')).toBe(
+      `~${mechanicIn(VARKHUL, 'assembly').every.toFixed(1)}s`,
+    );
+  });
+});
+
+describe('Varkhul’s two debuff rows', () => {
+  const Debuffs = VARKHUL.blocks.filter((one) => one.kind === 'debuffs') as DebuffsBlock[];
+
+  it('names everyone carrying the spread mark, with the seconds left on each', async () => {
+    const orbs = only(Debuffs, 'debuff block');
+    const h = await startRaid(VARKHUL);
+    for (const pid of [ALDREN, VOSS]) {
+      h.give(pid, aura(orbs.aura, { remaining: 3, duration: VK_ORBS.every }));
+      h.giveRow(pid, orbs.aura, 3);
+    }
+    h.frame();
+    expect(h.rows('debuffs')).toEqual([String(ALDREN), String(VOSS)]);
+    expect(h.valueOf('debuffs', String(ALDREN))).toBe('3s');
+    expect(h.detailOf('debuffs', String(ALDREN))).toBe(orbs.note ?? '');
+  });
+
+  /** Two blocks of one KIND: with one section per kind the second would draw over the first. */
+  it('draws the second debuff row in its own section rather than over the first', async () => {
+    expect(Debuffs.length).toBe(2);
+    const [orbs, wound] = Debuffs as [DebuffsBlock, DebuffsBlock];
+    const h = await startRaid(VARKHUL);
+    h.give(ALDREN, aura(orbs.aura, { remaining: 3, duration: 4 }));
+    h.giveRow(ALDREN, orbs.aura, 3);
+    h.give(VOSS, aura(wound.aura, { remaining: 25, duration: wound.durationSeconds ?? 30 }));
+    h.giveRow(VOSS, wound.aura, 25);
+    h.frame();
+    expect(h.rows('debuffs')).toEqual([String(ALDREN)]);
+    expect(h.rows('debuffs-2')).toEqual([String(VOSS)]);
+    expect(h.headingOf('debuffs')).toBe(orbs.label);
+    expect(h.headingOf('debuffs-2')).toBe(wound.label);
+    expect(h.detailOf('debuffs-2', String(VOSS))).toBe(wound.note ?? '');
+  });
+});
+
+/**
+ * The row set the `last-inferno` stage panel photographs, driven the same way that scenario
+ * drives it. No gate looks at the picture and the frame clips rather than growing, so this
+ * pins the row count and order; only opening the capture confirms they fit.
+ */
+describe('the panel the preview photographs', () => {
+  const beforeMs = 6000;
+  const afterMs = 1000;
+  const infernoLeft = 27;
+
+  async function theSamePanel(): Promise<RaidHarness> {
+    const h = await startRaid(IGNIVAR, {
+      hp: 340,
+      settings: { alerts: false },
+      conduitStates: [IG_STATIONS.spent, IG_STATIONS.ready, IG_STATIONS.ready, IG_STATIONS.spent],
+    });
+    h.frame();
+    h.yell(yellOf(IGNIVAR, 'pull'));
+    h.frame();
+    h.conduit(1, IG_STATIONS.active);
+    h.frame();
+    h.advance(beforeMs);
+    h.frame();
+    h.give(
+      RAID_BOSS_ID,
+      aura(enrageAuraOf(IG_ENRAGE), {
+        kind: 'buff_haste',
+        remaining: infernoLeft,
+        duration: IG_ENRAGE.seconds ?? infernoLeft,
+      }),
+    );
+    h.frame();
+    h.advance(afterMs);
+    h.frame();
+    return h;
+  }
+
+  it('draws four mechanics, one enrage and four conduits, and nothing else', async () => {
+    const h = await theSamePanel();
+    expect(h.rows('mechanics')).toEqual(['brand', 'rays', 'meteors', 'last-flame']);
+    expect(h.rows('enrage')).toEqual(['enrage']);
+    expect(h.rows('stations')).toEqual([861, 860, 862, 863].map(String));
+    for (const empty of ['gates', 'debuffs', 'soak', 'marks', 'channels', 'tankStacks', 'adds']) {
+      expect(h.shows(empty)).toBe(false);
+    }
+  });
+
+  /**
+   * A phase seated in `world` gives the re-seeds no edge, and a row reading `~0.0s`
+   * photographs as a stalled panel.
+   */
+  it('counts every mechanic off the numbers the phase re-seeds, with none of them at zero', async () => {
+    const h = await theSamePanel();
+    expect(h.valueOf('mechanics', 'brand')).toBe('~3.0s');
+    expect(h.valueOf('mechanics', 'rays')).toBe('~14.0s');
+    expect(h.valueOf('mechanics', 'meteors')).toBe('~1.0s');
+    expect(h.valueOf('mechanics', 'last-flame')).toBe('~5.0s');
+  });
+
+  it('draws the enrage as the game’s own seconds and the conduits in their three states', async () => {
+    const h = await theSamePanel();
+    expect(h.valueOf('enrage', 'enrage')).toBe(`${String(infernoLeft)}s`);
+    expect(h.valueOf('stations', '861')).toBe('~3.0s');
+    expect(h.valueOf('stations', '860')).toBe('SPENT');
+    expect(h.valueOf('stations', '862')).toBe('READY');
+    expect(h.valueOf('stations', '863')).toBe('SPENT');
   });
 });

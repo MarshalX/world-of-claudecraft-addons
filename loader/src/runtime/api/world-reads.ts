@@ -8,31 +8,19 @@
 import { type AbilityIndex, emptyAbilities } from '../world/abilities.ts';
 import type { ArenaStandings } from '../world/arena.ts';
 import type { WorldBackend } from '../world/backend.ts';
-import type { BankState } from '../world/bank.ts';
 import type { BattlegroundStandings } from '../world/battleground.ts';
 import type { CharacterInfo, ProfessionInfo, TalentInfo } from '../world/character.ts';
 import { type CombatState, OUT_OF_COMBAT } from '../world/combat.ts';
 import type { EntityCast, Hazard } from '../world/derived.ts';
 import type { EncounterInfo } from '../world/encounter.ts';
 import type { FinderInfo, FinderListingRow } from '../world/finder.ts';
-import type {
-  Aura,
-  Entity,
-  EquipSlot,
-  HeldSlot,
-  InvSlot,
-  Vec3,
-  WorldQuests,
-} from '../world/game-types.ts';
+import type { Aura, Entity, EquipSlot, HeldSlot, Vec3, WorldQuests } from '../world/game-types.ts';
 import type { CorpseView, DeathZone } from '../world/ground.ts';
 import type { GroupInfo } from '../world/group.ts';
 import type { WorldHub } from '../world/hub.ts';
 import type { ItemInstance } from '../world/items.ts';
-import type { MailState } from '../world/mail.ts';
-import type { MarketState } from '../world/market.ts';
 import type { MatchInfo } from '../world/match.ts';
 import type { PartyInfo } from '../world/party-types.ts';
-import { UNKNOWN } from '../world/proximity.ts';
 import { readonlyMapView } from '../world/readonly-map.ts';
 
 /**
@@ -139,6 +127,10 @@ export function selfReads(hub: WorldHub) {
 
     get spectating(): string | null {
       return fromBackend(hub, (backend) => backend.spectating);
+    },
+
+    get moveSpeedMult(): number | null {
+      return fromBackend(hub, (backend) => backend.moveSpeedMult);
     },
 
     get bags(): readonly (string | null)[] | null {
@@ -266,55 +258,6 @@ export function socialReads(hub: WorldHub) {
 
     get finderBoard(): readonly FinderListingRow[] | null {
       return fromBackend(hub, (backend) => backend.finderBoard);
-    },
-  };
-}
-
-/**
- * The counters the player walks up to, and the two badges that outlive them.
- *
- * Three of the six answer a STATUS rather than a value, because the server gates
- * them on where the player is standing. Before the game exists all three answer
- * `unknown` rather than null, which is the same choice `combat` and `abilities`
- * make and for the same reason: they are never-null readings, so there is
- * nothing for a null to mean.
- */
-export function economyReads(hub: WorldHub) {
-  return {
-    get market(): MarketState {
-      const backend = hub.backend();
-      if (backend === null) {
-        return UNKNOWN;
-      }
-      return backend.market;
-    },
-
-    get marketCollectPending(): boolean | null {
-      return fromBackend(hub, (backend) => backend.marketCollectPending);
-    },
-
-    get mail(): MailState {
-      const backend = hub.backend();
-      if (backend === null) {
-        return UNKNOWN;
-      }
-      return backend.mail;
-    },
-
-    get mailUnread(): number | null {
-      return fromBackend(hub, (backend) => backend.mailUnread);
-    },
-
-    get bank(): BankState {
-      const backend = hub.backend();
-      if (backend === null) {
-        return UNKNOWN;
-      }
-      return backend.bank;
-    },
-
-    get buyback(): readonly InvSlot[] | null {
-      return fromBackend(hub, (backend) => backend.buyback);
     },
   };
 }

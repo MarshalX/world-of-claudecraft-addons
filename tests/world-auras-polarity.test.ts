@@ -180,6 +180,30 @@ describe('isDispellable', () => {
     expect(isDispellable(permanentBuff, false)).toBe(false);
   });
 
+  // The two ids the game refuses whatever every flag on them says: neither
+  // carries `perm`, `ub` or `und`, so every flag clause answers yes to both.
+  it('refuses a resource state the game only surfaces as an aura', () => {
+    const ascension = aura({ id: 'divine_ascension', kind: 'buff_haste', value: 0.2 });
+
+    expect(isDispellable(ascension, true)).toBe(false);
+    expect(isDispellable(ascension, false)).toBe(false);
+  });
+
+  // Rides a mostly-buff kind and is drawn on the DEBUFF surface, so the friendly
+  // direction is the one that would wrongly accept it; both are pinned.
+  it('refuses a proc marker that is only displayed as a debuff', () => {
+    const ready = aura({ id: 'shaman_stormsurge_ready', kind: 'internal_cd', value: 0 });
+
+    expect(isDispellable(ready, true)).toBe(false);
+    expect(isDispellable(ready, false)).toBe(false);
+  });
+
+  it('keeps refusing by id alone, rather than by the kind it happens to ride', () => {
+    expect(isDispellable(aura({ id: 'corruption', kind: 'dot', school: 'shadow' }), false)).toBe(
+      true,
+    );
+  });
+
   it('accepts a magic-school harmful effect on the friendly direction', () => {
     expect(isDispellable(aura({ kind: 'dot', school: 'shadow' }), false)).toBe(true);
   });

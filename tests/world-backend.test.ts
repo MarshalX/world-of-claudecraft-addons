@@ -249,3 +249,45 @@ describe('characterKey', () => {
     expect(backend?.characterKey).toBe('Claudemoon/Alt');
   });
 });
+
+// 1 is a real reading, so none of the unknown states may fall back to it.
+describe('moveSpeedMult', () => {
+  it('publishes the multiplier the server computed', () => {
+    const backend = backendOf(
+      gameWorld({ movementWireVersion: 2, reconMoveSpeedMult: 0.5, spectating: null }),
+    );
+
+    expect(backend.moveSpeedMult).toBe(0.5);
+  });
+
+  it('publishes an unaffected player as 1 rather than as nothing', () => {
+    const backend = backendOf(
+      gameWorld({ movementWireVersion: 2, reconMoveSpeedMult: 1, spectating: null }),
+    );
+
+    expect(backend.moveSpeedMult).toBe(1);
+  });
+
+  // On the older wire the client's field sits at its constructed default of 1.
+  it('answers nothing on the older movement wire, where the 1 is a default', () => {
+    const backend = backendOf(
+      gameWorld({ movementWireVersion: 1, reconMoveSpeedMult: 1, spectating: null }),
+    );
+
+    expect(backend.moveSpeedMult).toBeNull();
+  });
+
+  // The server skips the reconciliation block for a spectator, so the value goes stale.
+  it('answers nothing while spectating', () => {
+    const backend = backendOf(
+      gameWorld({ movementWireVersion: 2, reconMoveSpeedMult: 0.5, spectating: 'Marshal' }),
+    );
+
+    expect(backend.moveSpeedMult).toBeNull();
+  });
+
+  // The field is not in `members.ts`, so this is the only thing pinning the answer.
+  it('answers nothing offline, where the field is absent', () => {
+    expect(backendOf(gameWorld()).moveSpeedMult).toBeNull();
+  });
+});

@@ -160,6 +160,7 @@ describe('the shape table', () => {
       dodgeChance: true,
       blockChance: true,
       swingTimer: true,
+      offhandSwingTimer: true,
       comboPoints: true,
       savedMana: true,
       stats: true,

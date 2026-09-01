@@ -16,6 +16,7 @@ import { createAnchors } from '../loader/src/runtime/ui/kit/anchor3d.ts';
 import { createArrangeHint } from '../loader/src/runtime/ui/kit/arrange-hint.ts';
 import { createAuraArt } from '../loader/src/runtime/ui/kit/aura-art.ts';
 import { createBanner } from '../loader/src/runtime/ui/kit/banner.ts';
+import { LABEL_ATTR } from '../loader/src/runtime/ui/kit/frame-chrome.ts';
 import { createFrameRoster } from '../loader/src/runtime/ui/kit/frame-roster.ts';
 import { createFrameToggles } from '../loader/src/runtime/ui/kit/frame-toggle.ts';
 import { createIconUrls } from '../loader/src/runtime/ui/kit/icons.ts';
@@ -29,11 +30,14 @@ import { createTooltips } from '../loader/src/runtime/ui/kit/tooltip.ts';
 import { createUnlockMode } from '../loader/src/runtime/ui/kit/unlock.ts';
 import type { UiKit } from '../loader/src/runtime/ui/mount.ts';
 import { HUD_BAND_CLASS, OVERLAY_BAND_CLASS } from '../loader/src/runtime/ui/root.ts';
+import { createSnapStore } from '../loader/src/runtime/ui/snap-store.ts';
 import type { ScreenPoint } from '../loader/src/runtime/world/project.ts';
 import { inertFrameLoop } from './fakes/frame-loop.ts';
 import { enterWorld, mountStartScreen } from './fakes/game-dom.ts';
 
 const FQID = 'official/combat-meter';
+/** The manifest's name, which is what the arrange-mode chip on a frame says. */
+const ADDON_NAME = 'Combat Meter';
 const VIEW = { w: 1280, h: 800 };
 
 /** Everything a DOM id may contain. */
@@ -89,6 +93,9 @@ function open() {
     },
   };
 
+  // Snapping off: a quantized drag would move a frame somewhere a case did not ask for.
+  const snap = createSnapStore({ storage: null, channel: 'pbe' });
+  const unlock = createUnlockMode(root, () => snap.enabled);
   const kit: UiKit = {
     project,
     unitPoint,
@@ -112,7 +119,8 @@ function open() {
       frames: inertFrameLoop(),
     }),
     stacking: createStacking({ root }),
-    unlock: createUnlockMode(root),
+    unlock,
+    snap,
     arrangeHint: createArrangeHint({
       toaster: createToaster({ doc: document, root: overlay, ...timers }),
     }),
@@ -142,6 +150,7 @@ function open() {
     doc: document,
     kit,
     fqid: FQID,
+    addonName: ADDON_NAME,
     bag,
     onError,
     frameStore: null,
@@ -153,6 +162,16 @@ function open() {
 }
 
 describe('creating surfaces', () => {
+  // ui-kit-frame.test.ts checks the chip against a name handed straight in; this is
+  // the link from the manifest name to it.
+  it('writes the addon name into the arrange-mode chip on a frame', () => {
+    const { ui } = open();
+
+    const frame = ui.frame({ id: 'meter', title: 'DPS' });
+
+    expect(frame.el.getAttribute(LABEL_ATTR)).toBe(`${ADDON_NAME} · DPS`);
+  });
+
   it('puts a frame under the addon root, not in the game HUD', () => {
     const { ui } = open();
 
