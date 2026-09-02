@@ -1,5 +1,5 @@
 {
-  "gameVersion": "0.41.1",
+  "gameVersion": "0.41.2",
   "source": "src/sim/data.ts (ITEMS), src/sim/bags.ts (BACKPACK_SLOTS, BAG_SOCKETS), src/sim/bag_pools.ts (isMaterialsOnlyBag, bagSlotsOf), src/sim/material_ids.ts (MATERIAL_ITEM_IDS)",
   "note": "The carried pool split. A general pool is backpackSlots plus every non-materialsOnly equipped bag; a materials pool is every materialsOnly one. A non-material item can only take general headroom; a material takes materials headroom first and spills into general. materials lists every id the game counts as one, derived rather than approximated by kind.",
   "backpackSlots": 16,

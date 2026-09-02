@@ -1,5 +1,5 @@
 {
-  "gameVersion": "0.41.1",
+  "gameVersion": "0.41.2",
   "source": "src/sim (every applyAura literal carrying encounterOwned), src/sim/aura_classify.ts",
   "auras": [
     {

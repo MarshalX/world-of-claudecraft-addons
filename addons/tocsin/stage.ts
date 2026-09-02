@@ -524,7 +524,11 @@ async function heardTheEngage(stage: Stage, row: Encounter): Promise<void> {
 const INFERNO_ALT =
   'A raid panel during Ignivar’s last phase, in three sections and nine rows. The mechanic timers: Brand of the Pyre in three seconds, Revolving Inferno in fourteen, Falling Cinders drawn red at one, and the alternating Searing Torrent or Rain of Cinders slot in five. Under them an Enrage row reading Last Inferno, 27 seconds, nine percent left and then the raid dies. Under that the four water conduits: North East running with three seconds of water, North West spent, South East ready, and South West spent.';
 
-const INFERNO_FRAME = { raid: { box: { x: 40, y: 40, w: 320, h: 420 }, visible: true } };
+// 440 rather than 420 for the reason WARD_FRAME is 440: this panel is NOT heroic either, so
+// it draws the difficulty caveat as its last line, and 420 cuts that line in half against the
+// panel's bottom border. It read as correct only because a shorter-metric rasteriser pushed
+// the caveat entirely out of the box, which looks like a panel that simply does not draw one.
+const INFERNO_FRAME = { raid: { box: { x: 40, y: 40, w: 320, h: 440 }, visible: true } };
 const PYRE_FRAME = { raid: { box: { x: 40, y: 40, w: 320, h: 560 }, visible: true } };
 
 const RAID_SCENARIOS: readonly Scenario[] = [

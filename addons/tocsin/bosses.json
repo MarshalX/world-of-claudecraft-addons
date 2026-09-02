@@ -1,5 +1,5 @@
 {
-  "gameVersion": "0.41.1",
+  "gameVersion": "0.41.2",
   "source": "src/sim/data.ts, src/sim/content/dungeons.ts, src/sim/types.ts, src/sim/mob/healer_channel.ts, src/sim/encounters/nythraxis.ts, src/sim/encounters/ignivar.ts, src/sim/encounters/varkhul.ts, src/sim/ignivar_arena.ts, src/sim/ignivar_meteors.ts, src/sim/ignivar_forge_wave.ts, src/sim/ignivar_forge_judgment.ts, src/sim/ignivar_raid_ids.ts, src/sim/varkhul_shared_pyre.ts, src/sim/varkhul_cinder_artificer.ts, src/sim/varkhul_forge_intermission.ts, src/sim/encounters/*_dialogue.ts",
   "encounters": [
     {
