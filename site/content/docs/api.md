@@ -880,7 +880,7 @@ So `woc.settings['max-rows']` is a number you can do arithmetic with, and this i
 const rows = typeof woc.settings['max-rows'] === 'number' ? woc.settings['max-rows'] : 10;
 ```
 
-It is worth stating plainly because fifteen of the sixteen addons in this marketplace wrote that guard, in 64 places, and every single fallback was byte-identical to the default the manifest already declared. Not one of them could ever fire. Read the setting and use it.
+It is worth stating plainly because fifteen of the sixteen addons then in this marketplace wrote that guard, in 64 places, and every single fallback was byte-identical to the default the manifest already declared. Not one of them could ever fire. Read the setting and use it.
 
 The one case worth checking is the opposite one: an id you did NOT declare reads as `undefined`, whatever you expected it to be. That is a bug in your manifest rather than a value to defend against, and the fix is to declare it. `woc.onSettingsChange` hands you the same object again after the player changes anything, with the same guarantees.
 

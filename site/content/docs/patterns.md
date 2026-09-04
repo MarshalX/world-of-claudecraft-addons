@@ -20,7 +20,7 @@ The same shape applies to anything that animates: subscribe for the change, anim
 
 ## The guard you are about to write around a setting cannot fire
 
-This one is measured rather than argued. Fifteen of the sixteen addons in this marketplace shipped a helper like this, and between them called it 64 times:
+This one is measured rather than argued. Fifteen of the sixteen addons then in this marketplace shipped a helper like this, and between them called it 64 times:
 
 ```js
 // Dead code. Every one of the 64 call sites resolved to the manifest default.
