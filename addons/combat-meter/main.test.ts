@@ -691,8 +691,10 @@ describe('the outcome line', () => {
     expect(h.outcomes()).toBe('');
   });
 
-  // `evade` is a wild mob that broke leash walking home immune, and it is a real outcome of a
-  // real swing you took. What it must not be is counted and unnamed: the total this line
+  // `evade` is a wild mob refusing the hit while immune (walking home on a broken leash, or,
+  // since game 0.41.4, pinned in place inside an instance because it cannot reach you), and it
+  // is a real outcome of a real swing you took. What it must not be is counted and unnamed:
+  // the total this line
   // divides by is every outcome recorded, so an outcome missing from the printed list silently
   // shrinks every percentage beside it.
   it('names an evade rather than only deflating the rest', async () => {
