@@ -314,6 +314,8 @@ woc.world.on('combat', ({ active, source }) => {
 
 `source` is `party` when you are grouped, since the server sets a combat flag per member; `threat` when a nearby mob's hate table has you on it, which is server state too; `pvp` when a player the bout puts on the other side has you selected, which is the same reading `world.reaction` answers with; and `recent` when none of those answered and damage involving you landed in the last five seconds. Only that last one is a guess. Most addons can ignore the source entirely; read it when acting on a false positive would be worse than acting late.
 
+Game 0.41.4 quietly made the first two branches better without changing a field. The server used to set a member's combat flag only for a mob's current target, so a grouped healer who never drew aggro read as out of combat for the whole fight and `party`, being consulted first, preferred that answer to the hate table that would have been right. It now derives the flag from the hate tables themselves, and an engaged boss additionally holds every nearby member of its attackers' group, so a raid healer and a member parked at the back both read as fighting. The same release added the other half: an attacker further than 100 yards from an open-world mob is dropped off its table, and inside a dungeon or raid room distance never drops anyone, only leaving the room does. So `world.combat` and `world.threat` both go quiet on leaving a fight rather than on running out of scope, and neither needed anything published for it.
+
 There IS an `inCombat` field on the entity and it is never written, so it reads false forever. That is not an oversight in this API, it is the reason this reading exists.
 
 ### Naming a unit

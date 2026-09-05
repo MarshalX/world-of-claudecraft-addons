@@ -44,6 +44,8 @@ The game builds every entity with defaults and fills in whatever the snapshot ca
 
 The published types mark which fields ride the self record and omit the ones that are never sent, but the types are a claim about another repository rather than a derivation from it. When a value matters, check it against a live session before you build on it.
 
+Game 0.41.4 added the newest one, and it is the cheapest to check. A mob that cannot reach you inside a dungeon or raid room now holds in place immune with its hate table intact instead of walking home, and the seconds it has been held sit on the entity as `evadeInPlace`. Nothing sends it: the client mirror builds every mob with the field set to `undefined` and the server names it nowhere, so a pinned-mob timer built on it reads "not pinned" through every pin there will ever be. What you CAN see is the evade record the pinned mob emits for each direct hit it refuses, which is the same `kind: 'evade'` a mob walking home emits and carries nothing to tell them apart.
+
 The game's two spell queues are the version of this that survives a careful reading. The melee on-next-swing queue is sent and you can see it; the cast queue, which the game finished building in 0.41.1 so that a press during the tail of a global cooldown fires when the cooldown clears, is sent by nothing. They are declared eleven lines apart, they are both called a queue, and exactly one of them reaches you. So "I checked, the queue is on the wire" is not a finding about the queue you meant, and a next-cast display built on the wrong one is blank in every session forever without ever raising anything.
 
 ## You never write cleanup, but you do write `woc.onDispose`

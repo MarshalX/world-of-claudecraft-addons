@@ -8,7 +8,16 @@
 import type { School } from './entity.js';
 import type { PersonalEvent } from './events.js';
 
-/** How an attack landed. */
+/**
+ * How an attack landed.
+ *
+ * `evade` is the one worth reading twice. It is a wild mob refusing a DIRECT hit while
+ * immune, always at `amount: 0`, and it never says the pull is over. It had one cause until
+ * game 0.41.4 and has two since: a mob that broke leash, which HAS dropped its hate table
+ * and is walking home, and a mob pinned in place inside a dungeon or raid room because it
+ * cannot reach you, which has NOT and swings again the moment it can. Nothing on the record
+ * separates them, so treat an evade as an outcome you took and never as an ending.
+ */
 export type DamageKind = 'hit' | 'miss' | 'dodge' | 'parry' | 'block' | 'resist' | 'evade';
 
 export interface DamageEvent extends PersonalEvent {

@@ -12,7 +12,13 @@
 import type { School } from '../world/game-types.ts';
 import type { PersonalEvent } from './events.ts';
 
-/** `evade` is a leashing wild mob refusing the hit, and always lands at amount 0. */
+/**
+ * `evade` is a wild mob refusing the hit while immune, and always lands at amount 0.
+ *
+ * TWO causes since game 0.41.4, and they say opposite things about the fight: a mob that
+ * broke leash has dropped its hate table and is walking home, while one pinned in place
+ * inside an instance still holds it and resumes the moment it can reach you again.
+ */
 type DamageKind = 'hit' | 'miss' | 'dodge' | 'parry' | 'block' | 'resist' | 'evade';
 
 interface DamageEvent extends PersonalEvent {

@@ -13,10 +13,19 @@
 // reason, and this is the same kind of honesty about a partial answer.
 //
 //  party  the party row for the player. The server sets inCombat per member, so
-//         when the player is grouped this is simply the answer.
+//         when the player is grouped this is simply the answer. Game 0.41.4 is
+//         what made that sentence true rather than optimistic: the server's flag
+//         used to be set only for a mob's CURRENT target (plus a pet's owner and
+//         a 5s linger), so a grouped healer who never drew aggro read as out of
+//         combat for the whole fight, and this branch preferred that wrong answer
+//         over the threat table that would have been right. The game now derives
+//         it from the hate tables themselves, so the two branches agree.
 //  threat a nearby mob's hate table contains the player. Server state again: the
 //         table rides the wire only for a living mob in combat, and the player is
-//         in it only because the server put them there.
+//         in it only because the server put them there. Since game 0.41.4 the
+//         server prunes those tables as a fight is left: past 100 yards from an
+//         open-world mob, or on leaving the instance slot a mob fights in. So an
+//         entry vanishing is "they left" as often as "they lost threat".
 //  pvp    a PLAYER the bout puts on the other side has the player selected. A
 //         player carries a real targetId, unlike a mob, so this reads the field
 //         that is actually set, and the bout answers the half no field does.

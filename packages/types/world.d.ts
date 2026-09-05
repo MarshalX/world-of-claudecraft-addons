@@ -351,6 +351,13 @@ export interface WorldApi {
    * decision the mob is about to make. Empty for anything that is not a mob in
    * combat.
    *
+   * A row can vanish without anyone having lost threat. Since game 0.41.4 the
+   * server drops an attacker off the table when they leave the fight: past 100
+   * yards from an open-world mob, or on leaving the dungeon or raid room an
+   * instance mob fights in, where distance never drops anyone however far the
+   * pull is kited. Nothing distinguishes that from a threat wipe here, so read a
+   * disappearance as "no longer in this fight" rather than as a drop.
+   *
    * ```js
    * const table = woc.world.threat(woc.world.target.id);
    * if (table.share !== null && table.share > 0.9) warn('about to pull');
