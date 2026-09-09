@@ -158,7 +158,16 @@ const SWEEP_MS = MS_PER_SECOND;
 /** Every field the search matches. */
 const SEARCHABLE = ['name', 'id', 'quality', 'kind', 'slot'];
 
-/** The kinds the game's own table declares, which is what a `kind` is checked against. */
+/**
+ * The kinds the game's own table declares, which is what a `kind` is checked against.
+ *
+ * A row whose kind is not here is DROPPED, which makes this list the one place a
+ * game release can silently shrink what this addon shows. It did at game 0.42.0:
+ * `recipe`, `scroll` and `flask` arrived together and 58 items went missing from
+ * the browser with nothing raising, because a dropped row looks exactly like an
+ * item the game does not have. The suite catches it only because it compares the
+ * published count against the table's own length; keep that comparison.
+ */
 const KINDS = [
   'weapon',
   'armor',
@@ -170,6 +179,9 @@ const KINDS = [
   'tool',
   'potion',
   'elixir',
+  'flask',
+  'scroll',
+  'recipe',
   'bag',
   'mount',
 ];

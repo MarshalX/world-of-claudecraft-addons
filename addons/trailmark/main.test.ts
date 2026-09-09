@@ -61,6 +61,8 @@ const SUPPLIES = 'q_supplies';
 const HUNTSMAN = 'q_hollow_the_huntsman';
 const ORE = 'q_prof_intro';
 const ESCORT = 'q_fv_seeing_wren_home';
+/** The farming intro, whose two objectives are the only `farm` ones shipped. */
+const FARM = 'q_farm_intro';
 const HOLLOW = 'q_hollow';
 const AMENDS = 'q_prof_amends_smith';
 /** The escort that starts on Farshore, which shares Eastbrook Vale's z band. */
@@ -93,6 +95,7 @@ const SUPPLIES_KEY = `${SUPPLIES}#0`;
 const HUNTSMAN_KEY = `${HUNTSMAN}#0`;
 const ORE_KEY = `${ORE}#0`;
 const ESCORT_KEY = `${ESCORT}#0`;
+const FARM_KEY = `${FARM}#0`;
 const HOLLOW_KEY = `${HOLLOW}#0`;
 const AMENDS_KEY = `${AMENDS}#0`;
 const FARSHORE_KEY = `${FARSHORE}#0`;
@@ -487,6 +490,22 @@ describe('resolving an objective to a place', () => {
 
     expect(h.note()).toContain(`of ${String(ORE_IN_RANGE)} areas in range pinned`);
     expect(pinsOf(h, ORE_KEY)).toBe(PIN_BUDGET);
+  });
+
+  /**
+   * The arm game 0.42.0 added, and the generator refused to write a table without:
+   * a farm objective is credited by planting or harvesting at a garden bed, and
+   * before this it resolved to nowhere while looking like an ordinary quest.
+   *
+   * The circle encloses the patch's beds rather than pinning its anchor, so the
+   * assertion is that the pin lands where the beds are: the anchor is their
+   * centroid, which on a 5 yard grid sits BETWEEN them.
+   */
+  it('sends a farm objective to the beds of the patch it names', async () => {
+    const h = await run({ 'pin-distance': 5000 }, undefined, [{ questId: FARM, counts: [0] }]);
+
+    expect(pinsOf(h, FARM_KEY)).toBe(1);
+    expect(h.detailOf(FARM_KEY)).not.toBe('Nowhere on the map');
   });
 
   it('sends an escort objective to where the escortee stands', async () => {

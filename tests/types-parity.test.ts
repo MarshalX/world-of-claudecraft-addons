@@ -32,11 +32,12 @@ import type {
   BattlegroundStandings,
 } from '../loader/src/runtime/world/battleground.ts';
 import type { ProfessionInfo, ToolEffectSlot } from '../loader/src/runtime/world/character.ts';
+import type { CombatSource, CombatState } from '../loader/src/runtime/world/combat.ts';
 import type { CivicService, Recipe, Station } from '../loader/src/runtime/world/content.ts';
 import type { Hazard, HazardKind } from '../loader/src/runtime/world/derived.ts';
-import type { Entity, HeldSlot, InvSlot } from '../loader/src/runtime/world/game-types.ts';
+import type { Aura, Entity, HeldSlot, InvSlot } from '../loader/src/runtime/world/game-types.ts';
 import type { CorpseView, DeathZone } from '../loader/src/runtime/world/ground.ts';
-import type { HeldItemInstance } from '../loader/src/runtime/world/items.ts';
+import type { HeldItemInstance, ItemInstance } from '../loader/src/runtime/world/items.ts';
 import type { MarketInfo } from '../loader/src/runtime/world/market.ts';
 import type { Reaction } from '../loader/src/runtime/world/reaction.ts';
 import type { WorldKey } from '../loader/src/runtime/world/signature.ts';
@@ -65,8 +66,10 @@ import type {
   VaultState as PublicVaultState,
 } from '../packages/types/economy-storage.js';
 import type {
+  Aura as PublicAura,
   Entity as PublicEntity,
   HeldItemInstance as PublicHeldItemInstance,
+  ItemInstance as PublicItemInstance,
 } from '../packages/types/entity.js';
 import type { EventPayloads as PublicEventPayloads } from '../packages/types/events.js';
 import type { FmtApi as PublicFmtApi } from '../packages/types/fmt.js';
@@ -77,6 +80,8 @@ import type { SoundApi as PublicSoundApi } from '../packages/types/sound.js';
 import type { StorageApi as PublicStorageApi } from '../packages/types/storage.js';
 import type { IconUrls as PublicIconUrls, UiApi as PublicUiApi } from '../packages/types/ui.js';
 import type {
+  CombatSource as PublicCombatSource,
+  CombatState as PublicCombatState,
   Reaction as PublicReaction,
   WorldApi as PublicWorldApi,
 } from '../packages/types/world.js';
@@ -221,8 +226,42 @@ const publishedIsEntity: Assignable<PublicEntity, Entity> = true;
  * Every field of an entity is required today, so a one-sided drop already fails
  * one direction above. This is here for the day one arrives OPTIONAL, which is
  * how every field the game has added to an existing EVENT has arrived.
+ *
+ * `inCombat` is excluded BY NAME rather than the assertion being dropped, and the
+ * exclusion is the point of the comment. Game 0.42.0 began sending it for the
+ * player's own record alone, so the loader reads it and `world.combat` reports
+ * `source: 'self'` when it answered; publishing the raw field would put it on
+ * every mob and npc too, where nothing writes it and it is permanently false,
+ * which is the exact trap this project already shipped once. So the two shapes
+ * legitimately disagree on one key, and `Omit` says which one and keeps the
+ * comparison doing its job for the other sixty-odd.
  */
-const entityFieldsAgree: SameFields<Entity, PublicEntity> = true;
+const entityFieldsAgree: SameFields<Omit<Entity, 'inCombat'>, PublicEntity> = true;
+/**
+ * The aura shape, which had no assertion of its own until game 0.42.0 put
+ * `flask` on it.
+ *
+ * `Entity.auras` reaches it, so a REQUIRED field on one side alone already fails
+ * a direction of the entity pair above. That is not enough, and this shape is the
+ * clearest case in the file for why: SEVEN of its fields are optional and every
+ * one of them arrived that way, so the only thing that can see the eighth land on
+ * one side alone is the key-set comparison.
+ *
+ * Neither ASSIGNABILITY direction can do that job here, which is worth stating
+ * because writing the ordinary pair and stopping would look like coverage and be
+ * none: every field the two shapes differ on is optional, and an optional field
+ * missing from one side leaves both directions assignable. `SameFields` is the
+ * whole assertion, and the pair is kept only for a REQUIRED field arriving.
+ *
+ * The two `Omit`s are the loader's deliberate non-publications: it carries
+ * `undispellable` and `permanent` because `world.dispellable` runs the game's
+ * whole predicate over them, and publishing a flag beside that verdict is an
+ * invitation to re-derive it wrongly and get a raid's dispels subtly out of step.
+ * Naming them here is what keeps the comparison exact for everything else.
+ */
+const auraIsPublished: Assignable<Omit<Aura, 'undispellable' | 'permanent'>, PublicAura> = true;
+const publishedIsAura: Assignable<PublicAura, Aura> = true;
+const auraFieldsAgree: SameFields<Omit<Aura, 'undispellable' | 'permanent'>, PublicAura> = true;
 /**
  * The two ground shapes, which had no assertion of their own until game 0.40.1
  * put a field on one of them.
@@ -298,6 +337,19 @@ const publishedIsHeldSlot: Assignable<PublicHeldSlot, HeldSlot> = true;
 const heldInstanceIsPublished: Assignable<HeldItemInstance, PublicHeldItemInstance> = true;
 const publishedIsHeldInstance: Assignable<PublicHeldItemInstance, HeldItemInstance> = true;
 const heldInstanceFieldsAgree: SameFields<HeldItemInstance, PublicHeldItemInstance> = true;
+/**
+ * The OWNER's payload, which had no assertion of its own until game 0.42.0 put
+ * `perfecting` and `perfectingBound` on it.
+ *
+ * `HeldItemInstance` above shares the public base and so cannot see a field added
+ * to this one alone, which is the whole gap: the two Perfecting fields are
+ * owner-only by the server's own allowlist, so they exist on exactly the shape
+ * with no pair. Every field here is optional, so `SameFields` is the only
+ * assertion of the three that can see one arrive on one side.
+ */
+const instanceIsPublished: Assignable<ItemInstance, PublicItemInstance> = true;
+const publishedIsInstance: Assignable<PublicItemInstance, ItemInstance> = true;
+const instanceFieldsAgree: SameFields<ItemInstance, PublicItemInstance> = true;
 const marketIsPublished: Assignable<MarketInfo, PublicMarketInfo> = true;
 const publishedIsMarket: Assignable<PublicMarketInfo, MarketInfo> = true;
 const marketFieldsAgree: SameFields<MarketInfo, PublicMarketInfo> = true;
@@ -379,6 +431,26 @@ const bgMatchFieldsAgree: SameFields<BattlegroundMatch, PublicBattlegroundMatch>
  */
 const reactionIsPublished: Assignable<Reaction, PublicReaction> = true;
 const publishedIsReaction: Assignable<PublicReaction, Reaction> = true;
+
+/**
+ * The combat reading, which had no assertion of its own until game 0.42.0 gave
+ * `CombatSource` a sixth member.
+ *
+ * Both directions on the UNION, for the reason the reaction pair gives: a member
+ * added to the loader alone leaves the published union a subset and only one
+ * direction fails, and adding one to the published side alone is worse, since it
+ * promises a source no branch can ever return. `SameFields` is absent here too,
+ * because it compares keys and a union of literals has none.
+ *
+ * The STATE pair beside it is what catches a field arriving on the record: both
+ * of its fields are required today, so two-way assignability is enough until one
+ * arrives optional, and then this needs `SameFields`.
+ */
+const combatSourceIsPublished: Assignable<CombatSource, PublicCombatSource> = true;
+const publishedIsCombatSource: Assignable<PublicCombatSource, CombatSource> = true;
+const combatStateIsPublished: Assignable<CombatState, PublicCombatState> = true;
+const publishedIsCombatState: Assignable<PublicCombatState, CombatState> = true;
+const combatStateFieldsAgree: SameFields<CombatState, PublicCombatState> = true;
 
 /**
  * The watchable keys against the runtime's own list.
@@ -495,6 +567,9 @@ describe('the published types', () => {
       entityIsPublished,
       publishedIsEntity,
       entityFieldsAgree,
+      auraIsPublished,
+      publishedIsAura,
+      auraFieldsAgree,
       corpseIsPublished,
       publishedIsCorpse,
       corpseFieldsAgree,
@@ -520,6 +595,9 @@ describe('the published types', () => {
       heldInstanceIsPublished,
       publishedIsHeldInstance,
       heldInstanceFieldsAgree,
+      instanceIsPublished,
+      publishedIsInstance,
+      instanceFieldsAgree,
       marketIsPublished,
       publishedIsMarket,
       marketFieldsAgree,
@@ -551,6 +629,11 @@ describe('the published types', () => {
       bgMatchFieldsAgree,
       reactionIsPublished,
       publishedIsReaction,
+      combatSourceIsPublished,
+      publishedIsCombatSource,
+      combatStateIsPublished,
+      publishedIsCombatState,
+      combatStateFieldsAgree,
       valuesArePublished,
       publishedAreValues,
       keysArePublished,

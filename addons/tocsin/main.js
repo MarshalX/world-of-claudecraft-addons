@@ -1197,9 +1197,31 @@ function reliefRow(tankPid, block) {
   };
 }
 
-/** A share of the declared maximum, so the setting means the same on any encounter. */
+/**
+ * When to start calling a swap.
+ *
+ * `swapStacks` is the game's own published swap point, and where a block carries
+ * one it beats the setting outright: the setting is a share of the cap, which is
+ * a guess at the number, and this IS the number. Nythraxis is the first block to
+ * carry one, from game 0.42.0, where the cap fell from ten stacks to three and a
+ * share of the cap stopped landing anywhere useful.
+ *
+ * Everything else still takes the share, so the setting means the same on every
+ * encounter that has not published a point of its own.
+ */
 function warnStacks(block) {
+  if (typeof block.swapStacks === 'number') {
+    return block.swapStacks;
+  }
   return (woc.settings['tank-warn'] / PERCENT) * block.maxStacks;
+}
+
+/** What one stack is worth, which heroic raises on its own from game 0.42.0. */
+function perStackFor(block) {
+  if (heroic() && typeof block.perStackHeroic === 'number') {
+    return block.perStackHeroic;
+  }
+  return block.perStack;
 }
 
 function toneForStacks(stacks, block) {
@@ -1228,7 +1250,7 @@ function tankStacksBlockRows(block, entity) {
     {
       id: 'tank',
       label: tank.name,
-      detail: `+${asPercent(stacks * block.perStack)} damage taken`,
+      detail: `+${asPercent(stacks * perStackFor(block))} damage taken`,
       value: `${String(stacks)} stacks`,
       fraction: stacks / Math.max(block.maxStacks, 1),
       tone: toneForStacks(stacks, block),

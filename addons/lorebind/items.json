@@ -1,9 +1,11 @@
 {
-  "gameVersion": "0.41.4",
+  "gameVersion": "0.42.0",
   "generatedFrom": [
     "src/sim/data.ts (the ITEMS merge)",
     "src/sim/content/items.ts",
     "src/sim/content/profession_items.ts",
+    "src/sim/content/apex_patterns.ts",
+    "src/sim/content/farm_patterns.ts",
     "src/sim/content/zone2.ts",
     "src/sim/content/zone3.ts",
     "src/sim/content/temple.ts",
@@ -157,6 +159,7 @@
       },
       "requiredLevel": 20,
       "requiredClass": ["warrior", "rogue", "hunter", "shaman", "paladin"],
+      "soulbound": true,
       "sellValue": 14000
     },
     {
@@ -176,6 +179,7 @@
       "hasteRating": 25,
       "requiredLevel": 20,
       "requiredClass": ["warrior", "paladin", "shaman"],
+      "soulbound": true,
       "sellValue": 10000
     },
     {
@@ -252,7 +256,7 @@
       "kind": "weapon",
       "quality": "rare",
       "slot": "mainhand",
-      "itemLevel": 23,
+      "itemLevel": 18,
       "stats": {
         "agi": 9,
         "sta": 4
@@ -262,7 +266,7 @@
         "max": 34,
         "speed": 2.7
       },
-      "requiredLevel": 20,
+      "requiredLevel": 15,
       "sellValue": 300
     },
     {
@@ -328,6 +332,7 @@
       "hasteRating": 25,
       "requiredLevel": 20,
       "requiredClass": ["druid"],
+      "soulbound": true,
       "sellValue": 10000
     },
     {
@@ -347,6 +352,7 @@
       "hasteRating": 25,
       "requiredLevel": 20,
       "requiredClass": ["rogue", "hunter", "druid"],
+      "soulbound": true,
       "sellValue": 10000
     },
     {
@@ -643,14 +649,32 @@
       },
       "hitRating": 25,
       "requiredLevel": 20,
+      "soulbound": true,
       "sellValue": 8000
     },
     {
       "id": "bandit_bandana",
       "name": "Red Bandana",
       "kind": "junk",
-      "quality": "poor",
+      "quality": "common",
       "sellValue": 6
+    },
+    {
+      "id": "barksong_handguards",
+      "name": "Barksong Handguards",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "gloves",
+      "armorType": "leather",
+      "itemLevel": 31,
+      "stats": {
+        "int": 9,
+        "spi": 6,
+        "armor": 104
+      },
+      "critRating": 40,
+      "requiredLevel": 20,
+      "sellValue": 140
     },
     {
       "id": "barrow_grave_offering",
@@ -865,6 +889,20 @@
       "id": "boar_hide",
       "name": "Bristly Boar Hide",
       "kind": "quest"
+    },
+    {
+      "id": "bog_beet",
+      "name": "Bog Beet",
+      "kind": "junk",
+      "quality": "common",
+      "sellValue": 8
+    },
+    {
+      "id": "bog_beet_seed",
+      "name": "Bog Beet Seed",
+      "kind": "junk",
+      "quality": "common",
+      "sellValue": 2
     },
     {
       "id": "bogiron_hauberk",
@@ -1086,6 +1124,82 @@
       "sellValue": 460
     },
     {
+      "id": "bramblehide_cinch",
+      "name": "Roots' Bramblehide Cinch",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "waist",
+      "armorType": "leather",
+      "itemLevel": 29,
+      "stats": {
+        "str": 8,
+        "sta": 6,
+        "armor": 120
+      },
+      "critRating": 20,
+      "requiredLevel": 20,
+      "requiredClass": ["druid"],
+      "set": "Roots' Bramblehide",
+      "sellValue": 12000
+    },
+    {
+      "id": "bramblehide_crown",
+      "name": "Roots' Bramblehide Crown",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "helmet",
+      "armorType": "leather",
+      "itemLevel": 29,
+      "stats": {
+        "str": 10,
+        "sta": 7,
+        "armor": 190
+      },
+      "hitRating": 20,
+      "requiredLevel": 20,
+      "requiredClass": ["druid"],
+      "set": "Roots' Bramblehide",
+      "sellValue": 12000
+    },
+    {
+      "id": "bramblehide_grips",
+      "name": "Roots' Bramblehide Grips",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "gloves",
+      "armorType": "leather",
+      "itemLevel": 29,
+      "stats": {
+        "str": 8,
+        "sta": 6,
+        "armor": 140
+      },
+      "hitRating": 20,
+      "requiredLevel": 20,
+      "requiredClass": ["druid"],
+      "set": "Roots' Bramblehide",
+      "sellValue": 12000
+    },
+    {
+      "id": "bramblehide_harness",
+      "name": "Roots' Bramblehide Harness",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "chest",
+      "armorType": "leather",
+      "itemLevel": 29,
+      "stats": {
+        "str": 12,
+        "sta": 8,
+        "armor": 215
+      },
+      "hitRating": 20,
+      "requiredLevel": 20,
+      "requiredClass": ["druid"],
+      "set": "Roots' Bramblehide",
+      "sellValue": 12000
+    },
+    {
       "id": "bramblehide_jerkin",
       "name": "Bramblehide Jerkin",
       "kind": "armor",
@@ -1098,6 +1212,63 @@
         "armor": 40
       },
       "sellValue": 120
+    },
+    {
+      "id": "bramblehide_legguards",
+      "name": "Roots' Bramblehide Legguards",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "legs",
+      "armorType": "leather",
+      "itemLevel": 29,
+      "stats": {
+        "str": 11,
+        "sta": 7,
+        "armor": 195
+      },
+      "hitRating": 20,
+      "requiredLevel": 20,
+      "requiredClass": ["druid"],
+      "set": "Roots' Bramblehide",
+      "sellValue": 12000
+    },
+    {
+      "id": "bramblehide_mantle",
+      "name": "Roots' Bramblehide Mantle",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "shoulder",
+      "armorType": "leather",
+      "itemLevel": 29,
+      "stats": {
+        "str": 9,
+        "sta": 6,
+        "armor": 165
+      },
+      "critRating": 20,
+      "requiredLevel": 20,
+      "requiredClass": ["druid"],
+      "set": "Roots' Bramblehide",
+      "sellValue": 12000
+    },
+    {
+      "id": "bramblehide_treads",
+      "name": "Roots' Bramblehide Treads",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "feet",
+      "armorType": "leather",
+      "itemLevel": 29,
+      "stats": {
+        "str": 8,
+        "sta": 5,
+        "armor": 175
+      },
+      "critRating": 20,
+      "requiredLevel": 20,
+      "requiredClass": ["druid"],
+      "set": "Roots' Bramblehide",
+      "sellValue": 12000
     },
     {
       "id": "breakscarred_steel",
@@ -1124,6 +1295,23 @@
       "sellValue": 320
     },
     {
+      "id": "briarstep_jerkin",
+      "name": "Briarstep Jerkin",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "chest",
+      "armorType": "leather",
+      "itemLevel": 31,
+      "stats": {
+        "agi": 13,
+        "sta": 9,
+        "armor": 172
+      },
+      "critRating": 40,
+      "requiredLevel": 20,
+      "sellValue": 175
+    },
+    {
       "id": "bridgemere_toll_chest",
       "name": "Sunken Toll-Chest",
       "kind": "quest"
@@ -1133,7 +1321,7 @@
       "name": "Brightwood Venison",
       "kind": "food",
       "quality": "common",
-      "foodHp": 92,
+      "foodHp": 81,
       "sellValue": 4
     },
     {
@@ -1176,6 +1364,13 @@
       },
       "requiredClass": ["rogue", "hunter"],
       "sellValue": 150
+    },
+    {
+      "id": "bronze_hoe",
+      "name": "Bronze Hoe",
+      "kind": "tool",
+      "quality": "common",
+      "sellValue": 10
     },
     {
       "id": "bronze_sickle",
@@ -1231,6 +1426,20 @@
       "sellValue": 300
     },
     {
+      "id": "brook_carrot",
+      "name": "Brook Carrot",
+      "kind": "junk",
+      "quality": "common",
+      "sellValue": 4
+    },
+    {
+      "id": "brook_carrot_seed",
+      "name": "Brook Carrot Seed",
+      "kind": "junk",
+      "quality": "common",
+      "sellValue": 1
+    },
+    {
       "id": "brutoks_maul",
       "name": "Brutok's Maul",
       "kind": "weapon",
@@ -1267,6 +1476,7 @@
       "blockValue": 30,
       "requiredLevel": 20,
       "requiredClass": ["warrior", "paladin", "shaman"],
+      "soulbound": true,
       "sellValue": 12000
     },
     {
@@ -1290,6 +1500,20 @@
       "quality": "common",
       "bagSlots": 8,
       "sellValue": 250
+    },
+    {
+      "id": "burnished_thorium_amulet",
+      "name": "Burnished Osmium Amulet",
+      "kind": "armor",
+      "quality": "rare",
+      "slot": "neck",
+      "itemLevel": 18,
+      "stats": {
+        "agi": 5,
+        "sta": 3
+      },
+      "requiredLevel": 15,
+      "sellValue": 310
     },
     {
       "id": "canopy_silk_hank",
@@ -1514,6 +1738,7 @@
       "critRating": 25,
       "requiredLevel": 20,
       "requiredClass": ["mage", "priest", "warlock", "druid"],
+      "soulbound": true,
       "sellValue": 12000
     },
     {
@@ -1573,6 +1798,7 @@
       "hitRating": 60,
       "requiredLevel": 20,
       "requiredClass": ["druid"],
+      "soulbound": true,
       "sellValue": 10000
     },
     {
@@ -1746,6 +1972,7 @@
       },
       "requiredLevel": 20,
       "requiredClass": ["rogue", "hunter"],
+      "soulbound": true,
       "sellValue": 14000
     },
     {
@@ -1808,6 +2035,7 @@
       "hasteRating": 25,
       "requiredLevel": 20,
       "requiredClass": ["mage", "priest", "warlock"],
+      "soulbound": true,
       "sellValue": 10000
     },
     {
@@ -1986,7 +2214,36 @@
       "spellPower": 4,
       "hitRating": 25,
       "requiredLevel": 20,
+      "soulbound": true,
       "sellValue": 8000
+    },
+    {
+      "id": "clockreel_fishing_rod",
+      "name": "Clockreel Fishing Rod",
+      "kind": "tool",
+      "quality": "epic",
+      "requiredLevel": 20,
+      "sellValue": 375
+    },
+    {
+      "id": "cogwheel_blank",
+      "name": "Cogwheel Blank",
+      "kind": "junk",
+      "quality": "common",
+      "sellValue": 18
+    },
+    {
+      "id": "coiled_copper_torc",
+      "name": "Coiled Copper Torc",
+      "kind": "armor",
+      "quality": "uncommon",
+      "slot": "neck",
+      "itemLevel": 11,
+      "stats": {
+        "agi": 2,
+        "sta": 1
+      },
+      "sellValue": 36
     },
     {
       "id": "coldsight_trackers_chest",
@@ -2094,6 +2351,13 @@
       "sellValue": 12000
     },
     {
+      "id": "compost",
+      "name": "Compost",
+      "kind": "junk",
+      "quality": "common",
+      "sellValue": 2
+    },
+    {
       "id": "conjured_bread",
       "name": "Conjured Oatcake",
       "kind": "food",
@@ -2199,6 +2463,20 @@
       "sellValue": 4
     },
     {
+      "id": "copperlens_ocular",
+      "name": "Copperlens Ocular",
+      "kind": "held_offhand",
+      "quality": "uncommon",
+      "slot": "offhand",
+      "itemLevel": 16,
+      "stats": {
+        "sta": 2,
+        "int": 3
+      },
+      "requiredClass": ["mage", "priest", "warlock", "shaman", "paladin", "druid"],
+      "sellValue": 36
+    },
+    {
       "id": "coppermail_gauntlets",
       "name": "Coppermail Gauntlets",
       "kind": "armor",
@@ -2242,6 +2520,7 @@
       "hitRating": 60,
       "requiredLevel": 20,
       "requiredClass": ["mage", "priest", "warlock"],
+      "soulbound": true,
       "sellValue": 10000
     },
     {
@@ -2263,6 +2542,27 @@
       "sellValue": 195
     },
     {
+      "id": "courtiers_bonefang",
+      "name": "Courtier's Bonefang",
+      "kind": "weapon",
+      "quality": "epic",
+      "slot": "mainhand",
+      "itemLevel": 29,
+      "stats": {
+        "agi": 13,
+        "sta": 7
+      },
+      "hitRating": 20,
+      "weapon": {
+        "min": 22,
+        "max": 34,
+        "speed": 1.8
+      },
+      "requiredLevel": 20,
+      "requiredClass": ["rogue", "hunter"],
+      "sellValue": 14000
+    },
+    {
       "id": "cracked_fetish",
       "name": "Cracked Fetish",
       "kind": "junk",
@@ -2273,14 +2573,14 @@
       "id": "cracked_ogre_tusk",
       "name": "Cracked Ogre Tusk",
       "kind": "junk",
-      "quality": "poor",
+      "quality": "common",
       "sellValue": 42
     },
     {
       "id": "cracked_wyrm_scale",
       "name": "Cracked Wyrm Scale",
       "kind": "junk",
-      "quality": "poor",
+      "quality": "common",
       "sellValue": 35
     },
     {
@@ -2526,6 +2826,696 @@
       "sellValue": 12000
     },
     {
+      "id": "crucible_agi_leather_chest",
+      "name": "Crucible Skirmisher's Jerkin",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "chest",
+      "armorType": "leather",
+      "itemLevel": 35,
+      "stats": {
+        "agi": 17,
+        "sta": 8,
+        "armor": 215
+      },
+      "critRating": 60,
+      "hasteRating": 25,
+      "requiredLevel": 20,
+      "requiredClass": ["rogue", "hunter"],
+      "set": "Crucible Skirmisher's Leather",
+      "sellValue": 12000
+    },
+    {
+      "id": "crucible_agi_leather_feet",
+      "name": "Crucible Skirmisher's Boots",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "feet",
+      "armorType": "leather",
+      "itemLevel": 35,
+      "stats": {
+        "agi": 11,
+        "sta": 5,
+        "armor": 145
+      },
+      "critRating": 60,
+      "hasteRating": 25,
+      "requiredLevel": 20,
+      "requiredClass": ["rogue", "hunter"],
+      "set": "Crucible Skirmisher's Leather",
+      "sellValue": 9000
+    },
+    {
+      "id": "crucible_agi_leather_waist",
+      "name": "Crucible Skirmisher's Belt",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "waist",
+      "armorType": "leather",
+      "itemLevel": 35,
+      "stats": {
+        "agi": 12,
+        "sta": 5,
+        "armor": 150
+      },
+      "critRating": 60,
+      "hasteRating": 25,
+      "requiredLevel": 20,
+      "requiredClass": ["rogue", "hunter"],
+      "set": "Crucible Skirmisher's Leather",
+      "sellValue": 9000
+    },
+    {
+      "id": "crucible_caster_cloth_chest",
+      "name": "Crucible Spellcaster's Robe",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "chest",
+      "armorType": "cloth",
+      "itemLevel": 35,
+      "stats": {
+        "sta": 8,
+        "int": 17,
+        "armor": 105
+      },
+      "spellPower": 16,
+      "critRating": 25,
+      "hasteRating": 60,
+      "requiredLevel": 20,
+      "requiredClass": ["mage", "priest", "warlock"],
+      "set": "Crucible Spellcaster's Cloth",
+      "sellValue": 12000
+    },
+    {
+      "id": "crucible_caster_cloth_feet",
+      "name": "Crucible Spellcaster's Slippers",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "feet",
+      "armorType": "cloth",
+      "itemLevel": 35,
+      "stats": {
+        "sta": 5,
+        "int": 11,
+        "armor": 70
+      },
+      "spellPower": 12,
+      "critRating": 25,
+      "hasteRating": 60,
+      "requiredLevel": 20,
+      "requiredClass": ["mage", "priest", "warlock"],
+      "set": "Crucible Spellcaster's Cloth",
+      "sellValue": 9000
+    },
+    {
+      "id": "crucible_caster_cloth_waist",
+      "name": "Crucible Spellcaster's Sash",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "waist",
+      "armorType": "cloth",
+      "itemLevel": 35,
+      "stats": {
+        "sta": 5,
+        "int": 12,
+        "armor": 75
+      },
+      "spellPower": 12,
+      "critRating": 25,
+      "hasteRating": 60,
+      "requiredLevel": 20,
+      "requiredClass": ["mage", "priest", "warlock"],
+      "set": "Crucible Spellcaster's Cloth",
+      "sellValue": 9000
+    },
+    {
+      "id": "crucible_caster_leather_chest",
+      "name": "Crucible Spellcaster's Jerkin",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "chest",
+      "armorType": "leather",
+      "itemLevel": 35,
+      "stats": {
+        "sta": 8,
+        "int": 17,
+        "armor": 215
+      },
+      "spellPower": 16,
+      "critRating": 25,
+      "hasteRating": 60,
+      "requiredLevel": 20,
+      "requiredClass": ["druid"],
+      "set": "Crucible Spellcaster's Leather",
+      "sellValue": 12000
+    },
+    {
+      "id": "crucible_caster_leather_feet",
+      "name": "Crucible Spellcaster's Boots",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "feet",
+      "armorType": "leather",
+      "itemLevel": 35,
+      "stats": {
+        "sta": 5,
+        "int": 11,
+        "armor": 145
+      },
+      "spellPower": 12,
+      "critRating": 25,
+      "hasteRating": 60,
+      "requiredLevel": 20,
+      "requiredClass": ["druid"],
+      "set": "Crucible Spellcaster's Leather",
+      "sellValue": 9000
+    },
+    {
+      "id": "crucible_caster_leather_waist",
+      "name": "Crucible Spellcaster's Belt",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "waist",
+      "armorType": "leather",
+      "itemLevel": 35,
+      "stats": {
+        "sta": 5,
+        "int": 12,
+        "armor": 150
+      },
+      "spellPower": 12,
+      "critRating": 25,
+      "hasteRating": 60,
+      "requiredLevel": 20,
+      "requiredClass": ["druid"],
+      "set": "Crucible Spellcaster's Leather",
+      "sellValue": 9000
+    },
+    {
+      "id": "crucible_caster_mail_chest",
+      "name": "Crucible Spellcaster's Hauberk",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "chest",
+      "armorType": "mail",
+      "itemLevel": 35,
+      "stats": {
+        "sta": 8,
+        "int": 17,
+        "armor": 380
+      },
+      "spellPower": 16,
+      "critRating": 25,
+      "hasteRating": 60,
+      "requiredLevel": 20,
+      "requiredClass": ["shaman"],
+      "set": "Crucible Spellcaster's Mail",
+      "sellValue": 12000
+    },
+    {
+      "id": "crucible_caster_mail_feet",
+      "name": "Crucible Spellcaster's Sabatons",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "feet",
+      "armorType": "mail",
+      "itemLevel": 35,
+      "stats": {
+        "sta": 5,
+        "int": 11,
+        "armor": 255
+      },
+      "spellPower": 12,
+      "critRating": 25,
+      "hasteRating": 60,
+      "requiredLevel": 20,
+      "requiredClass": ["shaman"],
+      "set": "Crucible Spellcaster's Mail",
+      "sellValue": 9000
+    },
+    {
+      "id": "crucible_caster_mail_waist",
+      "name": "Crucible Spellcaster's Girdle",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "waist",
+      "armorType": "mail",
+      "itemLevel": 35,
+      "stats": {
+        "sta": 5,
+        "int": 12,
+        "armor": 265
+      },
+      "spellPower": 12,
+      "critRating": 25,
+      "hasteRating": 60,
+      "requiredLevel": 20,
+      "requiredClass": ["shaman"],
+      "set": "Crucible Spellcaster's Mail",
+      "sellValue": 9000
+    },
+    {
+      "id": "crucible_healer_cloth_chest",
+      "name": "Crucible Healer's Robe",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "chest",
+      "armorType": "cloth",
+      "itemLevel": 35,
+      "stats": {
+        "sta": 4,
+        "int": 14,
+        "spi": 7,
+        "armor": 105
+      },
+      "spellPower": 12,
+      "critRating": 25,
+      "hasteRating": 60,
+      "requiredLevel": 20,
+      "requiredClass": ["mage", "priest"],
+      "set": "Crucible Healer's Cloth",
+      "sellValue": 12000
+    },
+    {
+      "id": "crucible_healer_cloth_feet",
+      "name": "Crucible Healer's Slippers",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "feet",
+      "armorType": "cloth",
+      "itemLevel": 35,
+      "stats": {
+        "sta": 3,
+        "int": 9,
+        "spi": 4,
+        "armor": 70
+      },
+      "spellPower": 8,
+      "critRating": 25,
+      "hasteRating": 60,
+      "requiredLevel": 20,
+      "requiredClass": ["mage", "priest"],
+      "set": "Crucible Healer's Cloth",
+      "sellValue": 9000
+    },
+    {
+      "id": "crucible_healer_cloth_waist",
+      "name": "Crucible Healer's Sash",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "waist",
+      "armorType": "cloth",
+      "itemLevel": 35,
+      "stats": {
+        "sta": 3,
+        "int": 9,
+        "spi": 5,
+        "armor": 75
+      },
+      "spellPower": 8,
+      "critRating": 25,
+      "hasteRating": 60,
+      "requiredLevel": 20,
+      "requiredClass": ["mage", "priest"],
+      "set": "Crucible Healer's Cloth",
+      "sellValue": 9000
+    },
+    {
+      "id": "crucible_healer_leather_chest",
+      "name": "Crucible Healer's Jerkin",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "chest",
+      "armorType": "leather",
+      "itemLevel": 35,
+      "stats": {
+        "sta": 4,
+        "int": 14,
+        "spi": 7,
+        "armor": 215
+      },
+      "spellPower": 12,
+      "critRating": 25,
+      "hasteRating": 60,
+      "requiredLevel": 20,
+      "requiredClass": ["druid"],
+      "set": "Crucible Healer's Leather",
+      "sellValue": 12000
+    },
+    {
+      "id": "crucible_healer_leather_feet",
+      "name": "Crucible Healer's Boots",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "feet",
+      "armorType": "leather",
+      "itemLevel": 35,
+      "stats": {
+        "sta": 3,
+        "int": 9,
+        "spi": 4,
+        "armor": 145
+      },
+      "spellPower": 8,
+      "critRating": 25,
+      "hasteRating": 60,
+      "requiredLevel": 20,
+      "requiredClass": ["druid"],
+      "set": "Crucible Healer's Leather",
+      "sellValue": 9000
+    },
+    {
+      "id": "crucible_healer_leather_waist",
+      "name": "Crucible Healer's Belt",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "waist",
+      "armorType": "leather",
+      "itemLevel": 35,
+      "stats": {
+        "sta": 3,
+        "int": 9,
+        "spi": 5,
+        "armor": 150
+      },
+      "spellPower": 8,
+      "critRating": 25,
+      "hasteRating": 60,
+      "requiredLevel": 20,
+      "requiredClass": ["druid"],
+      "set": "Crucible Healer's Leather",
+      "sellValue": 9000
+    },
+    {
+      "id": "crucible_healer_mail_chest",
+      "name": "Crucible Healer's Hauberk",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "chest",
+      "armorType": "mail",
+      "itemLevel": 35,
+      "stats": {
+        "sta": 4,
+        "int": 14,
+        "spi": 7,
+        "armor": 380
+      },
+      "spellPower": 12,
+      "critRating": 25,
+      "hasteRating": 60,
+      "requiredLevel": 20,
+      "requiredClass": ["paladin", "shaman"],
+      "set": "Crucible Healer's Mail",
+      "sellValue": 12000
+    },
+    {
+      "id": "crucible_healer_mail_feet",
+      "name": "Crucible Healer's Sabatons",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "feet",
+      "armorType": "mail",
+      "itemLevel": 35,
+      "stats": {
+        "sta": 3,
+        "int": 9,
+        "spi": 4,
+        "armor": 255
+      },
+      "spellPower": 8,
+      "critRating": 25,
+      "hasteRating": 60,
+      "requiredLevel": 20,
+      "requiredClass": ["paladin", "shaman"],
+      "set": "Crucible Healer's Mail",
+      "sellValue": 9000
+    },
+    {
+      "id": "crucible_healer_mail_waist",
+      "name": "Crucible Healer's Girdle",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "waist",
+      "armorType": "mail",
+      "itemLevel": 35,
+      "stats": {
+        "sta": 3,
+        "int": 9,
+        "spi": 5,
+        "armor": 265
+      },
+      "spellPower": 8,
+      "critRating": 25,
+      "hasteRating": 60,
+      "requiredLevel": 20,
+      "requiredClass": ["paladin", "shaman"],
+      "set": "Crucible Healer's Mail",
+      "sellValue": 9000
+    },
+    {
+      "id": "crucible_str_leather_chest",
+      "name": "Crucible Prowler's Jerkin",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "chest",
+      "armorType": "leather",
+      "itemLevel": 35,
+      "stats": {
+        "str": 17,
+        "sta": 8,
+        "armor": 215
+      },
+      "critRating": 60,
+      "hasteRating": 25,
+      "requiredLevel": 20,
+      "requiredClass": ["druid"],
+      "set": "Crucible Prowler's Leather",
+      "sellValue": 12000
+    },
+    {
+      "id": "crucible_str_leather_feet",
+      "name": "Crucible Prowler's Boots",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "feet",
+      "armorType": "leather",
+      "itemLevel": 35,
+      "stats": {
+        "str": 11,
+        "sta": 5,
+        "armor": 145
+      },
+      "critRating": 60,
+      "hasteRating": 25,
+      "requiredLevel": 20,
+      "requiredClass": ["druid"],
+      "set": "Crucible Prowler's Leather",
+      "sellValue": 9000
+    },
+    {
+      "id": "crucible_str_leather_waist",
+      "name": "Crucible Prowler's Belt",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "waist",
+      "armorType": "leather",
+      "itemLevel": 35,
+      "stats": {
+        "str": 12,
+        "sta": 5,
+        "armor": 150
+      },
+      "critRating": 60,
+      "hasteRating": 25,
+      "requiredLevel": 20,
+      "requiredClass": ["druid"],
+      "set": "Crucible Prowler's Leather",
+      "sellValue": 9000
+    },
+    {
+      "id": "crucible_str_mail_chest",
+      "name": "Crucible Striker's Hauberk",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "chest",
+      "armorType": "mail",
+      "itemLevel": 35,
+      "stats": {
+        "str": 17,
+        "sta": 8,
+        "armor": 380
+      },
+      "critRating": 60,
+      "hasteRating": 25,
+      "requiredLevel": 20,
+      "requiredClass": ["warrior", "paladin", "shaman"],
+      "set": "Crucible Striker's Mail",
+      "sellValue": 12000
+    },
+    {
+      "id": "crucible_str_mail_feet",
+      "name": "Crucible Striker's Sabatons",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "feet",
+      "armorType": "mail",
+      "itemLevel": 35,
+      "stats": {
+        "str": 11,
+        "sta": 5,
+        "armor": 255
+      },
+      "critRating": 60,
+      "hasteRating": 25,
+      "requiredLevel": 20,
+      "requiredClass": ["warrior", "paladin", "shaman"],
+      "set": "Crucible Striker's Mail",
+      "sellValue": 9000
+    },
+    {
+      "id": "crucible_str_mail_waist",
+      "name": "Crucible Striker's Girdle",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "waist",
+      "armorType": "mail",
+      "itemLevel": 35,
+      "stats": {
+        "str": 12,
+        "sta": 5,
+        "armor": 265
+      },
+      "critRating": 60,
+      "hasteRating": 25,
+      "requiredLevel": 20,
+      "requiredClass": ["warrior", "paladin", "shaman"],
+      "set": "Crucible Striker's Mail",
+      "sellValue": 9000
+    },
+    {
+      "id": "crucible_tank_leather_chest",
+      "name": "Crucible Guardian's Jerkin",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "chest",
+      "armorType": "leather",
+      "itemLevel": 35,
+      "stats": {
+        "str": 3,
+        "agi": 7,
+        "sta": 15,
+        "armor": 215
+      },
+      "critRating": 60,
+      "hasteRating": 25,
+      "requiredLevel": 20,
+      "requiredClass": ["druid"],
+      "set": "Crucible Guardian's Leather",
+      "sellValue": 12000
+    },
+    {
+      "id": "crucible_tank_leather_feet",
+      "name": "Crucible Guardian's Boots",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "feet",
+      "armorType": "leather",
+      "itemLevel": 35,
+      "stats": {
+        "str": 2,
+        "agi": 4,
+        "sta": 10,
+        "armor": 145
+      },
+      "critRating": 60,
+      "hasteRating": 25,
+      "requiredLevel": 20,
+      "requiredClass": ["druid"],
+      "set": "Crucible Guardian's Leather",
+      "sellValue": 9000
+    },
+    {
+      "id": "crucible_tank_leather_waist",
+      "name": "Crucible Guardian's Belt",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "waist",
+      "armorType": "leather",
+      "itemLevel": 35,
+      "stats": {
+        "str": 2,
+        "agi": 5,
+        "sta": 10,
+        "armor": 150
+      },
+      "critRating": 60,
+      "hasteRating": 25,
+      "requiredLevel": 20,
+      "requiredClass": ["druid"],
+      "set": "Crucible Guardian's Leather",
+      "sellValue": 9000
+    },
+    {
+      "id": "crucible_tank_mail_chest",
+      "name": "Crucible Guardian's Hauberk",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "chest",
+      "armorType": "mail",
+      "itemLevel": 35,
+      "stats": {
+        "str": 10,
+        "sta": 15,
+        "armor": 380
+      },
+      "critRating": 60,
+      "hasteRating": 25,
+      "requiredLevel": 20,
+      "requiredClass": ["warrior", "paladin", "shaman"],
+      "set": "Crucible Guardian's Mail",
+      "sellValue": 12000
+    },
+    {
+      "id": "crucible_tank_mail_feet",
+      "name": "Crucible Guardian's Sabatons",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "feet",
+      "armorType": "mail",
+      "itemLevel": 35,
+      "stats": {
+        "str": 6,
+        "sta": 10,
+        "armor": 255
+      },
+      "critRating": 60,
+      "hasteRating": 25,
+      "requiredLevel": 20,
+      "requiredClass": ["warrior", "paladin", "shaman"],
+      "set": "Crucible Guardian's Mail",
+      "sellValue": 9000
+    },
+    {
+      "id": "crucible_tank_mail_waist",
+      "name": "Crucible Guardian's Girdle",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "waist",
+      "armorType": "mail",
+      "itemLevel": 35,
+      "stats": {
+        "str": 7,
+        "sta": 10,
+        "armor": 265
+      },
+      "critRating": 60,
+      "hasteRating": 25,
+      "requiredLevel": 20,
+      "requiredClass": ["warrior", "paladin", "shaman"],
+      "set": "Crucible Guardian's Mail",
+      "sellValue": 9000
+    },
+    {
       "id": "crypt_keystone",
       "name": "Crypt Keystone",
       "kind": "quest",
@@ -2538,7 +3528,7 @@
     },
     {
       "id": "cryptbloom_shoulderguards",
-      "name": "Cryptbloom Shoulderguards",
+      "name": "Tombpetal Shoulderguards",
       "kind": "armor",
       "quality": "rare",
       "slot": "shoulder",
@@ -2944,6 +3934,14 @@
       "sellValue": 9000
     },
     {
+      "id": "deed_of_making",
+      "name": "Deed of Making",
+      "kind": "junk",
+      "quality": "rare",
+      "requiredLevel": 20,
+      "sellValue": 50
+    },
+    {
       "id": "deepfen_pearl",
       "name": "Deepfen Pearl",
       "kind": "junk",
@@ -2967,6 +3965,7 @@
       "hasteRating": 60,
       "requiredLevel": 20,
       "requiredClass": ["druid"],
+      "soulbound": true,
       "sellValue": 10000
     },
     {
@@ -3302,19 +4301,66 @@
       "sellValue": 950
     },
     {
+      "id": "duskforged_billet",
+      "name": "Duskforged Billet",
+      "kind": "junk",
+      "quality": "common",
+      "sellValue": 45
+    },
+    {
+      "id": "duskforged_bulwark",
+      "name": "Duskforged Bulwark",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "offhand",
+      "armorType": "mail",
+      "itemLevel": 31,
+      "stats": {
+        "str": 5,
+        "sta": 11,
+        "armor": 680
+      },
+      "hitRating": 20,
+      "blockValue": 30,
+      "requiredLevel": 20,
+      "requiredClass": ["warrior", "paladin", "shaman"],
+      "sellValue": 300
+    },
+    {
+      "id": "duskforged_warblade",
+      "name": "Duskforged Warblade",
+      "kind": "weapon",
+      "quality": "epic",
+      "slot": "mainhand",
+      "itemLevel": 31,
+      "stats": {
+        "str": 13,
+        "sta": 9
+      },
+      "hitRating": 50,
+      "weapon": {
+        "min": 30,
+        "max": 50,
+        "speed": 2.5
+      },
+      "requiredLevel": 20,
+      "requiredClass": ["warrior", "paladin", "shaman"],
+      "sellValue": 320
+    },
+    {
       "id": "duskhide_wraps",
       "name": "Duskhide Wraps",
       "kind": "armor",
       "quality": "rare",
       "slot": "gloves",
       "armorType": "leather",
-      "itemLevel": 23,
+      "itemLevel": 18,
       "stats": {
         "int": 6,
         "spi": 3,
         "armor": 46
       },
-      "requiredLevel": 20,
+      "requiredLevel": 15,
       "sellValue": 420
     },
     {
@@ -3424,6 +4470,14 @@
       "sellValue": 84
     },
     {
+      "id": "eastbrook_glazed_carrots",
+      "name": "Eastbrook Glazed Carrots",
+      "kind": "food",
+      "quality": "common",
+      "foodHp": 90,
+      "sellValue": 6
+    },
+    {
       "id": "eastbrook_greatsword",
       "name": "Eastbrook Greatsword",
       "kind": "weapon",
@@ -3450,6 +4504,14 @@
         "armor": 30
       },
       "sellValue": 72
+    },
+    {
+      "id": "eastbrook_root_pottage",
+      "name": "Eastbrook Root Pottage",
+      "kind": "food",
+      "quality": "common",
+      "foodHp": 117,
+      "sellValue": 12
     },
     {
       "id": "eastbrook_warded_leggings",
@@ -3562,7 +4624,7 @@
       "kind": "weapon",
       "quality": "rare",
       "slot": "mainhand",
-      "itemLevel": 23,
+      "itemLevel": 18,
       "stats": {
         "int": 9,
         "spi": 4
@@ -3572,7 +4634,7 @@
         "max": 31,
         "speed": 3
       },
-      "requiredLevel": 20,
+      "requiredLevel": 15,
       "sellValue": 285
     },
     {
@@ -3636,6 +4698,7 @@
       "blockValue": 22,
       "requiredLevel": 20,
       "requiredClass": ["paladin", "shaman"],
+      "soulbound": true,
       "sellValue": 12000
     },
     {
@@ -3990,6 +5053,19 @@
       "sellValue": 110
     },
     {
+      "id": "etched_iron_loop",
+      "name": "Etched Iron Loop",
+      "kind": "armor",
+      "quality": "uncommon",
+      "slot": "ring",
+      "itemLevel": 16,
+      "stats": {
+        "sta": 1,
+        "int": 3
+      },
+      "sellValue": 46
+    },
+    {
       "id": "event_skin_token",
       "name": "Mysterious Cosmetic Cache",
       "kind": "tool",
@@ -4002,9 +5078,72 @@
       "kind": "quest"
     },
     {
+      "id": "evergarden_braised_greens",
+      "name": "Evergarden Braised Greens",
+      "kind": "food",
+      "quality": "rare",
+      "foodHp": 980,
+      "requiredLevel": 20,
+      "sellValue": 150
+    },
+    {
+      "id": "evergarden_greens",
+      "name": "Evergarden Greens",
+      "kind": "junk",
+      "quality": "common",
+      "sellValue": 40
+    },
+    {
+      "id": "evergarden_greens_seed",
+      "name": "Evergarden Greens Seed",
+      "kind": "junk",
+      "quality": "common",
+      "sellValue": 8
+    },
+    {
+      "id": "evergarden_harvest_platter",
+      "name": "Evergarden Harvest Platter",
+      "kind": "food",
+      "quality": "rare",
+      "foodHp": 980,
+      "requiredLevel": 20,
+      "sellValue": 150
+    },
+    {
+      "id": "evergarden_hoe",
+      "name": "Evergarden Hoe",
+      "kind": "tool",
+      "quality": "epic",
+      "requiredLevel": 20,
+      "sellValue": 150
+    },
+    {
+      "id": "evergarden_pumpkin",
+      "name": "Evergarden Pumpkin",
+      "kind": "junk",
+      "quality": "common",
+      "sellValue": 40
+    },
+    {
+      "id": "evergarden_pumpkin_seed",
+      "name": "Evergarden Pumpkin Seed",
+      "kind": "junk",
+      "quality": "common",
+      "sellValue": 8
+    },
+    {
       "id": "evergarden_statue_rubbing",
       "name": "Statue Rubbing",
       "kind": "quest"
+    },
+    {
+      "id": "evergarden_sunmelon_tart",
+      "name": "Evergarden Sunmelon Tart",
+      "kind": "food",
+      "quality": "rare",
+      "foodHp": 980,
+      "requiredLevel": 20,
+      "sellValue": 150
     },
     {
       "id": "fang_of_korzul",
@@ -4100,6 +5239,31 @@
       "sellValue": 320
     },
     {
+      "id": "fenbloom_breeches",
+      "name": "Fenbloom Breeches",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "legs",
+      "armorType": "leather",
+      "itemLevel": 31,
+      "stats": {
+        "int": 12,
+        "spi": 8,
+        "armor": 132
+      },
+      "hasteRating": 40,
+      "requiredLevel": 20,
+      "sellValue": 160
+    },
+    {
+      "id": "fenbridge_beet_braise",
+      "name": "Fenbridge Beet Braise",
+      "kind": "food",
+      "quality": "uncommon",
+      "foodHp": 432,
+      "sellValue": 40
+    },
+    {
       "id": "fenbridge_hide_belt",
       "name": "Fenbridge Hide Belt",
       "kind": "armor",
@@ -4139,11 +5303,27 @@
       "sellValue": 32
     },
     {
+      "id": "fenbridge_rice_bowl",
+      "name": "Fenbridge Rice Bowl",
+      "kind": "food",
+      "quality": "uncommon",
+      "foodHp": 243,
+      "sellValue": 25
+    },
+    {
+      "id": "fenbridge_rice_pudding",
+      "name": "Fenbridge Rice Pudding",
+      "kind": "food",
+      "quality": "uncommon",
+      "foodHp": 243,
+      "sellValue": 25
+    },
+    {
       "id": "fenbridge_rye",
       "name": "Fenbridge Rye Loaf",
       "kind": "food",
       "quality": "common",
-      "foodHp": 243,
+      "foodHp": 220,
       "sellValue": 25
     },
     {
@@ -4231,6 +5411,13 @@
       "kind": "quest"
     },
     {
+      "id": "field_kit",
+      "name": "Field Kit",
+      "kind": "tool",
+      "quality": "common",
+      "sellValue": 4
+    },
+    {
       "id": "final_argument_greatblade",
       "name": "Final Argument Greatblade",
       "kind": "weapon",
@@ -4278,6 +5465,20 @@
       "sellValue": 30
     },
     {
+      "id": "fine_bog_beet",
+      "name": "Fine Bog Beet",
+      "kind": "junk",
+      "quality": "common",
+      "sellValue": 16
+    },
+    {
+      "id": "fine_brook_carrot",
+      "name": "Fine Brook Carrot",
+      "kind": "junk",
+      "quality": "common",
+      "sellValue": 8
+    },
+    {
       "id": "fine_copper_ore",
       "name": "Fine Copper Ore",
       "kind": "junk",
@@ -4292,8 +5493,57 @@
       "sellValue": 80
     },
     {
+      "id": "fine_evergarden_greens",
+      "name": "Fine Evergarden Greens",
+      "kind": "junk",
+      "quality": "common",
+      "sellValue": 80
+    },
+    {
+      "id": "fine_evergarden_pumpkin",
+      "name": "Fine Evergarden Pumpkin",
+      "kind": "junk",
+      "quality": "common",
+      "sellValue": 80
+    },
+    {
+      "id": "fine_frost_gourd",
+      "name": "Fine Frost Gourd",
+      "kind": "junk",
+      "quality": "common",
+      "sellValue": 30
+    },
+    {
+      "id": "fine_frost_lentils",
+      "name": "Fine Frost Lentils",
+      "kind": "junk",
+      "quality": "common",
+      "sellValue": 30
+    },
+    {
+      "id": "fine_gilded_sunmelon",
+      "name": "Fine Gilded Sunmelon",
+      "kind": "junk",
+      "quality": "common",
+      "sellValue": 80
+    },
+    {
+      "id": "fine_gilded_yam",
+      "name": "Fine Gilded Yam",
+      "kind": "junk",
+      "quality": "common",
+      "sellValue": 80
+    },
+    {
       "id": "fine_goldleaf_herb",
       "name": "Fine Goldleaf Herb",
+      "kind": "junk",
+      "quality": "common",
+      "sellValue": 30
+    },
+    {
+      "id": "fine_highland_barley",
+      "name": "Fine Highland Barley",
       "kind": "junk",
       "quality": "common",
       "sellValue": 30
@@ -4311,6 +5561,13 @@
       "kind": "junk",
       "quality": "common",
       "sellValue": 8
+    },
+    {
+      "id": "fine_marsh_rice",
+      "name": "Fine Marsh Rice",
+      "kind": "junk",
+      "quality": "common",
+      "sellValue": 16
     },
     {
       "id": "fine_silverleaf_herb",
@@ -4332,6 +5589,20 @@
       "kind": "junk",
       "quality": "common",
       "sellValue": 30
+    },
+    {
+      "id": "fine_thornpeak_cabbage",
+      "name": "Fine Thornpeak Cabbage",
+      "kind": "junk",
+      "quality": "common",
+      "sellValue": 30
+    },
+    {
+      "id": "fine_vale_wheat",
+      "name": "Fine Vale Wheat",
+      "kind": "junk",
+      "quality": "common",
+      "sellValue": 8
     },
     {
       "id": "firebottle",
@@ -4405,6 +5676,14 @@
       "quality": "uncommon"
     },
     {
+      "id": "forgefathers_ember",
+      "name": "Forgefather's Ember",
+      "kind": "quest",
+      "quality": "epic",
+      "requiredLevel": 20,
+      "soulbound": true
+    },
+    {
       "id": "forgefathers_warhammer",
       "name": "Forgefather's Warhammer",
       "kind": "weapon",
@@ -4424,6 +5703,7 @@
       },
       "requiredLevel": 20,
       "requiredClass": ["warrior", "rogue", "hunter", "shaman", "paladin"],
+      "soulbound": true,
       "sellValue": 14000
     },
     {
@@ -4447,7 +5727,32 @@
       },
       "requiredLevel": 20,
       "requiredClass": ["mage", "priest", "warlock", "shaman", "paladin", "druid"],
+      "soulbound": true,
       "sellValue": 16000
+    },
+    {
+      "id": "forgefold_legguards",
+      "name": "Forgefold Legguards",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "legs",
+      "armorType": "mail",
+      "itemLevel": 31,
+      "stats": {
+        "str": 11,
+        "sta": 9,
+        "armor": 315
+      },
+      "hasteRating": 40,
+      "requiredLevel": 20,
+      "sellValue": 320
+    },
+    {
+      "id": "forgefold_plating",
+      "name": "Forgefold Plating",
+      "kind": "junk",
+      "quality": "common",
+      "sellValue": 45
     },
     {
       "id": "forgewall_chest",
@@ -4487,6 +5792,7 @@
       "hitRating": 60,
       "requiredLevel": 20,
       "requiredClass": ["warrior", "paladin", "shaman"],
+      "soulbound": true,
       "sellValue": 10000
     },
     {
@@ -4574,6 +5880,13 @@
       "sellValue": 12000
     },
     {
+      "id": "formula_lastflame_zeal",
+      "name": "Formula: Last Flame's Zeal",
+      "kind": "recipe",
+      "quality": "epic",
+      "requiredLevel": 20
+    },
+    {
       "id": "fountain_court_mantle",
       "name": "Mantle of the Fountain Court",
       "kind": "armor",
@@ -4597,6 +5910,34 @@
       "sellValue": 30
     },
     {
+      "id": "frost_gourd",
+      "name": "Frost Gourd",
+      "kind": "junk",
+      "quality": "common",
+      "sellValue": 15
+    },
+    {
+      "id": "frost_gourd_seed",
+      "name": "Frost Gourd Seed",
+      "kind": "junk",
+      "quality": "common",
+      "sellValue": 4
+    },
+    {
+      "id": "frost_lentils",
+      "name": "Frost Lentils",
+      "kind": "junk",
+      "quality": "common",
+      "sellValue": 15
+    },
+    {
+      "id": "frost_lentils_seed",
+      "name": "Frost Lentils Seed",
+      "kind": "junk",
+      "quality": "common",
+      "sellValue": 4
+    },
+    {
       "id": "frostgill_chowder",
       "name": "Frostgill Chowder",
       "kind": "food",
@@ -4606,7 +5947,7 @@
     },
     {
       "id": "frostmane_mantle",
-      "name": "Mantle of the Frostmane",
+      "name": "Mantle of the Rimemane",
       "kind": "armor",
       "quality": "rare",
       "slot": "shoulder",
@@ -4747,6 +6088,7 @@
       "hasteRating": 25,
       "requiredLevel": 20,
       "requiredClass": ["warrior", "paladin", "shaman"],
+      "soulbound": true,
       "sellValue": 10000
     },
     {
@@ -4907,6 +6249,13 @@
       "sellValue": 4
     },
     {
+      "id": "garden_hoe",
+      "name": "Garden Hoe",
+      "kind": "tool",
+      "quality": "common",
+      "sellValue": 4
+    },
+    {
       "id": "gatherers_cache",
       "name": "Gatherer's Cache",
       "kind": "tool",
@@ -4932,6 +6281,34 @@
       "kind": "quest"
     },
     {
+      "id": "gilded_sunmelon",
+      "name": "Gilded Sunmelon",
+      "kind": "junk",
+      "quality": "common",
+      "sellValue": 40
+    },
+    {
+      "id": "gilded_sunmelon_seed",
+      "name": "Gilded Sunmelon Seed",
+      "kind": "junk",
+      "quality": "common",
+      "sellValue": 8
+    },
+    {
+      "id": "gilded_yam",
+      "name": "Gilded Yam",
+      "kind": "junk",
+      "quality": "common",
+      "sellValue": 40
+    },
+    {
+      "id": "gilded_yam_seed",
+      "name": "Gilded Yam Seed",
+      "kind": "junk",
+      "quality": "common",
+      "sellValue": 8
+    },
+    {
       "id": "glacier_melt",
       "name": "Glacier Melt",
       "kind": "drink",
@@ -4950,6 +6327,20 @@
       "id": "gleaming_antler",
       "name": "Gleaming Antler",
       "kind": "quest"
+    },
+    {
+      "id": "gleaming_thorium_loop",
+      "name": "Gleaming Osmium Loop",
+      "kind": "armor",
+      "quality": "rare",
+      "slot": "ring",
+      "itemLevel": 18,
+      "stats": {
+        "sta": 3,
+        "int": 5
+      },
+      "requiredLevel": 15,
+      "sellValue": 280
     },
     {
       "id": "gleamstag_charm",
@@ -5012,6 +6403,20 @@
       "sellValue": 12
     },
     {
+      "id": "goldleaf_folio",
+      "name": "Goldleaf Folio",
+      "kind": "held_offhand",
+      "quality": "uncommon",
+      "slot": "offhand",
+      "itemLevel": 16,
+      "stats": {
+        "int": 3,
+        "spi": 2
+      },
+      "requiredClass": ["mage", "priest", "warlock", "shaman", "paladin", "druid"],
+      "sellValue": 100
+    },
+    {
       "id": "goldleaf_game_stew",
       "name": "Goldleaf Game Stew",
       "kind": "food",
@@ -5041,6 +6446,18 @@
       "quality": "uncommon",
       "potionMana": 260,
       "sellValue": 22
+    },
+    {
+      "id": "goldleaf_scroll",
+      "name": "Goldleaf Scroll",
+      "kind": "scroll",
+      "quality": "uncommon",
+      "elixir": {
+        "aura": "Vipersear Vigor",
+        "value": 9,
+        "duration": 900
+      },
+      "sellValue": 15
     },
     {
       "id": "goldleaf_sickle",
@@ -5116,6 +6533,14 @@
       },
       "requiredClass": ["warrior", "paladin", "shaman"],
       "sellValue": 180
+    },
+    {
+      "id": "grand_cauldron",
+      "name": "Grand Cauldron",
+      "kind": "tool",
+      "quality": "epic",
+      "requiredLevel": 20,
+      "sellValue": 380
     },
     {
       "id": "graskbreaker_girdle",
@@ -5316,6 +6741,27 @@
       },
       "requiredLevel": 10,
       "sellValue": 800
+    },
+    {
+      "id": "gravecourt_hewer",
+      "name": "Gravecourt Hewer",
+      "kind": "weapon",
+      "quality": "epic",
+      "slot": "mainhand",
+      "itemLevel": 29,
+      "stats": {
+        "str": 13,
+        "sta": 7
+      },
+      "critRating": 20,
+      "weapon": {
+        "min": 30,
+        "max": 45,
+        "speed": 2.4
+      },
+      "requiredLevel": 20,
+      "requiredClass": ["warrior", "paladin", "shaman"],
+      "sellValue": 14000
     },
     {
       "id": "gravepath_treads",
@@ -5754,6 +7200,7 @@
       "hitRating": 60,
       "requiredLevel": 20,
       "requiredClass": ["druid"],
+      "soulbound": true,
       "sellValue": 10000
     },
     {
@@ -5771,6 +7218,13 @@
       },
       "requiredLevel": 20,
       "sellValue": 7500
+    },
+    {
+      "id": "growth_tonic",
+      "name": "Growth Tonic",
+      "kind": "junk",
+      "quality": "common",
+      "sellValue": 6
     },
     {
       "id": "grubjaw_tusk",
@@ -5809,6 +7263,35 @@
       "sellValue": 2000
     },
     {
+      "id": "gyrelens_array",
+      "name": "Gyrelens Array",
+      "kind": "held_offhand",
+      "quality": "epic",
+      "slot": "offhand",
+      "itemLevel": 31,
+      "stats": {
+        "sta": 6,
+        "int": 10
+      },
+      "critRating": 20,
+      "requiredLevel": 20,
+      "requiredClass": ["mage", "priest", "warlock", "shaman", "paladin", "druid"],
+      "sellValue": 340
+    },
+    {
+      "id": "hammered_copper_band",
+      "name": "Hammered Copper Band",
+      "kind": "armor",
+      "quality": "uncommon",
+      "slot": "ring",
+      "itemLevel": 11,
+      "stats": {
+        "str": 2,
+        "sta": 1
+      },
+      "sellValue": 32
+    },
+    {
       "id": "handaxe",
       "name": "Handaxe",
       "kind": "tool",
@@ -5816,11 +7299,19 @@
       "sellValue": 4
     },
     {
+      "id": "harvest_feast",
+      "name": "Harvest Feast",
+      "kind": "junk",
+      "quality": "rare",
+      "requiredLevel": 20,
+      "sellValue": 250
+    },
+    {
       "id": "healing_potion",
       "name": "Healing Potion",
       "kind": "potion",
       "quality": "common",
-      "potionHp": 320,
+      "potionHp": 279,
       "sellValue": 32
     },
     {
@@ -5843,6 +7334,7 @@
       },
       "requiredLevel": 20,
       "requiredClass": ["warrior", "hunter", "shaman", "paladin"],
+      "soulbound": true,
       "sellValue": 16000
     },
     {
@@ -5895,6 +7387,7 @@
       },
       "hasteRating": 25,
       "requiredLevel": 20,
+      "soulbound": true,
       "sellValue": 8000
     },
     {
@@ -6012,6 +7505,176 @@
       "requiredLevel": 20,
       "set": "Boundstone Vanguard",
       "sellValue": 460
+    },
+    {
+      "id": "heroic_bramblehide_cinch",
+      "name": "Roots' Bramblehide Cinch",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "waist",
+      "armorType": "leather",
+      "heroicOf": "bramblehide_cinch",
+      "itemLevel": 33,
+      "stats": {
+        "str": 9,
+        "sta": 7,
+        "armor": 120
+      },
+      "critRating": 55,
+      "hitRating": 20,
+      "requiredLevel": 20,
+      "requiredClass": ["druid"],
+      "set": "Roots' Bramblehide",
+      "sellValue": 12000
+    },
+    {
+      "id": "heroic_bramblehide_crown",
+      "name": "Roots' Bramblehide Crown",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "helmet",
+      "armorType": "leather",
+      "heroicOf": "bramblehide_crown",
+      "itemLevel": 33,
+      "stats": {
+        "str": 12,
+        "sta": 8,
+        "armor": 190
+      },
+      "critRating": 20,
+      "hitRating": 55,
+      "requiredLevel": 20,
+      "requiredClass": ["druid"],
+      "set": "Roots' Bramblehide",
+      "sellValue": 12000
+    },
+    {
+      "id": "heroic_bramblehide_grips",
+      "name": "Roots' Bramblehide Grips",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "gloves",
+      "armorType": "leather",
+      "heroicOf": "bramblehide_grips",
+      "itemLevel": 33,
+      "stats": {
+        "str": 9,
+        "sta": 7,
+        "armor": 140
+      },
+      "critRating": 20,
+      "hitRating": 55,
+      "requiredLevel": 20,
+      "requiredClass": ["druid"],
+      "set": "Roots' Bramblehide",
+      "sellValue": 12000
+    },
+    {
+      "id": "heroic_bramblehide_harness",
+      "name": "Roots' Bramblehide Harness",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "chest",
+      "armorType": "leather",
+      "heroicOf": "bramblehide_harness",
+      "itemLevel": 33,
+      "stats": {
+        "str": 14,
+        "sta": 9,
+        "armor": 215
+      },
+      "critRating": 20,
+      "hitRating": 55,
+      "requiredLevel": 20,
+      "requiredClass": ["druid"],
+      "set": "Roots' Bramblehide",
+      "sellValue": 12000
+    },
+    {
+      "id": "heroic_bramblehide_legguards",
+      "name": "Roots' Bramblehide Legguards",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "legs",
+      "armorType": "leather",
+      "heroicOf": "bramblehide_legguards",
+      "itemLevel": 33,
+      "stats": {
+        "str": 13,
+        "sta": 8,
+        "armor": 195
+      },
+      "critRating": 20,
+      "hitRating": 55,
+      "requiredLevel": 20,
+      "requiredClass": ["druid"],
+      "set": "Roots' Bramblehide",
+      "sellValue": 12000
+    },
+    {
+      "id": "heroic_bramblehide_mantle",
+      "name": "Roots' Bramblehide Mantle",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "shoulder",
+      "armorType": "leather",
+      "heroicOf": "bramblehide_mantle",
+      "itemLevel": 33,
+      "stats": {
+        "str": 10,
+        "sta": 7,
+        "armor": 165
+      },
+      "critRating": 55,
+      "hitRating": 20,
+      "requiredLevel": 20,
+      "requiredClass": ["druid"],
+      "set": "Roots' Bramblehide",
+      "sellValue": 12000
+    },
+    {
+      "id": "heroic_bramblehide_treads",
+      "name": "Roots' Bramblehide Treads",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "feet",
+      "armorType": "leather",
+      "heroicOf": "bramblehide_treads",
+      "itemLevel": 33,
+      "stats": {
+        "str": 9,
+        "sta": 6,
+        "armor": 175
+      },
+      "critRating": 55,
+      "hitRating": 20,
+      "requiredLevel": 20,
+      "requiredClass": ["druid"],
+      "set": "Roots' Bramblehide",
+      "sellValue": 12000
+    },
+    {
+      "id": "heroic_courtiers_bonefang",
+      "name": "Courtier's Bonefang",
+      "kind": "weapon",
+      "quality": "epic",
+      "slot": "mainhand",
+      "heroicOf": "courtiers_bonefang",
+      "itemLevel": 33,
+      "stats": {
+        "agi": 15,
+        "sta": 8
+      },
+      "critRating": 20,
+      "hitRating": 65,
+      "weapon": {
+        "min": 23,
+        "max": 36,
+        "speed": 1.8
+      },
+      "requiredLevel": 20,
+      "requiredClass": ["rogue", "hunter"],
+      "sellValue": 14000
     },
     {
       "id": "heroic_crownforged_dreadhelm",
@@ -6315,6 +7978,29 @@
       "requiredLevel": 20,
       "requiredClass": ["warrior", "hunter", "shaman", "paladin"],
       "sellValue": 3200
+    },
+    {
+      "id": "heroic_gravecourt_hewer",
+      "name": "Gravecourt Hewer",
+      "kind": "weapon",
+      "quality": "epic",
+      "slot": "mainhand",
+      "heroicOf": "gravecourt_hewer",
+      "itemLevel": 33,
+      "stats": {
+        "str": 15,
+        "sta": 8
+      },
+      "critRating": 65,
+      "hitRating": 20,
+      "weapon": {
+        "min": 32,
+        "max": 48,
+        "speed": 2.4
+      },
+      "requiredLevel": 20,
+      "requiredClass": ["warrior", "paladin", "shaman"],
+      "sellValue": 14000
     },
     {
       "id": "heroic_gravewyrm_bone_quiver",
@@ -6852,6 +8538,88 @@
       "sellValue": 12000
     },
     {
+      "id": "heroic_stormhymn_chain_grips",
+      "name": "Stormhymn Chain Grips",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "gloves",
+      "armorType": "mail",
+      "heroicOf": "stormhymn_chain_grips",
+      "itemLevel": 33,
+      "stats": {
+        "int": 9,
+        "spi": 7,
+        "armor": 165
+      },
+      "critRating": 20,
+      "hasteRating": 55,
+      "requiredLevel": 20,
+      "requiredClass": ["paladin", "shaman"],
+      "sellValue": 12000
+    },
+    {
+      "id": "heroic_stormhymn_chain_treads",
+      "name": "Stormhymn Chain Treads",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "feet",
+      "armorType": "mail",
+      "heroicOf": "stormhymn_chain_treads",
+      "itemLevel": 33,
+      "stats": {
+        "int": 9,
+        "spi": 6,
+        "armor": 190
+      },
+      "critRating": 55,
+      "hasteRating": 20,
+      "requiredLevel": 20,
+      "requiredClass": ["paladin", "shaman"],
+      "sellValue": 12000
+    },
+    {
+      "id": "heroic_thornpeak_moonhide_cowl",
+      "name": "Thornpeak Moonhide Cowl",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "helmet",
+      "armorType": "leather",
+      "heroicOf": "thornpeak_moonhide_cowl",
+      "itemLevel": 33,
+      "stats": {
+        "int": 12,
+        "spi": 8,
+        "armor": 190
+      },
+      "critRating": 20,
+      "hasteRating": 55,
+      "requiredLevel": 20,
+      "sellValue": 12000
+    },
+    {
+      "id": "heroic_thornpeak_wardblade",
+      "name": "Thornpeak Wardblade",
+      "kind": "weapon",
+      "quality": "epic",
+      "slot": "mainhand",
+      "heroicOf": "thornpeak_wardblade",
+      "itemLevel": 33,
+      "stats": {
+        "str": 9,
+        "sta": 14
+      },
+      "critRating": 20,
+      "hitRating": 65,
+      "weapon": {
+        "min": 34,
+        "max": 52,
+        "speed": 2.6
+      },
+      "requiredLevel": 20,
+      "requiredClass": ["warrior", "paladin", "shaman"],
+      "sellValue": 14000
+    },
+    {
       "id": "heroic_tideguard_greaves",
       "name": "Tideguard Greaves",
       "kind": "armor",
@@ -6920,6 +8688,27 @@
       },
       "requiredLevel": 20,
       "sellValue": 7200
+    },
+    {
+      "id": "heroic_votive_ward_of_the_deathless_court",
+      "name": "Votive Ward of the Deathless Court",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "offhand",
+      "armorType": "mail",
+      "heroicOf": "votive_ward_of_the_deathless_court",
+      "itemLevel": 33,
+      "stats": {
+        "int": 9,
+        "spi": 8,
+        "armor": 680
+      },
+      "critRating": 20,
+      "hasteRating": 55,
+      "blockValue": 30,
+      "requiredLevel": 20,
+      "requiredClass": ["paladin", "shaman"],
+      "sellValue": 12000
     },
     {
       "id": "heroic_wildgrowth_leggings",
@@ -7023,7 +8812,7 @@
     },
     {
       "id": "heroic_wyrmcult_grand_robe",
-      "name": "Wyrmcult Grand Robe",
+      "name": "Broodsworn Grand Robe",
       "kind": "armor",
       "quality": "rare",
       "slot": "chest",
@@ -7041,7 +8830,7 @@
     },
     {
       "id": "heroic_wyrmcult_soulsteps",
-      "name": "Wyrmcult Soulsteps",
+      "name": "Broodsworn Soulsteps",
       "kind": "armor",
       "quality": "rare",
       "slot": "feet",
@@ -7298,6 +9087,38 @@
       "sellValue": 150
     },
     {
+      "id": "highland_barley",
+      "name": "Highland Barley",
+      "kind": "junk",
+      "quality": "common",
+      "sellValue": 15
+    },
+    {
+      "id": "highland_barley_seed",
+      "name": "Highland Barley Seed",
+      "kind": "junk",
+      "quality": "common",
+      "sellValue": 4
+    },
+    {
+      "id": "highwatch_barley_bannock",
+      "name": "Highwatch Barley Bannock",
+      "kind": "food",
+      "quality": "rare",
+      "foodHp": 552,
+      "requiredLevel": 20,
+      "sellValue": 60
+    },
+    {
+      "id": "highwatch_barley_porridge",
+      "name": "Highwatch Barley Porridge",
+      "kind": "food",
+      "quality": "rare",
+      "foodHp": 552,
+      "requiredLevel": 20,
+      "sellValue": 60
+    },
+    {
       "id": "highwatch_breastplate",
       "name": "Highwatch Breastplate",
       "kind": "armor",
@@ -7308,6 +9129,15 @@
         "armor": 160
       },
       "sellValue": 700
+    },
+    {
+      "id": "highwatch_gourd_soup",
+      "name": "Highwatch Gourd Soup",
+      "kind": "food",
+      "quality": "rare",
+      "foodHp": 552,
+      "requiredLevel": 20,
+      "sellValue": 75
     },
     {
       "id": "highwatch_greatsword",
@@ -7510,6 +9340,7 @@
       },
       "hitRating": 25,
       "requiredLevel": 20,
+      "soulbound": true,
       "sellValue": 8000
     },
     {
@@ -7532,6 +9363,19 @@
       "kind": "junk",
       "quality": "poor",
       "sellValue": 28
+    },
+    {
+      "id": "iron_link_choker",
+      "name": "Iron Link Choker",
+      "kind": "armor",
+      "quality": "uncommon",
+      "slot": "neck",
+      "itemLevel": 16,
+      "stats": {
+        "agi": 3,
+        "sta": 1
+      },
+      "sellValue": 52
     },
     {
       "id": "iron_mining_pick",
@@ -7609,6 +9453,19 @@
         "speed": 2.4
       },
       "sellValue": 52
+    },
+    {
+      "id": "ironhusk_flask",
+      "name": "Ironhusk Flask",
+      "kind": "flask",
+      "quality": "epic",
+      "elixir": {
+        "aura": "Ironhusk Vigor",
+        "value": 13,
+        "duration": 1200
+      },
+      "requiredLevel": 20,
+      "sellValue": 25
     },
     {
       "id": "ironlink_hauberk",
@@ -7808,6 +9665,14 @@
       "sellValue": 2200
     },
     {
+      "id": "laden_hearth",
+      "name": "The Laden Hearth",
+      "kind": "tool",
+      "quality": "epic",
+      "requiredLevel": 20,
+      "sellValue": 380
+    },
+    {
       "id": "last_keep_signet",
       "name": "Signet of the Last Keep",
       "kind": "junk",
@@ -7851,7 +9716,7 @@
       "name": "Lesser Mana Potion",
       "kind": "potion",
       "quality": "common",
-      "potionMana": 250,
+      "potionMana": 226,
       "sellValue": 16
     },
     {
@@ -8000,6 +9865,7 @@
       "spellPower": 4,
       "critRating": 25,
       "requiredLevel": 20,
+      "soulbound": true,
       "sellValue": 8000
     },
     {
@@ -8024,12 +9890,20 @@
       },
       "hitRating": 25,
       "requiredLevel": 20,
+      "soulbound": true,
       "sellValue": 8000
     },
     {
       "id": "lost_caravan_goods",
       "name": "Lost Caravan Goods",
       "kind": "quest"
+    },
+    {
+      "id": "lucent_reagent",
+      "name": "Lucent Reagent",
+      "kind": "junk",
+      "quality": "common",
+      "sellValue": 40
     },
     {
       "id": "lunar_choir_leggings",
@@ -8095,6 +9969,22 @@
       "quality": "uncommon"
     },
     {
+      "id": "makers_charm",
+      "name": "Maker's Charm",
+      "kind": "tool",
+      "quality": "epic",
+      "requiredLevel": 20,
+      "sellValue": 150
+    },
+    {
+      "id": "makers_ember",
+      "name": "Maker's Ember",
+      "kind": "tool",
+      "quality": "epic",
+      "requiredLevel": 18,
+      "soulbound": true
+    },
+    {
       "id": "maldrecs_soulbinder",
       "name": "Maldrec's Soulbinder",
       "kind": "weapon",
@@ -8118,7 +10008,7 @@
       "name": "Mana Potion",
       "kind": "potion",
       "quality": "common",
-      "potionMana": 410,
+      "potionMana": 354,
       "sellValue": 32
     },
     {
@@ -8240,6 +10130,20 @@
       "sellValue": 25
     },
     {
+      "id": "marsh_rice",
+      "name": "Marsh Rice",
+      "kind": "junk",
+      "quality": "common",
+      "sellValue": 8
+    },
+    {
+      "id": "marsh_rice_seed",
+      "name": "Marsh Rice Seed",
+      "kind": "junk",
+      "quality": "common",
+      "sellValue": 2
+    },
+    {
       "id": "marshcloth_robe",
       "name": "Marshcloth Robe",
       "kind": "armor",
@@ -8325,6 +10229,14 @@
         "armor": 40
       },
       "sellValue": 250
+    },
+    {
+      "id": "masters_field_forge",
+      "name": "Master's Field Forge",
+      "kind": "tool",
+      "quality": "epic",
+      "requiredLevel": 20,
+      "sellValue": 380
     },
     {
       "id": "maul_of_the_scourged_wilds",
@@ -8550,13 +10462,13 @@
       "quality": "rare",
       "slot": "chest",
       "armorType": "leather",
-      "itemLevel": 23,
+      "itemLevel": 18,
       "stats": {
         "agi": 8,
         "sta": 5,
         "armor": 72
       },
-      "requiredLevel": 20,
+      "requiredLevel": 15,
       "sellValue": 120
     },
     {
@@ -8566,13 +10478,13 @@
       "quality": "rare",
       "slot": "legs",
       "armorType": "leather",
-      "itemLevel": 23,
+      "itemLevel": 18,
       "stats": {
         "agi": 7,
         "sta": 5,
         "armor": 64
       },
-      "requiredLevel": 20,
+      "requiredLevel": 15,
       "sellValue": 88
     },
     {
@@ -8582,13 +10494,13 @@
       "quality": "rare",
       "slot": "feet",
       "armorType": "leather",
-      "itemLevel": 23,
+      "itemLevel": 18,
       "stats": {
         "agi": 5,
         "sta": 3,
         "armor": 44
       },
-      "requiredLevel": 20,
+      "requiredLevel": 15,
       "sellValue": 78
     },
     {
@@ -8661,7 +10573,7 @@
     },
     {
       "id": "mistforged_pauldrons",
-      "name": "Mistforged Pauldrons",
+      "name": "Fogforged Pauldrons",
       "kind": "armor",
       "quality": "epic",
       "slot": "shoulder",
@@ -9009,6 +10921,7 @@
       "hitRating": 60,
       "requiredLevel": 20,
       "requiredClass": ["druid"],
+      "soulbound": true,
       "sellValue": 10000
     },
     {
@@ -9136,7 +11049,7 @@
       "id": "mudfin_scale",
       "name": "Slimy Mudfin Scale",
       "kind": "junk",
-      "quality": "poor",
+      "quality": "common",
       "sellValue": 5
     },
     {
@@ -9654,6 +11567,7 @@
       "hasteRating": 25,
       "requiredLevel": 20,
       "requiredClass": ["priest", "mage", "druid", "paladin", "shaman"],
+      "soulbound": true,
       "sellValue": 12000
     },
     {
@@ -9670,6 +11584,14 @@
         "armor": 54
       },
       "sellValue": 950
+    },
+    {
+      "id": "osmium_hoe",
+      "name": "Osmium Hoe",
+      "kind": "tool",
+      "quality": "rare",
+      "requiredLevel": 20,
+      "sellValue": 60
     },
     {
       "id": "outrider_brigandine",
@@ -9873,6 +11795,403 @@
       "sellValue": 6
     },
     {
+      "id": "pattern_barksong_handguards",
+      "name": "Pattern: Barksong Handguards",
+      "kind": "recipe",
+      "quality": "epic",
+      "requiredLevel": 18,
+      "sellValue": 100
+    },
+    {
+      "id": "pattern_briarstep_jerkin",
+      "name": "Pattern: Briarstep Jerkin",
+      "kind": "recipe",
+      "quality": "epic",
+      "requiredLevel": 18,
+      "sellValue": 100
+    },
+    {
+      "id": "pattern_clockreel_fishing_rod",
+      "name": "Schematic: Clockreel Fishing Rod",
+      "kind": "recipe",
+      "quality": "epic",
+      "requiredLevel": 20,
+      "sellValue": 100
+    },
+    {
+      "id": "pattern_crucible_agi_leather",
+      "name": "Pattern: Crucible Skirmisher's Leather",
+      "kind": "recipe",
+      "quality": "epic",
+      "requiredLevel": 20
+    },
+    {
+      "id": "pattern_crucible_caster_cloth",
+      "name": "Pattern: Crucible Spellcaster's Cloth",
+      "kind": "recipe",
+      "quality": "epic",
+      "requiredLevel": 20
+    },
+    {
+      "id": "pattern_crucible_caster_leather",
+      "name": "Pattern: Crucible Spellcaster's Leather",
+      "kind": "recipe",
+      "quality": "epic",
+      "requiredLevel": 20
+    },
+    {
+      "id": "pattern_crucible_caster_mail",
+      "name": "Pattern: Crucible Spellcaster's Mail",
+      "kind": "recipe",
+      "quality": "epic",
+      "requiredLevel": 20
+    },
+    {
+      "id": "pattern_crucible_healer_cloth",
+      "name": "Pattern: Crucible Healer's Cloth",
+      "kind": "recipe",
+      "quality": "epic",
+      "requiredLevel": 20
+    },
+    {
+      "id": "pattern_crucible_healer_leather",
+      "name": "Pattern: Crucible Healer's Leather",
+      "kind": "recipe",
+      "quality": "epic",
+      "requiredLevel": 20
+    },
+    {
+      "id": "pattern_crucible_healer_mail",
+      "name": "Pattern: Crucible Healer's Mail",
+      "kind": "recipe",
+      "quality": "epic",
+      "requiredLevel": 20
+    },
+    {
+      "id": "pattern_crucible_str_leather",
+      "name": "Pattern: Crucible Prowler's Leather",
+      "kind": "recipe",
+      "quality": "epic",
+      "requiredLevel": 20
+    },
+    {
+      "id": "pattern_crucible_str_mail",
+      "name": "Pattern: Crucible Striker's Mail",
+      "kind": "recipe",
+      "quality": "epic",
+      "requiredLevel": 20
+    },
+    {
+      "id": "pattern_crucible_tank_leather",
+      "name": "Pattern: Crucible Guardian's Leather",
+      "kind": "recipe",
+      "quality": "epic",
+      "requiredLevel": 20
+    },
+    {
+      "id": "pattern_crucible_tank_mail",
+      "name": "Pattern: Crucible Guardian's Mail",
+      "kind": "recipe",
+      "quality": "epic",
+      "requiredLevel": 20
+    },
+    {
+      "id": "pattern_duskforged_bulwark",
+      "name": "Plans: Duskforged Bulwark",
+      "kind": "recipe",
+      "quality": "epic",
+      "requiredLevel": 20,
+      "sellValue": 100
+    },
+    {
+      "id": "pattern_duskforged_warblade",
+      "name": "Plans: Duskforged Warblade",
+      "kind": "recipe",
+      "quality": "epic",
+      "requiredLevel": 20,
+      "sellValue": 100
+    },
+    {
+      "id": "pattern_evergarden_braised_greens",
+      "name": "Recipe: Evergarden Braised Greens",
+      "kind": "recipe",
+      "quality": "rare",
+      "requiredLevel": 20,
+      "sellValue": 100
+    },
+    {
+      "id": "pattern_evergarden_harvest_platter",
+      "name": "Recipe: Evergarden Harvest Platter",
+      "kind": "recipe",
+      "quality": "rare",
+      "requiredLevel": 20,
+      "sellValue": 100
+    },
+    {
+      "id": "pattern_evergarden_sunmelon_tart",
+      "name": "Recipe: Evergarden Sunmelon Tart",
+      "kind": "recipe",
+      "quality": "rare",
+      "requiredLevel": 20,
+      "sellValue": 100
+    },
+    {
+      "id": "pattern_fenbloom_breeches",
+      "name": "Pattern: Fenbloom Breeches",
+      "kind": "recipe",
+      "quality": "epic",
+      "requiredLevel": 18,
+      "sellValue": 100
+    },
+    {
+      "id": "pattern_forgefold_legguards",
+      "name": "Plans: Forgefold Legguards",
+      "kind": "recipe",
+      "quality": "epic",
+      "requiredLevel": 18,
+      "sellValue": 100
+    },
+    {
+      "id": "pattern_grand_cauldron",
+      "name": "Recipe: Grand Cauldron",
+      "kind": "recipe",
+      "quality": "epic",
+      "requiredLevel": 20,
+      "sellValue": 100
+    },
+    {
+      "id": "pattern_gyrelens_array",
+      "name": "Schematic: Gyrelens Array",
+      "kind": "recipe",
+      "quality": "epic",
+      "requiredLevel": 20,
+      "sellValue": 100
+    },
+    {
+      "id": "pattern_harvest_feast",
+      "name": "Recipe: Harvest Feast",
+      "kind": "recipe",
+      "quality": "rare",
+      "requiredLevel": 20,
+      "sellValue": 100
+    },
+    {
+      "id": "pattern_highwatch_barley_porridge",
+      "name": "Recipe: Highwatch Barley Porridge",
+      "kind": "recipe",
+      "quality": "rare",
+      "requiredLevel": 20,
+      "sellValue": 100
+    },
+    {
+      "id": "pattern_highwatch_gourd_soup",
+      "name": "Recipe: Highwatch Gourd Soup",
+      "kind": "recipe",
+      "quality": "rare",
+      "requiredLevel": 20,
+      "sellValue": 100
+    },
+    {
+      "id": "pattern_ironhusk_flask",
+      "name": "Recipe: Ironhusk Flask",
+      "kind": "recipe",
+      "quality": "epic",
+      "requiredLevel": 20,
+      "sellValue": 100
+    },
+    {
+      "id": "pattern_laden_hearth",
+      "name": "Recipe: The Laden Hearth",
+      "kind": "recipe",
+      "quality": "epic",
+      "requiredLevel": 20,
+      "sellValue": 100
+    },
+    {
+      "id": "pattern_makers_charm",
+      "name": "Schematic: Maker's Charm",
+      "kind": "recipe",
+      "quality": "epic",
+      "requiredLevel": 20,
+      "sellValue": 100
+    },
+    {
+      "id": "pattern_masters_field_forge",
+      "name": "Schematic: Master's Field Forge",
+      "kind": "recipe",
+      "quality": "epic",
+      "requiredLevel": 20,
+      "sellValue": 100
+    },
+    {
+      "id": "pattern_peppered_deepbarb_catfish",
+      "name": "Recipe: Peppered Deepbarb Catfish",
+      "kind": "recipe",
+      "quality": "rare",
+      "requiredLevel": 20,
+      "sellValue": 100
+    },
+    {
+      "id": "pattern_prismglass_loop",
+      "name": "Design: Prismglass Loop",
+      "kind": "recipe",
+      "quality": "epic",
+      "requiredLevel": 20,
+      "sellValue": 100
+    },
+    {
+      "id": "pattern_ridgebreaker",
+      "name": "Plans: Ridgebreaker",
+      "kind": "recipe",
+      "quality": "epic",
+      "requiredLevel": 20,
+      "sellValue": 100
+    },
+    {
+      "id": "pattern_roast_hollowgill_sturgeon",
+      "name": "Recipe: Roast Hollowgill Sturgeon",
+      "kind": "recipe",
+      "quality": "rare",
+      "requiredLevel": 20,
+      "sellValue": 100
+    },
+    {
+      "id": "pattern_runewater_flask",
+      "name": "Recipe: Runewater Flask",
+      "kind": "recipe",
+      "quality": "epic",
+      "requiredLevel": 20,
+      "sellValue": 100
+    },
+    {
+      "id": "pattern_sageleaf_chowder",
+      "name": "Recipe: Sageleaf Chowder",
+      "kind": "recipe",
+      "quality": "epic",
+      "requiredLevel": 20,
+      "sellValue": 100
+    },
+    {
+      "id": "pattern_sageleaf_feast",
+      "name": "Recipe: Sageleaf Feast",
+      "kind": "recipe",
+      "quality": "epic",
+      "requiredLevel": 20,
+      "sellValue": 100
+    },
+    {
+      "id": "pattern_spiritweld_girdle",
+      "name": "Plans: Spiritweld Girdle",
+      "kind": "recipe",
+      "quality": "epic",
+      "requiredLevel": 18,
+      "sellValue": 100
+    },
+    {
+      "id": "pattern_stonepot_feast",
+      "name": "Recipe: Stonepot Feast",
+      "kind": "recipe",
+      "quality": "epic",
+      "requiredLevel": 20,
+      "sellValue": 100
+    },
+    {
+      "id": "pattern_stonepot_stew",
+      "name": "Recipe: Stonepot Stew",
+      "kind": "recipe",
+      "quality": "epic",
+      "requiredLevel": 20,
+      "sellValue": 100
+    },
+    {
+      "id": "pattern_sunspun_handwraps",
+      "name": "Pattern: Sunspun Handwraps",
+      "kind": "recipe",
+      "quality": "epic",
+      "requiredLevel": 18,
+      "sellValue": 100
+    },
+    {
+      "id": "pattern_sunspun_haversack",
+      "name": "Pattern: Sunspun Haversack",
+      "kind": "recipe",
+      "quality": "epic",
+      "requiredLevel": 18,
+      "sellValue": 100
+    },
+    {
+      "id": "pattern_sunspun_leggings",
+      "name": "Pattern: Sunspun Leggings",
+      "kind": "recipe",
+      "quality": "epic",
+      "requiredLevel": 18,
+      "sellValue": 100
+    },
+    {
+      "id": "pattern_sunspun_vestments",
+      "name": "Pattern: Sunspun Vestments",
+      "kind": "recipe",
+      "quality": "epic",
+      "requiredLevel": 18,
+      "sellValue": 100
+    },
+    {
+      "id": "pattern_voidbound_grimoire",
+      "name": "Technique: Voidbound Grimoire",
+      "kind": "recipe",
+      "quality": "epic",
+      "requiredLevel": 20,
+      "sellValue": 100
+    },
+    {
+      "id": "pattern_warboar_flask",
+      "name": "Recipe: Warboar Flask",
+      "kind": "recipe",
+      "quality": "epic",
+      "requiredLevel": 20,
+      "sellValue": 100
+    },
+    {
+      "id": "pattern_wardspeaker_sabatons",
+      "name": "Plans: Wardspeaker Sabatons",
+      "kind": "recipe",
+      "quality": "epic",
+      "requiredLevel": 18,
+      "sellValue": 100
+    },
+    {
+      "id": "pattern_warhewn_signet",
+      "name": "Design: Warhewn Signet",
+      "kind": "recipe",
+      "quality": "epic",
+      "requiredLevel": 20,
+      "sellValue": 100
+    },
+    {
+      "id": "pattern_warspice_feast",
+      "name": "Recipe: Warspice Feast",
+      "kind": "recipe",
+      "quality": "epic",
+      "requiredLevel": 20,
+      "sellValue": 100
+    },
+    {
+      "id": "pattern_warspice_skewers",
+      "name": "Recipe: Warspice Skewers",
+      "kind": "recipe",
+      "quality": "epic",
+      "requiredLevel": 20,
+      "sellValue": 100
+    },
+    {
+      "id": "pattern_wyrmfall_pendant",
+      "name": "Design: Wyrmfall Pendant",
+      "kind": "recipe",
+      "quality": "epic",
+      "requiredLevel": 20,
+      "sellValue": 100
+    },
+    {
       "id": "peaksong_helm",
       "name": "Peaksong Helm",
       "kind": "armor",
@@ -9936,7 +12255,17 @@
       },
       "critRating": 25,
       "requiredLevel": 20,
+      "soulbound": true,
       "sellValue": 8000
+    },
+    {
+      "id": "peppered_deepbarb_catfish",
+      "name": "Peppered Deepbarb Catfish",
+      "kind": "food",
+      "quality": "rare",
+      "foodHp": 552,
+      "requiredLevel": 20,
+      "sellValue": 75
     },
     {
       "id": "pilgrims_leggings",
@@ -9984,6 +12313,26 @@
       "kind": "quest"
     },
     {
+      "id": "polished_copper_loop",
+      "name": "Polished Copper Loop",
+      "kind": "armor",
+      "quality": "uncommon",
+      "slot": "ring",
+      "itemLevel": 11,
+      "stats": {
+        "sta": 1,
+        "int": 2
+      },
+      "sellValue": 32
+    },
+    {
+      "id": "precision_chassis",
+      "name": "Precision Chassis",
+      "kind": "junk",
+      "quality": "common",
+      "sellValue": 45
+    },
+    {
       "id": "priests_sigil",
       "name": "Crypt Keystone Lower",
       "kind": "quest"
@@ -9995,6 +12344,28 @@
       "quality": "rare",
       "requiredLevel": 12,
       "sellValue": 20
+    },
+    {
+      "id": "prismglass_loop",
+      "name": "Prismglass Loop",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "ring",
+      "itemLevel": 31,
+      "stats": {
+        "sta": 5,
+        "int": 8
+      },
+      "hasteRating": 25,
+      "requiredLevel": 20,
+      "sellValue": 300
+    },
+    {
+      "id": "prismglass_setting",
+      "name": "Prismglass Setting",
+      "kind": "junk",
+      "quality": "common",
+      "sellValue": 45
     },
     {
       "id": "pristine_claw",
@@ -10164,6 +12535,13 @@
       "sellValue": 12000
     },
     {
+      "id": "quickening_catalyst",
+      "name": "Quickening Catalyst",
+      "kind": "junk",
+      "quality": "common",
+      "sellValue": 50
+    },
+    {
       "id": "quilted_trousers",
       "name": "Quilted Trousers",
       "kind": "armor",
@@ -10185,11 +12563,25 @@
       "sellValue": 6
     },
     {
+      "id": "raw_deepbarb_catfish",
+      "name": "Raw Deepbarb Catfish",
+      "kind": "junk",
+      "quality": "common",
+      "sellValue": 14
+    },
+    {
       "id": "raw_frostgill_trout",
       "name": "Raw Frostgill Trout",
       "kind": "junk",
       "quality": "common",
       "sellValue": 10
+    },
+    {
+      "id": "raw_hollowgill_sturgeon",
+      "name": "Raw Hollowgill Sturgeon",
+      "kind": "junk",
+      "quality": "common",
+      "sellValue": 18
     },
     {
       "id": "raw_marsh_pike",
@@ -10211,6 +12603,13 @@
       "kind": "junk",
       "quality": "common",
       "sellValue": 2
+    },
+    {
+      "id": "raw_stillmere_salmon",
+      "name": "Raw Stillmere Salmon",
+      "kind": "junk",
+      "quality": "common",
+      "sellValue": 22
     },
     {
       "id": "raw_stonescale_carp",
@@ -10328,11 +12727,27 @@
       "requiredLevel": 18
     },
     {
+      "id": "reins_chimeglass_tortoise",
+      "name": "Roadwarden's Bellstrap: Tolliver",
+      "kind": "junk",
+      "quality": "epic",
+      "requiredLevel": 18,
+      "soulbound": true
+    },
+    {
       "id": "reins_drakemaw_raptor",
       "name": "Reins of the Drakemaw Raptor",
       "kind": "mount",
       "quality": "epic",
       "requiredLevel": 18
+    },
+    {
+      "id": "reins_goblin_rocket_sled",
+      "name": "Ignition Key: Goblin Rocket Sled",
+      "kind": "junk",
+      "quality": "epic",
+      "requiredLevel": 18,
+      "soulbound": true
     },
     {
       "id": "reins_grag_bear",
@@ -10342,9 +12757,33 @@
       "requiredLevel": 20
     },
     {
+      "id": "reins_lanternback_troll",
+      "name": "Lamplighter's Yoke: Grumbol",
+      "kind": "mount",
+      "quality": "epic",
+      "requiredLevel": 18,
+      "soulbound": true
+    },
+    {
+      "id": "reins_mech_bird",
+      "name": "Ignition Key: Cluckwork Mech Bird",
+      "kind": "junk",
+      "quality": "rare",
+      "requiredLevel": 12,
+      "soulbound": true
+    },
+    {
+      "id": "reins_rallycart_rxt",
+      "name": "Ignition Key: Rallycart RXT",
+      "kind": "junk",
+      "quality": "epic",
+      "requiredLevel": 18,
+      "soulbound": true
+    },
+    {
       "id": "reins_rickshaw_mount",
       "name": "Bound Reins: Bonebound Rickshaw",
-      "kind": "mount",
+      "kind": "junk",
       "quality": "epic",
       "requiredLevel": 18,
       "soulbound": true
@@ -10370,7 +12809,7 @@
     },
     {
       "id": "reins_terrorspark_groundshaker",
-      "name": "Ignition Key: Terrorspark Groundshaker",
+      "name": "Ignition Key: Dreadspark Groundshaker",
       "kind": "mount",
       "quality": "epic",
       "requiredLevel": 18,
@@ -10582,6 +13021,27 @@
       "kind": "quest"
     },
     {
+      "id": "ridgebreaker",
+      "name": "Ridgebreaker",
+      "kind": "weapon",
+      "quality": "epic",
+      "slot": "mainhand",
+      "itemLevel": 31,
+      "stats": {
+        "str": 17,
+        "sta": 12
+      },
+      "hitRating": 50,
+      "weapon": {
+        "min": 49,
+        "max": 76,
+        "speed": 3.4
+      },
+      "requiredLevel": 20,
+      "requiredClass": ["warrior", "paladin", "shaman"],
+      "sellValue": 340
+    },
+    {
       "id": "ridgestalker_treads",
       "name": "Ridgestalker Treads",
       "kind": "armor",
@@ -10636,10 +13096,6 @@
       "kind": "armor",
       "quality": "epic",
       "slot": "ring",
-      "stats": {
-        "agi": 6,
-        "sta": 5
-      },
       "requiredLevel": 20,
       "sellValue": 5000
     },
@@ -10649,10 +13105,6 @@
       "kind": "armor",
       "quality": "epic",
       "slot": "ring",
-      "stats": {
-        "int": 6,
-        "spi": 5
-      },
       "requiredLevel": 20,
       "sellValue": 5000
     },
@@ -10662,10 +13114,6 @@
       "kind": "armor",
       "quality": "epic",
       "slot": "ring",
-      "stats": {
-        "str": 6,
-        "sta": 5
-      },
       "requiredLevel": 20,
       "sellValue": 5000
     },
@@ -10729,6 +13177,19 @@
       "sellValue": 42
     },
     {
+      "id": "riveted_iron_signet",
+      "name": "Riveted Iron Signet",
+      "kind": "armor",
+      "quality": "uncommon",
+      "slot": "ring",
+      "itemLevel": 16,
+      "stats": {
+        "str": 3,
+        "sta": 1
+      },
+      "sellValue": 46
+    },
+    {
       "id": "roadwardens_helm",
       "name": "Roadwarden's Helm",
       "kind": "armor",
@@ -10743,11 +13204,20 @@
       "sellValue": 130
     },
     {
+      "id": "roast_hollowgill_sturgeon",
+      "name": "Roast Hollowgill Sturgeon",
+      "kind": "food",
+      "quality": "rare",
+      "foodHp": 980,
+      "requiredLevel": 20,
+      "sellValue": 150
+    },
+    {
       "id": "roast_mountain_goat",
       "name": "Roast Mountain Goat",
       "kind": "food",
       "quality": "common",
-      "foodHp": 874,
+      "foodHp": 816,
       "sellValue": 150
     },
     {
@@ -10755,7 +13225,7 @@
       "name": "Spitted Boar Haunch",
       "kind": "food",
       "quality": "common",
-      "foodHp": 117,
+      "foodHp": 106,
       "sellValue": 12
     },
     {
@@ -10900,6 +13370,19 @@
       "kind": "quest"
     },
     {
+      "id": "runewater_flask",
+      "name": "Runewater Flask",
+      "kind": "flask",
+      "quality": "epic",
+      "elixir": {
+        "aura": "Runewater Clarity",
+        "value": 13,
+        "duration": 1200
+      },
+      "requiredLevel": 20,
+      "sellValue": 25
+    },
+    {
       "id": "rusted_censer",
       "name": "Rusted Censer",
       "kind": "quest"
@@ -10931,6 +13414,13 @@
       "sellValue": 10
     },
     {
+      "id": "sablewax_vellum",
+      "name": "Sablewax Vellum",
+      "kind": "junk",
+      "quality": "common",
+      "sellValue": 45
+    },
+    {
       "id": "sableweb_cord",
       "name": "Sableweb Cord",
       "kind": "armor",
@@ -10959,6 +13449,23 @@
       },
       "requiredClass": ["mage", "priest", "warlock", "druid"],
       "sellValue": 150
+    },
+    {
+      "id": "sageleaf_chowder",
+      "name": "Sageleaf Chowder",
+      "kind": "food",
+      "quality": "epic",
+      "foodHp": 1392,
+      "requiredLevel": 20,
+      "sellValue": 90
+    },
+    {
+      "id": "sageleaf_feast",
+      "name": "Sageleaf Feast",
+      "kind": "junk",
+      "quality": "epic",
+      "requiredLevel": 20,
+      "sellValue": 300
     },
     {
       "id": "saltforged_grips",
@@ -11076,6 +13583,7 @@
       "hasteRating": 25,
       "requiredLevel": 20,
       "requiredClass": ["druid"],
+      "soulbound": true,
       "sellValue": 10000
     },
     {
@@ -11107,6 +13615,7 @@
       },
       "hitRating": 25,
       "requiredLevel": 20,
+      "soulbound": true,
       "sellValue": 8000
     },
     {
@@ -11123,6 +13632,13 @@
       "hitRating": 25,
       "requiredLevel": 20,
       "sellValue": 4500
+    },
+    {
+      "id": "seasoned_stock",
+      "name": "Seasoned Stock",
+      "kind": "junk",
+      "quality": "common",
+      "sellValue": 30
     },
     {
       "id": "selthes_seastriders",
@@ -11461,13 +13977,13 @@
       "quality": "rare",
       "slot": "chest",
       "armorType": "cloth",
-      "itemLevel": 23,
+      "itemLevel": 18,
       "stats": {
         "int": 8,
         "spi": 5,
         "armor": 52
       },
-      "requiredLevel": 20,
+      "requiredLevel": 15,
       "sellValue": 340
     },
     {
@@ -11545,6 +14061,32 @@
       "quality": "common",
       "potionMana": 160,
       "sellValue": 12
+    },
+    {
+      "id": "silverleaf_primer",
+      "name": "Sheenleaf Primer",
+      "kind": "held_offhand",
+      "quality": "uncommon",
+      "slot": "offhand",
+      "itemLevel": 11,
+      "stats": {
+        "int": 2,
+        "spi": 1
+      },
+      "requiredClass": ["mage", "priest", "warlock", "shaman", "paladin", "druid"],
+      "sellValue": 24
+    },
+    {
+      "id": "silverleaf_scroll",
+      "name": "Sheenleaf Scroll",
+      "kind": "scroll",
+      "quality": "common",
+      "elixir": {
+        "aura": "Might of the Boar",
+        "value": 6,
+        "duration": 600
+      },
+      "sellValue": 10
     },
     {
       "id": "silverleaf_sickle",
@@ -11638,6 +14180,13 @@
       "requiredLevel": 17,
       "requiredClass": ["rogue", "hunter"],
       "sellValue": 2000
+    },
+    {
+      "id": "skysilver_hoe",
+      "name": "Skysilver Hoe",
+      "kind": "tool",
+      "quality": "uncommon",
+      "sellValue": 25
     },
     {
       "id": "slagbreaker_chest",
@@ -11765,6 +14314,7 @@
       },
       "requiredLevel": 20,
       "requiredClass": ["warrior", "rogue", "hunter", "shaman", "paladin"],
+      "soulbound": true,
       "sellValue": 14000
     },
     {
@@ -11889,6 +14439,7 @@
       "hitRating": 60,
       "requiredLevel": 20,
       "requiredClass": ["rogue", "hunter", "druid"],
+      "soulbound": true,
       "sellValue": 10000
     },
     {
@@ -11923,7 +14474,7 @@
       "name": "Smoked Mirefen Eel",
       "kind": "food",
       "quality": "common",
-      "foodHp": 432,
+      "foodHp": 375,
       "sellValue": 60
     },
     {
@@ -12059,13 +14610,13 @@
       "quality": "rare",
       "slot": "shoulder",
       "armorType": "mail",
-      "itemLevel": 23,
+      "itemLevel": 20,
       "stats": {
         "int": 6,
         "spi": 4,
         "armor": 78
       },
-      "requiredLevel": 20,
+      "requiredLevel": 17,
       "sellValue": 280
     },
     {
@@ -12214,6 +14765,23 @@
       "sellValue": 5
     },
     {
+      "id": "spiritweld_girdle",
+      "name": "Spiritweld Girdle",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "waist",
+      "armorType": "mail",
+      "itemLevel": 31,
+      "stats": {
+        "int": 9,
+        "spi": 6,
+        "armor": 224
+      },
+      "hasteRating": 40,
+      "requiredLevel": 20,
+      "sellValue": 300
+    },
+    {
       "id": "spool_of_thread",
       "name": "Spool of Thread",
       "kind": "junk",
@@ -12250,6 +14818,7 @@
       "hitRating": 60,
       "requiredLevel": 20,
       "requiredClass": ["mage", "priest"],
+      "soulbound": true,
       "sellValue": 10000
     },
     {
@@ -12377,6 +14946,7 @@
       },
       "requiredLevel": 20,
       "requiredClass": ["mage", "priest", "warlock", "shaman", "paladin", "druid"],
+      "soulbound": true,
       "sellValue": 14000
     },
     {
@@ -12396,6 +14966,7 @@
       "hasteRating": 60,
       "requiredLevel": 20,
       "requiredClass": ["paladin", "shaman"],
+      "soulbound": true,
       "sellValue": 10000
     },
     {
@@ -12462,6 +15033,7 @@
       },
       "requiredLevel": 20,
       "requiredClass": ["mage", "priest", "warlock", "shaman", "paladin", "druid"],
+      "soulbound": true,
       "sellValue": 16000
     },
     {
@@ -12531,6 +15103,7 @@
       "hasteRating": 60,
       "requiredLevel": 20,
       "requiredClass": ["mage", "priest"],
+      "soulbound": true,
       "sellValue": 10000
     },
     {
@@ -12637,6 +15210,23 @@
       "set": "Stonehearth Bastion",
       "soulbound": true,
       "sellValue": 12000
+    },
+    {
+      "id": "stonepot_feast",
+      "name": "Stonepot Feast",
+      "kind": "junk",
+      "quality": "epic",
+      "requiredLevel": 20,
+      "sellValue": 300
+    },
+    {
+      "id": "stonepot_stew",
+      "name": "Stonepot Stew",
+      "kind": "food",
+      "quality": "epic",
+      "foodHp": 1392,
+      "requiredLevel": 20,
+      "sellValue": 90
     },
     {
       "id": "storm_core",
@@ -12921,6 +15511,42 @@
       "sellValue": 460
     },
     {
+      "id": "stormhymn_chain_grips",
+      "name": "Stormhymn Chain Grips",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "gloves",
+      "armorType": "mail",
+      "itemLevel": 29,
+      "stats": {
+        "int": 8,
+        "spi": 6,
+        "armor": 165
+      },
+      "hasteRating": 20,
+      "requiredLevel": 20,
+      "requiredClass": ["paladin", "shaman"],
+      "sellValue": 12000
+    },
+    {
+      "id": "stormhymn_chain_treads",
+      "name": "Stormhymn Chain Treads",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "feet",
+      "armorType": "mail",
+      "itemLevel": 29,
+      "stats": {
+        "int": 8,
+        "spi": 5,
+        "armor": 190
+      },
+      "critRating": 20,
+      "requiredLevel": 20,
+      "requiredClass": ["paladin", "shaman"],
+      "sellValue": 12000
+    },
+    {
       "id": "stormkindled_chain",
       "name": "Stormkindled Chain",
       "kind": "armor",
@@ -12938,6 +15564,7 @@
       "hitRating": 60,
       "requiredLevel": 20,
       "requiredClass": ["shaman"],
+      "soulbound": true,
       "sellValue": 10000
     },
     {
@@ -13206,6 +15833,14 @@
       "sellValue": 800
     },
     {
+      "id": "sundered_essence",
+      "name": "Sundered Essence",
+      "kind": "tool",
+      "quality": "epic",
+      "requiredLevel": 18,
+      "soulbound": true
+    },
+    {
       "id": "sunken_court_mantle",
       "name": "Sunken Court Mantle",
       "kind": "armor",
@@ -13261,6 +15896,22 @@
       "sellValue": 5000
     },
     {
+      "id": "sunpetal_grimoire",
+      "name": "Sunpetal Grimoire",
+      "kind": "held_offhand",
+      "quality": "rare",
+      "slot": "offhand",
+      "itemLevel": 18,
+      "stats": {
+        "sta": 2,
+        "int": 5,
+        "spi": 3
+      },
+      "requiredLevel": 15,
+      "requiredClass": ["mage", "priest", "warlock", "shaman", "paladin", "druid"],
+      "sellValue": 280
+    },
+    {
       "id": "sunpetal_healing_draught",
       "name": "Sunpetal Healing Draught",
       "kind": "potion",
@@ -13286,6 +15937,19 @@
       "sellValue": 32
     },
     {
+      "id": "sunpetal_scroll",
+      "name": "Sunpetal Scroll",
+      "kind": "scroll",
+      "quality": "rare",
+      "elixir": {
+        "aura": "Might of the Serpent",
+        "value": 12,
+        "duration": 900
+      },
+      "requiredLevel": 20,
+      "sellValue": 20
+    },
+    {
       "id": "sunpetal_sickle",
       "name": "Sunpetal Sickle",
       "kind": "tool",
@@ -13294,19 +15958,86 @@
       "sellValue": 150
     },
     {
+      "id": "sunspun_bolt",
+      "name": "Sunspun Bolt",
+      "kind": "junk",
+      "quality": "common",
+      "sellValue": 45
+    },
+    {
+      "id": "sunspun_handwraps",
+      "name": "Sunspun Handwraps",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "gloves",
+      "armorType": "cloth",
+      "itemLevel": 31,
+      "stats": {
+        "int": 9,
+        "spi": 6,
+        "armor": 52
+      },
+      "critRating": 40,
+      "requiredLevel": 20,
+      "sellValue": 170
+    },
+    {
+      "id": "sunspun_haversack",
+      "name": "Sunspun Haversack",
+      "kind": "bag",
+      "quality": "epic",
+      "bagSlots": 16,
+      "requiredLevel": 20,
+      "sellValue": 180
+    },
+    {
+      "id": "sunspun_leggings",
+      "name": "Sunspun Leggings",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "legs",
+      "armorType": "cloth",
+      "itemLevel": 31,
+      "stats": {
+        "int": 12,
+        "spi": 8,
+        "armor": 72
+      },
+      "hasteRating": 40,
+      "requiredLevel": 20,
+      "sellValue": 190
+    },
+    {
+      "id": "sunspun_vestments",
+      "name": "Sunspun Vestments",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "chest",
+      "armorType": "cloth",
+      "itemLevel": 31,
+      "stats": {
+        "int": 12,
+        "spi": 10,
+        "armor": 90
+      },
+      "hasteRating": 40,
+      "requiredLevel": 20,
+      "sellValue": 200
+    },
+    {
       "id": "sunweave_mantle",
       "name": "Sunweave Mantle",
       "kind": "armor",
       "quality": "rare",
       "slot": "shoulder",
       "armorType": "cloth",
-      "itemLevel": 23,
+      "itemLevel": 18,
       "stats": {
         "int": 6,
         "spi": 4,
         "armor": 40
       },
-      "requiredLevel": 20,
+      "requiredLevel": 15,
       "sellValue": 175
     },
     {
@@ -13316,13 +16047,13 @@
       "quality": "rare",
       "slot": "feet",
       "armorType": "cloth",
-      "itemLevel": 23,
+      "itemLevel": 18,
       "stats": {
         "int": 5,
         "spi": 3,
         "armor": 34
       },
-      "requiredLevel": 20,
+      "requiredLevel": 15,
       "sellValue": 260
     },
     {
@@ -13364,7 +16095,7 @@
       "id": "tallow_candle",
       "name": "Greasy Tallow Lump",
       "kind": "junk",
-      "quality": "poor",
+      "quality": "common",
       "sellValue": 5
     },
     {
@@ -13425,7 +16156,7 @@
       "kind": "weapon",
       "quality": "rare",
       "slot": "mainhand",
-      "itemLevel": 23,
+      "itemLevel": 18,
       "stats": {
         "str": 9,
         "sta": 4
@@ -13435,7 +16166,7 @@
         "max": 32,
         "speed": 2.5
       },
-      "requiredLevel": 20,
+      "requiredLevel": 15,
       "sellValue": 275
     },
     {
@@ -13445,13 +16176,13 @@
       "quality": "rare",
       "slot": "chest",
       "armorType": "mail",
-      "itemLevel": 23,
+      "itemLevel": 18,
       "stats": {
         "str": 6,
         "sta": 7,
         "armor": 122
       },
-      "requiredLevel": 20,
+      "requiredLevel": 15,
       "sellValue": 420
     },
     {
@@ -13461,13 +16192,13 @@
       "quality": "rare",
       "slot": "helmet",
       "armorType": "mail",
-      "itemLevel": 23,
+      "itemLevel": 18,
       "stats": {
         "str": 6,
         "sta": 5,
         "armor": 102
       },
-      "requiredLevel": 20,
+      "requiredLevel": 15,
       "sellValue": 340
     },
     {
@@ -13477,13 +16208,13 @@
       "quality": "rare",
       "slot": "legs",
       "armorType": "mail",
-      "itemLevel": 23,
+      "itemLevel": 18,
       "stats": {
         "str": 6,
         "sta": 6,
         "armor": 110
       },
-      "requiredLevel": 20,
+      "requiredLevel": 15,
       "sellValue": 350
     },
     {
@@ -13649,6 +16380,58 @@
       "sellValue": 140
     },
     {
+      "id": "thornpeak_cabbage",
+      "name": "Thornpeak Cabbage",
+      "kind": "junk",
+      "quality": "common",
+      "sellValue": 15
+    },
+    {
+      "id": "thornpeak_cabbage_seed",
+      "name": "Thornpeak Cabbage Seed",
+      "kind": "junk",
+      "quality": "common",
+      "sellValue": 4
+    },
+    {
+      "id": "thornpeak_moonhide_cowl",
+      "name": "Thornpeak Moonhide Cowl",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "helmet",
+      "armorType": "leather",
+      "itemLevel": 29,
+      "stats": {
+        "int": 10,
+        "spi": 7,
+        "armor": 190
+      },
+      "hasteRating": 20,
+      "requiredLevel": 20,
+      "sellValue": 12000
+    },
+    {
+      "id": "thornpeak_wardblade",
+      "name": "Thornpeak Wardblade",
+      "kind": "weapon",
+      "quality": "epic",
+      "slot": "mainhand",
+      "itemLevel": 29,
+      "stats": {
+        "str": 8,
+        "sta": 12
+      },
+      "hitRating": 20,
+      "weapon": {
+        "min": 32,
+        "max": 49,
+        "speed": 2.6
+      },
+      "requiredLevel": 20,
+      "requiredClass": ["warrior", "paladin", "shaman"],
+      "sellValue": 14000
+    },
+    {
       "id": "thornpeak_wildwraps",
       "name": "Thornpeak Wildwraps",
       "kind": "armor",
@@ -13682,6 +16465,7 @@
       "hasteRating": 25,
       "requiredLevel": 20,
       "requiredClass": ["shaman"],
+      "soulbound": true,
       "sellValue": 10000
     },
     {
@@ -13717,6 +16501,7 @@
       "hitRating": 60,
       "requiredLevel": 20,
       "requiredClass": ["paladin", "shaman"],
+      "soulbound": true,
       "sellValue": 10000
     },
     {
@@ -13947,7 +16732,7 @@
       "name": "Highwatch Trail Hardtack",
       "kind": "food",
       "quality": "common",
-      "foodHp": 552,
+      "foodHp": 480,
       "sellValue": 75
     },
     {
@@ -14083,6 +16868,28 @@
       "sellValue": 120
     },
     {
+      "id": "vale_hearth_loaf",
+      "name": "Vale Hearth Loaf",
+      "kind": "food",
+      "quality": "common",
+      "foodHp": 90,
+      "sellValue": 6
+    },
+    {
+      "id": "vale_wheat",
+      "name": "Vale Wheat",
+      "kind": "junk",
+      "quality": "common",
+      "sellValue": 4
+    },
+    {
+      "id": "vale_wheat_seed",
+      "name": "Vale Wheat Seed",
+      "kind": "junk",
+      "quality": "common",
+      "sellValue": 1
+    },
+    {
       "id": "valeborn_spellblade",
       "name": "Valeborn Spellblade",
       "kind": "weapon",
@@ -14185,11 +16992,12 @@
       },
       "requiredLevel": 20,
       "requiredClass": ["warrior", "paladin", "shaman", "druid"],
+      "soulbound": true,
       "sellValue": 26000
     },
     {
       "id": "varric_shadow_cowl",
-      "name": "Varric's Shadow Cowl",
+      "name": "Vandric's Shadow Cowl",
       "kind": "armor",
       "quality": "rare",
       "slot": "helmet",
@@ -14458,6 +17266,23 @@
       "sellValue": 800
     },
     {
+      "id": "voidbound_grimoire",
+      "name": "Voidbound Grimoire",
+      "kind": "held_offhand",
+      "quality": "epic",
+      "slot": "offhand",
+      "itemLevel": 31,
+      "stats": {
+        "sta": 3,
+        "int": 8,
+        "spi": 5
+      },
+      "hasteRating": 20,
+      "requiredLevel": 20,
+      "requiredClass": ["mage", "priest", "warlock", "shaman", "paladin", "druid"],
+      "sellValue": 340
+    },
+    {
       "id": "voidscar_handwraps",
       "name": "Voidscar Handwraps",
       "kind": "armor",
@@ -14549,6 +17374,25 @@
       "sellValue": 150
     },
     {
+      "id": "votive_ward_of_the_deathless_court",
+      "name": "Votive Ward of the Deathless Court",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "offhand",
+      "armorType": "mail",
+      "itemLevel": 29,
+      "stats": {
+        "int": 8,
+        "spi": 7,
+        "armor": 680
+      },
+      "hasteRating": 20,
+      "blockValue": 30,
+      "requiredLevel": 20,
+      "requiredClass": ["paladin", "shaman"],
+      "sellValue": 12000
+    },
+    {
       "id": "wand_of_quenched_sparks",
       "name": "Wand of Quenched Sparks",
       "kind": "weapon",
@@ -14569,6 +17413,7 @@
       },
       "requiredLevel": 20,
       "requiredClass": ["mage", "priest", "warlock", "shaman", "paladin", "druid"],
+      "soulbound": true,
       "sellValue": 12000
     },
     {
@@ -14584,6 +17429,19 @@
         "armor": 60
       },
       "sellValue": 150
+    },
+    {
+      "id": "warboar_flask",
+      "name": "Warboar Flask",
+      "kind": "flask",
+      "quality": "epic",
+      "elixir": {
+        "aura": "Warboar Might",
+        "value": 13,
+        "duration": 1200
+      },
+      "requiredLevel": 20,
+      "sellValue": 25
     },
     {
       "id": "wardens_oathband",
@@ -14621,19 +17479,36 @@
       "sellValue": 1100
     },
     {
+      "id": "wardspeaker_sabatons",
+      "name": "Wardspeaker Sabatons",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "feet",
+      "armorType": "mail",
+      "itemLevel": 31,
+      "stats": {
+        "int": 8,
+        "spi": 6,
+        "armor": 212
+      },
+      "hasteRating": 40,
+      "requiredLevel": 20,
+      "sellValue": 280
+    },
+    {
       "id": "wardweave_cowl",
       "name": "Wardweave Cowl",
       "kind": "armor",
       "quality": "rare",
       "slot": "helmet",
       "armorType": "cloth",
-      "itemLevel": 23,
+      "itemLevel": 20,
       "stats": {
         "int": 7,
         "spi": 4,
         "armor": 44
       },
-      "requiredLevel": 20,
+      "requiredLevel": 17,
       "sellValue": 440
     },
     {
@@ -14653,7 +17528,40 @@
       "hitRating": 60,
       "requiredLevel": 20,
       "requiredClass": ["warrior", "paladin", "shaman"],
+      "soulbound": true,
       "sellValue": 10000
+    },
+    {
+      "id": "warhewn_signet",
+      "name": "Warhewn Signet",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "ring",
+      "itemLevel": 31,
+      "stats": {
+        "str": 8,
+        "sta": 5
+      },
+      "hitRating": 25,
+      "requiredLevel": 20,
+      "sellValue": 300
+    },
+    {
+      "id": "warspice_feast",
+      "name": "Warspice Feast",
+      "kind": "junk",
+      "quality": "epic",
+      "requiredLevel": 20,
+      "sellValue": 300
+    },
+    {
+      "id": "warspice_skewers",
+      "name": "Warspice Skewers",
+      "kind": "food",
+      "quality": "epic",
+      "foodHp": 1392,
+      "requiredLevel": 20,
+      "sellValue": 90
     },
     {
       "id": "warspirit_emberscale_chest",
@@ -14797,6 +17705,20 @@
       "id": "webwood_silk",
       "name": "Sableweb Silk Gland",
       "kind": "quest"
+    },
+    {
+      "id": "weighted_thorium_band",
+      "name": "Weighted Osmium Band",
+      "kind": "armor",
+      "quality": "rare",
+      "slot": "ring",
+      "itemLevel": 18,
+      "stats": {
+        "str": 5,
+        "sta": 3
+      },
+      "requiredLevel": 15,
+      "sellValue": 280
     },
     {
       "id": "whetted_iron_dirk",
@@ -15118,6 +18040,13 @@
       "kind": "quest"
     },
     {
+      "id": "withered_husks",
+      "name": "Withered Husks",
+      "kind": "junk",
+      "quality": "common",
+      "sellValue": 1
+    },
+    {
       "id": "wolf_fang",
       "name": "Cracked Wolf Fang",
       "kind": "junk",
@@ -15220,7 +18149,7 @@
     },
     {
       "id": "wyrmcult_grand_robe",
-      "name": "Wyrmcult Grand Robe",
+      "name": "Broodsworn Grand Robe",
       "kind": "armor",
       "quality": "rare",
       "slot": "chest",
@@ -15237,12 +18166,12 @@
     },
     {
       "id": "wyrmcult_orders",
-      "name": "Wyrmcult Orders",
+      "name": "Broodsworn Orders",
       "kind": "quest"
     },
     {
       "id": "wyrmcult_soulsteps",
-      "name": "Wyrmcult Soulsteps",
+      "name": "Broodsworn Soulsteps",
       "kind": "armor",
       "quality": "rare",
       "slot": "feet",
@@ -15259,7 +18188,7 @@
     },
     {
       "id": "wyrmcult_spellgrips",
-      "name": "Wyrmcult Spellgrips",
+      "name": "Broodsworn Spellgrips",
       "kind": "armor",
       "quality": "rare",
       "slot": "gloves",
@@ -15272,6 +18201,29 @@
       },
       "requiredLevel": 19,
       "sellValue": 1850
+    },
+    {
+      "id": "wyrmfall_core",
+      "name": "Wyrmfall Core",
+      "kind": "junk",
+      "quality": "rare",
+      "requiredLevel": 20,
+      "sellValue": 50
+    },
+    {
+      "id": "wyrmfall_pendant",
+      "name": "Wyrmfall Pendant",
+      "kind": "armor",
+      "quality": "epic",
+      "slot": "neck",
+      "itemLevel": 31,
+      "stats": {
+        "sta": 6,
+        "int": 8
+      },
+      "hasteRating": 25,
+      "requiredLevel": 20,
+      "sellValue": 320
     },
     {
       "id": "wyrmfang_greatblade",
@@ -15292,6 +18244,13 @@
       "requiredLevel": 20,
       "requiredClass": ["warrior", "hunter", "shaman", "paladin"],
       "sellValue": 8000
+    },
+    {
+      "id": "wyrmhide_cording",
+      "name": "Wyrmhide Cording",
+      "kind": "junk",
+      "quality": "common",
+      "sellValue": 40
     },
     {
       "id": "wyrmscale_jerkin",

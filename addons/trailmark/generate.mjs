@@ -79,14 +79,24 @@ const GAME_PACKAGE_NAME = 'world-of-claudecraft';
 
 const DATA_MODULE = '/src/sim/data.ts';
 const GATHERING_MODULE = '/src/sim/professions/gathering.ts';
+const FARM_PATCHES_MODULE = '/src/sim/content/farm_patches.ts';
 const OUT_FILE = 'quests.json';
 
 /** What the shipped file records about where it came from. */
 const SOURCE_NOTE =
-  'src/sim/data.ts, src/sim/quest_targets.ts, src/sim/types.ts, src/sim/content/*.ts';
+  'src/sim/data.ts, src/sim/quest_targets.ts, src/sim/types.ts, ' +
+  'src/sim/content/farm_patches.ts, src/sim/content/*.ts';
 
 /** The objective types `questObjectiveAreas` knows how to place, plus `craft`. */
-const KNOWN_OBJECTIVE_TYPES = new Set(['kill', 'collect', 'interact', 'craft', 'gather', 'escort']);
+const KNOWN_OBJECTIVE_TYPES = new Set([
+  'kill',
+  'collect',
+  'interact',
+  'craft',
+  'gather',
+  'escort',
+  'farm',
+]);
 
 /** Roughly what the tables carried at game 0.36.0, so a thin parse cannot pass quietly. */
 const EXPECTED = Object.freeze({
@@ -98,6 +108,11 @@ const EXPECTED = Object.freeze({
   nodes: 156,
   escorts: 4,
   drops: 50,
+  // One patch per farming hub, four hubs on the ladder. Here for the EMPTY case
+  // rather than the count: a farm objective whose patches all failed to read
+  // would place its marker over every bed in the world, which looks like an
+  // answer.
+  farmPatches: 4,
 });
 
 const GAME_ARG = '--game=';
@@ -167,7 +182,8 @@ async function loadTables(root) {
   try {
     const data = await server.ssrLoadModule(DATA_MODULE);
     const gathering = await server.ssrLoadModule(GATHERING_MODULE);
-    return { data, gathering };
+    const farmPatches = await server.ssrLoadModule(FARM_PATCHES_MODULE);
+    return { data, gathering, farmPatches };
   } catch (err) {
     return fail(`could not load the game's content modules from ${root}: ${String(err)}`);
   } finally {
@@ -228,6 +244,19 @@ function withOptionalTargets(row, objective) {
     }
     if (objective.itemId) {
       row.item = objective.itemId;
+    }
+  }
+  if (objective.type === 'farm') {
+    // `action` is carried because it is what the row SAYS (plant or harvest) even
+    // though placement ignores it; `patch` narrows the marker to one patch and is
+    // optional, and its absence is meaningful rather than missing, since the credit
+    // arm never reads it and every bed in the world then qualifies.
+    row.action = objective.action;
+    if (objective.cropId) {
+      row.crop = objective.cropId;
+    }
+    if (objective.patchId) {
+      row.patch = objective.patchId;
     }
   }
   return row;
@@ -314,6 +343,26 @@ function nodeRows(data, gathering) {
     item: gathering.nodeMaterialFor(node.type, node.zoneId).itemId,
     x: node.pos.x,
     z: node.pos.z,
+  }));
+}
+
+/**
+ * One row per farming patch, carrying every bed.
+ *
+ * The BEDS rather than the patch anchor, because the game's own placement encloses
+ * the beds (`pushFarmPatches` in src/sim/quest_targets.ts) and the anchor is their
+ * centroid: a patch is a grid on a 5 yard pitch, so enclosing the beds and pinning
+ * the centre are different areas and only the first is what the game draws.
+ *
+ * Its own section rather than a field on the objective for the reason `nodes` is
+ * one: several quests name the same patch, and a patchless farm objective is
+ * honestly earned at ANY bed in the world, so the placement needs the whole table
+ * rather than whatever one objective mentioned.
+ */
+function farmPatchRows(farmPatches) {
+  return farmPatches.FARM_PATCHES.map((patch) => ({
+    id: patch.id,
+    beds: patch.beds.map((bed) => ({ x: bed.x, z: bed.z })),
   }));
 }
 
@@ -471,7 +520,7 @@ function render(table) {
   return `${renderValue(table, NONE, NONE)}\n`;
 }
 
-function build(gameVersion, data, gathering) {
+function build(gameVersion, data, gathering, farmPatches) {
   return {
     gameVersion,
     source: SOURCE_NOTE,
@@ -481,6 +530,7 @@ function build(gameVersion, data, gathering) {
     objects: objectRows(data),
     npcs: npcRows(data),
     nodes: nodeRows(data, gathering),
+    farmPatches: farmPatchRows(farmPatches),
     escorts: escortRows(data),
     drops: dropRows(data),
   };
@@ -491,8 +541,8 @@ async function main() {
   // The identity check FIRST, before the module graph is touched: a wrong path
   // reported as a resolution failure reads as the game having moved something.
   const gameVersion = checkoutVersion(root);
-  const { data, gathering } = await loadTables(root);
-  const table = build(gameVersion, data, gathering);
+  const { data, gathering, farmPatches } = await loadTables(root);
+  const table = build(gameVersion, data, gathering, farmPatches);
   checkObjectiveTypes(table.quests);
   checkCounts(table);
   // Beside this script rather than anywhere an argument could name, so the only

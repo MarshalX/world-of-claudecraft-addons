@@ -1,5 +1,5 @@
 {
-  "gameVersion": "0.41.4",
+  "gameVersion": "0.42.0",
   "generatedFrom": ["src/sim/data.ts"],
   "fields": "the three item facts that decide what a market listing is worth against something other than another listing: sellValue, the flat per-unit copper a vendor pays, which is the only absolute price in the game; buyValue, the vendor shop price, present ONLY where some NPC actually stocks the id, which makes it a ceiling an ask above can never sell over; and noVendorSell, which voids the floor. An item the server refuses to list (quest, noMarketList, soulbound) is absent, as is one declaring none of the three. See src/sim/market.ts for the listing gate.",
   "items": [
@@ -26,14 +26,6 @@
     {
       "id": "anglers_feast_platter",
       "sellValue": 60
-    },
-    {
-      "id": "anvilguard_blade",
-      "sellValue": 14000
-    },
-    {
-      "id": "anvilstance_sabatons",
-      "sellValue": 10000
     },
     {
       "id": "apprentice_robe",
@@ -77,14 +69,6 @@
       "sellValue": 60
     },
     {
-      "id": "ashenbark_treads",
-      "sellValue": 10000
-    },
-    {
-      "id": "ashrunner_boots",
-      "sellValue": 10000
-    },
-    {
       "id": "ashwood_axe",
       "sellValue": 60
     },
@@ -102,12 +86,12 @@
       "buyValue": 25
     },
     {
-      "id": "band_of_marked_strikes",
-      "sellValue": 8000
-    },
-    {
       "id": "bandit_bandana",
       "sellValue": 6
+    },
+    {
+      "id": "barksong_handguards",
+      "sellValue": 140
     },
     {
       "id": "barrowshade_mantle",
@@ -128,6 +112,15 @@
     {
       "id": "bloodmane_warleggings",
       "sellValue": 800
+    },
+    {
+      "id": "bog_beet",
+      "sellValue": 8
+    },
+    {
+      "id": "bog_beet_seed",
+      "sellValue": 2,
+      "buyValue": 8
     },
     {
       "id": "bogiron_hauberk",
@@ -188,12 +181,44 @@
       "sellValue": 460
     },
     {
+      "id": "bramblehide_cinch",
+      "sellValue": 12000
+    },
+    {
+      "id": "bramblehide_crown",
+      "sellValue": 12000
+    },
+    {
+      "id": "bramblehide_grips",
+      "sellValue": 12000
+    },
+    {
+      "id": "bramblehide_harness",
+      "sellValue": 12000
+    },
+    {
       "id": "bramblehide_jerkin",
       "sellValue": 120
     },
     {
+      "id": "bramblehide_legguards",
+      "sellValue": 12000
+    },
+    {
+      "id": "bramblehide_mantle",
+      "sellValue": 12000
+    },
+    {
+      "id": "bramblehide_treads",
+      "sellValue": 12000
+    },
+    {
       "id": "briarroot_staff",
       "sellValue": 320
+    },
+    {
+      "id": "briarstep_jerkin",
+      "sellValue": 175
     },
     {
       "id": "brightwood_venison",
@@ -211,6 +236,10 @@
     {
       "id": "bristlehide_spaulders",
       "sellValue": 150
+    },
+    {
+      "id": "bronze_hoe",
+      "sellValue": 10
     },
     {
       "id": "bronze_sickle",
@@ -231,12 +260,18 @@
       "sellValue": 300
     },
     {
-      "id": "brutoks_maul",
-      "sellValue": 2000
+      "id": "brook_carrot",
+      "sellValue": 4,
+      "buyValue": 16
     },
     {
-      "id": "bulwark_of_the_inner_crucible",
-      "sellValue": 12000
+      "id": "brook_carrot_seed",
+      "sellValue": 1,
+      "buyValue": 4
+    },
+    {
+      "id": "brutoks_maul",
+      "sellValue": 2000
     },
     {
       "id": "bulwark_rusted_pauldrons",
@@ -246,6 +281,10 @@
       "id": "burlap_reagent_pouch",
       "sellValue": 250,
       "buyValue": 1000
+    },
+    {
+      "id": "burnished_thorium_amulet",
+      "sellValue": 310
     },
     {
       "id": "cantors_drowned_sash",
@@ -272,28 +311,25 @@
       "sellValue": 12000
     },
     {
-      "id": "cinder_of_the_first_design",
-      "sellValue": 12000
-    },
-    {
-      "id": "cinderbark_cinch",
-      "sellValue": 10000
-    },
-    {
-      "id": "cinderfang_kris",
-      "sellValue": 14000
-    },
-    {
-      "id": "cindersoaked_slippers",
-      "sellValue": 10000
-    },
-    {
       "id": "cinderwalk_treads",
       "sellValue": 900
     },
     {
-      "id": "circle_of_cinders",
-      "sellValue": 8000
+      "id": "clockreel_fishing_rod",
+      "sellValue": 375
+    },
+    {
+      "id": "cogwheel_blank",
+      "sellValue": 18
+    },
+    {
+      "id": "coiled_copper_torc",
+      "sellValue": 36
+    },
+    {
+      "id": "compost",
+      "sellValue": 2,
+      "buyValue": 8
     },
     {
       "id": "cooking_salt",
@@ -313,6 +349,10 @@
       "sellValue": 4
     },
     {
+      "id": "copperlens_ocular",
+      "sellValue": 36
+    },
+    {
       "id": "coppermail_gauntlets",
       "sellValue": 26
     },
@@ -321,12 +361,12 @@
       "sellValue": 40
     },
     {
-      "id": "cord_of_the_last_flame",
-      "sellValue": 10000
-    },
-    {
       "id": "corpse_candle_focus",
       "sellValue": 195
+    },
+    {
+      "id": "courtiers_bonefang",
+      "sellValue": 14000
     },
     {
       "id": "cracked_fetish",
@@ -397,6 +437,138 @@
     {
       "id": "crownforged_warspaulders",
       "sellValue": 12000
+    },
+    {
+      "id": "crucible_agi_leather_chest",
+      "sellValue": 12000
+    },
+    {
+      "id": "crucible_agi_leather_feet",
+      "sellValue": 9000
+    },
+    {
+      "id": "crucible_agi_leather_waist",
+      "sellValue": 9000
+    },
+    {
+      "id": "crucible_caster_cloth_chest",
+      "sellValue": 12000
+    },
+    {
+      "id": "crucible_caster_cloth_feet",
+      "sellValue": 9000
+    },
+    {
+      "id": "crucible_caster_cloth_waist",
+      "sellValue": 9000
+    },
+    {
+      "id": "crucible_caster_leather_chest",
+      "sellValue": 12000
+    },
+    {
+      "id": "crucible_caster_leather_feet",
+      "sellValue": 9000
+    },
+    {
+      "id": "crucible_caster_leather_waist",
+      "sellValue": 9000
+    },
+    {
+      "id": "crucible_caster_mail_chest",
+      "sellValue": 12000
+    },
+    {
+      "id": "crucible_caster_mail_feet",
+      "sellValue": 9000
+    },
+    {
+      "id": "crucible_caster_mail_waist",
+      "sellValue": 9000
+    },
+    {
+      "id": "crucible_healer_cloth_chest",
+      "sellValue": 12000
+    },
+    {
+      "id": "crucible_healer_cloth_feet",
+      "sellValue": 9000
+    },
+    {
+      "id": "crucible_healer_cloth_waist",
+      "sellValue": 9000
+    },
+    {
+      "id": "crucible_healer_leather_chest",
+      "sellValue": 12000
+    },
+    {
+      "id": "crucible_healer_leather_feet",
+      "sellValue": 9000
+    },
+    {
+      "id": "crucible_healer_leather_waist",
+      "sellValue": 9000
+    },
+    {
+      "id": "crucible_healer_mail_chest",
+      "sellValue": 12000
+    },
+    {
+      "id": "crucible_healer_mail_feet",
+      "sellValue": 9000
+    },
+    {
+      "id": "crucible_healer_mail_waist",
+      "sellValue": 9000
+    },
+    {
+      "id": "crucible_str_leather_chest",
+      "sellValue": 12000
+    },
+    {
+      "id": "crucible_str_leather_feet",
+      "sellValue": 9000
+    },
+    {
+      "id": "crucible_str_leather_waist",
+      "sellValue": 9000
+    },
+    {
+      "id": "crucible_str_mail_chest",
+      "sellValue": 12000
+    },
+    {
+      "id": "crucible_str_mail_feet",
+      "sellValue": 9000
+    },
+    {
+      "id": "crucible_str_mail_waist",
+      "sellValue": 9000
+    },
+    {
+      "id": "crucible_tank_leather_chest",
+      "sellValue": 12000
+    },
+    {
+      "id": "crucible_tank_leather_feet",
+      "sellValue": 9000
+    },
+    {
+      "id": "crucible_tank_leather_waist",
+      "sellValue": 9000
+    },
+    {
+      "id": "crucible_tank_mail_chest",
+      "sellValue": 12000
+    },
+    {
+      "id": "crucible_tank_mail_feet",
+      "sellValue": 9000
+    },
+    {
+      "id": "crucible_tank_mail_waist",
+      "sellValue": 9000
     },
     {
       "id": "cryptbloom_shoulderguards",
@@ -471,12 +643,12 @@
       "sellValue": 9000
     },
     {
-      "id": "deepfen_pearl",
-      "sellValue": 600
+      "id": "deed_of_making",
+      "sellValue": 50
     },
     {
-      "id": "dewfall_moccasins",
-      "sellValue": 10000
+      "id": "deepfen_pearl",
+      "sellValue": 600
     },
     {
       "id": "direfang_greatblade",
@@ -551,6 +723,18 @@
       "sellValue": 950
     },
     {
+      "id": "duskforged_billet",
+      "sellValue": 45
+    },
+    {
+      "id": "duskforged_bulwark",
+      "sellValue": 300
+    },
+    {
+      "id": "duskforged_warblade",
+      "sellValue": 320
+    },
+    {
       "id": "duskhide_wraps",
       "sellValue": 420
     },
@@ -568,8 +752,7 @@
     },
     {
       "id": "eastbrook_arming_sword",
-      "sellValue": 140,
-      "buyValue": 1400
+      "sellValue": 140
     },
     {
       "id": "eastbrook_buckler",
@@ -578,12 +761,15 @@
     },
     {
       "id": "eastbrook_chain_vest",
-      "sellValue": 180,
-      "buyValue": 1800
+      "sellValue": 180
     },
     {
       "id": "eastbrook_druids_hide",
       "sellValue": 84
+    },
+    {
+      "id": "eastbrook_glazed_carrots",
+      "sellValue": 6
     },
     {
       "id": "eastbrook_greatsword",
@@ -595,13 +781,16 @@
       "sellValue": 72
     },
     {
+      "id": "eastbrook_root_pottage",
+      "sellValue": 12
+    },
+    {
       "id": "eastbrook_warded_leggings",
       "sellValue": 105
     },
     {
       "id": "eastbrook_wool_trousers",
-      "sellValue": 110,
-      "buyValue": 1100
+      "sellValue": 110
     },
     {
       "id": "eelscale_leggings",
@@ -633,8 +822,7 @@
     },
     {
       "id": "elixir_of_the_bear",
-      "sellValue": 20,
-      "buyValue": 100
+      "sellValue": 20
     },
     {
       "id": "elixir_of_the_boar",
@@ -643,10 +831,6 @@
     {
       "id": "elixir_of_the_serpent",
       "sellValue": 20
-    },
-    {
-      "id": "ember_wardens_barrier",
-      "sellValue": 12000
     },
     {
       "id": "emberfang_warblade",
@@ -677,6 +861,44 @@
       "sellValue": 110
     },
     {
+      "id": "etched_iron_loop",
+      "sellValue": 46
+    },
+    {
+      "id": "evergarden_braised_greens",
+      "sellValue": 150
+    },
+    {
+      "id": "evergarden_greens",
+      "sellValue": 40
+    },
+    {
+      "id": "evergarden_greens_seed",
+      "sellValue": 8,
+      "buyValue": 64
+    },
+    {
+      "id": "evergarden_harvest_platter",
+      "sellValue": 150
+    },
+    {
+      "id": "evergarden_hoe",
+      "sellValue": 150
+    },
+    {
+      "id": "evergarden_pumpkin",
+      "sellValue": 40
+    },
+    {
+      "id": "evergarden_pumpkin_seed",
+      "sellValue": 8,
+      "buyValue": 64
+    },
+    {
+      "id": "evergarden_sunmelon_tart",
+      "sellValue": 150
+    },
+    {
       "id": "fang_of_korzul",
       "sellValue": 8000
     },
@@ -698,6 +920,14 @@
       "sellValue": 320
     },
     {
+      "id": "fenbloom_breeches",
+      "sellValue": 160
+    },
+    {
+      "id": "fenbridge_beet_braise",
+      "sellValue": 40
+    },
+    {
       "id": "fenbridge_hide_belt",
       "sellValue": 25
     },
@@ -708,6 +938,14 @@
     {
       "id": "fenbridge_hide_leggings",
       "sellValue": 32
+    },
+    {
+      "id": "fenbridge_rice_bowl",
+      "sellValue": 25
+    },
+    {
+      "id": "fenbridge_rice_pudding",
+      "sellValue": 25
     },
     {
       "id": "fenbridge_rye",
@@ -737,8 +975,21 @@
       "sellValue": 310
     },
     {
+      "id": "field_kit",
+      "sellValue": 4,
+      "buyValue": 20
+    },
+    {
       "id": "fine_ashwood_log",
       "sellValue": 30
+    },
+    {
+      "id": "fine_bog_beet",
+      "sellValue": 16
+    },
+    {
+      "id": "fine_brook_carrot",
+      "sellValue": 8
     },
     {
       "id": "fine_copper_ore",
@@ -749,7 +1000,35 @@
       "sellValue": 80
     },
     {
+      "id": "fine_evergarden_greens",
+      "sellValue": 80
+    },
+    {
+      "id": "fine_evergarden_pumpkin",
+      "sellValue": 80
+    },
+    {
+      "id": "fine_frost_gourd",
+      "sellValue": 30
+    },
+    {
+      "id": "fine_frost_lentils",
+      "sellValue": 30
+    },
+    {
+      "id": "fine_gilded_sunmelon",
+      "sellValue": 80
+    },
+    {
+      "id": "fine_gilded_yam",
+      "sellValue": 80
+    },
+    {
       "id": "fine_goldleaf_herb",
+      "sellValue": 30
+    },
+    {
+      "id": "fine_highland_barley",
       "sellValue": 30
     },
     {
@@ -759,6 +1038,10 @@
     {
       "id": "fine_ironbark_log",
       "sellValue": 8
+    },
+    {
+      "id": "fine_marsh_rice",
+      "sellValue": 16
     },
     {
       "id": "fine_silverleaf_herb",
@@ -773,6 +1056,14 @@
       "sellValue": 30
     },
     {
+      "id": "fine_thornpeak_cabbage",
+      "sellValue": 30
+    },
+    {
+      "id": "fine_vale_wheat",
+      "sellValue": 8
+    },
+    {
       "id": "footpad_jerkin",
       "sellValue": 5
     },
@@ -781,16 +1072,16 @@
       "sellValue": 200
     },
     {
-      "id": "forgefathers_warhammer",
-      "sellValue": 14000
+      "id": "forgefold_legguards",
+      "sellValue": 320
     },
     {
-      "id": "forgefire_spire",
-      "sellValue": 16000
+      "id": "forgefold_plating",
+      "sellValue": 45
     },
     {
-      "id": "forgewall_girdle",
-      "sellValue": 10000
+      "id": "formula_lastflame_zeal",
+      "noVendorSell": true
     },
     {
       "id": "fountain_court_mantle",
@@ -801,16 +1092,30 @@
       "sellValue": 30
     },
     {
+      "id": "frost_gourd",
+      "sellValue": 15
+    },
+    {
+      "id": "frost_gourd_seed",
+      "sellValue": 4,
+      "buyValue": 32
+    },
+    {
+      "id": "frost_lentils",
+      "sellValue": 15
+    },
+    {
+      "id": "frost_lentils_seed",
+      "sellValue": 4,
+      "buyValue": 32
+    },
+    {
       "id": "frostgill_chowder",
       "sellValue": 40
     },
     {
       "id": "frostmane_mantle",
       "sellValue": 2200
-    },
-    {
-      "id": "furnace_march_greaves",
-      "sellValue": 10000
     },
     {
       "id": "game_meat",
@@ -821,6 +1126,24 @@
       "sellValue": 60
     },
     {
+      "id": "gilded_sunmelon",
+      "sellValue": 40
+    },
+    {
+      "id": "gilded_sunmelon_seed",
+      "sellValue": 8,
+      "buyValue": 64
+    },
+    {
+      "id": "gilded_yam",
+      "sellValue": 40
+    },
+    {
+      "id": "gilded_yam_seed",
+      "sellValue": 8,
+      "buyValue": 64
+    },
+    {
       "id": "glacier_melt",
       "sellValue": 150,
       "buyValue": 2500
@@ -829,6 +1152,10 @@
       "id": "glass_vial",
       "sellValue": 3,
       "buyValue": 12
+    },
+    {
+      "id": "gleaming_thorium_loop",
+      "sellValue": 280
     },
     {
       "id": "gleamstag_charm",
@@ -847,6 +1174,10 @@
       "sellValue": 12
     },
     {
+      "id": "goldleaf_folio",
+      "sellValue": 100
+    },
+    {
       "id": "goldleaf_game_stew",
       "sellValue": 25
     },
@@ -861,6 +1192,10 @@
     {
       "id": "goldleaf_mana_draught",
       "sellValue": 22
+    },
+    {
+      "id": "goldleaf_scroll",
+      "sellValue": 15
     },
     {
       "id": "goldleaf_sickle",
@@ -883,6 +1218,10 @@
       "sellValue": 180
     },
     {
+      "id": "grand_cauldron",
+      "sellValue": 380
+    },
+    {
       "id": "graskbreaker_girdle",
       "sellValue": 5000
     },
@@ -897,6 +1236,10 @@
     {
       "id": "gravecaller_staff",
       "sellValue": 800
+    },
+    {
+      "id": "gravecourt_hewer",
+      "sellValue": 14000
     },
     {
       "id": "gravepath_treads",
@@ -971,12 +1314,12 @@
       "sellValue": 110
     },
     {
-      "id": "grovetender_belt",
-      "sellValue": 10000
-    },
-    {
       "id": "grovewardens_grips",
       "sellValue": 7500
+    },
+    {
+      "id": "growth_tonic",
+      "sellValue": 6
     },
     {
       "id": "guardian_core",
@@ -987,13 +1330,21 @@
       "sellValue": 2000
     },
     {
+      "id": "gyrelens_array",
+      "sellValue": 340
+    },
+    {
+      "id": "hammered_copper_band",
+      "sellValue": 32
+    },
+    {
+      "id": "harvest_feast",
+      "sellValue": 250
+    },
+    {
       "id": "healing_potion",
       "sellValue": 32,
       "buyValue": 170
-    },
-    {
-      "id": "heart_of_the_end_greatblade",
-      "sellValue": 16000
     },
     {
       "id": "heart_of_the_rift",
@@ -1002,10 +1353,6 @@
     {
       "id": "hearthlined_treads",
       "sellValue": 900
-    },
-    {
-      "id": "heartspring_amulet",
-      "sellValue": 8000
     },
     {
       "id": "herbed_marsh_pike",
@@ -1030,6 +1377,38 @@
     {
       "id": "heroic_boundstone_helm",
       "sellValue": 460
+    },
+    {
+      "id": "heroic_bramblehide_cinch",
+      "sellValue": 12000
+    },
+    {
+      "id": "heroic_bramblehide_crown",
+      "sellValue": 12000
+    },
+    {
+      "id": "heroic_bramblehide_grips",
+      "sellValue": 12000
+    },
+    {
+      "id": "heroic_bramblehide_harness",
+      "sellValue": 12000
+    },
+    {
+      "id": "heroic_bramblehide_legguards",
+      "sellValue": 12000
+    },
+    {
+      "id": "heroic_bramblehide_mantle",
+      "sellValue": 12000
+    },
+    {
+      "id": "heroic_bramblehide_treads",
+      "sellValue": 12000
+    },
+    {
+      "id": "heroic_courtiers_bonefang",
+      "sellValue": 14000
     },
     {
       "id": "heroic_crownforged_dreadhelm",
@@ -1090,6 +1469,10 @@
     {
       "id": "heroic_fanglords_beastspear",
       "sellValue": 3200
+    },
+    {
+      "id": "heroic_gravecourt_hewer",
+      "sellValue": 14000
     },
     {
       "id": "heroic_gravewyrm_bone_quiver",
@@ -1200,6 +1583,22 @@
       "sellValue": 12000
     },
     {
+      "id": "heroic_stormhymn_chain_grips",
+      "sellValue": 12000
+    },
+    {
+      "id": "heroic_stormhymn_chain_treads",
+      "sellValue": 12000
+    },
+    {
+      "id": "heroic_thornpeak_moonhide_cowl",
+      "sellValue": 12000
+    },
+    {
+      "id": "heroic_thornpeak_wardblade",
+      "sellValue": 14000
+    },
+    {
       "id": "heroic_tideguard_greaves",
       "sellValue": 1100
     },
@@ -1214,6 +1613,10 @@
     {
       "id": "heroic_verdant_walkers",
       "sellValue": 7200
+    },
+    {
+      "id": "heroic_votive_ward_of_the_deathless_court",
+      "sellValue": 12000
     },
     {
       "id": "heroic_wildgrowth_leggings",
@@ -1273,9 +1676,30 @@
       "buyValue": 1500
     },
     {
+      "id": "highland_barley",
+      "sellValue": 15
+    },
+    {
+      "id": "highland_barley_seed",
+      "sellValue": 4,
+      "buyValue": 32
+    },
+    {
+      "id": "highwatch_barley_bannock",
+      "sellValue": 60
+    },
+    {
+      "id": "highwatch_barley_porridge",
+      "sellValue": 60
+    },
+    {
       "id": "highwatch_breastplate",
       "sellValue": 700,
       "buyValue": 7000
+    },
+    {
+      "id": "highwatch_gourd_soup",
+      "sellValue": 75
     },
     {
       "id": "highwatch_greatsword",
@@ -1335,12 +1759,12 @@
       "buyValue": 6000
     },
     {
-      "id": "ignivars_ember_choker",
-      "sellValue": 8000
-    },
-    {
       "id": "inert_storm_shard",
       "sellValue": 28
+    },
+    {
+      "id": "iron_link_choker",
+      "sellValue": 52
     },
     {
       "id": "iron_mining_pick",
@@ -1367,6 +1791,10 @@
     {
       "id": "ironedge_longsword",
       "sellValue": 52
+    },
+    {
+      "id": "ironhusk_flask",
+      "sellValue": 25
     },
     {
       "id": "ironlink_hauberk",
@@ -1412,6 +1840,10 @@
     {
       "id": "korgaths_chainwraps",
       "sellValue": 2200
+    },
+    {
+      "id": "laden_hearth",
+      "sellValue": 380
     },
     {
       "id": "last_keep_signet",
@@ -1473,16 +1905,12 @@
       "sellValue": 215
     },
     {
-      "id": "locket_of_the_last_flame",
-      "sellValue": 8000
-    },
-    {
       "id": "loombound_reagent_satchel",
       "sellValue": 1200
     },
     {
-      "id": "loop_of_quiet_springs",
-      "sellValue": 8000
+      "id": "lucent_reagent",
+      "sellValue": 40
     },
     {
       "id": "lunar_choir_leggings",
@@ -1495,6 +1923,10 @@
     {
       "id": "lunarward_cinch",
       "sellValue": 9500
+    },
+    {
+      "id": "makers_charm",
+      "sellValue": 150
     },
     {
       "id": "maldrecs_soulbinder",
@@ -1539,6 +1971,15 @@
       "buyValue": 400
     },
     {
+      "id": "marsh_rice",
+      "sellValue": 8
+    },
+    {
+      "id": "marsh_rice_seed",
+      "sellValue": 2,
+      "buyValue": 8
+    },
+    {
       "id": "marshcloth_robe",
       "sellValue": 200,
       "buyValue": 2000
@@ -1562,6 +2003,10 @@
     {
       "id": "marshstrider_boots",
       "sellValue": 250
+    },
+    {
+      "id": "masters_field_forge",
+      "sellValue": 380
     },
     {
       "id": "maul_of_the_scourged_wilds",
@@ -1705,10 +2150,6 @@
       "sellValue": 700
     },
     {
-      "id": "moonscorch_waistwrap",
-      "sellValue": 10000
-    },
-    {
       "id": "moonshroud_breastplate",
       "sellValue": 2400
     },
@@ -1834,12 +2275,12 @@
       "sellValue": 300
     },
     {
-      "id": "orb_of_the_last_spring",
-      "sellValue": 12000
-    },
-    {
       "id": "orchard_sapbinder_grips",
       "sellValue": 950
+    },
+    {
+      "id": "osmium_hoe",
+      "sellValue": 60
     },
     {
       "id": "outrider_brigandine",
@@ -1870,6 +2311,210 @@
       "sellValue": 6
     },
     {
+      "id": "pattern_barksong_handguards",
+      "sellValue": 100
+    },
+    {
+      "id": "pattern_briarstep_jerkin",
+      "sellValue": 100
+    },
+    {
+      "id": "pattern_clockreel_fishing_rod",
+      "sellValue": 100
+    },
+    {
+      "id": "pattern_crucible_agi_leather",
+      "noVendorSell": true
+    },
+    {
+      "id": "pattern_crucible_caster_cloth",
+      "noVendorSell": true
+    },
+    {
+      "id": "pattern_crucible_caster_leather",
+      "noVendorSell": true
+    },
+    {
+      "id": "pattern_crucible_caster_mail",
+      "noVendorSell": true
+    },
+    {
+      "id": "pattern_crucible_healer_cloth",
+      "noVendorSell": true
+    },
+    {
+      "id": "pattern_crucible_healer_leather",
+      "noVendorSell": true
+    },
+    {
+      "id": "pattern_crucible_healer_mail",
+      "noVendorSell": true
+    },
+    {
+      "id": "pattern_crucible_str_leather",
+      "noVendorSell": true
+    },
+    {
+      "id": "pattern_crucible_str_mail",
+      "noVendorSell": true
+    },
+    {
+      "id": "pattern_crucible_tank_leather",
+      "noVendorSell": true
+    },
+    {
+      "id": "pattern_crucible_tank_mail",
+      "noVendorSell": true
+    },
+    {
+      "id": "pattern_duskforged_bulwark",
+      "sellValue": 100
+    },
+    {
+      "id": "pattern_duskforged_warblade",
+      "sellValue": 100
+    },
+    {
+      "id": "pattern_evergarden_braised_greens",
+      "sellValue": 100
+    },
+    {
+      "id": "pattern_evergarden_harvest_platter",
+      "sellValue": 100
+    },
+    {
+      "id": "pattern_evergarden_sunmelon_tart",
+      "sellValue": 100
+    },
+    {
+      "id": "pattern_fenbloom_breeches",
+      "sellValue": 100
+    },
+    {
+      "id": "pattern_forgefold_legguards",
+      "sellValue": 100
+    },
+    {
+      "id": "pattern_grand_cauldron",
+      "sellValue": 100
+    },
+    {
+      "id": "pattern_gyrelens_array",
+      "sellValue": 100
+    },
+    {
+      "id": "pattern_harvest_feast",
+      "sellValue": 100
+    },
+    {
+      "id": "pattern_highwatch_barley_porridge",
+      "sellValue": 100
+    },
+    {
+      "id": "pattern_highwatch_gourd_soup",
+      "sellValue": 100
+    },
+    {
+      "id": "pattern_ironhusk_flask",
+      "sellValue": 100
+    },
+    {
+      "id": "pattern_laden_hearth",
+      "sellValue": 100
+    },
+    {
+      "id": "pattern_makers_charm",
+      "sellValue": 100
+    },
+    {
+      "id": "pattern_masters_field_forge",
+      "sellValue": 100
+    },
+    {
+      "id": "pattern_peppered_deepbarb_catfish",
+      "sellValue": 100
+    },
+    {
+      "id": "pattern_prismglass_loop",
+      "sellValue": 100
+    },
+    {
+      "id": "pattern_ridgebreaker",
+      "sellValue": 100
+    },
+    {
+      "id": "pattern_roast_hollowgill_sturgeon",
+      "sellValue": 100
+    },
+    {
+      "id": "pattern_runewater_flask",
+      "sellValue": 100
+    },
+    {
+      "id": "pattern_sageleaf_chowder",
+      "sellValue": 100
+    },
+    {
+      "id": "pattern_sageleaf_feast",
+      "sellValue": 100
+    },
+    {
+      "id": "pattern_spiritweld_girdle",
+      "sellValue": 100
+    },
+    {
+      "id": "pattern_stonepot_feast",
+      "sellValue": 100
+    },
+    {
+      "id": "pattern_stonepot_stew",
+      "sellValue": 100
+    },
+    {
+      "id": "pattern_sunspun_handwraps",
+      "sellValue": 100
+    },
+    {
+      "id": "pattern_sunspun_haversack",
+      "sellValue": 100
+    },
+    {
+      "id": "pattern_sunspun_leggings",
+      "sellValue": 100
+    },
+    {
+      "id": "pattern_sunspun_vestments",
+      "sellValue": 100
+    },
+    {
+      "id": "pattern_voidbound_grimoire",
+      "sellValue": 100
+    },
+    {
+      "id": "pattern_warboar_flask",
+      "sellValue": 100
+    },
+    {
+      "id": "pattern_wardspeaker_sabatons",
+      "sellValue": 100
+    },
+    {
+      "id": "pattern_warhewn_signet",
+      "sellValue": 100
+    },
+    {
+      "id": "pattern_warspice_feast",
+      "sellValue": 100
+    },
+    {
+      "id": "pattern_warspice_skewers",
+      "sellValue": 100
+    },
+    {
+      "id": "pattern_wyrmfall_pendant",
+      "sellValue": 100
+    },
+    {
       "id": "peaksong_helm",
       "sellValue": 1500
     },
@@ -1883,8 +2528,8 @@
       "sellValue": 1700
     },
     {
-      "id": "pendant_of_the_first_tempering",
-      "sellValue": 8000
+      "id": "peppered_deepbarb_catfish",
+      "sellValue": 75
     },
     {
       "id": "pilgrims_leggings",
@@ -1895,8 +2540,24 @@
       "sellValue": 8500
     },
     {
+      "id": "polished_copper_loop",
+      "sellValue": 32
+    },
+    {
+      "id": "precision_chassis",
+      "sellValue": 45
+    },
+    {
       "id": "prime_cut",
       "sellValue": 20
+    },
+    {
+      "id": "prismglass_loop",
+      "sellValue": 300
+    },
+    {
+      "id": "prismglass_setting",
+      "sellValue": 45
     },
     {
       "id": "pristine_claw",
@@ -1915,6 +2576,10 @@
       "sellValue": 30
     },
     {
+      "id": "quickening_catalyst",
+      "sellValue": 50
+    },
+    {
       "id": "quilted_trousers",
       "sellValue": 90
     },
@@ -1923,8 +2588,16 @@
       "sellValue": 6
     },
     {
+      "id": "raw_deepbarb_catfish",
+      "sellValue": 14
+    },
+    {
       "id": "raw_frostgill_trout",
       "sellValue": 10
+    },
+    {
+      "id": "raw_hollowgill_sturgeon",
+      "sellValue": 18
     },
     {
       "id": "raw_marsh_pike",
@@ -1937,6 +2610,10 @@
     {
       "id": "raw_river_perch",
       "sellValue": 2
+    },
+    {
+      "id": "raw_stillmere_salmon",
+      "sellValue": 22
     },
     {
       "id": "raw_stonescale_carp",
@@ -2062,6 +2739,10 @@
       "sellValue": 1700
     },
     {
+      "id": "ridgebreaker",
+      "sellValue": 340
+    },
+    {
       "id": "ridgestalker_treads",
       "sellValue": 600
     },
@@ -2078,8 +2759,16 @@
       "sellValue": 42
     },
     {
+      "id": "riveted_iron_signet",
+      "sellValue": 46
+    },
+    {
       "id": "roadwardens_helm",
       "sellValue": 130
+    },
+    {
+      "id": "roast_hollowgill_sturgeon",
+      "sellValue": 150
     },
     {
       "id": "roast_mountain_goat",
@@ -2100,6 +2789,10 @@
       "sellValue": 95
     },
     {
+      "id": "runewater_flask",
+      "sellValue": 25
+    },
+    {
       "id": "rusty_dagger",
       "sellValue": 10
     },
@@ -2108,12 +2801,24 @@
       "sellValue": 10
     },
     {
+      "id": "sablewax_vellum",
+      "sellValue": 45
+    },
+    {
       "id": "sableweb_cord",
       "sellValue": 150
     },
     {
       "id": "sableweb_slippers",
       "sellValue": 150
+    },
+    {
+      "id": "sageleaf_chowder",
+      "sellValue": 90
+    },
+    {
+      "id": "sageleaf_feast",
+      "sellValue": 300
     },
     {
       "id": "saltforged_grips",
@@ -2136,20 +2841,16 @@
       "sellValue": 16000
     },
     {
-      "id": "scorchgrove_striders",
-      "sellValue": 10000
-    },
-    {
       "id": "scourgehide_carapace",
       "sellValue": 14000
     },
     {
-      "id": "seal_of_the_forgewall",
-      "sellValue": 8000
-    },
-    {
       "id": "seal_of_the_nine_oaths",
       "sellValue": 4500
+    },
+    {
+      "id": "seasoned_stock",
+      "sellValue": 30
     },
     {
       "id": "selthes_seastriders",
@@ -2232,6 +2933,14 @@
       "sellValue": 12
     },
     {
+      "id": "silverleaf_primer",
+      "sellValue": 24
+    },
+    {
+      "id": "silverleaf_scroll",
+      "sellValue": 10
+    },
+    {
       "id": "silverleaf_sickle",
       "sellValue": 25,
       "buyValue": 400
@@ -2268,12 +2977,8 @@
       "sellValue": 2000
     },
     {
-      "id": "slagrender_cleaver",
-      "sellValue": 14000
-    },
-    {
-      "id": "slagstalker_belt",
-      "sellValue": 10000
+      "id": "skysilver_hoe",
+      "sellValue": 25
     },
     {
       "id": "sloomtooth_tidefang",
@@ -2338,6 +3043,10 @@
       "sellValue": 5
     },
     {
+      "id": "spiritweld_girdle",
+      "sellValue": 300
+    },
+    {
       "id": "spool_of_thread",
       "sellValue": 3,
       "buyValue": 12
@@ -2348,28 +3057,12 @@
       "buyValue": 25
     },
     {
-      "id": "springbinder_sash",
-      "sellValue": 10000
-    },
-    {
-      "id": "springtouched_crozier",
-      "sellValue": 14000
-    },
-    {
-      "id": "springwarden_sabatons",
-      "sellValue": 10000
-    },
-    {
       "id": "staff_of_drowned_prayers",
       "sellValue": 300
     },
     {
       "id": "staff_of_the_gravewyrm",
       "sellValue": 8000
-    },
-    {
-      "id": "staff_of_the_last_spring",
-      "sellValue": 16000
     },
     {
       "id": "staff_of_velkhar",
@@ -2385,8 +3078,12 @@
       "buyValue": 6000
     },
     {
-      "id": "steps_of_quiet_water",
-      "sellValue": 10000
+      "id": "stonepot_feast",
+      "sellValue": 300
+    },
+    {
+      "id": "stonepot_stew",
+      "sellValue": 90
     },
     {
       "id": "stormbark_mantle",
@@ -2417,8 +3114,12 @@
       "sellValue": 460
     },
     {
-      "id": "stormkindled_chain",
-      "sellValue": 10000
+      "id": "stormhymn_chain_grips",
+      "sellValue": 12000
+    },
+    {
+      "id": "stormhymn_chain_treads",
+      "sellValue": 12000
     },
     {
       "id": "stormreel_fishing_rod",
@@ -2473,6 +3174,10 @@
       "sellValue": 5000
     },
     {
+      "id": "sunpetal_grimoire",
+      "sellValue": 280
+    },
+    {
       "id": "sunpetal_healing_draught",
       "sellValue": 32
     },
@@ -2485,8 +3190,32 @@
       "sellValue": 32
     },
     {
+      "id": "sunpetal_scroll",
+      "sellValue": 20
+    },
+    {
       "id": "sunpetal_sickle",
       "sellValue": 150
+    },
+    {
+      "id": "sunspun_bolt",
+      "sellValue": 45
+    },
+    {
+      "id": "sunspun_handwraps",
+      "sellValue": 170
+    },
+    {
+      "id": "sunspun_haversack",
+      "sellValue": 180
+    },
+    {
+      "id": "sunspun_leggings",
+      "sellValue": 190
+    },
+    {
+      "id": "sunspun_vestments",
+      "sellValue": 200
     },
     {
       "id": "sunweave_mantle",
@@ -2514,8 +3243,7 @@
     },
     {
       "id": "tanned_leather_jerkin",
-      "sellValue": 80,
-      "buyValue": 1600
+      "sellValue": 80
     },
     {
       "id": "tanning_agent",
@@ -2551,20 +3279,29 @@
       "sellValue": 140
     },
     {
+      "id": "thornpeak_cabbage",
+      "sellValue": 15
+    },
+    {
+      "id": "thornpeak_cabbage_seed",
+      "sellValue": 4,
+      "buyValue": 32
+    },
+    {
+      "id": "thornpeak_moonhide_cowl",
+      "sellValue": 12000
+    },
+    {
+      "id": "thornpeak_wardblade",
+      "sellValue": 14000
+    },
+    {
       "id": "thornpeak_wildwraps",
       "sellValue": 2100
     },
     {
-      "id": "thundershock_treads",
-      "sellValue": 10000
-    },
-    {
       "id": "thunderward_legguards",
       "sellValue": 2000
-    },
-    {
-      "id": "tidebinder_links",
-      "sellValue": 10000
     },
     {
       "id": "tidebound_spaulders",
@@ -2659,6 +3396,14 @@
       "buyValue": 1200
     },
     {
+      "id": "vale_hearth_loaf",
+      "sellValue": 6
+    },
+    {
+      "id": "vale_wheat",
+      "sellValue": 4
+    },
+    {
       "id": "valeborn_spellblade",
       "sellValue": 850
     },
@@ -2674,10 +3419,6 @@
     {
       "id": "varkhul_emberward",
       "sellValue": 20000
-    },
-    {
-      "id": "varkhul_forgebreaker",
-      "sellValue": 26000
     },
     {
       "id": "varric_shadow_cowl",
@@ -2721,6 +3462,10 @@
       "sellValue": 800
     },
     {
+      "id": "voidbound_grimoire",
+      "sellValue": 340
+    },
+    {
       "id": "voidscar_handwraps",
       "sellValue": 5000
     },
@@ -2741,12 +3486,16 @@
       "sellValue": 150
     },
     {
-      "id": "wand_of_quenched_sparks",
+      "id": "votive_ward_of_the_deathless_court",
       "sellValue": 12000
     },
     {
       "id": "wanderers_chestguard",
       "sellValue": 150
+    },
+    {
+      "id": "warboar_flask",
+      "sellValue": 25
     },
     {
       "id": "wardens_oathband",
@@ -2758,12 +3507,24 @@
       "buyValue": 5200
     },
     {
+      "id": "wardspeaker_sabatons",
+      "sellValue": 280
+    },
+    {
       "id": "wardweave_cowl",
       "sellValue": 440
     },
     {
-      "id": "warforged_waistguard",
-      "sellValue": 10000
+      "id": "warhewn_signet",
+      "sellValue": 300
+    },
+    {
+      "id": "warspice_feast",
+      "sellValue": 300
+    },
+    {
+      "id": "warspice_skewers",
+      "sellValue": 90
     },
     {
       "id": "wayfarers_backpack",
@@ -2772,6 +3533,10 @@
     {
       "id": "wayfarers_hood",
       "sellValue": 120
+    },
+    {
+      "id": "weighted_thorium_band",
+      "sellValue": 280
     },
     {
       "id": "whetted_iron_dirk",
@@ -2819,6 +3584,10 @@
       "buyValue": 4500
     },
     {
+      "id": "withered_husks",
+      "sellValue": 1
+    },
+    {
       "id": "wolf_fang",
       "sellValue": 4
     },
@@ -2859,8 +3628,20 @@
       "sellValue": 1850
     },
     {
+      "id": "wyrmfall_core",
+      "sellValue": 50
+    },
+    {
+      "id": "wyrmfall_pendant",
+      "sellValue": 320
+    },
+    {
       "id": "wyrmfang_greatblade",
       "sellValue": 8000
+    },
+    {
+      "id": "wyrmhide_cording",
+      "sellValue": 40
     },
     {
       "id": "wyrmscale_jerkin",

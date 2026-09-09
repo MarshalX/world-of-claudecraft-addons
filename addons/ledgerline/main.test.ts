@@ -2793,23 +2793,31 @@ describe('what a resale is priced against', () => {
 /**
  * The thinnest series this ledger holds, which is a legendary: posted a handful of times a
  * month, so the only question it asks of the price model is what a median over two readings may
- * claim against one over thirty. The Crucible tier's 145 class-set pieces and 15 sigils are
- * soulbound at game 0.41.1 and the other 41 are listable, which is the shape the first case pins.
+ * claim against one over thirty.
+ *
+ * The Crucible tier is the case that keeps moving, in BOTH directions, which is why it is pinned
+ * by id rather than by count. Game 0.41.1 took `soulbound` off 41 of the tier's 201 items,
+ * leaving 160 bound and those 41 listable; game 0.42.0 put it back on every one of them, so all
+ * 201 are bound and the whole tier is off the market again. The generator refuses a soulbound
+ * item exactly as the game's own market gate does, so it followed both moves without a line
+ * changing here, and only these pins noticed.
  */
 describe('a legendary, and a series too thin to be one', () => {
-  it('carries the legendaries and the 41 the patch unbound, and none of the 160 still bound', () => {
+  it('carries the listable legendaries and none of the 201 bound Crucible items', () => {
     const rows = (JSON.parse(FLOORS_TEXT) as { items: { id: string }[] }).items;
     const ids = new Set(rows.map((row) => row.id));
 
     expect(ids.has(LEGENDARY)).toBe(true);
-    expect(ids.has('varkhul_forgebreaker')).toBe(true);
-    // A class-set piece and a sigil, both soulbound at 0.41.1; the generator refuses a soulbound
-    // item as the game's market gate does.
+    // A class-set piece and a sigil, bound since 0.41.1 and still bound.
     for (const bound of ['emberscreed_helmet', 'sigil_ember_helmet']) {
       expect(ids.has(bound)).toBe(false);
     }
-    // An off-set weapon, unbound at 0.41.1, so a regeneration from an older checkout fails here.
-    expect(ids.has('forgefathers_warhammer')).toBe(true);
+    // The two 0.42.0 RE-BOUND: a legendary and an off-set weapon, both listable at 0.41.1 and
+    // neither listable now. A regeneration from a 0.41.x checkout puts them back and fails here.
+    for (const rebound of ['varkhul_forgebreaker', 'forgefathers_warhammer']) {
+      expect(ids.has(rebound)).toBe(false);
+    }
+    // Zone 3 legendaries rather than Crucible drops, so the tier's binding never reached them.
     expect(ids.has('voidsong_dirk')).toBe(true);
     expect(ids.has('kingsbane_last_oath')).toBe(true);
   });

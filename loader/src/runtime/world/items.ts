@@ -5,7 +5,7 @@
 // shapes are CLAIMS about the game in the same sense everything in that file is.
 //
 // The set matters more than any one of them. The server trims an instance to the
-// three PUBLIC fields before it crosses to another player, and applies the same
+// PUBLIC fields before it crosses to another player, and applies the same
 // trim to every market row and every mail attachment, so `PublicItemInstance` is
 // what an addon sees almost everywhere. `ItemInstance` is the untrimmed payload
 // and is reachable through `world.equipmentInstances` alone. `HeldItemInstance`
@@ -15,13 +15,18 @@
 /**
  * The public part of one worn item's instance payload.
  *
- * This is the SERVER's projection, not a narrowing done here: the send site
- * copies exactly these three out of the full payload and drops the rest, so an
- * inspecting client is never sent an item's bound owner, its remaining charges,
- * or its rift forge record. Declaring the three explicitly rather than reusing
- * the self-record type is what keeps that true when the game adds a payload
- * field: the allowlist excludes it by construction, and a structural copy of the
- * full type would not.
+ * This is the SERVER's projection, not a narrowing done here: `publicInstanceView`
+ * (`src/sim/item_instance_transfer.ts`) copies exactly these SIX out of the full
+ * payload and drops the rest, so an inspecting client is never sent an item's
+ * bound owner, its remaining charges, or its mid-track Perfecting rank.
+ * Declaring them explicitly rather than reusing the self-record type is what
+ * keeps that true when the game adds a payload field: the allowlist excludes it
+ * by construction, and a structural copy of the full type would not.
+ *
+ * It was THREE until game 0.42.0, which added `name` and `perfected` (a
+ * promotion is meant to be seen by whoever inspects you) and moved `rift` up
+ * from the owner-only record. Re-read the function rather than this list: it is
+ * the only thing that says what an inspecting client actually receives.
  */
 interface PublicItemInstance {
   /** The player who signed or crafted this specific copy. */
@@ -36,6 +41,31 @@ interface PublicItemInstance {
    * payload that carries it is an old copy still loading as before.
    */
   rolled?: { quality?: string; stats?: Record<string, number>; masterwork?: boolean };
+  /** The player-chosen legendary name stamped on an orange promotion. Free text. */
+  name?: string;
+  /** The copy finished its Perfecting track. Absent is an ordinary copy. */
+  perfected?: true;
+  /**
+   * Long-term Rift progression, for a piece earned there.
+   *
+   * `tier` is content and is left a string for the same reason `AuraKind` is: a
+   * copy of the union here would go stale while looking authoritative.
+   * `rolled.stats` is the aggregate the game actually applies; this record is
+   * the bounded input it is rebuilt from.
+   */
+  rift?: {
+    sourceEventId: string;
+    tier: string;
+    power: number;
+    upgradeLevel: number;
+    maxUpgradeLevel: number;
+    gemSlots: number;
+    gems: string[];
+    /** Legacy: pre-ladder payloads only, and the game's own load drops it. */
+    baseStats?: Record<string, number>;
+    /** Legacy: the retired forge enchant, on pre-ladder payloads only. */
+    enchant?: { stat: string; value: number };
+  };
 }
 
 /**
@@ -45,7 +75,7 @@ interface PublicItemInstance {
  * `world.inventory` and `world.bank` hand these over and nothing else does,
  * which mirrors where the game itself paints the padlock (its bag grid and both
  * bank grids). Everywhere else the same stack shape appears, the server has
- * already projected the payload down to the three public fields, so a lock is
+ * already projected the payload down to the public fields, so a lock is
  * structurally unreachable there rather than merely left out of this reading.
  */
 interface HeldItemInstance extends PublicItemInstance {
@@ -79,24 +109,16 @@ interface ItemInstance extends PublicItemInstance {
   /** Remaining uses per effect id, for a charge-limited piece. */
   charges?: Record<string, number>;
   /**
-   * Long-term Rift progression, for a piece earned there.
+   * Progress along the Perfecting track, 1 to one below the top rank.
    *
-   * `tier` is content and is left a string for the same reason `AuraKind` is: a
-   * copy of the union here would go stale while looking authoritative.
-   * `rolled.stats` is the aggregate the game actually applies; this record
-   * explains how it was earned.
+   * Owner-only: `publicInstanceView` copies `perfected` and not this, so an
+   * inspecting client sees that a copy FINISHED and never how far an unfinished
+   * one has come. Absent is rank zero, and it is DELETED when `perfected` stamps
+   * rather than holding the top rank, so the two are never both present.
    */
-  rift?: {
-    sourceEventId: string;
-    tier: string;
-    power: number;
-    upgradeLevel: number;
-    maxUpgradeLevel: number;
-    baseStats: Record<string, number>;
-    enchant?: { stat: string; value: number };
-    gemSlots: number;
-    gems: string[];
-  };
+  perfecting?: number;
+  /** The Perfecting binding, kept even where a collection swap left rank zero. */
+  perfectingBound?: true;
 }
 
 export type { HeldItemInstance, ItemInstance, PublicItemInstance };

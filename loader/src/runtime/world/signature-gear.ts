@@ -63,10 +63,18 @@ function statPairs(rolled: unknown): string {
 /**
  * One worn payload flattened, so a change WITHIN a slot is visible.
  *
- * Six readings, and each is something a gear pane repaints for: who signed the
+ * Eight readings, and each is something a gear pane repaints for: who signed the
  * copy, what is enchanted onto it, whether it is a masterwork proc, the stats it
- * carries, and how far its rift record has been taken. None of them moves per
- * tick, so the whole payload is affordable.
+ * carries, how far its rift record has been taken, and the two ends of the
+ * Perfecting track (the finished bit, and the legendary name a promotion
+ * stamps). None of them moves per tick, so the whole payload is affordable.
+ *
+ * The Perfecting pair earns its place by CHANGING ON A WORN PIECE, which is what
+ * separates it from the four absent fields below: a rank walk completes and a
+ * promotion is named without the piece ever leaving the slot, so without these a
+ * gear watcher would be told nothing at the one moment it exists for. The
+ * mid-track `perfecting` rank is deliberately not here, because it is owner-only
+ * and this digest runs over the public projection too.
  *
  * The gem COUNT is here even though a socketed gem also rebuilds `rolled.stats`,
  * because that rebuild only recognises the gem ids the game's own table lists: a
@@ -88,6 +96,8 @@ function instanceDigest(instance: unknown): string {
     statPairs(rolled),
     String(fieldNumber(rift, 'upgradeLevel') ?? ''),
     String(fieldArray(rift, 'gems').length),
+    String(fieldValue(instance, 'perfected')),
+    fieldString(instance, 'name') ?? '',
   ].join('|');
 }
 

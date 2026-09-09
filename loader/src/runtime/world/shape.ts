@@ -94,7 +94,13 @@ const SHAPE: Record<keyof Entity, FieldSpec> = {
   mainhandItemId: { kind: 'string', nullable: true },
   offhandItemId: { kind: 'string', nullable: true },
   weaponSkinId: { kind: 'string', nullable: true },
+  mountSkinId: { kind: 'string', nullable: true },
   mountKey: { kind: 'string' },
+  // Optional because a server predating game 0.42.0 never sends `cbt` and the
+  // client's own entity factory does not manufacture one, so absence is the
+  // honest reading rather than drift. This walks the live PLAYER, which is the
+  // only entity the field is ever written on.
+  inCombat: { kind: 'boolean', optional: true },
   helmHidden: { kind: 'boolean' },
   afk: { kind: 'boolean' },
   sitting: { kind: 'boolean' },
