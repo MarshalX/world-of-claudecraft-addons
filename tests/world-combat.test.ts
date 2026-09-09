@@ -143,6 +143,52 @@ function inputs(over: Partial<CombatInputs> = {}): CombatInputs {
 }
 
 describe('readCombat', () => {
+  // Game 0.42.0 began sending the sim's own flag for the player alone, as `cbt`
+  // on the self scalar cohort. These four cases are the whole of what makes the
+  // branch safe to put ABOVE the four that predate it.
+  it('answers from the sim flag on the player, above every other branch', () => {
+    expect(readCombat(inputs({ player: player({ inCombat: true }) }))).toEqual({
+      active: true,
+      source: 'self',
+    });
+  });
+
+  it('prefers the sim flag over a party row that disagrees', () => {
+    expect(readCombat(inputs({ player: player({ inCombat: true }), party: party(0) }))).toEqual({
+      active: true,
+      source: 'self',
+    });
+  });
+
+  // The asymmetry is the correctness of the branch rather than a shortcut. A
+  // server predating 0.42.0 never sends the bit and the client leaves it false,
+  // so a false here is "nobody said" and must fall through to the ladder that
+  // answered before. Reading it as an answer would reinstate the original trap:
+  // every fight reported over, on every server that has not been upgraded.
+  it('falls through to the older ladder when the flag is false rather than trusting it', () => {
+    expect(readCombat(inputs({ player: player({ inCombat: false }), party: party(1) }))).toEqual({
+      active: true,
+      source: 'party',
+    });
+  });
+
+  it('falls through when the server never sent the flag at all', () => {
+    const attacker = mob({ threat: new Map([[PLAYER_ID, 840]]) });
+
+    expect(
+      readCombat(inputs({ player: player({}), entities: new Map([[MOB_ID, attacker]]) })),
+    ).toEqual({ active: true, source: 'threat' });
+  });
+
+  // A corpse is not fighting, and the sim flag does not get to overrule that: the
+  // death branch is above every reading including this one.
+  it('is out of combat while dead even with the sim flag set', () => {
+    expect(readCombat(inputs({ player: player({ inCombat: true, dead: true }) }))).toEqual({
+      active: false,
+      source: 'none',
+    });
+  });
+
   it('answers from the party row when the player is grouped, and says so', () => {
     expect(readCombat(inputs({ party: party(1) }))).toEqual({ active: true, source: 'party' });
     expect(readCombat(inputs({ party: party(0) }))).toEqual({ active: false, source: 'party' });

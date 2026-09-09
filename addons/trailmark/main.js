@@ -88,6 +88,8 @@ const campsByMob = new Map();
 const clusterByItem = new Map();
 const npcs = new Map();
 const nodesByType = new Map();
+/** Patch id to its enclosing circle, plus every patch in order for the patchless case. */
+const farmPatches = new Map();
 const nodesByItem = new Map();
 const escorts = new Map();
 /** `<questId> <itemId>` to the mob templates whose tagged loot feeds it. */
@@ -174,6 +176,10 @@ function readObjective(value) {
     npc: stringAt(value, 'npc'),
     nodeType: stringAt(value, 'nodeType'),
     escort: stringAt(value, 'escort'),
+    // `patch` is null both when the objective names no patch and when the table is
+    // too old to carry one, and the two are the same answer here: circle every
+    // patch, which is what the game does for a patchless farm objective.
+    patch: stringAt(value, 'patch'),
   };
 }
 
@@ -307,6 +313,50 @@ function adoptEscorts(listed) {
   }
 }
 
+/**
+ * One enclosing circle per farming patch, the same bound the game draws.
+ *
+ * The circle encloses the BEDS rather than pinning the patch anchor, because a
+ * patch is a grid on a 5 yard pitch and its anchor is the centroid, so pinning the
+ * centre would put the marker between the beds instead of over them.
+ */
+function adoptFarmPatches(listed) {
+  for (const row of listed) {
+    const id = stringAt(row, 'id');
+    const beds = (arrayAt(row, 'beds') ?? [])
+      .map(readPoint)
+      .filter((bed) => bed !== null)
+      .map((bed) => [bed.x, bed.z]);
+    if (id === null || beds.length === 0) {
+      woc.warn(`${DATA_FILE}: a farm patch is not readable, leaving it out`, row);
+    } else {
+      farmPatches.set(id, clusterOf(beds));
+    }
+  }
+}
+
+/**
+ * Every patch a farm objective points at.
+ *
+ * A patchless objective circles EVERY patch rather than none, which is the game's
+ * own rule and not a fallback: the credit arm never reads `patchId`, so such an
+ * objective is honestly earned at any bed in the world and a single marker would
+ * send the player to one arbitrary hub. A NAMED patch this table does not carry
+ * resolves to nothing, because that is a stale table rather than a free choice.
+ */
+function pushFarm(found, seen, objective) {
+  if (typeof objective.patch === 'string') {
+    const one = farmPatches.get(objective.patch);
+    if (one !== undefined) {
+      pushArea(found, seen, { ...one, kind: 'farm' });
+    }
+    return;
+  }
+  for (const patch of farmPatches.values()) {
+    pushArea(found, seen, { ...patch, kind: 'farm' });
+  }
+}
+
 /** The quest-tagged loot join, precomputed, so nothing here ships a loot table. */
 function adoptDrops(listed) {
   for (const row of listed) {
@@ -352,6 +402,7 @@ function adopt(file) {
     ['npcs', adoptNpcs],
     ['nodes', adoptNodes],
     ['escorts', adoptEscorts],
+    ['farmPatches', adoptFarmPatches],
     ['drops', adoptDrops],
   ];
   for (const [name, take] of sections) {
@@ -472,6 +523,8 @@ function areasFor(questId, objective) {
     if (start !== undefined) {
       pushArea(found, seen, { ...start, radius: POINT_AREA_RADIUS, kind: 'escort' });
     }
+  } else if (objective.type === 'farm') {
+    pushFarm(found, seen, objective);
   }
   return found;
 }

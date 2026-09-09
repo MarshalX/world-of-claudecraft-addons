@@ -1,5 +1,5 @@
 {
-  "gameVersion": "0.41.4",
+  "gameVersion": "0.42.0",
   "source": "src/sim/data.ts (ITEMS), src/sim/bags.ts (BACKPACK_SLOTS, BAG_SOCKETS), src/sim/bag_pools.ts (isMaterialsOnlyBag, bagSlotsOf), src/sim/material_ids.ts (MATERIAL_ITEM_IDS)",
   "note": "The carried pool split. A general pool is backpackSlots plus every non-materialsOnly equipped bag; a materials pool is every materialsOnly one. A non-material item can only take general headroom; a material takes materials headroom first and spills into general. materials lists every id the game counts as one, derived rather than approximated by kind.",
   "backpackSlots": 16,
@@ -66,6 +66,12 @@
       "materialsOnly": false
     },
     {
+      "id": "sunspun_haversack",
+      "name": "Sunspun Haversack",
+      "slots": 16,
+      "materialsOnly": false
+    },
+    {
       "id": "travelers_knapsack",
       "name": "Traveler's Knapsack",
       "slots": 8,
@@ -101,7 +107,28 @@
       "id": "ashwood_log"
     },
     {
+      "id": "bandit_bandana"
+    },
+    {
+      "id": "bog_beet"
+    },
+    {
+      "id": "bog_beet_seed"
+    },
+    {
       "id": "bone_fragments"
+    },
+    {
+      "id": "brook_carrot"
+    },
+    {
+      "id": "brook_carrot_seed"
+    },
+    {
+      "id": "cogwheel_blank"
+    },
+    {
+      "id": "compost"
     },
     {
       "id": "cooking_salt"
@@ -110,13 +137,43 @@
       "id": "copper_ore"
     },
     {
+      "id": "cracked_ogre_tusk"
+    },
+    {
+      "id": "cracked_wyrm_scale"
+    },
+    {
       "id": "curved_tusk"
+    },
+    {
+      "id": "duskforged_billet"
     },
     {
       "id": "elderwood_log"
     },
     {
+      "id": "emberwing_cinderscale"
+    },
+    {
+      "id": "evergarden_greens"
+    },
+    {
+      "id": "evergarden_greens_seed"
+    },
+    {
+      "id": "evergarden_pumpkin"
+    },
+    {
+      "id": "evergarden_pumpkin_seed"
+    },
+    {
       "id": "fine_ashwood_log"
+    },
+    {
+      "id": "fine_bog_beet"
+    },
+    {
+      "id": "fine_brook_carrot"
     },
     {
       "id": "fine_copper_ore"
@@ -125,13 +182,37 @@
       "id": "fine_elderwood_log"
     },
     {
+      "id": "fine_evergarden_greens"
+    },
+    {
+      "id": "fine_evergarden_pumpkin"
+    },
+    {
+      "id": "fine_frost_gourd"
+    },
+    {
+      "id": "fine_frost_lentils"
+    },
+    {
+      "id": "fine_gilded_sunmelon"
+    },
+    {
+      "id": "fine_gilded_yam"
+    },
+    {
       "id": "fine_goldleaf_herb"
+    },
+    {
+      "id": "fine_highland_barley"
     },
     {
       "id": "fine_iron_ore"
     },
     {
       "id": "fine_ironbark_log"
+    },
+    {
+      "id": "fine_marsh_rice"
     },
     {
       "id": "fine_silverleaf_herb"
@@ -143,7 +224,40 @@
       "id": "fine_thorium_ore"
     },
     {
+      "id": "fine_thornpeak_cabbage"
+    },
+    {
+      "id": "fine_vale_wheat"
+    },
+    {
+      "id": "forgefold_plating"
+    },
+    {
+      "id": "frost_gourd"
+    },
+    {
+      "id": "frost_gourd_seed"
+    },
+    {
+      "id": "frost_lentils"
+    },
+    {
+      "id": "frost_lentils_seed"
+    },
+    {
       "id": "game_meat"
+    },
+    {
+      "id": "gilded_sunmelon"
+    },
+    {
+      "id": "gilded_sunmelon_seed"
+    },
+    {
+      "id": "gilded_yam"
+    },
+    {
+      "id": "gilded_yam_seed"
     },
     {
       "id": "glass_vial"
@@ -153,6 +267,15 @@
     },
     {
       "id": "goldleaf_herb"
+    },
+    {
+      "id": "growth_tonic"
+    },
+    {
+      "id": "highland_barley"
+    },
+    {
+      "id": "highland_barley_seed"
     },
     {
       "id": "homespun_cloth"
@@ -170,7 +293,28 @@
       "id": "linen_scrap"
     },
     {
+      "id": "lucent_reagent"
+    },
+    {
+      "id": "marsh_rice"
+    },
+    {
+      "id": "marsh_rice_seed"
+    },
+    {
+      "id": "mudfin_scale"
+    },
+    {
+      "id": "old_cragmaws_pelt"
+    },
+    {
+      "id": "precision_chassis"
+    },
+    {
       "id": "prime_cut"
+    },
+    {
+      "id": "prismglass_setting"
     },
     {
       "id": "pristine_claw"
@@ -185,10 +329,19 @@
       "id": "pristine_venom_gland"
     },
     {
+      "id": "quickening_catalyst"
+    },
+    {
       "id": "raw_bog_eel"
     },
     {
+      "id": "raw_deepbarb_catfish"
+    },
+    {
       "id": "raw_frostgill_trout"
+    },
+    {
+      "id": "raw_hollowgill_sturgeon"
     },
     {
       "id": "raw_marsh_pike"
@@ -198,6 +351,9 @@
     },
     {
       "id": "raw_river_perch"
+    },
+    {
+      "id": "raw_stillmere_salmon"
     },
     {
       "id": "raw_stonescale_carp"
@@ -221,6 +377,12 @@
       "id": "rough_hide"
     },
     {
+      "id": "sablewax_vellum"
+    },
+    {
+      "id": "seasoned_stock"
+    },
+    {
       "id": "sharp_claw"
     },
     {
@@ -242,16 +404,43 @@
       "id": "sunpetal_herb"
     },
     {
+      "id": "sunspun_bolt"
+    },
+    {
+      "id": "tallow_candle"
+    },
+    {
       "id": "tanning_agent"
     },
     {
       "id": "thorium_ore"
     },
     {
+      "id": "thornpeak_cabbage"
+    },
+    {
+      "id": "thornpeak_cabbage_seed"
+    },
+    {
+      "id": "vale_wheat"
+    },
+    {
+      "id": "vale_wheat_seed"
+    },
+    {
       "id": "venom_gland"
     },
     {
+      "id": "withered_husks"
+    },
+    {
       "id": "wolf_fang"
+    },
+    {
+      "id": "wyrmfall_core"
+    },
+    {
+      "id": "wyrmhide_cording"
     }
   ]
 }

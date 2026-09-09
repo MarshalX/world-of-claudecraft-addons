@@ -79,6 +79,27 @@ export interface Aura {
    * is the field to read before telling a player their trinket will help.
    */
   unbreakableControl?: boolean;
+  /**
+   * Set on a buff a FLASK minted, and on nothing else.
+   *
+   * An elixir and a scroll can mint the very same aura id with the same effect
+   * and the same duration, so nothing else on this shape tells them apart. What
+   * differs is what happens next: a flask survives your death, and it is a
+   * singleton, so drinking a second one sheds the first whatever it did. That is
+   * why this is the field to read for "am I flasked" rather than the aura id.
+   *
+   * It survives death, not a logout: auras are session state and none of them is
+   * persisted.
+   *
+   * Absent means "not from a flask" rather than "unknown", because the game
+   * sends it presence-only. It says nothing about dispels: a flask is protected,
+   * but so are several things that are not flasks, and `world.dispellable` is
+   * the answer to that question.
+   *
+   * Added in game 0.42.0 and in API minor 11. Before that release nothing on the
+   * wire distinguished the three sources.
+   */
+  flask?: boolean;
 }
 
 /**
@@ -145,9 +166,14 @@ export type EquipSlot =
  * The public part of one worn item's instance payload.
  *
  * This is the SERVER's projection rather than a narrowing done by the loader:
- * the send site copies exactly these three out of the full payload and drops the
+ * the send site copies exactly these six out of the full payload and drops the
  * rest, so an inspecting client is never sent an item's bound owner, its
- * remaining charges, or its rift forge record.
+ * remaining charges, or how far along its Perfecting track it has come.
+ *
+ * It was three until game 0.42.0, which added `name` and `perfected` and moved
+ * `rift` here from the owner-only record. A field appearing here is the game
+ * deciding an inspecting player should see it, so the set grows by their
+ * decision and not by ours.
  */
 export interface PublicItemInstance {
   /** The player who signed or crafted this specific copy. */
@@ -162,6 +188,57 @@ export interface PublicItemInstance {
    * payload that carries it is an old copy still loading as before.
    */
   rolled?: { quality?: string; stats?: Record<string, number>; masterwork?: boolean };
+  /**
+   * The name its owner chose when this copy was promoted to legendary.
+   *
+   * Player-authored free text, so treat it as text: it is not an id, it resolves
+   * to nothing, and it is the one string on this shape another player wrote.
+   * Absent on everything that was never promoted, which is almost everything.
+   *
+   * Added in API minor 11.
+   */
+  name?: string;
+  /**
+   * This copy finished its Perfecting track.
+   *
+   * Only ever true; absent is an ordinary copy. It is the FINISHED bit and not a
+   * rank: how far an unfinished copy has come is owner-only and is on
+   * `ItemInstance`, so on an inspected player this answers yes or nothing.
+   *
+   * Added in API minor 11.
+   */
+  perfected?: true;
+  /**
+   * Long-term Rift progression, for a piece earned there.
+   *
+   * `tier` is content and is left a string for the same reason `AuraKind` is: a
+   * copy of the union here would go stale while looking authoritative.
+   * `rolled.stats` is the aggregate the game actually applies; this record is
+   * the bounded input the game rebuilds that aggregate from, so the two agreeing
+   * is the game's job rather than something to check.
+   *
+   * Readable on an INSPECTED player from API minor 11: game 0.42.0 moved it into
+   * the public projection. Before that it was only ever your own.
+   */
+  rift?: {
+    sourceEventId: string;
+    tier: string;
+    power: number;
+    upgradeLevel: number;
+    maxUpgradeLevel: number;
+    gemSlots: number;
+    gems: string[];
+    /**
+     * Legacy, and absent on anything current.
+     *
+     * The old additive base line, kept only so a copy persisted before the band
+     * ladder still types. The game never reads it and drops it on load, so do
+     * not build a stat display on it: `rolled.stats` is the aggregate.
+     */
+    baseStats?: Record<string, number>;
+    /** Legacy in the same way: the retired forge enchant, never read. */
+    enchant?: { stat: string; value: number };
+  };
 }
 
 /**
@@ -171,7 +248,7 @@ export interface PublicItemInstance {
  * Reachable through `world.inventory` and `world.bank` and nowhere else, which
  * mirrors where the game itself paints the padlock: its bag grid and both bank
  * grids. Every other surface carrying a stack has already been projected down to
- * the three public fields by the server, so there a lock cannot be read at all
+ * the public fields by the server, so there a lock cannot be read at all
  * rather than reading as absent.
  *
  * Added in API minor 6.
@@ -210,24 +287,28 @@ export interface ItemInstance extends PublicItemInstance {
   /** Remaining uses per effect id, for a charge-limited piece. */
   charges?: Record<string, number>;
   /**
-   * Long-term Rift progression, for a piece earned there.
+   * How far along the Perfecting track this copy has come: 1 up to one below the
+   * top rank.
    *
-   * `tier` is content and is left a string for the same reason `AuraKind` is: a
-   * copy of the union here would go stale while looking authoritative.
-   * `rolled.stats` is the aggregate the game actually applies; this record
-   * explains how it was earned.
+   * Your own only. The server's public projection carries `perfected` and not
+   * this, so a copy you inspect on somebody else says whether it FINISHED and
+   * never how far an unfinished one got.
+   *
+   * Absent is rank zero. It is deleted rather than topped out when the track
+   * completes, so a copy has this or `perfected` and never both, and the pair to
+   * read for "in progress" is `perfecting !== undefined`.
+   *
+   * Added in API minor 11.
    */
-  rift?: {
-    sourceEventId: string;
-    tier: string;
-    power: number;
-    upgradeLevel: number;
-    maxUpgradeLevel: number;
-    baseStats: Record<string, number>;
-    enchant?: { stat: string; value: number };
-    gemSlots: number;
-    gems: string[];
-  };
+  perfecting?: number;
+  /**
+   * The Perfecting binding, which outlives the rank.
+   *
+   * Kept where a collection rank swap left the copy back at zero, so it is how a
+   * copy that HAS been on the track is told from one that never was. Only ever
+   * true. Added in API minor 11.
+   */
+  perfectingBound?: true;
 }
 
 /**
@@ -453,6 +534,20 @@ export interface Entity {
    * speed, so it is a reliable answer to "is that player mounted".
    */
   mountKey: string;
+  /**
+   * The worn mount SKIN drawn over whatever `mountKey` names, or null.
+   *
+   * An account cosmetic and purely a look: the sim never reads it, so speed and
+   * everything else still come from `mountKey`. That is the difference between
+   * the two, and it is why this one cannot answer "is that player mounted" -
+   * a skin can be worn while on foot, and `mountKey` is the field for that.
+   *
+   * A skin id rather than an item id, so `ui.icon.item` does not resolve one,
+   * exactly as with `weaponSkinId`.
+   *
+   * Added in game 0.42.0 and in API minor 11.
+   */
+  mountSkinId: string | null;
   /**
    * The player turned their helm off in the paperdoll, so the composed body
    * renders without it.

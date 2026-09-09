@@ -1,6 +1,6 @@
 {
-  "gameVersion": "0.41.4",
-  "source": "src/sim/data.ts, src/sim/quest_targets.ts, src/sim/types.ts, src/sim/content/*.ts",
+  "gameVersion": "0.42.0",
+  "source": "src/sim/data.ts, src/sim/quest_targets.ts, src/sim/types.ts, src/sim/content/farm_patches.ts, src/sim/content/*.ts",
   "zones": [
     {
       "id": "eastbrook_vale",
@@ -135,6 +135,30 @@
           "count": 5,
           "label": "Ore vein harvested",
           "nodeType": "ore"
+        }
+      ]
+    },
+    {
+      "id": "q_farm_intro",
+      "name": "First Furrow",
+      "giver": "farmer_jessica",
+      "turnIn": ["farmer_jessica"],
+      "objectives": [
+        {
+          "type": "farm",
+          "count": 1,
+          "label": "Vale Wheat planted",
+          "action": "plant",
+          "crop": "vale_wheat",
+          "patch": "patch_eastbrook"
+        },
+        {
+          "type": "farm",
+          "count": 1,
+          "label": "Vale Wheat harvested",
+          "action": "harvest",
+          "crop": "vale_wheat",
+          "patch": "patch_eastbrook"
         }
       ]
     },
@@ -557,6 +581,34 @@
           "count": 8,
           "label": "Game Meat delivered",
           "item": "game_meat"
+        }
+      ]
+    },
+    {
+      "id": "q_prof_workorder_kitchens_wheat",
+      "name": "Kitchens Wheat Order",
+      "giver": "cook_marlow",
+      "turnIn": ["cook_marlow"],
+      "objectives": [
+        {
+          "type": "collect",
+          "count": 8,
+          "label": "Vale Wheat delivered",
+          "item": "vale_wheat"
+        }
+      ]
+    },
+    {
+      "id": "q_prof_workorder_kitchens_rice",
+      "name": "Kitchens Rice Order",
+      "giver": "cook_marlow",
+      "turnIn": ["cook_marlow"],
+      "objectives": [
+        {
+          "type": "collect",
+          "count": 5,
+          "label": "Marsh Rice delivered",
+          "item": "marsh_rice"
         }
       ]
     },
@@ -1203,7 +1255,7 @@
         {
           "type": "kill",
           "count": 12,
-          "label": "Wyrmcult Zealot slain",
+          "label": "Broodsworn Zealot slain",
           "mob": "wyrmcult_zealot"
         }
       ]
@@ -1307,7 +1359,7 @@
         {
           "type": "kill",
           "count": 6,
-          "label": "Wyrmcult Necromancer slain",
+          "label": "Broodsworn Necromancer slain",
           "mob": "wyrmcult_necromancer"
         }
       ]
@@ -2122,14 +2174,14 @@
     },
     {
       "id": "q_fv_frostmane_tyrant",
-      "name": "The Frostmane Tyrant",
+      "name": "The Rimemane Tyrant",
       "giver": "warden_kaldra",
       "turnIn": ["warden_kaldra"],
       "objectives": [
         {
           "type": "kill",
           "count": 1,
-          "label": "The Frostmane slain",
+          "label": "The Rimemane slain",
           "mob": "frostmane_yeti"
         }
       ]
@@ -2185,7 +2237,7 @@
         {
           "type": "kill",
           "count": 8,
-          "label": "Harvest Sprite driven off",
+          "label": "Gleaning Sprite driven off",
           "mob": "harvest_sprite"
         },
         {
@@ -2490,7 +2542,7 @@
     },
     {
       "id": "q_ww_bells_of_gallowmere",
-      "name": "The Bells of Gallowmere",
+      "name": "The Bells of Gibbetmere",
       "giver": "lampman_cobb",
       "turnIn": ["sexton_marrow"],
       "objectives": [
@@ -2601,7 +2653,7 @@
         {
           "type": "escort",
           "count": 1,
-          "label": "Gravedigger Mosley walked safely back to Gallowmere",
+          "label": "Gravedigger Mosley walked safely back to Gibbetmere",
           "escort": "esc_ww_mosley"
         }
       ]
@@ -2699,7 +2751,7 @@
         {
           "type": "interact",
           "count": 1,
-          "label": "Find Okku at the Vinefall",
+          "label": "Find Okrim at the Vinefall",
           "npc": "hermit_okku"
         }
       ]
@@ -3327,6 +3379,62 @@
           "mob": "varkhul_forgefather_of_the_last_flame"
         }
       ]
+    },
+    {
+      "id": "q_forgefathers_requiem",
+      "name": "The Forgefather's Requiem",
+      "giver": "archivist_maelin_ember_projection",
+      "turnIn": ["archivist_maelin_ember_projection"],
+      "objectives": [
+        {
+          "type": "collect",
+          "count": 1,
+          "label": "Forgefather's Ember recovered",
+          "item": "forgefathers_ember"
+        }
+      ]
+    },
+    {
+      "id": "q_requiem_at_the_forge",
+      "name": "Requiem at the Forge",
+      "giver": "archivist_maelin_ember_projection",
+      "turnIn": ["archivist_maelin_ember_projection"],
+      "objectives": [
+        {
+          "type": "collect",
+          "count": 1,
+          "label": "Forgebreaker forged and carried",
+          "item": "varkhul_forgebreaker"
+        }
+      ]
+    },
+    {
+      "id": "q_hub_know_your_numbers",
+      "name": "Know Your Numbers",
+      "giver": "drillmaster_hale",
+      "turnIn": ["drillmaster_hale"],
+      "objectives": [
+        {
+          "type": "interact",
+          "count": 10,
+          "label": "Blow landed on the Training Dummy",
+          "object": "hub_dummy_drill"
+        }
+      ]
+    },
+    {
+      "id": "q_hub_healing_numbers",
+      "name": "Numbers That Heal",
+      "giver": "drillmaster_hale",
+      "turnIn": ["drillmaster_hale"],
+      "objectives": [
+        {
+          "type": "interact",
+          "count": 3,
+          "label": "Effective heal landed on the Healing Dummy",
+          "object": "hub_healing_drill"
+        }
+      ]
     }
   ],
   "camps": [
@@ -3890,14 +3998,14 @@
     },
     {
       "mob": "dune_troll",
-      "x": 460,
-      "z": 2140,
+      "x": 412,
+      "z": 2030,
       "radius": 10
     },
     {
       "mob": "dune_troll",
-      "x": 476,
-      "z": 2124,
+      "x": 427,
+      "z": 2044,
       "radius": 8
     },
     {
@@ -4921,6 +5029,12 @@
       "z": -122.64714310642654
     },
     {
+      "id": "farmer_jessica",
+      "name": "Farmer Jessica",
+      "x": -15.5,
+      "z": -81.5
+    },
+    {
       "id": "warden_fenwick",
       "name": "Warden Fenwick",
       "x": 4.824455435060822,
@@ -4967,6 +5081,12 @@
       "name": "Tanner Hesk",
       "x": 3.053383957289929,
       "z": 315.5600325924389
+    },
+    {
+      "id": "farmer_teasel",
+      "name": "Farmer Teasel",
+      "x": -21,
+      "z": 333.5
     },
     {
       "id": "captain_thessaly",
@@ -5039,6 +5159,12 @@
       "name": "Alchemist Verane",
       "x": 8.5,
       "z": 658
+    },
+    {
+      "id": "farmer_hollis",
+      "name": "Farmer Hollis",
+      "x": -18,
+      "z": 695.5
     },
     {
       "id": "tidewatcher_ondrel",
@@ -5258,7 +5384,7 @@
     },
     {
       "id": "hermit_okku",
-      "name": "Okku",
+      "name": "Okrim",
       "x": -397,
       "z": 1068
     },
@@ -5285,6 +5411,12 @@
       "name": "Gardener Yew",
       "x": 348,
       "z": 1160
+    },
+    {
+      "id": "farmer_verbena",
+      "name": "Farmer Verbena",
+      "x": 348.5,
+      "z": 867
     },
     {
       "id": "watcher_maren",
@@ -5345,6 +5477,12 @@
       "name": "Frightened Nell",
       "x": 296,
       "z": 80
+    },
+    {
+      "id": "riftwright_maelis",
+      "name": "Riftwright Maelis",
+      "x": 377,
+      "z": 7
     },
     {
       "id": "wayfarer_bryn",
@@ -6339,6 +6477,120 @@
       "z": 8
     }
   ],
+  "farmPatches": [
+    {
+      "id": "patch_eastbrook",
+      "beds": [
+        {
+          "x": -24,
+          "z": -84
+        },
+        {
+          "x": -19,
+          "z": -84
+        },
+        {
+          "x": -24,
+          "z": -79
+        },
+        {
+          "x": -19,
+          "z": -79
+        }
+      ]
+    },
+    {
+      "id": "patch_mirefen",
+      "beds": [
+        {
+          "x": -26,
+          "z": 339
+        },
+        {
+          "x": -21,
+          "z": 339
+        },
+        {
+          "x": -16,
+          "z": 339
+        },
+        {
+          "x": -26,
+          "z": 344
+        },
+        {
+          "x": -21,
+          "z": 344
+        }
+      ]
+    },
+    {
+      "id": "patch_thornpeak",
+      "beds": [
+        {
+          "x": -23,
+          "z": 685
+        },
+        {
+          "x": -18,
+          "z": 685
+        },
+        {
+          "x": -13,
+          "z": 685
+        },
+        {
+          "x": -23,
+          "z": 690
+        },
+        {
+          "x": -18,
+          "z": 690
+        },
+        {
+          "x": -13,
+          "z": 690
+        }
+      ]
+    },
+    {
+      "id": "patch_evergarden",
+      "beds": [
+        {
+          "x": 341,
+          "z": 872
+        },
+        {
+          "x": 346,
+          "z": 872
+        },
+        {
+          "x": 351,
+          "z": 872
+        },
+        {
+          "x": 356,
+          "z": 872
+        },
+        {
+          "x": 341,
+          "z": 877
+        },
+        {
+          "x": 346,
+          "z": 877
+        },
+        {
+          "x": 351,
+          "z": 877
+        },
+        {
+          "x": 356,
+          "z": 877
+        }
+      ]
+    }
+  ],
   "escorts": [
     {
       "id": "esc_fv_wren",
@@ -6491,6 +6743,11 @@
       "quest": "q_nythraxis_bound_guardian",
       "item": "kings_signet",
       "mobs": ["bound_guardian"]
+    },
+    {
+      "quest": "q_forgefathers_requiem",
+      "item": "forgefathers_ember",
+      "mobs": ["varkhul_forgefather_of_the_last_flame"]
     },
     {
       "quest": "q_drowned_choir",

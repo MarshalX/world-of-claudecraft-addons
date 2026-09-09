@@ -1,6 +1,6 @@
 {
-  "gameVersion": "0.41.4",
-  "source": "src/sim/data.ts, src/sim/content/dungeons.ts, src/sim/types.ts, src/sim/mob/healer_channel.ts, src/sim/encounters/nythraxis.ts, src/sim/encounters/ignivar.ts, src/sim/encounters/varkhul.ts, src/sim/ignivar_arena.ts, src/sim/ignivar_meteors.ts, src/sim/ignivar_forge_wave.ts, src/sim/ignivar_forge_judgment.ts, src/sim/ignivar_raid_ids.ts, src/sim/varkhul_shared_pyre.ts, src/sim/varkhul_cinder_artificer.ts, src/sim/varkhul_forge_intermission.ts, src/sim/encounters/*_dialogue.ts",
+  "gameVersion": "0.42.0",
+  "source": "src/sim/data.ts, src/sim/content/dungeons.ts, src/sim/types.ts, src/sim/mob/healer_channel.ts, src/sim/encounters/nythraxis.ts, src/sim/nythraxis_dread_curse.ts, src/sim/nythraxis_kings_wrath.ts, src/sim/encounters/ignivar.ts, src/sim/encounters/varkhul.ts, src/sim/ignivar_arena.ts, src/sim/ignivar_meteors.ts, src/sim/ignivar_forge_wave.ts, src/sim/ignivar_forge_judgment.ts, src/sim/ignivar_raid_ids.ts, src/sim/varkhul_shared_pyre.ts, src/sim/varkhul_cinder_artificer.ts, src/sim/varkhul_forge_intermission.ts, src/sim/encounters/*_dialogue.ts",
   "encounters": [
     {
       "id": "nythraxis",
@@ -135,18 +135,18 @@
           "objects": [
             {
               "name": "Left Wardstone",
-              "x": -40,
-              "z": 79
+              "x": -30,
+              "z": 74
             },
             {
               "name": "Right Wardstone",
-              "x": 40,
-              "z": 79
+              "x": 30,
+              "z": 74
             },
             {
               "name": "Threshold Wardstone",
               "x": 0,
-              "z": 63
+              "z": 62
             }
           ]
         },
@@ -163,17 +163,21 @@
         {
           "kind": "enrage",
           "label": "Enrage",
-          "name": "Final Stand",
-          "aura": "nythraxis_final_stand",
-          "hp": 0.05
+          "name": "King's Wrath",
+          "aura": "nythraxis_kings_wrath",
+          "hp": 0.3,
+          "damageBonus": 0.2,
+          "damageBonusHeroic": 0.25
         },
         {
           "kind": "tankStacks",
           "label": "Tank",
           "aura": "nythraxis_dread_curse",
-          "perStack": 0.1,
-          "maxStacks": 10,
-          "heroicOnly": true
+          "perStack": 0.35,
+          "perStackHeroic": 0.45,
+          "maxStacks": 3,
+          "swapStacks": 2,
+          "heroicOnly": false
         },
         {
           "kind": "adds",

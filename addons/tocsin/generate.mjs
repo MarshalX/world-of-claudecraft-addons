@@ -71,6 +71,20 @@ const MODULES = {
 
 const SOURCES = {
   nythraxis: 'src/sim/encounters/nythraxis.ts',
+  // Game 0.42.0 lifted the whole Dread Curse mechanic out of the encounter into
+  // its own module. The encounter still drives the cadence and IMPORTS the id and
+  // the tuning from here, so the encounter source no longer contains either, and
+  // the id check stopped rather than writing a row with a renamed aura in it.
+  // Read the file that DECLARES the thing, never the one that re-exports or
+  // imports it: a text reader pointed at an import line finds the name and no
+  // value behind it, which is the quiet gap the hard stop exists to prevent.
+  nythraxisDreadCurse: 'src/sim/nythraxis_dread_curse.ts',
+  // The same extraction again, and a substantive one. Game 0.42.0 REPLACED the 5%
+  // Final Stand haste enrage with a third phase entered at 30%, in its own module.
+  // The old `NYTHRAXIS_FINAL_STAND_HP` and the `nythraxis_final_stand` aura are
+  // both gone from the sim, so both checks stopped rather than shipping a table
+  // telling a raid the enrage comes at 5%.
+  nythraxisKingsWrath: 'src/sim/nythraxis_kings_wrath.ts',
   ignivar: 'src/sim/encounters/ignivar.ts',
   varkhul: 'src/sim/encounters/varkhul.ts',
 };
@@ -78,6 +92,7 @@ const SOURCES = {
 const SOURCE_NOTE =
   'src/sim/data.ts, src/sim/content/dungeons.ts, src/sim/types.ts, ' +
   'src/sim/mob/healer_channel.ts, src/sim/encounters/nythraxis.ts, ' +
+  'src/sim/nythraxis_dread_curse.ts, src/sim/nythraxis_kings_wrath.ts, ' +
   'src/sim/encounters/ignivar.ts, src/sim/encounters/varkhul.ts, ' +
   'src/sim/ignivar_arena.ts, src/sim/ignivar_meteors.ts, src/sim/ignivar_forge_wave.ts, ' +
   'src/sim/ignivar_forge_judgment.ts, src/sim/ignivar_raid_ids.ts, ' +
@@ -476,7 +491,6 @@ const NYTHRAXIS_NUMBERS = {
   gravebreakerSplashMult: 'NYTHRAXIS_GRAVEBREAKER_SPLASH_MULT',
   raiseFallenEvery: 'NYTHRAXIS_RAISE_FALLEN_EVERY',
   phaseTwoHp: 'NYTHRAXIS_PHASE_TWO_HP',
-  finalStandHp: 'NYTHRAXIS_FINAL_STAND_HP',
   transitionSeconds: 'NYTHRAXIS_TRANSITION_DURATION',
   phaseTwoSettle: 'NYTHRAXIS_PHASE_TWO_SETTLE_DELAY',
   soulRendEvery: 'NYTHRAXIS_SOUL_REND_EVERY',
@@ -493,10 +507,55 @@ const NYTHRAXIS_NUMBERS = {
   deathlessPctHeroic: 'NYTHRAXIS_DEATHLESS_PCT_HEROIC',
   deathlessSoulRendLockout: 'NYTHRAXIS_DEATHLESS_SOUL_REND_LOCKOUT',
   heroicSummonChannel: 'NYTHRAXIS_HEROIC_SUMMON_CHANNEL',
+};
+
+/**
+ * The Dread Curse tuning, which lives in its own module since game 0.42.0.
+ *
+ * Separate from the block above because it is read from a DIFFERENT file, and the
+ * failure message has to name the file that actually stopped declaring something.
+ *
+ * `perStack` split by difficulty in the same release, which is the substantive
+ * half: the mechanic runs on both difficulties now and heroic only raises the
+ * per-stack bite, so the two figures follow the `deathlessPct`/`deathlessPctHeroic`
+ * pairing already in the block above rather than inventing a shape.
+ */
+const NYTHRAXIS_DREAD_CURSE_NUMBERS = {
   dreadCurseEvery: 'NYTHRAXIS_DREAD_CURSE_EVERY',
   dreadCurseDuration: 'NYTHRAXIS_DREAD_CURSE_DURATION',
-  dreadCursePerStack: 'NYTHRAXIS_DREAD_CURSE_PER_STACK',
+  dreadCursePerStack: 'NYTHRAXIS_DREAD_CURSE_PER_STACK_NORMAL',
+  dreadCursePerStackHeroic: 'NYTHRAXIS_DREAD_CURSE_PER_STACK_HEROIC',
   dreadCurseMaxStacks: 'NYTHRAXIS_DREAD_CURSE_MAX_STACKS',
+  dreadCurseHitMaxHp: 'NYTHRAXIS_DREAD_CURSE_HIT_MAX_HP_NORMAL',
+  dreadCurseHitMaxHpHeroic: 'NYTHRAXIS_DREAD_CURSE_HIT_MAX_HP_HEROIC',
+  dreadCurseSwapStacks: 'NYTHRAXIS_DREAD_CURSE_TANK_SWAP_STACKS',
+};
+
+/** The one aura id that moved out of the encounter with its mechanic. */
+const NYTHRAXIS_DREAD_CURSE_AURA_IDS = {
+  dreadCurse: 'nythraxis_dread_curse',
+};
+
+/**
+ * The King's Wrath phase, which replaced the Final Stand enrage at game 0.42.0.
+ *
+ * Read from its own module for the reason the Dread Curse block is: the encounter
+ * imports these and no longer declares them. The name is an EXPORT here rather
+ * than a declared literal, unlike every other name in this file, because the game
+ * happens to export it, and a read beats a transcription wherever one is offered.
+ */
+const NYTHRAXIS_KINGS_WRATH_NUMBERS = {
+  kingsWrathHp: 'NYTHRAXIS_PHASE_THREE_HP',
+  kingsWrathDamageBonus: 'NYTHRAXIS_KINGS_WRATH_DAMAGE_BONUS_NORMAL',
+  kingsWrathDamageBonusHeroic: 'NYTHRAXIS_KINGS_WRATH_DAMAGE_BONUS_HEROIC',
+};
+
+const NYTHRAXIS_KINGS_WRATH_AURA_IDS = {
+  kingsWrath: 'nythraxis_kings_wrath',
+};
+
+const NYTHRAXIS_KINGS_WRATH_AURA_NAMES = {
+  kingsWrath: "King's Wrath",
 };
 
 /** Declared rather than read: these are string literals no export reaches. */
@@ -506,17 +565,6 @@ const NYTHRAXIS_AURA_IDS = {
   deathlessStun: 'nythraxis_deathless_stun',
   wardstoneLit: 'nythraxis_wardstone_lit',
   soulRend: 'nythraxis_soul_rend',
-  dreadCurse: 'nythraxis_dread_curse',
-  finalStand: 'nythraxis_final_stand',
-};
-
-/**
- * Declared for the same reason the ids are, and checked the same way: an aura's display name
- * is a string literal in an `applyAura` call that no export reaches. Only the ones an addon
- * SHOWS are here, since a name nothing draws is a name nothing can get wrong.
- */
-const NYTHRAXIS_AURA_NAMES = {
-  finalStand: 'Final Stand',
 };
 
 /**
@@ -548,10 +596,16 @@ const NYTHRAXIS_ANSWERS = new Map([
 /** The answers, hardest first: the addon draws and ranks by these words. */
 const ANSWER_ORDER = ['interrupt', 'control', 'tank', 'kill'];
 
-function nythraxisTuning(constants) {
+function nythraxisTuning(constants, dreadCurseConstants, kingsWrathConstants) {
   const out = {};
   for (const [key, name] of Object.entries(NYTHRAXIS_NUMBERS)) {
     out[key] = privateNumber(constants, name, SOURCES.nythraxis);
+  }
+  for (const [key, name] of Object.entries(NYTHRAXIS_DREAD_CURSE_NUMBERS)) {
+    out[key] = privateNumber(dreadCurseConstants, name, SOURCES.nythraxisDreadCurse);
+  }
+  for (const [key, name] of Object.entries(NYTHRAXIS_KINGS_WRATH_NUMBERS)) {
+    out[key] = privateNumber(kingsWrathConstants, name, SOURCES.nythraxisKingsWrath);
   }
   const arc = constants.get('NYTHRAXIS_GRAVEBREAKER_HALF_ARC');
   if (arc !== HALF_ARC_SOURCE) {
@@ -726,25 +780,83 @@ function nythraxisBlocks(t, deps) {
     {
       // The last stretch of the fight, and the one state on this boss that is not a mechanic
       // to answer: nothing is done about it except to know it is coming.
+      //
+      // Game 0.42.0 replaced the 5% Final Stand haste enrage with this, a third PHASE
+      // entered at 30% carrying a permanent damage bonus. Six times as much fight
+      // happens under it, so the old row was not merely mislabelled: it put the
+      // warning at the wrong end of the encounter.
       kind: 'enrage',
       // The heading names the SHAPE and the row names the aura, the way the adds block heads
       // 'Adds' over each add's own name. One row is still a row.
       label: 'Enrage',
-      name: NYTHRAXIS_AURA_NAMES.finalStand,
-      aura: NYTHRAXIS_AURA_IDS.finalStand,
-      hp: t.finalStandHp,
+      name: NYTHRAXIS_KINGS_WRATH_AURA_NAMES.kingsWrath,
+      aura: NYTHRAXIS_KINGS_WRATH_AURA_IDS.kingsWrath,
+      hp: t.kingsWrathHp,
+      damageBonus: t.kingsWrathDamageBonus,
+      damageBonusHeroic: t.kingsWrathDamageBonusHeroic,
     },
     {
       kind: 'tankStacks',
       label: 'Tank',
-      aura: NYTHRAXIS_AURA_IDS.dreadCurse,
+      aura: NYTHRAXIS_DREAD_CURSE_AURA_IDS.dreadCurse,
       perStack: t.dreadCursePerStack,
+      perStackHeroic: t.dreadCursePerStackHeroic,
       maxStacks: t.dreadCurseMaxStacks,
-      // Its presence is itself the heroic tell: the boss applies it on no other difficulty.
-      heroicOnly: true,
+      // The stack count at which the other tank taunts. The game publishes this to
+      // its own guide, so it is the one figure here a player is expected to act on
+      // rather than infer from the cap.
+      swapStacks: t.dreadCurseSwapStacks,
+      // NOT heroicOnly, and it said otherwise until game 0.42.0. The mechanic runs
+      // on both difficulties now ("the Nythraxis tank-swap debuff, on BOTH
+      // difficulties", src/sim/nythraxis_dread_curse.ts), and heroic raises only
+      // the per-stack bite. A normal-difficulty tank was being told this would not
+      // happen to them.
+      heroicOnly: false,
     },
     nythraxisAddsBlock(deps),
   ];
+}
+
+/**
+ * One mechanic module the encounter no longer declares, checked and read.
+ *
+ * Game 0.42.0 lifted two of Nythraxis's mechanics into modules of their own, and
+ * this is what a third extraction costs: a `where` and its id and name tables.
+ * The checks stay against the DECLARING file, so a rename still stops here rather
+ * than writing a row naming an aura that no longer exists.
+ */
+function extractedMechanic(where, source, ids, names) {
+  checkIds(source, ids, 'auras', where);
+  if (names !== undefined) {
+    checkIds(source, names, 'aura names', where);
+  }
+  return constantsIn(source, where);
+}
+
+/**
+ * Every id and name check for this encounter, and the tuning that survives them.
+ *
+ * Split out of `nythraxisRow` when game 0.42.0 took the mechanic count from one
+ * source file to three: the row builder describes the SHAPE of the encounter, and
+ * the reading and checking of three files is a different job that had started to
+ * bury it.
+ */
+function nythraxisChecked(deps, source, constants) {
+  checkIds(source, NYTHRAXIS_AURA_IDS, 'auras', SOURCES.nythraxis);
+  const owned = Object.fromEntries(NYTHRAXIS_OWNED_CASTS.map((k) => [k, NYTHRAXIS_CAST_IDS[k]]));
+  checkIds(source, owned, 'casts', SOURCES.nythraxis);
+  const dreadCurseConstants = extractedMechanic(
+    SOURCES.nythraxisDreadCurse,
+    deps.sources.nythraxisDreadCurse,
+    NYTHRAXIS_DREAD_CURSE_AURA_IDS,
+  );
+  const kingsWrathConstants = extractedMechanic(
+    SOURCES.nythraxisKingsWrath,
+    deps.sources.nythraxisKingsWrath,
+    NYTHRAXIS_KINGS_WRATH_AURA_IDS,
+    NYTHRAXIS_KINGS_WRATH_AURA_NAMES,
+  );
+  return nythraxisTuning(constants, dreadCurseConstants, kingsWrathConstants);
 }
 
 function nythraxisRow(deps) {
@@ -755,11 +867,7 @@ function nythraxisRow(deps) {
   if (wardItemId === undefined) {
     return fail(`${SOURCES.nythraxis} has no NYTHRAXIS_WARDSTONE_ITEM_ID`);
   }
-  checkIds(source, NYTHRAXIS_AURA_IDS, 'auras', SOURCES.nythraxis);
-  checkIds(source, NYTHRAXIS_AURA_NAMES, 'aura names', SOURCES.nythraxis);
-  const owned = Object.fromEntries(NYTHRAXIS_OWNED_CASTS.map((k) => [k, NYTHRAXIS_CAST_IDS[k]]));
-  checkIds(source, owned, 'casts', SOURCES.nythraxis);
-  const t = nythraxisTuning(constants);
+  const t = nythraxisChecked(deps, source, constants);
   const inner = {
     ...deps,
     def: dungeon(deps.dungeons, NYTHRAXIS_ARENA_ID),

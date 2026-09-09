@@ -93,7 +93,11 @@ interface TankBlock {
   label: string;
   aura: string;
   perStack: number;
+  /** The heroic per-stack figure, where the encounter splits it. New at game 0.42.0. */
+  perStackHeroic?: number;
   maxStacks: number;
+  /** The game's own published swap point, where the encounter publishes one. */
+  swapStacks?: number;
   heroicOnly: boolean;
 }
 
@@ -118,6 +122,9 @@ interface EnrageBlock {
   name: string;
   aura: string;
   hp: number;
+  /** What the phase adds to the boss's damage, where it is a phase rather than a haste buff. */
+  damageBonus?: number;
+  damageBonusHeroic?: number;
   countdown?: true;
   seconds?: number;
 }
@@ -991,8 +998,11 @@ describe('the settings', () => {
     h.frame();
     expect(h.shows('tankStacks')).toBe(false);
     expect(banner()).toContain('TAUNT');
-    // And the heroic tell still lands, so the figures do not stay on the normal ones.
-    expect(h.notes().join(' ')).not.toContain('Normal figures');
+    // The curse is NOT a heroic tell any more, so the caveat correctly stays. Game
+    // 0.42.0 put Dread Curse on both difficulties, and before it the mere presence
+    // of the aura was proof the fight was heroic. Asserting the caveat is gone here
+    // would be asserting the addon still believes that.
+    expect(h.notes().join(' ')).toContain('Normal figures');
   });
 });
 
@@ -1075,14 +1085,40 @@ describe('the tank block', () => {
     h.frame();
     expect(h.labelOf('tankStacks', 'tank')).toBe('Bronn');
     expect(h.valueOf('tankStacks', 'tank')).toBe('6 stacks');
-    expect(h.detailOf('tankStacks', 'tank')).toBe('+60% damage taken');
+    // Derived from the table rather than written out: the per-stack figure is
+    // content and moved from 0.1 to 0.35 at game 0.42.0, and a literal here is a
+    // second place that has to be remembered.
+    expect(h.detailOf('tankStacks', 'tank')).toBe(
+      `+${String(Math.round(6 * TANK.perStack * 100))}% damage taken`,
+    );
   });
 
-  it('latches heroic off the curse, so the normal caveat goes', async () => {
+  /**
+   * The inverse of what this asserted until game 0.42.0, and the reason is content
+   * rather than a fix: Dread Curse used to be applied on heroic alone, so seeing it
+   * WAS the difficulty tell. That release put it on both difficulties and split the
+   * per-stack bite instead, so the aura now says nothing about which fight this is
+   * and the caveat has to survive it. Pinned in this direction because a latch that
+   * silently came back would put heroic figures in front of a normal-difficulty
+   * tank with nothing on screen admitting it.
+   */
+  it('does not latch heroic off the curse, which runs on both difficulties now', async () => {
     const h = await start();
     h.give(BRONN, aura(TANK.aura, { stacks: 1, remaining: 45, duration: 45 }));
     h.frame();
-    expect(h.notes().join(' ')).not.toContain('Normal figures');
+    expect(h.notes().join(' ')).toContain('Normal figures');
+  });
+
+  /** The published swap point, which replaced a share of the cap as the warn threshold. */
+  it('calls the swap on the game’s own published stack count', async () => {
+    // Asserted rather than assumed: the point is optional on the shape, because only
+    // an encounter that publishes one carries it, and a table that stopped carrying
+    // Nythraxis's would silently put the threshold back on a share of the cap.
+    expect(TANK.swapStacks).toBeTypeOf('number');
+    const h = await start();
+    h.give(BRONN, aura(TANK.aura, { stacks: TANK.swapStacks ?? 0, remaining: 45, duration: 45 }));
+    h.frame();
+    expect(banner()).toContain('TAUNT');
   });
 
   it('says the other tank is not clear yet while their own aura is still running', async () => {
@@ -1107,7 +1143,11 @@ describe('the tank block', () => {
 
 describe('the enrage block', () => {
   it('says nothing while the boss is nowhere near it', async () => {
-    const h = await start({ hp: 500 });
+    // Comfortably above the watch threshold, which moved with the trigger: game
+    // 0.42.0 replaced the 5% Final Stand enrage with the 30% King's Wrath phase, so
+    // the old 500 health in this case is now INSIDE the window rather than nowhere
+    // near it.
+    const h = await start({ hp: 900 });
     h.frame();
     expect(h.shows('enrage')).toBe(false);
   });
@@ -1118,7 +1158,7 @@ describe('the enrage block', () => {
     // The heading names the shape and the row names the aura, so neither says the other twice.
     expect(h.headingOf('enrage')).toBe(ENRAGE.label);
     expect(h.labelOf('enrage', 'enrage')).toBe(ENRAGE.name);
-    expect(h.detailOf('enrage', 'enrage')).toContain('5%');
+    expect(h.detailOf('enrage', 'enrage')).toContain(`${String(Math.round(ENRAGE.hp * 100))}%`);
   });
 
   /**

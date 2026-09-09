@@ -1,5 +1,5 @@
 {
-  "gameVersion": "0.41.4",
+  "gameVersion": "0.42.0",
   "respawnSeconds": {
     "ore": 240,
     "wood": 240,
@@ -261,6 +261,10 @@
     "quickening_charm": {
       "kind": "respawnSpeed",
       "bonus": 1
+    },
+    "makers_charm": {
+      "kind": "quantity",
+      "bonus": 2
     }
   },
   "itemNames": {

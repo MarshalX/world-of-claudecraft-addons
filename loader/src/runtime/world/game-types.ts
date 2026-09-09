@@ -11,9 +11,13 @@
 // test is the WIRE, not the game's own type. Online, the client builds every
 // entity with defaults and fills in whatever the snapshot carried, so a field
 // the server never sends still EXISTS and holds its default forever. A shape
-// check cannot see that: `inCombat` is a real boolean on every entity and is
+// check cannot see that: `inCombat` was a real boolean on every entity and was
 // permanently false, which is how it got published and how the first example
-// addon built a feature on it. So a field earns a place here only if it was
+// addon built a feature on it. Game 0.42.0 began sending it for the PLAYER only
+// (`cbt` on the self scalar cohort), which is why it is declared below with the
+// narrowest doc line in this file rather than being the counterexample it used
+// to be: on every OTHER entity it is still the default and still that trap. So a
+// field earns a place here only if it was
 // found in `wireEntity` or in the self payload, and the self-only ones are
 // marked. Everything else is reachable through `world.raw`, which stays
 // `unknown` because the game promises nothing about it.
@@ -74,13 +78,38 @@ export interface Aura {
    */
   unbreakableControl?: boolean;
   /**
-   * A penalty only its own timer takes off: dispel, purge and cleanse all skip
-   * it. The recovery sicknesses are the family.
+   * An aura only its own timer takes off: dispel, cleanse, steal and any player
+   * purge all skip it.
+   *
+   * NOT a synonym for a penalty, which is what this said until game 0.42.0: the
+   * game sets it at four sites and two of them are things a player WANTS. The
+   * recovery sicknesses (`src/sim/spirit.ts`) and the cheater mark are the
+   * penalties; a flask's buff carries it so no dispel can strip it, and so does
+   * the warlock Fate Threads self-aura, whose loss would zero the kit. The
+   * `flask` marker below is how the first of those two is told apart.
+   *
+   * It scopes to PLAYER-driven counters only: a mob's Spellgnaw devour reads
+   * neither this flag nor the marker, so a flagged buff can still be eaten.
    *
    * On the wire as `und` and decoded presence-only, so absent means "not one"
    * rather than "unknown".
    */
   undispellable?: boolean;
+  /**
+   * Set on a buff a FLASK minted, and on nothing else.
+   *
+   * An elixir and a scroll can mint the very same aura id with the same effect,
+   * and only the flask survives death; the flask is also a singleton, so a
+   * second one sheds the first whatever it did. Nothing else on the aura tells
+   * these apart, which is the whole reason the game put a marker on the wire.
+   *
+   * A flask is not persisted: it survives death, not a logout or a restart.
+   *
+   * On the wire as `fl` from game 0.42.0 and decoded presence-only, so absent
+   * means "not from a flask" rather than "unknown". Dispel protection rides
+   * `undispellable` above and never this, so do not read one for the other.
+   */
+  flask?: boolean;
   /**
    * An aura with no natural expiry, which the game refuses to dispel or steal
    * whatever its polarity.
@@ -178,6 +207,22 @@ export interface Entity {
   maxResource: number;
   resourceType: ResourceType | null;
   dead: boolean;
+  /**
+   * The sim's own in-combat bit, for the PLAYER'S OWN ENTITY AND NOTHING ELSE.
+   *
+   * Sent as `cbt` on the self scalar cohort from game 0.42.0
+   * (`server/self_scalar_wire.ts`) and decoded onto this field
+   * (`src/net/combat_scalar_wire.ts`). On any other entity nothing writes it and
+   * it holds the client's default false for the whole session, which is the trap
+   * the header of this file is about.
+   *
+   * Deliberately NOT published: `world.combat` reads it as its highest-confidence
+   * branch and reports `source: 'self'` when it answered, which is the same bit
+   * without the field being reachable on units where it means nothing. It is also
+   * read POSITIVE-ONLY there, since a false cannot be told from a server that
+   * never sent it. Optional because that is exactly what an older server leaves.
+   */
+  inCombat?: boolean;
   /**
    * True once a player has RELEASED, which `dead` alone cannot tell you.
    *
@@ -323,6 +368,14 @@ export interface Entity {
    * speed, so it is a reliable answer to "is that player mounted".
    */
   mountKey: string;
+  /**
+   * The worn mount skin drawn over `mountKey`, or null.
+   *
+   * On the wire as `msk` in `identityFields` from game 0.42.0, one line under the
+   * `wsk` above. Render-only: the sim never reads it, so speed still comes from
+   * `mountKey` and a skin can be worn on foot.
+   */
+  mountSkinId: string | null;
   /** The paperdoll eye toggle: the composed body renders without its kit helm. */
   helmHidden: boolean;
 

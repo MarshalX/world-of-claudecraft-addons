@@ -1,5 +1,5 @@
 {
-  "gameVersion": "0.41.4",
+  "gameVersion": "0.42.0",
   "source": "src/sim (every applyAura literal carrying encounterOwned), src/sim/aura_classify.ts",
   "auras": [
     {
@@ -16,6 +16,54 @@
     },
     {
       "id": "ignivar_molten_armor",
+      "reason": "encounter"
+    },
+    {
+      "id": "nythraxis_ascension",
+      "reason": "encounter"
+    },
+    {
+      "id": "nythraxis_ascension_haste",
+      "reason": "encounter"
+    },
+    {
+      "id": "nythraxis_bone_storm",
+      "reason": "encounter"
+    },
+    {
+      "id": "nythraxis_bound",
+      "reason": "encounter"
+    },
+    {
+      "id": "nythraxis_bound_stun",
+      "reason": "encounter"
+    },
+    {
+      "id": "nythraxis_crown_endures",
+      "reason": "encounter"
+    },
+    {
+      "id": "nythraxis_crown_endures_haste",
+      "reason": "encounter"
+    },
+    {
+      "id": "nythraxis_dread_curse",
+      "reason": "encounter"
+    },
+    {
+      "id": "nythraxis_impaled",
+      "reason": "encounter"
+    },
+    {
+      "id": "nythraxis_kings_wrath",
+      "reason": "encounter"
+    },
+    {
+      "id": "nythraxis_soul_rend",
+      "reason": "encounter"
+    },
+    {
+      "id": "nythraxis_unbound",
       "reason": "encounter"
     },
     {

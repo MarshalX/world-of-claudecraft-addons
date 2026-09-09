@@ -72,20 +72,28 @@ export interface EntityCast {
  * Which signal answered a combat reading.
  *
  * It travels with the answer because the branches are not equally trustworthy.
- * `party` and `threat` are the server's own opinion, `pvp` is a field the server
- * fills, and `recent` is a five second timer over damage that involved you. An
- * addon that only acts on a certain reading can check; one that does not care
- * can ignore this entirely.
+ * `self` is the sim's own flag for you, `party` and `threat` are the server's
+ * opinion about the fight, `pvp` is a field the server fills, and `recent` is a
+ * five second timer over damage that involved you. An addon that only acts on a
+ * certain reading can check; one that does not care can ignore this entirely.
+ *
+ * `self` was added in API minor 11, for game 0.42.0. A loader talking to an older
+ * server never reports it and answers exactly as before, so a `switch` written
+ * without it still runs; it is a new member on a union you only ever READ.
  */
-export type CombatSource = 'party' | 'threat' | 'pvp' | 'recent' | 'none';
+export type CombatSource = 'self' | 'party' | 'threat' | 'pvp' | 'recent' | 'none';
 
 /**
  * Whether you are fighting.
  *
- * Derived, and it has to be: the server sends no combat flag for you. There IS
- * an `inCombat` on the client entity and the server never writes it, so it reads
- * false for an entire session, which is how an early version of the shipped
- * meter concluded that every fight had ended on every hit.
+ * Since game 0.42.0 the server sends its own combat flag for you, and `source`
+ * is `'self'` when that is what answered. It is still derived, because that bit
+ * is read positive-only: it lives on a field the client defaults to false, so a
+ * false cannot be told from a server that never sent one, and the older ladder
+ * (your party row, a mob's hate table, a PvP attacker, then recent damage) is
+ * what answers underneath. Reading the raw `inCombat` yourself is the trap that
+ * once had a shipped meter conclude every fight had ended on every hit: on every
+ * unit but you it is still permanently false.
  */
 export interface CombatState {
   active: boolean;

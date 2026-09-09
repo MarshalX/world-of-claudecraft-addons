@@ -1,5 +1,5 @@
 {
-  "gameVersion": "0.41.4",
+  "gameVersion": "0.42.0",
   "source": "src/sim/data.ts, src/ui/i18n.resolved.generated/en.ts",
   "mobs": [
     {
@@ -73,7 +73,7 @@
     },
     {
       "id": "deacon_varric",
-      "name": "Deacon Varric",
+      "name": "Deacon Vandric",
       "rank": "boss"
     },
     {
@@ -126,7 +126,7 @@
     },
     {
       "id": "frostmane_yeti",
-      "name": "Frostmane Yeti",
+      "name": "Rimemane Yeti",
       "rank": "elite"
     },
     {
@@ -264,6 +264,11 @@
       "id": "normal_boss_dummy",
       "name": "Normal Boss Dummy",
       "rank": "boss"
+    },
+    {
+      "id": "nythraxis_bone_spike",
+      "name": "Bone Spike",
+      "rank": "elite"
     },
     {
       "id": "nythraxis_heroic_priest_add",

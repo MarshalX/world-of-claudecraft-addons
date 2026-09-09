@@ -1,6 +1,6 @@
 {
   "source": {
-    "game": "0.41.4",
+    "game": "0.42.0",
     "files": [
       "src/sim/data.ts (ZONES, WORLD_SIZE, INSTANCE_X_BASE, PORTALS)",
       "src/sim/content/*.ts (one ZoneDef and one PortalDef[] per zone)",
@@ -223,7 +223,7 @@
         },
         {
           "id": "wyrmcult_tents",
-          "label": "Wyrmcult Tents",
+          "label": "Broodsworn Tents",
           "x": 55,
           "z": 820
         },
@@ -250,7 +250,7 @@
       "pois": [
         {
           "id": "eldergleam",
-          "label": "Eldergleam",
+          "label": "Eldershine",
           "x": -40,
           "z": 1030,
           "town": true
@@ -330,14 +330,14 @@
         {
           "id": "trollmoot",
           "label": "Trollmoot",
-          "x": 460,
-          "z": 2140
+          "x": 418,
+          "z": 2032
         },
         {
           "id": "the_last_keep",
           "label": "The Last Keep",
-          "x": 406,
-          "z": 2032
+          "x": 486,
+          "z": 2168
         },
         {
           "id": "bloodglass_fields",
@@ -525,7 +525,7 @@
         },
         {
           "id": "the_moonwell",
-          "label": "The Moonwell",
+          "label": "The Moonspring",
           "x": -290,
           "z": 1380
         },
@@ -560,7 +560,7 @@
       "pois": [
         {
           "id": "gallowmere",
-          "label": "Gallowmere",
+          "label": "Gibbetmere",
           "x": 360,
           "z": 1430,
           "town": true
@@ -913,7 +913,7 @@
     },
     {
       "id": "gy_veiled_hollow",
-      "label": "Eldergleam Rest",
+      "label": "Eldershine Rest",
       "x": -60,
       "z": 1004
     },
@@ -1004,8 +1004,8 @@
       "z": 654
     },
     {
-      "id": "mailbox_eldergleam",
-      "label": "Eldergleam",
+      "id": "mailbox_eldershine",
+      "label": "Eldershine",
       "x": -33,
       "z": 1025
     },
@@ -1040,8 +1040,8 @@
       "z": 1415
     },
     {
-      "id": "mailbox_gallowmere",
-      "label": "Gallowmere",
+      "id": "mailbox_gibbetmere",
+      "label": "Gibbetmere",
       "x": 354,
       "z": 1436
     },

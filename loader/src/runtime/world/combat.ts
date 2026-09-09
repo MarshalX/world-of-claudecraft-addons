@@ -1,17 +1,30 @@
 // Whether the player is in combat, and how confidently the loader knows it.
 //
-// The self record carries no combat flag. `inCombat` exists on the client entity
-// and the server never writes it, which is the trap this project already paid
-// for once: an addon read it, saw false for a whole session, and concluded every
-// fight had ended on every hit.
+// Until game 0.42.0 the self record carried no combat flag at all. `inCombat`
+// existed on the client entity and the server never wrote it, so it read false
+// for a whole session, which is the trap this project already paid for once: an
+// addon read it and concluded every fight had ended on every hit. That release
+// added `cbt` to the self scalar cohort (server/self_scalar_wire.ts, decoded at
+// src/net/combat_scalar_wire.ts onto `Entity.inCombat`), so the field is now the
+// sim's own answer for the PLAYER and the ladder below gained a branch above all
+// the others.
 //
-// So it is answered from things the server DOES send, in falling order of
+// The rest is answered from things the server DOES send, in falling order of
 // confidence, and the answer says which one replied. That is the whole reason
-// `source` is not optional: two of these branches are the server's own opinion
+// `source` is not optional: three of these branches are the server's own opinion
 // and one is a timer, and an addon that wants to trust the reading has to be
 // able to tell them apart. `ConflictReport` carries its source for the same
 // reason, and this is the same kind of honesty about a partial answer.
 //
+//  self   the sim's authoritative flag on the player's own entity, which is the
+//         same bit the game's own player frame lights its crossed swords from.
+//         It is read POSITIVE-ONLY, and that asymmetry is the whole of the
+//         branch's correctness: a server that does not send `cbt` leaves the
+//         client at blankEntity's false forever, and false is therefore
+//         "nobody said" rather than "not fighting". Treating it as an answer
+//         either way would reinstate the exact bug above against any server
+//         predating 0.42.0; treating a true as an answer cannot, because
+//         nothing but the server can ever set it.
 //  party  the party row for the player. The server sets inCombat per member, so
 //         when the player is grouped this is simply the answer. Game 0.41.4 is
 //         what made that sentence true rather than optimistic: the server's flag
@@ -45,7 +58,7 @@ import { fightsPlayer } from './reaction.ts';
 /** How long after damage stops the fallback branch still reads as in combat. */
 const IDLE_WINDOW_MS = 5000;
 
-type CombatSource = 'party' | 'threat' | 'pvp' | 'recent' | 'none';
+type CombatSource = 'self' | 'party' | 'threat' | 'pvp' | 'recent' | 'none';
 
 interface CombatState {
   active: boolean;
@@ -139,6 +152,13 @@ function readCombat(inputs: CombatInputs): CombatState {
   const { player, party, entities, match, lastDamageAt, now } = inputs;
   if (player === null || player.dead) {
     return OUT_OF_COMBAT;
+  }
+
+  // Positive-only, for the reason in the header: a false here is indistinguishable
+  // from a server that never sent the bit, so it falls through to the ladder that
+  // answered before this branch existed rather than being reported as an answer.
+  if (player.inCombat === true) {
+    return { active: true, source: 'self' };
   }
 
   const row = selfRow(party, player.id);
