@@ -2798,12 +2798,19 @@ describe('what a resale is priced against', () => {
  * The Crucible tier is the case that keeps moving, in BOTH directions, which is why it is pinned
  * by id rather than by count. Game 0.41.1 took `soulbound` off 41 of the tier's 201 items,
  * leaving 160 bound and those 41 listable; game 0.42.0 put it back on every one of them, so all
- * 201 are bound and the whole tier is off the market again. The generator refuses a soulbound
- * item exactly as the game's own market gate does, so it followed both moves without a line
- * changing here, and only these pins noticed.
+ * 201 were bound and the whole tier was off the market; game 0.42.1 took it off the same 41 a
+ * second time and pinned that state in the game's own suite (the binding-policy comment opening
+ * `src/sim/content/ignivar_loot.ts:35` names the two PRs and `tests/ignivar_loot.test.ts`). The
+ * generator refuses a soulbound item exactly as the game's own market gate does, so it followed
+ * all three moves without a line changing here, and only these pins noticed.
+ *
+ * What the third move also showed is that "the tier" is TWO files. The 41 that keep flipping are
+ * `ignivar_loot.ts`'s ordinary boss drops (offset, jewelry, held, weapons); the raid's legendaries
+ * live in `ignivar_drops.ts`, which 0.42.1 did not touch, so they stayed bound through a release
+ * that freed everything around them. A pin naming one of each is what tells those two apart.
  */
 describe('a legendary, and a series too thin to be one', () => {
-  it('carries the listable legendaries and none of the 201 bound Crucible items', () => {
+  it('carries the listable legendaries and none of the 160 bound Crucible items', () => {
     const rows = (JSON.parse(FLOORS_TEXT) as { items: { id: string }[] }).items;
     const ids = new Set(rows.map((row) => row.id));
 
@@ -2812,11 +2819,14 @@ describe('a legendary, and a series too thin to be one', () => {
     for (const bound of ['emberscreed_helmet', 'sigil_ember_helmet']) {
       expect(ids.has(bound)).toBe(false);
     }
-    // The two 0.42.0 RE-BOUND: a legendary and an off-set weapon, both listable at 0.41.1 and
-    // neither listable now. A regeneration from a 0.41.x checkout puts them back and fails here.
-    for (const rebound of ['varkhul_forgebreaker', 'forgefathers_warhammer']) {
-      expect(ids.has(rebound)).toBe(false);
-    }
+    // The raid legendary, bound at every tag this pin has seen: it is an `ignivar_drops.ts` item,
+    // so none of the three `ignivar_loot.ts` moves reached it. A regeneration that lists it means
+    // the tier's legendaries have been unbound too, which no release has done yet.
+    expect(ids.has('varkhul_forgebreaker')).toBe(false);
+    // The off-set weapon that has taken all three moves (`ignivar_loot.ts:3104`): listable at
+    // 0.41.1, bound at 0.42.0, listable again at 0.42.1. A regeneration from a 0.42.0 checkout
+    // drops it and fails here.
+    expect(ids.has('forgefathers_warhammer')).toBe(true);
     // Zone 3 legendaries rather than Crucible drops, so the tier's binding never reached them.
     expect(ids.has('voidsong_dirk')).toBe(true);
     expect(ids.has('kingsbane_last_oath')).toBe(true);

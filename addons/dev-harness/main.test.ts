@@ -413,6 +413,25 @@ function mob(): World {
   });
 }
 
+/** An hour, the unit the bind-on-pickup window is measured in (the game's own is two of them). */
+const HOUR_MS = 60 * 60 * 1000;
+
+/**
+ * A soulbound stack carrying a bind-on-pickup trade window that ends at `untilMs`.
+ *
+ * The deadline is the parameter rather than an offset so a malformed one is a call rather than a
+ * mutation, and callers build a live or lapsed one against `Date.now()`: that is the clock the
+ * field is stamped from on a live server, and a frozen literal would pass today and lapse under
+ * the suite next month.
+ */
+function bopStack(untilMs: unknown): { itemId: string; count: number; instance: unknown } {
+  return {
+    itemId: 'forgefathers_warhammer',
+    count: 1,
+    instance: { partyTrade: { untilMs, eligible: ['Marshal', 'Levy'], eligibleIds: [4021, 4088] } },
+  };
+}
+
 /** A world with nothing wrong in it, in the game's own field names. */
 function goodWorld(): World {
   const player = self();
@@ -521,11 +540,36 @@ describe('what it reports in a world', () => {
       'a live player and still no answer: offline, spectating, or the older movement wire',
     );
   });
+
+  it('counts a live bind-on-pickup window on a held copy', async () => {
+    expect(await inWorld({ inventory: [bopStack(Date.now() + HOUR_MS)] })).toContain(
+      '1 in a party-trade window',
+    );
+  });
+
+  // The case the readout exists for. The game retires an expired marker only when a character
+  // loads or saves, never on a tick, so a lapsed window is still sitting on the copy in exactly
+  // the shape a live one has. A harness that counted the FIELD would report this as tradeable
+  // and be wrong for as long as the session lasts.
+  it('reads an expired window off the clock rather than off the field being there', async () => {
+    expect(await inWorld({ inventory: [bopStack(Date.now() - HOUR_MS)] })).toContain(
+      '0 in a party-trade window',
+    );
+  });
 });
 
 // Each case contradicts what `packages/types` promises about a 0.41.0 surface and requires the
 // harness to name it.
 describe('what it refuses in a world', () => {
+  // A deadline that is not a finite number is the failure this check is for: every comparison
+  // against it is false, so the window reads as permanently expired and the addon that would
+  // have counted it down silently shows nothing at all.
+  it('names a party-trade window whose deadline is not a number', async () => {
+    expect(await inWorld({ inventory: [bopStack(null)] })).toContain(
+      'forgefathers_warhammer carries a malformed partyTrade window',
+    );
+  });
+
   it('names a split budget whose halves are not the capacity', async () => {
     const text = await inWorld({ bankInfo: { ...GOOD_BANK, materialsCapacity: 15 } });
 

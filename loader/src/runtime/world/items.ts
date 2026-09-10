@@ -9,8 +9,9 @@
 // trim to every market row and every mail attachment, so `PublicItemInstance` is
 // what an addon sees almost everywhere. `ItemInstance` is the untrimmed payload
 // and is reachable through `world.equipmentInstances` alone. `HeldItemInstance`
-// is the third position and the narrowest promise: the public fields plus the
-// owner's lock, on the two surfaces the game lets an owner set one.
+// is the third position: the public fields plus what only an owner sees on a
+// stack they are HOLDING, which is the lock they set and the bind-on-pickup
+// trade window a soulbound raid drop arrives carrying.
 
 /**
  * The public part of one worn item's instance payload.
@@ -69,14 +70,13 @@ interface PublicItemInstance {
 }
 
 /**
- * One copy IN YOUR OWN KEEPING: the public payload, plus the one mark its owner
- * sets by hand.
+ * One copy IN YOUR OWN KEEPING: the public payload, plus what only its owner sees.
  *
  * `world.inventory` and `world.bank` hand these over and nothing else does,
  * which mirrors where the game itself paints the padlock (its bag grid and both
  * bank grids). Everywhere else the same stack shape appears, the server has
- * already projected the payload down to the public fields, so a lock is
- * structurally unreachable there rather than merely left out of this reading.
+ * already projected the payload down to the public fields, so neither of these
+ * is structurally reachable there rather than merely left out of this reading.
  */
 interface HeldItemInstance extends PublicItemInstance {
   /**
@@ -89,6 +89,31 @@ interface HeldItemInstance extends PublicItemInstance {
    * unlocked, so read the value rather than the key.
    */
   locked?: boolean;
+  /**
+   * The bind-on-pickup trade window on a soulbound copy won from party boss loot.
+   *
+   * `untilMs` is a REAL EPOCH DEADLINE on a live server, so compare it against
+   * `Date.now()`: the game's own online client is `Math.max(0, untilMs -
+   * Date.now())` (`src/net/online.ts:3819`). The offline sim compares against a
+   * tick-derived clock instead, which is why the game routes this through a
+   * world method at all, and is not a case any addon meets.
+   *
+   * PRESENCE IS NOT TRADABILITY. The marker is retired only at a persistence
+   * boundary, on load and on save (`src/sim/loot/bop_trade_persistence.ts`), and
+   * deliberately never by a tick sweep, so a window that lapsed this session is
+   * still sitting on the copy exactly as it was. Read the deadline, never the key.
+   *
+   * `eligible` is the loot-candidate snapshot taken AT THE MOMENT THE ITEM
+   * DROPPED, not the party as it stands now, so a member who has since left is
+   * still on it and one who has since joined is not. `eligibleIds` is the same
+   * set as stable CHARACTER ids, which a live server always knows; they are not
+   * entity ids and must never be compared against one.
+   *
+   * Trading is the only channel this opens: mail, market, vendor and guild bank
+   * stay blocked by the item's own `soulbound` flag. Equipping the copy strips
+   * the field for good, which is why `ItemInstance` cannot carry it.
+   */
+  partyTrade?: { untilMs: number; eligible: string[]; eligibleIds?: number[] };
 }
 
 /**

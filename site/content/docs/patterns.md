@@ -50,7 +50,27 @@ Game 0.42.0 added two more, both of which the game's own source settles in a lin
 
 Game 0.41.4 added one before them, and it is the cheapest to check. A mob that cannot reach you inside a dungeon or raid room now holds in place immune with its hate table intact instead of walking home, and the seconds it has been held sit on the entity as `evadeInPlace`. Nothing sends it: the client mirror builds every mob with the field set to `undefined` and the server names it nowhere, so a pinned-mob timer built on it reads "not pinned" through every pin there will ever be. What you CAN see is the evade record the pinned mob emits for each direct hit it refuses, which is the same `kind: 'evade'` a mob walking home emits and carries nothing to tell them apart.
 
+Game 0.42.1 added one more, and it is the cheapest of the lot. A soulbound raid drop now pins its trade group at the instant loot rolls, and the group sits on the mob as `lootPartyTradeEligibility`. The game's own comment calls it runtime-only, the server names it nowhere, and unlike the others the client does not even build a default for it, so it reads `undefined` on every mob rather than as an empty answer. Nothing about who could have traded a drop is reachable from the corpse.
+
 The game's two spell queues are the version of this that survives a careful reading. The melee on-next-swing queue is sent and you can see it; the cast queue, which the game finished building in 0.41.1 so that a press during the tail of a global cooldown fires when the cooldown clears, is sent by nothing. They are declared eleven lines apart, they are both called a queue, and exactly one of them reaches you. So "I checked, the queue is on the wire" is not a finding about the queue you meant, and a next-cast display built on the wrong one is blank in every session forever without ever raising anything.
+
+## A field that IS sent can still lie by being there
+
+The trap above is a field that is never sent. The sharper one is a field that is sent honestly and whose PRESENCE means less than it looks like it means, because nothing removes it when what it describes stops being true.
+
+`instance.partyTrade` on a stack in your own bags is the worked example. A soulbound copy won from party boss loot carries a two-hour window in which it can still be traded to the players who shared the drop, and the marker is real, sent, and correct. What the game does not do is take it off when the window closes: an expired marker is retired only when the character loads or saves, deliberately never on a tick, so a window that lapsed an hour ago is still sitting on the copy in exactly the shape a live one has. An addon that lights a "tradeable" badge off `slot.instance?.partyTrade` lights it forever.
+
+Read the value:
+
+```js
+const trade = slot.instance?.partyTrade;
+const left = trade ? trade.untilMs - Date.now() : 0;
+if (left > 0) {
+  // still tradeable, and this is how long for
+}
+```
+
+`untilMs` is a real epoch deadline, so `Date.now()` is the right clock. The general form is worth carrying past this one field: **whenever a payload field encodes a deadline, a countdown or a claim about the present, ask what removes it.** If the answer is "a boundary the player may not cross for hours", the key is not the answer and the value is.
 
 ## You never write cleanup, but you do write `woc.onDispose`
 

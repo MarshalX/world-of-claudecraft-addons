@@ -242,16 +242,16 @@ export interface PublicItemInstance {
 }
 
 /**
- * One copy IN YOUR OWN KEEPING: the public payload, plus the one mark its owner
- * sets by hand.
+ * One copy IN YOUR OWN KEEPING: the public payload, plus what only an owner sees
+ * on a stack they are HOLDING.
  *
  * Reachable through `world.inventory` and `world.bank` and nowhere else, which
  * mirrors where the game itself paints the padlock: its bag grid and both bank
  * grids. Every other surface carrying a stack has already been projected down to
- * the public fields by the server, so there a lock cannot be read at all
+ * the public fields by the server, so neither of these can be read at all there
  * rather than reading as absent.
  *
- * Added in API minor 6.
+ * Added in API minor 6, and grown once since: `partyTrade` in minor 12.
  */
 export interface HeldItemInstance extends PublicItemInstance {
   /**
@@ -267,6 +267,51 @@ export interface HeldItemInstance extends PublicItemInstance {
    * gesture in the game's own window; an addon reports it and never performs it.
    */
   locked?: boolean;
+  /**
+   * The bind-on-pickup trade window on a soulbound copy won from party boss loot.
+   *
+   * A soulbound raid drop stays tradeable for two hours, but only with the
+   * players who were loot-eligible at the instant it dropped. This is the one
+   * channel the window opens: mail, market, vendor and guild bank stay blocked
+   * by the item's own soulbound flag throughout.
+   *
+   * `untilMs` IS A REAL EPOCH DEADLINE, so compare it against `Date.now()`. That
+   * is exactly what the game's own online client does; the offline sim uses a
+   * tick-derived clock instead, which is why the game routes its own countdown
+   * through a world method, and is not a case any addon meets.
+   *
+   * PRESENCE IS NOT TRADABILITY, and this is the trap worth reading twice. The
+   * marker is retired only when a character loads or saves, deliberately never
+   * on a tick, so a window that lapsed an hour ago is still sitting on the copy
+   * looking exactly as it did while it was live. Read the deadline, never the key:
+   *
+   * ```js
+   * const left = slot.instance?.partyTrade
+   *   ? slot.instance.partyTrade.untilMs - Date.now()
+   *   : 0;
+   * if (left > 0) woc.log(`${Math.round(left / 60000)} minutes to pass this on`);
+   * ```
+   *
+   * `eligible` is the loot-candidate snapshot taken AT THE MOMENT OF THE DROP,
+   * not the party as it stands now, so a member who has since left is on it and
+   * one who has since joined is not. `eligibleIds` is that same set as stable
+   * CHARACTER ids, which a live server always knows. They are not entity ids and
+   * must never be compared against one.
+   *
+   * Absent on any copy that never had a window, on one that has been through a
+   * save since expiring, and on every worn piece, because equipping strips the
+   * field for good, which is why `ItemInstance` does not carry it. It cannot
+   * appear on a market row, a letter attachment or another player's gear either:
+   * the server's public allowlist excludes it by construction.
+   *
+   * No `world.on` fires for the deadline passing, because nothing in the payload
+   * moves when it does. Every transition an addon can actually observe (the drop
+   * arriving, the copy being traded away or received) changes the stack's count
+   * and wakes an inventory watcher already.
+   *
+   * Added in API minor 12.
+   */
+  partyTrade?: { untilMs: number; eligible: string[]; eligibleIds?: number[] };
 }
 
 /**

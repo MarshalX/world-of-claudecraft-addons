@@ -93,7 +93,20 @@ An item id does not resolve to a **name**, a quality, or any stats. That content
 
 `bagCapacity` derives from `bags` and has no key of its own, so watch `bags`.
 
-A stack in `world.inventory` or `world.bank` is a `HeldSlot`, which is an `InvSlot` plus one field the shared shape cannot promise: `instance.locked`, the safety mark the owner sets in the game's own bag window. A locked copy refuses salvage, consumption as a craft reagent, and a vendor sale until it is unlocked, and it is a fact worth drawing, because it is the one thing in a bag the player chose. It is absent, and unreachable rather than merely missing, everywhere else a stack appears: the server projects a payload down to `signer`, `enchant` and `rolled` before it sends a market row, a letter attachment or a guild bank row, so `undefined` there means "not sent" and not "unlocked". You cannot set one. `net` is read-only, so an addon reports a lock and never performs one.
+A stack in `world.inventory` or `world.bank` is a `HeldSlot`, which is an `InvSlot` plus two fields the shared shape cannot promise. Both are absent, and unreachable rather than merely missing, everywhere else a stack appears: the server projects a payload down to a fixed allowlist before it sends a market row, a letter attachment or a guild bank row, so `undefined` there means "not sent" rather than "no". Read `PublicItemInstance` for what that allowlist currently holds; it was three fields until game 0.42.0 and is six now.
+
+The first is `instance.locked`, the safety mark the owner sets in the game's own bag window. A locked copy refuses salvage, consumption as a craft reagent, and a vendor sale until it is unlocked, and it is a fact worth drawing, because it is the one thing in a bag the player chose. You cannot set one. `net` is read-only, so an addon reports a lock and never performs one.
+
+The second is `instance.partyTrade`, the bind-on-pickup window a soulbound copy won from party boss loot carries: for two hours it may still be traded, but only to the players who were loot-eligible at the instant it dropped. **Read `untilMs`, never the field's presence.** It is a real epoch deadline, so compare it against `Date.now()`, and the marker is retired only when a character loads or saves rather than on a tick, so a window that lapsed an hour ago is still sitting on the copy looking exactly like a live one. `eligible` is the snapshot taken at the drop and not the party as it stands now, and `eligibleIds` holds stable character ids, which are not entity ids and must never be compared against one. Trading is the only channel the window opens; mail, market, vendor and guild bank stay blocked throughout, and equipping the copy strips the field for good, which is why a worn `ItemInstance` never carries it.
+
+```js
+const left = slot.instance?.partyTrade
+  ? slot.instance.partyTrade.untilMs - Date.now()
+  : 0;
+if (left > 0) woc.log(`${Math.round(left / 60000)} minutes to pass this on`);
+```
+
+Nothing wakes for the deadline passing, because nothing in the payload moves when it does. Every transition you can actually observe (the drop arriving, the copy traded away or received) moves the stack's count and wakes an inventory watcher already, so drive a countdown off `woc.every` or `woc.paint` rather than waiting for a `world.on`.
 
 Position comes off the entity rather than the zone, and every entity has it, not just you:
 
