@@ -2,7 +2,7 @@
   "schema": 1,
   "name": "Official Marketplace",
   "maintainer": "MarshalX",
-  "generated": "2026-09-09T16:28:26.000Z",
+  "generated": "2026-09-10T16:34:00.000Z",
   "addons": [
     {
       "id": "cadence",
@@ -244,9 +244,9 @@
     {
       "id": "dev-harness",
       "name": "Dev Harness",
-      "version": "1.12.0",
+      "version": "1.13.0",
       "apiVersion": 1,
-      "apiMinor": 10,
+      "apiMinor": 12,
       "author": "MarshalX",
       "description": "Exercises every part of the addon API and reports what worked, repainting as the world moves, so a loader change can be checked in the game rather than only in a test.",
       "entry": "main.js",
@@ -586,7 +586,7 @@
     {
       "id": "ledgerline",
       "name": "Ledgerline",
-      "version": "1.7.4",
+      "version": "1.7.5",
       "apiVersion": 1,
       "apiMinor": 7,
       "author": "MarshalX",
@@ -760,7 +760,7 @@
     {
       "id": "lorebind",
       "name": "Lorebind",
-      "version": "1.6.0",
+      "version": "1.6.1",
       "apiVersion": 1,
       "apiMinor": 7,
       "author": "MarshalX",
