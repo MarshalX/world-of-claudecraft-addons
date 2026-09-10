@@ -1846,6 +1846,50 @@ function money(copper) {
 }
 
 /**
+ * The two `HeldSlot`-only fields, read off your own bags: the lock the player set, and the
+ * bind-on-pickup window a soulbound copy won from party boss loot arrives carrying.
+ *
+ * Its own function because the checks around it are about the CONTAINER and these are about one
+ * copy's payload. Here and on the bank is the only place either can be read at all: a market row
+ * or a letter attachment is projected to the server's public allowlist before it is sent, so
+ * `undefined` there means "not sent" rather than "no".
+ *
+ * Both are REPORTED rather than asserted, since a bag with nothing locked in it is the ordinary
+ * state and demanding a live window would demand a raid inside the last two hours. What IS
+ * asserted is the shape where one exists, because `untilMs` arriving as anything but an epoch
+ * number is the failure worth naming: every comparison against it is false, so the window reads
+ * as permanently expired and nothing anywhere complains.
+ *
+ * The count is taken against the wall clock and never against the field being present. The game
+ * retires an expired marker only when a character loads or saves, deliberately never on a tick,
+ * so a window that lapsed an hour ago is still on the copy in the shape a live one has.
+ */
+function readHeldMarks(inventory) {
+  const badLock = inventory.find((slot) => {
+    const held = slot.instance?.locked;
+    return held !== undefined && typeof held !== 'boolean';
+  });
+  if (badLock !== undefined) {
+    return { fault: `${badLock.itemId} carries a lock that is not a boolean` };
+  }
+  const badWindow = inventory.find((slot) => {
+    const trade = slot.instance?.partyTrade;
+    if (trade === undefined) {
+      return false;
+    }
+    return !(Number.isFinite(trade.untilMs) && Array.isArray(trade.eligible));
+  });
+  if (badWindow !== undefined) {
+    return { fault: `${badWindow.itemId} carries a malformed partyTrade window` };
+  }
+  const now = Date.now();
+  return {
+    locked: inventory.filter((slot) => slot.instance?.locked === true).length,
+    tradeable: inventory.filter((slot) => (slot.instance?.partyTrade?.untilMs ?? 0) > now).length,
+  };
+}
+
+/**
  * The gear, bag and money reads, and the zone label behind the DOM.
  *
  * `bagCapacity` is read rather than derived: the loader takes the game's own number
@@ -1882,23 +1926,16 @@ function checkHoldings() {
     return result('holdings', false, 'the zone label did not resolve, so its anchor has moved');
   }
   const worn = Object.keys(equipment).length;
-  // The per-copy lock, which is a `HeldSlot` field and therefore only ever readable here and on
-  // the bank: a market row or a letter attachment is projected to the three public fields before
-  // the server sends it. Reported rather than asserted, since a bag with nothing locked in it is
-  // the ordinary state and this check would otherwise be a demand that the tester lock something.
-  const badLock = inventory.find((slot) => {
-    const held = slot.instance?.locked;
-    return held !== undefined && typeof held !== 'boolean';
-  });
-  if (badLock !== undefined) {
-    return result('holdings', false, `${badLock.itemId} carries a lock that is not a boolean`);
+  const marks = readHeldMarks(inventory);
+  if (marks.fault !== undefined) {
+    return result('holdings', false, marks.fault);
   }
-  const locked = inventory.filter((slot) => slot.instance?.locked === true).length;
   return result(
     'holdings',
     true,
     `in ${zone}: ${String(worn)} worn, ${String(inventory.length)}/${String(bagCapacity)} bags,` +
-      ` ${String(locked)} locked, ${money(copper)}`,
+      ` ${String(marks.locked)} locked, ${String(marks.tradeable)} in a party-trade window,` +
+      ` ${money(copper)}`,
   );
 }
 

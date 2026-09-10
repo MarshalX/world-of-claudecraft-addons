@@ -72,6 +72,7 @@ interface TableRow {
   requiredLevel?: number;
   sellValue?: number;
   priceHonor?: number;
+  soulbound?: true;
 }
 
 interface TableFile {
@@ -631,6 +632,26 @@ describe('the shipped table', () => {
     expect(HELMET.armorType).toBe('cloth');
     expect(WEAPON.weapon?.speed).toBeGreaterThan(0);
     expect(JUNK.stats).toBeUndefined();
+  });
+
+  // The binding line, pinned by id in BOTH directions, because it is the one field here that
+  // has moved back and forth. The Crucible tier lost `soulbound` on 41 items at game 0.41.1,
+  // got it back on all 201 at 0.42.0, and lost it on the same 41 again at 0.42.1
+  // (`src/sim/content/ignivar_loot.ts:35` names the policy and the game's own pinning test).
+  // Each of those moves rewrote this table and the addon drew a different word on 41 tooltips,
+  // and until this case existed nothing in the suite noticed any of them: the generator drops
+  // an absent flag rather than writing false, so a whole binding rule leaving the game reads
+  // exactly like a field the generator simply never extracted.
+  //
+  // The two ids are the two halves of the tier. `forgefathers_warhammer` is an
+  // `ignivar_loot.ts` boss drop and has taken all three moves; `emberscreed_helmet` is a
+  // sigil-redeemed set piece and has been bound throughout. The ledgerline suite pins the same
+  // pair from the market side, so the two tables cannot come to disagree about one game fact.
+  it('says which items bind, and drops the flag rather than writing false', () => {
+    expect(rowFor('emberscreed_helmet').soulbound).toBe(true);
+    expect(rowFor('forgefathers_warhammer').soulbound).toBeUndefined();
+    expect(TABLE.some((row) => row.soulbound === true)).toBe(true);
+    expect(TABLE.every((row) => row.soulbound === undefined || row.soulbound === true)).toBe(true);
   });
 
   // Derived by the game from where an item drops rather than declared on it, which is why

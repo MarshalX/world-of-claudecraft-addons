@@ -27,7 +27,7 @@
 // THE LOCK IS THE ONE THING IN A BAG THE PLAYER SET, and it is recorded for the same reason the
 // bags are: you cannot log in as somebody else to check whether the stack you are about to
 // salvage is the one they protected. Your own bags and your own bank are the only surfaces that
-// can answer, because the server projects a payload down to its three public fields before it
+// can answer, because the server projects a payload down to its public allowlist before it
 // sends one anywhere else, so a parcel in the post is counted as unlocked and every line saying
 // so says which stores it counted. Nothing here can toggle one: `net` is read-only.
 //
@@ -459,7 +459,7 @@ function entryCount(entry) {
  *
  * Read off the entry rather than the wire's payload, so a stored cell and a live one answer the
  * same way. A mail attachment cannot carry it: the server projects a letter's payload down to
- * its three public fields before it sends one, so the flag is not absent there, it is
+ * its public allowlist before it sends one, so the flag is not absent there, it is
  * unreachable, and a cell recorded from mail is honestly unlocked-as-far-as-anyone-knows.
  */
 function isLocked(entry) {
@@ -935,8 +935,9 @@ function onPrices(payload, from) {
  * the way that alt arranged them.
  *
  * The lock is the ONE place the two spellings differ, and both are read here. The wire nests it
- * under the copy's payload, where the rest of that payload is signer, enchant and rolled stats
- * this addon has no use for; storing the payload to keep one boolean would put an object per
+ * under the copy's payload, alongside a signer, an enchant, rolled stats and the rest of what a
+ * copy carries, none of which this addon has any use for; storing the payload to keep one
+ * boolean would put an object per
  * cell into a store that holds every character's bags, so it is written flat. Reading both is
  * what lets a record saved by any version read back the same way.
  */

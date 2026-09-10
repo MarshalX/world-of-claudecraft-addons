@@ -495,23 +495,26 @@ export interface InvSlot {
    * What is baked into this specific copy. Absent on an ordinary fungible stack.
    *
    * The PUBLIC trim, which is what the shared shape can promise: a market row, a
-   * letter attachment and a guild bank row are all projected to those three
-   * fields by the server before they are sent. A stack of YOUR OWN carries one
-   * field more and is read as a `HeldSlot`; the rest of the payload stays
-   * reachable through `world.raw` and is promised nowhere.
+   * letter attachment and a guild bank row are all projected to the allowlisted
+   * fields by the server before they are sent. Read `PublicItemInstance` for what
+   * that set currently is rather than counting it here; it was three until game
+   * 0.42.0 and is six now. A stack of YOUR OWN carries more and is read as a
+   * `HeldSlot`; the rest of the payload stays reachable through `world.raw` and
+   * is promised nowhere.
    */
   instance?: PublicItemInstance;
 }
 
 /**
- * One stack in your OWN bags or bank, which is where a lock can exist.
+ * One stack in your OWN bags or bank, which is where a lock and a bind-on-pickup
+ * trade window can exist.
  *
  * The only difference from `InvSlot` is that the payload here was never put
- * through the server's public projection, so it still carries the owner's lock.
- * Kept a separate shape rather than widening `InvSlot`: the lock is genuinely
- * absent from every other surface the stack shape appears on, and a field that
- * reads `undefined` on a market row would be indistinguishable there from an
- * unlocked copy.
+ * through the server's public projection, so it still carries the owner-only
+ * fields. Kept a separate shape rather than widening `InvSlot`: both are
+ * genuinely absent from every other surface the stack shape appears on, and a
+ * field that reads `undefined` on a market row would be indistinguishable there
+ * from an unlocked, untradeable copy.
  */
 export interface HeldSlot extends InvSlot {
   instance?: HeldItemInstance;
