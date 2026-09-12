@@ -8,9 +8,13 @@
 // actually carries (`cast`, `castRem`, `castTot`, `chan`) as the client names them
 // on the entity (`castingAbility`, `castRemaining`, `castTotal`, `channeling`).
 //
-// The two hazard readings are narrower than they sound and the tests say so: a
-// frost ring and a temporal hourglass are the only ground effects whose geometry
-// rides the snapshot, so anything else on the ground is invisible here by design.
+// The hazard reading is narrower than it sounds and the tests say so. THIS
+// COMMENT USED TO SAY there were two of them, a frost ring and a temporal
+// hourglass, and that they were the only ground effects whose geometry rides the
+// snapshot. The second half is still the point and the first half has been wrong
+// since game 0.41.0, which put three raid warnings on the same shape; there are
+// eight now. The families that ride the snapshot are still the only ones
+// readable at all, so everything else on the ground is invisible here by design.
 
 import { describe, expect, it } from 'vitest';
 
@@ -155,6 +159,112 @@ describe('hazardsOf', () => {
 
   it('answers an empty list when the collections are there and empty', () => {
     expect(hazardsOf({ activeFrostRings: [], activeTemporalHourglasses: [] })).toEqual([]);
+  });
+});
+
+// The Nythraxis floor. These four families have ridden the snapshot since before
+// this table read any of them, so the fixtures are the client's own decoded row
+// shapes (src/net/ground_telegraph_wire.ts), which is where the field names come
+// from: the wire says `r`/`dur`/`rem` and the client renames them on decode, so a
+// test written against the wire's names would pass against nothing.
+describe('hazardsOf over the Nythraxis families', () => {
+  const eruption = {
+    id: '248:ge:3:0',
+    x: 4,
+    z: 92,
+    radius: 6,
+    duration: 5,
+    remaining: 3.25,
+    warningLead: 1,
+  };
+  const flame = {
+    id: '248:gf:7',
+    sourceId: 248,
+    kind: 'grave',
+    x: 4,
+    z: 92,
+    radius: 6,
+    duration: 20,
+    remaining: 18,
+  };
+  const sigil = {
+    id: '248:sig:3',
+    sourceId: 248,
+    x: 18,
+    z: 96,
+    radius: 4,
+    duration: 15,
+    remaining: 15,
+  };
+
+  it('reads all three as hazards of their own kinds', () => {
+    const hazards = hazardsOf({
+      activeNythraxisGraveEruptions: [eruption],
+      activeNythraxisGraveFlames: [flame],
+      activeNythraxisBindingSigils: [sigil],
+    });
+
+    expect(hazards?.map((hazard) => hazard.kind)).toEqual([
+      'nythraxisGraveEruption',
+      'nythraxisGraveFlame',
+      'nythraxisBindingSigil',
+    ]);
+  });
+
+  // The countdown is the whole reason to read an eruption, and it counts to the
+  // BURST rather than to a burn running out, which is the opposite of the other
+  // two. `warningLead` is a reveal delay the published shape has no field for and
+  // is dropped rather than folded into one that means something else.
+  it('carries the eruption countdown and drops the reveal delay', () => {
+    const hazards = hazardsOf({ activeNythraxisGraveEruptions: [eruption] });
+
+    expect(hazards?.[0]).toEqual({
+      id: '248:ge:3:0',
+      kind: 'nythraxisGraveEruption',
+      x: 4,
+      z: 92,
+      radius: 6,
+      innerRadius: 0,
+      duration: 5,
+      remaining: 3.25,
+    });
+  });
+
+  // One list, two wire kinds, one published kind. `'soul'` was the Soulfire pool
+  // Soul Rend used to leave and game 0.42.2 retired it from play while leaving the
+  // discriminant declared, so a second published kind could never produce a row.
+  // If it ever comes back it arrives here, which is what this pins.
+  it('publishes a retired soul pool under the one grave-flame kind', () => {
+    const hazards = hazardsOf({
+      activeNythraxisGraveFlames: [{ ...flame, id: '248:gf:8', kind: 'soul' }],
+    });
+
+    expect(hazards?.[0]?.kind).toBe('nythraxisGraveFlame');
+  });
+
+  // The refusal, and the assertion that says it is a refusal rather than an
+  // oversight: a Gravefire is a travelling line with a heading and a half-width
+  // and no radius at all, so `null` here is the loader reporting that it read no
+  // hazard list on this world rather than reporting clean ground.
+  it('refuses the travelling gravefire line outright', () => {
+    expect(
+      hazardsOf({
+        activeNythraxisGravefires: [
+          {
+            id: '248:gfl:2',
+            sourceId: 248,
+            x: 0,
+            z: 96,
+            dirX: 1,
+            dirZ: 0,
+            tail: 0,
+            head: 12,
+            halfWidth: 2,
+            remaining: 8,
+          },
+        ],
+      }),
+    ).toBeNull();
   });
 });
 

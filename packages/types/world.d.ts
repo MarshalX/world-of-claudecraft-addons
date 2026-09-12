@@ -421,6 +421,18 @@ export interface WorldApi {
    */
   readonly targetAuras: readonly Aura[] | null;
 
+  /**
+   * Ground effects near you, or null on a game carrying none of the lists.
+   *
+   * Null and empty are different answers and both matter: null is a game whose
+   * world object has not one of these families on it, and an empty list is clean
+   * ground. The families are not delta-gated, so a list that stops carrying an
+   * entry means that entry is gone rather than unmentioned.
+   *
+   * Read `HazardKind` before building on this. It is CLOSED, it grew to eight at
+   * API minor 12, and three ground effects the game draws are refused outright
+   * for reasons the union documents one by one.
+   */
   readonly hazards: readonly Hazard[] | null;
 
   /**
@@ -636,11 +648,23 @@ export interface WorldApi {
    *
    * IT ANSWERS TRUE FOR A RAID MECHANIC THE GAME WILL REFUSE, and no client can
    * do better. Game 0.41.0 added an `encounterOwned` class of aura, checked by
-   * the game ahead of every clause above and used throughout the Ignivar and
-   * Varkhul encounters, and the wire does not carry it: the aura the server
-   * sends has room for permanent, unbreakable and undispellable and nothing for
-   * this one. So inside those two fights a true here means "nothing the client
-   * can see forbids it" rather than "it will work".
+   * the game ahead of every clause above, and the wire does not carry it: the
+   * aura the server sends has room for permanent, unbreakable and undispellable
+   * and nothing for this one. So inside an affected fight a true here means
+   * "nothing the client can see forbids it" rather than "it will work".
+   *
+   * THREE ENCOUNTERS, not the two this said until game 0.42.2, and the third is
+   * the one that matters most. Nythraxis carries ten `encounterOwned` sites to
+   * Varkhul's ten and Ignivar's three, and it was never a new use: the count is
+   * identical at 0.42.1, so this sentence was simply incomplete from the day it
+   * was written. What makes the correction worth more than a name is WHO the
+   * aura lands on. Nine of Nythraxis's ten are on the boss, where no player
+   * would try a dispel; the tenth is Soul Rend, applied to the marked RAIDERS,
+   * and it is a `vulnerability`, which is to say exactly the kind of harmful
+   * effect a healer reaches for. Ignivar's forge chains are player-applied too.
+   * So the honest reading is not "somewhere in two raids": there are player
+   * debuffs in these fights that this function calls removable and the game
+   * will not remove, and one of them is a mechanic a raid answers every pull.
    *
    * A party ROW cannot answer this at all and is refused rather than guessed
    * at: a row carries neither a school nor any of the flags, and those are the
