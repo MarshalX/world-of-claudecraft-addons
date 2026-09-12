@@ -539,6 +539,34 @@ describe('hazards', () => {
   it('treats a null reading as its own', () => {
     expect(changed('hazards', null, [])).toBe(false);
   });
+
+  // The Nythraxis families joined `world.hazards` without touching this
+  // signature, which is the claim worth an assertion rather than an assumption:
+  // `hazardSignature` reads `id` alone, and every family namespaces its own ids
+  // (`<bossId>:ge:<castKey>:<index>`, `:gf:<seq>`, `:sig:<castKey>`), so they can
+  // neither collide with each other nor with an Ignivar meteor's `<bossId>:<castKey>:<index>`.
+  const sigil = (id: string): Record<string, unknown> => ({
+    id,
+    kind: 'nythraxisBindingSigil',
+    radius: 4,
+    remaining: 15,
+  });
+
+  it('notices a binding sigil appearing', () => {
+    expect(changed('hazards', [], [sigil('248:sig:3')])).toBe(true);
+  });
+
+  // The 0.42.2 behaviour a boss mod actually watches for. A sigil now alternates
+  // between the two flanking platforms, so the next cast is a DIFFERENT place with
+  // a different cast key: the side switch has to wake a subscriber, and it does
+  // because the id moved, not because the position did.
+  it('notices the side switching on the next cast', () => {
+    expect(changed('hazards', [sigil('248:sig:3')], [sigil('248:sig:4')])).toBe(true);
+  });
+
+  it('does not confuse a grave flame with a sigil that shares a sequence number', () => {
+    expect(changed('hazards', [sigil('248:sig:3')], [{ ...sigil('248:gf:3') }])).toBe(true);
+  });
 });
 
 describe('markers', () => {

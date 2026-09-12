@@ -21,9 +21,20 @@
 // out of the assignment that WRITES it.
 //
 // YELLS ARE READ FOR THE RAID BOSSES AND NOT FOR NYTHRAXIS: a yell is the only exact PULL edge
-// the wire carries, and every Nythraxis mechanic is observable from a cast, an aura or an
-// entity appearing. A yell is range-gated (`emitMobYell` drops anyone past `YELL_RANGE`), so
-// it is an anchor with a backstop rather than a source of truth.
+// the wire carries, and every Nythraxis mechanic THIS TABLE SHIPS is observable from a cast, an
+// aura or an entity appearing. A yell is range-gated (`emitMobYell` drops anyone past
+// `YELL_RANGE`), so it is an anchor with a backstop rather than a source of truth.
+//
+// THAT SENTENCE USED TO SAY "every Nythraxis mechanic" and it was never true of the whole fight,
+// only of the four mechanics here. Grave Eruption is a pure ground telegraph with no cast, no
+// aura and no entity, and until loader API minor 12 it was not readable at all. It is now:
+// `woc.world.hazards` publishes the encounter's eruption, flame and sigil families, so a fourth
+// anchor route (`onHazard`) exists for them, the way `ignivarMeteor` and `varkhulForgestorm`
+// already use it. Neither Grave Eruption nor Binding Sigil is declared here yet, and adding one
+// is not mechanical: the cadences live in `src/sim/nythraxis_grave_eruption.ts` and
+// `src/sim/nythraxis_binding_sigil.ts` rather than in the encounter, so each needs its own
+// SOURCES entry read off the module that DECLARES it, and a cadence derived wrongly puts a raid
+// on a timer that drifts silently, which is worse than no row.
 //
 // HEROIC IS NOT SHIPPED: at game 0.41.0 the forge-lift is absent from HEROIC_DUNGEON_IDS, so
 // a raid always resolves to normal. Heroic tuning is not read and no heroic-only mechanic is

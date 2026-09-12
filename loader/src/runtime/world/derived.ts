@@ -32,6 +32,39 @@ import type { Entity } from './game-types.ts';
  * shape for every hazard that has one. `activeVarkhulCinderOrbProjectiles` is a
  * MOVING orb with its own dirX/dirZ heading, so drawn as a static disc it marks
  * where the orb was when the snapshot left rather than where it is.
+ *
+ * THE THREE NYTHRAXIS ROWS ARE OLDER THAN THEIR ENTRY HERE. That encounter
+ * serializes four families of its own (`server/nythraxis_wire.ts`), the client
+ * decodes all four onto this same world object
+ * (`applyGroundTelegraphSnapshot`, `src/net/ground_telegraph_wire.ts:355`), and
+ * this table read none of them: the fight's floor was legible to the game's own
+ * renderer and invisible to every addon. Each of the three carries the
+ * id/x/z/radius/duration/remaining shape the other five do, and the decode
+ * requires `radius`, `duration` and `remaining` to be finite and above 0 before
+ * it will build a row, so `toHazard` never has to defend against a zero.
+ *
+ * The family is also NOT delta-gated, which is what makes an empty reading
+ * honest: the server re-sends the whole visible set every frame and omits the
+ * key when nothing is visible, so an absent key CLEARS the list rather than
+ * leaving the last one standing. That is the opposite of the heavy self fields,
+ * and it is said in as many words at `ground_telegraph_wire.ts:350`.
+ *
+ * THE FOURTH IS REFUSED, for the `activeVarkhulCinderOrbProjectiles` reason and
+ * then for a second one. `activeNythraxisGravefires` is a travelling LINE, with
+ * dirX/dirZ, a tail, a head and a half-width and no radius at all, so
+ * `toHazard` would refuse every entry anyway; and game 0.42.2 retired Gravefire
+ * from play outright, dropping it from `NYTHRAXIS_RAID_MECHANICS`
+ * (`src/sim/content/dungeon_finder.ts:150`), so the list is now permanently
+ * empty. Either reason alone is enough; together they mean a row here could
+ * never fire.
+ *
+ * `activeNythraxisGraveFlames` is ONE list carrying two kinds, discriminated by
+ * the wire's `k`, and it is published as one kind for the cinder-fire reason
+ * directly above: `'soul'` was the Soulfire pool Soul Rend used to leave, and
+ * 0.42.2 retired that from play in the same pass, leaving the discriminant
+ * declared only so the wire and the renderer keep their shape
+ * (`src/sim/types.ts:5745`). A second kind here would be a name that can never
+ * produce a row, and `sourceId` is dropped because no other hazard has one.
  */
 const HAZARD_SOURCES = Object.freeze([
   ['frostRing', 'activeFrostRings'],
@@ -41,6 +74,10 @@ const HAZARD_SOURCES = Object.freeze([
   ['varkhulForgestorm', 'activeVarkhulForgestormWarnings'],
   // biome-ignore lint/security/noSecrets: a member name copied from the game, which the entropy heuristic cannot tell from a token
   ['varkhulAnvilMeteor', 'activeVarkhulAnvilMeteors'],
+  // biome-ignore lint/security/noSecrets: a member name copied from the game, which the entropy heuristic cannot tell from a token
+  ['nythraxisGraveEruption', 'activeNythraxisGraveEruptions'],
+  ['nythraxisGraveFlame', 'activeNythraxisGraveFlames'],
+  ['nythraxisBindingSigil', 'activeNythraxisBindingSigils'],
 ] as const);
 
 /**

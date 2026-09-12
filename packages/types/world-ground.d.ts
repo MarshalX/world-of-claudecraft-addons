@@ -99,8 +99,10 @@ export interface DeathZone {
  *
  * Closed rather than open, because a hazard is drawn from the snapshot rather
  * than named by content: a kind exists here only once the loader reads the list
- * that carries it. The last three arrived with the Ignivar and Varkhul
- * encounters in game 0.41.0, in API minor 10.
+ * that carries it. Three arrived with the Ignivar and Varkhul encounters in game
+ * 0.41.0, in API minor 10; the three Nythraxis kinds arrived in API minor 12,
+ * and their LISTS are older than that, so an addon reading them wants the minor
+ * declared rather than a feature detect.
  */
 export type HazardKind =
   | 'frostRing'
@@ -110,7 +112,42 @@ export type HazardKind =
   /** Varkhul's forgestorm, in the window between the warning and the wave. */
   | 'varkhulForgestorm'
   /** The meteors Varkhul's anvil strike brings down. */
-  | 'varkhulAnvilMeteor';
+  | 'varkhulAnvilMeteor'
+  /**
+   * A Grave Eruption warning circle, in the window before the ground bursts.
+   *
+   * `remaining` counts down to the burst and `duration` is the whole telegraph,
+   * so this is the one hazard kind whose countdown names a moment a player has
+   * to act on rather than a burn running out. The wire also carries a reveal
+   * DELAY (how long the circle is placed before the game draws it) that this
+   * shape has no field for, so a circle can be in this list a moment before it
+   * is on screen.
+   */
+  | 'nythraxisGraveEruption'
+  /**
+   * Burning ground left where a Grave Eruption landed.
+   *
+   * ONE kind for a list the wire discriminates into two. Its `k` also admits
+   * `'soul'`, the pool Soul Rend used to leave, which game 0.42.2 retired from
+   * play while keeping the discriminant declared. A second kind would be a name
+   * that can never produce a row, so both arrive here as this one; if Soulfire
+   * ever returns to the fight, it will arrive under this kind until a release
+   * splits it.
+   */
+  | 'nythraxisGraveFlame'
+  /**
+   * A Binding Sigil, live for as long as the raid has to drag the boss onto it.
+   *
+   * Game 0.42.2 made its placement KNOWABLE, which is what makes it worth
+   * reading. It used to be a hashed spot in a ring band around the boss's live
+   * position; it is now one of the two platforms flanking the throne, a fixed
+   * offset either side of where the boss SPAWNED rather than of where he is,
+   * alternating every cast. So consecutive sigils sit at mirrored `x` about
+   * that anchor and a display can say which way the drag goes. Which side is
+   * NOT on the wire (the sim keeps it), so compare `x` against the previous
+   * sigil's rather than against a constant.
+   */
+  | 'nythraxisBindingSigil';
 
 /**
  * A ground effect with a position, a radius and a life.
@@ -127,6 +164,13 @@ export type HazardKind =
  * ORBS are travelling rather than placed, so a disc drawn at the position on
  * the snapshot marks where the orb has been. Both are visible in the game's own
  * render and neither is readable as a hazard.
+ *
+ * NYTHRAXIS'S GRAVEFIRE IS NOT HERE EITHER, and it is the same refusal twice
+ * over. It is a travelling LINE with a heading, a tail, a head and a half-width
+ * and no radius at all, so it has nothing to put in the three fields below that
+ * describe a disc; and game 0.42.2 retired it from play, along with the Soulfire
+ * pools, so the list it rides is now permanently empty. The three Nythraxis
+ * kinds that ARE here are all discs with a real countdown.
  *
  * A rift boss death zone is the one exception the loader closes for you, and it
  * is a `DeathZone` on `world.deathZones` rather than a third `HazardKind`. It

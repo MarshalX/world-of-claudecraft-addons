@@ -192,6 +192,8 @@ woc.world.combat          // { active, source }: whether you are fighting
 
 `world.cooldowns` is keyed by real ability id, which makes it one of the few places an id is safe to assume. `world.hazards` and `world.markers` are what a positional addon reads.
 
+`world.hazards` is the ONE list of ground effects whose geometry the wire actually carries, and its `kind` is a closed union rather than an open one for exactly that reason: a kind exists only once the loader reads the list behind it. Eight kinds as of API minor 12, covering frost rings, temporal hourglasses, and the Ignivar, Varkhul and Nythraxis raid encounters. Three families the game draws are deliberately absent and each names its own reason on `HazardKind`: Varkhul's cinder fires have no remaining time at all, its cinder orbs are travelling rather than placed, and Nythraxis's Gravefire is a travelling line with no radius that game 0.42.2 retired from play anyway. Every other ground AoE in the game announces itself once as a `spellfxAt` event and then lives only in the renderer, so tracking one of those means keeping your own list from the events.
+
 The ground, and what died on it:
 
 ```js
