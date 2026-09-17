@@ -1716,6 +1716,7 @@ const LIVE_CHECKS = [
   checkReaction,
   checkAuraQueries,
   checkAuraPolarity,
+  checkAuraToggle,
   checkHoldings,
   checkProvenance,
   checkCharacter,
@@ -2538,6 +2539,38 @@ function checkAuraPolarity() {
     true,
     `${String(harmful.length)} of ${String(all.length)} on you are harmful, ${String(removable)} removable`,
   );
+}
+
+/**
+ * The toggle rule, which is the one classifier the loader implements WHOLE.
+ *
+ * Checked as an INVARIANT rather than against a list of stances, for the reason the
+ * dispel check is: a session need not have a form or a stance up. What holds whatever
+ * is on you is that the rule reads only an id and a kind, so it must answer the same
+ * for a stripped-down pair as for the whole aura. A loader that started consulting a
+ * field a party row does not carry would fail here and nowhere else, since every other
+ * caller hands it a full aura.
+ */
+function checkAuraToggle() {
+  const { world } = woc;
+  if (typeof world.toggle !== 'function') {
+    return result('aura toggle', false, 'world.toggle is not callable');
+  }
+  const all = world.aurasOn('player');
+  const disagreed = all.filter(
+    (aura) => world.toggle(aura) !== world.toggle({ id: aura.id, kind: aura.kind }),
+  );
+  if (disagreed.length > 0) {
+    return result('aura toggle', false, `${String(disagreed.length)} read more than id and kind`);
+  }
+  const modes = all.filter((aura) => world.toggle(aura));
+  // A mode's clock is scaffolding, so anything the rule accepts should be carrying one
+  // of the long backing durations rather than a real one. Reported rather than failed:
+  // the game is free to back a mode with any number it likes.
+  if (modes.length === 0) {
+    return result('aura toggle', true, 'nothing on you is a mode');
+  }
+  return result('aura toggle', true, `${String(modes.length)} of ${String(all.length)} are modes`);
 }
 
 function combatWord(active) {

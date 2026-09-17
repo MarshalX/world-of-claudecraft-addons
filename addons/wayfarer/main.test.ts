@@ -56,7 +56,7 @@ const SETTLE_TURNS = 12;
 /** What the shipped atlas has to carry, asserted so a hand edit cannot quietly thin it. */
 const ZONE_COUNT = 15;
 const POI_COUNT = 112;
-const GRAVEYARD_COUNT = 19;
+const GRAVEYARD_COUNT = 20;
 const MAILBOX_COUNT = 15;
 const PORTAL_COUNT = 1;
 /** Ten zones are grid columns with their own x bounds; five are the full-width strip. */
@@ -442,6 +442,17 @@ describe('the atlas it carries', () => {
     expect(ATLAS.graveyards).toHaveLength(GRAVEYARD_COUNT);
     expect(ATLAS.mailboxes).toHaveLength(MAILBOX_COUNT);
     expect(ATLAS.portals).toHaveLength(PORTAL_COUNT);
+  });
+
+  // BY ID as well as by count, because a count says nothing about WHICH row moved: the
+  // table could lose Dawnrest and gain Last Keep and still be twenty. Game 0.43.0 is why
+  // this one is named. The keep's headstones had stood there with no graveyard record, so
+  // every death at it released at the Wyrmwatch cairns nearly 300 yards north, and this
+  // addon drew a ghost the walk it no longer has to make.
+  it('carries the Last Keep churchyard, at the point the game authored it', () => {
+    const yard = ATLAS.graveyards.find((one) => one.id === 'gy_last_keep');
+
+    expect(yard).toEqual({ id: 'gy_last_keep', label: 'Last Keep Churchyard', x: 451, z: 2134 });
   });
 
   // This is not fifteen plain rectangles: five zones are the original full-width strip and

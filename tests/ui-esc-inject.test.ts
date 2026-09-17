@@ -13,7 +13,7 @@ import {
   menuInsertionPoint,
   mountMenuEntry,
 } from '../loader/src/runtime/ui/esc-inject.ts';
-import { type GameDom, mountGameMenu } from './fakes/game-dom.ts';
+import { GAME_OWN_MENU_ENTRY_CLASS, type GameDom, mountGameMenu } from './fakes/game-dom.ts';
 
 const LABEL = 'Addons';
 const ENTRY = '#woc-addons-menu-entry';
@@ -73,6 +73,21 @@ describe('menuInsertionPoint', () => {
 });
 
 describe('the game menu entry', () => {
+  // Against the GAME's own rows rather than a literal, for the reason the rail
+  // button's twin assertion gives: game 0.43.0 added the `ui-btn` primitive to
+  // every menu row, and the game's rule for a row is `#options-menu
+  // .opt-btn.ui-btn`, so an entry without it silently falls back to the legacy
+  // `.btn:where(:not(.ui-btn))` arm and renders in the previous style.
+  it('wears exactly what the game puts on its own menu rows', () => {
+    const game = mountGameMenu(document);
+    game.renderMainView();
+    const theirs = game.menu.querySelector('.opt-list .opt-btn')?.className;
+    teardown.push(mount(game).dispose);
+
+    expect(document.querySelector(ENTRY)?.className).toBe(theirs);
+    expect(document.querySelector(ENTRY)?.className).toBe(GAME_OWN_MENU_ENTRY_CLASS);
+  });
+
   it('injects into a menu that was already open at mount', () => {
     const game = mountGameMenu(document);
     game.renderMainView();

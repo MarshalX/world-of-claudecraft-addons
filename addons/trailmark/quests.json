@@ -1,5 +1,5 @@
 {
-  "gameVersion": "0.42.2",
+  "gameVersion": "0.43.2",
   "source": "src/sim/data.ts, src/sim/quest_targets.ts, src/sim/types.ts, src/sim/content/farm_patches.ts, src/sim/content/*.ts",
   "zones": [
     {
@@ -4862,7 +4862,7 @@
     },
     {
       "item": "sprung_trap",
-      "positions": [[-92, 1750], [-98, 1764], [-80, 1770], [-72, 1756]]
+      "positions": [[-92, 1750], [-116, 1756], [-80, 1770], [-72, 1756]]
     },
     {
       "item": "amberfall_sap_bucket",
@@ -4874,11 +4874,11 @@
     },
     {
       "item": "fenway_mooring_line",
-      "positions": [[-348, 344], [-338, 340], [-372, 336], [-384, 346]]
+      "positions": [[-348, 344], [-318, 340], [-372, 336], [-380, 350]]
     },
     {
       "item": "bridgemere_toll_chest",
-      "positions": [[-324, 360], [-320, 398], [-326, 428]]
+      "positions": [[-310, 360], [-320, 398], [-326, 428]]
     },
     {
       "item": "gloamfield_nightbloom",
@@ -4947,20 +4947,20 @@
     {
       "id": "marshal_redbrook",
       "name": "Marshal Redbrook",
-      "x": -58,
-      "z": -102
+      "x": -1,
+      "z": -93
     },
     {
       "id": "trader_wilkes",
       "name": "Trader Wilkes",
-      "x": -17.833512834321652,
-      "z": -106.50023078698499
+      "x": -25,
+      "z": -94
     },
     {
       "id": "apothecary_lin",
       "name": "Apothecary Lin",
-      "x": -72,
-      "z": -96
+      "x": -11,
+      "z": -89
     },
     {
       "id": "brother_aldric",
@@ -4977,14 +4977,14 @@
     {
       "id": "fisherman_brandt",
       "name": "Fisherman Brandt",
-      "x": -95,
-      "z": -50
+      "x": -25,
+      "z": -104
     },
     {
       "id": "foreman_odell",
       "name": "Foreman Odell",
-      "x": -84,
-      "z": -63
+      "x": -16,
+      "z": -111
     },
     {
       "id": "bursar_fernando",
@@ -5481,8 +5481,8 @@
     {
       "id": "riftwright_maelis",
       "name": "Riftwright Maelis",
-      "x": 377,
-      "z": 7
+      "x": 366,
+      "z": 10
     },
     {
       "id": "wayfarer_bryn",

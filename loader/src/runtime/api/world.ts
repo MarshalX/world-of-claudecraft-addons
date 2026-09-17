@@ -354,6 +354,14 @@ export interface WorldApi {
   /** Whether an effect can be removed. Full auras only; a party row cannot answer. */
   dispellable: (aura: Aura, offensive?: boolean) => boolean;
 
+  /**
+   * Whether an effect is a MODE, so its `remaining` and `duration` mean nothing.
+   *
+   * Either aura shape, since the rule needs only an id and a kind. See
+   * `world/auras.ts`; this is the game's whole rule rather than most of it.
+   */
+  toggle: (aura: Pick<Aura, 'id' | 'kind'>) => boolean;
+
   /** Flat yards from the player to a point, ignoring height. Null before world entry. */
   distanceTo: (at: { x: number; z: number }) => number | null;
 

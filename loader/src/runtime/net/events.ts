@@ -86,6 +86,10 @@ type ChatChannel =
   | 'whisper'
   | 'general'
   | 'party'
+  /** Both teams in the sender's battleground, cross-team on purpose. */
+  | 'battleground'
+  /** A party or raid leader's alert to every member. The `/pull` countdown rides it. */
+  | 'raidWarning'
   | 'guild'
   | 'officer'
   | 'world'
@@ -104,6 +108,10 @@ interface ChatEvent extends PersonalEvent {
   to?: string;
   fromTitle?: string;
   classId?: string;
+  /** A translation key on a GENERATED line, absent on anything a player typed. */
+  textKey?: string;
+  /** What the game interpolates into `textKey`, unrendered. */
+  textValues?: Record<string, string | number>;
 }
 
 interface PlayerDeathEvent extends PersonalEvent {

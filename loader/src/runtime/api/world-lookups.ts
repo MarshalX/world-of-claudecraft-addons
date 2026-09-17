@@ -9,6 +9,7 @@ import {
   filterPartyAuras,
   isDispellable,
   isHarmful,
+  isToggle,
   NO_ROWS,
   NONE,
   type PartyAuraQuery,
@@ -126,6 +127,8 @@ export function lookups(hub: WorldHub) {
     harmful: (aura: Aura | PartyMemberAura): boolean => isHarmful(aura),
 
     dispellable: (aura: Aura, offensive = false): boolean => isDispellable(aura, offensive),
+
+    toggle: (aura: Pick<Aura, 'id' | 'kind'>): boolean => isToggle(aura),
   };
 }
 

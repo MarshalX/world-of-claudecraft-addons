@@ -28,6 +28,7 @@ import {
   renderKindValues,
   SOURCE,
 } from './aura-kinds-core.ts';
+import { PERSISTENT, toggleRule } from './aura-toggle-core.ts';
 
 /** A trailing slash on --game, so the joined path never doubles it. */
 const TRAILING_SLASH = /\/$/;
@@ -86,15 +87,24 @@ function main() {
   const source = read(`${checkout}/${SOURCE}`);
   const kinds = debuffKinds(source);
   const ids = undispellableIds(source);
+  // The toggle rule's third term lives in another module, so this generator reads
+  // TWO files. Both are read before anything is written, for the same reason the
+  // two parses above share one read: the outputs must describe one state.
+  const rule = toggleRule(source, read(`${checkout}/${PERSISTENT}`));
   const version = gameVersion(checkout);
 
-  writeFileSync(new URL(GENERATED_VALUES, `file://${ROOT}`), renderKindValues(kinds, ids, version));
+  writeFileSync(
+    new URL(GENERATED_VALUES, `file://${ROOT}`),
+    renderKindValues(kinds, ids, version, rule),
+  );
   writeFileSync(new URL(GENERATED_TYPES, `file://${ROOT}`), renderKindTypes(kinds, version));
 
   console.log(
-    `aura-kinds: wrote ${String(kinds.length)} harmful kinds and ` +
-      `${String(ids.length)} undispellable ids from game ${version} to ` +
-      `${GENERATED_VALUES}, and the kinds to ${GENERATED_TYPES}`,
+    `aura-kinds: wrote ${String(kinds.length)} harmful kinds, ` +
+      `${String(ids.length)} undispellable ids, and a toggle rule of ` +
+      `${String(rule.kinds.length)} kinds, ${String(rule.ids.length)} ids and ` +
+      `${String(rule.timed.length)} timed overrides from game ${version} to ` +
+      `${GENERATED_VALUES}, and the harmful kinds to ${GENERATED_TYPES}`,
   );
 }
 

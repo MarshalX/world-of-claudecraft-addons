@@ -85,11 +85,33 @@ export const ANCHORS_REQUIRED_IN_GAME: readonly AnchorKey[] = [
   'zoneLabel',
 ];
 
-/** The classes the game puts on a menu entry, reused so ours is styled by the game. */
-export const GAME_MENU_BUTTON_CLASS = 'btn opt-btn';
+/**
+ * The classes the game puts on a menu entry, reused so ours is styled by the game.
+ *
+ * `ui-btn` is the game's own button PRIMITIVE, introduced with the interface
+ * library (`@layer library`, `src/styles/library.css`) at game 0.43.0, and it is
+ * load-bearing twice over: it carries the plate itself, and the game's rule for a
+ * menu row is `#options-menu .opt-btn.ui-btn` (`src/styles/components.css:15606`),
+ * which sets the positioning host and centres the label. Dropping it does not
+ * leave the entry unstyled, which is what makes it easy to miss: the game kept a
+ * legacy arm, `.btn:where(:not(.ui-btn))` (`src/styles/components.css:869`), so an
+ * entry without it renders in the PRE-0.43 style beside rows that do not.
+ */
+export const GAME_MENU_BUTTON_CLASS = 'btn ui-btn opt-btn';
 
-/** The classes the game puts on a rail button. */
-export const GAME_MICRO_BUTTON_CLASS = 'micro-btn';
+/**
+ * The classes the game puts on a rail button (`play.html`, every `#mm-*`).
+ *
+ * `micro-btn` alone is no longer a button. Game 0.43.0 moved the whole plate
+ * (border, radius, background, colour, font size and shadow) out of `.micro-btn`
+ * in `src/styles/hud.css` and into the library's `.ui-icon-btn`, leaving
+ * `.micro-btn` holding the 34x30 box, the cursor, the weight and the hover
+ * flyout. So a button wearing only `micro-btn` draws a bare glyph on the HUD with
+ * no plate under it at all, and nothing reports that. `--micro-btn-w`/`-h`
+ * (`src/styles/tokens.css:830`) are the same 34x30, so the geometry is unchanged
+ * and this is purely the look coming back.
+ */
+export const GAME_MICRO_BUTTON_CLASS = 'micro-btn ui-icon-btn ui-icon-btn--micro';
 
 export interface AnchorReport {
   key: AnchorKey;
