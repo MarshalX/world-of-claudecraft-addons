@@ -1,5 +1,5 @@
 {
-  "gameVersion": "0.42.2",
+  "gameVersion": "0.43.2",
   "generatedFrom": [
     "src/sim/data.ts (the ITEMS merge)",
     "src/sim/content/items.ts",
@@ -43,7 +43,7 @@
       "itemLevel": 26,
       "stats": {
         "sta": 5,
-        "spi": 4
+        "spi": 7
       },
       "requiredLevel": 20,
       "sellValue": 5000
@@ -57,7 +57,7 @@
       "itemLevel": 31,
       "stats": {
         "sta": 8,
-        "spi": 5
+        "spi": 9
       },
       "hasteRating": 25,
       "requiredLevel": 20,
@@ -85,6 +85,7 @@
       "slot": "helmet",
       "armorType": "cloth",
       "stats": {
+        "sta": 1,
         "int": 2,
         "spi": 1,
         "armor": 16
@@ -275,6 +276,7 @@
       "slot": "ring",
       "itemLevel": 26,
       "stats": {
+        "sta": 4,
         "int": 6,
         "spi": 5
       },
@@ -303,7 +305,7 @@
       "slot": "ring",
       "itemLevel": 31,
       "stats": {
-        "sta": 3,
+        "sta": 4,
         "int": 6,
         "spi": 1
       },
@@ -640,8 +642,9 @@
       "slot": "ring",
       "itemLevel": 35,
       "stats": {
-        "str": 8,
-        "agi": 7
+        "str": 5,
+        "agi": 5,
+        "sta": 5
       },
       "hitRating": 25,
       "requiredLevel": 20,
@@ -663,6 +666,7 @@
       "armorType": "leather",
       "itemLevel": 31,
       "stats": {
+        "sta": 5,
         "int": 9,
         "spi": 6,
         "armor": 104
@@ -686,7 +690,7 @@
       "itemLevel": 23,
       "stats": {
         "sta": 6,
-        "spi": 4,
+        "spi": 7,
         "armor": 76
       },
       "requiredLevel": 20,
@@ -724,6 +728,7 @@
       "armorType": "cloth",
       "itemLevel": 35,
       "stats": {
+        "sta": 8,
         "int": 13,
         "spi": 12,
         "armor": 105
@@ -745,6 +750,7 @@
       "armorType": "cloth",
       "itemLevel": 35,
       "stats": {
+        "sta": 6,
         "int": 9,
         "spi": 8,
         "armor": 75
@@ -766,6 +772,7 @@
       "armorType": "cloth",
       "itemLevel": 35,
       "stats": {
+        "sta": 7,
         "int": 11,
         "spi": 10,
         "armor": 90
@@ -787,6 +794,7 @@
       "armorType": "cloth",
       "itemLevel": 35,
       "stats": {
+        "sta": 7,
         "int": 11,
         "spi": 11,
         "armor": 95
@@ -808,6 +816,7 @@
       "armorType": "cloth",
       "itemLevel": 35,
       "stats": {
+        "sta": 6,
         "int": 9,
         "spi": 9,
         "armor": 80
@@ -983,7 +992,7 @@
       "itemLevel": 21,
       "stats": {
         "agi": 7,
-        "sta": 3
+        "sta": 4
       },
       "weapon": {
         "min": 17,
@@ -1020,6 +1029,7 @@
       "armorType": "cloth",
       "itemLevel": 26,
       "stats": {
+        "sta": 4,
         "int": 7,
         "spi": 4,
         "armor": 38
@@ -1413,6 +1423,7 @@
       "armorType": "cloth",
       "itemLevel": 11,
       "stats": {
+        "sta": 1,
         "int": 4,
         "spi": 2,
         "armor": 42
@@ -1442,8 +1453,8 @@
       "slot": "mainhand",
       "itemLevel": 20,
       "stats": {
-        "str": 8,
-        "sta": 3
+        "str": 7,
+        "sta": 4
       },
       "weapon": {
         "min": 24,
@@ -1522,6 +1533,7 @@
       "slot": "waist",
       "armorType": "cloth",
       "stats": {
+        "sta": 1,
         "int": 2,
         "spi": 1,
         "armor": 18
@@ -1554,7 +1566,8 @@
       "quality": "uncommon",
       "slot": "mainhand",
       "stats": {
-        "agi": 3
+        "agi": 3,
+        "sta": 2
       },
       "weapon": {
         "min": 5,
@@ -1580,6 +1593,7 @@
       "armorType": "mail",
       "itemLevel": 31,
       "stats": {
+        "sta": 5,
         "int": 9,
         "spi": 7,
         "armor": 240
@@ -1598,6 +1612,7 @@
       "armorType": "mail",
       "itemLevel": 31,
       "stats": {
+        "sta": 6,
         "int": 10,
         "spi": 8,
         "armor": 292
@@ -1616,6 +1631,7 @@
       "armorType": "cloth",
       "itemLevel": 35,
       "stats": {
+        "sta": 8,
         "int": 13,
         "spi": 12,
         "armor": 105
@@ -1637,6 +1653,7 @@
       "armorType": "cloth",
       "itemLevel": 35,
       "stats": {
+        "sta": 6,
         "int": 9,
         "spi": 8,
         "armor": 75
@@ -1658,6 +1675,7 @@
       "armorType": "cloth",
       "itemLevel": 35,
       "stats": {
+        "sta": 7,
         "int": 11,
         "spi": 10,
         "armor": 90
@@ -1679,6 +1697,7 @@
       "armorType": "cloth",
       "itemLevel": 35,
       "stats": {
+        "sta": 7,
         "int": 11,
         "spi": 11,
         "armor": 95
@@ -1700,6 +1719,7 @@
       "armorType": "cloth",
       "itemLevel": 35,
       "stats": {
+        "sta": 6,
         "int": 9,
         "spi": 9,
         "armor": 80
@@ -1725,6 +1745,7 @@
       "slot": "offhand",
       "itemLevel": 35,
       "stats": {
+        "sta": 6,
         "int": 12,
         "spi": 6
       },
@@ -1742,7 +1763,7 @@
       "slot": "neck",
       "itemLevel": 31,
       "stats": {
-        "sta": 4,
+        "sta": 5,
         "int": 6,
         "spi": 1
       },
@@ -2017,6 +2038,7 @@
       "armorType": "cloth",
       "itemLevel": 35,
       "stats": {
+        "sta": 5,
         "int": 11,
         "spi": 5,
         "armor": 70
@@ -2073,7 +2095,7 @@
       "armorType": "cloth",
       "itemLevel": 31,
       "stats": {
-        "sta": 5,
+        "sta": 6,
         "int": 8,
         "spi": 3,
         "armor": 76
@@ -2178,7 +2200,7 @@
       "armorType": "cloth",
       "itemLevel": 31,
       "stats": {
-        "sta": 3,
+        "sta": 5,
         "int": 7,
         "spi": 3,
         "armor": 44
@@ -2198,6 +2220,7 @@
       "slot": "ring",
       "itemLevel": 35,
       "stats": {
+        "sta": 5,
         "int": 10,
         "spi": 5
       },
@@ -2460,7 +2483,8 @@
       "itemLevel": 16,
       "stats": {
         "sta": 2,
-        "int": 3
+        "int": 3,
+        "spi": 2
       },
       "requiredClass": ["mage", "priest", "warlock", "shaman", "paladin", "druid"],
       "sellValue": 36
@@ -2500,6 +2524,7 @@
       "armorType": "cloth",
       "itemLevel": 35,
       "stats": {
+        "sta": 6,
         "int": 11,
         "spi": 6,
         "armor": 75
@@ -2518,6 +2543,7 @@
       "quality": "uncommon",
       "slot": "mainhand",
       "stats": {
+        "sta": 1,
         "int": 2,
         "spi": 2
       },
@@ -2579,6 +2605,7 @@
       "slot": "mainhand",
       "itemLevel": 20,
       "stats": {
+        "sta": 4,
         "int": 8,
         "spi": 4
       },
@@ -2598,6 +2625,7 @@
       "quality": "common",
       "slot": "mainhand",
       "stats": {
+        "sta": 1,
         "int": 2
       },
       "weapon": {
@@ -2711,6 +2739,7 @@
       "armorType": "mail",
       "itemLevel": 15,
       "stats": {
+        "sta": 1,
         "int": 2,
         "spi": 2,
         "armor": 56
@@ -2730,7 +2759,8 @@
       "quality": "uncommon",
       "slot": "mainhand",
       "stats": {
-        "str": 2
+        "str": 2,
+        "sta": 1
       },
       "weapon": {
         "min": 8,
@@ -2862,8 +2892,8 @@
       "armorType": "leather",
       "itemLevel": 35,
       "stats": {
-        "agi": 12,
-        "sta": 5,
+        "agi": 11,
+        "sta": 6,
         "armor": 150
       },
       "critRating": 60,
@@ -2884,6 +2914,7 @@
       "stats": {
         "sta": 8,
         "int": 17,
+        "spi": 8,
         "armor": 105
       },
       "spellPower": 16,
@@ -2905,6 +2936,7 @@
       "stats": {
         "sta": 5,
         "int": 11,
+        "spi": 5,
         "armor": 70
       },
       "spellPower": 12,
@@ -2924,8 +2956,9 @@
       "armorType": "cloth",
       "itemLevel": 35,
       "stats": {
-        "sta": 5,
+        "sta": 6,
         "int": 12,
+        "spi": 5,
         "armor": 75
       },
       "spellPower": 12,
@@ -2947,6 +2980,7 @@
       "stats": {
         "sta": 8,
         "int": 17,
+        "spi": 8,
         "armor": 215
       },
       "spellPower": 16,
@@ -2968,6 +3002,7 @@
       "stats": {
         "sta": 5,
         "int": 11,
+        "spi": 5,
         "armor": 145
       },
       "spellPower": 12,
@@ -2987,8 +3022,9 @@
       "armorType": "leather",
       "itemLevel": 35,
       "stats": {
-        "sta": 5,
+        "sta": 6,
         "int": 12,
+        "spi": 5,
         "armor": 150
       },
       "spellPower": 12,
@@ -3010,6 +3046,7 @@
       "stats": {
         "sta": 8,
         "int": 17,
+        "spi": 8,
         "armor": 380
       },
       "spellPower": 16,
@@ -3031,6 +3068,7 @@
       "stats": {
         "sta": 5,
         "int": 11,
+        "spi": 5,
         "armor": 255
       },
       "spellPower": 12,
@@ -3050,8 +3088,9 @@
       "armorType": "mail",
       "itemLevel": 35,
       "stats": {
-        "sta": 5,
+        "sta": 6,
         "int": 12,
+        "spi": 5,
         "armor": 265
       },
       "spellPower": 12,
@@ -3071,9 +3110,9 @@
       "armorType": "cloth",
       "itemLevel": 35,
       "stats": {
-        "sta": 4,
+        "sta": 8,
         "int": 14,
-        "spi": 7,
+        "spi": 11,
         "armor": 105
       },
       "spellPower": 12,
@@ -3093,9 +3132,9 @@
       "armorType": "cloth",
       "itemLevel": 35,
       "stats": {
-        "sta": 3,
+        "sta": 5,
         "int": 9,
-        "spi": 4,
+        "spi": 7,
         "armor": 70
       },
       "spellPower": 8,
@@ -3115,9 +3154,9 @@
       "armorType": "cloth",
       "itemLevel": 35,
       "stats": {
-        "sta": 3,
-        "int": 9,
-        "spi": 5,
+        "sta": 6,
+        "int": 10,
+        "spi": 7,
         "armor": 75
       },
       "spellPower": 8,
@@ -3137,9 +3176,9 @@
       "armorType": "leather",
       "itemLevel": 35,
       "stats": {
-        "sta": 4,
+        "sta": 8,
         "int": 14,
-        "spi": 7,
+        "spi": 11,
         "armor": 215
       },
       "spellPower": 12,
@@ -3159,9 +3198,9 @@
       "armorType": "leather",
       "itemLevel": 35,
       "stats": {
-        "sta": 3,
+        "sta": 5,
         "int": 9,
-        "spi": 4,
+        "spi": 7,
         "armor": 145
       },
       "spellPower": 8,
@@ -3181,9 +3220,9 @@
       "armorType": "leather",
       "itemLevel": 35,
       "stats": {
-        "sta": 3,
-        "int": 9,
-        "spi": 5,
+        "sta": 6,
+        "int": 10,
+        "spi": 7,
         "armor": 150
       },
       "spellPower": 8,
@@ -3203,9 +3242,9 @@
       "armorType": "mail",
       "itemLevel": 35,
       "stats": {
-        "sta": 4,
+        "sta": 8,
         "int": 14,
-        "spi": 7,
+        "spi": 11,
         "armor": 380
       },
       "spellPower": 12,
@@ -3225,9 +3264,9 @@
       "armorType": "mail",
       "itemLevel": 35,
       "stats": {
-        "sta": 3,
+        "sta": 5,
         "int": 9,
-        "spi": 4,
+        "spi": 7,
         "armor": 255
       },
       "spellPower": 8,
@@ -3247,9 +3286,9 @@
       "armorType": "mail",
       "itemLevel": 35,
       "stats": {
-        "sta": 3,
-        "int": 9,
-        "spi": 5,
+        "sta": 6,
+        "int": 10,
+        "spi": 7,
         "armor": 265
       },
       "spellPower": 8,
@@ -3309,8 +3348,8 @@
       "armorType": "leather",
       "itemLevel": 35,
       "stats": {
-        "str": 12,
-        "sta": 5,
+        "str": 11,
+        "sta": 6,
         "armor": 150
       },
       "critRating": 60,
@@ -3369,8 +3408,8 @@
       "armorType": "mail",
       "itemLevel": 35,
       "stats": {
-        "str": 12,
-        "sta": 5,
+        "str": 11,
+        "sta": 6,
         "armor": 265
       },
       "critRating": 60,
@@ -3523,6 +3562,7 @@
       "armorType": "leather",
       "itemLevel": 23,
       "stats": {
+        "sta": 3,
         "int": 6,
         "spi": 4,
         "armor": 56
@@ -3620,7 +3660,8 @@
       "slot": "mainhand",
       "itemLevel": 21,
       "stats": {
-        "agi": 8
+        "agi": 5,
+        "sta": 3
       },
       "weapon": {
         "min": 12,
@@ -3652,6 +3693,7 @@
       "armorType": "mail",
       "itemLevel": 35,
       "stats": {
+        "sta": 8,
         "int": 13,
         "spi": 12,
         "armor": 380
@@ -3673,6 +3715,7 @@
       "armorType": "mail",
       "itemLevel": 35,
       "stats": {
+        "sta": 6,
         "int": 9,
         "spi": 8,
         "armor": 270
@@ -3694,6 +3737,7 @@
       "armorType": "mail",
       "itemLevel": 35,
       "stats": {
+        "sta": 7,
         "int": 11,
         "spi": 10,
         "armor": 325
@@ -3715,6 +3759,7 @@
       "armorType": "mail",
       "itemLevel": 35,
       "stats": {
+        "sta": 7,
         "int": 11,
         "spi": 11,
         "armor": 345
@@ -3736,6 +3781,7 @@
       "armorType": "mail",
       "itemLevel": 35,
       "stats": {
+        "sta": 6,
         "int": 9,
         "spi": 9,
         "armor": 290
@@ -3778,7 +3824,8 @@
       "slot": "mainhand",
       "itemLevel": 13,
       "stats": {
-        "str": 4
+        "str": 4,
+        "sta": 2
       },
       "weapon": {
         "min": 11,
@@ -3819,9 +3866,9 @@
       "uniqueEquipped": true,
       "itemLevel": 49,
       "stats": {
-        "sta": 19,
+        "sta": 23,
         "int": 21,
-        "spi": 25
+        "spi": 43
       },
       "spellPower": 25,
       "weapon": {
@@ -3945,6 +3992,7 @@
       "armorType": "leather",
       "itemLevel": 35,
       "stats": {
+        "sta": 5,
         "int": 8,
         "spi": 8,
         "armor": 145
@@ -4001,6 +4049,7 @@
       "armorType": "leather",
       "itemLevel": 31,
       "stats": {
+        "sta": 5,
         "int": 8,
         "spi": 6,
         "armor": 96
@@ -4053,6 +4102,7 @@
       "quality": "uncommon",
       "slot": "mainhand",
       "stats": {
+        "sta": 2,
         "int": 3,
         "spi": 2
       },
@@ -4097,6 +4147,7 @@
       "armorType": "cloth",
       "itemLevel": 16,
       "stats": {
+        "sta": 3,
         "int": 6,
         "spi": 4,
         "armor": 48
@@ -4114,6 +4165,7 @@
       "armorType": "cloth",
       "itemLevel": 16,
       "stats": {
+        "sta": 2,
         "int": 5,
         "spi": 3,
         "armor": 42
@@ -4130,6 +4182,7 @@
       "slot": "mainhand",
       "itemLevel": 14,
       "stats": {
+        "sta": 3,
         "int": 6,
         "spi": 3
       },
@@ -4165,8 +4218,8 @@
       "slot": "mainhand",
       "itemLevel": 21,
       "stats": {
-        "agi": 9,
-        "sta": 3
+        "agi": 8,
+        "sta": 4
       },
       "weapon": {
         "min": 16,
@@ -4205,6 +4258,7 @@
       "slot": "mainhand",
       "itemLevel": 21,
       "stats": {
+        "sta": 4,
         "int": 10,
         "spi": 4
       },
@@ -4243,6 +4297,7 @@
       "armorType": "cloth",
       "itemLevel": 21,
       "stats": {
+        "sta": 3,
         "int": 5,
         "spi": 3,
         "armor": 35
@@ -4260,8 +4315,8 @@
       "armorType": "leather",
       "itemLevel": 21,
       "stats": {
-        "agi": 6,
-        "sta": 2,
+        "agi": 5,
+        "sta": 3,
         "armor": 60
       },
       "requiredLevel": 18,
@@ -4343,6 +4398,7 @@
       "armorType": "leather",
       "itemLevel": 18,
       "stats": {
+        "sta": 2,
         "int": 6,
         "spi": 3,
         "armor": 46
@@ -4359,6 +4415,7 @@
       "armorType": "leather",
       "itemLevel": 13,
       "stats": {
+        "sta": 1,
         "int": 3,
         "spi": 1,
         "armor": 34
@@ -4383,7 +4440,7 @@
       "itemLevel": 28,
       "stats": {
         "agi": 12,
-        "sta": 6
+        "sta": 7
       },
       "weapon": {
         "min": 20,
@@ -4450,6 +4507,7 @@
       "armorType": "leather",
       "itemLevel": 10,
       "stats": {
+        "sta": 1,
         "int": 2,
         "spi": 1,
         "armor": 52
@@ -4486,6 +4544,7 @@
       "armorType": "cloth",
       "itemLevel": 10,
       "stats": {
+        "sta": 1,
         "int": 2,
         "spi": 1,
         "armor": 30
@@ -4509,6 +4568,7 @@
       "armorType": "mail",
       "itemLevel": 11,
       "stats": {
+        "sta": 1,
         "int": 2,
         "spi": 1,
         "armor": 50
@@ -4572,7 +4632,7 @@
       "itemLevel": 21,
       "stats": {
         "sta": 3,
-        "spi": 2,
+        "spi": 4,
         "armor": 60
       },
       "sellValue": 1000
@@ -4586,7 +4646,8 @@
       "armorType": "leather",
       "itemLevel": 14,
       "stats": {
-        "agi": 5,
+        "agi": 3,
+        "sta": 2,
         "armor": 80
       },
       "requiredClass": ["rogue", "hunter"],
@@ -4613,6 +4674,7 @@
       "slot": "mainhand",
       "itemLevel": 18,
       "stats": {
+        "sta": 3,
         "int": 9,
         "spi": 4
       },
@@ -4677,6 +4739,7 @@
       "armorType": "mail",
       "itemLevel": 35,
       "stats": {
+        "sta": 6,
         "int": 9,
         "spi": 9,
         "armor": 760
@@ -4696,7 +4759,7 @@
       "itemLevel": 22,
       "stats": {
         "str": 8,
-        "sta": 3
+        "sta": 4
       },
       "weapon": {
         "min": 26,
@@ -4880,6 +4943,7 @@
       "armorType": "cloth",
       "itemLevel": 35,
       "stats": {
+        "sta": 8,
         "int": 13,
         "spi": 12,
         "armor": 105
@@ -4901,6 +4965,7 @@
       "armorType": "cloth",
       "itemLevel": 35,
       "stats": {
+        "sta": 6,
         "int": 9,
         "spi": 8,
         "armor": 75
@@ -4922,6 +4987,7 @@
       "armorType": "cloth",
       "itemLevel": 35,
       "stats": {
+        "sta": 7,
         "int": 11,
         "spi": 10,
         "armor": 90
@@ -4943,6 +5009,7 @@
       "armorType": "cloth",
       "itemLevel": 35,
       "stats": {
+        "sta": 7,
         "int": 11,
         "spi": 11,
         "armor": 95
@@ -4964,6 +5031,7 @@
       "armorType": "cloth",
       "itemLevel": 35,
       "stats": {
+        "sta": 6,
         "int": 9,
         "spi": 9,
         "armor": 80
@@ -5013,6 +5081,7 @@
       "slot": "mainhand",
       "itemLevel": 21,
       "stats": {
+        "sta": 3,
         "int": 6,
         "spi": 2
       },
@@ -5032,6 +5101,7 @@
       "slot": "shoulder",
       "armorType": "cloth",
       "stats": {
+        "sta": 1,
         "int": 2,
         "armor": 14
       },
@@ -5047,7 +5117,8 @@
       "itemLevel": 16,
       "stats": {
         "sta": 1,
-        "int": 3
+        "int": 3,
+        "spi": 1
       },
       "sellValue": 46
     },
@@ -5159,9 +5230,9 @@
       "slot": "mainhand",
       "itemLevel": 23,
       "stats": {
-        "str": 7,
+        "str": 6,
         "agi": 5,
-        "sta": 5
+        "sta": 6
       },
       "weapon": {
         "min": 40,
@@ -5218,6 +5289,7 @@
       "armorType": "leather",
       "itemLevel": 11,
       "stats": {
+        "sta": 1,
         "int": 3,
         "spi": 1,
         "armor": 48
@@ -5233,6 +5305,7 @@
       "armorType": "leather",
       "itemLevel": 31,
       "stats": {
+        "sta": 7,
         "int": 12,
         "spi": 8,
         "armor": 132
@@ -5321,6 +5394,7 @@
       "armorType": "cloth",
       "itemLevel": 14,
       "stats": {
+        "sta": 2,
         "int": 5,
         "spi": 3,
         "armor": 45
@@ -5385,6 +5459,7 @@
       "armorType": "mail",
       "itemLevel": 11,
       "stats": {
+        "sta": 1,
         "int": 2,
         "spi": 1,
         "armor": 42
@@ -5699,6 +5774,7 @@
       "slot": "mainhand",
       "itemLevel": 35,
       "stats": {
+        "sta": 11,
         "int": 22,
         "spi": 11
       },
@@ -5953,6 +6029,7 @@
       "armorType": "cloth",
       "itemLevel": 35,
       "stats": {
+        "sta": 8,
         "int": 17,
         "spi": 8,
         "armor": 105
@@ -5975,6 +6052,7 @@
       "armorType": "cloth",
       "itemLevel": 35,
       "stats": {
+        "sta": 6,
         "int": 11,
         "spi": 6,
         "armor": 75
@@ -5997,6 +6075,7 @@
       "armorType": "cloth",
       "itemLevel": 35,
       "stats": {
+        "sta": 7,
         "int": 14,
         "spi": 7,
         "armor": 90
@@ -6019,6 +6098,7 @@
       "armorType": "cloth",
       "itemLevel": 35,
       "stats": {
+        "sta": 7,
         "int": 15,
         "spi": 7,
         "armor": 95
@@ -6041,6 +6121,7 @@
       "armorType": "cloth",
       "itemLevel": 35,
       "stats": {
+        "sta": 6,
         "int": 12,
         "spi": 6,
         "armor": 80
@@ -6392,6 +6473,7 @@
       "slot": "offhand",
       "itemLevel": 16,
       "stats": {
+        "sta": 2,
         "int": 3,
         "spi": 2
       },
@@ -6458,6 +6540,7 @@
       "armorType": "cloth",
       "itemLevel": 16,
       "stats": {
+        "sta": 2,
         "int": 3,
         "spi": 2,
         "armor": 37
@@ -6473,6 +6556,7 @@
       "armorType": "cloth",
       "itemLevel": 16,
       "stats": {
+        "sta": 2,
         "int": 4,
         "spi": 2,
         "armor": 41
@@ -6487,7 +6571,8 @@
       "slot": "mainhand",
       "itemLevel": 7,
       "stats": {
-        "str": 3
+        "str": 2,
+        "sta": 1
       },
       "weapon": {
         "min": 8,
@@ -6566,7 +6651,7 @@
       "itemLevel": 21,
       "stats": {
         "sta": 3,
-        "spi": 3,
+        "spi": 5,
         "armor": 52
       },
       "sellValue": 1000
@@ -6580,6 +6665,7 @@
       "armorType": "cloth",
       "itemLevel": 35,
       "stats": {
+        "sta": 8,
         "int": 17,
         "spi": 8,
         "armor": 105
@@ -6602,6 +6688,7 @@
       "armorType": "cloth",
       "itemLevel": 35,
       "stats": {
+        "sta": 6,
         "int": 11,
         "spi": 6,
         "armor": 75
@@ -6624,6 +6711,7 @@
       "armorType": "cloth",
       "itemLevel": 35,
       "stats": {
+        "sta": 7,
         "int": 14,
         "spi": 7,
         "armor": 90
@@ -6646,6 +6734,7 @@
       "armorType": "cloth",
       "itemLevel": 35,
       "stats": {
+        "sta": 7,
         "int": 15,
         "spi": 7,
         "armor": 95
@@ -6668,6 +6757,7 @@
       "armorType": "cloth",
       "itemLevel": 35,
       "stats": {
+        "sta": 6,
         "int": 12,
         "spi": 6,
         "armor": 80
@@ -6713,6 +6803,7 @@
       "slot": "mainhand",
       "itemLevel": 13,
       "stats": {
+        "sta": 2,
         "int": 5,
         "spi": 2
       },
@@ -6787,6 +6878,7 @@
       "itemLevel": 12,
       "stats": {
         "agi": 3,
+        "sta": 1,
         "armor": 32
       },
       "requiredLevel": 9,
@@ -6831,6 +6923,7 @@
       "armorType": "cloth",
       "itemLevel": 10,
       "stats": {
+        "sta": 2,
         "int": 3,
         "spi": 3,
         "armor": 38
@@ -6990,9 +7083,9 @@
       "slot": "mainhand",
       "itemLevel": 23,
       "stats": {
-        "str": 7,
+        "str": 6,
         "agi": 5,
-        "sta": 5
+        "sta": 6
       },
       "weapon": {
         "min": 48,
@@ -7069,6 +7162,7 @@
       "armorType": "leather",
       "itemLevel": 35,
       "stats": {
+        "sta": 8,
         "int": 13,
         "spi": 12,
         "armor": 215
@@ -7090,6 +7184,7 @@
       "armorType": "leather",
       "itemLevel": 35,
       "stats": {
+        "sta": 6,
         "int": 9,
         "spi": 8,
         "armor": 150
@@ -7111,6 +7206,7 @@
       "armorType": "leather",
       "itemLevel": 35,
       "stats": {
+        "sta": 7,
         "int": 11,
         "spi": 10,
         "armor": 185
@@ -7132,6 +7228,7 @@
       "armorType": "leather",
       "itemLevel": 35,
       "stats": {
+        "sta": 7,
         "int": 11,
         "spi": 11,
         "armor": 195
@@ -7153,6 +7250,7 @@
       "armorType": "leather",
       "itemLevel": 35,
       "stats": {
+        "sta": 6,
         "int": 9,
         "spi": 9,
         "armor": 165
@@ -7174,6 +7272,7 @@
       "armorType": "leather",
       "itemLevel": 35,
       "stats": {
+        "sta": 6,
         "int": 9,
         "spi": 8,
         "armor": 150
@@ -7193,6 +7292,7 @@
       "armorType": "leather",
       "itemLevel": 26,
       "stats": {
+        "sta": 4,
         "int": 8,
         "spi": 5,
         "armor": 88
@@ -7231,8 +7331,8 @@
       "slot": "mainhand",
       "itemLevel": 20,
       "stats": {
-        "agi": 8,
-        "sta": 3
+        "agi": 7,
+        "sta": 4
       },
       "weapon": {
         "min": 14,
@@ -7252,7 +7352,8 @@
       "itemLevel": 31,
       "stats": {
         "sta": 6,
-        "int": 10
+        "int": 10,
+        "spi": 5
       },
       "critRating": 20,
       "requiredLevel": 20,
@@ -7362,6 +7463,7 @@
       "slot": "neck",
       "itemLevel": 35,
       "stats": {
+        "sta": 5,
         "int": 8,
         "spi": 8
       },
@@ -7707,9 +7809,9 @@
       "uniqueEquipped": true,
       "itemLevel": 53,
       "stats": {
-        "sta": 19,
+        "sta": 23,
         "int": 21,
-        "spi": 25
+        "spi": 43
       },
       "spellPower": 25,
       "critRating": 30,
@@ -7831,6 +7933,7 @@
       "heroicOf": "drowned_prayer_leggings",
       "itemLevel": 25,
       "stats": {
+        "sta": 4,
         "int": 8,
         "spi": 5,
         "armor": 48
@@ -7849,6 +7952,7 @@
       "heroicOf": "drowned_prayer_sandals",
       "itemLevel": 25,
       "stats": {
+        "sta": 3,
         "int": 6,
         "spi": 3,
         "armor": 42
@@ -7866,8 +7970,8 @@
       "heroicOf": "duskwhisper",
       "itemLevel": 31,
       "stats": {
-        "agi": 15,
-        "sta": 7
+        "agi": 14,
+        "sta": 8
       },
       "critRating": 50,
       "weapon": {
@@ -7945,9 +8049,9 @@
       "heroicOf": "fanglords_beastspear",
       "itemLevel": 25,
       "stats": {
-        "str": 8,
+        "str": 7,
         "agi": 5,
-        "sta": 5
+        "sta": 6
       },
       "weapon": {
         "min": 42,
@@ -8025,8 +8129,8 @@
       "heroicOf": "gravewyrm_mantle",
       "itemLevel": 25,
       "stats": {
-        "agi": 8,
-        "sta": 3,
+        "agi": 7,
+        "sta": 4,
         "armor": 82
       },
       "requiredLevel": 20,
@@ -8077,9 +8181,9 @@
       "heroicOf": "gravewyrm_thornmaul",
       "itemLevel": 25,
       "stats": {
-        "str": 8,
+        "str": 7,
         "agi": 5,
-        "sta": 5
+        "sta": 6
       },
       "weapon": {
         "min": 50,
@@ -8100,6 +8204,7 @@
       "heroicOf": "grovewardens_grips",
       "itemLevel": 28,
       "stats": {
+        "sta": 5,
         "int": 9,
         "spi": 5,
         "armor": 88
@@ -8117,9 +8222,9 @@
       "uniqueEquipped": true,
       "itemLevel": 53,
       "stats": {
-        "str": 17,
-        "agi": 17,
-        "sta": 15
+        "str": 15,
+        "agi": 15,
+        "sta": 23
       },
       "critRating": 30,
       "hitRating": 70,
@@ -8165,9 +8270,9 @@
       "heroicOf": "maul_of_the_scourged_wilds",
       "itemLevel": 33,
       "stats": {
-        "str": 12,
+        "str": 11,
         "agi": 9,
-        "sta": 9
+        "sta": 10
       },
       "critRating": 20,
       "hitRating": 65,
@@ -8208,6 +8313,7 @@
       "heroicOf": "moonshroud_robe",
       "itemLevel": 25,
       "stats": {
+        "sta": 5,
         "int": 10,
         "spi": 5,
         "armor": 70
@@ -8226,8 +8332,8 @@
       "heroicOf": "moonshroud_tunic",
       "itemLevel": 25,
       "stats": {
-        "agi": 10,
-        "sta": 4,
+        "agi": 9,
+        "sta": 5,
         "armor": 125
       },
       "requiredLevel": 20,
@@ -8244,6 +8350,7 @@
       "heroicOf": "necromancers_soulspire_mantle",
       "itemLevel": 28,
       "stats": {
+        "sta": 5,
         "int": 10,
         "spi": 5,
         "armor": 70
@@ -8263,6 +8370,7 @@
       "heroicOf": "necromancers_soulsteps",
       "itemLevel": 28,
       "stats": {
+        "sta": 4,
         "int": 9,
         "spi": 4,
         "armor": 80
@@ -8282,6 +8390,7 @@
       "heroicOf": "necromancers_starshroud",
       "itemLevel": 28,
       "stats": {
+        "sta": 7,
         "int": 12,
         "spi": 8,
         "armor": 92
@@ -8300,9 +8409,9 @@
       "heroicOf": "nightfangs_greatstaff",
       "itemLevel": 28,
       "stats": {
-        "str": 10,
+        "str": 9,
         "agi": 8,
-        "sta": 8
+        "sta": 9
       },
       "weapon": {
         "min": 53,
@@ -8382,8 +8491,8 @@
       "heroicOf": "shadowmeld_tunic",
       "itemLevel": 25,
       "stats": {
-        "agi": 10,
-        "sta": 4,
+        "agi": 9,
+        "sta": 5,
         "armor": 130
       },
       "requiredLevel": 20,
@@ -8402,6 +8511,7 @@
       "stats": {
         "sta": 7,
         "int": 13,
+        "spi": 7,
         "armor": 105
       },
       "critRating": 20,
@@ -8423,6 +8533,7 @@
       "stats": {
         "sta": 7,
         "int": 10,
+        "spi": 6,
         "armor": 92
       },
       "critRating": 20,
@@ -8441,6 +8552,7 @@
       "heroicOf": "staff_of_the_gravewyrm",
       "itemLevel": 28,
       "stats": {
+        "sta": 7,
         "int": 13,
         "spi": 7
       },
@@ -8462,6 +8574,7 @@
       "heroicOf": "staff_of_velkhar",
       "itemLevel": 25,
       "stats": {
+        "sta": 5,
         "int": 10,
         "spi": 4
       },
@@ -8486,6 +8599,7 @@
       "stats": {
         "sta": 8,
         "int": 12,
+        "spi": 7,
         "armor": 225
       },
       "critRating": 55,
@@ -8507,6 +8621,7 @@
       "stats": {
         "sta": 8,
         "int": 9,
+        "spi": 6,
         "armor": 190
       },
       "critRating": 55,
@@ -8526,6 +8641,7 @@
       "heroicOf": "stormhymn_chain_grips",
       "itemLevel": 33,
       "stats": {
+        "sta": 5,
         "int": 9,
         "spi": 7,
         "armor": 165
@@ -8546,6 +8662,7 @@
       "heroicOf": "stormhymn_chain_treads",
       "itemLevel": 33,
       "stats": {
+        "sta": 5,
         "int": 9,
         "spi": 6,
         "armor": 190
@@ -8566,6 +8683,7 @@
       "heroicOf": "thornpeak_moonhide_cowl",
       "itemLevel": 33,
       "stats": {
+        "sta": 7,
         "int": 12,
         "spi": 8,
         "armor": 190
@@ -8661,6 +8779,7 @@
       "heroicOf": "verdant_walkers",
       "itemLevel": 28,
       "stats": {
+        "sta": 4,
         "int": 8,
         "spi": 5,
         "armor": 82
@@ -8678,6 +8797,7 @@
       "heroicOf": "votive_ward_of_the_deathless_court",
       "itemLevel": 33,
       "stats": {
+        "sta": 6,
         "int": 9,
         "spi": 8,
         "armor": 680
@@ -8699,9 +8819,9 @@
       "heroicOf": "wildgrowth_leggings",
       "itemLevel": 28,
       "stats": {
-        "sta": 2,
+        "sta": 6,
         "int": 10,
-        "spi": 6,
+        "spi": 8,
         "armor": 112
       },
       "requiredLevel": 20,
@@ -8737,6 +8857,7 @@
       "heroicOf": "wildheart_hexwood_staff",
       "itemLevel": 28,
       "stats": {
+        "sta": 9,
         "int": 17,
         "spi": 9
       },
@@ -8779,9 +8900,9 @@
       "heroicOf": "wraithfire_orb",
       "itemLevel": 33,
       "stats": {
-        "sta": 3,
+        "sta": 6,
         "int": 8,
-        "spi": 6
+        "spi": 9
       },
       "critRating": 55,
       "hasteRating": 20,
@@ -8799,6 +8920,7 @@
       "heroicOf": "wyrmcult_grand_robe",
       "itemLevel": 25,
       "stats": {
+        "sta": 5,
         "int": 10,
         "spi": 4,
         "armor": 75
@@ -8817,6 +8939,7 @@
       "heroicOf": "wyrmcult_soulsteps",
       "itemLevel": 25,
       "stats": {
+        "sta": 3,
         "int": 6,
         "spi": 3,
         "armor": 68
@@ -8894,8 +9017,8 @@
       "heroicOf": "wyrmshadow_talongrips",
       "itemLevel": 28,
       "stats": {
-        "agi": 10,
-        "sta": 4,
+        "agi": 9,
+        "sta": 5,
         "armor": 110
       },
       "requiredLevel": 20,
@@ -8932,8 +9055,8 @@
       "heroicOf": "ysols_pearl_greaves",
       "itemLevel": 25,
       "stats": {
-        "sta": 9,
-        "spi": 4,
+        "sta": 11,
+        "spi": 6,
         "armor": 130
       },
       "requiredLevel": 20,
@@ -8948,6 +9071,7 @@
       "armorType": "cloth",
       "itemLevel": 35,
       "stats": {
+        "sta": 8,
         "int": 17,
         "spi": 8,
         "armor": 105
@@ -8970,6 +9094,7 @@
       "armorType": "cloth",
       "itemLevel": 35,
       "stats": {
+        "sta": 6,
         "int": 11,
         "spi": 6,
         "armor": 75
@@ -8992,6 +9117,7 @@
       "armorType": "cloth",
       "itemLevel": 35,
       "stats": {
+        "sta": 7,
         "int": 14,
         "spi": 7,
         "armor": 90
@@ -9014,6 +9140,7 @@
       "armorType": "cloth",
       "itemLevel": 35,
       "stats": {
+        "sta": 7,
         "int": 15,
         "spi": 7,
         "armor": 95
@@ -9036,6 +9163,7 @@
       "armorType": "cloth",
       "itemLevel": 35,
       "stats": {
+        "sta": 6,
         "int": 12,
         "spi": 6,
         "armor": 80
@@ -9209,6 +9337,7 @@
       "slot": "mainhand",
       "itemLevel": 10,
       "stats": {
+        "sta": 2,
         "int": 5,
         "spi": 2
       },
@@ -9314,8 +9443,9 @@
       "slot": "neck",
       "itemLevel": 35,
       "stats": {
-        "str": 8,
-        "agi": 8
+        "str": 6,
+        "agi": 5,
+        "sta": 5
       },
       "hitRating": 25,
       "requiredLevel": 20,
@@ -9523,6 +9653,7 @@
       "slot": "mainhand",
       "itemLevel": 17,
       "stats": {
+        "sta": 2,
         "int": 7,
         "spi": 3
       },
@@ -9573,7 +9704,8 @@
       "slot": "mainhand",
       "itemLevel": 6,
       "stats": {
-        "agi": 2
+        "agi": 1,
+        "sta": 1
       },
       "weapon": {
         "min": 4,
@@ -9601,7 +9733,7 @@
       "stats": {
         "str": 15,
         "agi": 15,
-        "sta": 14
+        "sta": 23
       },
       "weapon": {
         "min": 46,
@@ -9707,7 +9839,7 @@
       "itemLevel": 23,
       "stats": {
         "sta": 6,
-        "spi": 4,
+        "spi": 7,
         "armor": 76
       },
       "requiredLevel": 20,
@@ -9736,6 +9868,7 @@
       "slot": "chest",
       "armorType": "cloth",
       "stats": {
+        "sta": 2,
         "int": 3,
         "spi": 2,
         "armor": 36
@@ -9766,6 +9899,7 @@
       "slot": "helmet",
       "armorType": "cloth",
       "stats": {
+        "sta": 2,
         "int": 3,
         "spi": 2,
         "armor": 32
@@ -9837,6 +9971,7 @@
       "slot": "neck",
       "itemLevel": 35,
       "stats": {
+        "sta": 5,
         "int": 11,
         "spi": 5
       },
@@ -9862,6 +9997,7 @@
       "slot": "ring",
       "itemLevel": 35,
       "stats": {
+        "sta": 5,
         "int": 8,
         "spi": 7
       },
@@ -9890,6 +10026,7 @@
       "armorType": "cloth",
       "itemLevel": 31,
       "stats": {
+        "sta": 7,
         "int": 12,
         "spi": 8,
         "armor": 72
@@ -9907,6 +10044,7 @@
       "slot": "mainhand",
       "itemLevel": 31,
       "stats": {
+        "sta": 7,
         "int": 13,
         "spi": 9
       },
@@ -9929,6 +10067,7 @@
       "armorType": "leather",
       "itemLevel": 31,
       "stats": {
+        "sta": 5,
         "int": 9,
         "spi": 6,
         "armor": 100
@@ -9968,6 +10107,7 @@
       "slot": "mainhand",
       "itemLevel": 10,
       "stats": {
+        "sta": 2,
         "int": 4,
         "spi": 3
       },
@@ -9997,7 +10137,7 @@
       "itemLevel": 23,
       "stats": {
         "sta": 6,
-        "spi": 4,
+        "spi": 7,
         "armor": 74
       },
       "requiredLevel": 20,
@@ -10029,7 +10169,7 @@
       "itemLevel": 23,
       "stats": {
         "sta": 6,
-        "spi": 4,
+        "spi": 7,
         "armor": 76
       },
       "requiredLevel": 20,
@@ -10069,7 +10209,7 @@
       "itemLevel": 29,
       "stats": {
         "agi": 13,
-        "sta": 5
+        "sta": 7
       },
       "weapon": {
         "min": 21,
@@ -10140,6 +10280,7 @@
       "armorType": "mail",
       "itemLevel": 13,
       "stats": {
+        "sta": 2,
         "int": 3,
         "spi": 2,
         "armor": 110
@@ -10222,9 +10363,9 @@
       "slot": "mainhand",
       "itemLevel": 29,
       "stats": {
-        "str": 10,
+        "str": 9,
         "agi": 8,
-        "sta": 8
+        "sta": 9
       },
       "hitRating": 20,
       "weapon": {
@@ -10247,6 +10388,7 @@
       "stats": {
         "sta": 6,
         "int": 4,
+        "spi": 3,
         "armor": 72
       },
       "requiredLevel": 20,
@@ -10340,6 +10482,7 @@
       "armorType": "leather",
       "itemLevel": 11,
       "stats": {
+        "sta": 1,
         "int": 2,
         "spi": 1,
         "armor": 28
@@ -10385,7 +10528,8 @@
       "quality": "uncommon",
       "slot": "mainhand",
       "stats": {
-        "agi": 2
+        "agi": 2,
+        "sta": 1
       },
       "weapon": {
         "min": 14,
@@ -10403,6 +10547,7 @@
       "slot": "mainhand",
       "itemLevel": 13,
       "stats": {
+        "sta": 2,
         "int": 6,
         "spi": 3
       },
@@ -10487,7 +10632,8 @@
       "slot": "mainhand",
       "itemLevel": 13,
       "stats": {
-        "agi": 4
+        "agi": 4,
+        "sta": 2
       },
       "weapon": {
         "min": 7,
@@ -10711,6 +10857,7 @@
       "armorType": "leather",
       "itemLevel": 18,
       "stats": {
+        "sta": 3,
         "int": 6,
         "spi": 4,
         "armor": 100
@@ -10728,7 +10875,7 @@
       "itemLevel": 21,
       "stats": {
         "sta": 3,
-        "spi": 3,
+        "spi": 5,
         "armor": 54
       },
       "sellValue": 1000
@@ -10778,6 +10925,7 @@
       "armorType": "leather",
       "itemLevel": 35,
       "stats": {
+        "sta": 8,
         "int": 17,
         "spi": 8,
         "armor": 215
@@ -10800,6 +10948,7 @@
       "armorType": "leather",
       "itemLevel": 35,
       "stats": {
+        "sta": 6,
         "int": 11,
         "spi": 6,
         "armor": 150
@@ -10822,6 +10971,7 @@
       "armorType": "leather",
       "itemLevel": 35,
       "stats": {
+        "sta": 7,
         "int": 14,
         "spi": 7,
         "armor": 185
@@ -10844,6 +10994,7 @@
       "armorType": "leather",
       "itemLevel": 35,
       "stats": {
+        "sta": 7,
         "int": 15,
         "spi": 7,
         "armor": 195
@@ -10866,6 +11017,7 @@
       "armorType": "leather",
       "itemLevel": 35,
       "stats": {
+        "sta": 6,
         "int": 12,
         "spi": 6,
         "armor": 165
@@ -10888,6 +11040,7 @@
       "armorType": "leather",
       "itemLevel": 35,
       "stats": {
+        "sta": 6,
         "int": 11,
         "spi": 6,
         "armor": 150
@@ -10925,6 +11078,7 @@
       "armorType": "cloth",
       "itemLevel": 21,
       "stats": {
+        "sta": 4,
         "int": 10,
         "spi": 5,
         "armor": 70
@@ -10982,6 +11136,7 @@
       "armorType": "leather",
       "itemLevel": 5,
       "stats": {
+        "sta": 1,
         "int": 1,
         "spi": 1,
         "armor": 40
@@ -10997,6 +11152,7 @@
       "armorType": "cloth",
       "itemLevel": 7,
       "stats": {
+        "sta": 1,
         "int": 1,
         "spi": 2,
         "armor": 12
@@ -11041,6 +11197,7 @@
       "armorType": "cloth",
       "itemLevel": 25,
       "stats": {
+        "sta": 5,
         "int": 13,
         "spi": 7,
         "armor": 86
@@ -11068,6 +11225,7 @@
       "armorType": "cloth",
       "itemLevel": 26,
       "stats": {
+        "sta": 5,
         "int": 9,
         "spi": 5,
         "armor": 70
@@ -11086,6 +11244,7 @@
       "armorType": "cloth",
       "itemLevel": 26,
       "stats": {
+        "sta": 4,
         "int": 8,
         "spi": 4,
         "armor": 80
@@ -11104,6 +11263,7 @@
       "armorType": "cloth",
       "itemLevel": 26,
       "stats": {
+        "sta": 6,
         "int": 11,
         "spi": 7,
         "armor": 92
@@ -11161,6 +11321,7 @@
       "armorType": "cloth",
       "itemLevel": 13,
       "stats": {
+        "sta": 2,
         "int": 5,
         "spi": 2,
         "armor": 48
@@ -11175,6 +11336,7 @@
       "quality": "rare",
       "slot": "mainhand",
       "stats": {
+        "sta": 2,
         "int": 4,
         "spi": 2
       },
@@ -11196,7 +11358,8 @@
       "itemLevel": 26,
       "stats": {
         "sta": 4,
-        "int": 7
+        "int": 7,
+        "spi": 4
       },
       "hitRating": 25,
       "requiredLevel": 20,
@@ -11210,9 +11373,9 @@
       "slot": "mainhand",
       "itemLevel": 26,
       "stats": {
-        "str": 9,
+        "str": 8,
         "agi": 7,
-        "sta": 7
+        "sta": 8
       },
       "weapon": {
         "min": 51,
@@ -11306,8 +11469,8 @@
       "armorType": "leather",
       "itemLevel": 21,
       "stats": {
-        "agi": 6,
-        "sta": 2,
+        "agi": 5,
+        "sta": 3,
         "armor": 105
       },
       "requiredClass": ["rogue", "hunter"],
@@ -11470,6 +11633,7 @@
       "slot": "mainhand",
       "itemLevel": 20,
       "stats": {
+        "sta": 4,
         "int": 9,
         "spi": 4
       },
@@ -11504,6 +11668,7 @@
       "itemLevel": 11,
       "stats": {
         "agi": 1,
+        "sta": 1,
         "armor": 25
       },
       "sellValue": 80
@@ -11536,6 +11701,7 @@
       "slot": "offhand",
       "itemLevel": 35,
       "stats": {
+        "sta": 6,
         "int": 9,
         "spi": 9
       },
@@ -11721,6 +11887,7 @@
       "armorType": "cloth",
       "itemLevel": 26,
       "stats": {
+        "sta": 5,
         "int": 9,
         "spi": 6,
         "armor": 55
@@ -11749,6 +11916,7 @@
       "slot": "mainhand",
       "itemLevel": 17,
       "stats": {
+        "sta": 2,
         "int": 6,
         "spi": 2
       },
@@ -12174,6 +12342,7 @@
       "armorType": "mail",
       "itemLevel": 18,
       "stats": {
+        "sta": 3,
         "int": 5,
         "spi": 4,
         "armor": 78
@@ -12207,6 +12376,7 @@
       "armorType": "mail",
       "itemLevel": 19,
       "stats": {
+        "sta": 3,
         "int": 5,
         "spi": 3,
         "armor": 240
@@ -12248,6 +12418,7 @@
       "slot": "legs",
       "armorType": "cloth",
       "stats": {
+        "sta": 1,
         "int": 2,
         "spi": 1,
         "armor": 24
@@ -12294,7 +12465,8 @@
       "itemLevel": 11,
       "stats": {
         "sta": 1,
-        "int": 2
+        "int": 2,
+        "spi": 1
       },
       "sellValue": 32
     },
@@ -12327,7 +12499,8 @@
       "itemLevel": 31,
       "stats": {
         "sta": 5,
-        "int": 8
+        "int": 8,
+        "spi": 4
       },
       "hasteRating": 25,
       "requiredLevel": 20,
@@ -12406,6 +12579,7 @@
       "armorType": "cloth",
       "itemLevel": 35,
       "stats": {
+        "sta": 8,
         "int": 17,
         "spi": 8,
         "armor": 105
@@ -12428,6 +12602,7 @@
       "armorType": "cloth",
       "itemLevel": 35,
       "stats": {
+        "sta": 6,
         "int": 11,
         "spi": 6,
         "armor": 75
@@ -12450,6 +12625,7 @@
       "armorType": "cloth",
       "itemLevel": 35,
       "stats": {
+        "sta": 7,
         "int": 14,
         "spi": 7,
         "armor": 90
@@ -12472,6 +12648,7 @@
       "armorType": "cloth",
       "itemLevel": 35,
       "stats": {
+        "sta": 7,
         "int": 15,
         "spi": 7,
         "armor": 95
@@ -12494,6 +12671,7 @@
       "armorType": "cloth",
       "itemLevel": 35,
       "stats": {
+        "sta": 6,
         "int": 12,
         "spi": 6,
         "armor": 80
@@ -12628,7 +12806,8 @@
       "slot": "mainhand",
       "itemLevel": 6,
       "stats": {
-        "str": 2
+        "str": 1,
+        "sta": 1
       },
       "weapon": {
         "min": 6,
@@ -12809,6 +12988,7 @@
       "slot": "chest",
       "armorType": "cloth",
       "stats": {
+        "sta": 1,
         "int": 2,
         "spi": 1,
         "armor": 30
@@ -12965,6 +13145,7 @@
       "armorType": "cloth",
       "itemLevel": 21,
       "stats": {
+        "sta": 3,
         "int": 5,
         "spi": 3,
         "armor": 60
@@ -13120,7 +13301,7 @@
       "itemLevel": 16,
       "stats": {
         "agi": 5,
-        "sta": 2
+        "sta": 3
       },
       "weapon": {
         "min": 9,
@@ -13236,6 +13417,7 @@
       "armorType": "cloth",
       "itemLevel": 35,
       "stats": {
+        "sta": 8,
         "int": 17,
         "spi": 8,
         "armor": 105
@@ -13258,6 +13440,7 @@
       "armorType": "cloth",
       "itemLevel": 35,
       "stats": {
+        "sta": 6,
         "int": 11,
         "spi": 6,
         "armor": 75
@@ -13280,6 +13463,7 @@
       "armorType": "cloth",
       "itemLevel": 35,
       "stats": {
+        "sta": 7,
         "int": 14,
         "spi": 7,
         "armor": 90
@@ -13302,6 +13486,7 @@
       "armorType": "cloth",
       "itemLevel": 35,
       "stats": {
+        "sta": 7,
         "int": 15,
         "spi": 7,
         "armor": 95
@@ -13324,6 +13509,7 @@
       "armorType": "cloth",
       "itemLevel": 35,
       "stats": {
+        "sta": 6,
         "int": 12,
         "spi": 6,
         "armor": 80
@@ -13402,6 +13588,7 @@
       "armorType": "cloth",
       "stats": {
         "agi": 1,
+        "sta": 2,
         "int": 2,
         "armor": 11
       },
@@ -13416,6 +13603,7 @@
       "armorType": "cloth",
       "itemLevel": 7,
       "stats": {
+        "sta": 1,
         "int": 2,
         "spi": 1,
         "armor": 18
@@ -13504,6 +13692,7 @@
       "stats": {
         "sta": 6,
         "int": 9,
+        "spi": 5,
         "armor": 48
       },
       "hitRating": 40,
@@ -13519,6 +13708,7 @@
       "slot": "mainhand",
       "itemLevel": 33,
       "stats": {
+        "sta": 8,
         "int": 13,
         "spi": 10
       },
@@ -13547,6 +13737,7 @@
       "armorType": "leather",
       "itemLevel": 35,
       "stats": {
+        "sta": 5,
         "int": 11,
         "spi": 5,
         "armor": 145
@@ -13636,6 +13827,7 @@
       "armorType": "cloth",
       "itemLevel": 12,
       "stats": {
+        "sta": 1,
         "int": 2,
         "spi": 2,
         "armor": 20
@@ -13653,7 +13845,8 @@
       "armorType": "leather",
       "itemLevel": 7,
       "stats": {
-        "agi": 3,
+        "agi": 2,
+        "sta": 1,
         "armor": 55
       },
       "requiredClass": ["rogue", "hunter"],
@@ -13686,6 +13879,7 @@
       "armorType": "cloth",
       "itemLevel": 31,
       "stats": {
+        "sta": 5,
         "int": 9,
         "spi": 6,
         "armor": 52
@@ -13704,6 +13898,7 @@
       "armorType": "cloth",
       "itemLevel": 31,
       "stats": {
+        "sta": 5,
         "int": 8,
         "spi": 6,
         "armor": 44
@@ -13738,6 +13933,7 @@
       "armorType": "cloth",
       "itemLevel": 22,
       "stats": {
+        "sta": 3,
         "int": 5,
         "spi": 4,
         "armor": 32
@@ -13767,7 +13963,7 @@
       "itemLevel": 21,
       "stats": {
         "sta": 3,
-        "spi": 3,
+        "spi": 5,
         "armor": 52
       },
       "sellValue": 950
@@ -13781,6 +13977,7 @@
       "armorType": "cloth",
       "itemLevel": 31,
       "stats": {
+        "sta": 7,
         "int": 12,
         "spi": 10,
         "armor": 90
@@ -13933,6 +14130,7 @@
       "slot": "waist",
       "armorType": "cloth",
       "stats": {
+        "sta": 1,
         "int": 2,
         "spi": 1,
         "armor": 10
@@ -13950,6 +14148,7 @@
       "armorType": "cloth",
       "itemLevel": 18,
       "stats": {
+        "sta": 3,
         "int": 8,
         "spi": 5,
         "armor": 52
@@ -14041,6 +14240,7 @@
       "slot": "offhand",
       "itemLevel": 11,
       "stats": {
+        "sta": 1,
         "int": 2,
         "spi": 1
       },
@@ -14140,8 +14340,8 @@
       "slot": "mainhand",
       "itemLevel": 20,
       "stats": {
-        "agi": 8,
-        "sta": 3
+        "agi": 7,
+        "sta": 4
       },
       "weapon": {
         "min": 15,
@@ -14273,8 +14473,8 @@
       "itemLevel": 35,
       "stats": {
         "str": 9,
-        "agi": 9,
-        "sta": 7
+        "agi": 8,
+        "sta": 8
       },
       "critRating": 70,
       "hitRating": 30,
@@ -14581,6 +14781,7 @@
       "armorType": "mail",
       "itemLevel": 20,
       "stats": {
+        "sta": 3,
         "int": 6,
         "spi": 4,
         "armor": 78
@@ -14604,6 +14805,7 @@
       "armorType": "cloth",
       "itemLevel": 26,
       "stats": {
+        "sta": 4,
         "int": 8,
         "spi": 5,
         "armor": 50
@@ -14624,6 +14826,7 @@
       "stats": {
         "sta": 6,
         "int": 11,
+        "spi": 6,
         "armor": 105
       },
       "hasteRating": 20,
@@ -14643,6 +14846,7 @@
       "stats": {
         "sta": 5,
         "int": 8,
+        "spi": 4,
         "armor": 60
       },
       "requiredLevel": 20,
@@ -14661,6 +14865,7 @@
       "stats": {
         "sta": 6,
         "int": 9,
+        "spi": 5,
         "armor": 92
       },
       "hasteRating": 20,
@@ -14677,6 +14882,7 @@
       "slot": "chest",
       "armorType": "mail",
       "stats": {
+        "sta": 7,
         "int": 12,
         "spi": 10,
         "armor": 335
@@ -14693,6 +14899,7 @@
       "slot": "helmet",
       "armorType": "cloth",
       "stats": {
+        "sta": 6,
         "int": 10,
         "spi": 8,
         "armor": 76
@@ -14709,7 +14916,7 @@
       "slot": "ring",
       "itemLevel": 31,
       "stats": {
-        "sta": 3,
+        "sta": 4,
         "int": 4,
         "spi": 3
       },
@@ -14742,6 +14949,7 @@
       "armorType": "mail",
       "itemLevel": 31,
       "stats": {
+        "sta": 5,
         "int": 9,
         "spi": 6,
         "armor": 224
@@ -14779,6 +14987,7 @@
       "armorType": "cloth",
       "itemLevel": 35,
       "stats": {
+        "sta": 6,
         "int": 9,
         "spi": 8,
         "armor": 75
@@ -14798,6 +15007,7 @@
       "armorType": "mail",
       "itemLevel": 35,
       "stats": {
+        "sta": 8,
         "int": 13,
         "spi": 12,
         "armor": 380
@@ -14819,6 +15029,7 @@
       "armorType": "mail",
       "itemLevel": 35,
       "stats": {
+        "sta": 6,
         "int": 9,
         "spi": 8,
         "armor": 270
@@ -14840,6 +15051,7 @@
       "armorType": "mail",
       "itemLevel": 35,
       "stats": {
+        "sta": 7,
         "int": 11,
         "spi": 10,
         "armor": 325
@@ -14861,6 +15073,7 @@
       "armorType": "mail",
       "itemLevel": 35,
       "stats": {
+        "sta": 7,
         "int": 11,
         "spi": 11,
         "armor": 345
@@ -14882,6 +15095,7 @@
       "armorType": "mail",
       "itemLevel": 35,
       "stats": {
+        "sta": 6,
         "int": 9,
         "spi": 9,
         "armor": 290
@@ -14902,6 +15116,7 @@
       "slot": "mainhand",
       "itemLevel": 35,
       "stats": {
+        "sta": 8,
         "int": 13,
         "spi": 12
       },
@@ -14925,6 +15140,7 @@
       "armorType": "mail",
       "itemLevel": 35,
       "stats": {
+        "sta": 5,
         "int": 8,
         "spi": 8,
         "armor": 255
@@ -14948,6 +15164,7 @@
       "slot": "mainhand",
       "itemLevel": 13,
       "stats": {
+        "sta": 2,
         "int": 5,
         "spi": 2
       },
@@ -14967,6 +15184,7 @@
       "slot": "mainhand",
       "itemLevel": 26,
       "stats": {
+        "sta": 6,
         "int": 12,
         "spi": 6
       },
@@ -14987,6 +15205,7 @@
       "slot": "mainhand",
       "itemLevel": 35,
       "stats": {
+        "sta": 11,
         "int": 17,
         "spi": 16
       },
@@ -15009,6 +15228,7 @@
       "slot": "mainhand",
       "itemLevel": 23,
       "stats": {
+        "sta": 4,
         "int": 9,
         "spi": 4
       },
@@ -15060,6 +15280,7 @@
       "armorType": "cloth",
       "itemLevel": 35,
       "stats": {
+        "sta": 5,
         "int": 8,
         "spi": 8,
         "armor": 70
@@ -15206,9 +15427,9 @@
       "armorType": "leather",
       "itemLevel": 31,
       "stats": {
-        "sta": 2,
+        "sta": 5,
         "int": 9,
-        "spi": 5,
+        "spi": 7,
         "armor": 148
       },
       "critRating": 40,
@@ -15225,7 +15446,7 @@
       "armorType": "mail",
       "itemLevel": 31,
       "stats": {
-        "sta": 5,
+        "sta": 6,
         "int": 8,
         "spi": 3,
         "armor": 292
@@ -15246,7 +15467,7 @@
       "armorType": "mail",
       "itemLevel": 31,
       "stats": {
-        "sta": 3,
+        "sta": 5,
         "int": 7,
         "spi": 3,
         "armor": 212
@@ -15374,6 +15595,7 @@
       "stats": {
         "sta": 7,
         "int": 10,
+        "spi": 6,
         "armor": 225
       },
       "critRating": 20,
@@ -15390,6 +15612,7 @@
       "slot": "mainhand",
       "itemLevel": 33,
       "stats": {
+        "sta": 8,
         "int": 14,
         "spi": 9
       },
@@ -15415,6 +15638,7 @@
       "stats": {
         "sta": 5,
         "int": 8,
+        "spi": 4,
         "armor": 130
       },
       "requiredLevel": 20,
@@ -15433,6 +15657,7 @@
       "stats": {
         "sta": 7,
         "int": 8,
+        "spi": 5,
         "armor": 190
       },
       "critRating": 20,
@@ -15452,6 +15677,7 @@
       "stats": {
         "sta": 5,
         "int": 8,
+        "spi": 4,
         "armor": 110
       },
       "requiredLevel": 20,
@@ -15468,6 +15694,7 @@
       "armorType": "mail",
       "itemLevel": 17,
       "stats": {
+        "sta": 2,
         "int": 3,
         "spi": 2,
         "armor": 50
@@ -15483,6 +15710,7 @@
       "armorType": "mail",
       "itemLevel": 29,
       "stats": {
+        "sta": 5,
         "int": 8,
         "spi": 6,
         "armor": 165
@@ -15501,6 +15729,7 @@
       "armorType": "mail",
       "itemLevel": 29,
       "stats": {
+        "sta": 4,
         "int": 8,
         "spi": 5,
         "armor": 190
@@ -15519,6 +15748,7 @@
       "armorType": "mail",
       "itemLevel": 35,
       "stats": {
+        "sta": 6,
         "int": 11,
         "spi": 6,
         "armor": 270
@@ -15539,6 +15769,7 @@
       "armorType": "mail",
       "itemLevel": 35,
       "stats": {
+        "sta": 8,
         "int": 17,
         "spi": 8,
         "armor": 380
@@ -15561,6 +15792,7 @@
       "armorType": "mail",
       "itemLevel": 35,
       "stats": {
+        "sta": 6,
         "int": 11,
         "spi": 6,
         "armor": 270
@@ -15583,6 +15815,7 @@
       "armorType": "mail",
       "itemLevel": 35,
       "stats": {
+        "sta": 7,
         "int": 14,
         "spi": 7,
         "armor": 325
@@ -15605,6 +15838,7 @@
       "armorType": "mail",
       "itemLevel": 35,
       "stats": {
+        "sta": 7,
         "int": 15,
         "spi": 7,
         "armor": 345
@@ -15627,6 +15861,7 @@
       "armorType": "mail",
       "itemLevel": 35,
       "stats": {
+        "sta": 6,
         "int": 12,
         "spi": 6,
         "armor": 290
@@ -15657,6 +15892,7 @@
       "armorType": "leather",
       "itemLevel": 20,
       "stats": {
+        "sta": 3,
         "int": 6,
         "spi": 4,
         "armor": 58
@@ -15723,6 +15959,7 @@
       "armorType": "mail",
       "itemLevel": 22,
       "stats": {
+        "sta": 4,
         "int": 7,
         "spi": 5,
         "armor": 180
@@ -15752,6 +15989,7 @@
       "armorType": "cloth",
       "itemLevel": 31,
       "stats": {
+        "sta": 6,
         "int": 11,
         "spi": 7,
         "armor": 76
@@ -15770,6 +16008,7 @@
       "armorType": "mail",
       "itemLevel": 31,
       "stats": {
+        "sta": 7,
         "int": 12,
         "spi": 10,
         "armor": 335
@@ -15788,6 +16027,7 @@
       "armorType": "cloth",
       "itemLevel": 21,
       "stats": {
+        "sta": 2,
         "int": 4,
         "spi": 3,
         "armor": 55
@@ -15812,6 +16052,7 @@
       "armorType": "cloth",
       "itemLevel": 31,
       "stats": {
+        "sta": 5,
         "int": 9,
         "spi": 7,
         "armor": 56
@@ -15831,7 +16072,7 @@
       "itemLevel": 23,
       "stats": {
         "sta": 6,
-        "spi": 4,
+        "spi": 7,
         "armor": 76
       },
       "requiredLevel": 20,
@@ -15866,7 +16107,7 @@
       "slot": "offhand",
       "itemLevel": 18,
       "stats": {
-        "sta": 2,
+        "sta": 3,
         "int": 5,
         "spi": 3
       },
@@ -15936,6 +16177,7 @@
       "armorType": "cloth",
       "itemLevel": 31,
       "stats": {
+        "sta": 5,
         "int": 9,
         "spi": 6,
         "armor": 52
@@ -15962,6 +16204,7 @@
       "armorType": "cloth",
       "itemLevel": 31,
       "stats": {
+        "sta": 7,
         "int": 12,
         "spi": 8,
         "armor": 72
@@ -15979,6 +16222,7 @@
       "armorType": "cloth",
       "itemLevel": 31,
       "stats": {
+        "sta": 7,
         "int": 12,
         "spi": 10,
         "armor": 90
@@ -15996,6 +16240,7 @@
       "armorType": "cloth",
       "itemLevel": 18,
       "stats": {
+        "sta": 3,
         "int": 6,
         "spi": 4,
         "armor": 40
@@ -16012,6 +16257,7 @@
       "armorType": "cloth",
       "itemLevel": 18,
       "stats": {
+        "sta": 2,
         "int": 5,
         "spi": 3,
         "armor": 34
@@ -16047,8 +16293,9 @@
       "slot": "neck",
       "itemLevel": 26,
       "stats": {
-        "str": 6,
-        "agi": 6
+        "str": 4,
+        "agi": 4,
+        "sta": 4
       },
       "hasteRating": 25,
       "requiredLevel": 20,
@@ -16189,7 +16436,7 @@
       "armorType": "leather",
       "itemLevel": 31,
       "stats": {
-        "sta": 3,
+        "sta": 5,
         "int": 7,
         "spi": 3,
         "armor": 96
@@ -16252,7 +16499,7 @@
       "armorType": "leather",
       "itemLevel": 31,
       "stats": {
-        "sta": 5,
+        "sta": 6,
         "int": 8,
         "spi": 3,
         "armor": 168
@@ -16336,6 +16583,7 @@
       "armorType": "leather",
       "itemLevel": 7,
       "stats": {
+        "sta": 1,
         "int": 1,
         "spi": 1,
         "armor": 24
@@ -16365,6 +16613,7 @@
       "armorType": "leather",
       "itemLevel": 29,
       "stats": {
+        "sta": 6,
         "int": 10,
         "spi": 7,
         "armor": 190
@@ -16403,6 +16652,7 @@
       "armorType": "leather",
       "itemLevel": 22,
       "stats": {
+        "sta": 4,
         "int": 7,
         "spi": 4,
         "armor": 60
@@ -16419,6 +16669,7 @@
       "armorType": "mail",
       "itemLevel": 35,
       "stats": {
+        "sta": 5,
         "int": 11,
         "spi": 5,
         "armor": 255
@@ -16439,6 +16690,7 @@
       "armorType": "mail",
       "itemLevel": 20,
       "stats": {
+        "sta": 3,
         "int": 6,
         "spi": 4,
         "armor": 118
@@ -16455,6 +16707,7 @@
       "armorType": "mail",
       "itemLevel": 35,
       "stats": {
+        "sta": 6,
         "int": 9,
         "spi": 8,
         "armor": 270
@@ -16491,7 +16744,8 @@
       "slot": "mainhand",
       "itemLevel": 17,
       "stats": {
-        "agi": 6
+        "agi": 6,
+        "sta": 2
       },
       "weapon": {
         "min": 11,
@@ -16562,6 +16816,7 @@
       "armorType": "cloth",
       "itemLevel": 17,
       "stats": {
+        "sta": 1,
         "int": 2,
         "spi": 2,
         "armor": 40
@@ -16803,6 +17058,7 @@
       "slot": "mainhand",
       "itemLevel": 16,
       "stats": {
+        "sta": 3,
         "int": 6,
         "spi": 3
       },
@@ -16857,6 +17113,7 @@
       "quality": "rare",
       "slot": "mainhand",
       "stats": {
+        "sta": 2,
         "int": 4,
         "spi": 2
       },
@@ -16877,6 +17134,7 @@
       "slot": "offhand",
       "itemLevel": 7,
       "stats": {
+        "sta": 1,
         "int": 1,
         "spi": 1
       },
@@ -16964,6 +17222,7 @@
       "slot": "helmet",
       "armorType": "cloth",
       "stats": {
+        "sta": 2,
         "int": 4,
         "spi": 3,
         "armor": 42
@@ -17033,6 +17292,7 @@
       "armorType": "leather",
       "itemLevel": 31,
       "stats": {
+        "sta": 7,
         "int": 13,
         "spi": 9,
         "armor": 172
@@ -17051,6 +17311,7 @@
       "armorType": "leather",
       "itemLevel": 26,
       "stats": {
+        "sta": 4,
         "int": 7,
         "spi": 5,
         "armor": 82
@@ -17087,6 +17348,7 @@
       "armorType": "cloth",
       "itemLevel": 35,
       "stats": {
+        "sta": 8,
         "int": 17,
         "spi": 8,
         "armor": 105
@@ -17109,6 +17371,7 @@
       "armorType": "cloth",
       "itemLevel": 35,
       "stats": {
+        "sta": 6,
         "int": 11,
         "spi": 6,
         "armor": 75
@@ -17131,6 +17394,7 @@
       "armorType": "cloth",
       "itemLevel": 35,
       "stats": {
+        "sta": 7,
         "int": 14,
         "spi": 7,
         "armor": 90
@@ -17153,6 +17417,7 @@
       "armorType": "cloth",
       "itemLevel": 35,
       "stats": {
+        "sta": 7,
         "int": 15,
         "spi": 7,
         "armor": 95
@@ -17175,6 +17440,7 @@
       "armorType": "cloth",
       "itemLevel": 35,
       "stats": {
+        "sta": 6,
         "int": 12,
         "spi": 6,
         "armor": 80
@@ -17197,9 +17463,9 @@
       "armorType": "leather",
       "itemLevel": 26,
       "stats": {
-        "sta": 4,
+        "sta": 6,
         "int": 9,
-        "spi": 5,
+        "spi": 9,
         "armor": 160
       },
       "requiredLevel": 20,
@@ -17234,9 +17500,9 @@
       "slot": "offhand",
       "itemLevel": 31,
       "stats": {
-        "sta": 3,
+        "sta": 5,
         "int": 8,
-        "spi": 5
+        "spi": 8
       },
       "hasteRating": 20,
       "requiredLevel": 20,
@@ -17252,6 +17518,7 @@
       "armorType": "cloth",
       "itemLevel": 26,
       "stats": {
+        "sta": 3,
         "int": 6,
         "spi": 4,
         "armor": 42
@@ -17269,9 +17536,9 @@
       "uniqueEquipped": true,
       "itemLevel": 49,
       "stats": {
-        "sta": 17,
+        "sta": 22,
         "int": 25,
-        "spi": 23
+        "spi": 40
       },
       "spellPower": 25,
       "weapon": {
@@ -17291,6 +17558,7 @@
       "armorType": "cloth",
       "itemLevel": 31,
       "stats": {
+        "sta": 5,
         "int": 10,
         "spi": 6,
         "armor": 48
@@ -17308,6 +17576,7 @@
       "slot": "mainhand",
       "itemLevel": 13,
       "stats": {
+        "sta": 2,
         "int": 3,
         "spi": 2
       },
@@ -17328,6 +17597,7 @@
       "armorType": "mail",
       "itemLevel": 7,
       "stats": {
+        "sta": 1,
         "int": 1,
         "spi": 1,
         "armor": 28
@@ -17343,6 +17613,7 @@
       "armorType": "mail",
       "itemLevel": 29,
       "stats": {
+        "sta": 5,
         "int": 8,
         "spi": 7,
         "armor": 680
@@ -17361,6 +17632,7 @@
       "slot": "mainhand",
       "itemLevel": 35,
       "stats": {
+        "sta": 8,
         "int": 17,
         "spi": 8
       },
@@ -17447,6 +17719,7 @@
       "armorType": "mail",
       "itemLevel": 31,
       "stats": {
+        "sta": 5,
         "int": 8,
         "spi": 6,
         "armor": 212
@@ -17464,6 +17737,7 @@
       "armorType": "cloth",
       "itemLevel": 20,
       "stats": {
+        "sta": 3,
         "int": 7,
         "spi": 4,
         "armor": 44
@@ -17650,6 +17924,7 @@
       "armorType": "leather",
       "stats": {
         "agi": 2,
+        "sta": 1,
         "armor": 30
       },
       "requiredClass": ["rogue", "hunter"],
@@ -17707,7 +17982,7 @@
       "itemLevel": 21,
       "stats": {
         "sta": 3,
-        "spi": 2,
+        "spi": 4,
         "armor": 62
       },
       "sellValue": 1000
@@ -17871,6 +18146,7 @@
       "armorType": "leather",
       "itemLevel": 15,
       "stats": {
+        "sta": 1,
         "int": 2,
         "spi": 2,
         "armor": 36
@@ -17886,9 +18162,9 @@
       "armorType": "leather",
       "itemLevel": 26,
       "stats": {
-        "sta": 2,
+        "sta": 5,
         "int": 9,
-        "spi": 5,
+        "spi": 7,
         "armor": 112
       },
       "requiredLevel": 20,
@@ -17922,6 +18198,7 @@
       "slot": "mainhand",
       "itemLevel": 26,
       "stats": {
+        "sta": 8,
         "int": 15,
         "spi": 8
       },
@@ -17962,9 +18239,9 @@
       "slot": "mainhand",
       "itemLevel": 31,
       "stats": {
-        "str": 13,
-        "agi": 9,
-        "sta": 7
+        "str": 11,
+        "agi": 8,
+        "sta": 10
       },
       "hitRating": 50,
       "weapon": {
@@ -18042,6 +18319,7 @@
       "armorType": "cloth",
       "itemLevel": 7,
       "stats": {
+        "sta": 1,
         "int": 3,
         "spi": 2,
         "armor": 30
@@ -18058,9 +18336,9 @@
       "slot": "offhand",
       "itemLevel": 29,
       "stats": {
-        "sta": 3,
+        "sta": 5,
         "int": 7,
-        "spi": 5
+        "spi": 8
       },
       "critRating": 20,
       "requiredLevel": 20,
@@ -18097,6 +18375,7 @@
       "armorType": "mail",
       "itemLevel": 31,
       "stats": {
+        "sta": 5,
         "int": 9,
         "spi": 6,
         "armor": 224
@@ -18115,6 +18394,7 @@
       "armorType": "cloth",
       "itemLevel": 23,
       "stats": {
+        "sta": 4,
         "int": 9,
         "spi": 4,
         "armor": 75
@@ -18137,6 +18417,7 @@
       "armorType": "cloth",
       "itemLevel": 23,
       "stats": {
+        "sta": 3,
         "int": 5,
         "spi": 3,
         "armor": 68
@@ -18154,6 +18435,7 @@
       "armorType": "cloth",
       "itemLevel": 22,
       "stats": {
+        "sta": 3,
         "int": 5,
         "spi": 4,
         "armor": 36
@@ -18178,7 +18460,8 @@
       "itemLevel": 31,
       "stats": {
         "sta": 6,
-        "int": 8
+        "int": 8,
+        "spi": 5
       },
       "hasteRating": 25,
       "requiredLevel": 20,
@@ -18449,8 +18732,8 @@
       "slot": "mainhand",
       "itemLevel": 21,
       "stats": {
-        "str": 6,
-        "sta": 2
+        "str": 5,
+        "sta": 3
       },
       "weapon": {
         "min": 18,
@@ -18468,6 +18751,7 @@
       "slot": "neck",
       "itemLevel": 26,
       "stats": {
+        "sta": 4,
         "int": 7,
         "spi": 5
       },
@@ -18483,6 +18767,7 @@
       "slot": "ring",
       "itemLevel": 26,
       "stats": {
+        "sta": 4,
         "int": 5,
         "spi": 6
       },

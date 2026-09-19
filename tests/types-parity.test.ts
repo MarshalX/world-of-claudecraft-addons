@@ -38,7 +38,7 @@ import type { Hazard, HazardKind } from '../loader/src/runtime/world/derived.ts'
 import type { Aura, Entity, HeldSlot, InvSlot } from '../loader/src/runtime/world/game-types.ts';
 import type { CorpseView, DeathZone } from '../loader/src/runtime/world/ground.ts';
 import type { HeldItemInstance, ItemInstance } from '../loader/src/runtime/world/items.ts';
-import type { MarketInfo } from '../loader/src/runtime/world/market.ts';
+import type { MarketInfo, MarketListing } from '../loader/src/runtime/world/market.ts';
 import type { Reaction } from '../loader/src/runtime/world/reaction.ts';
 import type { WorldKey } from '../loader/src/runtime/world/signature.ts';
 import type { WorldValues } from '../loader/src/runtime/world/values.ts';
@@ -59,7 +59,10 @@ import type {
   Recipe as PublicRecipe,
   Station as PublicStation,
 } from '../packages/types/content.js';
-import type { MarketInfo as PublicMarketInfo } from '../packages/types/economy.js';
+import type {
+  MarketInfo as PublicMarketInfo,
+  MarketListing as PublicMarketListing,
+} from '../packages/types/economy.js';
 import type {
   BankInfo as PublicBankInfo,
   VaultInfo as PublicVaultInfo,
@@ -355,6 +358,18 @@ const publishedIsMarket: Assignable<PublicMarketInfo, MarketInfo> = true;
 const marketFieldsAgree: SameFields<MarketInfo, PublicMarketInfo> = true;
 
 /**
+ * The ROW, which the three above do not reach.
+ *
+ * They compare `MarketInfo`, whose `listings` is an array of these, and an array
+ * of a superset is still assignable both ways when the extra member is OPTIONAL,
+ * so all three stay green with a field on one side alone. Every field a row has
+ * gained has been optional: `instance` and, at game 0.43.0, `craftedRecipeId`.
+ */
+const listingIsPublished: Assignable<MarketListing, PublicMarketListing> = true;
+const publishedIsListing: Assignable<PublicMarketListing, MarketListing> = true;
+const listingFieldsAgree: SameFields<MarketListing, PublicMarketListing> = true;
+
+/**
  * The two stores, and the vault's own state wrapper.
  *
  * `nextRungClaudiumPrice` is OPTIONAL, so dropping it from either side alone
@@ -601,6 +616,9 @@ describe('the published types', () => {
       marketIsPublished,
       publishedIsMarket,
       marketFieldsAgree,
+      listingIsPublished,
+      publishedIsListing,
+      listingFieldsAgree,
       bankIsPublished,
       publishedIsBank,
       bankFieldsAgree,

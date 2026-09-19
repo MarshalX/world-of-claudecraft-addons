@@ -228,7 +228,9 @@ export interface CastStartEvent extends PersonalEvent {
    *   'disenchanting',
    *   'enchanting_apply',
    *   'salvaging',
+   *   'sundering',
    *   'tool_recharge',
+   *   'corpse_harvest',
    *   'demon_heal',
    * ]);
    * ```
@@ -237,6 +239,12 @@ export interface CastStartEvent extends PersonalEvent {
    * unrecognised value fall through as an ability id rather than treating the
    * list as complete. A sentinel never resolves in `world.abilities` and never
    * has icon art.
+   *
+   * It also SHRINKS, which the advice above already covers and which is worth
+   * naming once because it has happened: `'farming'` was a sentinel of its own
+   * for the planting cast and game 0.43.0 removed it outright. An addon that had
+   * enumerated the list and branched on a member now has a branch that can never
+   * be taken, and nothing anywhere reports that.
    *
    * `demon_heal` is a real cast, the warlock's channel that heals their own
    * demon, and the game keeps it out of its own activity bundle. It is listed

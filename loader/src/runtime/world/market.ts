@@ -41,6 +41,14 @@ interface MarketListing {
   house: boolean;
   /** Present only on an instanced listing, trimmed to the public fields. */
   instance?: PublicItemInstance;
+  /**
+   * The recipe that crafted the stack, on a crafted listing only.
+   *
+   * A plain row field rather than part of `instance`, so it does NOT go through
+   * `publicInstanceView` and is honest here: the game writes it straight onto
+   * the wired row (`src/sim/market.ts:1274`, conditional spread).
+   */
+  craftedRecipeId?: string;
 }
 
 /** One completed sale of yours, waiting to be collected. */

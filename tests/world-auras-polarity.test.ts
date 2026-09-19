@@ -22,6 +22,7 @@ import {
   filterPartyAuras,
   isDispellable,
   isHarmful,
+  isToggle,
 } from '../loader/src/runtime/world/auras.ts';
 import type { Aura } from '../loader/src/runtime/world/game-types.ts';
 import type { PartyMemberAura } from '../loader/src/runtime/world/party-types.ts';
@@ -216,5 +217,51 @@ describe('isDispellable', () => {
 
     expect(isDispellable(buff, true)).toBe(true);
     expect(isDispellable(buff, false)).toBe(false);
+  });
+});
+
+// A THIRD classifier off the same game file, and the only one of the three the
+// loader implements whole: it reads an id and a kind, and `wireAura` sends both.
+//
+// The failure it prevents is silent in the way this whole lane is. A stance and
+// a form carry a 3600s duration the sim needs only so the value is JSON-safe,
+// and `remaining` counts down through it, so every field a timer is drawn from
+// is present, well typed, and fiction. A bar under a Cat Form drains over an
+// hour and nothing anywhere says it should not have been drawn.
+describe('isToggle', () => {
+  it('answers a mode by its kind, whatever the id riding it', () => {
+    expect(isToggle(aura({ id: 'cat_form', kind: 'form_cat' }))).toBe(true);
+    expect(isToggle(aura({ id: 'battle_stance', kind: 'battle_stance' }))).toBe(true);
+  });
+
+  // Ghost Wolf rides `buff_speed`, which Sprint also rides at 15 seconds and
+  // very much wants a countdown, so the game separates the two by id alone.
+  it('answers a mode by its id where the kind cannot say', () => {
+    expect(isToggle(aura({ id: 'ghost_wolf', kind: 'buff_speed' }))).toBe(true);
+    expect(isToggle(aura({ id: 'sprint', kind: 'buff_speed' }))).toBe(false);
+  });
+
+  // The inverse override, and the reason the timed clause runs FIRST: Greater
+  // Invisibility reuses the rogue stealth machinery and is a fixed 20s buff, so
+  // a set-only implementation hides the one countdown in the family worth having.
+  it('keeps a genuine timed buff riding a toggle kind', () => {
+    expect(isToggle(aura({ id: 'greater_invisibility', kind: 'stealth' }))).toBe(false);
+    expect(isToggle(aura({ id: 'vanish', kind: 'stealth' }))).toBe(true);
+  });
+
+  it('answers a rotation bank the sim never ages', () => {
+    expect(isToggle(aura({ id: 'moontide', kind: 'moontide' }))).toBe(true);
+  });
+
+  it('says nothing about an ordinary timed effect', () => {
+    expect(isToggle(aura({ id: 'corruption', kind: 'dot' }))).toBe(false);
+  });
+
+  // Either shape, unlike isDispellable, and for a stated reason rather than by
+  // accident: the rule needs an id and a kind, and a party row carries both.
+  it('answers a party row, which carries everything the rule reads', () => {
+    const row: PartyMemberAura = { id: 'bear_form', kind: 'form_bear', remaining: 3599 };
+
+    expect(isToggle(row)).toBe(true);
   });
 });

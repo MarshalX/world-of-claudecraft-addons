@@ -759,7 +759,7 @@ describe('the record under the grid', () => {
 
     expect(recordPart('kind')).toBe('Uncommon cloth armor, helmet');
     expect(blockLines('number')).toContain('16 Armor');
-    expect(blockLines('stat')).toEqual(['+2 Intellect', '+1 Spirit']);
+    expect(blockLines('stat')).toEqual(['+1 Stamina', '+2 Intellect', '+1 Spirit']);
     // This one is uncommon vendor stock, so the game derives no item level and no required
     // level for it, and what it DOES ask is a class, plus the set it belongs to.
     expect(blockLines('gate')).toContain('Classes: Mage, Priest, Warlock, Druid');

@@ -142,6 +142,16 @@ const LOCAL_SPREAD = /\.\.\.([A-Z][A-Z0-9_]*),/g;
  * a `const 34` and report a missing declaration where the value was sitting in hand.
  */
 const IDENT_VALUE = /^[A-Z][A-Z0-9_]*$/;
+/**
+ * A same-module constant read as a VALUE, e.g. `id: LAST_KEEP_GRAVEYARD_ID,`.
+ *
+ * The two lookarounds are the whole of what keeps this from matching things it must
+ * not. Behind: no dot and no word character, so a layout read (`X_LAYOUT.services`)
+ * and the tail of a longer name are both out, and so is a spread, which
+ * LOCAL_SPREAD owns. Ahead: not a colon, so an upper-case property KEY is never
+ * mistaken for a reference to itself.
+ */
+const LOCAL_CONST = /(?<![.\w])([A-Z][A-Z0-9_]{2,})\b(?!\s*:)/g;
 
 /** Prose that belongs in the file rather than only in this script. */
 const NOTES = [
@@ -627,11 +637,44 @@ function withLayoutValues(text, layouts) {
   );
 }
 
+/**
+ * Every same-module SCALAR constant read as a value, replaced by what it holds.
+ *
+ * The scalar twin of `withLocalSpreads` above, and game 0.43.0 is what it is for:
+ * the Last Keep churchyard was appended to OVERWORLD_GRAVEYARDS as
+ * `{ id: LAST_KEEP_GRAVEYARD_ID, ... }`, because `spirit.ts` reads the same id to
+ * find that yard's reserved healer. Before this the whole table refused, which was
+ * the RIGHT failure (a graveyard table quietly short one graveyard sends a ghost
+ * 300 yards the wrong way) and is still a failure somebody has to come and fix.
+ *
+ * Anything it cannot resolve is LEFT ALONE rather than dropped, so `literal` still
+ * throws on it. That is the property to keep: this widens what can be read, and
+ * must never widen what can be read WRONG.
+ */
+function withLocalConstants(text, module) {
+  return text.replaceAll(LOCAL_CONST, (whole, ident) => {
+    const marker = `export const ${ident} = `;
+    const at = module.text.indexOf(marker);
+    if (at === NOT_FOUND) {
+      return whole;
+    }
+    const end = module.text.indexOf(';', at);
+    if (end === NOT_FOUND) {
+      return whole;
+    }
+    const value = literal(module.text.slice(at + marker.length, end), `${ident} in ${module.name}`);
+    return JSON.stringify(value);
+  });
+}
+
 function readGraveyards(root, modules) {
   const module = moduleNamed(modules, 'graveyards.ts');
   const opener = openerAt(module.text, 'export const OVERWORLD_GRAVEYARDS', '[');
   const block = blockAt(module.text, opener, '[', ']');
-  const resolved = withLayoutValues(block, layoutsFor(root, module));
+  // Layouts first, for the reason withLayoutValues gives about spreads: its reads
+  // carry dots, which is exactly what LOCAL_CONST's lookbehind refuses, so running
+  // it second leaves the layout references untouched either way.
+  const resolved = withLocalConstants(withLayoutValues(block, layoutsFor(root, module)), module);
   const rows = literal(resolved, 'OVERWORLD_GRAVEYARDS');
   return rows.map((row) => ({ id: row.id, label: row.name, x: row.x, z: row.z }));
 }

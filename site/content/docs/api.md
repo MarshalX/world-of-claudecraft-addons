@@ -24,6 +24,8 @@ woc.net.onAnyEvent((event) => { /* every event, whatever its kind */ });
 
 The `error` event is every refused action, and `text` is the only part of one that is always there. A refusal the SERVER wrote can also carry `code`, a stable identity to branch on where the prose is not, `channel` where it is about chat, and `retryAfterSeconds` where it is a rate limit rather than a rejection. All three are optional and most refusals carry none of them: they arrived with game 0.37.1 and the chat quota is the only thing filling them today, so display `text` and treat the rest as a bonus. `reason` is a different field, the sim's own coarse label, and it has one member.
 
+The `chat` event carries a `textKey` when the line was GENERATED rather than typed, and that is the field to branch on: `text` is English prose that a locale or a rewording changes under you, and the key does not. Presence is also how you tell the game speaking from somebody in your party. The `/pull` raid countdown is the first thing this makes readable at all: it arrives on the `raidWarning` channel as `hudChrome.pullTimer.start` with `textValues.seconds`, then `hudChrome.pullTimer.countdown` at 5, 4, 3, 2 and 1, then `hudChrome.pullTimer.pull`, or `hudChrome.pullTimer.cancel` if the leader called it off. Read `textValues.seconds`, which is a number in every language. Both fields arrived with game 0.43.0, so a line from an older server carries neither.
+
 `net.onSend` sees outbound frames, **after redaction**. The client's first frame on every socket carries your account bearer token, and it is blanked by field name rather than by frame type, so a version bump cannot slip one past.
 
 ```js
@@ -368,13 +370,16 @@ const debuffs = woc.world.partyAuras(pid, { debuff: true });
 woc.world.harmful(aura);            // is this working against whoever carries it
 woc.world.dispellable(aura);        // can you remove it off an ally
 woc.world.dispellable(aura, true);  // ...or strip it off an enemy
+woc.world.toggle(aura);             // is this a MODE, with a clock that means nothing
 ```
 
 `mine` is the filter a dot tracker needs and the one most often forgotten. Two players can carry the same debuff on one target, and without it a display shows a full timer while your own effect quietly expires.
 
 `world.harmful` and `world.dispellable` are functions rather than fields on the aura, and that is worth knowing rather than working around: the loader hands you the game's own aura objects rather than copies, so a field could only exist by writing onto state the game's HUD reads from the same array, or by copying every aura on every read, which would break the object identity you use to track one effect across frames. `world.harmful` accepts a party row as well as a full aura. `world.dispellable` refuses a row, because a row carries neither a school nor the encounter-control flag and those are the two clauses whose absence costs a player a global cooldown.
 
-`world.dispellable` refuses two auras BY ID that nothing visible on the aura would tell you about: a paladin's Divine Ascension charges and a shaman's Stormsurge proc window, states the game draws as auras rather than effects anything can transfer. One clause no client can run: `encounterOwned` is checked by the game ahead of everything else and never sent on the wire, and it is on most of the Ignivar and Varkhul mechanics, so inside those fights `true` means "nothing a client can see forbids it" rather than "this will work". There is no heuristic worth substituting.
+`world.dispellable` refuses two auras BY ID that nothing visible on the aura would tell you about: a paladin's Divine Ascension charges and a shaman's Stormsurge proc window, states the game draws as auras rather than effects anything can transfer. One clause no client can run: `encounterOwned` is checked by the game ahead of everything else and never sent on the wire, and it is set across all three raids, so inside those fights `true` means "nothing a client can see forbids it" rather than "this will work". It is not only a boss-aura problem: Nythraxis's Soul Rend goes on the marked raiders as a vulnerability, and Ignivar's forge chains go on a player, so these are player debuffs a healer would reach for and the answer here is wrong about them. There is no heuristic worth substituting.
+
+**Ask `world.toggle` before you draw a timer.** A stance, a druid form, stealth, Ghost Wolf, Beacon of Light, the battleground carried flag and the rotation banks a spec fills and spends are MODES: the game backs each with a long finite duration, 3600 seconds or a whole match, purely so the sim has a JSON-safe number, and `remaining` counts down through it like any other aura. So every field you would draw a bar from is present, correctly typed, and fiction. Without this a bar under a Cat Form is a full bar draining over an hour and a label under a Battle Stance reads `59:59`, and nothing anywhere reports it. Unlike `dispellable` this is the game's whole rule with nothing left over, because it reads only an id and a kind and the wire carries both, which is also why it accepts a party row. Greater Invisibility is the case that stops it being a kind check: it reuses the rogue stealth machinery and IS a fixed 20 second buff, so it answers `false`.
 
 Authored content, which ships in the client rather than arriving on the wire:
 

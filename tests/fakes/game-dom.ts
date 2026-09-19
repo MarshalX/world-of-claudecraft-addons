@@ -12,6 +12,18 @@
 const MENU_ENTRY_LABELS = ['Interface', 'Controls', 'Graphics', 'Sound'];
 const RAIL_BUTTON_IDS = ['mm-arena', 'mm-social', 'mm-options'];
 
+/**
+ * What the game itself puts on a menu row and on a rail button, at game 0.43.2.
+ *
+ * Exported because the loader's two injections are supposed to wear exactly
+ * these, and asserting them against a copy written out in the test would only
+ * restate the loader's own constant. `src/ui/options_main_menu_controller.ts:44`
+ * builds the first (the row list moved out of `options_window.ts` in that
+ * release); `play.html`, every `#mm-*` button, carries the second.
+ */
+const GAME_OWN_MENU_ENTRY_CLASS = 'btn ui-btn opt-btn';
+const GAME_OWN_RAIL_BUTTON_CLASS = 'micro-btn ui-icon-btn ui-icon-btn--micro';
+
 const BACK_BUTTON = '<button type="button" class="x-btn back-btn" data-back></button>';
 
 function backControl(withBack: boolean): string {
@@ -57,7 +69,7 @@ export function mountGameMenu(doc: Document): GameDom {
     list.className = 'opt-list';
     for (const label of MENU_ENTRY_LABELS) {
       const button = doc.createElement('button');
-      button.className = 'btn opt-btn';
+      button.className = GAME_OWN_MENU_ENTRY_CLASS;
       button.textContent = label;
       list.appendChild(button);
     }
@@ -96,7 +108,7 @@ export function mountGameMenu(doc: Document): GameDom {
 /** The micro-button rail, where #mm-options is the last child. */
 export function mountGameRail(doc: Document): HTMLElement {
   const buttons = RAIL_BUTTON_IDS.map(
-    (id) => `<button type="button" class="micro-btn" id="${id}"></button>`,
+    (id) => `<button type="button" class="${GAME_OWN_RAIL_BUTTON_CLASS}" id="${id}"></button>`,
   ).join('');
   doc.body.innerHTML = `<div id="side-buttons-col-b" class="side-buttons-col">${buttons}</div>`;
   return doc.getElementById('side-buttons-col-b') as HTMLElement;
@@ -123,7 +135,7 @@ export function mountStartScreen(doc: Document): void {
     '<div id="ui" tabindex="-1"></div>' +
     '<div id="options-menu" class="window panel"></div>' +
     '<div id="side-buttons-col-b" class="side-buttons-col">' +
-    '<button type="button" class="micro-btn" id="mm-options"></button>' +
+    `<button type="button" class="${GAME_OWN_RAIL_BUTTON_CLASS}" id="mm-options"></button>` +
     '</div>' +
     '</template>' +
     '<div id="start-screen"></div>';
@@ -158,3 +170,5 @@ export function leaveWorld(doc: Document): void {
   }
   doc.body.classList.remove('game-active');
 }
+
+export { GAME_OWN_MENU_ENTRY_CLASS, GAME_OWN_RAIL_BUTTON_CLASS };

@@ -32,6 +32,8 @@ import {
   renderKindTypes,
   renderKindValues,
 } from '../tools/aura-kinds-core.ts';
+import type { ToggleRule } from '../tools/aura-toggle-core.ts';
+import { setMembers, toggleRule } from '../tools/aura-toggle-core.ts';
 
 const OPEN = 'export const DEBUFF_AURA_KINDS: ReadonlySet<AuraKind> = new Set<AuraKind>([';
 
@@ -46,8 +48,11 @@ function namesIn(text: string, pattern: RegExp): string[] {
 }
 
 const VALUE_MEMBER = /^ {2}'([^']+)',$/gm;
-/** Where the second set starts in the values file. */
+/** Where each set starts in the values file, in the order they are written. */
 const IDS_DECLARATION = 'const UNDISPELLABLE_AURA_IDS';
+const TOGGLE_KINDS_DECLARATION = 'const TOGGLE_AURA_KINDS';
+const TOGGLE_IDS_DECLARATION = 'const TOGGLE_AURA_IDS';
+const TIMED_DECLARATION = 'const TIMED_AURA_IDS';
 const UNION_MEMBER = /^ {2}\| '([^']+)'/gm;
 const READ_FROM = /from (.+)\. Do not hand-edit/;
 
@@ -56,16 +61,39 @@ function readFromIn(text: string): string {
 }
 
 /**
- * The kinds half of the values file, and the ids half. Both sets share one
- * layout, so one pass over the whole file would read them as one set.
+ * The names of ONE set in the values file, bounded at both ends.
+ *
+ * Every set there shares one layout, so an unbounded pass would read the five of
+ * them as one. Bounding at the next declaration rather than at a line count is
+ * what keeps this honest when a set changes size.
  */
+function sectionIn(text: string, from: string, to: string | null): string[] {
+  const start = Math.max(text.indexOf(from), 0);
+  if (to === null) {
+    return namesIn(text.slice(start), VALUE_MEMBER);
+  }
+  return namesIn(text.slice(start, text.indexOf(to)), VALUE_MEMBER);
+}
+
 function kindsIn(text: string): string[] {
-  return namesIn(text.slice(0, text.indexOf(IDS_DECLARATION)), VALUE_MEMBER);
+  return sectionIn(text, '', IDS_DECLARATION);
 }
 
 function idsIn(text: string): string[] {
-  return namesIn(text.slice(text.indexOf(IDS_DECLARATION)), VALUE_MEMBER);
+  return sectionIn(text, IDS_DECLARATION, TOGGLE_KINDS_DECLARATION);
 }
+
+/** The toggle rule, read back out of the file in the shape the generator takes. */
+function toggleIn(text: string): ToggleRule {
+  return {
+    kinds: sectionIn(text, TOGGLE_KINDS_DECLARATION, TOGGLE_IDS_DECLARATION),
+    ids: sectionIn(text, TOGGLE_IDS_DECLARATION, TIMED_DECLARATION),
+    timed: sectionIn(text, TIMED_DECLARATION, null),
+  };
+}
+
+/** A minimal rule, for a case that is about something else. */
+const A_RULE: ToggleRule = { kinds: ['stealth'], ids: ['ghost_wolf'], timed: ['x'] };
 
 describe('parsing the declaration', () => {
   it('names every kind in the set, in source order', () => {
@@ -216,12 +244,14 @@ describe('parsing the ids no dispel takes', () => {
 
 describe('rendering the two outputs', () => {
   it('sorts both, so a regenerate diff is one line per kind that moved', () => {
-    expect(renderKindValues(['slow', 'dot'], ['x'], '0.0.0')).toContain("  'dot',\n  'slow',\n");
+    expect(renderKindValues(['slow', 'dot'], ['x'], '0.0.0', A_RULE)).toContain(
+      "  'dot',\n  'slow',\n",
+    );
     expect(renderKindTypes(['slow', 'dot'], '0.0.0')).toContain("  | 'dot'\n  | 'slow';");
   });
 
   it('renders the refused ids as a second set, sorted and unpublished', () => {
-    const values = renderKindValues(['dot'], ['zeta_mark', 'alpha_mark'], '0.0.0');
+    const values = renderKindValues(['dot'], ['zeta_mark', 'alpha_mark'], '0.0.0', A_RULE);
 
     expect(idsIn(values)).toEqual(['alpha_mark', 'zeta_mark']);
     expect(kindsIn(values)).toEqual(['dot']);
@@ -233,16 +263,76 @@ describe('rendering the two outputs', () => {
   });
 
   it('records which release it read, since nothing else can say the set is stale', () => {
-    expect(renderKindValues(['dot'], ['x'], '0.33.0')).toContain('world-of-claudecraft 0.33.0');
+    expect(renderKindValues(['dot'], ['x'], '0.33.0', A_RULE)).toContain(
+      'world-of-claudecraft 0.33.0',
+    );
     expect(renderKindTypes(['dot'], '0.33.0')).toContain('world-of-claudecraft 0.33.0');
   });
 
   // The two files are written from one parse and are useless if they disagree:
   // an author would autocomplete a name the runtime does not classify.
   it('names the same kinds in both', () => {
-    expect(kindsIn(renderKindValues(['dot', 'slow'], ['x'], '0.0.0'))).toEqual(
+    expect(kindsIn(renderKindValues(['dot', 'slow'], ['x'], '0.0.0', A_RULE))).toEqual(
       namesIn(renderKindTypes(['dot', 'slow'], '0.0.0'), UNION_MEMBER),
     );
+  });
+});
+
+/** The toggle rule as the game declares it, across its two files. */
+const TOGGLE_SOURCE = [
+  "export const TOGGLE_AURA_KINDS: ReadonlySet<AuraKind> = new Set<AuraKind>([\n  'stealth',\n  'form_cat',\n]);",
+  "export const TOGGLE_AURA_IDS: ReadonlySet<string> = new Set([\n  'ghost_wolf',\n]);",
+  "export const TIMED_AURA_IDS: ReadonlySet<string> = new Set(['greater_invisibility']);",
+  'export function isToggleAura(kind: AuraKind, id: string): boolean {',
+  '  return (',
+  '    (TOGGLE_AURA_KINDS.has(kind) || TOGGLE_AURA_IDS.has(id) || isPersistentEngineAura(id)) &&',
+  '    !TIMED_AURA_IDS.has(id)',
+  '  );',
+  '}',
+].join('\n\n');
+
+const ENGINE_SOURCE =
+  "const PERSISTENT_ENGINE_AURA_IDS: ReadonlySet<string> = new Set([\n  'moontide',\n  'ghost_wolf',\n]);";
+
+describe('parsing the toggle rule', () => {
+  // Merged because the game's predicate ORs them, and the dedupe is what makes
+  // that safe: an id in both sets must not be written twice.
+  it('merges the authored toggles with the engine banks, deduped', () => {
+    const rule = toggleRule(TOGGLE_SOURCE, ENGINE_SOURCE);
+
+    expect(rule.kinds).toEqual(['stealth', 'form_cat']);
+    expect([...rule.ids].sort()).toEqual(['ghost_wolf', 'moontide']);
+    expect(rule.timed).toEqual(['greater_invisibility']);
+  });
+
+  // The whole point of the guard: four declarations can survive a release that
+  // rewrites the predicate to consult something else, and generating from them
+  // then mirrors a rule the game has stopped applying, with nothing failing.
+  it('throws when the predicate stops consulting a set it still declares', () => {
+    const rewritten = TOGGLE_SOURCE.replace('TOGGLE_AURA_IDS.has(id) || ', '');
+
+    expect(() => toggleRule(rewritten, ENGINE_SOURCE)).toThrow(/no longer consults/);
+  });
+
+  it('throws when the predicate itself has moved or been renamed', () => {
+    expect(() => toggleRule(TOGGLE_SOURCE.replace('isToggleAura', 'isModeAura'), ENGINE_SOURCE)) //
+      .toThrow(/no longer declares/);
+  });
+
+  // A set that quietly answers short generates a file that compiles and then
+  // prints a countdown under every stance in the game.
+  it('throws rather than answering short on a set it cannot read', () => {
+    expect(() =>
+      setMembers(
+        'x.ts',
+        'const S: ReadonlySet<string> = new Set([\n  ...OTHER,\n]);',
+        'const S: ReadonlySet<string> = new Set([',
+        'S',
+      ),
+    ) //
+      .toThrow(/cannot read/);
+    expect(() => setMembers('x.ts', 'nothing here', 'const S = new Set([', 'S')) //
+      .toThrow(/no longer declares/);
   });
 });
 
@@ -258,7 +348,9 @@ describe('the checked-in files', () => {
   it('are laid out exactly the way the generator writes them', () => {
     const version = readFromIn(VALUES_TEXT).split(' ').at(-1) ?? '';
 
-    expect(VALUES_TEXT).toBe(renderKindValues(kindsIn(VALUES_TEXT), idsIn(VALUES_TEXT), version));
+    expect(VALUES_TEXT).toBe(
+      renderKindValues(kindsIn(VALUES_TEXT), idsIn(VALUES_TEXT), version, toggleIn(VALUES_TEXT)),
+    );
     expect(TYPES_TEXT).toBe(renderKindTypes(namesIn(TYPES_TEXT, UNION_MEMBER), version));
   });
 

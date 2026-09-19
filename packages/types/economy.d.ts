@@ -71,6 +71,21 @@ export interface MarketListing {
   house: boolean;
   /** Present only on an instanced listing, trimmed to the public fields. */
   instance?: PublicItemInstance;
+  /**
+   * The id of the recipe that crafted the stack. Absent on anything not crafted,
+   * and on every crafted stack from a server older than game 0.43.0.
+   *
+   * A recipe id, not an item id: `ui.icon.item` does not resolve one, and there
+   * is no route from it back to a display name, exactly as with `mountKey` and
+   * `weaponSkinId`. What it reliably answers is whether two same-item listings
+   * are the same GOODS, which the item id alone does not say.
+   *
+   * Unlike everything under `instance`, this is not filtered by the game's
+   * public-instance allowlist, so it is as true on a stranger's row as on yours.
+   *
+   * Added in API minor 12.
+   */
+  craftedRecipeId?: string;
 }
 
 /**

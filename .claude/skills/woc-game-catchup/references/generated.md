@@ -50,7 +50,11 @@ It warns when the loader's own sheet reads a token WITHOUT a fallback that the g
 
 ### `pnpm aura-kinds`
 
-Reads `src/sim/aura_classify.ts` from a checkout. Writes BOTH `packages/types/aura-kinds.generated.d.ts` and `loader/src/shared/aura-kinds.generated.ts`, because there is no endpoint to re-read at run time so the runtime carries the value as well as the types.
+Reads `src/sim/aura_classify.ts` from a checkout, and since game 0.43.0 `src/sim/persistent_aura.ts` beside it. Writes BOTH `packages/types/aura-kinds.generated.d.ts` and `loader/src/shared/aura-kinds.generated.ts`, because there is no endpoint to re-read at run time so the runtime carries the value as well as the types.
+
+It now carries TWO rules out of that file: the harmful kinds and refused ids behind `world.harmful`/`world.dispellable`, and the toggle rule behind `world.toggle`. Each set's parse is guarded by a check that the game's own predicate still CONSULTS it, so four declarations surviving a rewritten predicate is a failure rather than a file that mirrors a rule the game stopped applying.
+
+**The generated file's layout is formatter-sensitive and the fix is in the renderer.** Biome collapses a short array onto one line and keeps one carrying a comment expanded, so a set that shrinks enough would silently change shape and break the round-trip test that proves the file is what the generator writes. Each toggle set body therefore opens with a comment line, deliberately. Do not remove one to tidy it.
 
 **Its flag is space separated: `--game <path>`.** It is `process.argv.indexOf('--game')`. `--game=<path>` trips the required-argument error, which reads as a missing flag rather than a wrong one. `--game` is required and never defaulted, a missing source file is a failure rather than a warning, and the checkout's version is stamped into both headers.
 

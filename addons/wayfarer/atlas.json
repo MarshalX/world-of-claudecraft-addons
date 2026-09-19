@@ -1,6 +1,6 @@
 {
   "source": {
-    "game": "0.42.2",
+    "game": "0.43.2",
     "files": [
       "src/sim/data.ts (ZONES, WORLD_SIZE, INSTANCE_X_BASE, PORTALS)",
       "src/sim/content/*.ts (one ZoneDef and one PortalDef[] per zone)",
@@ -982,6 +982,12 @@
       "label": "Dawnrest Graves",
       "x": -324,
       "z": 58
+    },
+    {
+      "id": "gy_last_keep",
+      "label": "Last Keep Churchyard",
+      "x": 451,
+      "z": 2134
     }
   ],
   "mailboxes": [

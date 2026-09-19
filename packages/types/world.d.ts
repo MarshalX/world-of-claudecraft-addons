@@ -676,6 +676,39 @@ export interface WorldApi {
   dispellable: (aura: Aura, offensive?: boolean) => boolean;
 
   /**
+   * Whether an effect is a MODE rather than a timed one, so its clock is fiction.
+   *
+   * A stance, a druid form, stealth, Ghost Wolf, Beacon of Light, the
+   * battleground carried flag, and the rotation banks a spec fills and spends.
+   * The game backs each with a long finite duration, 3600 seconds or a whole
+   * match, purely so the sim has a JSON-safe number to serialise, and
+   * `remaining` counts down through it like any other aura. So the two fields
+   * are present, well typed, and say nothing: a bar drawn from `remaining /
+   * duration` under a Cat Form is a full bar draining over an hour, and a label
+   * under a Battle Stance reads `59:59`.
+   *
+   * ASK THIS BEFORE DRAWING A TIMER, and draw nothing where it answers true.
+   * That is what the game's own surfaces do, and the game's source records them
+   * having drifted apart once already, with the aura overlay showing a 3,599
+   * countdown on a stance the buff bar was correctly showing none for.
+   *
+   * Unlike `dispellable` this is the game's WHOLE rule with nothing left over:
+   * it reads an id and a kind, the wire carries both on every aura, so there is
+   * no clause a client cannot see. For the same reason it takes either aura
+   * shape, a party row included.
+   *
+   * The inverse case is real and is handled: Greater Invisibility reuses the
+   * rogue stealth machinery and IS a fixed 20 second buff, so it answers false
+   * despite its kind. The sets are game CONTENT, so a mode added by a release
+   * these types predate answers false, which is the conservative direction here:
+   * a timer drawn where none was wanted, rather than one withheld from an effect
+   * that has a real clock.
+   *
+   * Added in game 0.43.0 and in API minor 12.
+   */
+  toggle: (aura: Pick<Aura, 'id' | 'kind'>) => boolean;
+
+  /**
    * Flat distance from the player to a point, in yards, IGNORING HEIGHT.
    *
    * The distance you would walk, which is what the game's own range gates

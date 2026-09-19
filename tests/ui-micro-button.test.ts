@@ -2,7 +2,7 @@
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { BUTTON_ID, mountMicroButton } from '../loader/src/runtime/ui/micro-button.ts';
-import { mountGameRail } from './fakes/game-dom.ts';
+import { GAME_OWN_RAIL_BUTTON_CLASS, mountGameRail } from './fakes/game-dom.ts';
 
 const LABEL = 'Addons';
 const BUTTON = '#woc-addons-micro-button';
@@ -27,12 +27,26 @@ describe('the rail button', () => {
     expect(document.getElementById('mm-options')?.nextElementSibling).toBe(button);
   });
 
-  it('carries the game rail class and an accessible name', () => {
+  // Against the GAME's own buttons rather than against a literal, because a
+  // literal here only restates the loader's constant and both would be edited
+  // together. Game 0.43.0 moved the whole plate out of `.micro-btn` into the
+  // interface library's `.ui-icon-btn`, so a button wearing the old class alone
+  // became a bare glyph with nothing under it, and nothing failed.
+  it('wears exactly what the game puts on its own rail buttons', () => {
+    const rail = mountGameRail(document);
+    const theirs = rail.querySelector('#mm-options')?.className;
+
+    const { el } = mount();
+
+    expect(el?.className).toBe(theirs);
+    expect(el?.className).toBe(GAME_OWN_RAIL_BUTTON_CLASS);
+  });
+
+  it('carries an accessible name', () => {
     mountGameRail(document);
 
     const { el } = mount();
 
-    expect(el?.className).toBe('micro-btn');
     expect(el?.getAttribute('aria-label')).toBe(LABEL);
   });
 

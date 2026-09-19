@@ -109,6 +109,22 @@ export type ChatChannel =
   | 'whisper'
   | 'general'
   | 'party'
+  /**
+   * Everyone in the sender's battleground, BOTH teams.
+   *
+   * Cross-team on purpose, which is the game's own reason for it: players were
+   * falling back to General to talk to the other side.
+   */
+  | 'battleground'
+  /**
+   * A party or raid LEADER's alert, broadcast to every member.
+   *
+   * The `/pull` countdown rides this channel, which is why it is worth branching
+   * on: see `textKey` below for reading that countdown without parsing English.
+   *
+   * Added in API minor 12.
+   */
+  | 'raidWarning'
   | 'guild'
   | 'officer'
   | 'world'
@@ -138,6 +154,34 @@ export interface ChatEvent extends PersonalEvent {
   fromTitle?: string;
   /** The sender's class id. Absent on a mob or boss yell. */
   classId?: string;
+  /**
+   * A stable id for a GENERATED line, where `text` is the English of it.
+   *
+   * The same bargain `ErrorEvent.code` offers one level up: `text` is prose that
+   * a locale or a rewording changes under you, and this does not. A line a PLAYER
+   * typed never carries one, so presence is also the test for "the game said
+   * this, not somebody in my party".
+   *
+   * It is a translation key rather than an enum, so treat the set as open and
+   * match the ones you care about. The `/pull` countdown is the one worth naming,
+   * because it is the first thing here an addon could not otherwise read at all:
+   * `'hudChrome.pullTimer.start'` with `{ seconds }`, then
+   * `'hudChrome.pullTimer.countdown'` with `{ seconds }` at 5, 4, 3, 2 and 1,
+   * then `'hudChrome.pullTimer.pull'`, or `'hudChrome.pullTimer.cancel'` if the
+   * leader called it off. All four arrive on the `'raidWarning'` channel.
+   *
+   * Added in game 0.43.0 and in API minor 12.
+   */
+  textKey?: string;
+  /**
+   * What the game would interpolate into `textKey`'s template, when it has any.
+   *
+   * Read the VALUE rather than the rendered `text`: `{ seconds: 5 }` is a number
+   * whatever language the player is in.
+   *
+   * Added in game 0.43.0 and in API minor 12.
+   */
+  textValues?: Record<string, string | number>;
 }
 
 /**
