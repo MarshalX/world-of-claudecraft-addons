@@ -28,6 +28,20 @@ const STYLE_ID = 'woc-addons-style';
  * the document's, competing directly with `#game-canvas` (0), `#nameplates` (1)
  * and `#ui` (10, and 80 or 90 in the game's other layouts).
  *
+ * `#ui` is NOT the whole of the game's UI, which is easy to assume from the
+ * sentence above it and from the menu argument below. The game also mounts
+ * dialogs as siblings of it on `document.body`, above the whole `#ui` context
+ * precisely because nothing inside a stacking context can paint above one:
+ * `.armory-inspect-overlay` at 90 (`src/styles/components.css:3706`) and, since
+ * game 0.43.3, `#store-prompt-stack` at 96 (`src/styles/hud.css:10218`, 120 under
+ * `body.mobile-touch`), minted and dropped per prompt by
+ * `src/ui/store_prompt_host.ts`. That family lands BETWEEN the two bands, which
+ * is where it belongs and needs nothing from us: above the hud band, so a dialog
+ * the player opened covers addon HUD furniture the way `#ui` itself does, and
+ * below the overlay band, so the manager and the toaster still reach over it.
+ * The reason to write the numbers down is that a future band would have to be
+ * placed against them rather than against `#ui` alone.
+ *
  * The split is the frame/window distinction the kit already draws, made visible:
  * a frame is HUD FURNITURE and belongs among the game's own HUD, under any window
  * the player deliberately opened, so the hud band sits below `#ui`. Everything the
