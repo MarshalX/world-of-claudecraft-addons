@@ -1,6 +1,6 @@
 # AGENTS.md
 
-Working instructions for this repository. `CLAUDE.md` points here; this file is the single source of truth.
+Working instructions for this repository. `CLAUDE.md` points here. This file and the area rules under `.claude/rules/` it lists are the single source of truth.
 
 ## What this is
 
@@ -199,79 +199,21 @@ TypeScript runs `strict` plus `noUncheckedIndexedAccess`, `noImplicitOverride`, 
 
   **A generator must hard-stop on a missing export** (`fail()` in `objectAfter` and siblings); never add a fallback, which would write a stale table under a green run. Point generators at the file that DECLARES an object, not at a re-export.
 
-### The UI kit
-
-- **A `bare` frame drags and resizes only in the arrange mode.** Its whole element is the handle and its drawn rows are the only hit area, so any small press moved it. `kit/frame-gestures.ts` gates the interactjs instance, **never the box keeper**, which also restores and refits frames. Every refused drag toasts the arrange combo as currently bound, replacing the previous toast (`kit/arrange-hint.ts`).
-- **Addon frames are hidden whenever the game HUD is absent, and hidden by default.** `ui/root.ts` adds `NO_HUD_CLASS` at mount and `ui/mount.ts` clears it from the HUD presence signal, so the no-event state is safe on the landing page. The rule targets `.woc-addon-frame`, so the manager stays reachable. Addons keep running before world entry but must not draw. `whenHudMounts` reports falling as well as rising.
-- **The root is a sibling of `#ui`, is NOT A LAYER, and its stylesheet is unlayered.** `#woc-addons` is `display: contents` holding `woc-hud-band` (z 5) and `woc-overlay-band` (z 100001). `#ui` is one stacking context containing the game's windows, so a single layer would sit above or below all of them; and a boxed root would itself become one stacking context. Frames and world anchors go in the hud band, under game windows; the manager, menus, toasts, modals, banner and tooltip go in the overlay band. The pointer rule is two `#woc-addons :where(.woc-hud-band) > *`-style rules, not one selector list, because the build's scoping guard splits on commas. The game also mounts body-level dialogs at z 90 to 120, between the two bands; place any new band against that range.
-
-  **An unlayered rule outranks any layered one**, so game layer changes cost nothing; watch instead for a class the kit WEARS (`panel`, `panel-title`, `x-btn`, in `@layer base`) leaving its layer, which would leave the loader winning only by injection order. Loader rules stay scoped to loader elements (the build enforces it), and `@keyframes` names must start with `woc-`.
-- **A frame's `pointer` decides how much of the player's controls it takes**; bare frames default to `content`. The game binds world input to the canvas, so any covering element eats targeting, camera and zoom, and nothing can forward them. `auto` is the whole box, `content` only what the addon drew, `none` nothing, matching the game's own `pointer-events: none` overlays. Unlock mode forces `auto`. A tooltip cannot live on a `none` frame, and hit-testing on every pointermove to fake one is rejected.
-- **Window order is ONE service on the root** (`ui/kit/stacking.ts`): capture-phase `pointerdown` and `focusin` on `#woc-addons` raise `closest('.woc-window')`, so no window needs wiring. Raising belongs to SHOWING (built, shown, and the manager's `show()` even when open), never to callers. The counter renormalises at `WINDOW_Z_CEILING`; keep the overlay z values in `styles/kit.css` above it.
-- **Placement rules are pure** in `ui/frame/geometry.ts` with Node tests; interactjs only handles gestures. A persisted box is parsed, since a NaN drops a style declaration silently.
-- **The unlock outline is an `outline` with a wash**, because bare resets `border` and `box-shadow` and an empty frame otherwise shows nothing to grab.
-- **A non-resizable frame gets its `width` written, never a height** (`applyWidth` in `kit/frame.ts`): shrink-to-fit or `max-width` lets the panel shift as rows reflow. An addon must not size its column to the frame width, which includes padding. Only the stage proves this.
-- **A readout's height is the KIT's to derive.** `ui.bar` and `ui.tile` take `size`; writing one yourself opts out of the tap-target floor. `ui.units` subtracts gaps before dividing and FLOORS the share (rounding up overflows a clipping box). `frame.box()` gives the initial size, since `onMove` does not fire for placement.
-- **`resizable` is per axis** (`'width'`, `'height'`); an unrecognised value means NOT resizable.
-- **A `.woc-bar` never shrinks** (`flex-shrink: 0` in `styles/bar.css`), or overflow squeezes rows instead of scrolling. Vitest cannot see it; the stage can.
-- **Frame density is an enum**: `comfortable` (default, the game's scale), `compact`, `bare`. `ui.window` refuses only `bare`, whose missing title bar would lose the close button. An unknown value falls back to comfortable, never compact. The variant reaches `.woc-btn` and `.woc-tab`, so reuse those instead of restyling.
-- **Frame versus window is the ARIA ROLE** (`roleFor`): a window is `role="dialog"`, something the player opened and dismisses; a frame is `role="group"`, HUD furniture the player toggles. The panel look and resizing are independent of it; a window always has a close button, and a frame gets one with `closable: true` (not on `bare`).
-- **The tap-target floor is a TOUCH rule**, `@media (pointer: coarse)` in `ui/styles/touch.css`, concatenated LAST so it beats density variants. The game's desktop controls run 11px to 13px; its 16px/40px floor exists only under that query. **Never hand-size a kit control's font or height**: an inline style defeats the floor. Change padding. A size copied from the game is only as true as the media query it came from.
-- **A bar's fill is tinted by SCHOOL from the game's `--color-debuff-*`**, separate from `tone` (urgency); addons pass no colour. Tone wins by SOURCE ORDER in `styles/bar.css`, so do not reorder those groups.
-- **A dropdown is the kit's menu, never a native `<select>`**, whose OS-drawn popup escapes every loader rule. `kit/picker.ts` (DOM) and `manager/picker.tsx` (preact) reuse `ui.menu` over `kit/caret-glyph.ts`; `MenuItem.checked` marks a choice. Tests drive the real control through `tests/fakes/controls.ts` and `menuService`, since assigning `value` to a button proves nothing.
-- **ITEM QUALITY is a third axis** (`quality`, and the published `woc-quality-<tier>` class). The game hard-codes two palettes, one for names and one for borders; ours are `styles/quality.css` and `styles/tile.css`. `.woc-tile` sets `border` as a shorthand, so `tile.css` must run tier, then school, then tone.
-- **There is ONE close mark**, a stroked `currentColor` path in `ui/kit/close-glyph.ts` (a `×` renders thin in the serif title font), rendered for DOM and preact; tests assert `CLOSE_PATH`. A glyph never goes in a strings module.
-- **CSS text is not readable from Vitest**: every `.css` import is `''`, `?raw` included, and `noNodejsModules` is not exempt in `tests/**`. Do not widen the exemption; check class-to-rule agreement by running the loader.
-- **A tooltip whose anchor leaves the document is the KIT's problem** (`ui/kit/tooltip.ts`): a root-scoped observer runs only while a tooltip shows, dead attachments are swept on the next `attach`, and nothing is reaped until seen CONNECTED, because addons attach before inserting. None of it is public API.
-
 ### Keybinds
 
 - **The keydown listener claims a key ONLY when a bind matched.** It runs in the capture phase before the game, so an eager `stopImmediatePropagation` silently degrades the game's controls. Its editable-element guard is deliberately wider than the game's.
 - **Conflict detection reads the game's LIVE keybind profile** (`__game.input.keybinds`), which includes defaults the stored blob lacks. Storage is a fallback that reports its `source` and over-reports on purpose, since it cannot tell held from edge actions.
 
-### The marketplace, the dev server and the manager
+### Area rules
 
-- **The official marketplace cannot be removed**; `canRemoveMarketplace` runs in the host.
-- **The local dev origin is a build-time constant** (`LOCAL_ORIGIN` in `shared/marketplace.ts`, in `@connect`) that `normalizeMarketplaceUrl` rejects as input. `MarketplaceSource` is a union so callers must say which kind they hold.
-- **A marketplace id is re-derived on read** by `fromStored`; only owner, repo and ref are stored, because the id is the storage namespace of every addon from it.
-- **The dev watcher polls BODIES, never the index**, which would repaint the manager every tick.
-- **The dev server serves the loader on ONE EXACT PATH** (`resolveLoader`, name in `tools/artifact.ts`), and installing over http avoids the `file://` permission.
-- **The dev index `generated` stamp is an mtime**, so ETags can answer 304.
-- **The contents-API fallback runs only on a 404 for a repository.** A 403 is the rate limit and must not trigger a request per addon. Too many directories is REFUSED, never truncated.
-- **`MarketApi.setRef` moves the ref, never the id**, and drops cached rows.
-- **Nothing about an addon is written anywhere but its manifest.** The site and README read it through `tools/catalog.ts`; never add a second description. The only editorial choice is which four get pictures (`tools/featured.ts`).
-- **`development`-tagged addons ship in Browse but not on the site catalog or README list**, and both publishers name what they omit.
-- **A generated file is owned by the BOT or a contributor, never both.** `marketplace.json` and the README section belong to the bot and have no freshness test; the README markers are tested, because their absence silently stops the generator.
-- **ONE job (`.github/workflows/marketplace.yml`) regenerates both in one commit**, since two would race on push; its title becomes a changelog line.
-- **Never hand-edit `marketplace.json`.** The dev server builds its own index per request through the `pnpm validate` reader (`tools/serve-core.ts`).
-- **The manager has three ways in**; `GM_registerMenuCommand` is host-side and works even when the runtime never connects, because the manager is how a player learns the loader is broken.
-- **The manager fetches AT MOST ONCE A SESSION, and the once is not optional.** Reads answer from the host's cache; Refresh always fetches. `market.ensure` seeds it, awaited ahead of the reads in `catalog-store.ts`, because an unseeded `registry.updates` reports a false all-clear. The once-per-session refusal lives in the host, and a failed read counts as read.
-- **A companion is a note with a route.** `companions` holds bare ids; `companionReasons` says what each ADDS, tied by `AddonManifest.refine`. It is a second key rather than a richer shape because one unreadable entry fails an older loader's whole index parse, while an unknown key is dropped. It gates nothing; its actions reuse existing controls. The pending row resolves against every row, and Browse's search lives in `ManagerApp` so the tab switch keeps it.
-- **A pin means "stop offering"**: `registry.setPin` fetches nothing, removes the addon from updates, and the row stays visible.
+Rules that apply to one area live in `.claude/rules/`, each scoped by the `paths` in its frontmatter. Claude Code loads one when it reads a matching file; any other agent reads the file before touching those paths. Each rule lives in exactly one place, here or there.
 
-### Versioning and release
-
-- **`@name` and `@namespace` are FROZEN**: a manager keys the script and its whole GM store on them, so a change installs an empty second script. `release.yml` greps the built block for both.
-- **`API_MINOR` moves on the first additive merge after the current one has SHIPPED IN A RELEASE TAG**; until then additive merges ride it. Check with `git tag --contains <the commit that set it>`. A member changing shape or leaving moves `API_VERSION`. **Widening a union an addon only READS is additive** (`ResourceType` gaining `'focus'`).
-- **`apiMinor` counts PUBLISHED MEMBERS**, record fields included: declare the smallest minor carrying every member read. **Never reason from passthrough**: nothing promises it, and an under-declared addon reads `undefined` silently where an over-declared one is refused with a message.
-- **An addon's `version` is the ONLY thing that ships it.** `host/updates.ts` offers only newer versions, so an unbumped change reaches fresh installs and nobody else. Check the whole branch's set of changed addons, and bump only on what a player can observe.
-- **The git tag is the only source of a release version.** `package.json` stays `0.0.0`; `release.yml` sets the version from the dispatch input and greps `@version` out of both built files.
-- **A release is ONE BUTTON** (`workflow_dispatch` in `release.yml`), and the run creates the tag, because `GITHUB_TOKEN` events start no workflows and the alternative is a long-lived token. Everything that can fail runs before the tag push. The drift guard refuses when `marketplace.json` rows do not match the tagged commit; wait for the bot rather than regenerating. It compares rows, not `generated`.
-- **There is no npm token and there must not be one**: write tokens now expire within 90 days, so a secret would fail on release day. The `types` job uses TRUSTED PUBLISHING. npm matches the WORKFLOW FILENAME, so the publish step cannot move files without editing npmjs.com and cannot live in a `workflow_call` workflow. The publisher needs `npm publish` allowed, and `setup-node`'s `registry-url` stays unset because its placeholder token blocks OIDC.
-- **There is ONE canonical artifact**: the Release asset via `releases/latest/download`. `loader/dist/` is never committed. `@updateURL` points at `woc-loader.meta.js`; both files are built and attached together.
-- **A published release is immutable**: fix with a patch tag; delete only within minutes of publishing.
-- **`CHANGELOG.md` is generated from commit titles, and the VERB is the category**, so lead with it. `tag_pattern` is `v[0-9]*` so `types-v*` tags do not split sections.
-
-### The stage and previews
-
-- **A scenario states what was ALREADY TRUE in `world` and what then HAPPENED in `run`.** The addon reads the world on its first line, so anything a session has at login (class, spellbook, bags, party) goes in `world`.
-- **Adopting `woc.paint` needs three edits**: the addon, `harness.frames.tick()` in its suite, and `stage.frame()` in its scenario. A missing scenario tick photographs a BLANK panel into the committed preview and nothing warns, so open the capture.
-- **The stage empties the player's dynamic collections** in `createPlayer` (`stage/src/stage.ts`), not in the shared fixture that suites assert on.
-- **The loader inherits the game's look through tokens AND three worn classes** (`panel`, `panel-title`, `x-btn`). `.panel` carries a frame's edge, so tokens alone render a frame with no border. `pnpm theme` copies both, keeping each rule's layer and media query. `tests/tools-theme.test.ts` fails when the kit wears a class the extractor does not know (`tools/kit-classes.ts`).
-- **A preview is CROPPED to the drawn frames plus 24px.** Frames floor at their opening size, so fix a half-empty panel with more content and an overfull one with less, never with a different box. Scale is chosen from `MIN_DEVICE_WIDTH` and verified against the capture, with `SLOT_MARGIN` (16px) absorbing rasteriser jitter. Width growth and the 512 kB shrink are separate passes in that order.
-- **A preview may be a SHEET of several `preview: true` scenarios**, each in its own iframe (one document cannot hold two copies of an addon), captioned in the page because sharp lacks the game font. **Budget: `panes * (box + 48) + (panes - 1) * 16 <= 1440`**; over it the last pane is silently cropped.
-- **`pnpm shots` never guesses**: which scenario (`preview: true`), when it is done (`data-stage="ready"`), or what it shows (`alt` written on the scenario, copied verbatim).
-- **The stage shows only the game's default theme**; the theme picker's values live in JavaScript (`src/ui/theme.ts`), in no stylesheet.
+| File | Covers |
+|---|---|
+| `.claude/rules/ui-kit.md` | The kit, frames, windows, stacking, density, tooltips, and what addon UI may size itself. |
+| `.claude/rules/marketplace.md` | Marketplace sources, the dev server, the manager, and the bot-owned generated files. |
+| `.claude/rules/release.md` | `@name`, `API_MINOR`, addon `version` bumps, the release workflow, npm publishing, the changelog. |
+| `.claude/rules/stage.md` | Stage scenarios, `woc.paint` adoption, preview capture and cropping. |
 
 ## Dependencies
 

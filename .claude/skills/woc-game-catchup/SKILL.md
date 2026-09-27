@@ -1,6 +1,6 @@
 ---
 name: woc-game-catchup
-description: "Catch this project up to a new World of ClaudeCraft release: audit the game checkout between two tags, verify the loader still resolves everything it depends on, regenerate every generated artifact (skill and item art unions, sound cues, aura kinds, the stage theme, and the per-addon data tables), publish what the game now sends but no addon can read, and fix or extend the addons whose behaviour the release changed. Use this whenever the user says a game version landed or shipped, names a game tag or version number, asks what a game release broke, asks whether the loader still works against the new game, asks to regenerate the tables or the art unions or the theme, asks what new the game gives addons, or says anything like 'the game updated', 'catch up to 0.38', 'audit the game diff' or 'did anything break'. Also use it when an addon is reported showing wrong or missing game content, since a silently stale data table is the usual cause and this is the pass that finds it."
+description: "Catch this project up to a new World of ClaudeCraft release: audit the game checkout between two tags, verify the loader still resolves everything it depends on, regenerate every generated artifact (skill and item art unions, sound cues, aura kinds, the stage theme, and the per-addon data tables), publish what the game now sends but no addon can read, and fix or extend the addons whose behaviour the release changed. Use it whenever a game release is the subject: a new game version or tag, what a release broke or added for addons, whether the loader still works against it, or regenerating the tables, the art unions or the theme. Also use it when an addon is reported showing wrong or missing game content, since a silently stale data table is the usual cause and this is the pass that finds it."
 ---
 
 # Catching the project up to a game release
@@ -9,7 +9,7 @@ The game ships releases this project does not control and cannot compile against
 
 **Everything this pass looks for fails silently.** A data table pinning gather nodes the game re-sited raises no error and fails no test; the player walks to a marker and finds an empty field. A comment stating something the release made false goes on being read as fact. A field the game starts sending is never published. Nothing in `pnpm check` looks at any of this, so running the generators and stopping does the easy tenth of the pass.
 
-Read `AGENTS.md` first and let it win over anything here.
+Read `AGENTS.md` first, with the area rules it lists (Phase 4 needs the stage and release ones), and let them win over anything here.
 
 ## The two inputs
 
@@ -111,7 +111,7 @@ Run `pnpm shots` over the whole catalogue once the addon work is final, and diff
 **A preview whose bytes changed and reproduces is KEPT and committed.** The committed PNG is the current picture of the current game. Restoring one because the change looked small puts back a picture of an older game and hands the next pass the same decision. The measurement below is for understanding and reporting, not for deciding whether to keep.
 
 - **An unchanged checksum is an all-clear; a changed one is not yet a finding.** Capture anything whose bytes moved a SECOND time first; only a diff that reproduces is worth measuring. `emberwatch` is the known unstable capture: see `references/generated.md`.
-- **A cold run flakes at the top.** The first addon captured can exceed the 15s `READY_MS` while the 6.7 MB bundle is served for the first time, and it reports as a `waitForSelector` timeout that reads like a broken scenario. Re-run before believing one.
+- **A cold run flakes at the top.** The first addon captured can exceed the 15s `READY_MS` while the stage bundle is served for the first time, and it reports as a `waitForSelector` timeout that reads like a broken scenario. Re-run before believing one.
 - **Measure what moved.** Decode both PNGs and take the max per-channel delta, the count of pixels above about 32, and their bounding box. A max near 40 with a handful of such pixels and no tight box is the game re-encoding its art. A tight box with large deltas is a layout shift, and is usually yours.
 - **Where the diff sits names the cause.** Scattered over every icon is the game's art. A localized rectangle is your own change. Text-wide speckle under a max of about 20 is capture noise between Chromium builds.
 - **Save the committed bytes before running**, because a capture can fail and you need the original to diff against and fall back to. Copy files; nothing in this pass runs a git write.

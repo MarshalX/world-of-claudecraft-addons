@@ -7,7 +7,7 @@ description: "Build a World of ClaudeCraft addon end to end: the manifest, the s
 
 An addon is ONE FILE. `entry` in the manifest names a single `main.js`, the loader evaluates it as a function body in strict mode with `woc` in scope, and there are no imports, no exports and no build step. Anything two addons both need comes from the loader's kit or over the bus. That constraint shapes every decision below: a line spent on scaffolding is a line the feature did not get.
 
-If the repository has an `AGENTS.md` or `CLAUDE.md`, read it first and let it win over anything here.
+If the repository has an `AGENTS.md` or `CLAUDE.md`, read it first, with the area rules it lists for the kit, the stage and versioning, and let them win over anything here.
 
 ## The four files
 
@@ -25,7 +25,7 @@ The suite lives beside the addon rather than in `tests/`, because `tests/` is ab
 
 Reach for the kit first, every time; hand-rolled UI is what makes an addon twice the size it needs to be.
 
-- **`ui.bar` and `ui.tile` are the two timer shapes and there is no third.** `ui.banner` is the centre-screen warning, `ui.toast` the transient note, `ui.alert` the modal, `ui.tooltip` the hover, `ui.field` a settings control, `ui.tabs` a tab strip, `ui.menu` a context menu, `ui.anchor3d` a world-anchored element. Do not reach past these into `document.createElement` for something the kit already draws.
+- **`ui.bar` and `ui.tile` are the two timer shapes and there is no third.** `ui.banner` is the centre-screen warning, `ui.toast` the transient note, `ui.alert` the modal, `ui.tooltip` the hover, `ui.field` a settings control, `ui.tabs` a tab strip, `ui.menu` a context menu, `ui.anchor3d` a world-anchored element, `ui.itemCell` an item slot. The whole kit is in `packages/types/ui.d.ts`; read it before reaching into `document.createElement` for something it may already draw.
 - **`.woc-btn` and `.woc-tab` inherit your frame's density.** An addon that draws its own buttons stops matching the game the first time the loader restyles.
 - **50 lines per function body is a real gate.** A builder that outgrows it is usually holding two concerns; split it while writing, into small named functions.
 - **Comments explain intent and non-obvious constraints, never what the code says.** A comment saying which reading is an inference is the most valuable line in the file.

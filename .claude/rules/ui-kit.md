@@ -1,0 +1,35 @@
+---
+paths:
+  - "loader/src/runtime/ui/**"
+  - "addons/**"
+  - "stage/**"
+  - "packages/types/ui*.d.ts"
+  - "tests/fakes/controls.ts"
+---
+
+# The UI kit
+
+Part of `AGENTS.md`, split out because it applies only to the paths above. Everything in `AGENTS.md` still holds here.
+
+- **A `bare` frame drags and resizes only in the arrange mode.** Its whole element is the handle and its drawn rows are the only hit area, so any small press moved it. `kit/frame-gestures.ts` gates the interactjs instance, **never the box keeper**, which also restores and refits frames. Every refused drag toasts the arrange combo as currently bound, replacing the previous toast (`kit/arrange-hint.ts`).
+- **Addon frames are hidden whenever the game HUD is absent, and hidden by default.** `ui/root.ts` adds `NO_HUD_CLASS` at mount and `ui/mount.ts` clears it from the HUD presence signal, so the no-event state is safe on the landing page. The rule targets `.woc-addon-frame`, so the manager stays reachable. Addons keep running before world entry but must not draw. `whenHudMounts` reports falling as well as rising.
+- **The root is a sibling of `#ui`, is NOT A LAYER, and its stylesheet is unlayered.** `#woc-addons` is `display: contents` holding `woc-hud-band` (z 5) and `woc-overlay-band` (z 100001). `#ui` is one stacking context containing the game's windows, so a single layer would sit above or below all of them; and a boxed root would itself become one stacking context. Frames and world anchors go in the hud band, under game windows; the manager, menus, toasts, modals, banner and tooltip go in the overlay band. The pointer rule is two `#woc-addons :where(.woc-hud-band) > *`-style rules, not one selector list, because the build's scoping guard splits on commas. The game also mounts body-level dialogs at z 90 to 120, between the two bands; place any new band against that range.
+
+  **An unlayered rule outranks any layered one**, so game layer changes cost nothing; watch instead for a class the kit WEARS (`panel`, `panel-title`, `x-btn`, in `@layer base`) leaving its layer, which would leave the loader winning only by injection order. Loader rules stay scoped to loader elements (the build enforces it), and `@keyframes` names must start with `woc-`.
+- **A frame's `pointer` decides how much of the player's controls it takes**; bare frames default to `content`. The game binds world input to the canvas, so any covering element eats targeting, camera and zoom, and nothing can forward them. `auto` is the whole box, `content` only what the addon drew, `none` nothing, matching the game's own `pointer-events: none` overlays. Unlock mode forces `auto`. A tooltip cannot live on a `none` frame, and hit-testing on every pointermove to fake one is rejected.
+- **Window order is ONE service on the root** (`ui/kit/stacking.ts`): capture-phase `pointerdown` and `focusin` on `#woc-addons` raise `closest('.woc-window')`, so no window needs wiring. Raising belongs to SHOWING (built, shown, and the manager's `show()` even when open), never to callers. The counter renormalises at `WINDOW_Z_CEILING`; keep the overlay z values in `styles/kit.css` above it.
+- **Placement rules are pure** in `ui/frame/geometry.ts` with Node tests; interactjs only handles gestures. A persisted box is parsed, since a NaN drops a style declaration silently.
+- **The unlock outline is an `outline` with a wash**, because bare resets `border` and `box-shadow` and an empty frame otherwise shows nothing to grab.
+- **A non-resizable frame gets its `width` written, never a height** (`applyWidth` in `kit/frame.ts`): shrink-to-fit or `max-width` lets the panel shift as rows reflow. An addon must not size its column to the frame width, which includes padding. Only the stage proves this.
+- **A readout's height is the KIT's to derive.** `ui.bar` and `ui.tile` take `size`; writing one yourself opts out of the tap-target floor. `ui.units` subtracts gaps before dividing and FLOORS the share (rounding up overflows a clipping box). `frame.box()` gives the initial size, since `onMove` does not fire for placement.
+- **`resizable` is per axis** (`'width'`, `'height'`); an unrecognised value means NOT resizable.
+- **A `.woc-bar` never shrinks** (`flex-shrink: 0` in `styles/bar.css`), or overflow squeezes rows instead of scrolling. Vitest cannot see it; the stage can.
+- **Frame density is an enum**: `comfortable` (default, the game's scale), `compact`, `bare`. `ui.window` refuses only `bare`, whose missing title bar would lose the close button. An unknown value falls back to comfortable, never compact. The variant reaches `.woc-btn` and `.woc-tab`, so reuse those instead of restyling.
+- **Frame versus window is the ARIA ROLE** (`roleFor`): a window is `role="dialog"`, something the player opened and dismisses; a frame is `role="group"`, HUD furniture the player toggles. The panel look and resizing are independent of it; a window always has a close button, and a frame gets one with `closable: true` (not on `bare`).
+- **The tap-target floor is a TOUCH rule**, `@media (pointer: coarse)` in `ui/styles/touch.css`, concatenated LAST so it beats density variants. The game's desktop controls run 11px to 13px; its 16px/40px floor exists only under that query. **Never hand-size a kit control's font or height**: an inline style defeats the floor. Change padding. A size copied from the game is only as true as the media query it came from.
+- **A bar's fill is tinted by SCHOOL from the game's `--color-debuff-*`**, separate from `tone` (urgency); addons pass no colour. Tone wins by SOURCE ORDER in `styles/bar.css`, so do not reorder those groups.
+- **A dropdown is the kit's menu, never a native `<select>`**, whose OS-drawn popup escapes every loader rule. `kit/picker.ts` (DOM) and `manager/picker.tsx` (preact) reuse `ui.menu` over `kit/caret-glyph.ts`; `MenuItem.checked` marks a choice. Tests drive the real control through `tests/fakes/controls.ts` and `menuService`, since assigning `value` to a button proves nothing.
+- **ITEM QUALITY is a third axis** (`quality`, and the published `woc-quality-<tier>` class). The game hard-codes two palettes, one for names and one for borders; ours are `styles/quality.css` and `styles/tile.css`. `.woc-tile` sets `border` as a shorthand, so `tile.css` must run tier, then school, then tone.
+- **There is ONE close mark**, a stroked `currentColor` path in `ui/kit/close-glyph.ts` (a `×` renders thin in the serif title font), rendered for DOM and preact; tests assert `CLOSE_PATH`. A glyph never goes in a strings module.
+- **CSS text is not readable from Vitest**: every `.css` import is `''`, `?raw` included, and `noNodejsModules` is not exempt in `tests/**`. Do not widen the exemption; check class-to-rule agreement by running the loader.
+- **A tooltip whose anchor leaves the document is the KIT's problem** (`ui/kit/tooltip.ts`): a root-scoped observer runs only while a tooltip shows, dead attachments are swept on the next `attach`, and nothing is reaped until seen CONNECTED, because addons attach before inserting. None of it is public API.
