@@ -2,32 +2,20 @@
 
 // Longwatch: the rare spawns, where they live, and when they are due back.
 //
-// Nothing on the wire says a mob is rare, so matching is on `templateId` against
-// `rares.json`, which `generate.mjs` writes from a game checkout. Never hand-edit it.
+// Nothing on the wire says a mob is rare, so matching is on `templateId` against `rares.json`,
+// written by `generate.mjs` from a game checkout; never hand-edit it. The zone match is from
+// position, never `world.zone`, which is localized display text. Every stamp is `woc.wallClock()`:
+// `woc.now()` restarts on every page load, so a stored kill would read as future.
 //
-// The zone match is done from position, never from `world.zone`, which is localized
-// display text: a string compare here would work on an English client and nowhere else.
+// A slain mob stays where it fell for the whole respawn and stands up under the same entity id, so
+// a found corpse proves the rare is down without saying when it died. That bounds the return: no
+// later than the find plus the respawn, no sooner than the last sighting alive plus the same.
+// `windowOf` is that pair, and the row says which reading it draws, since a bound shown as a
+// countdown overstates what is known.
 //
-// Every stamp is `woc.wallClock()` rather than `woc.now()`. The monotonic clock restarts
-// on every page load, so a kill stamped with it reads as being in the future next
-// session.
-//
-// A body is evidence, and it is the only evidence most sightings ever produce. A slain mob
-// is NOT removed from the world: it lies where it fell for the whole respawn window and
-// then stands up again reusing the same entity id, so walking up to a rare's corpse proves
-// it is down without saying when it died. That bounds the return rather than fixing it:
-// the kill happened at or before the moment the body was found, so the rare is back no
-// later than that moment plus its respawn, and no sooner than the last time it was seen
-// standing plus the same. `windowOf` is that pair, and the row says which of the two
-// readings it is drawing, because a bound presented as a countdown is a lie about how much
-// is known.
-//
-// The game itself is the second source of uncertainty, and it defeats a watched kill rather
-// than being fixed by one. A rare with an authored respawn WINDOW draws its delay fresh on
-// every death (game 0.38.0 put Grix the Tunnelking on a quarter to half an hour), so its
-// return is a stretch of time however exactly its death was dated. `rares.json` carries
-// both ends for such a rare and one figure for every other, and `isExact` is the single
-// question that decides whether a row may count down to a moment at all.
+// A rare with an authored respawn WINDOW draws its delay fresh on every death, so even a watched
+// kill gives a stretch of time. `rares.json` carries both ends for such a rare, and `isExact`
+// decides whether a row may count down to a moment.
 
 /** The opening box. The minimums are well under it, since the opening size is the floor. */
 const FRAME_WIDTH = 460;
@@ -35,7 +23,7 @@ const FRAME_HEIGHT = 300;
 const MIN_WIDTH = 210;
 const MIN_HEIGHT = 110;
 
-/** The narrowest a column may get. `auto-fill` rather than a fixed count, which squeezes. */
+/** The narrowest a column may get. `auto-fill`, where a fixed count would squeeze. */
 const COLUMN_MIN = 205;
 
 const MS_PER_SECOND = 1000;
@@ -43,18 +31,15 @@ const MS_PER_SECOND = 1000;
 const NEARLY_BACK = 60;
 /** How far a world pin floats above its point, in screen pixels. */
 const PIN_LIFT = 28;
-/** A pin's side, which is the tap-target floor the game holds its own controls to. */
+/** A pin's side: the game's tap-target floor. */
 const PIN_SIZE = 40;
 /** The game's own "something rare turned up" chime. */
 const SIGHTING_CUE = 'ui_gather_rare';
 /**
- * How long a tapped corpse stays owner-locked, which is the game's `LOOT_FFA_DELAY`.
- *
- * The lock is armed at the kill, so a corpse still holding it died inside this window. It
- * is the one reading that narrows a found body to a minute rather than to a respawn, and
- * it is worth nothing on a corpse nobody could loot, which is why it is read off
- * `world.corpses` (a corpse with a loot record) rather than off the `lootable` flag, which
- * every door and ground pickup in the game also carries.
+ * How long a tapped corpse stays owner-locked: the game's `LOOT_FFA_DELAY`, armed at the kill. A
+ * corpse still locked died inside this window, narrowing a found body to a minute. Read off
+ * `world.corpses` (corpses with a loot record), not the `lootable` flag, which doors and ground
+ * pickups also carry.
  */
 const LOCK_SECONDS = 60;
 /** What marks a figure as a ceiling rather than a measurement. */
@@ -63,13 +48,11 @@ const AT_MOST = '≤ ';
 const STORE_KEY = 'sightings';
 /** The data file the roster lives in, declared as `data` in the manifest. */
 const ROSTER_FILE = 'rares.json';
-/** The rank table this addon carries for everybody else. Nothing here draws from it. */
+/** The rank table this addon carries for other addons. Nothing here draws from it. */
 const RANKS_FILE = 'mobs.json';
 /**
- * The topic the rank table is published on.
- *
- * A bare noun, and `follow` derives `mobs:ask` from it. Written down in the topic table
- * in the authoring docs, which is the only registry the bus has.
+ * The topic the rank table is published on. A bare noun; `follow` derives `mobs:ask` from it.
+ * Listed in the authoring docs' topic table, the only registry the bus has.
  */
 const RANKS_TOPIC = 'mobs';
 
@@ -84,20 +67,15 @@ const RANK_DUE = 0;
 const EVERY_ZONE = 'Every zone';
 const CURRENT_ZONE = 'The zone I am in';
 
-/** The `sort` setting's answers that are tested by name. Soonest back is the fall-through. */
+/** The `sort` answers tested by name; soonest back is the fall-through. */
 const BY_NAME = 'Name';
 const BY_DISTANCE = 'Distance';
 
 /**
- * The four zone rectangles that hold a rare, from `ZONES` in `src/sim/data.ts`. Half-open
- * on both axes, and the x bounds are load-bearing: Farshore shares Eastbrook's z band, so
- * a test on z alone puts a player standing there in Eastbrook Vale.
- *
- * Four of the game's FOURTEEN, and the narrowness is a decision rather than drift. Nine of
- * the other ten hold no rare, and the tenth holds one that this roster's shape cannot say
- * anything true about; `generate.mjs` carries the measurement. A position anywhere in those
- * ten resolves to null here, which is what the zone filter and the pins read as "nowhere
- * this addon knows about".
+ * The four zone rectangles that hold a rare, from `ZONES` in `src/sim/data.ts`. Half-open, and the
+ * x bounds matter: Farshore shares Eastbrook's z band. The other zones hold no rare this roster can
+ * describe (`generate.mjs` says why), so a position in them resolves to null: nowhere this addon
+ * knows about.
  */
 const ZONES = [
   { id: 'eastbrook_vale', name: 'Eastbrook Vale', zMin: -180, zMax: 180 },
@@ -109,60 +87,45 @@ const ZONES = [
 const STRIP_MIN_X = -180;
 const STRIP_MAX_X = 180;
 
-/** The zone ids a roster row is allowed to name, which is these four and no others. */
+/** The zone ids a roster row may name: these four only. */
 const ZONE_IDS = new Set(ZONES.map((zone) => zone.id));
 
-/** Empty until the data file lands, which no handler special-cases: nothing matches. */
+/** Empty until the data file lands; nothing matches meanwhile, so no handler special-cases it. */
 let rares = [];
 
-/** The roster by template id, which is the shape every lookup here wants. */
+/** The roster by template id. */
 let byTemplate = new Map();
 
 /**
- * What is known about each rare. The two entity ids are in-session only, since an entity id
- * is reissued; the four stamps persist.
+ * What is known about each rare. The entity ids are in-session only, since an entity id is
+ * reissued; the four stamps persist.
  *
- *  - `entityId` is the live rare standing there now, and `corpseId` its body. They are
- *    never both set: the game revives a corpse in place under the same id.
- *  - `seenAt` is the last sighting, and is the tooltip's line rather than an input to any
- *    arithmetic. It stays an honest answer to "when did YOU last look at this thing".
- *  - `killedAt` is a kill this character watched happen, and is the only exact reading.
- *  - `downAt` is the EARLIEST moment a body was found since the rare was last seen alive,
- *    which is the ceiling. A later sighting of the same body cannot improve it, so it is
- *    written once and left alone.
- *  - `aliveAt` is the latest moment the rare can be PROVEN to have still been alive, which
- *    is the floor. A sighting sets it; an owner-locked corpse raises it to a minute ago.
+ *  - `entityId` is the live rare standing there, `corpseId` its body. Never both set: the game
+ *    revives a corpse in place under the same id.
+ *  - `seenAt` is the last sighting, for the tooltip only, not for arithmetic.
+ *  - `killedAt` is a kill this character watched, the only exact reading.
+ *  - `downAt` is the EARLIEST moment a body was found since the rare was last seen alive: the
+ *    ceiling. Written once, since a later sighting of the same body cannot improve it.
+ *  - `aliveAt` is the latest moment the rare is PROVEN alive: the floor. A sighting sets it;
+ *    an owner-locked corpse raises it to a minute ago.
  */
 const watch = new Map();
 
 /**
- * One roster row, or null for anything that is not one.
+ * One roster row, or null for anything that is not one. `woc.data` hands back `unknown` (the
+ * loader checks only that the file is JSON), so the shape is checked here.
  *
- * `woc.data` hands back `unknown`: the loader checks the file is JSON when it fetches it
- * and nothing beyond that, so the shape is a claim and this is where it is checked. What
- * each field is, and where the shipped file read it from:
- *
- *  - `id` is the mob template id, which is what an entity's `templateId` carries and
- *    therefore the only thing a match can be made on.
- *  - `name` is the display name, which the generator takes from the game's `MOBS` table
- *    and cross-checks against the resolved English catalogue, refusing to write the file
- *    if the two disagree. An ability's id and display name already diverge, and that
- *    drift reaching mobs has to stop at the generator.
- *  - `x`/`z` is the authored camp centre, out of the game's own `CAMPS`. Every rare is
- *    authored as a one-mob camp with a radius of 8 or less and the scatter puts it within
- *    a few yards of the centre, so the centre is the location. A rare with two camps has
- *    no honest shape here, which is why the generator refuses one rather than picking.
- *  - `respawn` is seconds, resolved by running the game's own `resolveRespawnSeconds`. It
- *    has to be positive, or a row would divide the fill by nothing and read as due the
- *    instant the rare died.
- *  - `respawnMax` is the other end, present only where the game authored a random window
- *    rather than a fixed schedule (game 0.38.0 put Grix the Tunnelking on one). Absent
- *    means the two ends are the same and a kill this character watched gives an exact
- *    countdown; present means it never can, whatever was watched, so the row reads as a
- *    window and says so. A value that does not exceed `respawn` is dropped rather than
- *    obeyed, since a window that runs backwards would make every row of that rare due.
- *  - `zone` has to be one of the four rectangles above. A row naming any other zone could
- *    never pass the zone filter and would sort by a distance to nowhere.
+ *  - `id` is the mob template id, what an entity's `templateId` carries.
+ *  - `name` is the display name from the game's `MOBS`, cross-checked by the generator against
+ *    the English catalogue so id/name drift stops there.
+ *  - `x`/`z` is the authored camp centre from `CAMPS`. Every rare is a one-mob camp with a small
+ *    radius, so the centre is the location; the generator refuses a rare with two camps.
+ *  - `respawn` is seconds from the game's own `resolveRespawnSeconds`, and must be positive or
+ *    a row reads as due the instant the rare died.
+ *  - `respawnMax` is present only where the game authored a random window. Absent, a watched
+ *    kill gives an exact countdown; present, it never can. A value not above `respawn` is
+ *    dropped, since a backwards window would make every row due.
+ *  - `zone` must be one of the four rectangles, or the row can never pass the zone filter.
  */
 function readRare(value) {
   if (typeof value !== 'object' || value === null) {
@@ -180,12 +143,9 @@ function readRare(value) {
 }
 
 /**
- * The far end of a row's respawn, which is the near end again on a fixed schedule.
- *
- * Carried as a number rather than as an absent field so nothing downstream has to ask
- * whether a rare is windowed before doing arithmetic: `respawn === respawnMax` is what a
- * fixed schedule looks like, and it is the one comparison that decides whether a watched
- * kill can be counted exactly.
+ * The far end of a row's respawn, equal to the near end on a fixed schedule. A number rather than
+ * an absent field, so nothing downstream asks whether a rare is windowed before doing arithmetic;
+ * `respawn === respawnMax` is the one comparison that decides exactness.
  */
 function ceilingOf(respawn, respawnMax) {
   if (Number.isFinite(respawnMax) && respawnMax > respawn) {
@@ -240,14 +200,12 @@ function blank() {
 const STAMPS = ['seenAt', 'killedAt', 'downAt', 'aliveAt'];
 
 /**
- * Whether the roster has been walked once with anything in it.
- *
- * Keyed on there being something to walk rather than on the first call, since the first
- * line runs at document-start with no world and the roster lands later still.
+ * Whether the roster has been walked once with anything in it. Keyed on there being something to
+ * walk, since the first line runs at document-start and the roster lands later.
  */
 let firstRoster = true;
 
-/** Rows go across and then down: the sort is a ranking, so column-major would misread. */
+/** Rows go across and then down: the sort is a ranking, which column-major would misread. */
 const list = document.createElement('div');
 list.className = 'woc-lw-list';
 list.style.display = 'grid';
@@ -255,8 +213,8 @@ list.style.gridTemplateColumns = `repeat(auto-fill, minmax(${String(COLUMN_MIN)}
 list.style.gap = '3px 6px';
 
 /**
- * The panel. Resizable WITH a height, which is the pair that makes it scroll: a frame with
- * no height is sized by its content, and nineteen rows reach down the whole screen.
+ * Resizable WITH a height, which makes it scroll: a content-sized frame of every rare reaches down
+ * the whole screen.
  */
 const frame = woc.ui.frame({
   id: 'rares',
@@ -278,8 +236,8 @@ function keepsTimers() {
 }
 
 /**
- * The zone id a point is in, or null for a point in none of the four. The game's own
- * resolution: half-open on both axes, first match wins, no clamping to a nearest band.
+ * The zone id a point is in, or null. The game's own resolution: half-open, first match wins, no
+ * clamping to a nearest band.
  */
 function zoneAt(x, z) {
   for (const zone of ZONES) {
@@ -312,11 +270,8 @@ function since(stampMs) {
 }
 
 /**
- * Seconds from a stamp to the two ends of the respawn it starts, going NEGATIVE past each
- * rather than clamping, since a row that has run out has to be able to say so.
- *
- * The two ends are equal on a fixed schedule, which is what lets everything below take a
- * pair without asking first.
+ * Seconds from a stamp to the two ends of the respawn it starts, going NEGATIVE past each so a row
+ * that has run out can say so. The ends are equal on a fixed schedule.
  */
 function boundsFrom(rare, stampMs) {
   const elapsed = since(stampMs);
@@ -331,22 +286,18 @@ function measuredFor(rare) {
   return boundsFrom(rare, watch.get(rare.id).killedAt);
 }
 
-/** A kill was watched AND the game respawns this one on a fixed schedule, so it is exact. */
+/** A kill was watched AND the rare respawns on a fixed schedule, so the return is exact. */
 function isExact(rare) {
   return measuredFor(rare) !== null && rare.respawn === rare.respawnMax;
 }
 
 /**
- * The window the return falls inside, or null when nothing bounds it at all.
+ * The window the return falls inside, or null when nothing bounds it.
  *
- * Two sources, and a watched kill beats a found body because it dates the death instead of
- * bounding it. `latest` is the ceiling and is what the row draws. `earliest` is null only
- * where nothing proves when the rare was last alive, which is the ordinary case for a body
- * walked into cold; a null floor means "any moment now" rather than a floor of zero.
- *
- * A watched kill of a WINDOWED rare lands here rather than reading as exact, which is the
- * whole reason this returns a pair: the death is dated to the second and the return still
- * is not, because the game draws that rare's delay fresh on every death.
+ * A watched kill beats a found body because it dates the death. `latest` is the ceiling the row
+ * draws. `earliest` is null where nothing proves when the rare was last alive, as for a body found
+ * cold, and means "any moment now". A watched kill of a WINDOWED rare lands here too, since the
+ * game rolls its delay per death.
  */
 function windowOf(rare) {
   const measured = measuredFor(rare);
@@ -375,20 +326,13 @@ function leftFor(rare) {
 }
 
 /**
- * One of 'up', 'down', 'window', 'body', 'due' or 'unseen'. Everything drawn comes from
- * this, and the split that matters is 'down' against 'window': the first is a countdown to
- * a moment and the second is a stretch of time the rare turns up somewhere inside.
+ * One of 'up', 'down', 'window', 'body', 'due' or 'unseen'. 'down' is a countdown to a moment;
+ * 'window' is a stretch the rare turns up inside. A cold body and a watched kill of a windowed rare
+ * both land in 'window', so 'down' asks `isExact` rather than whether a kill was watched, or the
+ * countdown runs out early and sits on 'Due' unexplained.
  *
- * Two different things put a row in 'window', and the row's own tooltip is what tells them
- * apart. A body walked into cold bounds a death nobody watched. A watched kill of a rare
- * the game respawns on a RANDOM window dates the death exactly and still cannot date the
- * return, which is why 'down' asks `isExact` rather than merely asking whether a kill was
- * watched: reading a windowed rare as exact was a countdown that ran out fifteen minutes
- * early and then sat on 'Due' for the rest of the window with nothing saying why.
- *
- * 'body' is the state where the arithmetic has run out and the corpse is still lying there,
- * so the rare is provably NOT back whatever the clock says. It outranks 'due' rather than
- * the other way around, because a body in scope is an observation and 'due' is a deduction.
+ * 'body' is where the arithmetic has run out and the corpse is still there, so the rare is provably
+ * NOT back. It outranks 'due', because a body in scope is an observation and 'due' a deduction.
  */
 function stateOf(rare) {
   const row = watch.get(rare.id);
@@ -412,10 +356,8 @@ function stateOf(rare) {
 }
 
 /**
- * The right-hand figure: a countdown, or the word for a state that has no clock.
- *
- * Bounded by one respawn, 21,600 seconds at the longest in `rares.json`, so this stops a
- * tier under the days `sightingLine` reaches.
+ * The right-hand figure: a countdown, or the word for a state with no clock. Bounded by one respawn
+ * (at most six hours in `rares.json`), so it stops a tier under the days `sightingLine` reaches.
  */
 function figure(rare) {
   const state = stateOf(rare);
@@ -451,11 +393,8 @@ function fillOf(rare) {
 }
 
 /**
- * Whether a bounded rare could already be standing there.
- *
- * A window with no floor is deliberately NOT warm. The honest reading of a body walked into
- * cold is that the rare could be back at any moment over the whole respawn, and a row that
- * is warm for six hours has stopped saying anything.
+ * Whether a bounded rare could already be standing there. A window with no floor is NOT warm: the
+ * rare could be back at any moment over the whole respawn, and a row warm for hours says nothing.
  */
 function couldBeBack(rare) {
   const bounds = windowOf(rare);
@@ -471,7 +410,7 @@ function toneFor(rare) {
   if (state === 'up') {
     return 'danger';
   }
-  // A body in scope is proof it is not back, whatever any of the arithmetic says.
+  // A body in scope proves it is not back, whatever the arithmetic says.
   if (state === 'body') {
     return 'default';
   }
@@ -497,14 +436,10 @@ function detailOf(rare) {
 }
 
 /**
- * The tooltip's last line: when this character last laid eyes on it STANDING.
- *
- * A body is deliberately not a sighting here, since "last seen" beside a countdown reads as
- * when it was last up. The never-seen wording is narrowed where a body was found instead, or
- * the line would contradict the one above it, which says the reading came from that body.
- *
- * UNBOUNDED: `seenAt` is a persisted stamp, so this is the one figure here that reaches
- * `fmt.duration`'s day tier.
+ * The tooltip's last line: when this character last saw it STANDING. A body is not a sighting,
+ * since "last seen" beside a countdown reads as last up; the never-seen wording is narrowed where a
+ * body was found so it does not contradict the line above. `seenAt` persists, so this is the one
+ * figure that reaches `fmt.duration`'s day tier.
  */
 function sightingLine(rare) {
   const row = watch.get(rare.id);
@@ -519,12 +454,9 @@ function sightingLine(rare) {
 }
 
 /**
- * The window a bound gives, spelled out. Two readings a player has to be able to tell
- * apart: with a floor this is a stretch of time the rare turns up inside, and without one
- * the ceiling is all there is and the rare could already be standing there.
- *
- * Where the window came from is on the line too, because the same words otherwise cover a
- * death nobody watched and a death watched to the second whose RETURN the game rolls.
+ * The window a bound gives, spelled out. With a floor it is a stretch the rare turns up inside;
+ * without one the ceiling is all there is and it could already be up. The line also says where the
+ * window came from: a death nobody watched, or a watched death whose return the game rolls.
  */
 function windowLine(rare) {
   const bounds = windowOf(rare);
@@ -548,10 +480,8 @@ function sourceOf(rare) {
 }
 
 /**
- * Where the figure beside the name came from, which a bounded row cannot leave unsaid.
- *
- * Null for the two states with nothing to explain: a rare standing in front of the player,
- * and one nobody has ever seen.
+ * Where the figure beside the name came from, which a bounded row must say. Null for a rare
+ * standing there and one never seen.
  */
 function readingLine(rare) {
   const state = stateOf(rare);
@@ -568,11 +498,8 @@ function readingLine(rare) {
 }
 
 /**
- * The rare's own schedule, which is the one line here that says nothing about this session.
- *
- * A range where the game authored one, because the alternative is a single figure standing
- * for a delay that is drawn fresh on every death: a player reading "back 15m" then times
- * the next kill against it and finds an empty clearing, with the addon still saying 15m.
+ * The rare's own schedule. A range where the game authored one, since a single figure for a delay
+ * rolled per death sends the player to an empty clearing.
  */
 function scheduleLine(rare) {
   const earliest = woc.fmt.duration(rare.respawn, 'coarse');
@@ -582,7 +509,7 @@ function scheduleLine(rare) {
   return `Back ${earliest} to ${woc.fmt.duration(rare.respawnMax, 'coarse')} after it dies`;
 }
 
-/** A function rather than a string: the distance, the reading and the sighting all move. */
+/** A function: the distance, the reading and the sighting all move. */
 function rowTooltip(rare) {
   const lines = [
     `${zoneName(rare.zone)}, camp at ${String(rare.x)}, ${String(rare.z)}`,
@@ -610,11 +537,9 @@ function createRow(rare) {
 }
 
 /**
- * Where a pin sits. A function rather than a point, because the answer has two sources.
- * While the rare is standing there the pin follows its live position, which is the game's
- * own mutating object and is read per frame rather than copied. While it is dead the pin
- * sits on the authored camp centre at the player's own height: the camp table carries x
- * and z and no y, since terrain height is not authored.
+ * Where a pin sits. While the rare stands, it follows the live position, the game's mutating object
+ * read per frame. While dead, it sits on the authored camp centre at the player's own height, since
+ * the camp table has no y.
  */
 function pinPoint(rare) {
   return () => {
@@ -634,10 +559,9 @@ function pinPoint(rare) {
 }
 
 /**
- * One world pin: the portrait, with the respawn sweeping over it. A tile rather than a
- * bar, and the name is passed and never drawn: a column of names floating over a zone is
- * a wall of text between the player and the fight. The label is still how the tile is
- * announced, and the list beside it is where the name is written out.
+ * One world pin: the portrait with the respawn sweeping over it. The name is passed only as the
+ * tile's announced label, never drawn: names floating over a zone are a wall of text in the fight.
+ * The list writes the name out.
  */
 function createPin(rare) {
   const tile = woc.ui.tile({
@@ -698,11 +622,8 @@ function passes(rare, choice, here) {
 }
 
 /**
- * Up first, then soonest back, with the ones nobody has killed at the bottom.
- *
- * A bounded row is ranked by its ceiling, which puts it later in the list than a measured
- * row that will genuinely be back at the same time. That is the right way round: the list
- * is where a player decides what to walk to, and what is known beats what is guessed at.
+ * Up first, then soonest back, with never-killed at the bottom. A bounded row ranks by its ceiling,
+ * below a measured row due at the same time: what is known beats what is guessed.
  */
 function dueRank(rare) {
   const state = stateOf(rare);
@@ -728,8 +649,9 @@ function order(entries, choice) {
   return [...entries].sort((a, b) => dueRank(a) - dueRank(b));
 }
 
-/** Recomputed per draw, which is what makes the zone filter follow the player over a
- * border with nothing watching the border. Affordable: the roster is fixed at nineteen.
+/**
+ * Recomputed per draw, so the zone filter follows the player over a border with nothing watching
+ * it. The roster is small and fixed.
  */
 function wanted() {
   const choice = woc.settings.zones;
@@ -755,8 +677,9 @@ function sync(entries) {
   pins.sync(pinnable(entries));
 }
 
-/** The pins are anchors over the world rather than children of the frame, so hiding the
- * frame does not take them down and nothing else would.
+/**
+ * The pins are world anchors rather than children of the frame, so hiding the frame does not take
+ * them down.
  */
 function redraw() {
   if (frame.visible) {
@@ -767,10 +690,8 @@ function redraw() {
 }
 
 /**
- * Write the stamps down, once the character they belong to is known.
- *
- * A per-character write REJECTS before world entry, so the await is a guard rather than a
- * delay. The entity id is left out: it is this session's id for the thing standing there.
+ * Write the stamps once the character is known. A per-character write REJECTS before world entry,
+ * so the await is a guard. The entity id is left out: it is this session's only.
  */
 async function save() {
   if (!keepsTimers()) {
@@ -802,8 +723,9 @@ function stampOf(value) {
   return null;
 }
 
-/** Fills gaps and never overwrites: a death can land before the read settles, and what
- * this session observed is newer than anything on disk.
+/**
+ * Fills gaps and never overwrites: a death can land before the read settles, and this session's
+ * observations are newer than disk.
  */
 function reclaim(id, record) {
   const row = watch.get(id);
@@ -838,7 +760,7 @@ function load() {
   });
 }
 
-/** A rare has come into range. Loud, because that is the whole point of the addon. */
+/** A rare has come into range. Loud, because that is the point of the addon. */
 function announce(rare) {
   if (firstRoster || !woc.settings.alert) {
     return;
@@ -848,11 +770,8 @@ function announce(rare) {
 }
 
 /**
- * Every reading a kill or a body left behind, dropped.
- *
- * Called where the rare is demonstrably standing there, so whatever the arithmetic said
- * about it is spent. Both bounds go with the kill stamp, or a body found before this one
- * would go on bounding a rare that has already come back.
+ * Drop every reading a kill or body left behind. Called where the rare is demonstrably standing, so
+ * both bounds go with the kill stamp, or an old body would keep bounding a rare that is back.
  */
 function forgetDeath(row) {
   row.killedAt = null;
@@ -862,10 +781,9 @@ function forgetDeath(row) {
 function arrived(entity, rare) {
   const row = watch.get(rare.id);
   row.seenAt = woc.wallClock();
-  // Every pass rather than only the first, so a rare watched for an hour and then found
-  // dead is floored an hour later than one merely glimpsed. It is the same stamp `seenAt`
-  // takes and is kept apart from it because that one is an answer to a question the player
-  // asked, and this one is an input to arithmetic a lock reading can also move.
+  // Every pass, so a rare watched for an hour then found dead is floored an hour later. Kept apart
+  // from `seenAt`, which answers the player's question, where this is an input a lock reading can
+  // also move.
   row.aliveAt = woc.wallClock();
   row.corpseId = null;
   if (row.entityId === entity.id) {
@@ -878,14 +796,10 @@ function arrived(entity, rare) {
 }
 
 /**
- * Raise the floor from the corpse's own loot lock, which is armed at the kill and lapses a
- * minute later. Still held means the kill was inside that minute, which turns a six hour
- * window into a one minute one.
- *
- * Read off `world.corpses` rather than the entity, because the lock is only meaningful on a
- * corpse that went through a loot roll and that map is exactly those. An unreadable timer
- * is taken as HELD by the loader, which would be a claim rather than a reading, so nothing
- * is concluded from a corpse the map does not carry.
+ * Raise the floor from the corpse's loot lock, armed at the kill and lapsing a minute later: still
+ * held means the kill was inside that minute. Read off `world.corpses`, since the lock means
+ * something only on a corpse that went through a loot roll. The loader takes an unreadable timer as
+ * HELD, so nothing is concluded from a corpse the map does not carry.
  */
 function readLock(entity, row) {
   const view = woc.world.corpses.get(entity.id);
@@ -899,27 +813,18 @@ function readLock(entity, row) {
 }
 
 /**
- * Whether a body needs a bound written for it, which is where THIS death is not the one the
- * stamps already describe.
- *
- * A spent ceiling is the test. A bound whose window has run out cannot be about the body in
- * front of the player, since that body would have stood up, so the rare came back and died
- * again unwatched and the old reading is about a life that has ended. A bound still running
- * is left exactly where it is: the first sighting of a body is the tightest ceiling any
- * later sighting of it could give.
+ * Whether a body needs a bound written, i.e. THIS death is not the one the stamps describe. A spent
+ * ceiling is the test: the rare came back and died again unwatched. A running bound is left alone,
+ * since the first sighting of a body is the tightest ceiling.
  */
 function needsBound(rare, row) {
   return row.downAt === null || boundsFrom(rare, row.downAt).latest <= 0;
 }
 
 /**
- * A body found. The kill stamp wins where there is one, since that is a measurement and
- * this is a bound.
- *
- * The lock is read once, at the sighting that writes the bound. Holding a body in view does
- * narrow the floor by a second a second until the lock lapses, and that is deliberately
- * given up: it is at most a minute off a window measured in hours, and taking it would mean
- * a storage write every second for as long as the player stands over the corpse.
+ * A body found. A kill stamp wins, being a measurement. The lock is read once, at the sighting that
+ * writes the bound: tracking it every second would narrow the floor by at most a minute at the cost
+ * of a storage write per second.
  */
 function foundBody(entity, rare) {
   const row = watch.get(rare.id);
@@ -929,9 +834,9 @@ function foundBody(entity, rare) {
     return;
   }
   if (row.downAt !== null) {
-    // Only reached for a SPENT bound, so whatever proved this rare alive proved it about a
-    // life that has since ended. Kept where the bound is new, which is the ordinary case of
-    // watching a rare and then finding its body: that sighting is the floor.
+    // Reached only for a SPENT bound, so whatever proved the rare alive was about a life that has
+    // ended. Kept where the bound is new: watching a rare then finding its body makes that sighting
+    // the floor.
     row.aliveAt = null;
   }
   row.downAt = woc.wallClock();
@@ -970,14 +875,13 @@ function scan() {
   redraw();
 }
 
-// A rare walking into range changes the entity SET, so this is the prompt signal for one
-// arriving or leaving. It is not enough on its own: a rare dying in front of the player
-// keeps its entity id and its place in the set, so the transition to a body is invisible
-// here and is caught by the once-a-second pass instead.
+// A rare walking into range changes the entity SET, the prompt signal for arrivals and departures.
+// A rare dying in view keeps its id and place in the set, so that transition is caught by the
+// once-a-second pass.
 woc.world.on('entities', scan);
 
-// The record identifies nothing but an entity id, so the template is read off the corpse,
-// which is still in scope at the moment the event lands.
+// The record carries only an entity id, so the template is read off the corpse, still in scope when
+// the event lands.
 woc.net.onEvent('death', (event) => {
   const entity = woc.world.entities.get(event.entityId);
   if (entity === undefined) {
@@ -990,8 +894,7 @@ woc.net.onEvent('death', (event) => {
   const row = watch.get(rare.id);
   row.killedAt = woc.wallClock();
   row.entityId = null;
-  // A measurement, so the bounds this character had are spent. Left in place they would
-  // outlive the kill they were guessing at and go on narrowing nothing.
+  // A measurement, so the old bounds are spent and dropped.
   row.downAt = null;
   row.aliveAt = null;
   persist();
@@ -999,20 +902,15 @@ woc.net.onEvent('death', (event) => {
 });
 
 /**
- * The player has become somebody else without the page reloading.
+ * The player became somebody else without a reload: the game swaps characters by cloning its HUD.
+ * Left in place, the next kill would write the previous character's stamps under this one's key.
  *
- * The game clones and removes its HUD on a switch rather than reloading, so nothing forces
- * an addon to start again. Left in place, the next kill would write the previous
- * character's stamps out under this one's key, which outlives the session.
- *
- * NOT YET VERIFIED against a real switch: no suite reproduces the HUD clone, so the tests
- * only prove that a change of key clears what memory held. A live session still has to
- * confirm the key moves once rather than through an intermediate reading with no
- * character in it.
+ * NOT YET VERIFIED against a real switch: no suite reproduces the HUD clone. A live session must
+ * confirm the key moves once, with no intermediate reading carrying no character.
  */
 woc.world.on('characterKey', () => {
-  // Replaced rather than cleared field by field, so a stamp added later cannot be the one
-  // somebody forgets to blank here and carry from one character onto another's key.
+  // Replaced whole, so a stamp added later cannot be forgotten here and carried onto another
+  // character's key.
   for (const id of [...watch.keys()]) {
     watch.set(id, blank());
   }
@@ -1021,45 +919,36 @@ woc.world.on('characterKey', () => {
   redraw();
 });
 
-// Once a second, which is as often as any figure here moves, and a full re-read rather than
-// a redraw: a rare dying or standing up in view is a field change on an entity that was
-// already in the set, which `world.on('entities')` cannot see. The cost is one pass over
-// the entities in interest scope. The lag it leaves is up to a second on the zone filter
-// and on the pins leaving the world; the keybind answers the second on the path a player
-// takes most.
+// Once a second, a full re-read: a rare dying or standing up in view is a field change on an entity
+// already in the set, which `world.on('entities')` cannot see. The lag is up to a second on the
+// zone filter and on pins leaving; the keybind answers at once.
 woc.setInterval(scan, MS_PER_SECOND);
 
-// Bound by hand rather than with the frame's own `toggleKey`, DECLINED because this key
-// does two things: `toggleKey` only toggles, and the pins are anchors over the world that
-// nothing else takes down. No visibility callback on `FrameOpts` to hang the redraw on.
+// Bound by hand because this key does two things: `toggleKey` only toggles the frame, the pins are
+// world anchors nothing else takes down, and `FrameOpts` has no visibility callback.
 woc.keys.bind('toggle', () => {
   frame.toggle();
-  // Now, rather than up to a second from now: somebody who just hid the panel should not
-  // watch its pins hang over the world waiting for the next tick.
+  // Now rather than on the next tick, so a hidden panel's pins do not linger.
   redraw();
 });
 
 woc.onSettingsChange(() => {
-  // Turning the countdowns back on mid-session needs the read offered again. It fills
-  // only what is blank, so it cannot undo what this session learned.
+  // Turning the countdowns back on mid-session re-offers the read. It fills only blanks, so it
+  // cannot undo this session's readings.
   load();
   redraw();
 });
 
 /**
- * Every handler above is wired BEFORE this await: subscribing after one would miss
- * whatever landed during it. `load()` rather than `await restore()`, since a per-character
- * read waits for the character and would hold the first draw on the landing page.
+ * Every handler above is wired BEFORE this await, or it would miss what landed during it. `load()`
+ * rather than `await restore()`, since a per-character read waits for the character and would hold
+ * the first draw on the landing page.
  */
 /**
- * The rank table, for whoever asks.
- *
- * Answered from what was read rather than fetched per ask, and `null` until the read
- * lands, which `publish` requires: a follower that started first gets the announce.
- * Nothing in this addon draws from it. It lives here because this is the addon that
- * already evaluates the game's `MOBS` to build its own roster, so carrying the rank
- * table costs one more read of a table it opens anyway, where a second addon carrying
- * its own copy would be a second thing to regenerate on a game release.
+ * The rank table, for whoever asks. Answered from what was read, and `null` until the read lands,
+ * which `publish` requires; a follower that started first gets the announce. It lives here because
+ * this addon already evaluates the game's `MOBS`, where a second copy elsewhere would be one more
+ * thing to regenerate.
  */
 let ranks = null;
 
@@ -1081,7 +970,7 @@ function rankRow(row) {
   return out;
 }
 
-/** The shipped file's own shape, checked here for the reason `readRoster` checks the roster's. */
+/** The shipped file's shape, checked here for the same reason `readRoster` checks the roster's. */
 function readRanks(table) {
   const listed = table?.mobs;
   if (!Array.isArray(listed)) {
@@ -1091,11 +980,8 @@ function readRanks(table) {
 }
 
 /**
- * The rank table is loaded and published separately from the roster.
- *
- * Its own path because the two fail apart: a rank table that could not be read leaves
- * every other addon without decoration, and this addon's own rare list working. Folding
- * them into one `await` would take the rare list down with it.
+ * The rank table loads separately from the roster, so a failed rank read leaves other addons
+ * undecorated without taking this addon's rare list down.
  */
 async function serveRanks() {
   const table = readRanks(await woc.data(RANKS_FILE));

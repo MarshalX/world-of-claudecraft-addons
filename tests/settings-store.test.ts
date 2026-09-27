@@ -1,11 +1,5 @@
-// One addon's settings store.
-//
-// The property that matters is that `values()` is correct SYNCHRONOUSLY at
-// every point an addon can observe it: after hydrate, immediately after a write
-// (before the host has acknowledged it), and after another tab's write arrives.
-// An addon reads `woc.settings.window` on its first line and does arithmetic
-// with it, so a window where it reads the old value is a window where the addon
-// is wrong and nothing says so.
+// One addon's settings store. `values()` must be correct SYNCHRONOUSLY after hydrate, right
+// after a write (before the host acknowledges it), and after another tab's write.
 
 import { describe, expect, it, vi } from 'vitest';
 import { createSettingsStore } from '../loader/src/runtime/settings/store.ts';
@@ -42,8 +36,6 @@ describe('hydrating', () => {
     expect(store.values()).toEqual({ window: 12, 'show-pet': false });
   });
 
-  // An addon with nothing declared must not make every session pay a bridge
-  // round trip for an empty object, and must still hydrate with no host at all.
   it('does not touch storage for an addon that declares nothing', async () => {
     const hub = createFakeStorage({ connected: false });
     const { store } = open(hub, []);
@@ -62,7 +54,7 @@ describe('hydrating', () => {
     expect(store.values()).toEqual({ window: 5, 'show-pet': true });
   });
 
-  it('falls back to defaults when storage holds something that is not a record', async () => {
+  it('falls back to defaults when storage holds a non-record', async () => {
     const hub = createFakeStorage();
     await hub.set(NS, SETTINGS_KEY, 'corrupted');
     const { store } = open(hub);
@@ -74,9 +66,7 @@ describe('hydrating', () => {
 });
 
 describe('writing', () => {
-  // Applied locally BEFORE the host acknowledges. The manager has already
-  // painted the new value; waiting for the echo leaves a window in which
-  // woc.settings still reads the old one.
+  // Applied locally BEFORE the host acknowledges, since the manager has already painted it.
   it('is readable synchronously, before the write resolves', () => {
     const { store } = open();
 
@@ -104,7 +94,7 @@ describe('writing', () => {
     expect(seen).toHaveBeenCalledWith(expect.objectContaining({ 'show-pet': false }));
   });
 
-  it('clamps a value into its declared range rather than refusing it', async () => {
+  it('clamps a value into its declared range', async () => {
     const { store } = open();
 
     await store.set('window', 999);
@@ -157,7 +147,7 @@ describe('changes from elsewhere', () => {
     expect(store.values()).toMatchObject({ window: 5 });
   });
 
-  it('re-hydrates rather than trusting a partial record', () => {
+  it('re-hydrates on a partial record', () => {
     const { hub, store } = open();
 
     hub.remote(NS, SETTINGS_KEY, { window: 9 });

@@ -1,10 +1,5 @@
-// Merging every source's index into the list Browse draws.
-//
-// The case worth the most here is two marketplaces publishing the same addon id,
-// which is legitimate and which the loader has to survive. If a
-// row's identity were the short id rather than the fqid, one would silently
-// stand in for the other in the list, in the install call, and in the check for
-// whether it is installed already.
+// Merging every source's index into the list Browse draws. Two sources may publish the
+// same addon id, so a row's identity is the fqid, never the short id.
 
 import { describe, expect, it } from 'vitest';
 import {
@@ -62,8 +57,6 @@ describe('browseRows', () => {
     ]);
   });
 
-  // The whole reason the fqid exists. Marking one installed must not mark the
-  // other, or a player would be told they already have an addon they do not.
   it('marks only the copy that is installed when two sources share an id', () => {
     const rows = browseRows(twoSources(), new Map([['official/combat-meter', true]]));
 
@@ -94,10 +87,7 @@ describe('browseRows', () => {
     });
 
     it('matches a tag', () => {
-      // A word that appears in no id, name, author or description, so a hit can
-      // only have come from the tag list. 'combat' stopped being usable for that
-      // the moment the meter's id became combat-meter, and the test went on
-      // passing for the wrong reason until the rename made it match two rows.
+      // The word must appear nowhere but the tags, or a hit proves nothing.
       const tagged = [marketState(OFFICIAL, [marketEntry({ id: 'bag-sort', tags: ['raiding'] })])];
 
       const rows = browseRows(tagged, NOTHING, { query: 'raiding', tag: null });
@@ -105,8 +95,6 @@ describe('browseRows', () => {
       expect(rows.map((row) => row.fqid)).toEqual(['official/bag-sort']);
     });
 
-    // Two words is a player naming two things they remember, not quoting a
-    // title, so order must not matter.
     it('requires every word but not their order', () => {
       const rows = browseRows(twoSources(), NOTHING, { query: 'sorter bag', tag: null });
 
@@ -161,10 +149,7 @@ describe('catalogTags', () => {
   });
 });
 
-// Browse draws one blank list for reasons that need different things done about
-// them, and the catalog store seeding the indexes is what made the distinction
-// matter: "press Refresh" stopped being the ordinary answer, so it had to stop
-// being the only one.
+// Browse's blank list has several causes, each needing a different remedy.
 describe('browseEmptiness', () => {
   it('is unread while no source has been read and none has failed', () => {
     const markets = [marketState(OFFICIAL, [], { fetchedAt: null })];
@@ -178,8 +163,7 @@ describe('browseEmptiness', () => {
     expect(browseEmptiness(markets)).toBe('unreadable');
   });
 
-  // The actionable one wins: a source that could not be read is a thing to go
-  // and look at, and one that is merely empty is not.
+  // The actionable reading wins.
   it('is unreadable when one source failed and another read cleanly', () => {
     const markets = [
       marketState(OFFICIAL, []),
@@ -207,8 +191,6 @@ describe('pendingUpdates', () => {
     };
   }
 
-  // A pin is the player having decided. An action labelled "all" that overrode
-  // it would make the pin advisory rather than a decision.
   it('leaves out anything the player pinned', () => {
     const rows = [row(), row({ fqid: 'official/bag-sort', pin: '1.2.0' })];
 
@@ -220,6 +202,7 @@ describe('pendingUpdates', () => {
   });
 });
 
+// Read over every source, not the filtered rows, so the column holds still while typing.
 describe('catalogHasPreviews', () => {
   const shot = { file: 'preview.png', alt: 'The panel, mid-fight.' };
 
@@ -236,18 +219,13 @@ describe('catalogHasPreviews', () => {
     expect(catalogHasPreviews(markets)).toBe(true);
   });
 
-  // The reading is over every source rather than over the filtered rows, which is
-  // what stops the column appearing and disappearing as a player types.
   it('is false for a list with no sources at all', () => {
     expect(catalogHasPreviews([])).toBe(false);
   });
 });
 
-// What the Installed pane draws from, because the registry keeps an addon's
-// manifest and not its directory in the repository, so it cannot build the URL
-// itself. The fqid is the key for the reason it is a browse row's identity: two
-// sources may publish the same addon id, and one's picture must not be shown
-// against the other's row.
+// The Installed pane's preview source: the registry keeps the manifest but not the
+// addon's directory, so it cannot build the URL itself. Keyed by fqid.
 describe('catalogShots', () => {
   const shot = { file: 'preview.png', alt: 'The panel, mid-fight.' };
 
@@ -282,9 +260,6 @@ describe('catalogShots', () => {
     expect(shots.get('gh:someone/their-addons/combat-meter')?.alt).toBe('Theirs.');
   });
 
-  // An addon installed from a source since removed, or one its source no longer
-  // offers, has nothing left that says where its picture is. The Installed row
-  // then draws none, which is the honest answer rather than a gap.
   it('has no answer for an addon no source offers', () => {
     expect(catalogShots([]).get('official/combat-meter')).toBeUndefined();
   });

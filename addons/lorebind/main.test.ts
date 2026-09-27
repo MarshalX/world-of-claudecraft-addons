@@ -1,36 +1,18 @@
 // @vitest-environment happy-dom
 
-// Lorebind, run through the real loader.
+// Lorebind, run through the real loader. The source ranking is what is under test: which of four
+// unequal answers the addon gives for an id, and whether it says which.
 //
-// The source ranking is what is under test, and everything else in this file is arrangement for
-// it. The addon exists because an item id resolves to no name anywhere on the API, so the only
-// question worth asking of it is which of four unequal answers it gives and whether it says
-// which one it gave.
+// Every fixture is a real row of the shipped `items.json`, so a case is about the game's content
+// rather than a fixture somebody wrote. The one exception is `LOPSIDED_WARFARE`.
 //
-// Every fixture is a real row out of the shipped `items.json`, read through the same `?raw`
-// import the loader's data cache is seeded from. A stub table would turn a case about the
-// game's own content into a case about a fixture somebody wrote, and the row that matters most
-// here (an item the game declares with no quality, of which there are 96) is exactly the row
-// nobody inventing a fixture would think to write.
+// The art name must never win and never be published: it is provenance for a picture, and a
+// subscriber taking it off the bus would rank a labelled guess above its own identical fallback.
 //
-// The art file is the source that must never win and must never be published.
-// `ui.icon.itemArtName` is provenance for a picture: measured at game 0.33.0, 21 of its 303
-// named entries disagreed with what the game calls the item, and the loader documents it as
-// provenance rather than as a name. So there are two cases about it.
-// It loses to the table on screen, and it is kept off the bus altogether, because a subscriber
-// that took an art name from a publisher would rank it above the identical fallback it already
-// has, which turns a labelled guess into an unlabelled answer one hop away.
+// A null icon is not evidence an id is fake, since an item can ship ahead of its art.
 //
-// A null icon is not evidence an id is fake. Every weapon is art-less, filed under a model name
-// the game does not serve, and at game 0.35.0 that is all 134 of the items with no art. It
-// reads in that direction only: an item can ship ahead of its art. `a weapon draws as
-// text` pins that such an id is still a complete, readable row that says why it has no picture:
-// a hidden icon slot makes "no file exists" look exactly like "this item does not exist".
-//
-// The fake's art manifest never settles, which is the state the loader is genuinely in for the
-// first moments of every session: `icon.item` is optimistic and `itemArtName` is null until it
-// lands. So the art count is held back rather than reported as zero. Where a case needs the
-// manifest to have answered, it says so by spying.
+// The fake's art manifest never settles, so `icon.item` stays optimistic and `itemArtName` null,
+// as in the first moments of a real session. A case needing the manifest's answer spies on it.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ANY_SENDER } from '../../loader/src/runtime/bus/hub.ts';
@@ -45,7 +27,7 @@ import { createSharedServices } from '../../tests/fakes/shared-services.ts';
 import { createFakeStorage } from '../../tests/fakes/storage.ts';
 import MANIFEST_TEXT from './addon.json?raw';
 import TABLE_TEXT from './items.json?raw';
-// biome-ignore lint/correctness/noUnresolvedImports: Vite's ?raw suffix is a loader directive a static resolver does not model, and an addon file is a function BODY with no exports at all. Same reason as the satchel suite.
+// biome-ignore lint/correctness/noUnresolvedImports: Vite's ?raw suffix is a loader directive a static resolver does not model, and an addon file is a function BODY with no exports at all.
 import SOURCE from './main.js?raw';
 
 const MANIFEST_JSON: unknown = JSON.parse(MANIFEST_TEXT);
@@ -86,7 +68,7 @@ function readHeader(): TableFile {
 }
 
 const TABLE: readonly TableRow[] = readHeader().items;
-/** How many rows the shipped file holds, which is what every count on screen is against. */
+/** How many rows the shipped file holds, the base of every count on screen. */
 const TABLE_SIZE = TABLE.length;
 
 function rowFor(id: string): TableRow {
@@ -98,39 +80,28 @@ function rowFor(id: string): TableRow {
 }
 
 /**
- * Four real rows, each picked for the shape it has rather than for its name. A weapon, because
- * every weapon in the game is art-less. A helmet, because it is the ordinary complete row: kind,
- * slot and quality all present. A junk item, because it has a quality and no slot. And a quest
- * item, because the game declares no quality for it at all and "absent" and "poor" are answers
- * this addon must not confuse.
+ * Real rows picked for their shape: a weapon; a helmet, the ordinary complete row; a junk item,
+ * with a quality and no slot; and a quest item with no quality, since "absent" is not "poor".
  */
 const WEAPON = rowFor('worn_sword');
 const HELMET = rowFor('acolytes_circlet');
 const JUNK = rowFor('amber_hide');
 const NO_QUALITY = rowFor('amberfall_sap_bucket');
 
-/**
- * A fifth, for the numbers rather than for the strings: the one row here carrying all three of
- * a sell price, an item level and a level gate, which is what a subscriber ranks a bag by.
- */
+/** A row carrying a sell price, an item level and a level gate at once. */
 const PRICED = rowFor('abyssal_loop');
 
 /**
- * Three more, for the facts game 0.35.0 made worth drawing.
- *
- * A Warfare piece, because the honor gear is the only place the two PvP ratings and the honor
- * price appear at all. A heroic upgrade variant, because it is one of the 63 rows sharing a
- * display name with another row and nothing but its base id ties the pair together. And a
- * legendary heroic variant, which is the only row in the table that is BOTH: unique-equipped
- * with its base, so the wear rule counts the two of them as one item.
+ * A Warfare piece, the only shape carrying the PvP ratings and an honor price; a heroic variant,
+ * which shares its base's display name; and a legendary heroic variant, unique-equipped with its
+ * base.
  */
 const WARFARE = rowFor('furyforged_warhelm');
 const HEROIC = rowFor('heroic_direfang_quiver');
 const UNIQUE = rowFor('heroic_kingsbane_last_oath');
 
 /**
- * A Crucible set piece, the only row shape carrying a set, an armor class and a class gate at
- * once. Its id and its set NAME share no word: 'emberscreed' is 'Creed of Embers Vestments'.
+ * A set piece whose id and set NAME share no word: 'emberscreed' is 'Creed of Embers Vestments'.
  */
 const SET_PIECE = rowFor('emberscreed_helmet');
 
@@ -139,14 +110,7 @@ const UNKNOWN_ID = 'lorebind_not_in_the_table';
 
 const FQID = 'official/lorebind';
 
-/**
- * `woc.data` landed at minor 2 and the kit's item quality axis at 3. The grid is a `ui.list`
- * now, the counting lines are `ui.line`, the strips are `ui.row`, the repaint is `woc.paint`,
- * the count is `fmt.count`, the name service is `bus.publish` and the key is the frame's own
- * `toggleKey`: all of them minor 4. The square a cell is drawn at is `ui.itemCell`, minor 7,
- * and the claim tracks the newest member rather than the oldest. An addon reading it off an
- * older loader gets `undefined`, and a grid whose track is `NaNpx` draws nothing at all.
- */
+/** The newest member read is `ui.itemCell`, minor 7; off an older loader the grid is `NaNpx`. */
 const NEEDS_MINOR = 7;
 
 /** The row `mountAddon` would build, for the one case that mounts the addon by hand. */
@@ -175,9 +139,8 @@ afterEach(() => {
 });
 
 /**
- * Chain `times` microtask hops, without an await inside a loop. The addon awaits `woc.data`
- * and then publishes, so its start-up is several promise hops deep and `MICROTASKS` is set
- * well past that depth rather than at the exact number of hops.
+ * Chain `times` microtask hops without an await in a loop. `MICROTASKS` is set well past the
+ * depth of the addon's start-up rather than at the exact hop count.
  */
 function flush(times: number): Promise<void> {
   let chain: Promise<void> = Promise.resolve();
@@ -211,10 +174,8 @@ function emptyWorld(): WorldState {
 }
 
 /**
- * The game's own world object, with every field the addon reads as a getter, because that is
- * what the loader reads through: the suite moves the state and the next poll sees it.
- * `lootRollGroupStatus` is a call rather than a field, which is what the loader's own group
- * reader expects and is the one read on that surface that is.
+ * The game's world object, every field a getter so the next poll sees what the suite moved.
+ * `lootRollGroupStatus` is a call, as the loader's group reader expects.
  */
 function fakeWorld(state: WorldState, player: unknown): Record<string, unknown> {
   return {
@@ -289,10 +250,8 @@ async function start(options: StartOptions = {}): Promise<Harness> {
   teardown.push(harness.dispose);
 
   const sent: Published[] = [];
-  // Subscribed as somebody else, because nobody receives their own messages: a listener
-  // registered under the addon's own fqid would hear nothing. Two subscriptions rather than one,
-  // because the hub matches a topic exactly: there is a wildcard for the sender and none for the
-  // topic.
+  // Subscribed as somebody else, since nobody receives their own messages. One subscription per
+  // topic: there is a wildcard for the sender and none for the topic.
   for (const topic of ['item', 'items']) {
     teardown.push(
       harness.shared.bus.subscribe({
@@ -313,10 +272,8 @@ async function start(options: StartOptions = {}): Promise<Harness> {
     harness.shared.world.watcher.poll();
     await flush(MICROTASKS);
     vi.advanceTimersToNextFrame();
-    // The repaint is `woc.paint`, which runs on the LOADER'S one frame loop rather than on an
-    // animation frame of the addon's own, so a settle has to step that loop as well as the
-    // clock. The fake runs the real loop over a clock a suite drives, so nothing here is a
-    // stand-in for the coalescing: one tick is one frame, however many repaints were asked for.
+    // `woc.paint` runs on the loader's frame loop, so a settle steps that loop as well as the
+    // clock. One tick is one frame, however many repaints were asked for.
     harness.frames.tick();
     await flush(MICROTASKS);
   };
@@ -363,13 +320,7 @@ function partOf(el: Element | null, selector: string): string {
   return el?.querySelector(selector)?.textContent ?? '';
 }
 
-/**
- * What ONE square announces itself as, which is the whole of what it says in words.
- *
- * A square is art, so its accessible name is where its name, quality, kind and slot live, and
- * that is what a screen reader is read and what these cases assert against. What the square
- * shows a sighted player is the picture, the quality border, and the record under the grid.
- */
+/** One square's accessible name, the only place a square of art says its name, tier and kind. */
 function cellName(itemId: string): string {
   return cellEl(itemId)?.getAttribute('aria-label') ?? '';
 }
@@ -385,11 +336,8 @@ function recordPart(role: string): string {
 }
 
 /**
- * The block under the kind line, ONE FACT PER ENTRY, in the order it is drawn.
- *
- * The record reads like the game's own tooltip: a column rather than three comma-joined
- * lines. `role` narrows to one kind of fact, which is what the colours say too: a `number` is
- * what the item is made of, a `stat` is what it gives you, and a `gate` is what it asks first.
+ * The block under the kind line, one fact per entry, in drawn order. `role` narrows to `number`
+ * (what the item is), `stat` (what it gives) or `gate` (what it asks first).
  */
 function blockLines(role = ''): string[] {
   let selector = 'div';
@@ -402,12 +350,8 @@ function blockLines(role = ''): string[] {
 }
 
 /**
- * The class the record's name is drawn under, which is where the tier's colour comes from.
- *
- * A class rather than a colour, because the palette is the LOADER'S: the kit carries the
- * game's own two quality tables and this addon may not hold a hex of its own. Under Vitest a
- * stylesheet is an empty string anyway, so the class is the only half of it a suite can see;
- * that the class paints anything is proved by running the loader, which is the stage's job.
+ * The class the record's name is drawn under. A class, not a colour: the palette is the loader's,
+ * and under Vitest a stylesheet is empty, so the stage proves the class paints.
  */
 function recordQuality(): string {
   const el = document.querySelector('[data-role="record"] [data-role="name"]');
@@ -434,12 +378,8 @@ function lineFor(role: string): string {
 }
 
 /**
- * What the tooltip says over an element, or '' when nothing is described.
- *
- * The hidden check is the whole point of the cases about turning the service off. There is one
- * tooltip element for the whole loader and it stays in the document holding its last text, so a
- * helper that only read `textContent` would report the previous row's tooltip for an element
- * that has none, and every "describes nothing" case would pass regardless.
+ * What the tooltip says over an element, or '' when nothing is described. Keep the hidden check:
+ * the one shared tooltip keeps its last text, so without it every "describes nothing" case passes.
  */
 function tipOver(el: Element | null): string {
   el?.dispatchEvent(new Event('pointerenter'));
@@ -467,10 +407,8 @@ function chipOn(quality: string): string {
 }
 
 /**
- * Choose an equipment slot, in the words the control shows rather than the game's id.
- *
- * Through the loader's own dropdown, which is a button and a menu rather than a `<select>`:
- * the same two clicks a player makes. See tests/fakes/controls.ts.
+ * Choose an equipment slot by its shown words, through the loader's dropdown (a button and a
+ * menu, not a `<select>`). See tests/fakes/controls.ts.
  */
 function chooseSlot(value: string): void {
   choosePicker(document.querySelector('[data-role="slot"]') ?? document, value);
@@ -495,33 +433,22 @@ function search(value: string): void {
 }
 
 /**
- * Narrow to one id, which is how a codex of eight hundred-odd rows is actually read. Every case
- * about one item goes through here rather than reaching into an unfiltered list: the list is
- * capped, deliberately and visibly, so an assertion against the whole of it would be an
- * assertion about alphabetical position.
+ * Narrow by search. The grid is capped, so a case about one item narrows first; asserting against
+ * the unfiltered list would be asserting alphabetical position.
  */
 async function only(h: Harness, needle: string): Promise<void> {
   search(needle);
   await h.settle();
 }
 
-/**
- * Narrow to one id and OPEN it, which is the pair of gestures every case about one item makes.
- *
- * The grid draws art and the record draws words, so a case about what the addon SAYS has to
- * pick a square first. Clicking is the same path a player takes rather than a hook only the
- * suite uses.
- */
+/** Narrow to one id and click it open, since only the record under the grid draws words. */
 async function open(h: Harness, itemId: string): Promise<void> {
   await only(h, itemId);
   pick(itemId);
   await h.settle();
 }
 
-/**
- * One field off a published record. A helper rather than an index at the call site: Biome wants
- * `row.id` and TypeScript forbids dotting into an index signature.
- */
+/** One field off a published record: Biome wants `row.id` and TypeScript forbids it here. */
 function field(row: Record<string, unknown>, name: string): unknown {
   return row[name];
 }
@@ -549,12 +476,8 @@ function roll(itemId: string, itemName: string, quality: string): Roll {
 }
 
 /**
- * A table of one row, stating the two Warfare ratings at DIFFERENT values.
- *
- * Written rather than picked out of the shipped file because no shipped row does: all 47 carry
- * the pair twice over at one value, so the rule the game applies to them is invisible in the
- * content. This is the one fixture here that is not a real item, and it is one because the case
- * is about arithmetic rather than about the game's table.
+ * A one-row table stating the two Warfare ratings at DIFFERENT values. Invented because no shipped
+ * row does, which hides the `Math.min` rule; the only fixture here that is not a real item.
  */
 const LOPSIDED_WARFARE = JSON.stringify({
   gameVersion: '0.0.0',
@@ -576,9 +499,7 @@ describe('its manifest', () => {
     expect(validateManifest(MANIFEST_JSON).ok).toBe(true);
   });
 
-  // The data file is the first-ranked source, so a manifest that stopped
-  // declaring it would leave the addon with nothing but the art file to name an
-  // item from, which is the exact inversion this addon exists to prevent.
+  // Without the data file the art file is the only source left to name an item from.
   it('declares the item table as its data file', () => {
     expect(parseManifest(MANIFEST_TEXT).data).toEqual(['items.json']);
   });
@@ -587,46 +508,35 @@ describe('its manifest', () => {
     expect(parseManifest(MANIFEST_TEXT).permissions).toEqual(['world.read', 'ui', 'keys']);
   });
 
-  // An older loader strips an unknown option rather than refusing it, so a claim that is too
-  // low installs and then draws wrongly rather than failing: at 3 this addon would have got a
-  // grid of identical grey squares, and at 4 it would get a panel with no rows in it at all.
-  // See NEEDS_MINOR for what is being claimed.
+  // An older loader strips an unknown option rather than refusing it, so a claim too low installs
+  // and draws wrongly. See NEEDS_MINOR.
   it('declares the minor the members it calls arrived in', () => {
     expect(parseManifest(MANIFEST_TEXT).apiMinor).toBe(NEEDS_MINOR);
   });
 });
 
 describe('the shipped table', () => {
-  // Neither the count nor the version is pinned to a literal: content moves both, and
-  // `items.json` is a generated artifact this addon's own `generate.mjs` owns, so asserting
-  // the output the generator is responsible for is what `AGENTS.md` says not to do. What is
-  // asserted instead is what would STOP the generator: a header with no stamp, and a table
-  // whose ids are not a key.
+  // Neither the count nor the version is pinned: the table is generated. What is asserted is
+  // what would break a reader: a header with no stamp, and ids that are not a key.
   it('stamps the game version it was derived from', () => {
     expect(readHeader().gameVersion).toMatch(/^\d+\.\d+\.\d+$/);
   });
 
-  // The id is the Map key the whole addon is built on, so a duplicate would not
-  // fail anywhere: the second row would quietly replace the first and one item
-  // would read with another's stats. The count rides along because a table that
-  // lost rows on its way through the reader is the other silent failure, and it
-  // is checked against the file rather than against a number typed here.
+  // The id is the addon's Map key, so a duplicate silently gives one item another's stats.
   it('keys every row by an id of its own', () => {
     expect(TABLE.length).toBeGreaterThan(0);
     expect(new Set(TABLE.map((row) => row.id)).size).toBe(TABLE.length);
   });
 
-  // Absent is not poor. 96 of the game's items declare no quality at all, and a
-  // generator that filled one in would put a fact on screen the game never said.
+  // Absent is not poor: filling a quality in would state a fact the game never did.
   it('leaves quality and slot out where the game declares none', () => {
     expect(NO_QUALITY.quality).toBeUndefined();
     expect(JUNK.slot).toBeUndefined();
     expect(JUNK.quality).toBe('poor');
   });
 
-  // The table carries what the game's own tooltip draws, which is the difference between a
-  // browser and a lookup box. Asserted on real rows, so a generator that quietly stopped
-  // extracting a field fails here rather than showing a blank record.
+  // Asserted on real rows, so a generator that stops extracting a field fails here rather than
+  // drawing a blank record.
   it('carries the numbers the game draws, on the items that have them', () => {
     expect(HELMET.stats).toBeDefined();
     expect(HELMET.armorType).toBe('cloth');
@@ -634,19 +544,10 @@ describe('the shipped table', () => {
     expect(JUNK.stats).toBeUndefined();
   });
 
-  // The binding line, pinned by id in BOTH directions, because it is the one field here that
-  // has moved back and forth. The Crucible tier lost `soulbound` on 41 items at game 0.41.1,
-  // got it back on all 201 at 0.42.0, and lost it on the same 41 again at 0.42.1
-  // (`src/sim/content/ignivar_loot.ts:35` names the policy and the game's own pinning test).
-  // Each of those moves rewrote this table and the addon drew a different word on 41 tooltips,
-  // and until this case existed nothing in the suite noticed any of them: the generator drops
-  // an absent flag rather than writing false, so a whole binding rule leaving the game reads
-  // exactly like a field the generator simply never extracted.
-  //
-  // The two ids are the two halves of the tier. `forgefathers_warhammer` is an
-  // `ignivar_loot.ts` boss drop and has taken all three moves; `emberscreed_helmet` is a
-  // sigil-redeemed set piece and has been bound throughout. The ledgerline suite pins the same
-  // pair from the market side, so the two tables cannot come to disagree about one game fact.
+  // Pinned by id in BOTH directions, never by count: the generator drops an absent flag rather
+  // than writing false, so a binding rule leaving the game reads like a field never extracted.
+  // `forgefathers_warhammer` is an unbound boss drop and `emberscreed_helmet` a bound set piece.
+  // The ledgerline suite pins the same pair from the market side; update both together.
   it('says which items bind, and drops the flag rather than writing false', () => {
     expect(rowFor('emberscreed_helmet').soulbound).toBe(true);
     expect(rowFor('forgefathers_warhammer').soulbound).toBeUndefined();
@@ -654,8 +555,7 @@ describe('the shipped table', () => {
     expect(TABLE.every((row) => row.soulbound === undefined || row.soulbound === true)).toBe(true);
   });
 
-  // Derived by the game from where an item drops rather than declared on it, which is why
-  // the generator calls the game's own two functions instead of copying a rule.
+  // Derived by the game from where an item drops, so the generator calls the game's functions.
   it('carries the two levels the game derives rather than declares', () => {
     const levelled = TABLE.filter((row) => row.itemLevel !== undefined);
     const gated = TABLE.filter((row) => row.requiredLevel !== undefined);
@@ -666,13 +566,11 @@ describe('the shipped table', () => {
   });
 });
 
-// The addon, in four cases. Each one is an id only ONE source can answer for,
-// except the first, which is the id two can and is therefore the ranking itself.
+// Each case is an id only one source answers for, except the first, which two do.
 describe('the source ranking', () => {
-  // The search is what forces the repaint, and it has to: a sweep that learns nothing
-  // deliberately schedules no paint, so a case that only ticked would be asserting against the
-  // first paint, taken before the art spy existed.
-  it('takes the table over the art file, which is the whole ordering', async () => {
+  // The search forces the repaint: a sweep that learns nothing schedules none, so a tick alone
+  // would assert against the paint taken before the art spy existed.
+  it('takes the table over the art file', async () => {
     const h = await start();
     h.artNames(new Map([[HELMET.id, 'Acolyte Circlet of Drift']]));
     await h.tick();
@@ -702,9 +600,7 @@ describe('the source ranking', () => {
     expect(recordPart('source')).toContain('from its art file');
   });
 
-  // An id nothing can name is a real answer, and it is not the same answer as an
-  // id that does not exist. Drawing the raw id and saying nothing could name it
-  // is what keeps the two apart.
+  // An id nothing can name still exists; the raw id and the source line keep that distinct.
   it('draws the raw id when nothing can name it, and says nothing could', async () => {
     const h = await start({ world: { inventory: [{ itemId: UNKNOWN_ID, count: 1 }] } });
     await h.tick();
@@ -716,9 +612,7 @@ describe('the source ranking', () => {
 });
 
 describe('the record under the grid', () => {
-  // Absent is not poor. The game declares no quality for 96 of its items, and a record that
-  // said nothing where every other one says a tier reads as the lowest tier rather than as a
-  // fact nobody has.
+  // Absent is not poor: a blank where every other record names a tier reads as the lowest tier.
   it('says a quality nobody knows is unknown rather than leaving it blank', async () => {
     const h = await start();
     await h.tick();
@@ -727,8 +621,6 @@ describe('the record under the grid', () => {
     expect(recordPart('kind')).toBe('Quest, quality unknown');
   });
 
-  // The one thing a player reads an item list by. The hexes are the game's own table, so a
-  // codex in any other palette would disagree with every bag and every loot roll on screen.
   it('hands the square and the name to the kit to colour by tier', async () => {
     const h = await start();
     await h.tick();
@@ -738,8 +630,7 @@ describe('the record under the grid', () => {
     expect(cellQuality(HELMET.id)).toContain('woc-tile-quality-uncommon');
   });
 
-  // The 96 items the game ranks at no tier get no class at all rather than the lowest one:
-  // absent is not poor, and a colour would claim a tier nobody said.
+  // Absent is not poor, so no tier class at all.
   it('colours nothing for an item the game ranks at no tier', async () => {
     const h = await start();
     await h.tick();
@@ -749,9 +640,6 @@ describe('the record under the grid', () => {
     expect(cellQuality(NO_QUALITY.id)).not.toContain('woc-tile-quality');
   });
 
-  // The whole of what the record is for. Asserted line by line rather than on the block,
-  // because each one is a different claim: what it IS, what it gives you, and what it asks
-  // of you first, and the game draws them in that order.
   it('spells out an item the way the game does, in its own order', async () => {
     const h = await start();
     await h.tick();
@@ -760,14 +648,11 @@ describe('the record under the grid', () => {
     expect(recordPart('kind')).toBe('Uncommon cloth armor, helmet');
     expect(blockLines('number')).toContain('16 Armor');
     expect(blockLines('stat')).toEqual(['+1 Stamina', '+2 Intellect', '+1 Spirit']);
-    // This one is uncommon vendor stock, so the game derives no item level and no required
-    // level for it, and what it DOES ask is a class, plus the set it belongs to.
+    // Vendor stock: no derived levels, so the gates are a class and a set.
     expect(blockLines('gate')).toContain('Classes: Mage, Priest, Warlock, Druid');
     expect(blockLines('gate').at(-1)).toContain('Sell price:');
   });
 
-  // A swing, not a stat block: the two damage bounds, the speed, and the number a player
-  // actually compares two weapons by, which the game computes rather than stores.
   it('works a weapon out to damage per second, as the game does', async () => {
     const h = await start();
     await h.tick();
@@ -780,9 +665,6 @@ describe('the record under the grid', () => {
     expect(blockLines('number')[0]).toContain(`${dps.toFixed(1)} damage per second`);
   });
 
-  // The numbers exist for a table id and for nothing else. An id learned off a roll has a
-  // name and a quality and no stats at all, and the record has to be a name and a source
-  // rather than a row of empty labels.
   it('draws no numbers at all for an id the table does not carry', async () => {
     const h = await start({ world: { prompts: [roll(UNKNOWN_ID, 'Gilded Censer', 'rare')] } });
     await h.tick();
@@ -792,8 +674,7 @@ describe('the record under the grid', () => {
     expect(recordPart('source')).toContain('from a loot roll');
   });
 
-  // Until a square is clicked the record describes the first of them, so a full grid never
-  // sits over an empty record that reads as a panel which has not finished loading.
+  // An empty record under a full grid reads as a panel still loading.
   it('opens on the first square rather than on nothing', async () => {
     const h = await start();
     await h.tick();
@@ -803,10 +684,8 @@ describe('the record under the grid', () => {
     expect(recordPart('source').startsWith(drawnIds()[0] ?? '')).toBe(true);
   });
 
-  // Every weapon in the game is filed under a model name nothing serves, so its icon slot is
-  // permanently empty. A blank slot alone reads exactly like an id this addon made up, which is
-  // the ambiguity the tooltip closes.
-  it('says a weapon draws as text because the game ships no art for it', async () => {
+  // A blank icon slot alone reads like an id the addon made up; the tooltip says why it is blank.
+  it('says an item with no art draws as text, and why', async () => {
     const h = await start();
     h.artFiles(new Set([HELMET.id]));
     await h.tick();
@@ -817,9 +696,7 @@ describe('the record under the grid', () => {
     expect(tipOver(cellEl(WEAPON.id))).toContain('ships no art');
   });
 
-  // The table was derived at one game version and the player may be on another,
-  // so a roll spelling an id differently is the only evidence available that a
-  // rename has happened. Dropping it would throw that away silently.
+  // A roll spelling an id differently is the only evidence the table is behind a rename.
   it('shows a roll that disagrees with the table rather than hiding either', async () => {
     const h = await start({
       world: { prompts: [roll(HELMET.id, 'Acolyte Circlet', 'uncommon')] },
@@ -833,11 +710,8 @@ describe('the record under the grid', () => {
     expect(said).toContain('renamed');
   });
 
-  // The game keeps Warfare as two ratings and draws ONE line, the smaller of them, in its
-  // tooltip and in its compare arrows alike. Forty-seven items carry the pair and every one of
-  // them carries it twice over at the same value, so nothing in the shipped table can tell a
-  // min from a max, a sum or an average: that is what the case below is for, and this one pins
-  // that the line is drawn at all and reads the way the game's does.
+  // Shipped rows state both ratings equal, so this pins only that the line is drawn; the next
+  // case pins the `Math.min`.
   it('draws the Warfare pair as the single line the game draws', async () => {
     const h = await start();
     await h.tick();
@@ -849,10 +723,7 @@ describe('the record under the grid', () => {
     expect(blockLines('stat')).toContain(`+${String(rating)} Warfare`);
   });
 
-  // The rule rather than the value, which needs a table of its own: no shipped row states the
-  // two ratings differently, so a version taking the offense rating alone, or the larger of the
-  // two, passes every case built on real content. It would over-report the moment content
-  // separated them, which is the thing the game's own `Math.min` exists to prevent.
+  // Needs its own table: with equal ratings, taking offense alone or the larger passes too.
   it('takes the smaller of the two Warfare ratings, not the first or the larger', async () => {
     const h = await start({ table: LOPSIDED_WARFARE });
     await h.tick();
@@ -861,9 +732,7 @@ describe('the record under the grid', () => {
     expect(blockLines('stat')).toContain('+4 Warfare');
   });
 
-  // An honor price is not on the game's tooltip and is in this table on purpose: it is the only
-  // price a Warfare piece has, since the honor gear declares no `buyValue` at all, and a codex
-  // that draws a sell price and nothing else says the item cannot be bought.
+  // The honor price is the only price a Warfare piece has; without it the item reads unbuyable.
   it('draws what a Quartermaster charges for a piece a vendor does not sell', async () => {
     const h = await start();
     await h.tick();
@@ -873,10 +742,7 @@ describe('the record under the grid', () => {
     expect(blockLines('gate')).toContain(`Honor price: ${String(WARFARE.priceHonor)}`);
   });
 
-  // 63 pairs of rows in the table read as the same name, because the game resolves a heroic
-  // variant's display name to its base's unchanged and says so in as many words. The tag is the
-  // game's own answer to that and is the ONLY thing on either row that differs in words, so a
-  // player searching "Direfang Quiver" can tell which of the two squares is which.
+  // A heroic variant shares its base's display name; the tag is the only word that differs.
   it('marks a heroic variant the way the game does rather than renaming it', async () => {
     const h = await start();
     await h.tick();
@@ -890,10 +756,7 @@ describe('the record under the grid', () => {
     expect(cellName(HEROIC.id)).toContain('[HEROIC]');
   });
 
-  // Unique-equipped is keyed on the item FAMILY rather than on the id: a heroic variant and its
-  // base are one item for the wear rule, so a character wearing Thronebane cannot also wear the
-  // heroic one. Both halves are on the record because neither is recoverable without the other:
-  // the tag alone reads as "one of these", and the base id alone says nothing about wearing.
+  // Unique-equipped is keyed on the item family: a heroic variant and its base count as one.
   it('says a legendary is unique-equipped and which item it counts as', async () => {
     const h = await start();
     await h.tick();
@@ -904,9 +767,7 @@ describe('the record under the grid', () => {
     expect(blockLines('gate')).toContain(`Heroic upgrade of ${String(UNIQUE.heroicOf)}`);
   });
 
-  // The other side of it, which is what keeps the tag meaningful: the table states the flag on
-  // six rows and the addon must not infer it for a seventh. An epic Warfare piece is the row a
-  // version deriving "unique" from anything but the flag would get wrong.
+  // The flag is read, never inferred: an epic Warfare piece is what an inference gets wrong.
   it('says nothing about wearing for an item the game does not restrict', async () => {
     const h = await start();
     await h.tick();
@@ -944,13 +805,7 @@ describe('the coverage line', () => {
     expect(lineFor('coverage')).toContain('1 by nothing');
   });
 
-  // Until the manifest lands `icon.item` is optimistic, so every id looks as
-  // though it has art. Reporting zero art-less items in that window would be a
-  // measurement nobody took.
-  //
-  // Read off the counting line's own tooltip, which is where that sentence lives: it is a
-  // caveat about the grid rather than a figure, it is the same words every session, and a
-  // browser that spent one of its lines explaining itself would be a panel of text again.
+  // Until the manifest lands `icon.item` is optimistic, so a count of zero would be unmeasured.
   it('waits for the art manifest before counting what draws as text', async () => {
     const h = await start();
     await h.tick();
@@ -960,9 +815,7 @@ describe('the coverage line', () => {
     );
   });
 
-  // Built from the shared services directly, because the spy has to exist before
-  // the addon's first line: `preloadItems` is called during boot, so a spy
-  // installed after mounting replaces a promise the addon is already holding.
+  // Mounted by hand so the spy exists before the addon's first line: `preloadItems` runs at boot.
   it('counts what draws as text once the manifest has answered', async () => {
     const player = liveEntity({ set: { name: PLAYER_ENTITY.name, templateId: 'hunter' } });
     const shared = createSharedServices(document, createFakeStorage(), {
@@ -989,16 +842,11 @@ describe('the coverage line', () => {
     const said = tipOver(document.querySelector('[data-role="coverage"]'));
 
     expect(said).toContain(`${String(TABLE_SIZE - 1)} of ${String(TABLE_SIZE)} ship no art`);
-    // Why the count is not zero, which is what it reads as at game 0.36.0 in a real session:
-    // art is commissioned behind content rather than absent by design, so the line says the
-    // figure will move rather than naming a category that never gets one.
+    // The line says the figure moves as art catches up with content.
     expect(said).toContain('commissions art behind content');
   });
 });
 
-// The controls, which are what makes the window a browser rather than a search box. Every one
-// of them narrows a fact the table already carries, so each case here is one control against
-// one row of the shipped file.
 describe('the filters', () => {
   it('shelves the table by kind, and leaves the other shelves out', async () => {
     const h = await start();
@@ -1010,8 +858,7 @@ describe('the filters', () => {
     expect(drawnIds()).not.toContain(HELMET.id);
   });
 
-  // Nothing lit is EVERY tier rather than none, which is the only reading a chip row can be
-  // started from: six chips all lit would make the first press a narrowing to five.
+  // Nothing lit means every tier.
   it('lights one tier at a time, and unlights it again', async () => {
     const h = await start();
     await h.tick();
@@ -1028,10 +875,8 @@ describe('the filters', () => {
     expect(drawnIds()).toContain(JUNK.id);
   });
 
-  // Counted rather than sampled, and counted off the shipped file rather than typed. The grid
-  // is capped, so a case asserting that one helmet is in it and one sword is not would pass on
-  // alphabetical position with the filter deleted: `acolytes_circlet` is inside the first 120
-  // rows of the table and `worn_sword` is not.
+  // Counted off the shipped file: the grid is capped, so "helmet in, sword out" would pass on
+  // alphabetical position with the filter deleted.
   it('narrows to one equipment slot', async () => {
     const helmets = TABLE.filter((row) => row.slot === 'helmet');
     const h = await start();
@@ -1043,9 +888,7 @@ describe('the filters', () => {
     expect(drawnIds()).toContain(HELMET.id);
   });
 
-  // The one filter that is about the PLAYER. An id is seen when this addon has proven it
-  // exists from the world rather than from its own file, which is what the collection line
-  // counts and what this narrows to.
+  // An id is seen when the world, not the file, proves it exists.
   it('narrows to what this character has actually laid eyes on', async () => {
     const h = await start({ world: { inventory: [{ itemId: JUNK.id, count: 3 }] } });
     await h.tick();
@@ -1055,9 +898,7 @@ describe('the filters', () => {
     expect(drawnIds()).toEqual([JUNK.id]);
   });
 
-  // Four orders because the questions are different, and the three numeric ones are all a
-  // "best" question, so they run highest first with the alphabet breaking ties. Quality sorts
-  // by RANK rather than by its word, which is the one an alphabet gets exactly backwards.
+  // Quality sorts by rank; the alphabet would put epic under poor.
   it('sorts by a tier rather than by the word for it', async () => {
     const h = await start();
     await h.tick();
@@ -1094,8 +935,7 @@ describe('the filters', () => {
   });
 });
 
-// The panel is the smaller half of this addon. The bus is what `satchel` and `ledgerline`
-// read to name an item, so the payload shape is the part that has to hold still.
+// `satchel` and `ledgerline` name items off the bus, so the payload shape has to hold still.
 describe('what it puts on the bus', () => {
   it('publishes the whole table as one batch rather than one message per row', async () => {
     const h = await start();
@@ -1126,9 +966,7 @@ describe('what it puts on the bus', () => {
     });
   });
 
-  // What a vendor pays is the one number in the table a consumer cannot approximate: `satchel`
-  // totals a bag with it and `ledgerline` reads it as the floor a listing is worth beating. It
-  // is copper, the same unit every price on the wire is in, so nothing has to convert.
+  // Copper, the wire's unit, which `satchel` and `ledgerline` both read directly.
   it('publishes the sell price in copper', async () => {
     const h = await start();
     await h.settle();
@@ -1137,12 +975,8 @@ describe('what it puts on the bus', () => {
     expect(PRICED.sellValue).toBe(5000);
   });
 
-  // A subscriber naming an id out of a bag gets the base item's name for a heroic variant,
-  // because that IS the game's name for it, so 63 pairs arrive as one name twice. The base id is
-  // the only thing that separates them, it rides no wire payload, and the alternative left to a
-  // subscriber is reading an id prefix, which is the guess this addon exists to make
-  // unnecessary. `uniqueEquipped` is deliberately not published beside it: nothing draws
-  // equipment yet, and a field with no reader is a promise kept for nobody.
+  // A heroic variant arrives under its base's name; `heroicOf` is the only thing separating them.
+  // `uniqueEquipped` is deliberately unpublished.
   it('publishes the base id a heroic variant shares its name with', async () => {
     const h = await start();
     await h.settle();
@@ -1165,9 +999,7 @@ describe('what it puts on the bus', () => {
     expect(field(record, 'requiredLevel')).toBe(PRICED.requiredLevel);
   });
 
-  // The same rule the strings follow, and it matters more for a price: a consumer adding up a
-  // bag has to be able to tell an item worth nothing to a vendor from one whose worth nobody
-  // published, and a `0` reads as the first.
+  // A `0` would read as "worth nothing" rather than "unpriced".
   it('leaves a number the table does not state out rather than sending a zero', async () => {
     const h = await start();
     await h.settle();
@@ -1180,9 +1012,6 @@ describe('what it puts on the bus', () => {
     expect(record).not.toHaveProperty('requiredLevel');
   });
 
-  // Absent and empty are different answers, and a subscriber checking
-  // `payload.quality` has no way to tell an item nobody knows the quality of
-  // from one whose quality is the empty string.
   it('leaves an unknown field out rather than sending it empty', async () => {
     const h = await start();
     await h.settle();
@@ -1194,10 +1023,7 @@ describe('what it puts on the bus', () => {
     expect(field(record ?? {}, 'name')).toBe(NO_QUALITY.name);
   });
 
-  // The `toEqual` is the half that matters as much as the count. A roll spells a name and a
-  // quality and says nothing about what the item is worth, so a version that filled the numbers
-  // in from somewhere would make a subscriber's `sellValue` check mean "somebody mentioned this
-  // item once" rather than "the table priced this".
+  // The `toEqual` pins that no numbers are filled in: a roll prices nothing.
   it('publishes one record, carrying no numbers, for a name learned off a roll', async () => {
     const h = await start();
     await h.settle();
@@ -1226,13 +1052,7 @@ describe('what it puts on the bus', () => {
     expect(h.sent.filter((message) => message.topic === 'item')).toHaveLength(1);
   });
 
-  // The art name is provenance for a picture, and a subscriber already has the identical
-  // fallback. Publishing it would rank a labelled guess above that fallback one hop away, with
-  // the label lost on the way.
-  //
-  // The ask is what makes this bite: the batch on boot goes out before the art manifest can
-  // answer, so a version that published art names would still look clean there. The batch length
-  // is asserted for the same reason.
+  // The ask makes this bite: the boot batch goes out before the art spy can answer.
   it('never publishes a name it took off an art file', async () => {
     const h = await start({ world: { inventory: [{ itemId: UNKNOWN_ID, count: 1 }] } });
     h.artNames(new Map([[UNKNOWN_ID, 'Gilded Censer']]));
@@ -1246,9 +1066,7 @@ describe('what it puts on the bus', () => {
     expect(h.sent[0]?.payload).toHaveLength(TABLE_SIZE);
   });
 
-  // The unnamed half of the same refusal. An id the codex can prove exists and
-  // cannot name is a row on screen and must not be a record on the bus: a
-  // subscriber has no use for `{ id, name: '' }` and every use for silence.
+  // A row on screen, but `{ id, name: '' }` is no use to a subscriber.
   it('never publishes an id nothing can name', async () => {
     const h = await start({ world: { inventory: [{ itemId: UNKNOWN_ID, count: 1 }] } });
     await h.tick();
@@ -1260,8 +1078,7 @@ describe('what it puts on the bus', () => {
     expect(h.sent[0]?.payload).toHaveLength(TABLE_SIZE);
   });
 
-  // A publisher that only emitted on change tells an addon that started later
-  // nothing at all, which is every consumer installed after this one.
+  // An addon that started later hears nothing from a publisher that only emits on change.
   it('answers an ask from a fork with everything it knows', async () => {
     const h = await start();
     await h.settle();
@@ -1273,7 +1090,7 @@ describe('what it puts on the bus', () => {
     expect(h.sent[0]?.payload).toHaveLength(TABLE_SIZE);
   });
 
-  it('stamps from rather than letting the addon claim a sender', async () => {
+  it('is stamped with its own fqid as the sender', async () => {
     const h = await start();
     await h.settle();
 
@@ -1291,12 +1108,10 @@ describe('what it says about a set piece', () => {
     expect(field(record, 'set')).toBe(HELMET.set);
     expect(field(record, 'armorType')).toBe(HELMET.armorType);
     expect(field(record, 'requiredClass')).toEqual(HELMET.requiredClass);
-    // The fixture is real content, so this pins that the row still has all three to publish.
+    // Real content: pins that the row still carries all three.
     expect(HELMET.requiredClass).toHaveLength(4);
   });
 
-  // The game builds set bonuses and proc auras from the id ('emberscreed' procs
-  // `set_emberscreed_4pc`); every row here says 'Creed of Embers Vestments'.
   it('publishes the set display name and not the game set id', async () => {
     const h = await start();
     await h.settle();
@@ -1307,8 +1122,7 @@ describe('what it says about a set piece', () => {
     expect(SET_PIECE.id.startsWith('emberscreed')).toBe(true);
   });
 
-  // The bus freezes the envelope and not the payload, so a subscriber sorting in place would
-  // sort what every later subscriber reads.
+  // The bus freezes the envelope, not the payload.
   it('publishes a copy of the class list rather than the row it holds', async () => {
     const h = await start();
     await h.settle();
@@ -1335,9 +1149,7 @@ describe('what it says about a set piece', () => {
 });
 
 describe('learning from rolls', () => {
-  // A roll open before the addon started fires no watch handler, because a watch
-  // key reports a CHANGE and the world is already live when an addon's body
-  // runs. The sweep is what closes that window.
+  // A watch key reports a change, so only the sweep sees a roll open before the addon started.
   it('learns a roll that was already open when it started', async () => {
     const h = await start({ world: { status: [roll(UNKNOWN_ID, 'Gilded Censer', 'rare')] } });
     await h.tick();
@@ -1409,8 +1221,6 @@ describe('the search', () => {
     expect(drawnIds()).toEqual([WEAPON.id]);
   });
 
-  // An empty grid reads as a measurement of zero, which is the one thing it
-  // never means. Saying which search found nothing is the alternative.
   it('says which search found nothing rather than drawing an empty list', async () => {
     const h = await start();
     await h.tick();
@@ -1431,8 +1241,6 @@ describe('the search', () => {
 });
 
 describe('when the table cannot be read', () => {
-  // The panel says the table could not be read rather than sitting there empty
-  // implying the game has no items in it.
   it('says so rather than drawing an empty codex', async () => {
     const h = await start({ table: '{"items":"not an array"}' });
     await h.tick();
@@ -1441,9 +1249,7 @@ describe('when the table cannot be read', () => {
     expect(lineFor('status')).toContain('could not be read');
   });
 
-  // A row the file's own shape does not admit is dropped rather than half-read. The file is
-  // content and a future generator could emit a kind this addon does not know; taking such a row
-  // would put a name on screen with a `kind` nothing can render.
+  // A row with an unknown kind is dropped rather than half-read.
   it('drops a row whose kind the game does not declare, and keeps the rest', async () => {
     const good = JSON.stringify({ ...HELMET });
     const bad = JSON.stringify({ ...JUNK, kind: 'lorebind_not_a_kind' });
@@ -1476,8 +1282,7 @@ describe('when the table cannot be read', () => {
 });
 
 describe('the tooltip service', () => {
-  // How another addon borrows the codex for a grid it drew itself, which is the
-  // half of the name service that is not on the bus.
+  // How another addon borrows the codex for elements it drew.
   it('describes an element another addon marked', async () => {
     const h = await start();
     await h.tick();
@@ -1493,8 +1298,7 @@ describe('the tooltip service', () => {
     expect(said).toContain('from the table');
   });
 
-  // The setting has to mean something after the fact, not only at start-up. A version that
-  // merely declined to add tooltips would leave every one already on screen answering.
+  // Declining to add new tooltips is not enough: the ones already attached must go too.
   it('takes its tooltips back when the setting is turned off mid-session', async () => {
     const h = await start();
     await h.tick();

@@ -1,29 +1,11 @@
-// The install page's content, separated from its markup.
-//
-// Store URLs and browser-setting instructions are the two things on this site with
-// a real shelf life: extension listings move, and the Chromium user-scripts toggle
-// has changed both its name and its location across Chrome versions. Keeping them
-// as data rather than woven into markup means checking them is reading one table.
-//
-// Every link below was opened and confirmed to be the right listing on 30 July
-// 2026. That check found one bad one, and it is worth recording why it was
-// removed rather than corrected: the Safari link pointed at `id1482490089`, which
-// is Tampermonkey CLASSIC, superseded by a newer paid app. Both are paid, and this
-// loader has never been run on Safari at all, so sending someone to buy an
-// extension for an untested browser was the wrong link AND the wrong advice. The
-// Safari branch in step 2 now says so instead.
+// The install page's content, kept as data because store listings and the Chromium user-scripts
+// toggle move between versions. No Safari link: the loader is untested there and every Safari
+// manager is paid.
 
 /**
- * When step 2 was last confirmed against current stable, shown on the page.
- *
- * This is the one claim on the site that no test can check: it asserts that a
- * PERSON opened chrome://extensions and read the setting. Bumping the number
- * without doing that makes it look true rather than be true, so change it only
- * alongside a fresh screenshots/chrome-user-scripts.png.
- *
- * Verified 30 July 2026 against Chrome 150.0.7871: the toggle is on an
- * extension's Details page, below Site access, labelled exactly "Allow User
- * Scripts".
+ * When a person last confirmed step 2 against stable Chrome, shown on the page. Change it only
+ * alongside a fresh screenshots/chrome-user-scripts.png. In Chrome 150 the toggle is on the
+ * extension's Details page, below Site access, labelled "Allow User Scripts".
  */
 export const CHROME_CHECKED = { version: '150', date: 'July 2026' } as const;
 

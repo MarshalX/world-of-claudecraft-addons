@@ -1,17 +1,5 @@
-// The reading behind `pnpm tables`: whether a regenerated data table moved
-// CONTENT or only its version stamp.
-//
-// That distinction is the whole reason the tool exists, because it decides an
-// addon version bump and both wrong answers cost something. Calling a stamp
-// content bumps an addon so every player downloads a body identical to the one
-// they have. Calling content a stamp leaves a corrected table bound for nobody:
-// no badge, no update row, no error, and fresh installs quietly getting
-// different data from everyone already running it.
-//
-// What this cannot check is whether the tables on disk still match the game.
-// That answer lives in a checkout this suite has no path to, and there is no
-// endpoint that would 404 to say so. It is a release-time question, answered by
-// running the tool.
+// The reading behind `pnpm tables`: whether a regenerated data table moved CONTENT or only
+// its version stamp, which decides whether the addon's version must be bumped.
 
 import { describe, expect, it } from 'vitest';
 import { classifyTable, exitCodeFor, renderReport, type TableRow } from '../tools/tables-core.ts';
@@ -44,9 +32,7 @@ describe('classifyTable', () => {
     expect(classifyTable(before, after)).toBe('stamp');
   });
 
-  // The field name was never standardised across the eight generators, so a
-  // classifier keyed on one spelling would call another generator's stamp
-  // content and bump an addon for nothing.
+  // The generators disagree on the stamp field's name.
   it.each(['game', 'gameVersion'])('recognises the stamp spelled %s', (key) => {
     expect(classifyTable(table(key, '0.37.1', -70), table(key, '0.38.2', -70))).toBe('stamp');
   });
@@ -57,9 +43,7 @@ describe('classifyTable', () => {
     expect(classifyTable(before, after)).toBe('content');
   });
 
-  // The case that matters most on a real release: the game moved a node AND the
-  // stamp advanced. A classifier that stopped at the first stamp line it
-  // recognised would report this as bookkeeping and lose the repair.
+  // The usual release: a row and the stamp both moved.
   it('reads a moved row as content even when the stamp moved too', () => {
     const before = table('gameVersion', '0.37.1', -70);
     const after = table('gameVersion', '0.38.2', -63);
@@ -71,9 +55,6 @@ describe('classifyTable', () => {
     expect(classifyTable(before, `${before}\n`)).toBe('content');
   });
 
-  // A version-shaped string elsewhere in the table is not a stamp. Without the
-  // key in the pattern, an item id or a label carrying a number would let a real
-  // content change pass as bookkeeping.
   it('does not read an arbitrary version-shaped value as a stamp', () => {
     const before = '{\n  "patch": "0.37.1"\n}';
     const after = '{\n  "patch": "0.38.2"\n}';
@@ -108,8 +89,7 @@ describe('renderReport', () => {
 });
 
 describe('exitCodeFor', () => {
-  // A moved table is the expected result of a game release, not a failure, so it
-  // must not break a script somebody wired this into.
+  // A moved table is the expected result of a game release.
   it('succeeds when tables moved', () => {
     expect(exitCodeFor([row('content'), row('stamp')])).toBe(0);
   });

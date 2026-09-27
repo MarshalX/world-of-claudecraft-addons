@@ -1,12 +1,6 @@
-// `pnpm site`: build the static site into site/dist.
-//
-// The socket around tools/site/build.ts, which is where every decision lives.
-// This file reads argv, drives the page list, and prints what happened.
-//
-// The release is read from GitHub at build time and is ALLOWED to be absent:
-// package.json stays at 0.0.0 on purpose (the tag is the only source of a release
-// version, see vite.config.ts), so falling back to it would put an install button
-// advertising 0.0.0 on the landing page. Absent means no version chip.
+// `pnpm site`: build the static site into site/dist. Decisions live in tools/site/build.ts; this
+// reads argv, drives the page list and prints what happened. The release may be absent: never
+// fall back to package.json, which always says 0.0.0.
 
 import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -33,13 +27,7 @@ function humanSize(bytes) {
   return `${Math.round(bytes / BYTES_PER_KB)} kB`;
 }
 
-/**
- * The current release, or null when there is none.
- *
- * Network failure and "no release yet" are deliberately the same answer: the
- * button renders without a chip either way, and a build that fails because
- * GitHub was slow is a build that cannot run offline.
- */
+/** The current release, or null when there is none or GitHub cannot be reached. */
 async function readRelease() {
   const url = 'https://api.github.com/repos/MarshalX/world-of-claudecraft-addons/releases/latest';
   try {
@@ -58,14 +46,7 @@ async function readRelease() {
   }
 }
 
-/**
- * robots.txt and a sitemap, both derived from the page list.
- *
- * Generated rather than committed for the same reason everything else here is: a
- * hand-kept sitemap is a second list of pages, and it is the one that goes stale.
- * The 404 is excluded, since a search engine indexing it is the point of failure
- * the file exists to avoid.
- */
+/** robots.txt and a sitemap, derived from the page list, with the 404 left out. */
 function writeStatics(out, pages) {
   const routes = pages.filter((page) => page.path !== '/404').map((page) => page.path);
   const urls = routes.map((route) => `  <url><loc>${ORIGIN}${route}</loc></url>`).join('\n');
@@ -94,9 +75,7 @@ async function main() {
   if (!offline) {
     release = await readRelease();
   }
-  // One reading of addons/, split the one way both pages care about. An author
-  // tool ships and is in the in-game Browse; the catalog page says so rather than
-  // shortening its count in silence. See tools/catalog.ts.
+  // Author tools are split out so the catalog page can name them. See tools/catalog.ts.
   const all = readAddons();
   const catalog = all.filter((one) => !isAuthorTool(one));
   const tools = all.filter((one) => isAuthorTool(one));
@@ -106,9 +85,7 @@ async function main() {
     landing(build, { release, catalog }),
     install(build, release),
     addons(build, { catalog, tools }),
-    // One page per addon a player installs. Author tools get none, for the reason
-    // they get no card: the catalog is what a player reads, and dev-harness is
-    // named there and pointed at the docs.
+    // Author tools get no page, as they get no card.
     ...catalog.map((addon) => addonPage(build, addon, catalog)),
     changelog(build, readFileSync(join(ROOT, 'CHANGELOG.md'), 'utf8')),
     ...docs.map((_page, index) => docsPage(build, docs, index)),

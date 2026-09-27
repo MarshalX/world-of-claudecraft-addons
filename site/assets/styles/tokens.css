@@ -1,27 +1,16 @@
-/* The palette, the type stack and the two theme overrides.
+/* The palette, the type stack and the two theme overrides. Concatenated first by
+ * tools/site.mjs.
  *
- * The three-way structure is load-bearing: :root carries
- * dark, [data-theme] is the explicit choice a visitor made, and the media query
- * covers everyone who has not chosen. The attribute selector must come BEFORE
- * the media query so an explicit choice wins over the system preference at equal
- * specificity; reordering these two blocks silently breaks the theme toggle.
- *
- * Concatenated first by tools/site.mjs. Nothing here is layered or scoped: the
- * site owns its whole document, unlike the loader's sheet which has a game to
- * sit alongside.
+ * :root is dark, [data-theme] is a visitor's explicit choice, and the media query
+ * covers everyone who has not chosen. The attribute block must come BEFORE the
+ * media query; reordering them silently breaks the theme toggle.
  */
 
-/* Cinzel and Alegreya Sans are self-hosted rather than fetched from Google, so
- * the site makes no third-party request at all, and a
- * page explaining why an addon can read your session token has no business
- * loading a font from a tracker-adjacent CDN. Both are OFL; OFL.txt ships beside
- * the files. The mono stack is the system's, so there is nothing to download.
+/* Fonts are self-hosted so the site makes no third-party request. Both are OFL;
+ * the licences ship beside the files.
  *
- * Cinzel 600 and Alegreya Sans 500 are deliberately absent. Both appear in the
- * design's Google Fonts request and NEITHER is used by a single rule, in the six
- * designed pages or here: they were over-requested. That is 42 kB of a 300 kB
- * budget spent on type nothing asks for. Adding a rule that wants either weight
- * means adding the file and the @font-face back, which is the cheap direction. */
+ * Cinzel 600 and Alegreya Sans 500 are deliberately absent because no rule uses
+ * them. A rule that wants either needs the file and @font-face added back. */
 @font-face {
   font-family: "Cinzel";
   src: url("/assets/fonts/cinzel-400.woff2") format("woff2");
@@ -62,8 +51,8 @@
   --gold: rgb(255 209 0);
   --gold-dim: rgb(199 163 0);
 
-  /* The plate every screenshot sits on. Near-black in BOTH themes by design: on
-     light it reads as a deliberate window rather than a mis-exported image. */
+  /* The screenshot plate. Near-black in BOTH themes, so on light it reads as a
+     window, not a mis-exported image. */
   --figure: rgb(12 12 17);
 
   --bg: rgb(12 12 17);
@@ -76,16 +65,15 @@
   --border: rgb(83 68 32);
   --hairline: rgb(38 35 26);
 
-  /* Gold is unreadable as link text on the light parchment, so the ink role is
-     separate from the accent itself and darkens while --gold does not. */
+  /* Gold is unreadable as link text on light parchment, so the ink role darkens
+     while --gold does not. */
   --accent-ink: rgb(255 209 0);
   --code-bg: rgb(16 16 24);
 
   --ok: rgb(127 220 79);
   --err: rgb(255 143 133);
 
-  /* The game's own debuff palette, inherited so a school reads the same on the
-     site as it does on an aura icon in game. */
+  /* The game's own debuff palette, so a school reads the same as in game. */
   --arcane: rgb(63 140 255);
   --fire: rgb(232 114 42);
   --frost: rgb(74 163 223);
@@ -96,13 +84,11 @@
   --radius-sm: 4px;
   --radius-md: 8px;
 
-  /* The tap-target floor the game holds every control to, and the loader's
-     comfortable density. Nothing a person operates goes below it. */
+  /* The tap-target floor. Nothing a person operates goes below it. */
   --tap: 40px;
 
-  /* The install funnel's sticky bar: one row plus its two hairline rules. Both
-     halves are here so scroll-padding-top cannot drift from the real height, which
-     is what left a sliver of the page header showing above a stuck bar. */
+  /* The sticky step bar's height: one row plus its two hairline rules. Kept here so
+     scroll-padding-top cannot drift from it. */
   --steps-row: 56px;
   --steps-h: calc(var(--steps-row) + 2px);
 

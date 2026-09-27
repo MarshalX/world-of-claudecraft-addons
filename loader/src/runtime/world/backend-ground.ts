@@ -1,9 +1,5 @@
-// The ground around the player: what is on it, who marked it, what died on it.
-//
-// `hazards` and `markers` moved here from the derived group when the ground keys
-// landed, because the seam is the SUBJECT rather than how the reading was
-// obtained: everything here answers a question about a place. `nodeCooldowns`
-// and `corpse` ride the player's own payload and are here for the same reason.
+// The ground around the player: what is on it, who marked it, what died on it. Grouped by
+// subject (a place), whatever the source of each reading.
 
 import { fieldValue } from '../net/frames.ts';
 import { readAs } from './backend-read.ts';

@@ -1,21 +1,6 @@
-// One page per addon: everything its manifest declares, in the order somebody
-// deciding whether to install it asks for it.
-//
-// It exists because the catalog card ran out of room. A card is a name, a
-// picture and a sentence, and an addon also declares what it lets you change
-// (143 settings across the catalog, up to nine on one addon), what it binds, what
-// it reads and what it works well beside. Cramming that into a grid cell makes
-// one card three times the height of its neighbours; hiding it behind a
-// disclosure makes it something nobody finds.
-//
-// Everything here is the manifest, and the settings and keybinds are the same
-// declarations the LOADER reads to build the panes a player will actually meet.
-// So this page cannot describe a control that does not exist, and an addon that
-// adds a setting documents it by shipping.
-//
-// Author tools get no page, for the reason they get no card: the catalog is what
-// a player reads. dev-harness is named on the catalog page and pointed at the
-// docs, which is where somebody who wants it is already standing.
+// One page per addon: everything its manifest declares, in the order somebody deciding whether
+// to install it asks for it. Everything comes from the manifest the loader reads, so the page
+// cannot describe a control that does not exist. Author tools get no page, as they get no card.
 
 import { describeCombo } from '../../../loader/src/shared/combo.ts';
 import type { CatalogAddon } from '../../catalog.ts';
@@ -41,13 +26,7 @@ function settingRow(setting: ReturnType<typeof describeSetting>): Html {
 </li>`;
 }
 
-/**
- * What the addon lets a player change.
- *
- * Absent is a real answer and is printed as one: an addon with nothing to
- * configure is a fact about that addon, and a section that simply vanishes reads
- * as a page that failed to render.
- */
+/** What the addon lets a player change. "None" is printed: a missing section reads as broken. */
 function settings(addon: CatalogAddon): Html {
   if (addon.settings.length === 0) {
     return html`<section class="addon-block">
@@ -66,12 +45,7 @@ function settings(addon: CatalogAddon): Html {
 </section>`;
 }
 
-/**
- * What the addon binds, printed the way the manager prints it.
- *
- * Through the loader's own `describeCombo`, so `Alt+KeyB` reads as `Alt+B` here
- * and in the game with one implementation between them.
- */
+/** What the addon binds, through the loader's own `describeCombo` so it reads as in the game. */
 function keybinds(addon: CatalogAddon): Html | false {
   if (addon.keybinds.length === 0) {
     return false;
@@ -91,12 +65,8 @@ function keybinds(addon: CatalogAddon): Html | false {
 }
 
 /**
- * The declared permissions, with the sentence that makes them honest.
- *
- * The caveat is not optional and never appears without them: addon code runs in
- * the page with the page's globals in scope, so a list on its own reads as a
- * sandbox and there is not one. Same statement as the install confirmation makes
- * in the game, at the moment somebody is reading the same list.
+ * The declared permissions. Never print the list without the caveat: on its own it reads as a
+ * sandbox, and there is not one.
  */
 function declares(build: Build, addon: CatalogAddon): Html | false {
   if (addon.permissions.length === 0) {
@@ -114,11 +84,7 @@ function declares(build: Build, addon: CatalogAddon): Html | false {
 </section>`;
 }
 
-/**
- * One companion, named and explained. The reason is the author's own sentence
- * about what that addon adds; a companion named without one is just the link,
- * rather than a manufactured sentence saying nothing.
- */
+/** One companion, with the author's reason when the manifest gives one. */
 function companionLine(one: CatalogAddon, reason: string): Html {
   const link = html`<a href="${addonPath(one.id)}">${one.name}</a>`;
   if (reason === '') {
@@ -156,19 +122,8 @@ function intro(addon: CatalogAddon): Html {
 /**
  * The name, what it does, and the picture, placed by how big the picture is.
  *
- * Beside the text is the good shape and is what most addons get: a single HUD
- * panel is 776 device pixels wide, it fills its half of the row at the size it
- * has in the game, and the description reads next to it. What broke that was
- * never the layout, it was the FILE: previews were measured once for a catalog
- * cell, so every one of them capped at 350 CSS px and used two thirds of the
- * column it was given. `previewsWide` is the same picture measured for this slot.
- *
- * The exception is the two-panel sheets. Satchel, Ledgerline, Longwatch and
- * Emberwatch carry between 1900 and 2350 device pixels, and half a row is not a
- * small version of that picture, it is an unreadable one. Those take a row of
- * their own, and `fillsOwnRow` decides it from the file rather than from a list
- * of ids, so an addon that re-shoots its preview wider is laid out for what it
- * shipped rather than for what it used to be.
+ * A single panel sits beside the text; a multi-panel sheet is unreadable at half a row, so
+ * `fillsOwnRow` gives it a row of its own, decided from the file rather than a list of ids.
  */
 function head(build: Build, addon: CatalogAddon): Html {
   const shot = build.previewsWide.get(addon.id);

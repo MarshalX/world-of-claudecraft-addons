@@ -1,23 +1,10 @@
 // What competitive bout the player is in, across all seven formats.
 //
-// One union rather than seven reads, discriminated on `format`, because an addon
-// asks "am I fighting anyone" before it asks what kind. A duel is a member of it
-// for the same reason: it is a bout with an opponent and a countdown, and an
-// addon that has to check two unrelated reads to answer one question will check
-// one of them.
+// One union discriminated on `format`, since an addon asks "am I fighting anyone" first.
 //
-// THE THREE KEYS BEHIND IT REFRESH AT THREE DIFFERENT RATES, and the union hides
-// that, so each member's own type says which it came from. The duel key rides
-// every tick. The battleground key rides at 1 Hz and is forced fresh on every
-// transition worth acting on. The arena key is gated to 0.1 Hz, so everything
-// read from it is up to ten seconds old and is the game's own recoverable
-// baseline rather than a live feed; the members whose live path is the event
-// queue say which events those are.
-//
-// `match-modes.ts` holds the two unranked bout shapes and type-imports the two
-// bases below back from here. `verbatimModuleSyntax` erases both directions, so
-// there is no runtime cycle. `battleground.ts` needs nothing from here, because
-// its match member deliberately does not extend `BoutBase`: see that module.
+// Three keys feed it at different rates: `duelInfo` every tick, `bgInfo` at 1 Hz plus every
+// transition, `arenaInfo` at 0.1 Hz (up to ten seconds stale; see each member for its live
+// events).
 
 import { fieldArray, fieldNumber, fieldString, fieldValue } from '../net/frames.ts';
 import { type BattlegroundMatch, battlegroundOf } from './battleground.ts';
@@ -36,11 +23,8 @@ interface MatchCombatant {
 interface BoutBase {
   state: 'countdown' | 'active' | 'over';
   /**
-   * The map this bout plays in, or null.
-   *
-   * Null on a server that predates the field, and reported as the default for
-   * the Protect Yumi brackets, which play in their own maze band and never show
-   * one.
+   * The map this bout plays in, or null. The Protect Yumi brackets report the default, since
+   * they play in their own maze.
    */
   map: string | null;
   /** Your side, excluding you. */
@@ -67,12 +51,8 @@ interface RankedMatch extends BoutBase {
 type MatchInfo = BattlegroundMatch | DuelMatch | RankedMatch | FiestaMatch | YumiMatch;
 
 /**
- * An unrecognised state reads as 'active'.
- *
- * The two named boundaries are both claims a display ACTS on: 'countdown' draws
- * a start timer and 'over' draws an aftermath. Guessing either from a value the
- * game has since added would draw a boundary that is not there, where the
- * neutral middle only fails to draw one.
+ * An unrecognised state reads as 'active', the neutral middle; guessing 'countdown' or 'over'
+ * would draw a timer or an aftermath that is not there.
  */
 function boutState(state: string | null): BoutBase['state'] {
   if (state === 'countdown' || state === 'over') {
@@ -91,11 +71,8 @@ function combatantsOf(rows: readonly unknown[]): readonly MatchCombatant[] {
 }
 
 /**
- * What every arena bout carries, whatever its format.
- *
- * `returnIn` stays null rather than falling back to 0: the game sends the field
- * only once the bout is over, so a zero would say the aftermath has already
- * ended on every bout that is still being fought.
+ * What every arena bout carries, whatever its format. `returnIn` stays null, not 0: it is sent
+ * only once the bout is over.
  */
 function boutBase(match: unknown): BoutBase {
   return {
@@ -127,16 +104,10 @@ function duelState(state: string | null): DuelMatch['state'] {
 }
 
 /**
- * The bout the player is in, or null when they are in none.
+ * The bout the player is in, or null when they are in none. Read in falling order of freshness.
  *
- * READ IN FALLING ORDER OF FRESHNESS, which is what decides the order rather
- * than taste: the three keys are mutually exclusive in the game, so any of them
- * answering is the answer, and where two could the fresher one should win. The
- * duel rides every tick, the battleground 1 Hz, the arena 0.1 Hz.
- *
- * THE ARENA AND BATTLEGROUND KEYS ARE PRESENT FOR EVERY CHARACTER, queued or
- * not. Only their `match` member says a bout is on, so a reader that answered a
- * bout whenever `arenaInfo` existed would tell the whole realm it is fighting.
+ * `arenaInfo` and `bgInfo` exist for every character; only their `match` member says a bout is
+ * on.
  */
 function readMatch(world: unknown): MatchInfo | null {
   const duel = duelOf(fieldValue(world, 'duelInfo'));

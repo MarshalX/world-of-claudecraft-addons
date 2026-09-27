@@ -1,15 +1,9 @@
 // Reading a marketplace that has no marketplace.json, by enumerating it.
 //
-// A supported marketplace publishes an index and the loader reads it in one
-// request. This is the fallback for a repository that has not wired the Action
-// yet: list addons/ through the GitHub contents API, then fetch each addon.json
-// individually. It costs 1 + N requests against an unauthenticated 60/hour
-// limit, so it is a degraded mode with a warning in the manager rather than a
-// second supported way to publish.
-//
-// It is reached ONLY on a 404 for the index. A 403 is the rate limit, and
-// answering that by issuing N more requests would spend the rest of the hour
-// discovering there is no quota left.
+// Lists addons/ through the GitHub contents API and fetches each addon.json: 1 + N requests
+// against an unauthenticated 60/hour limit, so it is a degraded mode the manager warns about.
+// Reached ONLY on a 404 for the index; a 403 is the rate limit and N more requests would
+// only spend what is left of it.
 
 import { diagError } from '../shared/diag.ts';
 import { contentsApiUrl, fileUrl, type MarketplaceRef } from '../shared/marketplace.ts';
@@ -19,13 +13,8 @@ import { inSeries } from '../shared/sequence.ts';
 import type { Fetcher } from './fetcher.ts';
 
 /**
- * Past this the fallback is refused rather than truncated.
- *
- * One request per addon against 60 an hour means a repository this size cannot
- * be enumerated within quota even once, let alone refreshed. Reading the first
- * forty and presenting them as the source's contents would be a silent lie about
- * what the marketplace offers; saying it is too large to read this way is the
- * truth, and publishing an index is the fix.
+ * Past this the fallback is refused, never truncated: the first forty presented as the whole
+ * source would misstate what it offers, and it cannot be read within quota anyway.
  */
 const MAX_ENUMERATED = 40;
 
@@ -34,13 +23,7 @@ const ADDONS_DIR = 'addons';
 
 type ContentsFetcher = Pick<Fetcher, 'getJson'>;
 
-/**
- * The subdirectory names in a contents-API listing.
- *
- * Read defensively rather than through a schema: this is one field of a
- * third-party API shape the loader does not otherwise model, and every row that
- * does not look like a directory is simply not one.
- */
+/** A contents-API row that is a directory. Any row that does not look like one is not one. */
 function isDirectoryRow(row: unknown): row is { name: string } {
   if (row === null || typeof row !== 'object') {
     return false;
@@ -68,12 +51,8 @@ function byName(left: string, right: string): number {
 }
 
 /**
- * One directory's manifest as an index row, or null if it is not an addon.
- *
- * The id has to match the directory for the same reason CI enforces it: the
- * directory is what the index publishes as `path`, and the id is what the fqid
- * is built from, so a mismatch would install an addon whose storage namespace
- * names a directory that does not hold it.
+ * One directory's manifest as an index row, or null if it is not an addon. The id must match
+ * the directory, as CI enforces, since `path` comes from one and the fqid from the other.
  */
 async function readOne(
   fetcher: ContentsFetcher,
@@ -100,12 +79,8 @@ async function readOne(
 }
 
 /**
- * Enumerate a repository's addons, or throw with what stopped it.
- *
- * A directory that does not hold a readable addon is skipped rather than
- * failing the whole source: one broken addon in a third-party repository should
- * not hide the rest of it. What fails the source is not being able to list the
- * directory at all, and being too large to list within quota.
+ * Enumerate a repository's addons, or throw with what stopped it. An unreadable addon is
+ * skipped so it does not hide the rest; only an unlistable or oversized source fails.
  */
 async function enumerateAddons(
   fetcher: ContentsFetcher,
@@ -129,11 +104,8 @@ async function enumerateAddons(
     );
   }
 
-  // One at a time rather than concurrently: this path exists because the source
-  // is already costing a request per addon against a shared rate limit, and a
-  // burst is what that limit answers worst.
-  // Sorted so the pane's order does not depend on what the API happened to
-  // return, the same way the generated index is sorted by directory.
+  // In series, since a burst is what the rate limit answers worst. Sorted like the generated
+  // index, so the order does not depend on the API.
   const addons: MarketplaceEntry[] = [];
   await inSeries(dirs.sort(byName), async (dir) => {
     const row = await readOne(fetcher, market, dir);

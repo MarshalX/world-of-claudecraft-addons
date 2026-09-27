@@ -1,14 +1,7 @@
 // The stage's own chrome: pick an addon, pick a scenario, read what went wrong.
 //
-// Plain DOM rather than the preact the manager uses. The manager is a real UI
-// that ships; this is a control strip on a developer's page, and pulling preact
-// into the stage bundle to render two `<select>` elements would be the tail
-// wagging the dog.
-//
-// It is deliberately NOT built from the loader kit either, even though the kit is
-// right there. Everything the kit draws is a thing being photographed, so chrome
-// wearing the same classes would be a second `.woc-window` in every shot and,
-// worse, would make a kit regression look like part of the furniture.
+// Plain DOM, deliberately NOT the loader kit: kit classes here would put a second
+// `.woc-window` in every shot and make a kit regression look like furniture.
 
 import type { Scenario } from './stage.ts';
 
@@ -42,12 +35,7 @@ interface Picker {
 }
 
 const BAR_ID = 'stage-bar';
-/**
- * Where a failure is written, on EITHER route.
- *
- * Declared here because the picker builds one as part of its chrome, and shared
- * because `pnpm shots` reads one selector whichever page it opened.
- */
+/** Where a failure is written on EITHER route; `pnpm shots` reads this one selector. */
 const STATUS_ID = 'stage-status';
 /** On the document while the chrome is hidden, so a shot has only the addon in it. */
 const BARE_CLASS = 'stage-bare';
@@ -69,7 +57,7 @@ function select(doc: Document, label: string): [HTMLLabelElement, HTMLSelectElem
   return [wrap, el];
 }
 
-/** Says so in the list, so the 25 addons with no scenario yet are visible as a set. */
+/** Marks an addon with no scenario yet in the list. */
 function scenarioSuffix(choice: AddonChoice): string {
   if (choice.scenarios.length === 0) {
     return ' (no scenario)';
@@ -77,21 +65,13 @@ function scenarioSuffix(choice: AddonChoice): string {
   return '';
 }
 
-/** The addon list, which never changes while the page is up. */
 function fillAddons(doc: Document, el: HTMLSelectElement, addons: readonly AddonChoice[]): void {
   for (const addon of addons) {
     el.append(option(doc, addon.id, `${addon.name}${scenarioSuffix(addon)}`));
   }
 }
 
-/**
- * The scenario list for one addon.
- *
- * An addon with no scenario file gets one disabled entry saying so, rather than
- * an empty list. An empty `<select>` reads as a page that has not loaded yet,
- * which is the wrong thing to conclude from an addon nobody has written a
- * scenario for.
- */
+/** An addon with no scenario gets one disabled entry, since an empty list reads as loading. */
 function fillScenarios(doc: Document, el: HTMLSelectElement, choice: AddonChoice | null): void {
   el.replaceChildren();
   if (choice === null || choice.scenarios.length === 0) {
@@ -106,16 +86,8 @@ function fillScenarios(doc: Document, el: HTMLSelectElement, choice: AddonChoice
 }
 
 /**
- * Turn the loader's arrange mode on, which is the only way to pick a BARE frame up.
- *
- * The one control here that is not about the picture. A frameless overlay refuses
- * both gestures outside that mode (loader/src/runtime/ui/kit/frame-gestures.ts), and
- * the keybind that flips it lives in runtime/boot.ts, which the stage does not run:
- * without this, half the catalogue cannot be dragged on the stage at all.
- *
- * It survives a scenario change, because the state belongs to the page rather than
- * to the mount: a person arranging a panel and then switching scenario to see the
- * empty state has not asked to be locked out again.
+ * Toggle the loader's arrange mode, the only way to move a BARE frame. The keybind for it
+ * lives in runtime/boot.ts, which the stage does not run.
  */
 function arrangeToggle(doc: Document, deps: PickerDeps): HTMLButtonElement {
   const button = doc.createElement('button');
@@ -138,7 +110,7 @@ function arrangeToggle(doc: Document, deps: PickerDeps): HTMLButtonElement {
   return button;
 }
 
-/** Hide the chrome, which is the state a screenshot is taken in. */
+/** Hide the chrome, the state a screenshot is taken in. */
 function bareToggle(doc: Document): HTMLButtonElement {
   const button = doc.createElement('button');
   button.type = 'button';
@@ -151,16 +123,8 @@ function bareToggle(doc: Document): HTMLButtonElement {
 }
 
 /**
- * Build the control strip.
- *
- * The two `<select>` elements are the whole interface on purpose. Everything else
- * a stage could offer (a viewport size, a theme, a zoom) is a thing the browser
- * window, `pnpm theme` and the browser's own zoom already do, and every one of
- * them would be a second place the shot's dimensions are decided.
- *
- * The two buttons are the exceptions and neither decides anything about the shot:
- * one hides this strip, and the other is the only route to a gesture the loader
- * otherwise refuses. See `arrangeToggle`.
+ * Build the control strip. Nothing here may decide a shot's dimensions (viewport, theme,
+ * zoom): the browser and `pnpm theme` already own those.
  */
 function createPicker(deps: PickerDeps): Picker {
   const { doc } = deps;

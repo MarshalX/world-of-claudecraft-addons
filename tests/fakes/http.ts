@@ -1,10 +1,5 @@
-// A stand-in for the userscript manager's cross-origin request API.
-//
-// It answers conditional requests FOR REAL: every body gets an etag derived from
-// its own text, an If-None-Match that matches gets a 304 with no body, and
-// editing a body changes the etag. Stubbing that away would leave every test
-// about the ETag cache asserting against a fixture rather than against the
-// mechanism, and the mechanism is the thing hot reload rests on.
+// A stand-in for the userscript manager's cross-origin request API. It answers conditional
+// requests for real (etag from the body, 304 on a match), since the ETag cache is under test.
 
 import type { HttpRequest, HttpResponse } from '../../loader/src/host/gm.ts';
 
@@ -20,14 +15,7 @@ interface FakeHttp {
   notModified: () => number;
 }
 
-/**
- * Stable and cheap: a different body has to produce a different tag, no more.
- *
- * The body itself, encoded, rather than a digest. A hash would be shorter and
- * would introduce the one failure mode this fake must not have: a collision that
- * makes two different bodies look unchanged, which is exactly the bug the ETag
- * suites exist to catch.
- */
+/** The encoded body itself, never a hash: a collision would make two bodies look unchanged. */
 function etagOf(body: string): string {
   return `"${encodeURIComponent(body)}"`;
 }
@@ -36,11 +24,7 @@ const OK = 200;
 const NOT_MODIFIED = 304;
 const NOT_FOUND = 404;
 
-/**
- * @param files url to body. A url that is absent answers 404 rather than
- * throwing, because that is what a private or renamed repository does and it is
- * the case the loader has to render rather than crash on.
- */
+/** @param files url to body. An absent url answers 404, as a private or renamed repository does. */
 function createFakeHttp(files: Record<string, string> = {}): FakeHttp {
   const bodies = new Map(Object.entries(files));
   const calls: string[] = [];

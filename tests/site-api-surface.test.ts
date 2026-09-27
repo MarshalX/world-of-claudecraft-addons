@@ -1,6 +1,5 @@
-// The parser `tests/site-api-coverage.test.ts` rests on. A member this LOSES is a
-// member the docs guard stops requiring, so the mistake makes that suite greener
-// rather than redder and nothing anywhere goes red.
+// The parser `tests/site-api-coverage.test.ts` rests on. A member this loses is one the docs
+// guard stops requiring, so the mistake turns nothing red anywhere else.
 
 import { describe, expect, it } from 'vitest';
 import { apiSurface, membersOf } from '../tools/site/api-surface.ts';
@@ -24,8 +23,7 @@ describe('membersOf', () => {
     ).toEqual(['outer', 'after']);
   });
 
-  // Interval notation is the precise way to say what a bearing returns, so the
-  // parser is what has to give.
+  // Interval notation in doc comments is legitimate, so the parser has to tolerate it.
   it('keeps counting after a doc comment carrying an unmatched close paren', () => {
     const source = body(
       '  /**',
@@ -76,14 +74,12 @@ describe('the surface of the real tree', () => {
   const surface = apiSurface();
   const qualified = new Set(surface.map((one) => one.qualified));
 
-  // `fmt.compass` is declared under a doc comment carrying a parenthetical, and
-  // it is the last member of its interface, so losing it shows up nowhere else.
+  // `fmt.compass` is the last member of its interface, under a parenthetical doc comment.
   it('finds a member declared after a parenthetical in its own doc comment', () => {
     expect(qualified).toContain('fmt.compass');
   });
 
-  // The tail is where a dropped member hides: everything after a break goes at
-  // once.
+  // A parse break drops everything after it, so the tail is where a loss shows.
   it('finds the members at the end of WorldApi, which is the longest interface', () => {
     expect(qualified).toContain('world.on');
     expect(qualified).toContain('world.raw');

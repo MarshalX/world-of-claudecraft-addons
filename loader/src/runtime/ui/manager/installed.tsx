@@ -1,7 +1,5 @@
-// The Installed pane: every addon the registry holds, with its enable toggle.
-//
-// Pure render. The state it draws is loaded by manager/store.ts, so this file
-// has no effects and no fetch of its own.
+// The Installed pane: every addon the registry holds, with its enable toggle. Pure render; the
+// state is loaded by manager/store.ts.
 
 import type { InstalledAddon } from '../../../shared/protocol.ts';
 import type { AddonStatus } from '../../supervisor.ts';
@@ -30,12 +28,7 @@ interface RowProps {
   onFind: (name: string) => void;
 }
 
-/**
- * The run state, which is not the enable state.
- *
- * An addon can be enabled and not running, and the row has to be able to say so:
- * the toggle reports what the player asked for and this reports what happened.
- */
+/** The run state. The toggle shows what the player asked for; this shows what happened. */
 function StatusBadge(props: { statuses: readonly AddonStatus[]; fqid: string }) {
   const view = statusView(props.statuses, props.fqid);
   if (view === null) {
@@ -65,9 +58,8 @@ function AddonRow(props: RowProps) {
           ids={addon.manifest.companions}
           reasons={addon.manifest.companionReasons}
           ctx={{ ...props.companions, market: addon.marketplace }}
-          // Enable is this pane's own toggle pointed at another row, which is
-          // why it is here and not in Browse. There is no install here at all,
-          // so a companion nobody has is a jump to the pane that owns one.
+          // Enable is this pane's toggle pointed at another row; a missing companion jumps to
+          // Browse, which owns install.
           actions={{
             onEnable: (note) => {
               if (note.fqid !== null) {
@@ -104,21 +96,13 @@ function AddonRow(props: RowProps) {
 }
 
 /**
- * The arrange-your-UI switch, at the top of the pane rather than beside a row.
- *
- * It belongs to no addon: it outlines EVERY addon frame at once, including ones
- * currently drawing nothing, which is the only way to grab a bare overlay whose
- * content is empty. Putting it on a row would suggest otherwise.
- *
- * Shown even with nothing installed, because a player arriving here to find out
- * why they cannot see an addon's window should find the control that shows them
- * where it is.
+ * The arrange mode switch, at the top of the pane because it outlines every addon frame at once.
+ * Shown even with nothing installed.
  */
 function UnlockRow(props: { unlocked: boolean; onUnlock: (on: boolean) => void }) {
   return (
-    // Deliberately NOT a `.woc-row`: that class means "an installed addon", and
-    // a control that borrowed it would be counted as one by anything selecting
-    // rows, this pane's own tests included.
+    // Not a `.woc-row`: that class means an installed addon, and selectors (tests included) count
+    // it as one.
     <div className="woc-unlock-row">
       <div className="woc-row-main">
         <span className="woc-row-name">{UI_TEXT.unlockFrames}</span>
@@ -139,22 +123,13 @@ interface InstalledPaneProps {
   state: InstalledState;
   statuses: readonly AddonStatus[];
   /**
-   * Every addon id any source offers, so a companion nobody has can say whether
-   * it is one Browse away or nowhere at all.
-   *
-   * From the catalog rather than from this pane's own rows, because those are
-   * two different questions and this pane only knows the answer to one. Empty
-   * while the catalog is still loading, which reads as `unknown` for one paint.
+   * Every addon any source offers, so a missing companion can say whether Browse has it. Empty
+   * while the catalog loads, which reads as `unknown` for one paint.
    */
   offered: ReadonlyMap<string, OfferedAddon>;
   /**
-   * Each offered addon's screenshot by fqid, for the row thumbnails.
-   *
-   * From the catalog for the reason `offered` is: the registry persists an
-   * addon's manifest but not its directory in the repository, so it cannot say
-   * where the picture is. Empty while the catalog is still loading, which is one
-   * paint of a column that then appears; the manager loads the catalog on open
-   * rather than on the Browse tab, so that paint is the only one.
+   * Each offered addon's screenshot by fqid. From the catalog because the registry does not keep
+   * an addon's repository directory, so it cannot say where the picture is.
    */
   shots: ReadonlyMap<string, AddonShot>;
   onToggle: (fqid: string, on: boolean) => void;
@@ -165,16 +140,11 @@ interface InstalledPaneProps {
   onUnlock: (on: boolean) => void;
 }
 
-/**
- * The enable flags this pane holds, which is the reading the companion note
- * needs and the catalog store has to be told.
- */
+/** The installed set the companion note reads. */
 function companionsOf(props: InstalledPaneProps): Omit<CompanionContext, 'market'> {
   return {
     installed: new Map(props.state.rows.map((row) => [row.fqid, row.enabled])),
-    // This pane's own rows, which is where an installed companion's NAME comes
-    // from: the registry keeps the manifest, so it can name an addon whose
-    // source has since been removed from the list.
+    // From the registry, so an installed companion is named even after its source is removed.
     names: new Map(props.state.rows.map((row) => [row.fqid, row.manifest.name])),
     offered: props.offered,
   };
@@ -183,18 +153,14 @@ function companionsOf(props: InstalledPaneProps): Omit<CompanionContext, 'market
 export function InstalledPane(props: InstalledPaneProps) {
   const { state } = props;
   const companions = companionsOf(props);
-  // Asked of the installed rows rather than of everything on offer, unlike
-  // Browse: this list is the addons a player has, and reserving a column here
-  // because some addon they have never installed has a picture would indent
-  // every row against nothing.
+  // Asked of the installed rows only, so an uninstalled addon's picture reserves no column here.
   const shots = state.rows.some((row) => props.shots.has(row.fqid));
   const unlock = <UnlockRow unlocked={props.unlocked} onUnlock={props.onUnlock} />;
 
   if (state.status === 'idle' || state.status === 'loading') {
     return <p className="woc-note">{UI_TEXT.installedLoading}</p>;
   }
-  // A failure with no message is the unreachable-store case, which the store
-  // reports without one because there is no error to quote: nothing was tried.
+  // A failure with no message is the unreachable store: nothing was tried.
   if (state.status === 'failed' && state.rows.length === 0) {
     return <p className="woc-note woc-note-bad">{state.error ?? UI_TEXT.installedUnreachable}</p>;
   }

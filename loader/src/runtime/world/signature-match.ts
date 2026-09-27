@@ -1,13 +1,5 @@
-// What counts as a change on the four keys about what the player is currently IN.
-//
-// Their own module rather than four more branches in `signature.ts`: the sheet
-// keys describe what the player HAS, and these describe what the player is
-// currently IN, which is a different question with a different lifetime.
-//
-// Every countdown is excluded, as everywhere else here: a bout's return timer, a
-// respawn, a teleport clock, a queue's waited seconds and a proposal's thirty
-// second deadline all move on every sample and none of them is a change in the
-// set of things being watched.
+// What counts as a change on the keys about what the player is currently IN. Every countdown
+// is excluded: it moves on every sample without changing what is being watched.
 
 import { fieldArray, fieldNumber, fieldScalar, fieldString, fieldValue } from '../net/frames.ts';
 
@@ -20,13 +12,7 @@ type SocialKey = (typeof SOCIAL_KEYS)[number];
 
 const SOCIAL_SET: ReadonlySet<string> = new Set<string>(SOCIAL_KEYS);
 
-/**
- * Takes a plain string rather than a `WorldKey`.
- *
- * `signature.ts` imports this module, so naming its key union here would be a
- * cycle for no gain: the narrowing a caller wants happens against whatever union
- * it already holds.
- */
+/** Takes a plain string: naming `WorldKey` would be an import cycle with `signature.ts`. */
 function isSocialKey(key: string): key is SocialKey {
   return SOCIAL_SET.has(key);
 }
@@ -58,11 +44,7 @@ function baseSignature(match: unknown): string {
 }
 
 /**
- * A power-up by id and phase, never by its telegraph.
- *
- * `frac` moves on every sample by construction, so including it would fire a
- * subscription continuously to say that a bar is filling. One appearing,
- * becoming grabbable, or being taken is the set change an addon acts on.
+ * A power-up by id and phase, never by its telegraph `frac`, which moves on every sample.
  */
 function powerupsOf(match: unknown): string {
   return fieldArray(match, 'powerups')
@@ -82,12 +64,8 @@ function fiestaSignature(match: unknown): string {
 }
 
 /**
- * Sudden death, your bench, and whether each cat is still up.
- *
- * A cat's HEALTH and POSITION are excluded even though both move: this reading
- * is up to ten seconds old and the live path is the event queue, so firing on
- * them would notify an addon long after the fact and invite it to treat the
- * notification as the moment.
+ * Sudden death, your bench, and whether each cat is still up. A cat's health and position are
+ * excluded: this reading can be ten seconds stale, and the event queue is the live path.
  */
 function yumiSignature(match: unknown): string {
   const cats = fieldValue(match, 'cats');
@@ -106,15 +84,8 @@ function flagsOf(match: unknown): string {
 }
 
 /**
- * The roster by pid, with the four tallies and the two states a scoreboard draws.
- *
- * The tallies are numbers and are in anyway, for the reason the dungeon finder's
- * acceptance counts are: each increment is a discrete event a player is watching
- * for rather than a bar filling, the game itself forces a fresh readout on every
- * kill, and the key it rides cannot sample faster than 1 Hz.
- *
- * Sorted, because the wire's own roster order is not a fact about the match: a
- * reordering that changed nothing would otherwise repaint every scoreboard.
+ * The roster by pid, with the four tallies and the two states a scoreboard draws. The tallies
+ * are discrete events, not a filling bar. Sorted, since the wire's roster order means nothing.
  */
 function fightersOf(match: unknown): string {
   return fieldArray(match, 'fighters')
@@ -129,11 +100,8 @@ function fightersOf(match: unknown): string {
 }
 
 /**
- * State, the score, both flags and the roster. No clock of any kind.
- *
- * Its own branch rather than `baseSignature`, because a battleground carries no
- * `allies`/`enemies` pair and no map: its roster is one list carrying each
- * fighter's team, which is also what its flags are indexed by.
+ * State, the score, both flags and the roster. No clock of any kind. Not `baseSignature`: a
+ * battleground has no `allies`/`enemies` pair and no map.
  */
 function bgMatchSignature(match: unknown): string {
   const score = fieldArray(match, 'scores').join(':');
@@ -203,11 +171,7 @@ function bgLadderOf(ladder: unknown): string {
 }
 
 /**
- * The offer by acceptance, never by its clock.
- *
- * Its own reader rather than the dungeon finder's `proposalOf` above: that one
- * reads a per-role seat map this offer does not have, and the two shapes are
- * unrelated beyond both being called a proposal.
+ * The offer by acceptance, never by its clock. Unrelated to the finder's `proposalOf` shape.
  */
 function bgProposalOf(proposal: unknown): string {
   if (proposal === null) {
@@ -218,11 +182,8 @@ function bgProposalOf(proposal: unknown): string {
 }
 
 /**
- * Your record, your queue, the offer and the ladder.
- *
- * `requeueIn` is carried as a BOOLEAN, exactly as the dungeon finder's cooldown
- * is: it counts down every second, and what an addon acts on is the transition
- * from locked out to clear rather than the number.
+ * Your record, your queue, the offer and the ladder. `requeueIn` is signed as a boolean, since
+ * only the transition to clear matters.
  */
 function battlegroundSignature(info: unknown): string {
   if (info === null) {
@@ -244,11 +205,8 @@ function needsOf(needs: unknown): string {
 }
 
 /**
- * The proposal, by acceptance rather than by clock.
- *
- * The counts are in even though they are numbers: a proposal meter is the whole
- * display, each increment is the discrete event a player is watching for, and
- * there are at most five of them before the proposal resolves.
+ * The proposal, by acceptance rather than by clock. The counts are in: each increment is a
+ * discrete event.
  */
 function proposalOf(proposal: unknown): string {
   if (proposal === null) {
@@ -272,10 +230,8 @@ function listingOf(listing: unknown): string {
 }
 
 /**
- * Selection, queue membership, the proposal's acceptance, and your listing's applicants.
- *
- * The cooldown is carried as a BOOLEAN. It ticks every second, and what an addon
- * acts on is the transition from blocked to clear rather than the count.
+ * Selection, queue membership, the proposal's acceptance, and your listing's applicants. The
+ * cooldown is signed as a boolean, since only the transition to clear matters.
  */
 function finderSignature(finder: unknown): string {
   if (finder === null) {
@@ -291,12 +247,8 @@ function finderSignature(finder: unknown): string {
 }
 
 /**
- * Listing ids with their sizes. Nothing else on a board row can move.
- *
- * The COUNT leads so that a board which has synced and is empty is a different
- * signature from one that has not synced at all. Those are different things to
- * draw, and without the count both would render as the empty string and the
- * first sync of an idle realm would notify nobody.
+ * Listing ids with their sizes. The count leads so a synced empty board differs from one never
+ * synced, or the first sync of an idle realm would notify nobody.
  */
 function boardSignature(board: unknown): string {
   if (!Array.isArray(board)) {

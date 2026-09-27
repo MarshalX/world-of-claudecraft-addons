@@ -1,37 +1,14 @@
-// Turning a world point into a point on screen.
+// Turning a world point into a point on screen, through the game's RENDERER.
 //
-// The one read in this project that goes through the RENDERER rather than through
-// the world model, and it is an assertion like every other read of the game: the
-// method is looked up on an object this repository cannot compile against, called
-// defensively, and its answer is checked before anything is written to a style.
+// `worldToScreen` answers viewport pixels from the canvas's top left, which are already the
+// loader root's coordinates. Do NOT divide by the UI scale as the game's combat text does: that
+// text lives inside the zoomed `#ui`, and the loader's root is an unscaled sibling of it.
 //
-// What it returns, from the game's own renderer: viewport pixels measured from the
-// top left of the canvas, plus a flag for a point behind the camera. The canvas is
-// `position: fixed` at the viewport origin and sized to the window, and the loader's
-// root is `position: fixed; inset: 0`, so those pixels are already the coordinates
-// an element in the root is positioned by.
+// A failed projection is null, so the anchor is hidden rather than parked at the corner.
 //
-// THE TRAP, which is the reason this file has a comment this long. The game's own
-// floating combat text divides that point by its UI scale, because the HUD lives
-// inside `#ui` and `#ui` is scaled by CSS `zoom`. Copying that divide would be
-// wrong here: the loader's root is a SIBLING of `#ui` and is not scaled, so an
-// anchor divided by the scale would drift further from its world point the further
-// a player moved their UI scale from 1, and would look perfect on the machine of
-// anyone who never changed it.
-//
-// A projection that fails is a null rather than a throw or a guess. Before world
-// entry there is no renderer at all, and an anchor that cannot be placed has to be
-// hidden rather than parked at the top left corner of the screen.
-//
-// THE SECOND TRAP, and the reason `behind` is not the renderer's flag any more.
-// `worldToScreen` reports only the far half of the depth test, so a point BETWEEN
-// the camera and the near plane comes back with `behind: false` and finite
-// coordinates that are wrong by any amount. The game does not trust the flag
-// either: its nameplates, its chat bubbles and its click picking all run
-// `isProjectedNameplateAnchorVisible` first, which is a camera-space z test, and
-// the loader reproduces it here. The reproducing case is a first-person or close
-// mount camera putting your own head behind the near plane, which is where the
-// anchor kit used to place an element in the middle of the screen.
+// The renderer's `behind` flag misses a point between the camera and the near plane, which
+// projects to finite, wrong coordinates (a close or first-person camera and your own head). The
+// game guards with `isProjectedNameplateAnchorVisible`, a camera-space z test, reproduced here.
 
 import type { WorldPoint } from './anchor-point.ts';
 
@@ -50,10 +27,8 @@ const COLUMN_Z = 2;
 const COLUMN_TRANSLATION = 3;
 
 /**
- * The near plane assumed when the camera does not carry one.
- *
- * Zero degrades the guard to "in front of the camera at all", which is still the
- * half of the test the raw flag reports, rather than refusing to project.
+ * The near plane assumed when the camera does not carry one: the guard degrades to "in front of
+ * the camera at all" rather than refusing to project.
  */
 const NO_NEAR_PLANE = 0;
 
@@ -63,19 +38,7 @@ interface ScreenPoint {
   y: number;
   /** Yards from the camera, along the direction it is looking. */
   depth: number;
-  /**
-   * True when x and y are MEANINGLESS: behind the camera, or nearer than the
-   * near plane.
-   *
-   * The second case is the one the raw projection does not report and the game
-   * itself guards against. `isProjectedNameplateAnchorVisible` is what its
-   * nameplates, its chat bubbles and its click picking all consult before
-   * trusting a projection, because a point between the camera and the near plane
-   * projects to finite coordinates that are wrong by any amount. The game's own
-   * comment about the click pick says it plainly: such a point "could steal an
-   * unrelated click", and the reproducing case is a close or first-person camera
-   * putting your own head behind the near plane.
-   */
+  /** True when x and y are MEANINGLESS: behind the camera, or nearer than the near plane. */
   behind: boolean;
 }
 
@@ -89,12 +52,8 @@ interface GameRenderer {
 }
 
 /**
- * One row of the matrix applied to a point, as `Vector3.applyMatrix4` does it.
- *
- * A missing element is a NaN rather than an assertion: the LENGTH was checked, but
- * the array is the game's and a hole in it would otherwise be something the
- * compiler believes. It propagates into the finite check below, which is where
- * every other unreadable answer in this file ends up too.
+ * One row of the matrix applied to a point, as `Vector3.applyMatrix4` does it. A missing element
+ * is NaN, which the finite check in `cameraDepth` catches.
  */
 function rowDot(m: ArrayLike<number>, row: number, p: WorldPoint): number {
   const el = (column: number): number => m[column * MATRIX_SIDE + row] ?? Number.NaN;
@@ -115,14 +74,9 @@ function matrixOf(renderer: GameRenderer): ArrayLike<number> | null {
 }
 
 /**
- * How far in front of the camera a point is, or null when it cannot be read.
- *
- * The game's own near-plane guard, in arithmetic rather than in three: three is
- * not a loader dependency and never will be, so there is no Vector3 here to apply
- * a matrix with. Divided by w rather than assuming an affine matrix, so this is
- * what `Vector3.applyMatrix4` DOES rather than a simplification of it that a
- * future camera could invalidate. The camera looks down its own -z, so a point in
- * front of it has a negative z there and the distance is that magnitude.
+ * How far in front of the camera a point is, or null when it cannot be read. Plain arithmetic,
+ * since three is not a dependency; divided by w rather than assuming an affine matrix. The
+ * camera looks down -z, so the distance is the negated camera-space z.
  */
 function cameraDepth(renderer: GameRenderer, p: WorldPoint): number | null {
   const m = matrixOf(renderer);
@@ -150,12 +104,8 @@ function nearOf(renderer: GameRenderer): number {
 }
 
 /**
- * The projected point with the near-plane guard applied, or the point as it is.
- *
- * A camera the loader cannot read falls back to the raw flag, which is what this
- * file did before the guard existed. A guard that turned every anchor off because
- * the camera moved on a game update would be worse than a slightly over-trusting
- * one.
+ * The projected point with the near-plane guard applied. An unreadable camera falls back to the
+ * raw flag, rather than hiding every anchor after a game update.
  */
 function guarded(renderer: GameRenderer, point: ScreenPoint, p: WorldPoint): ScreenPoint {
   const depth = cameraDepth(renderer, p);
@@ -177,11 +127,7 @@ function rendererOf(game: unknown): GameRenderer | null {
 }
 
 /**
- * The answer, if it is one.
- *
- * Checked rather than trusted, because a NaN reaching a style property drops the
- * declaration silently: an anchor would stop moving and read as one placed
- * somewhere odd rather than as one that failed.
+ * The answer, if it is one. Checked because a NaN reaching a style property is dropped silently.
  */
 function asPoint(value: unknown): ScreenPoint | null {
   if (typeof value !== 'object' || value === null) {
@@ -191,18 +137,13 @@ function asPoint(value: unknown): ScreenPoint | null {
   if (!(Number.isFinite(x) && Number.isFinite(y))) {
     return null;
   }
-  // `depth` is not on the renderer's answer at all: it is the guard's, and
-  // `guarded` fills it in. Zero here rather than optional, so the shape is
-  // complete at every return and no consumer has to test for a missing field.
+  // The renderer does not answer `depth`; `guarded` fills it in when it can read the camera.
   return { x: x as number, y: y as number, depth: 0, behind: behind === true };
 }
 
 /**
- * A projector over the live game object.
- *
- * The game is read on every call rather than captured: the loader starts at
- * document-start, `__game` is assigned at world entry, and an addon may hold an
- * anchor across a session that has not started yet.
+ * A projector over the live game object, read on every call: `__game` is assigned only at world
+ * entry.
  */
 function createProjector(game: () => unknown): Projector {
   return (x, y, z) => {
@@ -217,8 +158,7 @@ function createProjector(game: () => unknown): Projector {
       }
       return guarded(renderer, point, { x, y, z });
     } catch {
-      // A future update can leave something callable in place that throws when
-      // called. The cost of that has to be a hidden anchor, not a dead frame loop.
+      // A game member can stay callable and throw; that must cost an anchor, not the frame loop.
       return null;
     }
   };

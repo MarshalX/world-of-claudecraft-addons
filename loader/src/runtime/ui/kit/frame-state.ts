@@ -1,25 +1,10 @@
 // Where an addon frame was left, per character.
 //
-// Per character rather than per channel, which is the opposite of the manager's
-// own window (see manager/geometry-store.ts), and the difference is real. The
-// manager is one window a player arranges once on their screen. An addon frame
-// is HUD furniture: a raid healer and a solo hunter want the same addon in
-// different places, and they are the same person on the same monitor.
+// Per character, unlike the manager's own window (manager/geometry-store.ts): HUD furniture
+// sits differently for each character. Visibility is saved alongside the box.
 //
-// Visibility is saved alongside the box, so a frame the player closed stays
-// closed on the next login. Without that, `save: true` would restore a window
-// to exactly where it was and then show it anyway.
-//
-// Writes are fire and forget. A frame that reopens in its default spot is a
-// small annoyance; a drag that stalls on a bridge round trip is a large one.
-//
-// READS wait for the character, and that is the whole of a bug this shipped with.
-// An addon builds its frames on its first line, which is document-start: there is
-// no character then, so there is no key, so the one read of a saved position
-// happened on the landing page, found nothing, and was never tried again. Every
-// addon frame opened at its default spot on every reload, stacked on top of each
-// other, and a frame the player had closed came back. The key exists at world
-// entry, so the read waits for it.
+// Writes are fire and forget, so a drag never stalls on a bridge round trip. READS wait for
+// world entry: an addon builds its frames at document-start, when there is no character key.
 
 import { diagError } from '../../../shared/diag.ts';
 import type { Channel } from '../../../shared/hosts.ts';
@@ -36,23 +21,12 @@ interface FrameStateDeps {
   fqid: string;
   hub: StorageHub;
   channel: Channel;
-  /**
-   * The character in play, or null before world entry.
-   *
-   * Resolved per call rather than captured: an addon may build its frames before
-   * the player has entered the world, and a null captured then would mean the
-   * frame never persisted for the whole session.
-   */
+  /** The character in play, or null before world entry. Resolved per call, never captured. */
   character: () => string | null;
   /**
-   * Resolves once `character()` will answer. See the note at the top.
-   *
-   * A read waits for it; a WRITE does not. A write before world entry has nowhere
-   * to go and nothing to say: frames are hidden while the game's HUD is absent, so
-   * there is no gesture that could have produced one.
-   *
-   * Called rather than awaited directly, because asking costs a world subscription
-   * and a frame that does not persist must not pay for one.
+   * Resolves once `character()` will answer. A read waits for it; a write before world entry
+   * is dropped, since hidden frames cannot have produced a gesture. A function, so a frame that
+   * does not persist never pays for the world subscription.
    */
   known: () => Promise<void>;
 }
@@ -66,8 +40,7 @@ function isFrameState(value: unknown): value is FrameState {
   if (typeof value !== 'object' || value === null) {
     return false;
   }
-  // Destructured rather than indexed: dot access on an index signature is a type
-  // error under noPropertyAccessFromIndexSignature.
+  // Destructured, not dotted: noPropertyAccessFromIndexSignature.
   const { box, visible } = value as Record<string, unknown>;
   return typeof visible === 'boolean' && isFrameBox(box);
 }
@@ -88,9 +61,7 @@ function createFrameStateStore(deps: FrameStateDeps): FrameStateStore {
       if (!deps.hub.connected) {
         return null;
       }
-      // Never resolves for a player who does not enter the world, which is
-      // correct: there is no per-character state to restore for a character that
-      // does not exist, and their frames are hidden with the HUD anyway.
+      // Never resolves without world entry, which is correct: there is nothing to restore.
       await deps.known();
       const key = keyFor(frameId);
       if (key === null) {
@@ -98,8 +69,7 @@ function createFrameStateStore(deps: FrameStateDeps): FrameStateStore {
       }
       try {
         const stored = await deps.hub.get(ns, key);
-        // Validated rather than trusted: a NaN reaching a style property drops
-        // the declaration silently, which would strand the frame off screen.
+        // Validated: a NaN style drops silently and could strand the frame off screen.
         if (!isFrameState(stored)) {
           return null;
         }

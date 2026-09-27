@@ -1,12 +1,5 @@
-// Reading the player's existing game bindings, to warn before an addon takes a
-// key the game is using.
-//
-// The two sources are not equally good and the difference is the point of the
-// module. The LIVE profile on __game.input.keybinds is the game's own matcher
-// and includes every DEFAULT binding. The STORED blob holds only what the player
-// explicitly saved, so on an account that never opened Key Bindings it is empty
-// and every key reads as free. A test that only exercised the stored path would
-// pass while conflict detection reported WASD as unbound on most accounts.
+// The live profile includes every default binding; the stored blob holds only what the
+// player saved, so it is empty on most accounts. Both paths need their own cases.
 
 import { describe, expect, it } from 'vitest';
 import { createGameBindings } from '../loader/src/runtime/keys/game-bindings.ts';
@@ -38,8 +31,6 @@ describe('the live profile', () => {
     expect(bindings.conflicts('KeyW')).toEqual({ actions: ['moveForward'], source: 'live' });
   });
 
-  // The reason the live matcher is preferred over reimplementing the rule: it
-  // already knows that a held action ignores modifiers.
   it('reports a held action against a modified combo', () => {
     const bindings = createGameBindings({
       game: () => liveGame({ held: [['KeyW', 'moveForward']] }),
@@ -77,8 +68,7 @@ describe('the live profile', () => {
     expect(bindings.conflicts('KeyW').actions).toEqual(['moveForward']);
   });
 
-  // The loader boots at document-start and the game does not exist for many
-  // seconds, so a reference taken once would be null for the whole session.
+  // The game appears seconds after document-start, so a captured reference stays null.
   it('resolves the game on every call rather than capturing it', () => {
     let game: unknown = null;
     const bindings = createGameBindings({ game: () => game, storage: () => null });
@@ -88,8 +78,6 @@ describe('the live profile', () => {
     expect(bindings.conflicts('KeyW').source).toBe('live');
   });
 
-  // Feature-detected rather than assumed: a game refactor must cost the live
-  // path and fall back, not throw at an addon.
   it.each([
     ['no game at all', null],
     ['a game with no input', {}],
@@ -131,8 +119,7 @@ describe('the stored fallback', () => {
     expect(bindings.conflicts('Alt+KeyB').actions).toEqual(['openBags']);
   });
 
-  // The fallback runs precisely when there is no reliable way to tell which
-  // character is loaded, so it over-reports rather than missing the active one.
+  // The fallback cannot tell which character is loaded, so it over-reports.
   it('unions every scope it finds', () => {
     const bindings = createGameBindings({
       game: () => null,
@@ -202,15 +189,8 @@ describe('with neither source', () => {
   });
 });
 
-// A live session found this one. The matchers are methods on the game's own
-// class and their bodies read `this.map`, so calling one off the instance throws
-// on an undefined `this`. The manager reads conflicts DURING RENDER, so that
-// throw unmounted the settings pane and left the player a blank window.
-//
-// Two things have to hold. The matchers must be called bound, and a throw from
-// them must cost the live reading rather than reaching the caller: this is an
-// undeclared debug hook, so something callable that throws when called is a
-// shape a game update can legitimately produce.
+// The matchers read `this.map`, so they must be called bound, and the manager reads
+// conflicts during render, so a throw from them must never reach the caller.
 describe('the game profile as a real object', () => {
   /** A profile whose matchers throw, standing in for a game that changed shape. */
   function hostileGame(): unknown {
@@ -242,8 +222,7 @@ describe('the game profile as a real object', () => {
     expect(() => bindings.conflicts('KeyW')).not.toThrow();
   });
 
-  // Falling back rather than reporting 'live' with nothing found: an empty live
-  // reading would tell the player the key is free when it was never checked.
+  // An empty 'live' reading would call the key free when it was never checked.
   it('falls back to stored bindings when a matcher throws', () => {
     const bindings = createGameBindings({
       game: hostileGame,

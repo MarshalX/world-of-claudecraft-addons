@@ -1,18 +1,7 @@
-// An addon's `preview.alt` is written in TWO places that nothing ties together: on
-// the SCENARIO in `stage.ts`, beside the fixture that produces the panel, and in
-// `addon.json`, which `pnpm shots` copies it into and which everything else reads.
-//
-// They can disagree silently either way. A manifest-only edit is overwritten by the
-// next capture; a scenario-only edit ships a stale description until somebody runs
-// a tool that rewrites every PNG in the tree. This needs no browser, so it catches
-// the drift on the commit that introduces it.
-//
-// It COMPOSES the whole string rather than checking each panel's sentence appears
-// in it. Containment passes while the lead ("On the left,") or the join changes,
-// and those are part of what a screen reader reads out.
-//
-// It reads the filesystem through tools/manifests.ts, as tests/addons-suites.test.ts
-// does: `noNodejsModules` is not exempt under `tests/**`.
+// `preview.alt` lives on the scenario in `stage.ts` and is copied into `addon.json` by
+// `pnpm shots`; nothing else ties the two together. Compare the whole composed string,
+// since the lead ("On the left,") and the join are read aloud too. The filesystem is
+// read through tools/manifests.ts because `noNodejsModules` is not exempt in `tests/**`.
 
 import { describe, expect, it } from 'vitest';
 import { addonDirs, readAddon } from '../tools/manifests.ts';
@@ -29,11 +18,7 @@ interface Shipped {
   alt: string;
 }
 
-/**
- * Read with a computed access rather than `module.SCENARIOS`, because the name is the
- * addon's: `useNamingConvention` asks for camelCase on a property either way. Same
- * idiom as `fieldValue` in runtime/net/frames.ts.
- */
+/** A computed access, because `useNamingConvention` rejects `module.SCENARIOS`. */
 const SCENARIOS_EXPORT = 'SCENARIOS';
 
 /** Every addon whose manifest declares a preview, with the sentence it ships. */
@@ -60,12 +45,9 @@ function scenariosIn(module: Record<string, unknown>): readonly Scenario[] {
 }
 
 /**
- * The panels one addon marks for the preview, read the way `pnpm shots` reads them.
- * An addon promising a picture with no scenario to produce it THROWS rather than
- * being skipped.
- *
- * `stage.ts` is literal in the template because vite's dynamic-import-vars plugin
- * warns on a specifier whose extension is not in the static part.
+ * The panels one addon marks for the preview, read the way `pnpm shots` reads them. A
+ * missing `stage.ts` throws. The extension stays literal in the template because vite's
+ * dynamic-import-vars plugin warns otherwise.
  */
 async function panelsOf(dir: string): Promise<Panel[]> {
   const module: Record<string, unknown> = await import(`../addons/${dir}/stage.ts`);
@@ -100,10 +82,8 @@ describe('every addon that ships a preview', () => {
     expect(mismatched).toEqual([]);
   });
 
-  // The guard on the guard, the same one addons-suites.test.ts carries: an empty
-  // list makes the check above vacuous, so a broken `addonDirs` or a manifest
-  // schema change that hid `preview` would pass it while proving nothing.
-  it('is actually being looked at', () => {
+  // An empty list would make the check above pass vacuously.
+  it('includes at least one addon', () => {
     expect(shipped().length).toBeGreaterThan(0);
   });
 });

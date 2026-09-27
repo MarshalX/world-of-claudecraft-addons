@@ -42,8 +42,7 @@ describe('isWorldSocket', () => {
     expect(isWorldSocket(WORLD_URL, ORIGIN)).toBe(true);
   });
 
-  // A realm connects to that realm's own origin, so the host cannot be part of
-  // the test or a realm socket would go unseen.
+  // A realm connects to its own origin, so the host cannot be part of the match.
   it('matches a realm socket on another host', () => {
     expect(isWorldSocket('wss://realm-eu.worldofclaudecraft.com/ws', ORIGIN)).toBe(true);
   });
@@ -95,8 +94,6 @@ describe('installSocketHook', () => {
     expect(tapped.calls).toEqual(['send:{"t":"input","seq":1}']);
   });
 
-  // Read-only means read-only: the frame still has to reach the server exactly
-  // as the game wrote it.
   it('passes the send through to the real socket', () => {
     const { ctor } = install(taps());
 
@@ -119,9 +116,8 @@ describe('installSocketHook', () => {
     expect(other.sent).toEqual(['anything']);
   });
 
-  // The game builds a new socket per reconnect, so the wrap has to keep working
-  // rather than being tied to the first one.
-  it('taps every socket the game opens, not only the first', () => {
+  // The game builds a new socket per reconnect.
+  it('taps every socket the game opens', () => {
     const tapped = taps();
     const { ctor } = install(tapped);
 
@@ -146,8 +142,7 @@ describe('installSocketHook', () => {
     expect(socket.sent).toEqual(['{"t":"input"}']);
   });
 
-  // A tap runs inside the game's own stack, `send` synchronously. A throw there
-  // would break the frame the game was sending.
+  // A tap runs synchronously inside the game's `send`, so a throw would break the frame.
   describe('a throwing tap', () => {
     it('does not stop the game sending', () => {
       const { ctor } = install({

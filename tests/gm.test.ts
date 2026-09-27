@@ -54,18 +54,15 @@ describe('detectCapabilities', () => {
     expect(detectCapabilities({ ...legacyOnlySource() }).menuCommand).toBe(false);
   });
 
-  // A missing request grant costs marketplaces and nothing else: the manager
-  // and every already-installed addon work from cached source without it, so it
-  // is a capability rather than a boot condition.
+  // A capability, never a boot condition: installed addons work from cached source without it.
   it('reports the request surface from either spelling', () => {
     expect(detectCapabilities(greasemonkeySource()).http).toBe(true);
     expect(detectCapabilities(violentmonkeySource()).http).toBe(true);
     expect(detectCapabilities({ ...legacyOnlySource() }).http).toBe(false);
   });
 
-  // Pinned against Violentmonkey 2.45 as observed, not as assumed: its GM object
-  // stops at registerMenuCommand, so the promise store pairs with the legacy
-  // listener. This mix is what the loader runs on in production.
+  // Violentmonkey 2.45 as observed: its GM object stops at registerMenuCommand, so the promise
+  // store pairs with the legacy listener.
   it('pairs the promise store with the legacy listener on Violentmonkey', () => {
     expect(detectCapabilities(violentmonkeySource())).toEqual({
       valueStore: 'gm4',
@@ -127,9 +124,8 @@ describe('createGmAdapter', () => {
     expect(remove).toHaveBeenCalledOnce();
   });
 
-  // Pinned against Tampermonkey 5.5 as observed. Both managers report a native
-  // listener, but they reach it through different surfaces, so the capability
-  // value alone cannot tell them apart.
+  // Tampermonkey 5.5 as observed. It reports the same native listener capability as Violentmonkey
+  // through a different surface.
   describe('on Tampermonkey', () => {
     it('detects the same capabilities as Violentmonkey', () => {
       expect(detectCapabilities(tampermonkeySource())).toEqual({
@@ -153,8 +149,7 @@ describe('createGmAdapter', () => {
       expect(viaLegacy).not.toHaveBeenCalled();
     });
 
-    // The id arrives as a promise here, so unsubscribing has to await it. This
-    // branch runs on no other manager.
+    // The id arrives as a promise here, so unsubscribing has to await it.
     it('unsubscribes through the id the promise resolves to', async () => {
       const src = tampermonkeySource();
       const remove = vi.fn(src.gm?.removeValueChangeListener);
@@ -187,9 +182,7 @@ describe('createGmAdapter', () => {
     });
   });
 
-  // The mixed Violentmonkey path routes reads through GM.* and change
-  // notification through GM_addValueChangeListener. Nothing else covers a store
-  // and a listener coming from different surfaces of the same manager.
+  // Reads go through GM.* and change notification through GM_addValueChangeListener.
   describe('on Violentmonkey', () => {
     it('round-trips a value through the promise store', async () => {
       const gm = createGmAdapter(violentmonkeySource());
@@ -215,10 +208,8 @@ describe('createGmAdapter', () => {
       });
     });
 
-    // A BroadcastChannel exists here too, so only the detected capability keeps
-    // the adapter off the fallback. Asserting the remover ran is what makes this
-    // about path selection: the fallback also stops delivery, so an unobserved
-    // handler would pass either way.
+    // A BroadcastChannel exists here too, and the fallback also stops delivery, so only asserting
+    // the remover ran proves the path chosen.
     it('unsubscribes through the legacy remover rather than the fallback', () => {
       const src = violentmonkeySource();
       const remove = vi.fn(src.legacyRemoveValueChangeListener);

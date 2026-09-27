@@ -1,19 +1,6 @@
-// Serve addons/ and the built userscript over http on :5180.
-//
-// Two roles on one socket: the loader's local dev marketplace, and the place a
-// userscript manager installs the loader itself from. They are one server
-// because they are one session: `pnpm dev` is somebody testing a loader change
-// against real addons, and needing a second port for the half that changes least
-// often is the kind of friction that ends in a stale userscript being debugged.
-//
-// The socket. Everything it decides lives in serve-core.ts, which a Vitest suite
-// drives directly.
-//
-// Every response carries a strong ETag over its own bytes. That is what the
-// loader's conditional GET polls: an unchanged addon body answers 304 with no
-// payload, which is what makes a two-second hot-reload poll cost nothing. The
-// userscript is served the same way, so a manager's update check on an unchanged
-// build is a 304 rather than half a megabyte.
+// Serve addons/ and the built userscript over http: the local dev marketplace and the loader
+// install URL. Decisions live in serve-core.ts. Every response carries a strong ETag over its own
+// bytes, which the loader's hot-reload poll and a manager's update check rely on for a 304.
 
 import { readFile } from 'node:fs/promises';
 import { createServer } from 'node:http';
@@ -51,12 +38,9 @@ function sendCacheable(req, res, body, type) {
     etag,
     'content-type': type,
     'content-length': Buffer.byteLength(body),
-    // The loader fetches through GM_xmlhttpRequest, which is not subject to
-    // CORS. This is here for a browser tab opened straight at the server, which
-    // is the ordinary way to check what it is serving.
+    // GM_xmlhttpRequest ignores CORS; this is for a browser tab opened at the server.
     'access-control-allow-origin': '*',
-    // The ETag is the whole freshness mechanism, so an intermediary caching by
-    // age would hide exactly the change this server exists to publish.
+    // The ETag is the whole freshness mechanism, so nothing may cache by age.
     'cache-control': 'no-cache',
   });
   res.end(body);
@@ -101,9 +85,6 @@ async function handle(req, res) {
 
   const loader = resolveLoader(pathname);
   if (loader !== null) {
-    // A named cause rather than a bare 404: the userscript is a build output, so
-    // the ordinary way to reach this is a working tree that has never run the
-    // build, and "not found" would send someone looking at the route instead.
     await sendFile(req, res, loader, 'the loader is not built yet: run "pnpm build"\n');
     return;
   }

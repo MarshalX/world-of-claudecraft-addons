@@ -1,14 +1,8 @@
 // Installed addon set, enable state, and what each addon has cached.
 //
-// Install is the only thing that fetches code. What is persisted afterwards is
-// the manifest, the enable flag, the source body and every declared data file,
-// so enabling an addon is a storage read rather than a network call and a
-// marketplace that goes offline does not take every addon installed from it down
-// with it.
-//
-// The fetching itself is addon-fetch.ts. What is here is the bookkeeping over
-// the installed set: which rows exist, which are on, and which cached records
-// each write has to keep in step with them.
+// Install is the only thing that fetches code; it persists the manifest, the enable flag, the
+// body and every declared data file, so enabling is a storage read and an offline marketplace
+// takes nothing down. The fetching itself is addon-fetch.ts.
 
 import { diagError } from '../shared/diag.ts';
 import { LOCAL_ID, splitFqid } from '../shared/marketplace.ts';
@@ -29,10 +23,8 @@ import { computeUpdates } from './updates.ts';
 /**
  * Read the persisted set, dropping any record that no longer parses.
  *
- * Dropping rather than throwing keeps one corrupt record from hiding every other
- * installed addon, and the diagnostic is what makes the loss visible. The next
- * write persists the surviving list, so a dropped record is gone at that point
- * rather than merely hidden.
+ * Throwing would let one corrupt record hide every other addon. The next write persists the
+ * surviving list, so a dropped record is then gone for good.
  */
 async function readInstalled(storage: RegistryStorage): Promise<InstalledAddon[]> {
   const raw = await storage.get(REGISTRY_NS, INSTALLED_KEY);
@@ -59,20 +51,8 @@ async function readInstalled(storage: RegistryStorage): Promise<InstalledAddon[]
 type Write = (rows: readonly InstalledAddon[]) => Promise<void>;
 
 /**
- * Fetch and persist an addon that is not installed yet, ready to run.
- *
- * It lands ENABLED. The lifecycle this replaced had install fetch only the
- * manifest and enable go and get the code, which made "installed but off" a
- * state that meant something: nothing had been downloaded. This implementation
- * caches the body at install so that enabling is never a network call, so by the
- * time the row exists the code is already on disk and the separation protects
- * nothing. What it cost was real: the player accepts a confirmation that says to
- * install only what they would trust as a browser extension, and then nothing
- * runs.
- *
- * Nothing unsafe follows from starting it. The supervisor records a throw as
- * `failed` and badges it, and an addon declaring an apiVersion or gameVersion
- * this loader cannot honour is marked `incompatible` and never evaluated.
+ * Fetch and persist an addon that is not installed yet. It lands ENABLED: the body is already
+ * on disk once the row exists, and the player has already confirmed the install.
  */
 async function install(deps: RegistryDeps, write: Write, fqid: string): Promise<void> {
   const rows = await readInstalled(deps.storage);
@@ -80,19 +60,16 @@ async function install(deps: RegistryDeps, write: Write, fqid: string): Promise<
     throw new Error(`${fqid} is already installed`);
   }
   const acquired = await acquire(deps, fqid);
-  // The body first: a record with no cached source would show in the list as
-  // installed and fail on every enable. The data files with it, for the same
-  // reason: an addon whose first line calls woc.data must not race an install.
+  // Body and data before the row: a row with nothing cached fails on every enable, and an
+  // addon whose first line calls woc.data must not race the install.
   await deps.storage.set(REGISTRY_NS, sourceKey(fqid), acquired.source);
   await writeAddonData(deps.storage, fqid, acquired.data);
   await write([...rows, acquired.row]);
 }
 
 /**
- * Drop the record and its cached body, keeping the addon's own data.
- *
- * Uninstalling to fix something and reinstalling is the common case, and it
- * should not silently cost the player their settings and window positions.
+ * Drop the record and its cached body, keeping the addon's own data, so an uninstall and
+ * reinstall does not cost the player their settings and window positions.
  */
 async function uninstall(deps: RegistryDeps, write: Write, fqid: string): Promise<void> {
   const rows = await readInstalled(deps.storage);
@@ -102,9 +79,7 @@ async function uninstall(deps: RegistryDeps, write: Write, fqid: string): Promis
   }
   await deps.storage.delete(REGISTRY_NS, sourceKey(fqid));
   await deps.storage.delete(REGISTRY_NS, dataKey(fqid));
-  // Otherwise a reinstall would issue a conditional request, get a 304, and be
-  // served the copy from before the uninstall. Every file the addon brought, not
-  // only its body: a data file has exactly the same cache entry.
+  // Otherwise a reinstall gets a 304 and is served the pre-uninstall copy of every file.
   await Promise.all((await urlsOf(deps, fqid)).map((url) => deps.fetcher.forget(url)));
   await write(kept);
 }
@@ -112,11 +87,9 @@ async function uninstall(deps: RegistryDeps, write: Write, fqid: string): Promis
 /**
  * Hold an addon at a version, or release it back to tracking its marketplace.
  *
- * Nothing is fetched. A marketplace serves one version per ref, so there is no
- * older body to go back to and a pin cannot mean "install that instead"; what it
- * means is that this addon stops being offered an update. Validation runs
- * through the registry's own schema rather than a second copy of the version
- * pattern, so a pin can only ever be a shape the record itself would accept.
+ * Nothing is fetched: a marketplace serves one version per ref, so a pin only stops the addon
+ * being offered updates. Validated through the record's own schema so there is one version
+ * pattern.
  */
 async function setPin(
   deps: RegistryDeps,
@@ -181,11 +154,8 @@ async function readSource(deps: RegistryDeps, fqid: string): Promise<string> {
 }
 
 /**
- * One declared data file, the same way and in the same order the body is read.
- *
- * The refusal names the fix rather than the fault: a missing record means the
- * addon was installed by a loader that had never heard of `data`, which is the
- * player's to resolve by updating and not their addon author's.
+ * One declared data file, read the way the body is. A missing record means an older loader
+ * installed the addon, so the refusal tells the player to update it.
  */
 async function readData(deps: RegistryDeps, fqid: string, name: string): Promise<string> {
   if (isLocal(fqid)) {
@@ -222,9 +192,7 @@ function createRegistry(deps: RegistryDeps): RegistryApi {
       if (row === undefined) {
         throw new Error(`cannot set the enable state of an addon that is not installed: ${fqid}`);
       }
-      // A no-op write still wakes every other tab through the value-change
-      // listener, so the already-in-that-state case returns before touching
-      // storage.
+      // A no-op write would still wake every other tab through the value-change listener.
       if (row.enabled === on) {
         return;
       }

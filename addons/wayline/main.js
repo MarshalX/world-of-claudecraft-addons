@@ -2,15 +2,10 @@
 
 // Wayline: where the next level is, in time rather than in numbers.
 //
-// A RATE IS A LIE UNLESS IT SAYS WHAT IT IS A RATE OF, and that is the whole addon. A
-// running total over the time since the addon started fails in the one situation this is
-// looked at: the player stops, the denominator keeps growing, and the rate decays toward
-// zero with nothing on screen saying nothing has happened for forty minutes. So every
-// award carries the moment it landed, the rate is measured over a rolling window, and an
-// empty window says so rather than dividing.
-//
-// The window is short by default because the game makes the rate slippery: a kill is
-// split between everyone within 80 yards and one far below you is worth nothing.
+// The rate is measured over a rolling window and an empty window says so rather than dividing.
+// An average since load would decay silently toward zero once the player stops. The window is
+// short by default: a kill is split between everyone in range and one far below you is worth
+// nothing, so the rate shifts quickly.
 //
 // KILLS ARE INFERRED. An xp event does not say what earned it, so an award landing within
 // a couple of seconds of a death credited to you or your group is counted as a kill. A
@@ -19,20 +14,16 @@
 // The rested pool is shown and its FILLING is not: nothing published says where you are
 // logged out or whether the pool is accruing.
 //
-// TWO CLOCKS, which is why this survives a page reload. `woc.now()` is monotonic and
-// restarts on every load, so each sample also carries a wall reading the restore
-// subtracts from. A wall reading is not monotonic and a monotonic one does not outlive
-// the page.
+// TWO CLOCKS: `woc.now()` is monotonic and restarts on every load, so each sample also carries
+// a wall reading the restore subtracts from.
 //
-// Nothing animates, so nothing runs a frame loop: a `woc.setInterval` at one second for
-// what the clock moves, and `world.on('character')` for what the game moves.
+// Nothing animates, so there is no frame loop: a one-second interval for what the clock moves
+// and `world.on('character')` for what the game moves.
 
 /**
- * Experience needed to leave each level, index 0 being level 1 to 2.
- *
- * A snapshot of game content taken at game 0.33.0. Nothing on the wire carries it and
- * nothing derives it, so a release that retunes levelling makes these wrong with nothing
- * to report it. The last entry is what the virtual curve grows from.
+ * Experience needed to leave each level, index 0 being level 1 to 2. Transcribed from game
+ * content (0.33.0); nothing on the wire carries it, so a levelling retune goes unreported.
+ * The last entry is what the virtual curve grows from.
  */
 const XP_PER_LEVEL =
   '400 900 1400 2100 2800 3600 4500 5400 6500 7600 8800 10100 11400 12900 14400 16000 17700 19400 21300 23200'
@@ -91,9 +82,8 @@ const samples = [];
 /** When a death credited to this player or their group was last seen. */
 const kill = { at: null };
 /**
- * A revision rather than a dirty flag: a boolean initialised to `false` reads as the
- * literal type and the guard is reported as one that can only go one way. The revision is
- * marked only once a write lands, so a failed one is retried next tick.
+ * A revision rather than a dirty flag, which the checker narrows to a literal `false`.
+ * `written` moves only once a write lands, so a failed one is retried next tick.
  */
 const store = { revision: 0, written: -1 };
 /** What the frame was built at, since a frame's density is decided when it is built. */
@@ -161,13 +151,10 @@ function levelRequirement(level) {
 }
 
 /**
- * The cumulative experience to reach each level, real and virtual, in the game's own shape.
+ * The cumulative experience to reach each level, real and virtual. Index 0 is padding.
  *
- * WHERE THE ROUNDING GOES is part of the curve: the running step stays a float and is
- * rounded only on its way into the total. Rounding it in place is a different curve,
- * drifting by 21 at virtual 40 and by billions at 200.
- *
- * Index 0 is padding, so the level is the index.
+ * The running step stays a float and is rounded only on its way into the total, as the game
+ * does; rounding it in place is a different curve that drifts by billions at 200.
  */
 const LIFETIME_TO_REACH = (() => {
   const cumulative = [0, 0];
@@ -186,11 +173,8 @@ const LIFETIME_TO_REACH = (() => {
 })();
 
 /**
- * The virtual level a lifetime total stands at, and the way into the next one.
- *
- * `lifetimeXp` and NOT `xp`: at the cap the game zeroes `xp` and never touches that bar
- * again, so a curve over it reports virtual 1 for the life of the character. Derived
- * because nothing publishes a virtual level.
+ * The virtual level a lifetime total stands at, and the way into the next one. Read from
+ * `lifetimeXp`, NOT `xp`, which the game zeroes at the cap and never moves again.
  */
 function virtualStanding(lifetime) {
   const total = Math.max(numberOf(lifetime), 0);
@@ -266,11 +250,7 @@ function restedTotal() {
   return samples.reduce((sum, sample) => sum + sample.rested, 0);
 }
 
-/**
- * Experience per hour over the window, or NULL when it holds nothing. The null is the
- * point of the file: an average since the addon started answers forever, about a session
- * that has stopped.
- */
+/** Experience per hour over the window, or NULL when it holds nothing. */
 function ratePerHour(now) {
   prune(now);
   const [first] = samples;
@@ -293,20 +273,13 @@ function averageKillAward() {
   return kills.reduce((sum, sample) => sum + counted(sample), 0) / kills.length;
 }
 
-// The panel. It outlives the frame, because a density change rebuilds the frame and every
-// row inside this survives it. One gap for every row, because every row is the same kind
-// of thing: the three middle figures are kit rows too, so what separates the panel's
-// three parts is which of them carry a fill.
+// The panel outlives the frame, so a density rebuild keeps every row.
 const panel = woc.ui.column({ className: 'woc-wayline', gap: PANEL_GAP });
 
 const levelBar = woc.ui.bar({ label: 'Level', className: 'woc-wayline-level' });
 panel.appendChild(levelBar.el);
 
-/**
- * A kit row whose fill is never set: none of the three has a whole to be a fraction of.
- * What the kit is asked for is the row itself, and above all its font size, which a plain
- * div would inherit from the frame instead.
- */
+/** A kit row whose fill is never set, used for its font size, which a plain div lacks. */
 function createLine(key, name) {
   const line = woc.ui.bar({ label: name, className: 'woc-wayline-line' });
   line.el.dataset.wayline = key;
@@ -326,11 +299,8 @@ panel.appendChild(virtualBar.el);
 woc.ui.show(virtualBar.el, false);
 
 /**
- * Throw the recorded awards away and start measuring again, for when a player leaves a
- * group or stops grinding and the window describes something they no longer do.
- *
- * Its size is left to the density: an inline height would take the tap-target floor away
- * from a player who asked for it.
+ * Throw the recorded awards away and start measuring again. Its size is left to the density:
+ * an inline height would defeat the touch tap-target floor.
  */
 const reset = document.createElement('button');
 reset.type = 'button';
@@ -345,9 +315,8 @@ function densitySetting() {
 }
 
 /**
- * `ui.frame` and not `ui.window` for what they ANNOUNCE: a window is `role="dialog"`,
- * something opened, and this is `role="group"`, HUD furniture that is toggled. Not `bare`
- * either: six rows of small text are unreadable without a panel behind them.
+ * `ui.frame` because this is toggled HUD furniture (`role="group"`), not something opened.
+ * Not `bare`: six rows of small text are unreadable without a panel behind them.
  */
 function buildFrame() {
   chrome.density = densitySetting();
@@ -357,12 +326,9 @@ function buildFrame() {
     width: FRAME_WIDTH,
     density: chrome.density,
     save: true,
-    // The mouse route to the same dismissal the keybind is, which is what a frame asks
-    // for instead of becoming a window: a titled panel without one leaves the player
-    // hunting for a keybind they never chose.
+    // A mouse route to the same dismissal the keybind gives.
     closable: true,
-    // On the FRAME, which is what makes the density rebuild below safe: the loader releases
-    // a bind with its frame, so a swap leaves one binding whichever order it happens in.
+    // On the FRAME, so the loader releases it with the frame and a density rebuild is safe.
     toggleKey: 'toggle',
   });
 }
@@ -370,10 +336,7 @@ function buildFrame() {
 let frame = buildFrame();
 frame.body.appendChild(panel);
 
-/**
- * `fraction` here is progress MADE, the opposite of what the kit's timer rows mean by it:
- * this is the bar the game draws for the same number, and a draining one reads backwards.
- */
+/** `fraction` here is progress MADE, like the game's own bar, not time left. */
 function paintLevel() {
   const { character } = woc.world;
   const level = playerLevel();
@@ -386,8 +349,7 @@ function paintLevel() {
       label: `Level ${String(LEVEL_CAP)}`,
       fraction: 1,
       value: 'max',
-      // Lifetime past the cap, not `xp`: `xp` is frozen at 0 for a capped character, so a
-      // detail read from it would say `0 past the cap` forever.
+      // Lifetime past the cap, not `xp`, which is frozen at 0 for a capped character.
       detail: `${grouped(pastCap(character.lifetimeXp))} past the cap`,
     });
     return;
@@ -431,11 +393,7 @@ function paintFigures(now) {
   timeLine.update({ value: timeFigure(rate, goal) });
 }
 
-/**
- * Nothing at all when the pool is empty: the kit HIDES an empty detail rather than blanking
- * it, so the row loses its second line. At the cap the pool is zero for the life of the
- * character, and `0 bubbles, 0 xp` under `0.0 levels` is the same nothing said twice.
- */
+/** Empty for an empty pool, which the kit hides rather than drawing `0 bubbles, 0 xp`. */
 function restedDetail(rested, levels) {
   if (rested <= 0) {
     return '';
@@ -467,8 +425,7 @@ function paintVirtual() {
   }
   const standing = virtualStanding(character.lifetimeXp);
   virtualBar.update({
-    // The level standing at, not the next one: `standing.level` is absolute, since the
-    // curve is a function of the lifetime total rather than a count of levels past the cap.
+    // The level standing at, not the next one; `standing.level` is absolute.
     label: `Virtual ${String(standing.level)}`,
     fraction: share(standing.into, standing.need),
     value: percent(standing.into, standing.need),
@@ -478,13 +435,10 @@ function paintVirtual() {
 
 function paint() {
   paintLevel();
-  // Before the button is judged, because this is what prunes: the awards a reset would
-  // throw away are the ones still inside the window after that call.
+  // Before the button is judged, because this is what prunes.
   paintFigures(woc.now());
   paintRested();
   paintVirtual();
-  // A control that would do nothing says so, rather than sitting there at full strength
-  // offering it. This is the state the panel spends every break in.
   reset.disabled = samples.length === 0;
 }
 
@@ -510,7 +464,6 @@ function levelTip() {
   return { title: `Level ${String(level)}`, lines };
 }
 
-/** The honest paragraph, which is most of why this row has a tooltip at all. */
 function rateTip() {
   const rate = ratePerHour(woc.now());
   const lines = [`Measured over the last ${String(windowMinutes())} minutes of play.`];
@@ -574,9 +527,7 @@ function restedTip() {
       tone: 'muted',
     },
   ];
-  // The one thing that can be said about the filling, and it is a negative. A capped
-  // character accrues no rested at all, so this row is a pool that will not move rather
-  // than one whose movement cannot be seen.
+  // A capped character accrues no rested at all.
   if (playerLevel() >= LEVEL_CAP) {
     lines.push({
       text: `At level ${String(LEVEL_CAP)} it stops filling entirely, however long you rest.`,
@@ -670,8 +621,8 @@ function stored(sample) {
 }
 
 /**
- * Put stored awards back on this page's monotonic clock. Merged and re-sorted rather than
- * assigned, because the read waits for the character and awards can land while it waits.
+ * Put stored awards back on this page's monotonic clock. Merged and re-sorted, because awards
+ * can land while the read waits for the character.
  */
 function adopt(entries) {
   const now = woc.now();
@@ -702,12 +653,9 @@ async function restore() {
 }
 
 /**
- * Write the recorded awards back, for this character only.
- *
- * `world.ready` is awaited because a per-character write refuses to wait on its own: its
- * payload was decided at the call, so a held one lands on whichever character was picked.
- * The player check first is NOT the same guard: `world.ready` resolves only on world
- * entry, so ticking before then would leave a pending promise behind every ten seconds.
+ * Write the recorded awards back, for this character only. A per-character write rejects
+ * before world entry, hence `world.ready`; the player check comes first so a tick before
+ * then returns instead of leaving a pending promise every ten seconds.
  */
 async function save() {
   const at = store.revision;
@@ -744,21 +692,15 @@ reset.addEventListener('click', () => {
 woc.net.onEvent('xp', record);
 woc.net.onEvent('death', noteDeath);
 
-// A level up moves the denominator and resets the experience into it, and the clock below
-// would show the old level for up to a second after.
+// Repaint at once, or the interval would show the old level for up to a second.
 woc.net.onEvent('levelup', paint);
 
-// The sheet moving is what the game reports; everything else on the panel is what the
-// clock moves, which is the interval underneath.
 woc.world.on('character', paint);
 
 woc.setInterval(paint, PAINT_MS);
 woc.setInterval(persist, SAVE_MS);
 
-/**
- * A frame's density is fixed when it is built, so that one setting needs a new frame and
- * everything else is answered by the next paint.
- */
+/** A frame's density is fixed when it is built, so that one setting needs a new frame. */
 woc.onSettingsChange(() => {
   if (densitySetting() !== chrome.density) {
     const previous = frame;
@@ -769,10 +711,8 @@ woc.onSettingsChange(() => {
   paint();
 });
 
-// The one thing registered, and it is a write rather than a teardown: disable is hot, so
-// the awards recorded since the last save would otherwise be the only ones a player loses
-// by turning the addon off. Everything else lives inside a kit widget, inside the frame
-// body, or on a woc timer, and the loader drains all three.
+// Disable is hot, so write the awards recorded since the last save. The loader tears down the
+// rest.
 woc.onDispose(persist);
 
 load();

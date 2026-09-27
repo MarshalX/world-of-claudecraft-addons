@@ -1,15 +1,6 @@
-/* The context menu and the two field controls that had no rules yet.
- *
- * A sheet of its own rather than more of panes.css, which is the MANAGER's panes:
- * everything here is a surface an addon asks the loader for, and the two change
- * for different reasons. The controls an addon reuses (.woc-btn, .woc-input,
- * .woc-field) are still declared there, because the manager is their first
- * consumer and a copy here would be a second set to keep in step.
- *
- * The menu sits in the overlay band with the toasts, the modal and the tooltip,
- * above every window whatever order they were clicked in. It is transient and
- * cannot be arranged around, so being under a window it was opened from would
- * only ever be wrong. Keep this in step with kit/stacking.ts's ceiling.
+/* The context menu and the slider controls. .woc-btn, .woc-input and .woc-field live in
+ * panes.css. The menu is in the overlay band above every window; keep it in step with
+ * kit/stacking.ts's ceiling.
  */
 #woc-addons .woc-menu {
   position: fixed;
@@ -17,9 +8,7 @@
   flex-direction: column;
   min-width: 160px;
   max-width: 280px;
-  /* The height cap itself is written by kit/menu.ts, which is the only thing that
-     knows the viewport. This is what makes a capped menu usable rather than
-     merely clipped. */
+  /* kit/menu.ts writes the height cap; this makes a capped menu scroll. */
   overflow-y: auto;
   padding: 4px;
   border-radius: var(--radius-sm, 4px);
@@ -34,10 +23,8 @@
   color: var(--color-text-light, rgb(240 235 216));
   cursor: pointer;
   font-family: inherit;
-  /* The game draws its own dropdown rows (`.ui-dd-item`) at 12px on 5px of padding
-     and gives them a 40px floor only under `@media (pointer: coarse)`. 13px here
-     because this menu is also the right-click menu, whose rows are sentences
-     rather than one-word options. The floor is in touch.css. */
+  /* The game's `.ui-dd-item` is 12px on 5px; 13px here, since right-click rows are sentences.
+     The touch floor is in touch.css. */
   font-size: 13px;
   padding: 5px 10px;
   text-align: left;
@@ -51,10 +38,8 @@
   color: var(--gold, rgb(255 209 0));
 }
 
-/* The chosen row of a menu that is a CHOICE, which is what a dropdown's is. The game marks
-   its own the same way, in the accent and by nothing else: `kit/menu.ts` carries the fact to
-   a reader who cannot see a colour as `aria-checked`, which is what this rule selects on, so
-   the two cannot say different things. */
+/* The chosen row of a CHOICE menu, in the accent as the game marks its own. Selected on
+   `aria-checked`, so the colour and the announced state cannot disagree. */
 #woc-addons .woc-menu-item[aria-checked="true"] {
   color: var(--gold, rgb(255 209 0));
 }
@@ -64,28 +49,22 @@
   cursor: default;
 }
 
-/* A rule ABOVE the item, drawn with margin so the groups either side keep their
-   own padding. kit/menu.ts refuses it on the first item, where it would draw a
-   lid on the menu rather than separate anything. */
+/* A rule ABOVE the item, with margin so the groups keep their padding (never on the first). */
 #woc-addons .woc-menu-cut {
   border-top: 1px solid var(--color-border-default, rgb(78 61 29));
   margin-top: 4px;
   padding-top: 8px;
 }
 
-/* The slider's readout, which sits inside the field's label so the two read as
-   one line: "Rolling window   5". Tabular figures for the same reason a bar's
-   countdown has them, since this number moves while the player drags. */
+/* The slider's readout, inside the field's label. Tabular figures, since it moves while dragged. */
 #woc-addons .woc-field-value {
   color: var(--color-text-light, rgb(240 235 216));
   font-variant-numeric: tabular-nums;
   margin-left: 6px;
 }
 
-/* The range input. The game styles none of its own, so this is the one control
-   here with no game rule to inherit: it is drawn from the same tokens the rest
-   of the kit uses rather than invented, and left at the browser's own thumb,
-   which is the part a player's pointer and touch settings already tune. */
+/* The range input, which the game has no rule for: drawn from the kit's tokens, with the
+   browser's own thumb. */
 #woc-addons .woc-slider {
   width: 100%;
   min-height: 24px;

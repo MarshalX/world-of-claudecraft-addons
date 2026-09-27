@@ -1,14 +1,8 @@
-// The economy reads, split from `backend.ts` because it has no room left.
+// The economy reads. Some are gated by the server on PROXIMITY to an NPC and some are not; see
+// `proximity.ts`.
 //
-// Six reads that share one fact: three of them are gated by the server on the
-// player's PROXIMITY to an NPC and three of them are not, and the addon surface
-// has to make that difference impossible to miss. See `proximity.ts`.
-//
-// `hasSelf` is the "has a snapshot decoded" signal, and it is the ROSTER's size
-// rather than the player record because the offline sim's player accessor throws
-// when the primary is missing while its entity map is a plain field on both
-// hosts. The roster is filled by the same snapshot decode that fills the self
-// payload, so an empty roster is exactly "nothing has decoded yet".
+// `hasSelf` ("a snapshot has decoded") is the ROSTER's size, not the player record, because the
+// offline sim's player accessor throws when the primary is missing.
 
 import { fieldValue } from '../net/frames.ts';
 import { readAs } from './backend-read.ts';
@@ -39,13 +33,8 @@ interface EconomyReads {
 }
 
 /**
- * A boolean read that keeps `false`.
- *
- * Not `readAs`, because the answer has to survive being falsy: the collect
- * indicator is false for most of a session and a reader written around
- * truthiness would publish "no snapshot yet" for the ordinary case. `fieldValue`
- * itself is safe (`?? null` only replaces null and undefined); this is what stops
- * a later reader from losing it.
+ * A boolean read that keeps `false`, the ordinary answer; a truthiness-based reader would turn
+ * it into "no snapshot yet".
  */
 function flagAt(source: unknown, field: string): boolean | null {
   const value = fieldValue(source, field);
@@ -65,11 +54,8 @@ function countAt(source: unknown, field: string): number | null {
 }
 
 /**
- * The six economy reads off the game's own world object.
- *
- * One `proximityReader` per gated key, held for the life of the backend, so the
- * wrapper is rebuilt only when the game swaps the object behind it rather than on
- * every access.
+ * The economy reads off the game's own world object. One `proximityReader` per gated key, held
+ * for the backend's life, so a wrapper is rebuilt only when the game swaps the object.
  */
 function economyReads(world: unknown, hasSelf: () => boolean): EconomyReads {
   const market = proximityReader<MarketInfo>();
@@ -102,9 +88,7 @@ function economyReads(world: unknown, hasSelf: () => boolean): EconomyReads {
       return vault(fieldValue(world, 'vaultInfo'), hasSelf());
     },
 
-    // A plain `readAs` rather than a proximity reader: null means an instance
-    // refuses the draw, which walking cannot fix, and an empty record is a real
-    // answer (the draw is allowed and the vault is empty).
+    // Not a proximity reader: null means an instance refuses the draw, which walking cannot fix.
     get craftVaultStock(): Readonly<Record<string, number>> | null {
       return readAs<Record<string, number>>(world, 'craftVaultStock');
     },

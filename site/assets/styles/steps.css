@@ -1,17 +1,12 @@
 /* The install funnel's step indicator.
  *
- * Its own file for two reasons: components.css had reached its 300-line ceiling,
- * and this component has an ORDER requirement the others do not. The `:target`
- * rules marking the current step are far more specific than the base rules they
- * override, so every base rule has to come first. Otherwise noDescendingSpecificity
- * fires, and the real problem it warns about is that a low-specificity rule
- * written later silently loses to a high-specificity one written earlier.
- *
- * Base first, state last. Keep it that way.
+ * Base first, state last. The `:target` state rules are far more specific than the
+ * base rules, so a base rule written after them silently loses (and
+ * noDescendingSpecificity fires).
  */
 
-/* Sticky, anchors only, no JavaScript. The current step is FILLED rather than
-   marked with an icon, so it survives with styles off and with images off. */
+/* Sticky, anchors only, no JavaScript. The current step is FILLED, not marked
+   with an icon, so it survives with images off. */
 .steps {
   margin: 0;
   padding: 0;
@@ -22,9 +17,8 @@
   border-bottom: 1px solid var(--border);
 }
 
-/* Separators BETWEEN cells only. `border-left` on every child drew a stray
-   hairline floating 24px in from each end, because the list carries the column's
-   gutter while the bar behind it is full-bleed. */
+/* Separators BETWEEN cells only: the list carries the column's gutter while the
+   bar is full-bleed, so an outer border would float in from each end. */
 .steps > li {
   flex: 1;
 }
@@ -65,9 +59,8 @@
   color: var(--muted);
 }
 
-/* Below this the names go and only the numbers remain. The QUALIFIER has to go
-   with them: on its own it read as "2 Chromium only", the qualifier describing
-   nothing. */
+/* Below this only the numbers remain. The qualifier goes too, or it describes
+   nothing ("2 Chromium only"). */
 @media (width <= 620px) {
   .step-name,
   .step-qualifier {
@@ -79,11 +72,9 @@
   }
 }
 
-/* The current step, taken from `:target` rather than from an attribute in the
-   markup. All three sections live on one page, so which step you are on is a
-   scroll position; marking one in the HTML meant step 1 claimed to be current
-   even while you were reading step 3. The first selector is the default before
-   anything has been clicked, and the rest track the ids in install-data.ts. */
+/* The current step comes from `:target`, since all steps share one page and a
+   step marked in the markup stays current while you read another. The first
+   selector is the default; the rest track the ids in install-data.ts. */
 body:not(:has(:target)) .steps a[href="#step-1"],
 body:has(#step-1:target) .steps a[href="#step-1"],
 body:has(#step-2:target) .steps a[href="#step-2"],

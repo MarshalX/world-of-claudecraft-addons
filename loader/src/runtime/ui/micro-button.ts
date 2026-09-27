@@ -1,19 +1,11 @@
 // A button on the game's micro-button rail.
 //
-// One insert rather than an observer, unlike the game menu: the rail is built
-// once with the rest of the HUD and the game never rebuilds it. It does not
-// exist before world entry though, so the caller waits for the HUD first (see
-// ui/hud-mount.ts).
+// One insert, not an observer: the game builds the rail once with the HUD, and the caller
+// waits for the HUD first (ui/hud-mount.ts). The loader's button goes after the game-menu
+// button, and addon buttons follow it in registration order.
 //
-// The loader's own button is placed after the game-menu button, which is the
-// rail's last entry, so the two menu routes sit together and the ordering does
-// not depend on how many buttons the game adds above them. Addon buttons follow
-// it, in the order the addons asked for them.
-//
-// The glyph is an inline SVG rather than the game's data-icon mechanism. The
-// game hydrates [data-icon] from a closed registry of its own names, so
-// borrowing that attribute would either render nothing or, worse, silently pick
-// up whatever the game later assigns to a name we guessed.
+// The glyph is inline SVG. Do not use the game's [data-icon]: it hydrates from a closed
+// registry of the game's own names, so a guessed name renders nothing or the wrong icon.
 
 import { ANCHORS, GAME_MICRO_BUTTON_CLASS } from './anchors.ts';
 
@@ -21,11 +13,8 @@ import { ANCHORS, GAME_MICRO_BUTTON_CLASS } from './anchors.ts';
 const BUTTON_ID = 'woc-addons-micro-button';
 
 /**
- * The id prefix every loader-owned rail button carries.
- *
- * A new button goes after the LAST one already there rather than after the
- * loader's own, or every addon button would be inserted directly after it and
- * the group would come out in reverse registration order.
+ * The id prefix every loader-owned rail button carries. A new button goes after the LAST
+ * one, or the group would come out in reverse registration order.
  */
 const LOADER_BUTTON_SELECTOR = '[id^="woc-"]';
 
@@ -71,11 +60,7 @@ export function mountMicroButton(deps: MicroButtonDeps): MicroButton {
   button.innerHTML = deps.glyph ?? GLYPH;
   button.addEventListener('click', deps.onOpen);
 
-  // After the last loader button already on the rail, so the whole loader group
-  // stays together and in registration order; otherwise after the game-menu
-  // button, which is where the loader's own goes. after() rather than
-  // appendChild() keeps the group in place even if the game appends its own
-  // buttons later.
+  // after() rather than appendChild() keeps the group in place if the game appends later.
   const ours = [...column.querySelectorAll(LOADER_BUTTON_SELECTOR)];
   const anchor = ours.at(-1) ?? column.querySelector(ANCHORS.microOptions);
   if (anchor === null) {

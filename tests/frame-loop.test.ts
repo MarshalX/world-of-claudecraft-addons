@@ -1,15 +1,8 @@
 // @vitest-environment happy-dom
 
-// The one animation-frame loop the loader runs.
-//
-// Three things are worth pinning and they are the three reasons this exists as an
-// object rather than as a set of callbacks. The PHASE ORDER, because an addon's
-// handler moves things and the loader's paint pass reads what moved, so a paint
-// that ran first would put every anchor one frame behind. The IDLE behaviour,
-// because a session with no animating addon and no anchor has to cost nothing.
-// And the FREEZE, because addon handlers are held while the loader's own paint
-// pass keeps running, which is the opposite of what `woc.requestAnimationFrame`
-// does and is the reason `onFrame` is a different primitive rather than a wrapper.
+// The one animation-frame loop the loader runs. Handlers run before paints (a paint first would
+// leave every anchor a frame behind), it costs nothing when idle, and a freeze drops addon ticks
+// while the loader's own paint pass keeps running.
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { MAX_FRAME_DT_MS } from '../loader/src/runtime/frame-loop.ts';
@@ -21,7 +14,6 @@ afterEach(() => {
 });
 
 describe('the two phases', () => {
-  // The whole reason this is one object: registration order must not decide it.
   it('runs every handler before every paint, whatever order they subscribed in', () => {
     const clock = createFrameClock();
     const ran: string[] = [];
@@ -119,8 +111,7 @@ describe('the delta', () => {
     expect(seen).toEqual([0, 33]);
   });
 
-  // A tab returning from the background otherwise hands an addon half a minute to
-  // multiply a sweep by. The clamp is the game's own.
+  // The clamp is the game's own.
   it('is clamped for a tab that came back from the background', () => {
     const clock = createFrameClock();
     const seen: number[] = [];
@@ -191,10 +182,8 @@ describe('a callback that throws', () => {
 });
 
 describe('the freeze', () => {
-  // The difference from `woc.requestAnimationFrame`, and the reason onFrame
-  // exists: a one-shot has to be HELD because an addon re-arms inside its own
-  // handler, and a dropped link kills the chain. This loop is the loader's, so
-  // there is no chain and a frozen tick is simply not delivered.
+  // Unlike `woc.requestAnimationFrame`, which must HOLD a one-shot or the addon's re-arm chain
+  // breaks, this loop has no chain to break.
   it('drops a frozen tick rather than queueing it', () => {
     const clock = createFrameClock();
     const handler = vi.fn();
@@ -210,8 +199,7 @@ describe('the freeze', () => {
     expect(handler).toHaveBeenCalledTimes(1);
   });
 
-  // Diagnostics stays live under a freeze by the same rule: everything the loader
-  // runs for ITSELF keeps running, so an anchor still follows a camera that moves.
+  // What the loader runs for itself keeps running, so an anchor still follows the camera.
   it('keeps the loader own paint pass running', () => {
     const clock = createFrameClock();
     const paint = vi.fn();

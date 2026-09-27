@@ -1,11 +1,5 @@
-// One addon's keybind overrides.
-//
-// The store's job is to answer "what combo is this id on right now", where the
-// answer is the player's override if there is one and the manifest's default
-// otherwise, and to announce every change so a live binding can move. The case
-// most easily got wrong is the REMOVAL of an override in another tab: the
-// binding has to go back to the manifest default, which a naive diff of two
-// records reports as nothing having changed.
+// One addon's keybind overrides: the player's override if there is one, else the manifest
+// default, with every change announced so a live binding can move.
 
 import { describe, expect, it, vi } from 'vitest';
 import { createKeybindStore } from '../loader/src/runtime/keys/store.ts';
@@ -152,9 +146,7 @@ describe('changes from another tab', () => {
     expect(seen).toHaveBeenCalledWith('toggle', 'Ctrl+KeyM');
   });
 
-  // The case a record diff gets wrong. An override REMOVED elsewhere has to move
-  // the live binding back to the manifest default, and nothing in the new record
-  // mentions the id at all.
+  // A naive record diff misses this: the new record does not mention the removed id at all.
   it('announces the manifest default when an override is removed elsewhere', () => {
     const { hub, store } = open();
     hub.remote(NS, KEYBINDS_KEY, { toggle: 'Ctrl+KeyM' });

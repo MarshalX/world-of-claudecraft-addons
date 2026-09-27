@@ -1,7 +1,4 @@
-// A net hub wired to controllable taps, a controllable clock, and fake timers.
-//
-// The hub owns no global, so driving it means calling the taps the socket hook
-// would have called. That is the same entry point a real frame takes.
+// A net hub over controllable taps, clock and timers, driven as the socket hook drives it.
 
 import { createNet, type NetApi } from '../../loader/src/runtime/api/net.ts';
 import { DisposalBag } from '../../loader/src/runtime/disposal.ts';

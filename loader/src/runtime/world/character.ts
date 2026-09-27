@@ -1,18 +1,7 @@
 // The character sheet: progression, deeds, talents and profession skills.
 //
-// Every field here rides the self payload and was confirmed present in a
-// recorded session, which is what earns it a place: the standing rule is that a
-// field is published because it was found on the WIRE, never because it is
-// readable on the client object.
-//
-// One member of the game's own professions facet is deliberately left out.
-// `professionsState` is marked as a stub in the game's source and carries a
-// trail of in-flight issue numbers, so its shape is the least settled thing in
-// reach. `craftingIdentity` was left out for the same reason and no longer is:
-// the server sends it as one atomic value and every field on it is a scalar or a
-// sorted id array, and it carries the `synced` flag that says whether the craft
-// skill counters beside it are real zeroes or a client-side default nothing has
-// filled in yet. See `crafting.ts`.
+// Every field here rides the self payload. `professionsState` is deliberately left out: the game
+// marks it a stub and its shape is unsettled.
 
 import { fieldArray, fieldNumber, fieldString, fieldValue } from '../net/frames.ts';
 import { type CraftingIdentity, readCraftingIdentity } from './crafting.ts';
@@ -81,10 +70,8 @@ interface ToolEffectSlot {
 
 interface ProfessionInfo {
   /**
-   * Craft id to skill. Independent, additive counters.
-   *
-   * All-zero until `identity.synced`, which is why the flag is published: the
-   * client fills this from a default and the server's first `cprof` replaces it.
+   * Craft id to skill. Independent, additive counters. A client default of all zeroes until
+   * `identity.synced`.
    */
   craftSkills: Readonly<Record<string, number>>;
   /** Gathering profession id to proficiency, the same kind of counter. */
@@ -208,12 +195,7 @@ function readTalents(world: unknown): TalentInfo | null {
 }
 
 /**
- * One slot, or null for a row missing either of the two ids that name it.
- *
- * Lenient about the rest and strict about those two, matching the art readers: a
- * row with no `professionId` names no tool, so keeping it would put an entry in
- * the list that nothing can ever be matched against.
- */
+/** One slot, or null for a row missing either of the two ids that name it. */
 function toolEffectSlot(row: unknown): ToolEffectSlot | null {
   const professionId = fieldString(row, 'professionId');
   const effectId = fieldString(row, 'effectId');

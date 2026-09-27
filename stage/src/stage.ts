@@ -1,23 +1,9 @@
-// One addon, mounted in a real browser over a scripted fake world.
+// One addon, mounted in a real browser over a scripted fake world, for what a Vitest
+// suite cannot see: how it LOOKS.
 //
-// This is `tests/fakes/addon.ts` with a screen in front of it. The addon goes
-// through the REAL `loadAddon`, over the REAL shared services, and draws with the
-// REAL kit and stylesheet: nothing here reimplements a frame or a bar, because a
-// picture of a reimplementation is a picture of the wrong thing.
-//
-// It exists because a Vitest suite cannot see what an addon looks like. Every
-// `.css` import resolves to `''` under Vitest and happy-dom lays nothing out, so
-// the agreement between a class in `ui/kit/` and its rule in `ui/styles/` has only
-// ever been checkable by running the loader against a live game. That is also why
-// most addons here still ship with no `preview.png`: the states worth a picture
-// (a taunt holding a mob, a loot roll, one debuff school ticking) cannot be
-// summoned on demand by playing.
-//
-// The fakes are shared with the suites rather than rewritten, and that is the
-// point rather than thrift. A scenario and its addon's suite describe the same
-// world in the same words, so a scenario is usually the suite's `start()` with
-// the assertions taken out, and neither can drift into describing a game the
-// other would not recognise.
+// The addon goes through the REAL `loadAddon`, shared services, kit and stylesheet;
+// nothing here reimplements a frame or a bar. The fakes are the suites' own, so a
+// scenario and its addon's suite describe the same world in the same words.
 
 import type { NetState } from '../../loader/src/runtime/net/state.ts';
 import type { FrameBox } from '../../loader/src/runtime/ui/frame/geometry.ts';
@@ -37,12 +23,8 @@ import {
 } from './draft.ts';
 
 /**
- * Who the stage is logged in as.
- *
- * The pair the shared fake answers `character()` with, repeated here because a
- * seeded frame box is keyed on it and the two have to agree: a box stored against
- * anyone else is one the loader looks for and does not find, which reads as the
- * seeding silently doing nothing.
+ * Who the stage is logged in as. Must match what the shared fake answers `character()`
+ * with, or a seeded frame box is silently never found.
  */
 const CHANNEL = 'pbe';
 const CHARACTER = 'Claudemoon/Marshal';
@@ -54,12 +36,8 @@ interface FrameState {
 }
 
 /**
- * Let a pending frame restore land.
- *
- * Three microtask turns, which is what the suites wait and what a frame's stored
- * box and visibility take to come back out of storage. Written out rather than
- * looped, because `noAwaitInLoops` is right in general and this is not a loop
- * over work: it is one fixed number of turns with nothing to parallelise.
+ * Let a pending frame restore land: three microtask turns, as the suites wait. Written out
+ * because `noAwaitInLoops` forbids the loop.
  */
 async function settleFrames(): Promise<void> {
   await Promise.resolve();
@@ -69,37 +47,26 @@ async function settleFrames(): Promise<void> {
 
 /** The controls a scenario drives its world with, once the addon is up. */
 interface Stage extends WorldDraft {
-  /** Run the world watcher once, which is what publishes a change to addons. */
+  /** Run the world watcher once, publishing a change to addons. */
   poll: () => void;
-  /** Advance the loader's own frame loop, which is what `woc.onFrame` rides. */
+  /**
+   * Advance the loader's own frame loop, which `woc.onFrame` and `woc.paint` ride. An addon
+   * that paints through `woc.paint` draws nothing until a scenario calls this.
+   */
   frame: (count?: number) => void;
-  /** Move the addon-visible clock, which is what `woc.now()` reads. */
+  /** Move the monotonic clock `woc.now()` reads. */
   advance: (ms: number) => void;
   /**
-   * Let this much WALL clock pass, which is what a stored stamp is read against.
-   *
-   * The pair of `advance` rather than a rename of it, because the two clocks come
-   * apart and an addon that survives a reload is written to the difference:
-   * `woc.now()` is monotonic and restarts from near zero on every page load, so
-   * anything counting a six hour respawn down stamps the kill with
-   * `woc.wallClock()` instead. A scenario about one of those has to be able to say
-   * that a kill happened twenty minutes ago, and this is the only way to say it.
-   *
-   * Forward only, and a delta rather than a stamp: a scenario knows how long ago
-   * something happened and has no business knowing what epoch the fake started at.
+   * Let this much WALL clock pass, the clock `woc.wallClock()` reads and a stored stamp is
+   * compared against. Separate from `advance` because `woc.now()` restarts on every page
+   * load. Forward only, as a delta, so a scenario never needs the fake's epoch.
    */
   elapse: (ms: number) => void;
   /** Deliver one inbound socket frame, as the socket hook would. */
   inbound: (frame: unknown) => void;
   /**
-   * Override part of what `net.state` answers.
-   *
-   * Here for the reason it is on the shared harness: `latencyMs` is the one field
-   * of it addons actually draw and it CANNOT be produced by driving this fake,
-   * since it is measured by pairing an outbound input frame's sequence number
-   * against a later snapshot's acknowledgement and only the inbound tap is wired.
-   * A scenario that wants `cadence`'s latency band therefore states a round trip,
-   * exactly as that addon's suite does.
+   * Override part of what `net.state` answers. `latencyMs` needs an outbound input frame
+   * paired with a later ack, and only the inbound tap is wired, so a scenario states it.
    */
   netState: (patch: Partial<NetState>) => void;
   /** Press a combo in the manifest's own spelling, e.g. 'Alt+Shift+KeyD'. */
@@ -107,23 +74,13 @@ interface Stage extends WorldDraft {
   /** Let a pending frame restore land before the next step reads the DOM. */
   settle: () => Promise<void>;
   /**
-   * Say something on the bus AS another addon, which is how a scenario stands in for a
-   * companion an addon names.
-   *
-   * The fqid is the sender rather than a label: the hub stamps it, subscribers filter on
-   * it, and an addon that names a companion is subscribed to that companion's id. So a
-   * picture of the recommended pair is a scenario emitting what the companion emits,
-   * which is also the only honest way to draw one, since the companion's own addon is not
-   * mounted on the stage.
+   * Emit on the bus AS another addon (`from` is its fqid), standing in for a companion that
+   * is not mounted on the stage.
    */
   publish: (from: string, topic: string, payload: unknown) => void;
   /**
-   * Turn the loader's arrange mode on, which is the only thing that lets a BARE
-   * frame be dragged or resized at all.
-   *
-   * Here because the stage is where a person picks a panel up with a real pointer,
-   * and because no scenario can reach the mode otherwise: the keybind that flips it
-   * belongs to runtime/boot.ts, which the stage does not run.
+   * Turn the loader's arrange mode on, the only way a BARE frame can be dragged or resized.
+   * Its keybind lives in runtime/boot.ts, which the stage does not run.
    */
   arrange: (on: boolean) => void;
 }
@@ -131,15 +88,9 @@ interface Stage extends WorldDraft {
 /**
  * One picture worth taking of one addon.
  *
- * Two steps rather than one, and which one a line belongs in is a real decision.
- * `world` runs BEFORE the addon body, so it describes the session the addon woke
- * up in: the class, the spellbook, the bags, anything already true at login.
- * `run` runs after, so it describes what then happened: a cooldown starting, a
- * mob pulling, a number moving.
- *
- * When in doubt put it in `world`. A fact stated late still reaches the addon
- * through a poll, so the shot usually looks right, and the cases where it does
- * not are the ones nobody checks. See WorldDraft for the one that got away.
+ * `world` runs BEFORE the addon body: the class, the spellbook, the bags, anything true at
+ * login. `run` runs after: a cooldown starting, a mob pulling. When in doubt use `world`;
+ * a fact stated late usually still looks right, and the exceptions go unnoticed.
  */
 interface Scenario {
   /** Unique within the addon, and the value of the `scenario` URL parameter. */
@@ -151,54 +102,25 @@ interface Scenario {
   /** Data files as the host caches them: raw TEXT keyed by the declared path. */
   data?: Record<string, string>;
   /**
-   * Frame boxes and visibility, seeded as the loader's own per-character state.
-   *
-   * For the case cropping cannot fix: an addon whose default box is the wrong
-   * SHAPE for a picture. `combat-meter` opens at a fixed 320px height whatever it
-   * is holding, so a shot of four rows is nearly half empty, and no crop can
-   * recover the space because the panel really is that tall. Keyed by the
-   * addon's own frame id, which is its persistence key.
-   *
-   * Seeded rather than set afterwards because a frame restores its box once, on
-   * the way up. Same namespace and key derivation the loader uses, so a scenario
-   * cannot describe a box the loader would not restore.
+   * Frame boxes and visibility, keyed by frame id and seeded as the loader's per-character
+   * state before mount (a frame restores once, on the way up). For a default box whose SHAPE
+   * cropping cannot fix. A box shorter than the frame's declared height is clamped back up.
    */
   frames?: Record<string, FrameState>;
   /**
-   * This scenario is part of what `pnpm shots` photographs for this addon.
+   * Part of what `pnpm shots` photographs. At least one scenario must carry it; the tool
+   * never picks by position.
    *
-   * At least one must carry it, and the tool fails on none rather than choosing.
-   * Position would otherwise decide, which is invisible: reordering the array to
-   * read better would silently change what ships, and `idle` is first in more
-   * than one file.
-   *
-   * SEVERAL may carry it, and then the preview is a sheet of them side by side in
-   * array order. That is for an addon whose LAYOUT is a setting, where a picture
-   * of one configuration is a picture of half the addon: `cooldown-bars` draws
-   * either a column of bars or a strip of swept icons, and which one it shows on
-   * its Browse row should not be a coin toss. Each panel is its own iframe, so
-   * two panels of one addon are two separate loader instances rather than one
-   * addon mounted twice. Every panel of a multi-panel sheet needs a `caption`.
+   * SEVERAL may carry it, for an addon whose LAYOUT is a setting: the preview is then a sheet
+   * of them side by side in array order, each needing a `caption`.
    */
   preview?: true;
-  /**
-   * The title drawn under this panel in a sheet.
-   *
-   * Separate from `label`, which is what the picker's dropdown says, because the
-   * two are read in different places: a dropdown wants "Five draining bars" and a
-   * picture wants "Bars". Left out on a single-panel preview, which has nothing
-   * to distinguish itself from and so nothing to title.
-   */
+  /** The title under this panel in a multi-panel sheet; `label` is the picker's. */
   caption?: string;
   /**
-   * What the picture shows, for someone who cannot see it.
-   *
-   * Required on the preview scenario, because `pnpm shots` writes it into
-   * `addon.json` and a preview with no description is one the manager and the
-   * site both render as an unlabelled image. It lives HERE rather than only in
-   * the manifest so the sentence and the fixture that produces it are edited
-   * together: an alt text describing rows a scenario no longer draws is the
-   * failure this placement is trying to avoid.
+   * What the picture shows, for someone who cannot see it. Required on a preview scenario;
+   * `pnpm shots` copies it into `addon.json`. Kept beside the fixture so the two are edited
+   * together.
    */
   alt?: string;
   /** Shape the world the addon starts in. Runs before the body is evaluated. */
@@ -232,9 +154,7 @@ interface ControlDeps {
 /** The controls, bound to a harness that is already up. */
 function createControls(deps: ControlDeps): Stage {
   const { harness } = deps;
-  // The harness takes a STAMP, so the running total lives here: a scenario says
-  // how long ago something happened, and where the fake's epoch started is not
-  // something it should have to know or repeat.
+  // The harness takes a stamp, so the running total lives here.
   let wall = WALL_CLOCK_MS;
   return {
     ...deps.draft,
@@ -260,19 +180,14 @@ function createControls(deps: ControlDeps): Stage {
   };
 }
 
-/** The screen actually on show, rather than the suites' fixed 800x600. */
+/** The real screen, instead of the suites' fixed 800x600. */
 function screenViewport(): { w: number; h: number } {
   return { w: globalThis.innerWidth, h: globalThis.innerHeight };
 }
 
 /**
- * Read an art manifest for real, over the proxy `tools/stage-core.ts` runs.
- *
- * The suites hand both art readers a promise that never settles, which holds every
- * icon at its optimistic URL and every art name at null. That is the right default
- * for a case about a decision and the wrong one for a photograph: an addon that
- * LABELS a row from `ui.icon.itemArtName` draws raw item ids until the manifest
- * lands, so a stage without this photographs the fake rather than the addon.
+ * Read an art manifest for real, over the proxy `tools/stage-core.ts` runs. The suites'
+ * never-settling default would leave `ui.icon.itemArtName` null and photograph raw ids.
  */
 async function fetchJson(url: string): Promise<unknown> {
   const response = await fetch(url);
@@ -282,20 +197,7 @@ async function fetchJson(url: string): Promise<unknown> {
   return await response.json();
 }
 
-/**
- * Mount one addon, run its scenario, and hand back both halves.
- *
- * The scenario's own failure is left to the caller rather than swallowed: a
- * scenario that throws half way leaves a partly drawn addon on screen, and a
- * picture of that is worse than an error message, so `main.ts` reports it.
- */
-/**
- * Put a scenario's frame boxes where the loader will look for them.
- *
- * Before the addon runs, because a frame reads its stored box once as it comes
- * up. `mountAddon` takes a storage hub, so this seeds the same one it is handed
- * rather than reaching into it afterwards.
- */
+/** Seed frame boxes into the storage `mountAddon` is handed, before the addon runs. */
 async function seedFrames(
   storage: ReturnType<typeof createFakeStorage>,
   fqid: string,
@@ -308,6 +210,10 @@ async function seedFrames(
   );
 }
 
+/**
+ * Mount one addon and run its scenario. A scenario's failure propagates, so `main.ts` reports
+ * it instead of photographing a half-drawn addon.
+ */
 async function mountScenario(input: MountInput): Promise<MountedStage> {
   const player = createPlayer();
   const entities = new Map<number, Fake>([[PLAYER_ENTITY.id, player]]);
@@ -332,9 +238,7 @@ async function mountScenario(input: MountInput): Promise<MountedStage> {
     manifest: input.manifest,
     source: input.source,
     storage,
-    // The renderer rides the same handle the world does, because that is where the
-    // game keeps it: an addon reads the world and the loader reads the renderer off
-    // one object, and splitting them here would be a shape no session ever has.
+    // One object carries the world and the renderer, as in the game.
     game: Promise.resolve({ world: draft.world, renderer: camera.renderer }),
     settings: scenario.settings ?? {},
     data: scenario.data ?? {},
@@ -350,10 +254,7 @@ async function mountScenario(input: MountInput): Promise<MountedStage> {
   return { stage, harness, dispose: harness.dispose };
 }
 
-// The two draft types are re-exported by name, so an addon's `stage.ts` has one module to
-// import its scenario shapes from: `WorldDraft` is what a scenario's own `world` step is handed
-// and `Stage` extends it, so splitting them across two import lines would be a seam that says
-// nothing about how a scenario is written.
+// Re-exported so an addon's `stage.ts` imports every scenario shape from one module.
 export type { Fake, WorldDraft } from './draft.ts';
 export type { FrameState, MountedStage, Scenario, ScenarioRegistry, Stage };
 export { mountScenario };

@@ -13,7 +13,7 @@ install an addon, configure it, all inside the game.
 
 ## What it is
 
-**Fully external to the game.** No game source is modified and no build is forked. The loader reaches the game only through surfaces a browser already gets: the `window.__game` global, the WebSocket, HUD DOM ids, and the audio pack. That constraint is the whole design, and it is why this can exist at all without the game's cooperation.
+**Fully external to the game.** No game source is modified and no build is forked. The loader reaches the game only through surfaces a browser already gets: the `window.__game` global, the WebSocket, HUD DOM ids, and the audio pack.
 
 It is also **read-only by design**. No send API, no synthetic input, no automation of play. Addons reformat, aggregate and re-present information the player already has.
 
@@ -33,8 +33,6 @@ Works on all three deployments:
 4. Open the game, press <kbd>Esc</kbd>, and look for **Addons** at the bottom of the Game Menu.
 
 **[Full instructions, per browser →](https://woc.marshal.dev/install)**
-
-The per-browser procedure lives on the site rather than here, because two copies of a fiddly set of steps means one of them is wrong.
 
 ## What ships with it
 
@@ -113,7 +111,7 @@ No export, no registration call, and no cleanup: the file is evaluated as a func
 
 **[Authoring docs →](https://woc.marshal.dev/docs/)** covers the manifest, the whole `woc` surface, publishing, and the patterns nobody derives from a signature. The full type surface is published as [`@woc-addons/types`](packages/types).
 
-One worth internalising before you start: a field can be declared on the game's entity, be readable, and never be sent. `inCombat` is one, and it holds `false` for a whole session. Check what you read against the wire, not against a type.
+One worth internalising before you start: a field can be declared on the game's entity, be readable, and never be sent. `inCombat` is one on every unit except your own, where it holds `false` for the whole session. Check what you read against the wire, not against a type.
 
 ## Trust
 
@@ -139,7 +137,7 @@ pnpm cues       # regenerate the sound-cue union from a deployed game's pack
 pnpm icons      # regenerate the skill-icon union from its per-class art manifests
 ```
 
-Develop against `pbe` or `pbe2`. They run ahead of live, so game drift shows up there first.
+Develop against `pbe` or `pbe2`, where unshipped game changes appear. They diverge from live in both directions, so no channel is a superset of another.
 
 A release is one button: Actions, Release, Run workflow, with the version typed into the form. The run gates the tree, builds and checksums the userscript, tags it, publishes the GitHub release, publishes `@woc-addons/types` if its version moved, regenerates `CHANGELOG.md` and redeploys the site.
 

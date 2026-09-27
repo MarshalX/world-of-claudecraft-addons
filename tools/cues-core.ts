@@ -1,14 +1,5 @@
-// Turning the game's sound pack into a cue-name union authors can autocomplete.
-//
-// The reading and the rendering live here, apart from the fetch, so a Vitest
-// suite can drive both without a network. `tools/cues.mjs` is the CLI around
-// them, the same split as manifests.ts and serve-core.ts.
-//
-// A cue is not a file, and the difference is the whole reason this is generated
-// from the pack rather than from a directory listing: the pack collapses a
-// numbered family into one cue with several variants, so the deployed files
-// outnumber the cues by more than two to one. Anything counting files would
-// offer authors a couple of hundred names that do not resolve.
+// Turning the game's sound pack into a cue-name union authors can autocomplete. The fetch lives in
+// tools/cues.mjs. Read from the pack, never a directory listing: a numbered file family is one cue.
 
 const GENERATED = 'packages/types/cues.generated.d.ts';
 
@@ -27,11 +18,8 @@ function byCodePoint(a: string, b: string): number {
 }
 
 /**
- * Every cue the pack names, sorted and deduplicated.
- *
- * Throws rather than returning an empty list for a payload that is not a pack.
- * An empty union would generate a file that compiles, publishes, and quietly
- * takes autocomplete away from every author.
+ * Every cue the pack names, sorted and deduplicated. Throws rather than returning empty, since an
+ * empty union compiles and silently removes autocomplete.
  */
 function cueNames(pack: unknown): string[] {
   if (typeof pack !== 'object' || pack === null) {

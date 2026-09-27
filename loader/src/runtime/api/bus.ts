@@ -1,21 +1,8 @@
-// The woc.bus surface handed to addons. Mirrors packages/types/bus.d.ts.
+// The woc.bus surface, mirroring packages/types/bus.d.ts. Binds the fqid, bags every subscription,
+// and silences a disabled addon's emits, which are synchronous calls into other addons.
 //
-// A facade over one hub, doing three things the hub cannot do for itself: it
-// binds the addon's fqid so `emit` cannot claim to be somebody else, it puts
-// every subscription in the addon's disposal bag so disabling one stops its
-// handlers without the addon writing cleanup, and it stops a disabled addon
-// emitting at all. The last matters because an emit is a synchronous call into
-// other addons' code: a stray timer firing after disable would otherwise wake
-// handlers on behalf of an addon that is no longer running.
-//
-// There is no request-response here and there will not be. An addon awaiting a
-// reply from an addon that may be disabled, may never have been installed, or
-// may simply not answer is a hang with no timeout anybody chose, and the shape
-// invites it: `await bus.ask(...)` looks like it cannot fail. Publish and
-// subscribe both ways instead.
-//
-// `follow` asks once at subscribe and `publish` announces once at construction,
-// and it takes both for addon start order not to matter.
+// No request-response, ever: awaiting a reply from an addon that may not answer is a hang with no
+// timeout. `follow` asks once and `publish` announces once, so start order does not matter.
 
 import type { BusHub, BusMessage } from '../bus/hub.ts';
 import { ANY_SENDER } from '../bus/hub.ts';
@@ -31,11 +18,7 @@ interface Publication {
 interface BusApi {
   /** Publish to every addon listening for this topic from you. */
   emit: (topic: string, payload?: unknown) => void;
-  /**
-   * Listen. `from` is the publishing addon's fqid, or `'*'` for any of them.
-   *
-   * You never receive your own messages, whichever you pass.
-   */
+  /** `from` is the publisher's fqid, or `'*'`. You never receive your own messages. */
   on: (from: string, topic: string, handler: (message: BusMessage) => void) => Teardown;
   /**
    * Answer `<topic>:ask` from any sender with `produce()`, and announce when
@@ -57,7 +40,7 @@ interface BusDeps {
   onError: (where: string, err: unknown) => void;
 }
 
-/** Derived rather than declared: topic names are content, and not the loader's to own. */
+/** Derived, since topic names are content the loader does not own. */
 function askTopic(topic: string): string {
   return `${topic}:ask`;
 }
@@ -109,8 +92,7 @@ function createBus(deps: BusDeps): BusApi {
         deps.onError(`the bus handler for '${topic}'`, err);
       },
     });
-    // Both the bag and the addon hold it, so an explicit call drops both and
-    // disabling the addon drops it whether or not the addon ever called.
+    // An explicit call also drops the bag entry.
     const drop = deps.bag.add(off);
     return () => {
       drop();

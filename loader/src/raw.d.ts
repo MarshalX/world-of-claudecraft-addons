@@ -1,9 +1,5 @@
-// The non-TypeScript module shapes this project imports as text.
-//
-// `*.js?raw` is Vite's raw suffix, which the host uses to inline the pre-bundled
-// runtime; declaring it as a wildcard means a typecheck run does not need the
-// generated bundle to exist yet. `*.css` is the loader stylesheet, which
-// loader/build-runtime.mjs loads as text so it can be injected as one <style>.
+// Module shapes imported as text. The `*.js?raw` wildcard lets a typecheck run before the
+// runtime bundle has been generated.
 
 declare module '*.js?raw' {
   const source: string;
@@ -15,16 +11,12 @@ declare module '*.json?raw' {
   export default source;
 }
 
-// A generated declaration file read as TEXT, which is how the suite that guards
-// it against hand-edits compares it with what its generator writes.
+// Generated files read as text by the suites that guard them against hand-edits.
 declare module '*.d.ts?raw' {
   const source: string;
   export default source;
 }
 
-// A generated VALUE module read as text, for the same guard. The runtime carries
-// the harmful-kind set as a value because nothing serves it, so that generator
-// writes a `.ts` as well as a `.d.ts` and both need pinning against a hand-edit.
 declare module '*.generated.ts?raw' {
   const source: string;
   export default source;

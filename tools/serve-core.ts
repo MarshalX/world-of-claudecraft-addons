@@ -1,8 +1,5 @@
-// What the dev server decides, separate from how it answers.
-//
-// The two decisions worth testing are here rather than inside a request handler:
-// what the index says, and whether a path may be served at all. tools/serve.mjs
-// is the socket around them.
+// What the dev server decides (the index, and whether a path may be served), separate from the
+// socket in tools/serve.mjs.
 
 import { createHash } from 'node:crypto';
 import { join, normalize } from 'node:path';
@@ -13,13 +10,7 @@ import { addonDirs, newestManifestMs, ROOT, readAddon } from './manifests.ts';
 /** Matched by shared/marketplace.ts LOCAL_ORIGIN and by the userscript @connect list. */
 const PORT = 5180;
 
-/**
- * The loopback interface only.
- *
- * This server hands out file contents from the working tree and has no
- * authentication, so binding it to every interface would put the repository on
- * the local network.
- */
+/** Loopback only: the server has no authentication and serves the working tree. */
 const HOST = '127.0.0.1';
 
 /** Only what an addon directory legitimately contains. */
@@ -28,10 +19,7 @@ const TYPES: Record<string, string> = {
   '.json': 'application/json; charset=utf-8',
   '.css': 'text/css; charset=utf-8',
   '.svg': 'image/svg+xml',
-  // An addon's preview. Added when previews moved into the addon directory: the
-  // manager loads one from the local source exactly as it does from GitHub, and
-  // an image handed over as application/octet-stream is a picture that renders
-  // by sniffing at best and not at all behind a nosniff header.
+  // An addon's preview; as application/octet-stream it would not render behind nosniff.
   '.png': 'image/png',
 };
 
@@ -54,16 +42,8 @@ function contentType(path: string): string {
 }
 
 /**
- * The index, built from addons/*\/addon.json on every call.
- *
- * Generated rather than read from the committed marketplace.json, so saving a
- * manifest is visible on the next refresh instead of waiting for `pnpm index`.
- * It also means the dev index cannot diverge from what CI would accept, since
- * both go through the same reader.
- *
- * An invalid manifest is skipped rather than failing the whole index: a server
- * that answered 500 while an author was mid-edit on one addon would take away
- * every other addon they were testing at the same time.
+ * The index, built from addons/*\/addon.json on every call so a saved manifest shows on the next
+ * refresh. An invalid manifest is skipped so one mid-edit addon does not take down the rest.
  */
 function buildIndex(onSkipped?: (dir: string) => void): MarketplaceIndex {
   const addons: MarketplaceIndex['addons'] = [];
@@ -84,20 +64,15 @@ function buildIndex(onSkipped?: (dir: string) => void): MarketplaceIndex {
     schema: 1,
     name: 'Local dev server',
     maintainer: 'dev',
-    // The newest manifest's mtime, NOT the current time. The response body is
-    // what the ETag is taken over, so a clock in it would make every index
-    // request a fresh body and the conditional GET would never answer 304.
+    // An mtime, NOT the clock: the ETag is taken over the body, so a clock would defeat the 304.
     generated: new Date(newestManifestMs(kept)).toISOString(),
     addons,
   };
 }
 
 /**
- * The absolute path one request names, or null if it is outside addons/.
- *
- * `normalize` collapses `..` before the prefix check, so the check cannot be
- * walked past by a path that only looks like it is under addons/. The trailing
- * separator in the prefix matters: without it, `addons-other/` would pass.
+ * The absolute path one request names, or null if it is outside addons/. `normalize` runs before
+ * the prefix check, and the prefix keeps its trailing slash so `addons-other/` fails.
  */
 function resolveFile(pathname: string): string | null {
   let decoded: string;
@@ -117,19 +92,9 @@ function resolveFile(pathname: string): string | null {
 const LOADER_PATH = `/${LOADER_FILENAME}`;
 
 /**
- * The built userscript, so the loader can be installed from a URL.
- *
- * Installing from `file://` needs a per-manager permission that is off by
- * default and moves between browser versions, which makes "did the install even
- * happen" the first thing to debug in a session that was supposed to be about
- * something else. A localhost URL is the same flow a released loader uses, and
- * `localhost` is already in the userscript's @connect list.
- *
- * ONE EXACT PATH, matched before decoding and with no directory behind it. That
- * is the whole difference from resolveFile: this cannot be walked, because there
- * is nothing to walk. Serving loader/dist as a tree would put a second
- * traversal-guarded route in a server whose only real security property is that
- * it has exactly one.
+ * The built userscript, so the loader installs from a URL rather than `file://`. ONE EXACT PATH,
+ * matched before decoding: do not serve loader/dist as a tree, which would add a second route that
+ * needs a traversal guard.
  */
 function resolveLoader(pathname: string): string | null {
   if (pathname !== LOADER_PATH) {

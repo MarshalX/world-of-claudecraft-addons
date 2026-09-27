@@ -3,93 +3,38 @@
 //
 //   node addons/longwatch/generate.mjs --game=/path/to/world-of-claudecraft
 //
-// TWO TABLES, ONE READ. `rares.json` is this addon's own roster: the rares it can
-// place and count down. `mobs.json` is the rank service it PUBLISHES on the bus for
-// every other addon: which templates are elite, which are bosses, which are rare, and
-// which the game hides from a player who is not on the gating quest. None of that is
-// on the wire, and it comes off the same `MOBS` this already evaluates, so a second
-// generator reading the same table would be a second thing to regenerate on a game
-// release and a second way to be silently stale.
+// Two tables from one read of `MOBS`: `rares.json` is this addon's roster, and `mobs.json` is
+// the rank table it PUBLISHES on the bus (elite, boss, rare, quest-gated), none of which is on
+// the wire. One generator, so there is one thing to regenerate on a release.
 //
-// The checkout path is REQUIRED and is never defaulted, for the reason every other
-// generator here says so: nothing tells you a stale working tree is stale the way a
-// 404 tells you an endpoint moved, so a remembered path is a silent way to rebuild
-// the table against a game nobody is running. The target is proved to be the game by
-// its package NAME before a line of content is read, and the game's own version is
-// stamped into the output rather than typed here.
+// The checkout path is REQUIRED and never defaulted, since a stale checkout writes a plausible
+// table. The target is proved to be the game by package NAME first, and its version is stamped
+// into the output.
 //
-// WHAT IT READS, all of it under the checkout and none of it written to:
+// Reads package.json; src/sim/data.ts (MOBS, CAMPS, ZONES, `zoneContaining`);
+// src/sim/respawn_policy.ts (`resolveRespawnSeconds`, the whole countdown); and
+// src/ui/i18n.resolved.generated/en.ts (the name cross-check). It EVALUATES rather than parses,
+// through vite's SSR module loader, because MOBS and CAMPS are merges and the respawn is a
+// function with a precedence order.
 //
-//   package.json                          the version stamped into the output
-//   src/sim/data.ts                       MOBS for the rare, elite, boss and quest-gate
-//                                         flags and the name, CAMPS for where each one
-//                                         stands, ZONES and `zoneContaining` for which
-//                                         zone that is
-//   src/sim/respawn_policy.ts             `resolveRespawnSeconds`, which is the whole
-//                                         of the countdown this addon draws
-//   src/ui/i18n.resolved.generated/en.ts  the resolved English catalogue, for the
-//                                         name cross-check below
+// Which rares ship is MECHANICAL, never a list of names. A rare with NO CAMP (summoned by an
+// encounter, or inside an instance) has nothing to wait for. A rare in NO COVERED ZONE could
+// never pass `main.js`'s zone filter, and is skipped and named on stdout rather than failing.
+// Scope is judged BEFORE roster shape, so the shape guards below speak only about rares that
+// would otherwise ship.
 //
-// IT EVALUATES RATHER THAN PARSES, through vite's SSR module loader, the same way
-// `trailmark` and `lorebind` do: `MOBS` and `CAMPS` are merges of two dozen content
-// modules and the respawn resolution is a function with a precedence order, not a
-// literal. Running that function is the only way to be right about it.
+// The name is read from both `MOBS[id].name` and the catalogue, and a disagreement is a hard
+// failure: ids and display names already diverge for abilities, and a name no player sees
+// must not land in the table.
 //
-// WHICH RARES SHIP, and it is a MECHANICAL test rather than a curated list. Two
-// things leave a rare out, and the second is not a smaller version of the first.
+// It fails loudly when a carried rare gains a SECOND camp (two spawns cannot be one countdown,
+// and taking the first pins the wrong clearing), when a rare straddles a covered and an
+// uncovered zone, when the name sources diverge, or when a table comes back empty. Moved counts
+// only warn.
 //
-// NO CAMP means nowhere to be waited for, so a countdown would be a number with
-// nothing behind it. That is four of the game's twenty-four: three summoned by the
-// Nythraxis crypt encounter and one miniboss inside a dungeon instance.
-//
-// NO COVERED ZONE means the rare stands outside the four zones `main.js` resolves a
-// position against, so its row could never pass that filter whatever shape it had.
-// That is one, `drakemaw_broodlord`, added in game 0.34.0. It is SKIPPED AND NAMED on
-// stdout rather than failing the run, because leaving it out is a decision somebody
-// made rather than a defect, and a generator that refused every release would be run
-// once. Nineteen ship.
-//
-// Nothing here names any of the five. `CAMPS` says which rares have a home and
-// `ZONES` says which of those this addon can place, so the day one of the four gains
-// a camp, or the day this addon gains a fifth zone, the roster follows with no edit.
-//
-// SCOPE IS JUDGED BEFORE ROSTER SHAPE, and the order is load-bearing rather than
-// tidy. `drakemaw_broodlord` trips the one-camp guard below AND the zone filter, and
-// judging shape first stopped the whole run to report a roster problem about a rare
-// this addon was never going to carry: the message named four camps when the fact
-// that mattered was a fifth zone. Scope first means every shape guard below speaks
-// only about rares that would otherwise have shipped, which is the only thing that
-// keeps those guards worth reading.
-//
-// THE NAME IS CROSS-CHECKED RATHER THAN CHOSEN. `MOBS[id].name` and the catalogue's
-// `entities.mobs[id].name` both exist, and today all 221 agree. That is not a given:
-// an ABILITY's id and display name have already diverged in this game (`arcane_shot`
-// is shown everywhere as "Fell Shot"), and the same drift reaching mobs would put a
-// name in this file that no player sees. So both are read and a disagreement is a
-// hard failure rather than a silent pick, which is what turns that drift into
-// something somebody has to look at on the day it happens.
-//
-// WHAT A GAME RELEASE COULD INVALIDATE, each of which fails loudly:
-//
-//  - A rare THIS ADDON CARRIES gains a SECOND camp. The shipped shape is one point
-//    and one countdown per rare, and two camps means two spawns the addon would time
-//    as one. It refuses rather than taking the first, which would pin the wrong
-//    clearing. Scoped to a rare inside the four zones, per the ordering above; a rare
-//    outside them is left out before its shape is ever judged.
-//  - A rare STRADDLES a covered zone and an uncovered one. Unlike a wholly uncovered
-//    rare, that is not a scope decision anybody made: nothing here can say which of
-//    its clearings to time, so it stops rather than timing the covered ones alone.
-//  - The two name sources diverge, as above.
-//  - The counts move. A warning, since content growing is the ordinary case, except
-//    an empty table, which is a read that stopped working.
-//
-// DETERMINISTIC. Rows are sorted by id in code point order, keys in a fixed order,
-// trailing newline, so re-running against an unchanged checkout produces a byte
-// identical file and a real diff means real content moved. Sorted rather than kept in
-// the game's own `MOBS` order, which is what `trailmark` does and is right there for a
-// reason that does not hold here: that file's order fixes entity ids inside the game,
-// while nothing about this one is load-bearing, so the stable choice is the one a
-// content reshuffle cannot churn.
+// Rows are sorted by id in code point order with fixed key order and a trailing newline, so an
+// unchanged checkout regenerates byte-identical. Sorted rather than in `MOBS` order because
+// nothing here depends on the game's order and a content reshuffle must not churn the diff.
 
 import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -108,24 +53,17 @@ const RANKS_FILE = 'mobs.json';
 /** What the shipped file records about where it came from. */
 const SOURCE_NOTE =
   'src/sim/data.ts, src/sim/respawn_policy.ts, src/ui/i18n.resolved.generated/en.ts';
-/** The rank table reads less: no camp, no respawn policy, so it says so. */
+/** The rank table reads less: no camp, no respawn policy. */
 const RANKS_SOURCE_NOTE = 'src/sim/data.ts, src/ui/i18n.resolved.generated/en.ts';
 
 /**
- * The zones this addon can express, which is `ZONES` in `main.js` and the `zones`
- * setting's options in `addon.json`.
+ * The zones this addon can express, matching `ZONES` in `main.js` and the `zones` setting in
+ * `addon.json`; the three lists move together. A rare outside them is left out HERE rather than
+ * dropped at run time in front of a player.
  *
- * Stated here so a rare standing outside them is left out HERE rather than shipping a
- * row that `readRare` would drop at run time, in front of a player, with a warning
- * only they would see. All three lists move together or none of them do, so gaining a
- * zone is one edit in each of the three and the roster follows on the next run.
- *
- * FOUR OF THE GAME'S FOURTEEN, and adding the other ten buys nothing today. Nine hold
- * no rare at all. The tenth, the Drakelands, holds `drakemaw_broodlord` at FOUR camps
- * on a 100 second respawn, which is four spawns that are up most of the time rather
- * than the one point and one countdown a row here is, so admitting the zone without
- * redesigning the roster row would add ten dead options to the setting and still list
- * nothing. Measured against game 0.35.1.
+ * The game's other zones either hold no rare, or hold one this row shape cannot describe
+ * (`drakemaw_broodlord` has several camps on a short respawn, up most of the time), so admitting
+ * them would add dead options and list nothing.
  */
 const KNOWN_ZONES = new Set([
   'eastbrook_vale',
@@ -134,10 +72,12 @@ const KNOWN_ZONES = new Set([
   'veiled_hollow',
 ]);
 
-/** Roughly what the tables carried at game 0.34.0, so a thin read cannot pass. */
+/** Rough floors for each table, so a thin read cannot pass. */
 const EXPECTED_RARES = 24;
 const EXPECTED_CAMPED = 19;
-/** What `MOBS` carried at game 0.39.0: 64 elites, 20 rare elites, 25 bosses, 4 plain rares, 1 gate. */
+/**
+ * The ranked-template floor (elites, rare elites, bosses, plain rares and quest gates together).
+ */
 const EXPECTED_RANKED = 114;
 
 const GAME_ARG = '--game=';
@@ -176,11 +116,8 @@ function gamePathFrom(args) {
 }
 
 /**
- * Prove the path really is the game before loading a module out of it.
- *
- * The package NAME rather than the presence of a directory, because a wrong path that
- * happens to hold a `src` reads as plausible right up until the module graph fails to
- * resolve, and a resolution failure reads as the game having moved something.
+ * Prove the path is the game before loading a module out of it, by package NAME: a wrong path with
+ * a `src` fails later as a resolution error that reads as the game having moved something.
  */
 function checkoutVersion(root) {
   let parsed;
@@ -199,11 +136,8 @@ function checkoutVersion(root) {
 }
 
 /**
- * The game's own modules, loaded through its own module graph.
- *
- * `configFile: false` on purpose: the game's vite config is about building the game,
- * and running its plugin chain to read three modules would make this script depend on
- * a build pipeline it has no business knowing about.
+ * The game's modules, loaded through its own module graph. `configFile: false`, because the game's
+ * vite config is about building the game and its plugin chain is irrelevant here.
  */
 async function loadModules(root) {
   const server = await createServer({
@@ -226,11 +160,8 @@ async function loadModules(root) {
 }
 
 /**
- * The mob half of the resolved English catalogue.
- *
- * Reached by its documented path rather than searched for, so a bundle that reshapes
- * itself fails here instead of quietly yielding an empty object that would make every
- * name look absent and every cross-check pass.
+ * The mob half of the resolved English catalogue, reached by its documented path so a reshaped
+ * bundle fails here rather than yielding an empty object that makes every cross-check pass.
  */
 function mobCatalogue(catalogue) {
   const mobs = catalogue.en?.entities?.mobs;
@@ -276,10 +207,8 @@ function inCoveredZone(camp, data) {
 }
 
 /**
- * Which bucket a rare falls in, judged SCOPE FIRST: see the ordering note at the top.
- *
- * `covered` carries the camps back rather than a flag, so the caller works from the
- * filtered list and cannot accidentally re-admit a camp this decided to leave out.
+ * Which bucket a rare falls in, judged SCOPE FIRST. `covered` carries the camps back rather than a
+ * flag, so the caller cannot re-admit a camp this left out.
  */
 function placeRare(id, camps, deps) {
   if (camps.length === NONE) {
@@ -325,20 +254,13 @@ function rareRow(id, template, camps, deps) {
 }
 
 /**
- * The seconds a row records, which is a PAIR wherever the game authored a window.
+ * The seconds a row records: a PAIR wherever the game authored a `respawnWindow`, whose multiplier
+ * is drawn per death, since pinning one end shows a countdown wrong by the width of the window.
+ * `null` as the roll resolves the FLOOR, which is what `respawn` means; the ceiling rolls its own
+ * maximum. `respawnMax` is left off a fixed rare.
  *
- * A `respawnWindow` template draws its multiplier uniformly per death, so there is no one
- * number to record: game 0.38.0 put Grix the Tunnelking on [36, 72) and a table pinning
- * either end alone would show a countdown that is wrong by up to fifteen minutes with
- * nothing on screen saying so. `null` as the roll resolves the FLOOR, which is the game's
- * own way of asking for the fastest respawn and is what `respawn` has always meant here;
- * the ceiling is the same resolution with a roll that answers its own maximum. Both are
- * written for a windowed rare and `respawnMax` is left off a fixed one, so a fixed row is
- * byte-identical to what this generator has always written.
- *
- * The ceiling is the window's own upper bound although the draw is half-open and can never
- * reach it. A bound the game cannot hit is the right kind of wrong for a row that says
- * "back within": it is late by less than a second and never early.
+ * The ceiling is the window's upper bound although the draw is half-open and never reaches it: for
+ * "back within" that is late by under a second and never early.
  */
 function respawnBounds(id, template, camp, deps) {
   const respawn = deps.respawn.resolveRespawnSeconds(template, camp.center, undefined, null);
@@ -364,13 +286,9 @@ function respawnBounds(id, template, camp, deps) {
 }
 
 /**
- * Every rare this addon can place, sorted by id, plus a count of each kind left out.
- *
- * Neither exclusion is an editorial decision, which is why neither is a list of names:
- * `CAMPS` is what says a mob has a home, and `KNOWN_ZONES` is what says this addon can
- * place it. A rare summoned by an encounter or standing in a dungeon instance is on no
- * respawn cycle at all; a rare in a zone `main.js` does not resolve could not be shown
- * even with a countdown behind it.
+ * Every rare this addon can place, sorted by id, plus a count of each kind left out. `CAMPS` says a
+ * mob has a home and `KNOWN_ZONES` says this addon can place it; neither exclusion is a list of
+ * names.
  */
 function rareRows(deps) {
   const byMob = campsByMob(deps.data);
@@ -396,11 +314,8 @@ function rareRows(deps) {
 }
 
 /**
- * Which rank a template carries, or null for the ordinary mob most of them are.
- *
- * `boss` beats `elite` because that is the order the game's own nameplate resolves
- * them in, and `rare` is a SEPARATE flag rather than a third rank: the three are
- * independent in `MOBS` and a rare elite is an ordinary thing to be.
+ * Which rank a template carries, or null. `boss` beats `elite`, the order the game's nameplate
+ * resolves them in; `rare` is a SEPARATE flag, since a rare elite is ordinary.
  */
 function rankOf(template) {
   if (template.boss === true) {
@@ -413,15 +328,10 @@ function rankOf(template) {
 }
 
 /**
- * One rank row, carrying only what is not derivable from an id.
- *
- * `name` rides every row for the reason `agreedName` exists at all: a mob's id and
- * its display name have already diverged in this game, so a consumer that title-cased
- * the id would print a name no player sees, and no regeneration could fix it.
- *
- * `requiresQuestId` rides the same table rather than a second one. It is the same read
- * of `MOBS`, and it is what lets a display honour the game's own rule that a
- * quest-gated mob reads as inert scenery to anybody not on the quest.
+ * One rank row, carrying only what an id cannot give. `name` rides every row because ids and
+ * display names diverge, and title-casing the id prints a name no player sees. `requiresQuestId`
+ * rides here too, so a display can treat a quest-gated mob as inert scenery for anybody not on the
+ * quest.
  */
 function rankRow(id, template, mobs) {
   const row = { id, name: agreedName(id, template, mobs) };
@@ -439,12 +349,9 @@ function rankRow(id, template, mobs) {
 }
 
 /**
- * Every template carrying something the wire cannot say, sorted by id.
- *
- * ONLY THE FLAGGED SHIP, and an id a consumer does not find here is an ordinary mob.
- * That is safe because this is read from the whole of `MOBS` rather than from a
- * curated list, so it is complete by construction: the failure a hand-written roster
- * has, of decorating a few and silently missing the rest, cannot happen here.
+ * Every template carrying something the wire cannot say, sorted by id. Only flagged templates ship,
+ * so an absent id is an ordinary mob; that is safe because this reads the whole of `MOBS` and is
+ * complete by construction.
  */
 function rankRows(deps) {
   const rows = [];
@@ -457,7 +364,7 @@ function rankRows(deps) {
   return rows;
 }
 
-/** The same shape of guard the rares get, and for the same reason. */
+/** The same shape of guard the rares get, for the same reason. */
 function checkRanks(rows) {
   if (rows.length === NONE) {
     fail('read no elite, boss or rare template at all, which is a read that stopped working');
@@ -470,11 +377,8 @@ function checkRanks(rows) {
 }
 
 /**
- * Counts, so a table that stopped being read cannot pass quietly.
- *
- * A moved count is a WARNING, because content growing is the ordinary case and a
- * generator that refused every release would be run once. An EMPTY table is a
- * failure: that is a read that stopped working rather than content that moved.
+ * Counts, so a table that stopped being read cannot pass quietly. A moved count WARNS, since
+ * content growing is ordinary; an EMPTY table fails, since that is a broken read.
  */
 function checkCounts(rows, campless, offMap) {
   if (rows.length === NONE) {
@@ -494,13 +398,8 @@ function checkCounts(rows, campless, offMap) {
 }
 
 /**
- * Ordinary two-space JSON, which is what Biome formats this repository's JSON to.
- *
- * Deliberately NOT the one-row-per-line rendering `trailmark` uses. That shape exists
- * to keep a diff readable when rows MOVE, and rows here cannot: they are sorted by id,
- * so a retuned respawn is a one-line diff either way and a new rare is six added
- * lines in one place. Expanded also means `pnpm lint` formats this file like every
- * other JSON in the tree rather than needing an exemption to be left alone.
+ * Ordinary two-space JSON, as Biome formats it. Rows are sorted by id and never move, so the
+ * compact per-row rendering `trailmark` uses buys nothing.
  */
 function render(table) {
   return `${JSON.stringify(table, null, INDENT)}\n`;
@@ -508,8 +407,8 @@ function render(table) {
 
 async function main() {
   const root = gamePathFrom(process.argv.slice(2));
-  // The identity check FIRST, before the module graph is touched: a wrong path
-  // reported as a resolution failure reads as the game having moved something.
+  // The identity check FIRST, before the module graph is touched: a wrong path reported as a
+  // resolution failure reads as the game having moved something.
   const gameVersion = checkoutVersion(root);
   const { data, respawn, catalogue } = await loadModules(root);
   const deps = { data, respawn, mobs: mobCatalogue(catalogue) };
@@ -517,8 +416,7 @@ async function main() {
   checkCounts(rows, campless, offMap);
   const ranked = rankRows(deps);
   checkRanks(ranked);
-  // Beside this script rather than anywhere an argument could name, so the only files
-  // this can write are the two it exists to write.
+  // Beside this script, never a path an argument could name.
   const out = join(import.meta.dirname, OUT_FILE);
   writeFileSync(out, render({ gameVersion, source: SOURCE_NOTE, rares: rows }));
   const ranksOut = join(import.meta.dirname, RANKS_FILE);
@@ -530,9 +428,8 @@ async function main() {
       `${String(campless)} left out for having no camp, ` +
       `${String(offMap.length)} for standing outside the zones this addon carries`,
   );
-  // NAMED rather than counted, because this is the exclusion a reader would otherwise
-  // have to take on trust: a rare left out for its zone is one a fifth zone would let
-  // in, so the answer to "which" has to be on screen for anybody deciding that.
+  // NAMED rather than counted: a rare left out for its zone is one a new zone would let in, so
+  // which ones is on screen for whoever decides that.
   if (offMap.length > NONE) {
     console.log(`generate: outside them: ${offMap.join(', ')}`);
   }

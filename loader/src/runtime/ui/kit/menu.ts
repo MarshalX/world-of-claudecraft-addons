@@ -1,19 +1,10 @@
 // A context menu: per-row actions without spending frame space on them.
 //
-// The reason this is in the kit rather than in each addon is not the markup, it
-// is the DISMISSAL. A menu has to close on select, on Escape, on a click anywhere
-// else, and on the anchor being taken away, and every one of those is a listener
-// on something the addon does not own. An addon that hand-rolls it gets three of
-// the four right and leaves a menu floating over the HUD on the fourth.
+// The kit owns the DISMISSAL: close on select, on Escape, on a click anywhere else, and on
+// the anchor going away, all listeners on things the addon does not own.
 //
-// ONE menu for the whole loader, like the banner. Opening a second closes the
-// first, because two open context menus is not a state anyone means to be in, and
-// the alternative is a stack whose dismissal order is a new thing to be wrong
-// about.
-//
-// It is NOT a window: no stacking participation, no saved position, no drag. It
-// sits in the overlay band above every window, exactly where a transient thing
-// belongs, and it is gone before anything could be arranged around it.
+// ONE menu for the whole loader, like the banner: opening a second closes the first. It is
+// NOT a window (no stacking, no saved position, no drag) and sits in the overlay band.
 
 import type { Teardown } from '../../disposal.ts';
 import { clampNumber } from '../frame/geometry.ts';
@@ -32,13 +23,9 @@ interface MenuItem {
   /** A rule above this item. Ignored on the first, where it would draw a lid. */
   separator?: boolean;
   /**
-   * This item is the one currently chosen, drawn in the game's own accent.
-   *
-   * For a menu that is a CHOICE rather than a list of actions, which is what a dropdown is:
-   * `ui.field.select` is built on this. Stated rather than implied, and stated as a flag on
-   * every item of such a menu rather than only on the chosen one, because a menu where one
-   * item says `checked: true` and the rest say nothing announces one radio button and a list
-   * of commands. An item that leaves it out stays an ordinary action.
+   * This item is the one currently chosen, drawn in the game's own accent. For a CHOICE menu
+   * (`ui.field.select`), set it on every item, `false` on the rest, or the others announce as
+   * commands. An item that leaves it out stays an ordinary action.
    */
   checked?: boolean;
 }
@@ -51,12 +38,7 @@ interface MenuDeps {
 }
 
 interface Menus {
-  /**
-   * Open a menu at an element, or at a point.
-   *
-   * Returns a close, which is also what the caller's disposal bag holds: an addon
-   * disabled with its menu open must not leave it on screen.
-   */
+  /** Open a menu at an element, or at a point. Returns a close, which the disposal bag holds. */
   open: (at: Element | { x: number; y: number }, items: readonly MenuItem[]) => Teardown;
   dispose: () => void;
 }
@@ -70,30 +52,13 @@ function anchorPoint(at: Element | { x: number; y: number }): { x: number; y: nu
   return at;
 }
 
-/**
- * The least room a menu is given before it starts scrolling.
- *
- * A floor rather than a target: on a viewport shorter than this the menu takes
- * what there is, because a menu clipped to nothing is worse than one that
- * overhangs a little.
- */
+/** The least room a menu is given before it starts scrolling, even on a shorter viewport. */
 const MIN_MENU_HEIGHT_PX = 120;
 
 /**
- * Keep the whole menu on screen, in BOTH directions.
- *
- * Measured after it is in the document and unhidden: a hidden element measures as
- * zero, so a placement computed before that puts every menu in the same wrong
- * corner. The same order kit/tooltip.ts uses, for the same reason.
- *
- * The height cap is written before the measurement rather than after, so what is
- * measured is a menu that already fits and the clamp below has something true to
- * work with. Without it a long menu had its `top` pinned to the margin and then
- * simply ran off the bottom of the window: clamping a position can only move a
- * box, and a box taller than the viewport has nowhere to be moved to. The rail
- * button's own menu found it, at twenty-five rows, but it is every menu's
- * problem: `ui.menu` is on the addon API and an addon listing its own rows has
- * no way to know how many will fit.
+ * Keep the whole menu on screen, in BOTH directions. Measured after it is in the document and
+ * unhidden, since a hidden element measures as zero (as in kit/tooltip.ts). The height cap is
+ * written before measuring: a box taller than the viewport cannot be clamped into it.
  */
 function place(el: HTMLElement, point: { x: number; y: number }, view: { w: number; h: number }) {
   el.style.maxHeight = `${Math.max(MIN_MENU_HEIGHT_PX, view.h - EDGE_MARGIN_PX * 2)}px`;
@@ -108,15 +73,12 @@ function buildItem(doc: Document, item: MenuItem, first: boolean): HTMLElement {
   const button = doc.createElement('button');
   button.type = 'button';
   button.className = 'woc-menu-item';
-  // A choice rather than a command, so it is announced as one and drawn as one. The colour
-  // is the game's own for a chosen dropdown row; `aria-checked` is what carries the same
-  // fact to a reader who cannot see the colour.
+  // `aria-checked` carries what the colour shows.
   if (item.checked !== undefined) {
     button.setAttribute('role', 'menuitemradio');
     button.setAttribute('aria-checked', String(item.checked));
   }
-  // A rule above the first item would draw a lid on the menu rather than
-  // separating anything, so the flag is honoured everywhere else and dropped here.
+  // No rule above the first item, where it would draw a lid.
   if (item.separator === true && !first) {
     button.classList.add('woc-menu-cut');
   }
@@ -138,8 +100,7 @@ function buildMenu(deps: MenuDeps, items: readonly MenuItem[], close: Teardown):
       button.setAttribute('role', 'menuitem');
     }
     button.addEventListener('click', () => {
-      // Closed FIRST, so a handler that opens another menu is not immediately
-      // shut by the teardown of the one that launched it.
+      // Closed FIRST, so a handler that opens another menu keeps it open.
       close();
       item.onSelect();
     });
@@ -149,13 +110,8 @@ function buildMenu(deps: MenuDeps, items: readonly MenuItem[], close: Teardown):
 }
 
 /**
- * The listeners that close a menu, and the one thing they all have in common.
- *
- * Every one of them is on something outside the menu, which is exactly why this
- * is not each addon's job. The pointer listener is on the DOCUMENT and in the
- * capture phase: a click on a game control has to dismiss the menu as well as
- * reach the game, and a bubbling listener never sees a click whose handler stops
- * propagation, which the game's own controls do.
+ * The listeners that close a menu. The pointer listener is on the DOCUMENT in the capture
+ * phase, since the game's own controls stop propagation.
  */
 function watchForDismissal(deps: MenuDeps, el: HTMLElement, close: Teardown): Teardown {
   const onPointerDown = (event: Event): void => {
@@ -208,8 +164,7 @@ function createMenus(deps: MenuDeps): Menus {
       };
       closeOpen = teardown;
 
-      // The caller's own handle. Calling it while a LATER menu is open must not
-      // take that one down, which is what comparing the teardown checks.
+      // Comparing the teardown keeps this handle from closing a LATER menu.
       return () => {
         if (closeOpen === teardown) {
           close();

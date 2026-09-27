@@ -1,31 +1,16 @@
 // What goes INSIDE a tooltip, as opposed to where the tooltip goes.
 //
-// Split from kit/tooltip.ts because the two answer different questions and change
-// for different reasons: that file owns one shared element, its placement, and the
-// attachment lifecycle; this one owns markup. The seam is a function from content
-// to nodes, which is also what makes the content testable without a pointer.
+// kit/tooltip.ts owns the shared element, placement and lifecycle; this owns the markup, as
+// a function from content to nodes. A plain string is still a whole tooltip.
 //
-// A plain string is still a tooltip. `ui.tooltip(el, 'Toggle the meter')` was the
-// whole surface before this and remains the common case, so it is the SAME call
-// rather than a legacy one: an addon that wants a line of text writes a line of
-// text, and a published surface that changed shape here would have moved the API
-// major for no gain to anyone.
-//
-// Every node is built with textContent. An ability name, a player name and a
-// number off the wire all reach this, and innerHTML on any of them is script
-// injection into a page that is also running the game.
+// Every node is built with textContent: wire text reaches this, and innerHTML would be script
+// injection into the game's page.
 
 const TONES = Object.freeze(['default', 'muted', 'good', 'warn', 'danger'] as const);
 
 /**
- * What a line MEANS, which is not what a bar's tone means.
- *
- * Deliberately its own union rather than the readout's, even though three names
- * overlap. A bar's tone is urgency, and urgency is the only thing a fill can say;
- * a tooltip line is prose, and the useful distinctions there are the ones the
- * game's own tooltips draw: flavour text is quieter than the rules, a requirement
- * you meet reads differently from one you do not. There is no fill in the world
- * that wants to be 'muted', and no line that wants to be a percentage.
+ * What a line MEANS, as the game's own tooltips distinguish lines. Its own union, not the
+ * readout's tone, which is urgency.
  */
 type TooltipTone = (typeof TONES)[number];
 
@@ -45,17 +30,9 @@ interface TooltipContent {
 }
 
 /**
- * A line of text, the whole tooltip, or a function returning either.
- *
- * The function form is resolved WHEN THE TOOLTIP IS SHOWN, and it is what a live
- * readout needs: a meter row's tooltip has to carry the numbers as they are under
- * the pointer, and an attachment fixed at build time carries the numbers as they
- * were when the row was created. The alternative an addon would reach for is
- * detaching and re-attaching on every repaint, which is a listener swap per row
- * per frame to answer a question nobody asked unless they are hovering.
- *
- * It also costs less than the static form for anything that changes: content is
- * built for the one row being pointed at rather than for every row on screen.
+ * A line of text, the whole tooltip, or a function returning either. The function form is
+ * resolved WHEN THE TOOLTIP IS SHOWN, so a live readout's tooltip carries current numbers
+ * without re-attaching on every repaint.
  */
 type TooltipInput = string | TooltipContent | (() => string | TooltipContent);
 
@@ -74,11 +51,7 @@ function lineOf(entry: string | TooltipLine): TooltipLine {
 }
 
 /**
- * The head: the icon and the title, or nothing.
- *
- * The icon slot hides itself on a failed load exactly as a bar's does, since the
- * same ability may have no painted art, and a broken-image glyph in a tooltip is
- * worse than a tooltip with no icon.
+ * The head: the icon and the title, or nothing. The icon hides on a failed load, as a bar's does.
  */
 function buildHead(doc: Document, content: TooltipContent): HTMLElement | null {
   if (content.title === undefined && (content.icon ?? null) === null) {
@@ -116,7 +89,7 @@ function resolve(input: TooltipInput): string | TooltipContent {
   return input;
 }
 
-/** A string is one line at the default tone, which is what the old surface drew. */
+/** A string is one line at the default tone. */
 function asContent(input: TooltipInput): TooltipContent {
   const resolved = resolve(input);
   if (typeof resolved === 'string') {
@@ -126,10 +99,8 @@ function asContent(input: TooltipInput): TooltipContent {
 }
 
 /**
- * Render content into the shared tooltip element, replacing whatever was there.
- *
- * `replaceChildren` rather than clearing and appending: one operation, and it
- * cannot leave the element half-filled if a line throws on the way.
+ * Render content into the shared tooltip element. `replaceChildren` in one operation, so a line
+ * that throws cannot leave it half-filled.
  */
 function renderTooltip(doc: Document, tip: HTMLElement, input: TooltipInput): void {
   const content = asContent(input);

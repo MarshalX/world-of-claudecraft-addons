@@ -1,9 +1,4 @@
-// Dividing a box between the units drawn in it.
-//
-// Pure arithmetic, which is why it is worth having in one place: five addons had written
-// it, all five agreed about the shape and each stated the parts differently. What is
-// pinned here is the two decisions a caller would otherwise have to rediscover, which are
-// that the gaps come out BEFORE the division and that the share is FLOORED.
+// Dividing a box between units: gaps come out before the division, and the share is floored.
 
 import { describe, expect, it } from 'vitest';
 import { units } from '../loader/src/runtime/ui/kit/units.ts';
@@ -17,8 +12,7 @@ describe('dividing a box', () => {
     expect(units(120, { count: 4 })).toBe(30);
   });
 
-  // Before, not after. Eight rows in 205 with a 3px gap is 23 each and not 25: the
-  // difference is two rows' worth of overflow at the bottom of a frame that clips.
+  // Eight rows in 205 with a 3px gap is 23 each, not 25.
   it('pays the gaps out of the box before dividing', () => {
     expect(units(205, { count: 8, gap: 3 })).toBe(23);
   });
@@ -27,16 +21,13 @@ describe('dividing a box', () => {
     expect(units(100, { count: 2, gap: 10 })).toBe(45);
   });
 
-  // A caption band under a strip of art, a footer, a header row: space the units never
-  // get. `emberwatch` and `purelight` each carry one, and each had to solve the box back
-  // for the square by hand.
+  // A caption band, footer or header row: space the units never get.
   it('takes a fixed extra off the top', () => {
     expect(units(60, { extra: 15 })).toBe(45);
   });
 
-  // A share rounded UP is a last row a pixel or two past the bottom of the box, and a
-  // bare frame clips rather than scrolls, so what that costs is the bottom row.
-  it('floors the share rather than rounding it', () => {
+  // Rounding up pushes the last row past a box that clips.
+  it('floors the share instead of rounding it', () => {
     expect(units(100, { count: 3 })).toBe(33);
   });
 
@@ -48,14 +39,12 @@ describe('dividing a box', () => {
     expect(units(400, { count: 2, max: 69 })).toBe(69);
   });
 
-  // The floor wins, the same way the frame's own bounds resolve a contradiction: only
-  // one of the two is about the display staying readable.
+  // As with frame bounds, the floor is the one about staying readable.
   it('lets the floor beat a ceiling under it', () => {
     expect(units(100, { min: 40, max: 10 })).toBe(40);
   });
 
-  // A box that has not been measured yet has to give back a usable number rather than a
-  // NaN, which would drop whatever style property it reached silently.
+  // An unmeasured box must not yield a NaN, which a style property drops silently.
   it.each([
     ['NaN', Number.NaN],
     ['infinite', Number.POSITIVE_INFINITY],
@@ -63,7 +52,7 @@ describe('dividing a box', () => {
     expect(units(bad, { count: 4, min: 23 })).toBe(23);
   });
 
-  it('answers the floor rather than dividing by nothing', () => {
+  it('answers the floor instead of dividing by nothing', () => {
     expect(units(100, { count: 0, min: 23 })).toBe(23);
   });
 

@@ -1,9 +1,4 @@
-// The runtime's one door to GM storage.
-//
-// Its whole job is routing: the host reports a change once, as a single event
-// carrying a namespace, and something has to turn that into "this addon's
-// settings moved". Everything asserted here is about that fan-out and about the
-// disconnected case, which must reject rather than answer an empty store.
+// The runtime's door to GM storage: per-namespace fan-out, and rejection when disconnected.
 
 import { describe, expect, it, vi } from 'vitest';
 import { createStorageHub } from '../loader/src/runtime/storage/hub.ts';
@@ -88,8 +83,7 @@ describe('the storage hub with a bridge', () => {
     expect(handler).not.toHaveBeenCalled();
   });
 
-  // A handler is allowed to unsubscribe itself, which mutating the live set
-  // mid-iteration would turn into a skipped neighbour.
+  // Unsubscribing mid-iteration from the live set would skip a neighbour.
   it('delivers to every handler even when one unsubscribes itself', () => {
     const hub = createStorageHub(remote());
     const second = vi.fn();
@@ -103,7 +97,6 @@ describe('the storage hub with a bridge', () => {
     expect(second).toHaveBeenCalledOnce();
   });
 
-  // One addon's throwing handler must not cost every other addon the change.
   it('keeps delivering after a handler throws', () => {
     const hub = createStorageHub(remote());
     const after = vi.fn();
@@ -128,9 +121,7 @@ describe('the storage hub with a bridge', () => {
 });
 
 describe('the storage hub with no bridge', () => {
-  // Rejecting, not resolving undefined. An addon that read an empty store would
-  // treat it as first-run state and overwrite the player's real data on the
-  // next session that does connect.
+  // An empty store reads as first-run state, and the addon overwrites the real data later.
   it.each([
     ['get', (hub: ReturnType<typeof createStorageHub>) => hub.get('ns', 'k')],
     ['set', (hub: ReturnType<typeof createStorageHub>) => hub.set('ns', 'k', 1)],

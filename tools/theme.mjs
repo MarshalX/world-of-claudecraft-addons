@@ -1,17 +1,8 @@
-// `pnpm theme`: regenerate the stage's game-token stylesheet from a deployed game.
+// `pnpm theme`: regenerate the stage's game-token stylesheet from a deployed game. By hand, after
+// a game release changes the palette. Reads LIVE by default; `--host` picks another channel.
 //
-// Run by hand after a game release changes the palette, not on every build, for
-// the same reason `pnpm cues`, `pnpm icons` and `pnpm items` are: the answer
-// changes a few times a year and wiring it into the build would spend two
-// requests per build to rewrite one file.
-//
-// It reads the LIVE host by default, because a preview screenshot is a picture of
-// what most players are running. Point it at pbe with --host to pick up a palette
-// change early: `pnpm theme --host https://pbe.worldofclaudecraft.com`.
-//
-// The stylesheet URL is content-hashed, so this reads `play.html` and follows the
-// `<link rel="stylesheet">` it finds. Both sheets are read and merged in document
-// order, which is what the browser does with them.
+// The stylesheet URL is content-hashed, so this reads `play.html` and follows every
+// `<link rel="stylesheet">`, merging the sheets in document order as the browser does.
 
 import { readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import process from 'node:process';
@@ -63,12 +54,8 @@ function loaderCss() {
 }
 
 /**
- * Say which loader tokens the game no longer declares, without failing.
- *
- * A warning rather than an error because the loader is what would have to change
- * and this tool only reads. It is still the only place the drift is visible: a
- * `var()` with no fallback and no token resolves to nothing, so the symptom is one
- * declaration quietly not applying.
+ * Warn about loader tokens the game no longer declares. The only place this drift is visible: a
+ * `var()` with no fallback and no token silently drops its declaration.
  */
 function reportDrift(tokens) {
   const missing = unbackedTokens(loaderCss(), uiSourceText(), tokens);

@@ -1,17 +1,8 @@
-// What each decoded event kind carries, as the loader claims it.
+// What each decoded event kind carries, as the loader claims it. Written separately from
+// `packages/types/events.d.ts`, never imported from it, or `tests/types-parity.test.ts` would be
+// trivially true. Author prose lives in the published copy.
 //
-// A CLAIM about the game, like `world/game-types.ts`, and deliberately written
-// separately from `packages/types/events.d.ts` rather than imported from it. The
-// published package describes this file's behaviour and nothing links the two,
-// so importing one into the other would make `tests/types-parity.test.ts`
-// trivially true and remove the only thing that catches them drifting.
-//
-// The prose lives in the published copy, which is what an author reads. This one
-// carries the shapes and the notes a maintainer needs.
-//
-// The combat records are in `events-combat.ts` and the battleground's in
-// `events-pvp.ts`, the same split the published catalogue makes. `EventPayloads`
-// below is the one map over all three files.
+// `EventPayloads` below is the one map over this file, `events-combat.ts` and `events-pvp.ts`.
 
 import type {
   AuraEvent,
@@ -127,13 +118,8 @@ interface RespawnEvent extends PersonalEvent {
 }
 
 /**
- * A refused action.
- *
- * `text` is the only field every refusal carries. The three optional ones ride a
- * SERVER-authored refusal alone (the General chat quota is the whole set today),
- * so a refusal raised by the sim carries none of them, and neither does one from
- * a server older than game 0.37.1. `reason` is the sim's own label and is a
- * different field from `code`.
+ * A refused action. Only `text` is always present; `code`, `channel` and `retryAfterSeconds` ride a
+ * server-authored refusal alone. `reason` is the sim's own label, distinct from `code`.
  */
 interface ErrorEvent extends PersonalEvent {
   type: 'error';

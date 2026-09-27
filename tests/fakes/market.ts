@@ -1,10 +1,5 @@
-// MarketplaceState and MarketplaceEntry shapes, for a suite that is not about
-// either of them.
-//
-// Collected here because MarketplaceState is what the bridge carries to four
-// different panes, so it is the shape most likely to gain a field: `degraded`
-// arrived with the contents-API fallback and would otherwise have been a
-// compile error in every suite that built one by hand.
+// MarketplaceState and MarketplaceEntry builders, so a new field is one edit rather than one per
+// suite.
 
 import type { MarketplaceRef } from '../../loader/src/shared/marketplace.ts';
 import type {
@@ -48,13 +43,7 @@ function marketState(
   };
 }
 
-/**
- * A MarketApi that answers, for a suite that is not about the source list.
- *
- * Every member is present because the manager's type demands all of them, and a
- * suite that only cares about `list` should not have to say what `setRef` does
- * to make the compiler let it through.
- */
+/** A MarketApi that answers, for a suite that is not about the source list. */
 function fakeMarketApi(overrides: Partial<MarketApi> = {}): MarketApi {
   return {
     list: () => Promise.resolve([]),

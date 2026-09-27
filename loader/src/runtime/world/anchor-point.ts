@@ -1,23 +1,11 @@
 // A unit's world point: at its feet, or over its head.
 //
-// The head point is the one an addon cannot compute. It is not a constant offset
-// above the entity: the game's own nameplates, chat bubbles and click picking all
-// read the RENDERER's view of that unit and add `(height + mountLift) * scale`
-// plus a yard of clearance. Nothing on the wire says how tall a model is drawn,
-// so an addon offsetting by a guess puts a plate inside a dragon and a long way
-// over a boar, and the two look equally deliberate.
+// The head point is not a constant offset: like the game's nameplates it reads the RENDERER's
+// view of the unit, `(height + mountLift) * scale` plus a yard of clearance. Model height is not
+// on the wire, so a guessed offset is wrong per model.
 //
-// Every read here is an assertion, like every other read of the game. The view
-// map is public and its values are plain objects, but this repository cannot
-// compile against either, so a map that is not a Map, a getter that throws and a
-// field of the wrong kind are each a null. A null hides the anchor; a NaN reaching
-// a style property drops the declaration silently and reads as a marker that has
-// stopped somewhere odd rather than as one that failed.
-//
-// NO VIEW MEANS NO HEAD POINT. The game's nameplate loop iterates the view map, so
-// a unit it is not drawing gets no plate at all, and past its draw range (about 80
-// yards) a rig stops being updated. Answering null there is the same answer the
-// game gives; guessing a height is the defect this module exists to remove.
+// Anything unreadable is null, which hides the anchor; a NaN reaching a style is dropped
+// silently. No view means no head point, as the game draws no plate for a unit it is not drawing.
 
 import type { Entity } from './game-types.ts';
 import type { UnitContext, UnitToken } from './units.ts';
@@ -71,12 +59,8 @@ function asNumber(value: unknown): number | null {
 }
 
 /**
- * A number, its default when the field is ABSENT, or null when it is nonsense.
- *
- * The two cases are told apart on purpose. A renderer that never had the field is
- * an older or newer game whose units are simply unlifted and unscaled, and hiding
- * every anchor over that would be a loader that goes blank on a game update. A
- * field that is present and holds a NaN is a value nobody can draw from.
+ * A number, its default when the field is ABSENT, or null when it is present and nonsense. An
+ * absent field must not hide every anchor after a game update.
  */
 function optionalNumber(value: unknown, fallback: number): number | null {
   if (value === undefined) {
@@ -116,18 +100,14 @@ function viewOf(game: unknown, id: number): GameView | null {
     }
     return view as GameView;
   } catch {
-    // A future update can leave something Map-shaped in place that throws when
-    // read. The cost of that has to be a hidden anchor, not a dead frame.
+    // A game member can stay Map-shaped and throw; that must cost an anchor, not the frame.
     return null;
   }
 }
 
 /**
- * Where the rig is, falling back to the entity when the game is not drawing it.
- *
- * Past the draw range a view survives with its `group` no longer updated, which
- * is why the game's own overhead anchors check `group.visible` first. Reading the
- * position alone would pin a plate over the terrain a unit stood on 80 yards ago.
+ * Where the rig is, falling back to the entity when the game is not drawing it. Past the draw
+ * range a view's `group` stops updating, so check `group.visible` first, as the game does.
  */
 function basePoint(view: GameView, entity: Entity): WorldPoint | null {
   if (view.group?.visible === true) {
@@ -144,8 +124,7 @@ function headPoint(view: GameView, entity: Entity): WorldPoint | null {
   const base = basePoint(view, entity);
   const height = asNumber(view.height);
   const lift = optionalNumber(view.mountLift, NO_LIFT);
-  // The scale the renderer ACTUALLY applied, rather than the entity's own: entity
-  // scale is on the wire only when it is not 1, and the loader does not publish it.
+  // The scale the renderer applied; the entity's own scale is not published.
   const scale = optionalNumber(view.liveScale, UNSCALED);
   if (base === null || height === null || lift === null || scale === null) {
     return null;

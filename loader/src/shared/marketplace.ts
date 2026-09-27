@@ -1,15 +1,6 @@
-// Marketplace identity and URL construction.
-//
-// A marketplace is a GitHub repository with an addons/ directory. Only GitHub is
-// accepted, which is what bounds the userscript's @connect list: no marketplace
-// URL a user can paste will aim GM_xmlhttpRequest at another host.
-//
-// The one exception is the local dev server, and it is an exception because it
-// is not user input at all. Its origin is a constant in this file, so the set of
-// hosts the loader can reach is still fixed at build time. Source is therefore a
-// union rather than an optional field: a caller that builds a URL has to say
-// which kind of source it is looking at, instead of a `raw.githubusercontent.com`
-// path quietly appearing for something that is not a repository.
+// Marketplace identity and URL construction. Only GitHub repositories are accepted, which is what
+// bounds the userscript's @connect list. The local dev server is the one other source, and its
+// origin is a build-time constant, never user input.
 
 const RAW_BASE = 'https://raw.githubusercontent.com';
 const API_BASE = 'https://api.github.com';
@@ -88,17 +79,14 @@ export const OFFICIAL_ID = 'official';
 export const LOCAL_ID = 'local';
 
 /**
- * Where the local dev server listens, and the whole reason `localhost` is in the
- * userscript's @connect list. A constant rather than a setting: a configurable
- * origin would turn the allowlist into user input.
+ * Where the local dev server listens, and why `localhost` is in @connect. Must stay a constant:
+ * a configurable origin would turn the allowlist into user input.
  */
 export const LOCAL_ORIGIN = 'http://localhost:5180';
 
 /**
- * Where a marketplace's files come from.
- *
- * The `local` arm exists only for the dev server. It is never persisted and
- * never constructed from anything a user typed.
+ * Where a marketplace's files come from. A union so a URL builder must say which kind it has. The
+ * `local` arm is the dev server only, never persisted and never built from user input.
  */
 export type MarketplaceSource =
   | { kind: 'github'; owner: string; repo: string; ref: string }
@@ -111,11 +99,8 @@ export interface MarketplaceRef {
 }
 
 /**
- * The built-in marketplace: never persisted, merged in at position 0 on every
- * registry read, and rejected by canRemoveMarketplace.
- *
- * "Official" means official to this loader. The game project is a separate
- * repository under a different owner and does not endorse it.
+ * The built-in marketplace: never persisted, merged in first on every read, never removable.
+ * "Official" means official to this loader; the game project does not endorse it.
  */
 export const OFFICIAL: MarketplaceRef = Object.freeze({
   id: OFFICIAL_ID,
@@ -128,13 +113,7 @@ export const OFFICIAL: MarketplaceRef = Object.freeze({
   }),
 } as const);
 
-/**
- * The ephemeral dev source, present only while dev mode is on.
- *
- * Never written to the persisted marketplace list, so turning dev mode off is
- * what removes it. `tools/serve.mjs` generates its index from addons/ on every
- * request, which is what makes an edit to a manifest visible without a rebuild.
- */
+/** The dev source, present only while dev mode is on and never persisted. */
 export const LOCAL: MarketplaceRef = Object.freeze({
   id: LOCAL_ID,
   name: 'Local dev server',
@@ -144,14 +123,8 @@ export const LOCAL: MarketplaceRef = Object.freeze({
 export type NormalizeResult = { ok: true; ref: MarketplaceRef } | { ok: false; error: string };
 
 /**
- * What the host persists for one user-added marketplace.
- *
- * Deliberately not the whole ref. A stored ref would carry an `id` and a
- * `source.kind` that a hand-edited GM value could set to anything, and the id is
- * the storage namespace for every addon installed from it. Persisting only the
- * three fields the user actually chose means reading the list back runs the
- * same validation that accepting it did, and the id is re-derived rather than
- * trusted.
+ * What the host persists for one user-added marketplace. Not the whole ref: the id is the storage
+ * namespace of every addon from it, so it is re-derived and re-validated on read, never stored.
  */
 export interface StoredMarketplace {
   owner: string;
@@ -221,13 +194,7 @@ export function fileUrl(market: MarketplaceRef, path: string): string {
   return `${marketplaceBase(market.source)}/${path}`;
 }
 
-/**
- * Fallback enumeration for a repository with no marketplace.json.
- *
- * Null for the local source, which has no such fallback and needs none: the dev
- * server builds its index from the directory on every request, so an index is
- * always there and always current.
- */
+/** Fallback enumeration for a repository with no marketplace.json. Null for the local source. */
 export function contentsApiUrl(market: MarketplaceRef): string | null {
   const { source } = market;
   if (source.kind === 'local') {
@@ -251,12 +218,8 @@ export function splitFqid(value: string): { marketplace: string; addonId: string
 }
 
 /**
- * Reduce anything a user might paste to a MarketplaceRef.
- *
- * Accepts `owner/repo`, a github.com URL, a `.git` clone URL, and a tree or blob
- * URL carrying a branch or tag. Every non-GitHub host is rejected, including the
- * dev server's own origin: the local source is a build-time constant and is not
- * reachable through this door.
+ * Reduce anything a user might paste to a MarketplaceRef: `owner/repo`, a github.com, `.git`, or
+ * tree/blob URL. Every other host is rejected, the dev server's origin included.
  */
 export function normalizeMarketplaceUrl(input: string): NormalizeResult {
   const raw = input.trim();

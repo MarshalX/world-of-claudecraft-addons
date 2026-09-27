@@ -20,13 +20,7 @@ import {
   toStored,
 } from '../loader/src/shared/marketplace.ts';
 
-/**
- * The GitHub arm of a ref's source.
- *
- * A helper rather than a cast: reading owner off a source that turned out to be
- * the local one has to be a test failure, not `undefined` flowing into an
- * assertion that then passes for the wrong reason.
- */
+/** The GitHub arm of a ref's source; fails rather than letting `undefined` into an assertion. */
 function github(ref: MarketplaceRef) {
   if (ref.source.kind !== 'github') {
     throw new Error(`${ref.id} is not a GitHub marketplace`);
@@ -97,8 +91,7 @@ describe('normalizeMarketplaceUrl', () => {
     expect(normalizeMarketplaceUrl('  someone/repo  ').ok).toBe(true);
   });
 
-  // The short @connect allowlist depends on this: a non-GitHub marketplace must
-  // never be constructible, or GM_xmlhttpRequest could be aimed anywhere.
+  // The short @connect allowlist depends on a non-GitHub marketplace never being constructible.
   it.each([
     ['https://gitlab.com/someone/repo', 'non-github host'],
     ['https://evil.example/someone/repo', 'arbitrary host'],
@@ -211,15 +204,12 @@ describe('the local dev source', () => {
     );
   });
 
-  // The dev server generates its index on every request, so there is nothing for
-  // the contents-API fallback to fall back to and no reason to enumerate.
+  // The dev server generates its index per request, so there is nothing to fall back to.
   it('has no contents-API fallback', () => {
     expect(contentsApiUrl(LOCAL)).toBeNull();
   });
 
-  // The short @connect list is what bounds where GM_xmlhttpRequest can be aimed,
-  // and it stays bounded because the local origin is a constant rather than
-  // something the normalizer can be talked into producing.
+  // The local origin is a build constant; the normalizer must never produce it.
   it.each([LOCAL_ORIGIN, 'http://localhost:5180/marketplace.json', 'localhost/5180'])(
     'cannot be reconstructed by pasting %s',
     (input) => {
@@ -237,9 +227,8 @@ describe('the local dev source', () => {
   });
 });
 
-// The id is the storage namespace of every addon installed from a source, so it
-// is re-derived on read rather than trusted. A stored id a player could edit
-// would be a way to point one source's addon at another's settings and data.
+// The id is the storage namespace of everything installed from a source, so it is re-derived on
+// read: an editable stored id could point one source's addon at another's data.
 describe('persisting a user-added marketplace', () => {
   it('round-trips the three fields the user chose', () => {
     const added = normalizeMarketplaceUrl('https://github.com/someone/their-addons/tree/v1.2.0');
@@ -274,8 +263,7 @@ describe('persisting a user-added marketplace', () => {
     expect(fromStored(value)).toBeNull();
   });
 
-  // Built-ins come from the loader build on every read, so persisting one would
-  // create a second copy that a later loader version could not move.
+  // Built-ins come from the loader build; a persisted copy could not be moved by a later loader.
   it('refuses to persist a built-in source', () => {
     expect(toStored(OFFICIAL)).toBeNull();
     expect(toStored(LOCAL)).toBeNull();

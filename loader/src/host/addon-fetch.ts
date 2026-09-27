@@ -1,15 +1,7 @@
 // Getting one addon's files out of its marketplace, and forgetting them again.
 //
-// Split out of registry.ts when data files landed, and the seam is a real one:
-// registry.ts is the installed-set bookkeeping it started as, and this is
-// everything that resolves an fqid to URLs and reads them. `RegistryDeps` lives
-// here rather than there because every member of it exists for this half.
-//
-// The dev source is the deliberate exception to reading from the cache, and it
-// is deliberate twice over: `refetchLocal` for the body and `refetchLocalData`
-// for a declared table. Reopening the game has to pick up whatever is on disk
-// now, which is the entire point of pointing the loader at a dev server, and it
-// is bounded to `localhost` by shared/marketplace.ts.
+// The dev source is the one exception to reading from the cache (`refetchLocal` for the body,
+// `refetchLocalData` for a table): reopening the game has to pick up what is on disk now.
 
 import { diagError } from '../shared/diag.ts';
 import { fileUrl, type MarketplaceRef } from '../shared/marketplace.ts';
@@ -41,11 +33,7 @@ interface Acquired {
 
 interface RegistryDeps {
   storage: RegistryStorage;
-  /**
-   * `entry` says where an addon's files are; `api.list` is what update rows are
-   * compared against, and it answers from the indexes as they were last read
-   * rather than fetching.
-   */
+  /** `entry` locates an addon's files; `api.list` answers from the last-read indexes. */
   market: Pick<MarketService, 'entry' | 'api'>;
   fetcher: Pick<Fetcher, 'get' | 'forget'>;
   /** Called after a write that changed something, so the manager can refresh. */
@@ -65,9 +53,8 @@ async function acquire(deps: RegistryDeps, fqid: string): Promise<Acquired> {
     throw new Error(`${url} is empty, so there is nothing to install`);
   }
 
-  // `path` is the index's own field and is not part of a manifest, so it is
-  // dropped rather than persisted: it is re-read from the index on update, and a
-  // stale copy of it would send the next fetch to the wrong directory.
+  // `path` belongs to the index, not the manifest, and is re-read on update: a persisted
+  // copy would go stale and send the next fetch to the wrong directory.
   const { path: _path, ...manifest } = row;
   const data = await fetchAddonData(
     deps.fetcher,
@@ -81,12 +68,7 @@ async function acquire(deps: RegistryDeps, fqid: string): Promise<Acquired> {
   };
 }
 
-/**
- * Every URL this addon's files came from: the entry, then each declared data file.
- *
- * One resolution rather than two, because both callers want the same index row
- * and `market.entry` may fetch an index to answer.
- */
+/** Every URL this addon's files came from: the entry, then each declared data file. */
 async function urlsOf(deps: RegistryDeps, fqid: string): Promise<string[]> {
   const found = await deps.market.entry(fqid);
   if (found === null) {
@@ -105,11 +87,8 @@ async function originOf(deps: RegistryDeps, fqid: string): Promise<string | null
 }
 
 /**
- * Re-read a dev-server addon, falling back to the cached body.
- *
- * A server that is not running must leave the last body it served working rather
- * than disabling the addon, so a failure here is a diagnostic and not a
- * rejection.
+ * Re-read a dev-server addon, falling back to the cached body. A stopped server must leave
+ * the last body working, so a failure is a diagnostic and not a rejection.
  */
 async function refetchLocal(deps: RegistryDeps, fqid: string): Promise<string | null> {
   try {
@@ -129,13 +108,8 @@ async function refetchLocal(deps: RegistryDeps, fqid: string): Promise<string | 
 /**
  * Re-read one data file from the dev server, falling back to the cached copy.
  *
- * The same deliberate exception `refetchLocal` is, for the same reason: a table
- * an author just regenerated has to be what the next load reads.
- *
- * The declared list is re-read from the INDEX rather than from the installed
- * record, because the dev server rebuilds its index from disk on every request
- * and a file added to the manifest since install is exactly the case worth
- * catching.
+ * The declared list comes from the INDEX, which the dev server rebuilds from disk per
+ * request, so a file added to the manifest since install is found.
  */
 async function refetchLocalData(
   deps: RegistryDeps,

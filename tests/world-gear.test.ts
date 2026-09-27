@@ -13,11 +13,8 @@ function changed(key: WorldKey, before: unknown, after: unknown): boolean {
 }
 
 /**
- * One worn piece as the server sends it, which is the three-field public trim.
- *
- * Written out rather than taken from a fixture builder because the trim is the
- * subject: a helper that filled in the other five payload fields would be
- * asserting against a shape no inspecting client is ever sent.
+ * One worn piece as the server sends it: the three-field public trim, written out because
+ * a fixture builder would fill in fields no inspecting client is sent.
  */
 const worn = (over: Record<string, unknown> = {}): Record<string, unknown> => ({
   signer: 'Marshal',
@@ -26,10 +23,7 @@ const worn = (over: Record<string, unknown> = {}): Record<string, unknown> => ({
 });
 
 describe('equipmentInstances', () => {
-  // The reason this key exists at all. An enchant is applied to the piece that
-  // is already worn, so the slot still holds the same item id and `equipment`
-  // cannot report it: a signature that rendered the payload as an object would
-  // answer the same string on both sides and the pane would never repaint.
+  // The slot keeps the same item id, so `equipment` cannot report this.
   it('notices an enchant landing on a piece that is already worn', () => {
     const before = { chest: worn() };
     const after = { chest: worn({ enchant: 'enchant_chest_stamina' }) };
@@ -59,9 +53,7 @@ describe('equipmentInstances', () => {
     expect(changed('equipmentInstances', before, after)).toBe(true);
   });
 
-  // Two copies of the same item, one signed by somebody else. The item id in
-  // `equipment` is identical across the swap, so this is the only reading that
-  // can tell them apart.
+  // Two copies of one item, one signed by somebody else: only this reading tells them apart.
   it('notices a different copy of the same item', () => {
     const before = { chest: worn({ signer: 'Marshal' }) };
     const after = { chest: worn({ signer: 'Thornpeak' }) };
@@ -77,9 +69,8 @@ describe('equipmentInstances', () => {
     expect(changed('equipmentInstances', before, after)).toBe(true);
   });
 
-  // The game rebuilds `rolled.stats` on every socket, but only for the gem ids
-  // its own table lists, so a gem from a later content release would fill a
-  // socket and move nothing else. Filling a socket is what a gear pane draws.
+  // The game rebuilds `rolled.stats` only for gems its table lists, so an unknown gem moves
+  // nothing but the socket.
   it('notices a gem the stat table does not recognise filling a socket', () => {
     const rift = { sourceEventId: 'e1', tier: 'B', upgradeLevel: 2, gemSlots: 2, gems: [] };
     const before = { ring1: worn({ rift }) };
@@ -88,16 +79,14 @@ describe('equipmentInstances', () => {
     expect(changed('equipmentInstances', before, after)).toBe(true);
   });
 
-  it('separates two slots rather than letting one absorb the other', () => {
+  it('keeps two slots separate', () => {
     const before = { chest: worn({ enchant: 'e1' }), legs: worn() };
     const after = { chest: worn(), legs: worn({ enchant: 'e1' }) };
 
     expect(changed('equipmentInstances', before, after)).toBe(true);
   });
 
-  // The client rebuilds this record from the wire rather than mutating it, and
-  // key order is nobody's promise, so an unsorted digest would fire on a
-  // reserialization that changed nothing.
+  // The client rebuilds this record from the wire, and key order is nobody's promise.
   it('does not care what order the slots serialize in', () => {
     const before = { chest: worn(), legs: worn({ enchant: 'e1' }) };
     const after = { legs: worn({ enchant: 'e1' }), chest: worn() };
@@ -116,10 +105,8 @@ describe('equipmentInstances', () => {
     expect(changed('equipmentInstances', { chest: worn() }, { chest: worn() })).toBe(false);
   });
 
-  // The trim is what makes this sparse: the server keys a slot only while at
-  // least one of the signer, the enchant and the roll survives, so a plain worn
-  // set is empty rather than a map of empty payloads. An `einst` that carries no
-  // slot RESETS the mirror, and a pane holding the old one has to be told.
+  // The server keys a slot only while a signer, enchant or roll survives, and an `einst`
+  // carrying no slot RESETS the mirror.
   it('notices the last instanced piece coming off', () => {
     expect(changed('equipmentInstances', { chest: worn() }, {})).toBe(true);
   });
@@ -128,27 +115,21 @@ describe('equipmentInstances', () => {
     expect(changed('equipmentInstances', {}, { chest: worn() })).toBe(true);
   });
 
-  // An absent record and an empty one are ONE reading, the same collapse
-  // `equipment` makes, and it is safe for the same reason: the watcher's first
-  // sample is delivered to every subscriber whether or not the signature moved,
-  // so nobody learns about the payload from a transition out of null. What the
-  // collapse buys is that a game release which stops seeding the member is not
-  // reported as a player taking all their instanced gear off.
+  // Safe because the first sample reaches every subscriber anyway; a game that stops seeding
+  // the member must not read as the player taking all their instanced gear off.
   it('reads an absent record and an empty one as the same nothing', () => {
     expect(changed('equipmentInstances', null, {})).toBe(false);
   });
 
-  it('treats a record of the wrong kind as absent rather than throwing', () => {
+  it('treats a record of the wrong kind as absent', () => {
     expect(() => capture('equipmentInstances', 'nonsense')).not.toThrow();
     expect(changed('equipmentInstances', 'nonsense', null)).toBe(false);
   });
 });
 
 describe('entities', () => {
-  // Worn gear rides a full entity record, which the server re-emits on the tick
-  // after any equip. Folding it into this signature would wake every
-  // `world.on('entities')` subscriber at equip rate to report a roster that did
-  // not move, and there is deliberately no watch key for another player's gear.
+  // Folding gear in would wake every `entities` subscriber at equip rate for a roster that
+  // did not move; there is deliberately no watch key for another player's gear.
   it('is quiet when a nearby player changes what they are wearing', () => {
     const before = new Map<number, unknown>([[661, { id: 661, equippedItems: { chest: 'a' } }]]);
     const after = new Map<number, unknown>([[661, { id: 661, equippedItems: { chest: 'b' } }]]);
@@ -193,10 +174,8 @@ describe('the backend read', () => {
     expect(backendOf(game).equipmentInstances).toMatchObject({ chest: { boundTo: 12 } });
   });
 
-  // The client assigns a whole new record on every `einst` delta rather than
-  // mutating the one it holds, so a value captured when the backend was built
-  // goes stale the first time anything is enchanted.
-  it('follows the record the client replaced rather than capturing one', () => {
+  // The client assigns a new record on every `einst` delta, so a captured one goes stale.
+  it('follows the record the client replaced', () => {
     const game = gameWorld({ equipmentInstances: {} });
     const backend = backendOf(game);
 
@@ -267,9 +246,8 @@ function harness(): Harness {
   };
 }
 
-// End to end, because the three halves of this key are wired in three different
-// modules: the published key list, the capture dispatch, and the backend read.
-// Every unit above passes with any one of them missing.
+// End to end, since the key list, capture dispatch and backend read live in three modules
+// and every unit above passes with any one of them missing.
 describe('world.equipmentInstances', () => {
   it('answers null before the player has a self record', () => {
     expect(harness().world.equipmentInstances).toBeNull();
@@ -283,11 +261,8 @@ describe('world.equipmentInstances', () => {
     expect(h.world.equipmentInstances).toBe(at(h.live, 'equipmentInstances'));
   });
 
-  // An addon subscribes on its first line, minutes before the player enters the
-  // world, and the signature reads null and empty as one nothing. This delivery
-  // is what makes that collapse safe: the first sample reaches a subscriber
-  // whether or not the signature moved, so the payload is never missed.
-  it('delivers the first record to a subscriber that was there before world entry', async () => {
+  // This delivery is what makes the null-and-empty collapse safe.
+  it('delivers the first record to a subscriber from before world entry', async () => {
     const h = harness();
     const seen = vi.fn();
     h.world.on('equipmentInstances', seen);
@@ -321,8 +296,7 @@ describe('world.equipmentInstances', () => {
     expect(seen).toHaveBeenCalledOnce();
   });
 
-  // The pair is the point: `equipment` says which piece and this says what is on
-  // it, so a swap that keeps the item id has to wake this one and not that one.
+  // `equipment` says which piece and this says what is on it.
   it('leaves the equipment subscriber alone when only the payload moved', async () => {
     const h = harness();
     const gear = vi.fn();

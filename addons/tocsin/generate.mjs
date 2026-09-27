@@ -4,47 +4,36 @@
 //   node addons/tocsin/generate.mjs --game /path/to/world-of-claudecraft
 //
 // The checkout is REQUIRED and never defaulted: nothing tells you a stale working tree is
-// stale the way a 404 tells you an endpoint moved. Both argument forms are accepted because
-// they have drifted across this tree, and the wrong one trips the required-argument error,
-// which reads as a missing flag rather than a wrong one.
+// stale. Both argument forms are accepted because they differ across this tree's generators.
 //
 // TWO READING MODES. Anything the game EXPORTS is evaluated through vite's SSR loader;
 // anything module-PRIVATE is parsed as text, because SSR loading a module yields its exports
 // and none of its private numbers. Text reading is the weaker mechanism, so it is made loud:
 // every name is declared, an absent name is a hard failure, and there is no fallback value.
 //
-// A CONSTANT THAT IS STILL EXPORTED IS NOT THEREBY STILL USED: at game 0.41.0
-// `IGNIVAR_SOAK_AURA_ID` is still exported and passed to `applyAura` nowhere, and resolving it
-// would ship a soak row that can never fire. So nothing here is emitted off a declaration
+// AN EXPORTED CONSTANT IS NOT THEREBY USED: an aura id can stay exported after the game stops
+// applying it, and a row built on it can never fire. So nothing is emitted off a declaration
 // alone: `liveSitesIn` requires an aura id in an `id:` position, a cast assigned to
 // `castingAbility` and a damage label passed to a damage entry point, and every clock is parsed
 // out of the assignment that WRITES it.
 //
 // YELLS ARE READ FOR THE RAID BOSSES AND NOT FOR NYTHRAXIS: a yell is the only exact PULL edge
-// the wire carries, and every Nythraxis mechanic THIS TABLE SHIPS is observable from a cast, an
-// aura or an entity appearing. A yell is range-gated (`emitMobYell` drops anyone past
-// `YELL_RANGE`), so it is an anchor with a backstop rather than a source of truth.
+// the wire carries, and every Nythraxis mechanic this table ships is observable from a cast, an
+// aura or an entity. A yell is range-gated (`emitMobYell` drops anyone past `YELL_RANGE`), so it
+// is an anchor with a backstop rather than a source of truth.
 //
-// THAT SENTENCE USED TO SAY "every Nythraxis mechanic" and it was never true of the whole fight,
-// only of the four mechanics here. Grave Eruption is a pure ground telegraph with no cast, no
-// aura and no entity, and until loader API minor 12 it was not readable at all. It is now:
-// `woc.world.hazards` publishes the encounter's eruption, flame and sigil families, so a fourth
-// anchor route (`onHazard`) exists for them, the way `ignivarMeteor` and `varkhulForgestorm`
-// already use it. Neither Grave Eruption nor Binding Sigil is declared here yet, and adding one
-// is not mechanical: the cadences live in `src/sim/nythraxis_grave_eruption.ts` and
-// `src/sim/nythraxis_binding_sigil.ts` rather than in the encounter, so each needs its own
-// SOURCES entry read off the module that DECLARES it, and a cadence derived wrongly puts a raid
-// on a timer that drifts silently, which is worse than no row.
+// Grave Eruption and Binding Sigil are not declared: they are readable through `woc.world.hazards`
+// but their cadences live in their own modules (`src/sim/nythraxis_grave_eruption.ts`,
+// `src/sim/nythraxis_binding_sigil.ts`), so each needs a SOURCES entry read off the module that
+// declares it. A wrongly derived cadence drifts silently, which is worse than no row.
 //
-// HEROIC IS NOT SHIPPED: at game 0.41.0 the forge-lift is absent from HEROIC_DUNGEON_IDS, so
-// a raid always resolves to normal. Heroic tuning is not read and no heroic-only mechanic is
-// declared.
+// HEROIC IS NOT SHIPPED for the raids: the forge-lift is absent from HEROIC_DUNGEON_IDS, so a
+// raid always resolves to normal, and no heroic tuning or heroic-only mechanic is read for it.
 //
-// THE OUTPUT MUST SURVIVE BIOME, which is a constraint on its SHAPE. `JSON.stringify` always
-// expands an array; Biome collapses one of primitives that fits the line and leaves one of
-// OBJECTS expanded. A bare `["a", "b"]` here therefore fails lint and `pnpm fix` rewrites it
-// into a form the next run undoes, a loop with no resting state. Every list is a list of
-// objects that say what they are. Check with: generate, `pnpm fix`, generate, compare.
+// THE OUTPUT MUST SURVIVE BIOME: it collapses an array of primitives that fits the line and
+// leaves one of objects expanded, so a bare `["a", "b"]` fails lint and `pnpm fix` and the next
+// run undo each other forever. Every list is a list of objects. Check with: generate, `pnpm fix`,
+// generate, compare.
 
 import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -82,19 +71,9 @@ const MODULES = {
 
 const SOURCES = {
   nythraxis: 'src/sim/encounters/nythraxis.ts',
-  // Game 0.42.0 lifted the whole Dread Curse mechanic out of the encounter into
-  // its own module. The encounter still drives the cadence and IMPORTS the id and
-  // the tuning from here, so the encounter source no longer contains either, and
-  // the id check stopped rather than writing a row with a renamed aura in it.
-  // Read the file that DECLARES the thing, never the one that re-exports or
-  // imports it: a text reader pointed at an import line finds the name and no
-  // value behind it, which is the quiet gap the hard stop exists to prevent.
+  // Read the file that DECLARES a value, never one that imports or re-exports it: a text reader
+  // pointed at an import line finds the name and no value behind it.
   nythraxisDreadCurse: 'src/sim/nythraxis_dread_curse.ts',
-  // The same extraction again, and a substantive one. Game 0.42.0 REPLACED the 5%
-  // Final Stand haste enrage with a third phase entered at 30%, in its own module.
-  // The old `NYTHRAXIS_FINAL_STAND_HP` and the `nythraxis_final_stand` aura are
-  // both gone from the sim, so both checks stopped rather than shipping a table
-  // telling a raid the enrage comes at 5%.
   nythraxisKingsWrath: 'src/sim/nythraxis_kings_wrath.ts',
   ignivar: 'src/sim/encounters/ignivar.ts',
   varkhul: 'src/sim/encounters/varkhul.ts',
@@ -163,11 +142,8 @@ function gamePathFrom(args) {
 }
 
 /**
- * Prove the path really is the game before loading a module out of it.
- *
- * The package NAME rather than the presence of a directory: a wrong path that happens to
- * hold a `src` reads as plausible until the module graph fails, and a resolution failure
- * reads as the game having moved something.
+ * Prove the path is the game by its package NAME before loading from it: a wrong path holding a
+ * `src` fails later as a resolution error that reads as the game having moved something.
  */
 function checkoutVersion(root) {
   let parsed;
@@ -186,11 +162,8 @@ function checkoutVersion(root) {
 }
 
 /**
- * The game's own modules, through its own module graph.
- *
- * `configFile: false` on purpose: the game's vite config is about building the game, and
- * running its plugin chain to read a handful of modules would tie this script to a build
- * pipeline it has no business knowing about.
+ * The game's own modules, through its own module graph. `configFile: false` keeps this script
+ * off the game's build plugin chain.
  */
 async function loadModules(root) {
   const server = await createServer({
@@ -521,15 +494,8 @@ const NYTHRAXIS_NUMBERS = {
 };
 
 /**
- * The Dread Curse tuning, which lives in its own module since game 0.42.0.
- *
- * Separate from the block above because it is read from a DIFFERENT file, and the
- * failure message has to name the file that actually stopped declaring something.
- *
- * `perStack` split by difficulty in the same release, which is the substantive
- * half: the mechanic runs on both difficulties now and heroic only raises the
- * per-stack bite, so the two figures follow the `deathlessPct`/`deathlessPctHeroic`
- * pairing already in the block above rather than inventing a shape.
+ * The Dread Curse tuning, separate from the block above because it is read from a DIFFERENT
+ * file and a failure has to name the file that stopped declaring something.
  */
 const NYTHRAXIS_DREAD_CURSE_NUMBERS = {
   dreadCurseEvery: 'NYTHRAXIS_DREAD_CURSE_EVERY',
@@ -547,14 +513,7 @@ const NYTHRAXIS_DREAD_CURSE_AURA_IDS = {
   dreadCurse: 'nythraxis_dread_curse',
 };
 
-/**
- * The King's Wrath phase, which replaced the Final Stand enrage at game 0.42.0.
- *
- * Read from its own module for the reason the Dread Curse block is: the encounter
- * imports these and no longer declares them. The name is an EXPORT here rather
- * than a declared literal, unlike every other name in this file, because the game
- * happens to export it, and a read beats a transcription wherever one is offered.
- */
+/** The King's Wrath phase, read from its own module for the reason the Dread Curse block is. */
 const NYTHRAXIS_KINGS_WRATH_NUMBERS = {
   kingsWrathHp: 'NYTHRAXIS_PHASE_THREE_HP',
   kingsWrathDamageBonus: 'NYTHRAXIS_KINGS_WRATH_DAMAGE_BONUS_NORMAL',
@@ -579,9 +538,8 @@ const NYTHRAXIS_AURA_IDS = {
 };
 
 /**
- * `spiritMending` is checked against its own export rather than against the encounter source,
- * because the heal is driven by the generic `channelHeal` mob mechanic and its id lives with
- * that mechanic. That is the stronger of the two checks, which is why it is separate.
+ * `spiritMending` is checked against the healer module's export (`checkMendingId`) rather than
+ * the encounter source, because the generic `channelHeal` mechanic owns that id.
  */
 const NYTHRAXIS_CAST_IDS = {
   deathlessRage: 'nythraxis_deathless_rage',
@@ -630,11 +588,9 @@ function nythraxisTuning(constants, dreadCurseConstants, kingsWrathConstants) {
 }
 
 /**
- * The three wardstones, in the game's own authored order and carrying its own names.
- *
- * The NAME is the whole point of reading these rather than deriving a side from a bearing:
- * "Left" and "Right" are what a player reads when they target one, and a client-derived
- * side flips with the camera. A rename in the game therefore rewrites this table.
+ * The three wardstones in the game's authored order, carrying its own names: "Left" and "Right"
+ * are what a player reads on targeting one, where a side derived from a bearing flips with the
+ * camera.
  */
 function wardstones(def, itemId) {
   const found = (def.objects ?? []).filter((one) => one.itemId === itemId);
@@ -789,16 +745,9 @@ function nythraxisBlocks(t, deps) {
       heroicMult: t.soulRendHeroicMult,
     },
     {
-      // The last stretch of the fight, and the one state on this boss that is not a mechanic
-      // to answer: nothing is done about it except to know it is coming.
-      //
-      // Game 0.42.0 replaced the 5% Final Stand haste enrage with this, a third PHASE
-      // entered at 30% carrying a permanent damage bonus. Six times as much fight
-      // happens under it, so the old row was not merely mislabelled: it put the
-      // warning at the wrong end of the encounter.
+      // The third phase with its permanent damage bonus: nothing is done about it except to know
+      // it is coming. The heading names the shape and the row names the aura.
       kind: 'enrage',
-      // The heading names the SHAPE and the row names the aura, the way the adds block heads
-      // 'Adds' over each add's own name. One row is still a row.
       label: 'Enrage',
       name: NYTHRAXIS_KINGS_WRATH_AURA_NAMES.kingsWrath,
       aura: NYTHRAXIS_KINGS_WRATH_AURA_IDS.kingsWrath,
@@ -813,15 +762,9 @@ function nythraxisBlocks(t, deps) {
       perStack: t.dreadCursePerStack,
       perStackHeroic: t.dreadCursePerStackHeroic,
       maxStacks: t.dreadCurseMaxStacks,
-      // The stack count at which the other tank taunts. The game publishes this to
-      // its own guide, so it is the one figure here a player is expected to act on
-      // rather than infer from the cap.
+      // The game's own published swap point, which beats a share of the cap.
       swapStacks: t.dreadCurseSwapStacks,
-      // NOT heroicOnly, and it said otherwise until game 0.42.0. The mechanic runs
-      // on both difficulties now ("the Nythraxis tank-swap debuff, on BOTH
-      // difficulties", src/sim/nythraxis_dread_curse.ts), and heroic raises only
-      // the per-stack bite. A normal-difficulty tank was being told this would not
-      // happen to them.
+      // The curse runs on both difficulties; heroic raises only the per-stack bite.
       heroicOnly: false,
     },
     nythraxisAddsBlock(deps),
@@ -829,12 +772,8 @@ function nythraxisBlocks(t, deps) {
 }
 
 /**
- * One mechanic module the encounter no longer declares, checked and read.
- *
- * Game 0.42.0 lifted two of Nythraxis's mechanics into modules of their own, and
- * this is what a third extraction costs: a `where` and its id and name tables.
- * The checks stay against the DECLARING file, so a rename still stops here rather
- * than writing a row naming an aura that no longer exists.
+ * A mechanic module outside the encounter, checked against the DECLARING file so a rename stops
+ * here rather than writing a row naming an aura that no longer exists.
  */
 function extractedMechanic(where, source, ids, names) {
   checkIds(source, ids, 'auras', where);
@@ -844,14 +783,7 @@ function extractedMechanic(where, source, ids, names) {
   return constantsIn(source, where);
 }
 
-/**
- * Every id and name check for this encounter, and the tuning that survives them.
- *
- * Split out of `nythraxisRow` when game 0.42.0 took the mechanic count from one
- * source file to three: the row builder describes the SHAPE of the encounter, and
- * the reading and checking of three files is a different job that had started to
- * bury it.
- */
+/** Every id and name check for this encounter, and the tuning that survives them. */
 function nythraxisChecked(deps, source, constants) {
   checkIds(source, NYTHRAXIS_AURA_IDS, 'auras', SOURCES.nythraxis);
   const owned = Object.fromEntries(NYTHRAXIS_OWNED_CASTS.map((k) => [k, NYTHRAXIS_CAST_IDS[k]]));
@@ -910,9 +842,7 @@ function nythraxisRow(deps) {
       fields: NYTHRAXIS_TIMER_FIELDS,
       where: SOURCES.nythraxis,
     }),
-    // What stops every clock at once, as one list of conditions rather than two parallel
-    // arrays: each returns early from the game's own per-tick driver, and each says whether
-    // it is an aura the boss wears or a cast it is in the middle of.
+    // What stops every clock at once: each returns early from the game's own per-tick driver.
     freeze: [
       whenAura(NYTHRAXIS_AURA_IDS.deathlessStun),
       whenAura(NYTHRAXIS_AURA_IDS.transitionPause),
@@ -1400,9 +1330,8 @@ function varkhulIds(mods) {
 
 /**
  * One list because his driver returns before EVERY cadence while any major ability is in
- * flight. Two windows cannot be closed from a client: Anvil's Decree clears the cast while he
- * walks to the anvil, and the forgestorm's warnings lapse between waves, so there this counts
- * down where the game does not.
+ * flight. Two windows no client can see (the walk to the anvil, the gaps between forgestorm
+ * waves) count down here where the game holds.
  */
 function varkhulFreeze(ids) {
   return [
@@ -1702,8 +1631,7 @@ function report(row) {
 
 async function main() {
   const root = gamePathFrom(process.argv.slice(INDENT));
-  // The identity check FIRST, before the module graph is touched: a wrong path reported as
-  // a resolution failure reads as the game having moved something.
+  // The identity check FIRST, before the module graph is touched (see `checkoutVersion`).
   const gameVersion = checkoutVersion(root);
   const sources = {};
   for (const [name, path] of Object.entries(SOURCES)) {

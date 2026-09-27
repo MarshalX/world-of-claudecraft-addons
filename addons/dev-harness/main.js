@@ -2,14 +2,10 @@
 
 // Dev Harness: run every part of the addon API against the real game and say what worked.
 //
-// An ordinary addon with no access to anything the loader does not publish, which is what
-// makes it worth having: if a surface can be checked from here, it can be checked by
-// anyone's addon. It catches the two failures a unit suite cannot, a live game that is
-// not the shape the fakes assume and a surface never wired to the object an addon is
-// handed.
-//
-// It never touches the game's state: everything here reads, renders into the loader's own
-// root, or plays a sound.
+// An ordinary addon using only what the loader publishes, so it catches what a unit suite
+// cannot: a live game that is not the shape the fakes assume, and a surface never wired to
+// the object an addon is handed. It never touches game state: it reads, renders into the
+// loader's root, or plays a sound.
 
 const CHECK_TIMEOUT_MS = 3000;
 /** Long enough that one player action repaints once, short enough to feel live. */
@@ -44,9 +40,8 @@ const PAINT_WAIT_MS = 250;
 const LIST_BUDGET = 2;
 const LIST_ROWS = 3;
 /**
- * The scaling probe: a box of 205 divided between 8 rows with a 3px gap is 23 each, which
- * is the natural height of a kit row and therefore the number a sized row should draw at.
- * Stated rather than computed, so the check fails if the division ever moves.
+ * The scaling probe: 205 split between 8 rows with a 3px gap is 23 each, a kit row's natural
+ * height. Stated rather than computed, so the check fails if the division moves.
  */
 const SCALE_BOX = 205;
 const SCALE_ROWS = 8;
@@ -55,9 +50,8 @@ const SCALE_MIN = 12;
 const SCALE_SHARE = 23;
 const SCALE_WIDTH = 240;
 /**
- * What the formatting check puts through. The two that look like typos are the cases
- * worth having: 59.5 reads as `60` rather than `1m`, since the minute branch is chosen on
- * the raw value and the ceiling lands after it, and 3720 is an hour and two minutes.
+ * What the formatting check puts through. 59.5 reads as `60`, not `1m`, since the minute
+ * branch is chosen on the raw value before the ceiling; 3720 is an hour and two minutes.
  */
 const FMT_INPUT = {
   seconds: 45,
@@ -67,14 +61,14 @@ const FMT_INPUT = {
   one: 1,
   many: 4,
   pair: 2,
-  /** Read as a figure and never as an absence, which is the case below that says so. */
+  /** Read as a figure, never as an absence. */
   zero: 0,
 };
 
-/** A quarter turn, which is where the sign convention is either right or backwards. */
+/** A quarter turn, where the sign convention is either right or backwards. */
 const QUARTER_TURN_DEGREES = 90;
 
-/** Straight ahead, a right turn and a left one, which are the three a reader can check. */
+/** Straight ahead, a right turn and a left one. */
 const COMPASS_CASES = [
   ['ahead', FMT_INPUT.zero, '↑'],
   ['to the right', QUARTER_TURN_DEGREES, '→'],
@@ -85,10 +79,8 @@ const PROBE_YARDS = 10;
 const PROBE_TOLERANCE = 0.01;
 
 /**
- * The three squares the tile demonstration drains: label, ability, class, school. The last
- * one names an ability nothing ships art for, so its slot collapses and the square is left
- * with its wedge and its figures on nothing, which is the case a cooldown display meets
- * constantly.
+ * The tile demonstration's squares, as label, ability, class, school. The last names an
+ * ability with no art, so its slot collapses to the wedge and figures alone.
  */
 const DEMO_TILES = [
   ['Fireball', 'fireball', 'mage', 'fire'],
@@ -97,10 +89,8 @@ const DEMO_TILES = [
 ];
 
 /**
- * Every key the published types say `world.on` accepts. Written out rather than read from
- * anywhere, which is the point: the loader owns one list and this is an independent second
- * one. A key added to the published types and not to the runtime's list would typecheck
- * everywhere and throw here.
+ * Every key the published types say `world.on` accepts, written out as an independent copy
+ * of the loader's list: a key in the types and missing from the runtime throws here.
  */
 const WORLD_KEYS = [
   'player',
@@ -147,9 +137,8 @@ const WORLD_KEYS = [
   'buyback',
 ];
 /**
- * Every way the published types say an attack can land. A second independent copy, for the
- * reason `WORLD_KEYS` is one: a kind the wire sends and the types do not list reaches an
- * addon as an ordinary string and is silently wrong there rather than loudly.
+ * Every way the published types say an attack can land, an independent copy like
+ * `WORLD_KEYS`: an unlisted kind reaches an addon as a plain string and is silently wrong.
  */
 const DAMAGE_KINDS = ['hit', 'miss', 'dodge', 'parry', 'block', 'resist', 'evade'];
 /** An arbitrary nested value, to show that storage is not flattened to strings. */
@@ -157,11 +146,7 @@ const PROBE_VALUE = Object.freeze(['a', ['b'], { c: true }]);
 /** Matches --color-text-error, so a failed line reads the way the manager's do. */
 const FAIL_COLOR = 'rgb(255 143 133)';
 
-/**
- * The sibling file this addon declares, and what it has to contain. `data.json` is
- * deliberately inert: what is being demonstrated is the route, which is that a table can
- * live in its own file instead of being pasted into `main.js`.
- */
+/** The declared sibling file and its marker. Deliberately inert: the route is what is checked. */
 const DATA_FILE = 'data.json';
 const DATA_MARKER = 'dev-harness data file';
 /** A name no manifest declares, which is the only reason it is refused. */
@@ -185,9 +170,8 @@ const EPOCH_FLOOR_MS = 1_577_836_800_000;
 const MAX_FRAME_DT_MS = 250;
 
 /**
- * The clock that measures an INTERVAL, and picking the wrong one of the two is silent:
- * `now()` is monotonic from this page load, `wallClock()` is epoch and is the one for
- * anything stored. A stored `now()` reading looks like the future on the next load.
+ * `now()` is monotonic from page load and measures intervals; `wallClock()` is epoch and is
+ * the one to store. A stored `now()` reading looks like the future on the next load.
  */
 const started = woc.now();
 
@@ -200,18 +184,15 @@ woc.net.onRaw(() => {
 /** Ticks of the loader's own animation loop since load, and the last delta it gave. */
 let framesTicked = 0;
 let lastFrameDt = null;
-// Subscribed for the session, like the world keys at the bottom of this file and at the
-// same price: the watcher already samples once per animation frame.
+// Subscribed for the session: the watcher already samples once per animation frame.
 woc.onFrame((dt) => {
   framesTicked += 1;
   lastFrameDt = dt;
 });
 
 /**
- * Subscribed and dropped in the same breath, so anything it counts is the loader still
- * calling a handler that was torn down. The teardown is the half worth checking: a handler
- * that never fires is visible immediately, while one the loader forgot to release keeps
- * running against a disabled addon.
+ * Subscribed and dropped at once, so any count is the loader calling a torn-down handler,
+ * which would keep running against a disabled addon.
  */
 let strayFrames = 0;
 woc.onFrame(() => {
@@ -219,18 +200,13 @@ woc.onFrame(() => {
 })();
 
 /**
- * Whether the GAME still matches what the published types claim, which only a live session
- * can answer: these records pass through the loader untouched, so no fake can catch a
- * drift. Everything else in this file asks whether a surface reached the addon.
+ * Whether the game still matches the published types. These records pass through the loader
+ * untouched, so only a live session can catch drift. The claims: `evade` lands at 0;
+ * `absorbed` is absent rather than 0 (the only thing parting a shielded heal from an
+ * overheal); `abilityId` is a string whenever it is set.
  *
- * Three claims, each of which fails silently in an addon that believed it. `evade` always
- * lands at 0, so a meter counts it as an outcome and never as damage. `absorbed` is absent
- * rather than 0, which is all that separates a heal a shield devoured from one that
- * overhealed. `abilityId` is a string whenever it is anything, since an addon builds an
- * icon URL from it.
- *
- * NOT watched: whether a non-null `abilityId` only rides a player's own hit. Its source
- * can have left interest scope, so the check would report the roster as the wire.
+ * Not watched: whether a non-null `abilityId` only rides a player's own hit, since its source
+ * can have left interest scope and the check would report the roster as the wire.
  */
 const records = {
   damage: 0,
@@ -241,7 +217,7 @@ const records = {
   auras: 0,
   aurasAttributed: 0,
 };
-/** The distinct contradictions seen, named. A count alone does not say what broke. */
+/** The distinct contradictions seen, named, since a count does not say what broke. */
 const contradictions = [];
 
 function contradiction(note) {
@@ -251,11 +227,8 @@ function contradiction(note) {
 }
 
 /**
- * The id a damage record carries, and whether the spellbook knows it. A null is the
- * ordinary answer and by a wide margin the common one: the game fills this only on a
- * player's primary direct hit. What is worth counting is how many of the non-null ones the
- * spellbook resolves, which is the measurement behind whether reaching for this field buys
- * a display anything a name lookup would not.
+ * Counts a damage record's `abilityId` and whether the spellbook resolves it. Null is the
+ * common answer: the game fills it only on a player's primary direct hit.
  */
 function noteAbilityId(id) {
   if (id === null || id === undefined) {
@@ -287,8 +260,7 @@ woc.net.onEvent('damage', (event) => {
 
 woc.net.onEvent('heal2', (event) => {
   records.heals += 1;
-  // Absent, never 0 and never null, is what lets an addon tell a heal a shield ate
-  // from a heal that overhealed. Both land at `amount: 0` and nothing else parts them.
+  // Absent, never 0 or null: both a shielded heal and an overheal land at `amount: 0`.
   if (event.absorbed === 0 || event.absorbed === null) {
     contradiction(`a heal carried absorbed ${String(event.absorbed)}, which is meant to be absent`);
   }
@@ -296,12 +268,8 @@ woc.net.onEvent('heal2', (event) => {
 });
 
 /**
- * Overhealing, which is published as absent-or-positive and as PARTIAL ONLY.
- *
- * The absence rule is the same one `absorbed` carries and fails the same silent way: a 0
- * here would make "no overhealing" and "some overhealing" the same reading. The partial
- * rule cannot be checked from this side at all, because a fully overhealing tick emits no
- * record for a watcher to see, which is exactly why it is documented rather than asserted.
+ * Overheal is published as absent-or-positive, and partial only. The partial rule cannot be
+ * checked here: a fully overhealing tick emits no record at all.
  */
 function noteOverheal(event) {
   if (event.overheal === undefined) {
@@ -315,13 +283,9 @@ function noteOverheal(event) {
 }
 
 /**
- * The aura attribution added in game 0.35.0, and the only route to a MOB ability's id.
- *
- * Two claims worth a live session. All four fields ride the same emit path, so `sourceId`
- * and `abilityId` arrive together or not at all; an addon that tested one and read the
- * other would be right until that stopped holding. And `refresh` marks a re-application
- * that emits no fade, so a duration tracker counting gains against fades needs it: a
- * `refresh` on a record that is not a gain would break that counting silently.
+ * Aura attribution, the only route to a mob ability's id. `sourceId` and `abilityId` ride
+ * one emit path, so they arrive together or not at all. `refresh` marks a re-application with
+ * no fade, so one on a non-gain would silently break gain-versus-fade counting.
  */
 function lonelyField(hasSource) {
   if (hasSource) {
@@ -388,8 +352,7 @@ function checkGame() {
     return result('game', false, 'woc.game.channel is not a string');
   }
   if (game.version === null) {
-    // Not a failure. The footer is written by the game and is not there before
-    // the document is, so a null here on an early run is expected.
+    // Not a failure: the game writes the footer after document-start.
     return result('game', true, `${game.channel}, version not readable yet`);
   }
   return result('game', true, `${game.channel} running ${game.version} (${String(game.build)})`);
@@ -425,8 +388,7 @@ async function checkStorage() {
   if (!keys.includes(key)) {
     return result('storage', false, `keys() did not list it: ${keys.join(', ')}`);
   }
-  // Deliberately checked: settings live in a namespace of their own, and an
-  // addon's own keys() must not report them.
+  // Settings live in their own namespace, so an addon's keys() must not report them.
   if (keys.includes('values') || keys.includes('keybinds')) {
     return result('storage', false, "keys() is reporting loader-owned keys as this addon's own");
   }
@@ -440,16 +402,9 @@ async function checkStorage() {
 }
 
 /**
- * The store refusing a write for a character the world can name. Null otherwise.
- *
- * `world.characterKey` and the key `woc.storage.character` files under are the same value
- * by construction, and this is the only place both can be read in the same breath: two
- * checks reading them separately would disagree whenever a login landed between them.
- *
- * Only one direction of a disagreement is a failure. A store that refuses while the world
- * names a character is an addon whose per-character data silently never persists. The
- * other direction is what this addon's own suite arranges on purpose, so it is reported in
- * the note rather than failed.
+ * The store refusing a write for a character the world can name, or null. Read together
+ * with `world.characterKey` so a login cannot land between the two. Only this direction
+ * fails: the other is what this addon's suite arranges on purpose.
  */
 function refusedWhileKnown(accepted) {
   const key = woc.world.characterKey;
@@ -460,16 +415,9 @@ function refusedWhileKnown(accepted) {
 }
 
 /**
- * The per-character store.
- *
- * The first write decides which half of this runs, rather than a reading of `world.player`.
- * The two do move together in the loader, but inferring one from the other would make this
- * check fail whenever that coupling was the thing that broke.
- *
- * Which half runs is reported rather than asserted. The refusal itself has a unit suite
- * with a fake that can hold world entry open; what cannot be checked anywhere but here is
- * that any of this reached the object an addon is handed, and that a real round trip
- * through the userscript manager comes back.
+ * The per-character store. The first write decides which half runs, not `world.player`, so
+ * the check still fails when the coupling between them is what broke. Which half ran is
+ * reported, not asserted.
  */
 async function checkCharacterStorage() {
   const store = woc.storage.character;
@@ -477,8 +425,7 @@ async function checkCharacterStorage() {
     return result('character storage', false, 'storage.character is not on the object');
   }
   const key = 'harness-probe';
-  // Not a read, deliberately: a read before world entry is CONTRACTED not to
-  // settle, so awaiting one here would hang the slow half for the session.
+  // Not a read: a read before world entry is contracted not to settle, and would hang.
   const refusal = await store
     .set(key, PROBE_VALUE)
     .then(() => null)
@@ -499,25 +446,21 @@ async function checkCharacterStorage() {
   if (JSON.stringify(read) !== JSON.stringify(PROBE_VALUE)) {
     return result('character storage', false, `read back ${JSON.stringify(read)}`);
   }
-  // The derivation has to come back OFF: a raw listing would hand this addon the
-  // key with the realm and character still on it, and every other character's too.
+  // The listing must strip the realm and character from each key.
   if (!keys.includes(key)) {
     return result('character storage', false, `keys() did not list it: ${keys.join(', ')}`);
   }
   if (gone !== 'absent') {
     return result('character storage', false, 'delete left the value behind');
   }
-  // Separate stores, not one with a prefix. Written last so the account-wide key
-  // it leaves behind is the one checkStorage already cleans up.
+  // Separate stores, not one with a prefix. Written last so checkStorage cleans up the key.
   await woc.storage.set(key, 'account-wide');
   const stillMine = await store.get(key, 'absent');
   await woc.storage.delete(key);
   if (stillMine !== 'absent') {
     return result('character storage', false, 'an account-wide key was visible as this character');
   }
-  // The key is named as well as counted, so a reader can see the pair the check
-  // above will not fail on: a store that answers for a character the world has
-  // not named yet reads here as a round trip against "null".
+  // Named so a store answering before the world names a character reads as "null" here.
   return result(
     'character storage',
     true,
@@ -526,13 +469,9 @@ async function checkCharacterStorage() {
 }
 
 /**
- * The declared file itself: parsed by the loader, and the same object every call.
- *
- * The read needs the host, because the file is fetched at install and answered from that
- * cache rather than over the network at run time. A document with no marketplace behind it
- * has nothing to hand back, and that is reported in the loader's own words rather than
- * failed. In a real game a rejection means the addon was installed by a loader that did
- * not know about `data` yet.
+ * The declared file: parsed by the loader, and the same object every call. It is answered
+ * from the install cache, so a document with no marketplace behind it rejects, and that is
+ * reported rather than failed.
  */
 async function readDataFile() {
   const read = await woc
@@ -554,12 +493,9 @@ async function readDataFile() {
 }
 
 /**
- * A file shipped beside this one, and the name that was never declared.
- *
- * The second half is the one worth watching a person run. `woc.data` checks its argument
- * for membership in the manifest's `data` list, and nothing anywhere joins that argument
- * onto a URL, so a traversing name is refused for being undeclared rather than for looking
- * dangerous. That is a property of the design rather than of a filter.
+ * The declared file, and an undeclared one. `woc.data` checks membership in the manifest's
+ * `data` list and never joins its argument onto a URL, so a traversing name is refused for
+ * being undeclared.
  */
 async function checkData() {
   if (typeof woc.data !== 'function') {
@@ -572,8 +508,7 @@ async function checkData() {
   if (refusal === null) {
     return result('data', false, `${UNDECLARED_FILE} resolved, so the declared list is not read`);
   }
-  // The message has to name what IS declared, because the failure it reports is
-  // almost always a file added to the directory and not to the manifest.
+  // The message names what is declared: the usual cause is a file missing from the manifest.
   if (!refusal.includes(DATA_FILE)) {
     return result('data', false, `the refusal did not say what is declared: ${refusal}`);
   }
@@ -581,10 +516,8 @@ async function checkData() {
 }
 
 /**
- * The bus, checked against itself, which is the only thing one addon can do. The harness
- * cannot prove two addons reach each other, because it is one addon and the loader never
- * delivers anybody their own messages. So what is checked is exactly that refusal, plus
- * the surface being callable and the wildcard being a real value rather than undefined.
+ * One addon cannot prove two reach each other, so this checks that the bus is callable,
+ * that `anySender` is a real value, and that an addon never hears its own messages.
  */
 function checkBus() {
   const { bus } = woc;
@@ -616,9 +549,8 @@ function checkBus() {
 }
 
 /**
- * The cue list is empty until the SFX pack has been fetched, and `preload`
- * resolving is what says it has been. Reading `cues()` on the addon's first pass
- * is a race with that fetch, so preloading nothing is how to wait for it.
+ * The cue list is empty until the SFX pack is fetched, so preloading nothing waits for it
+ * before `cues()` is read.
  */
 async function checkSound() {
   await woc.sound.preload([]);
@@ -631,8 +563,7 @@ async function checkSound() {
   if (!cues.includes(wanted)) {
     return result('sound', false, `"${wanted}" is not one of the ${String(cues.length)} cues`);
   }
-  // A cue is not a file: the pack collapses a numbered family into one cue, so
-  // this count is well below the number of files the game serves.
+  // A cue is not a file: the pack collapses a numbered family into one cue.
   return result('sound', true, `${String(cues.length)} cues, "${wanted}" is one of them`);
 }
 
@@ -649,8 +580,7 @@ function checkKeys() {
   if (!(Array.isArray(report.game) && Array.isArray(report.addons))) {
     return result('keys', false, 'conflicts() did not return the two lists');
   }
-  // The source is the interesting half. 'stored' means only explicitly saved
-  // bindings could be read, so an empty reading does not mean the key is free.
+  // A 'stored' source means only saved bindings were read, so empty does not mean free.
   const own = report.addons.some((entry) => entry.startsWith(`${woc.addon.fqid}:`));
   if (!own) {
     return result('keys', false, `conflicts("${combo}") did not see this addon's own bind`);
@@ -678,15 +608,8 @@ function checkWorld() {
 }
 
 /**
- * Every published key is watchable, and every read answers.
- *
- * A key that reached the published types without reaching the runtime's own list throws
- * from `world.on`, which is invisible to a unit suite because nothing there reads the
- * published types.
- *
- * The reads are checked for being present rather than for a value. Before world entry
- * almost all of them are legitimately null, and a key missing from the object entirely is
- * a different thing from one answering null, which is what `undefined` separates.
+ * Every published key is watchable and every read answers. Reads are checked for presence,
+ * not value: before world entry most are legitimately null, while a missing key is undefined.
  */
 function checkWorldKeys() {
   const unwatchable = [];
@@ -711,11 +634,8 @@ function checkWorldKeys() {
 }
 
 /**
- * A mob's cast is readable even though no event announces it. `net.onEvent('castStart')`
- * fires for a player cast, a pet's cast and the game's timed activities, and never for a
- * mob, so `world.casts` is the only way to see a boss cast. What this can check without a
- * fight is that the derivation runs over the live roster and agrees with the cast fields on
- * the entities.
+ * `castStart` never fires for a mob, so `world.casts` is the only way to see a boss cast.
+ * Without a fight, this checks it agrees with the cast fields on the live roster.
  */
 function checkCasts() {
   const { casts } = woc.world;
@@ -740,22 +660,17 @@ function checkCasts() {
 }
 
 /**
- * Whether this document has the loader's stylesheet in it at all. The control for the
- * measurement below: the harness also runs headless, where CSS text does not survive, and
- * a rule missing because no sheet was injected has to be told apart from one missing
- * because its class was renamed.
+ * Whether the loader's stylesheet is in this document. Headless runs carry no CSS, and that
+ * has to be told apart from a rule missing because its class was renamed.
  */
 function sheetLive() {
   return getComputedStyle(win.el).position === 'absolute';
 }
 
 /**
- * A suite can assert the classes the kit writes and not that the sheet declaring them
- * exists, since CSS text does not survive that environment: a class renamed on one side
- * of the seam passes every test and draws nothing. Here it is measurable.
- *
- * Attached and taken away in the same call, because a style cannot be computed for an
- * element outside the document and every kit rule is scoped under the loader's root.
+ * Measures that the sheet reaches a kit class, which no suite can: a class renamed on one
+ * side passes every test and draws nothing. Attached briefly, since kit rules are scoped
+ * under the loader's root and a detached element has no computed style.
  */
 function checkTile() {
   if (typeof woc.ui.tile !== 'function') {
@@ -771,8 +686,7 @@ function checkTile() {
   const announced = tile.el.getAttribute('aria-label');
   tile.destroy();
 
-  // Half a timer left has to be half the square GIVEN BACK, not half of it covered:
-  // the public fraction is what remains and the wedge takes what has elapsed.
+  // The fraction is what remains and the wedge covers what has elapsed.
   if (swept !== '50.00%') {
     return result('tile', false, `a half-spent timer swept ${swept ?? 'nothing'}`);
   }
@@ -789,12 +703,8 @@ function checkTile() {
 }
 
 /**
- * Whether the loader wired these to the object an addon is handed at all: a builder that
- * never reached `woc.ui` typechecks everywhere and throws only here.
- *
- * The SETTER is checked rather than the change event: `set` must move the control without
- * calling back, or a pane that saves on change writes the value it was just given
- * straight back.
+ * The field and tab builders reached `woc.ui`, and `set` moves a control without calling
+ * back, or a pane that saves on change writes the value straight back.
  */
 function checkFields() {
   const { field, tabs } = woc.ui;
@@ -847,10 +757,8 @@ function keptWord(kept) {
 }
 
 /**
- * A row that survives a sync has to be the SAME row, since an addon holds measured state
- * on it and a rebuilt row draws identically until the moment those measurements matter.
- * A row past the budget comes OUT of the parent and stays alive, so `size` counts it
- * while the DOM does not.
+ * A row that survives a sync must be the same row, since an addon holds measured state on
+ * it. A row past the budget leaves the parent and stays alive, so `size` counts it.
  */
 function checkList() {
   if (typeof woc.ui.list !== 'function') {
@@ -891,8 +799,7 @@ function checkList() {
   if (cut.drawn !== 'b,a' || cut.held !== LIST_ROWS) {
     return result('list', false, `past the budget: drew "${cut.drawn}", held ${String(cut.held)}`);
   }
-  // The row it is NOT drawing has to be in the walk: a fade wants the pin that is off
-  // the list exactly as much as the ones on it.
+  // The walk includes rows not drawn: a fade needs the pin off the list too.
   if (cut.walked !== LIST_ROWS) {
     return result('list', false, `values() walked ${String(cut.walked)} of ${String(cut.held)}`);
   }
@@ -908,9 +815,8 @@ function checkList() {
 }
 
 /**
- * Every one writes a CLASS and never an inline style, which is the whole argument: an
- * inline style outranks every selector a stylesheet can spell, so one that reached for
- * `style` would look right on a desktop and silently drop the coarse-pointer floor.
+ * Every builder writes a class, never an inline style: an inline style outranks every
+ * selector and would silently drop the coarse-pointer floor.
  */
 function checkLayout() {
   const { column, row, line, show } = woc.ui;
@@ -959,12 +865,11 @@ function checkAnchor() {
   if (player === null) {
     return result('anchor', true, 'no player yet, so there is no point to project');
   }
-  // Visible or not is the camera's business: the player can be behind it, which
-  // is exactly what the anchor is supposed to hide for.
+  // Visibility is the camera's business: the player can be behind it.
   return result('anchor', true, `anchored to you, ${onScreenWord(visible)}`);
 }
 
-/** Whether the first frame had placed it yet, said in words a reader can use. */
+/** Whether the first frame had placed it yet. */
 function onScreenWord(visible) {
   if (visible) {
     return 'on screen';
@@ -973,10 +878,8 @@ function onScreenWord(visible) {
 }
 
 /**
- * Where a world point lands on screen, which is the arithmetic behind an anchor. The null
- * is the whole safety of this call and is why there is no `onScreen` flag beside it: a
- * point behind the camera has no place on screen, and a surface that answered with
- * coordinates anyway would put a marker on the wrong side of the player.
+ * Where a world point lands on screen. A point behind the camera answers null, never
+ * coordinates, which would put a marker on the wrong side of the player.
  */
 function checkProject() {
   if (typeof woc.ui.project !== 'function') {
@@ -1007,7 +910,7 @@ function builtOrWithheld(built, expected) {
   return built === null || built === expected;
 }
 
-/** Which of the two answers came back, in the words the report needs. */
+/** Which of the two answers came back. */
 function artWord(built) {
   if (built === null) {
     return 'withheld, the manifest says there is no file';
@@ -1016,13 +919,9 @@ function artWord(built) {
 }
 
 /**
- * The icon URL builders answer, and refuse an id they cannot build a name from.
- *
- * Two answers are correct for `ability` and `item` and only one is for `mob`, and the
- * difference is a served manifest. Where the game publishes which ids ship a painted file,
- * the loader withholds the URL for the rest rather than handing over one that 404s, so a
- * blank slot means "no art exists". The answer also moves: it is the optimistic URL until
- * the manifest lands, so this accepts either and says which one it got.
+ * The icon URL builders answer, and refuse an id they cannot build a name from. `ability`
+ * and `item` have a served manifest, so each is the optimistic URL until it lands and null
+ * for an id with no file after; either is accepted here. `mob` has no manifest.
  */
 function checkIcons() {
   const { icon } = woc.ui;
@@ -1037,20 +936,16 @@ function checkIcons() {
   if (!builtOrWithheld(item, '/ui/items/baked_bread.webp')) {
     return result('icons', false, `item() built ${String(item)}`);
   }
-  // Provenance for the FILE, never the item's name: nothing in the game keeps the
-  // two in step. A name at all means there is a file, so the pair cannot disagree.
+  // The art source name, never the item's name. A name at all means there is a file.
   if (icon.itemArtName('baked_bread') !== null && item === null) {
     return result('icons', false, 'itemArtName named art for an item with no icon');
   }
-  // A missing class is the case an addon hits before world entry, and a path with an
-  // empty segment in it would be a request that cannot succeed rather than a null.
+  // A missing class is what an addon hits before world entry, and must answer null.
   if (icon.ability('fireball', '') !== null) {
     return result('icons', false, 'ability() built a path with no class in it');
   }
-  // `aura` is the one builder that is NOT optimistic: the family is closed and
-  // covers the auras no ability id names, so it answers null until the manifest
-  // lands and null forever for an aura outside it. Both are legitimate here, so
-  // what is checked is that it refuses an id it cannot make a file name from.
+  // `aura` is not optimistic: it answers null until its manifest lands, so only the
+  // refusal of an unusable id is checkable here.
   if (icon.aura('') !== null) {
     return result('icons', false, 'aura() built a path from an empty id');
   }
@@ -1058,21 +953,14 @@ function checkIcons() {
 }
 
 /**
- * The served AURA art manifest, new with game 0.39.0.
- *
- * The half no unit suite reaches: whether the game still serves this family at all. The
- * check is deliberately not that any given aura has a file, because the family covers only
- * the auras no ability names (a mob's, an encounter's, a battleground rune's) and which of
- * those a session can see is content. What it proves is that the manifest read resolved and
- * that a known member of the family came back with a URL, so a release that moved or
- * dropped the file shows up here rather than as a blank slot in somebody's addon.
+ * Whether the game still serves the aura art manifest: the read resolves and a known member
+ * comes back with a URL. The family covers only auras no ability names, so which ones a
+ * session sees is content and is not checked.
  */
 async function checkAuraArt() {
   await woc.ui.icon.preloadAuras();
 
-  // Resurrection sickness: in the family since it shipped, and one of the few members
-  // that is neither an encounter's nor a battleground's, so a session anywhere can be
-  // expected to resolve it once the manifest is read.
+  // Neither an encounter's nor a battleground's, so any session can resolve it.
   const known = woc.ui.icon.aura('resurrection_sickness');
   if (known === null) {
     return result('aura art', false, 'manifest read but resurrection_sickness has no URL');
@@ -1080,9 +968,8 @@ async function checkAuraArt() {
   if (!known.startsWith('/ui/')) {
     return result('aura art', false, `aura() built ${known}`);
   }
-  // An aura applied by an ability carries that ability's id and belongs to `ability()`,
-  // which is the order the game's own resolver checks in. A URL here would mean the two
-  // families had started overlapping.
+  // An ability-applied aura belongs to `ability()`, as in the game's own resolver, so a
+  // URL here means the two families overlap.
   if (woc.ui.icon.aura('rejuvenation') !== null) {
     return result('aura art', false, 'an ability-applied aura resolved in the aura family too');
   }
@@ -1090,10 +977,8 @@ async function checkAuraArt() {
 }
 
 /**
- * The served art manifest, read for the player's own class. The half a unit suite cannot
- * reach: whether the game still serves the manifest, and whether the ability ids in it line
- * up with what the player has. Not every ability ships a file, so the check is that the
- * loader can tell rather than that any given ability has one.
+ * The skill art manifest for the player's class: that the game serves it and its ids line up
+ * with the spellbook. Not every ability ships a file, so this only counts them.
  */
 async function checkSkillArt() {
   const cls = woc.world.player?.templateId ?? '';
@@ -1102,8 +987,7 @@ async function checkSkillArt() {
   }
   await woc.ui.icon.preload(cls);
 
-  // The player's whole kit, which `world.abilities.known` is exactly. Walking the keys of
-  // the cooldown map instead only ever sees the abilities already on cooldown.
+  // The whole kit; the cooldown map's keys would see only abilities already on cooldown.
   const ids = (woc.world.abilities?.known ?? []).map((info) => info.id);
   if (ids.length === 0) {
     return result('skill art', true, `manifest read for ${cls}, no spellbook to check it against`);
@@ -1163,11 +1047,9 @@ function checkTimers() {
 }
 
 /**
- * The two clocks, and the difference between them a stored stamp depends on. `woc.now()`
- * is measured from this page load, so it is always a small number and is meaningless in
- * the next session; `woc.wallClock()` is epoch milliseconds and is the only one of the two
- * that survives a reload. A wall clock reading below 2020 is not an epoch stamp at all, and
- * a monotonic reading at or above it means `now()` has been wired to the wrong source.
+ * `woc.now()` counts from page load and `woc.wallClock()` is epoch milliseconds. A wall
+ * reading below 2020 is not an epoch stamp, and a monotonic one at or above it means `now()`
+ * is wired to the wrong source.
  */
 function checkClocks() {
   const monotonic = woc.now();
@@ -1193,10 +1075,8 @@ function checkClocks() {
 }
 
 /**
- * A count of zero is not a failure: this document may have no animation loop running. A
- * failure is a delta outside the documented range, or a handler still called after its
- * teardown. No "is it callable" arm, unlike `checkData`: the subscription is made at load,
- * so a missing `onFrame` takes the addon down before any check runs.
+ * Zero frames is not a failure, since this document may have no animation loop. There is no
+ * callable check: a missing `onFrame` throws at load, before any check runs.
  */
 function checkFrames() {
   if (strayFrames > 0) {
@@ -1216,9 +1096,8 @@ function checkFrames() {
 }
 
 /**
- * Each shadowed global, touched in a way that fires the proxy's `get` trap. Property reads
- * only, never a call or a construction: if the shadow were ever absent these have to be
- * harmless, and `new WebSocket(...)` in an unshadowed closure would open a real socket.
+ * Each shadowed global, touched by a property read only: if the shadow were absent these must
+ * be harmless, and `new WebSocket(...)` would open a real socket.
  */
 const SHADOW_PROBES = [
   ['localStorage', () => localStorage.length],
@@ -1229,9 +1108,8 @@ const SHADOW_PROBES = [
 ];
 
 /**
- * The loader shadows the riskiest globals inside an addon closure, so reaching for one
- * fails loudly and names the API to use instead. It is not a sandbox and the loader says
- * so plainly; this checks it is doing the job it does claim, which is to stop the accident.
+ * The loader shadows the riskiest globals so reaching for one throws and names the API to
+ * use. It is a guardrail against accidents, not a sandbox.
  */
 function checkShadowedGlobals() {
   const reachable = [];
@@ -1249,7 +1127,7 @@ function checkShadowedGlobals() {
   return result('shadowed globals', true, `${String(SHADOW_PROBES.length)} globals shadowed`);
 }
 
-/** What a display could guess from an id alone, which is the thing being replaced. */
+/** What a display could guess from an id alone. */
 function titleCase(id) {
   return id
     .split('_')
@@ -1258,10 +1136,8 @@ function titleCase(id) {
 }
 
 /**
- * `titleCase` above is the ORACLE rather than a duplicate: the published member has to
- * agree with the hand-written one, or a migrated addon draws different words. Everything
- * rounds UP, since a countdown reading 0 while the thing runs is the one error a timer
- * must not make.
+ * `titleCase` above is the oracle: the published member must agree with it, or a migrated
+ * addon draws different words. Durations round up, so a running timer never reads 0.
  */
 function checkFmt() {
   const { fmt } = woc;
@@ -1286,8 +1162,7 @@ function checkFmt() {
   for (const [what, degrees, want] of COMPASS_CASES) {
     same(what, fmt.compass(degrees), want);
   }
-  // A reading nobody has yet is nothing; a reading of zero is a reading. Checked as a
-  // pair, because a falsy test satisfies the first half and breaks the second.
+  // Absent is empty and zero is a reading; a falsy test passes one and breaks the other.
   same('absent duration', fmt.duration(null), '');
   same('absent bearing', fmt.compass(null), '');
   same('unusable duration', fmt.duration(Number.NaN), '');
@@ -1300,15 +1175,8 @@ function checkFmt() {
 }
 
 /**
- * The spellbook, and the id-to-name bridge it exists for.
- *
- * The round trip is the point, so that is what is asserted: every ability has to come back
- * as itself through both lookups. An index that answered a plausible-looking neighbour
- * would pass a spot check on one ability and be wrong everywhere else.
- *
- * The lookups are also checked for rejecting a name that is not the player's, because that
- * is the case a meter hits constantly: every mob ability reaches it as a display name with
- * no id behind it, and a null is the honest answer.
+ * The spellbook's id-to-name bridge: every ability round-trips through both lookups, and a
+ * name that is not the player's (every mob ability, to a meter) answers null.
  */
 function checkAbilities() {
   const book = woc.world.abilities;
@@ -1330,9 +1198,7 @@ function checkAbilities() {
   if (book.byName('\0 not an ability') !== null) {
     return result('abilities', false, 'byName answered for a name nobody has');
   }
-  // How many names a title-cased id would have got wrong, which is what a display had to
-  // fall back on before this surface existed. A count of zero would mean the bridge is not
-  // earning its place on this character.
+  // How many names a title-cased id would get wrong.
   const diverged = book.known.filter((info) => info.name !== titleCase(info.id));
   return result(
     'abilities',
@@ -1342,9 +1208,8 @@ function checkAbilities() {
 }
 
 /**
- * The derived half answers with no world at all: an id nobody has comes back title-cased
- * under `known: false`. The mark stays the addon's, so what is checked is that the FACT
- * arrives rather than that anything was drawn.
+ * `describe` answers with no world: an unknown id comes back title-cased under
+ * `known: false`. Drawing the mark is the addon's job, so only the fact is checked.
  */
 function checkDescribe() {
   const book = woc.world.abilities;
@@ -1375,9 +1240,8 @@ function checkDescribe() {
 }
 
 /**
- * One ability against the three fields game 0.41.0 added, all ABSENT rather than false or
- * zero when they do not apply. `offGcd` is deliberately not checked: the loader publishes it
- * only where the game says true, so a check for a false could never fire.
+ * One ability's optional shape fields, which are absent rather than false or zero when they do
+ * not apply. `offGcd` is published only when true, so it has nothing to check.
  */
 function abilityShapeFault(info) {
   const { empowerStages: stages, channel } = info;
@@ -1393,8 +1257,7 @@ function abilityShapeFault(info) {
   ) {
     return `${info.id} channels ${String(channel.duration)}s over ${String(channel.ticks)} ticks`;
   }
-  // A channel's length is here rather than in `castTime`, so a channel carrying a cast time
-  // contradicts the published advice.
+  // A channel's length lives here, so a channel with a cast time contradicts the types.
   if (info.castTime !== 0) {
     return `${info.id} is a channel and still carries a ${String(info.castTime)}s cast time`;
   }
@@ -1402,9 +1265,8 @@ function abilityShapeFault(info) {
 }
 
 /**
- * The three ability fields game 0.41.0 published, read off the player's own spellbook. All
- * three are optional by contract, so a class with none of them is an ordinary reading rather
- * than a missing surface, and `empowerStages` is the COUNT, since the live stage is on no wire.
+ * The optional ability shape fields across the player's spellbook. A class with none is an
+ * ordinary reading. `empowerStages` is the count; the live stage is on no wire.
  */
 function checkAbilityShapes() {
   const known = woc.world.abilities?.known ?? [];
@@ -1427,8 +1289,8 @@ function checkAbilityShapes() {
 }
 
 /**
- * How much of the null a reader can rule out. Only "no world" is separable from here; a live
- * player answering null is where a renamed member would land, looking like an offline session.
+ * Only "no world" is separable here; a renamed member would also answer null with a live
+ * player, looking like an offline session.
  */
 function noMultWord() {
   if (woc.world.player === null) {
@@ -1438,9 +1300,8 @@ function noMultWord() {
 }
 
 /**
- * The server's own movement multiplier. FOUR WAYS TO NULL, none a failure: before world entry,
- * offline play, spectating (the server skips the block) and the older movement wire. A null
- * must stay a null, since 1 is a real reading meaning nothing is affecting the player.
+ * The server's movement multiplier. Null before world entry, offline, spectating and on the
+ * older movement wire, none a failure. Null must never read as 1, which is a real reading.
  */
 function checkMoveSpeed() {
   const mult = woc.world.moveSpeedMult;
@@ -1457,9 +1318,8 @@ function checkMoveSpeed() {
 }
 
 /**
- * Only answerable while there is a player, and checked against the player's OWN position,
- * where the answers are known without a second source. A null from either while a player
- * is live means the surface is reading a position the loader does not have.
+ * Checked against the player's own position, where the answers are known. A null with a live
+ * player means the surface reads a position the loader does not have.
  */
 function checkGeometry() {
   const { world } = woc;
@@ -1494,9 +1354,8 @@ function checkGeometry() {
 }
 
 /**
- * NOBODY RECEIVES THEIR OWN MESSAGES, so a self round trip is unobservable by design and
- * an arriving answer cannot be checked here. What can: both halves reachable, the two
- * controls handed back, and following your own topic hearing nothing.
+ * Nobody receives their own messages, so only these are checkable: both halves callable, the
+ * two controls handed back, and following your own topic hearing nothing.
  */
 function checkPublish() {
   const { bus } = woc;
@@ -1505,8 +1364,7 @@ function checkPublish() {
   }
   let heard = 0;
   let asked = 0;
-  // Reads none of this addon's own state, deliberately: a producer runs during the call
-  // that registers it, while the body is still being evaluated.
+  // Reads no addon state: a producer runs inside `publish`, while the body is still evaluating.
   const publication = bus.publish('harness-probe', () => {
     asked += 1;
     return PROBE_VALUE;
@@ -1551,16 +1409,9 @@ function paintOutcome(painted) {
 }
 
 /**
- * `woc.paint`, which is the coalesced repaint three addons wrote byte for byte.
- *
- * Two requests before a frame have to produce ONE paint, which is the whole feature.
- *
- * IT WAITS ON `onFrame`, NOT ON `requestAnimationFrame`: a repaint rides the LOADER'S
- * shared loop, and in a document where that loop is driven by something other than the
- * browser, rAF fires while no loader frame has run at all.
- *
- * A loop that has not ticked is a stated skip rather than a failure, told apart by the
- * frame counter `frames` reads, so this cannot pass by having waited in the wrong place.
+ * Two `woc.paint` requests before a frame must produce one paint. It waits on `onFrame`, not
+ * `requestAnimationFrame`: a repaint rides the loader's loop, which rAF does not drive when
+ * something else ticks it. A loop that never ticked is a stated skip.
  */
 function checkPaint() {
   return new Promise((resolve) => {
@@ -1572,8 +1423,7 @@ function checkPaint() {
     const request = woc.paint(() => {
       painted += 1;
     });
-    // Before the watch, so the seat on the loop is taken ahead of it and the paint runs
-    // first within one frame.
+    // Before the watch, so the paint runs first within a frame.
     request();
     request();
     const finish = () => {
@@ -1591,12 +1441,8 @@ function checkPaint() {
 }
 
 /**
- * The `probe` id is claimed by nothing else, so a registration under it can only have come
- * from the frame, which is what makes this a check of the member rather than of the
- * keybind surface under it.
- *
- * The release is half the contract: the bind belongs to the FRAME, so destroying one takes
- * it with it, or a rebuild would leave a key pointing at a panel that is gone.
+ * Nothing else claims `probe`, so a registration under it came from the frame. Destroying the
+ * frame must release the bind, or a rebuild leaves a key pointing at a panel that is gone.
  */
 function checkToggleKey() {
   const combo = woc.keys.combo('probe');
@@ -1622,30 +1468,22 @@ function checkToggleKey() {
 }
 
 /**
- * The four surfaces a display sized against the game is built out of: the box the loader
- * is holding, the arithmetic that divides it, the height that goes onto a row, and the
- * square the game draws one item at.
- *
- * Measured rather than asserted where it can be. `ui.units` is pure and answers here; the
- * row height is a custom property the sheet derives from, so the check is that the derived
- * height actually reached the element, which is the half no suite can see. The item cell
- * can only be reported, since nothing on the page holds the figure it was copied from.
+ * The sizing surfaces: `frame.box()`, `ui.units`, a row's size, and `ui.itemCell`. The row is
+ * measured, since the sheet derives its height and no suite can see that. The item cell is
+ * only reported: it is a transcription of the game's bag grid with nothing to compare to.
  */
 function checkScaling() {
   const { units, bar, itemCell } = woc.ui;
   if (typeof units !== 'function' || typeof bar !== 'function') {
     return result('scaling', false, 'ui.units or ui.bar is not callable');
   }
-  // A number rather than a function, so the failure to catch is the member never having
-  // been wired to the object an addon is handed: that reads as `undefined`, and an addon
-  // sizing a grid off it lays every square out at NaN pixels rather than throwing.
+  // Unwired, it reads as `undefined` and a grid sized off it lays out at NaN without throwing.
   if (typeof itemCell !== 'number' || !Number.isFinite(itemCell) || itemCell <= 0) {
     return result('scaling', false, `ui.itemCell is ${String(itemCell)} rather than a size`);
   }
   const share = units(SCALE_BOX, { count: SCALE_ROWS, gap: SCALE_GAP, min: SCALE_MIN });
   const probe = woc.ui.frame({ id: 'scale-probe', title: 'Probe', width: SCALE_WIDTH });
-  // Called defensively, the way everything reached through a loader surface is here: a
-  // member that never got wired to the object throws rather than answering.
+  // Called defensively: an unwired member would throw.
   let box = null;
   if (typeof probe.box === 'function') {
     box = probe.box();
@@ -1685,20 +1523,12 @@ function checkScaling() {
   if (tall !== share) {
     return result('scaling', false, `a row asked for ${String(share)} drew ${String(tall)} tall`);
   }
-  // The cell is REPORTED rather than checked against anything: it is a transcription of
-  // the game's own bag grid, so the figure in front of somebody running this against a
-  // live client is the only thing that can tell them the reading has gone stale.
   return result('scaling', true, `box, units and a ${String(tall)}px row all agree, ${cell}`);
 }
 
 /**
- * The checks that describe the live world, in report order.
- *
- * Separated from the rest because their answers change while the player plays, and because
- * they are cheap: reading state the loader already holds. They are re-run from `world.on`
- * as things move, so a line that says "no target, so target-of-target went unchecked"
- * becomes a real check the moment a target is picked. Most of the world surface can only
- * be verified while something is actually happening.
+ * The checks that describe the live world, in report order. They are cheap and re-run from
+ * `world.on`, so a skipped line becomes a real check once, say, a target is picked.
  */
 const LIVE_CHECKS = [
   checkWorld,
@@ -1757,9 +1587,8 @@ const STATIC_CHECKS = [
 ];
 
 /**
- * The world keys a live check reads, so a change to any of them repaints. Deliberately the
- * keys the checks consume rather than every key that exists: subscribing to all of them
- * would wake the harness on traffic no line here reports.
+ * The world keys a live check reads, so a change repaints. Only these: every key would wake
+ * the harness on traffic no line reports.
  */
 const LIVE_KEYS = [
   'player',
@@ -1782,9 +1611,8 @@ const LIVE_KEYS = [
 ];
 
 /**
- * The slow half: a storage round trip, a pack fetch, a timer, an image load. Never re-run
- * on a world change, since a storage round trip writes through the bridge to the userscript
- * manager and the answer cannot move.
+ * The slow half: storage round trips, fetches and timers. Never re-run on a world change,
+ * since the answers cannot move and storage writes through to the userscript manager.
  */
 async function runSlowChecks() {
   return await Promise.all([
@@ -1812,10 +1640,7 @@ const win = woc.ui.window({
   visible: woc.settings['open-on-load'] === true,
 });
 
-/**
- * The report, in a container of its own so a live repaint cannot take the
- * controls with it, or wipe a bar demo half way through its drain.
- */
+/** Its own container, so a live repaint cannot take the controls or a running demo with it. */
 const report = document.createElement('div');
 /** Where a demo puts something to look at, kept outside the repainting half. */
 const stage = document.createElement('div');
@@ -1824,11 +1649,7 @@ win.body.append(report, stage);
 /** The slow half's last answer, held so a live repaint can show it unchanged. */
 let slowResults = [];
 
-/**
- * Copper as the game writes it, so the readout matches what a player sees.
- *
- * Bare copper when there is nothing above it, rather than an empty string.
- */
+/** Copper as the game writes it, with bare copper when there is nothing above it. */
 function money(copper) {
   const gold = Math.floor(copper / COPPER_PER_GOLD);
   const silver = Math.floor((copper % COPPER_PER_GOLD) / COPPER_PER_SILVER);
@@ -1847,23 +1668,13 @@ function money(copper) {
 }
 
 /**
- * The two `HeldSlot`-only fields, read off your own bags: the lock the player set, and the
- * bind-on-pickup window a soulbound copy won from party boss loot arrives carrying.
+ * The two `HeldSlot`-only fields in your bags: the player's lock, and the party-trade window
+ * on soulbound boss loot. Only bags and bank carry them; a market row or letter attachment is
+ * projected to the public allowlist, so `undefined` there means "not sent".
  *
- * Its own function because the checks around it are about the CONTAINER and these are about one
- * copy's payload. Here and on the bank is the only place either can be read at all: a market row
- * or a letter attachment is projected to the server's public allowlist before it is sent, so
- * `undefined` there means "not sent" rather than "no".
- *
- * Both are REPORTED rather than asserted, since a bag with nothing locked in it is the ordinary
- * state and demanding a live window would demand a raid inside the last two hours. What IS
- * asserted is the shape where one exists, because `untilMs` arriving as anything but an epoch
- * number is the failure worth naming: every comparison against it is false, so the window reads
- * as permanently expired and nothing anywhere complains.
- *
- * The count is taken against the wall clock and never against the field being present. The game
- * retires an expired marker only when a character loads or saves, deliberately never on a tick,
- * so a window that lapsed an hour ago is still on the copy in the shape a live one has.
+ * Counts are reported and only the shape is asserted: a non-numeric `untilMs` makes every
+ * comparison false, so the window silently reads as expired. The count uses the wall clock,
+ * since the game retires an expired marker only on load or save, never on a tick.
  */
 function readHeldMarks(inventory) {
   const badLock = inventory.find((slot) => {
@@ -1891,15 +1702,9 @@ function readHeldMarks(inventory) {
 }
 
 /**
- * The gear, bag and money reads, and the zone label behind the DOM.
- *
- * `bagCapacity` is read rather than derived: the loader takes the game's own number
- * straight through, and an addon cannot compute the same figure from anything published.
- * So it is checked against `inventory.length`, because a capacity below what is already
- * carried is the only thing wrong with it a check can know from here.
- *
- * The zone is the single read whose source is the game's DOM rather than its world object,
- * so a game update that renames the element leaves it silently null.
+ * Gear, bags, money and zone. `bagCapacity` is the game's own number, so the only checkable
+ * fault is a capacity below what is carried. The zone is read from the game's DOM, so a
+ * renamed element leaves it silently null.
  */
 function checkHoldings() {
   const { world } = woc;
@@ -1941,10 +1746,8 @@ function checkHoldings() {
 }
 
 /**
- * The character sheet. The numbers themselves cannot be checked against anything: only the
- * live game knows how much experience the player has. What is checked is the shape, and
- * that lifetime totals are not below their live counterparts, which is the one invariant
- * these fields have with each other.
+ * The character sheet: its shape, and that lifetime totals are not below their live
+ * counterparts. The values themselves have nothing to check against.
  */
 function checkCharacter() {
   const { character, talents, professions } = woc.world;
@@ -1973,9 +1776,7 @@ function checkCharacter() {
   if (talents === null || professions === null) {
     return result('character', false, 'the sheet resolved but talents or professions did not');
   }
-  // An ARRAY is the assertion, never a non-empty one: the game elides the wire key
-  // entirely for anyone who has never slotted a tool effect, which is most players,
-  // so an empty list here is the ordinary reading rather than a failure to read.
+  // Empty is ordinary: the game omits the key for anyone who never slotted a tool effect.
   if (!Array.isArray(professions.toolEffectSlots)) {
     return result('character', false, 'professions.toolEffectSlots is not an array');
   }
@@ -1989,11 +1790,8 @@ function checkCharacter() {
 }
 
 /**
- * Who the loader thinks is playing. Opaque by contract, so nothing here parses it, and the
- * interesting assertion is that the store and the world agree, which
- * `checkCharacterStorage` makes. What is left for this line is the shape and the reading
- * itself, since a key that came back empty would file every per-character record under
- * nothing at all and would look exactly like a key that was never derived.
+ * The character key is opaque, so only its shape is checked here; `checkCharacterStorage`
+ * checks it agrees with the store. An empty key would file every record under nothing.
  */
 function checkCharacterKey() {
   const { characterKey } = woc.world;
@@ -2007,10 +1805,8 @@ function checkCharacterKey() {
 }
 
 /**
- * The three static content tables. Never null even before world entry, which is why none
- * is a watch key: an empty table is the honest answer for a client that has not carried
- * one, and authored content cannot change during a session. All are copies the loader
- * froze, so the write test is here for the reason `world.entities` gets one.
+ * The static content tables: never null, empty before a client carries one, and never a
+ * watch key since authored content does not change in a session. All are frozen copies.
  */
 function checkContent() {
   const { recipes, stations, civicServices } = woc.world;
@@ -2046,13 +1842,8 @@ function checkContent() {
 }
 
 /**
- * The counters a player has to be standing at, and the one shape they share.
- *
- * None of the three is ever null, which is the point of the shape: `unknown` already means
- * the loader has no world. What is checked is that the payload and the status agree. An
- * `away` carrying a reading is a pane drawn from wherever the player last stood, and a
- * `near` carrying nothing is a pane that cannot draw at all; both look like working code
- * from the outside.
+ * The counters a player has to stand at. Never null (`unknown` means no world), so the check
+ * is that status and payload agree: `away` carries nothing and `near` carries a reading.
  */
 function checkCounters() {
   const wrong = [];
@@ -2107,10 +1898,8 @@ function vaultRungFault(upgrades, cap, next) {
 }
 
 /**
- * The Materials Vault: one count per material against a cap they all share, with a missing
- * key meaning zero, so keys count materials STOCKED. `checkCounters` already holds status to
- * payload, so only the payload is checked, and `stock` is never sorted: key order is not a
- * fact about it.
+ * The Materials Vault: one count per material against a shared cap, a missing key meaning
+ * zero. Only the payload is checked here; key order in `stock` means nothing.
  */
 function checkVault() {
   const { vault } = woc.world;
@@ -2139,9 +1928,9 @@ function checkVault() {
 }
 
 /**
- * What crafting may draw from the vault where the player stands: a ROOT read, not a gated
- * one, since it is refused inside every instance and no banker changes that. An EMPTY record
- * means allowed with nothing to draw, NULL means refused here, and undefined means unwired.
+ * What crafting may draw from the vault here: a root read, not a gated one, since every
+ * instance refuses it. Empty means allowed with nothing to draw, null means refused here,
+ * and undefined means unwired.
  */
 function checkCraftVault() {
   const stock = woc.world.craftVaultStock;
@@ -2170,10 +1959,7 @@ function checkCraftVault() {
   return result('craft vault', true, `${String(held)} materials drawable from where you stand`);
 }
 
-/**
- * The bag sockets. ALWAYS FOUR ENTRIES, since the index IS the socket number and a short
- * array renumbers every socket after the gap.
- */
+/** The bag sockets: always four entries, since the index is the socket number. */
 function socketFault(info) {
   const bags = info.socketBags;
   const open = info.socketsUnlocked;
@@ -2223,10 +2009,9 @@ function claudiumWord(price) {
 }
 
 /**
- * The split budget and the four bag sockets, from game 0.41.0. `capacity` is a DISPLAY TOTAL,
- * never a fit answer, since a general deposit can be refused while the materials pool has
- * room. A used count is deliberately not bounded by its capacity: unsocketing a bag shrinks a
- * pool without destroying its contents, and the game tolerates the overflow.
+ * The split bank budget and the bag sockets. `capacity` is a display total, never a fit
+ * answer. A used count is not bounded by its capacity: unsocketing a bag shrinks a pool
+ * without destroying its contents.
  */
 function checkBankBudget() {
   const { bank } = woc.world;
@@ -2267,10 +2052,8 @@ function heldStacks() {
 }
 
 /**
- * `craftedRecipeId`, the recipe a stack was minted from. Only ever on a stack of the player's
- * OWN: a market row, a letter attachment and a guild bank row are built field by field
- * without it, so read off anything public it is an absence. Absent is the ordinary case, so
- * the count is reported and never required.
+ * `craftedRecipeId` rides only the player's own stacks; public rows are built without it.
+ * Absent is ordinary, so the count is reported, never required.
  */
 function checkProvenance() {
   if (woc.world.inventory === null) {
@@ -2303,8 +2086,7 @@ function refusesWrite(table) {
   } catch {
     return true;
   }
-  // Put it back. The tables are copies, so this is not the game's own state, but a check
-  // that leaves a null row behind would break the next addon to read it.
+  // Put it back, or the next addon to read the table finds a null row.
   table.pop();
   return false;
 }
@@ -2325,14 +2107,9 @@ function runWord(current) {
 }
 
 /**
- * The group, the run, and a mob's hate table.
- *
- * The threat half is checked against the entity it came from rather than against a number:
- * the rows must be sorted, and the player's own row must agree with the raw table. A
- * projection that quietly stopped sorting would still look plausible on screen.
- *
- * The loot roll half watches the clock conversion. A roll whose `remaining` is null while
- * the world is up means the loader never got the sim's clock off the snapshot.
+ * The group, the run, and the target's hate table. Threat rows must be sorted and the
+ * player's row must match the raw entity table. A roll with a null `remaining` while the
+ * world is up means the loader never read the sim's clock.
  */
 function checkGroup() {
   const { group, encounter, threat, target } = woc.world;
@@ -2378,11 +2155,8 @@ function fightingId(entity) {
 }
 
 /**
- * Unit tokens, against the state they are resolved from. Every assertion here is one an
- * addon would otherwise trust silently: that `player` and `target` agree with the plain
- * reads, that an unknown token is a null rather than a throw, and that `targettarget` on a
- * mob target is not the permanently-null field. The last cannot be checked without a mob
- * target, so it reports what it could see rather than passing quietly.
+ * Unit tokens against the reads they resolve from: an unknown token is null, not a throw, and
+ * `targettarget` on a mob reads `aggroTargetId`, since a mob's `targetId` is always null.
  */
 function checkUnits() {
   const { world } = woc;
@@ -2415,17 +2189,9 @@ function checkUnits() {
 }
 
 /**
- * `world.reaction`, and the claim the whole reading rests on.
- *
- * The load-bearing half is the last one: the lookup exists because the game writes
- * `hostile` where it builds a MOB and never on a player, so a session in which any player
- * carries it is a session where this stopped being true, and the flag would then be
- * answering a question the bout is being asked. Nothing else can catch that, since a plate
- * built either way looks right until you meet somebody who wants to kill you.
- *
- * A hostile mob is checked in the other direction, because that is the one case where the
- * flag IS the answer and a rule that had stopped reading it would still pass every
- * friendly case.
+ * `world.reaction` rests on the game setting `hostile` only on mobs, never on players, so a
+ * flagged player means PvP reaction must be re-derived. A hostile mob is checked the other
+ * way, since that is the one case where the flag is the answer.
  */
 function checkReaction() {
   const { world } = woc;
@@ -2467,11 +2233,7 @@ function checkReaction() {
   return result('reaction', true, `${String(players)} players in scope, none flagged hostile`);
 }
 
-/**
- * The aura filters, checked against the unfiltered list they narrow. A filter that returned
- * everything would pass any spot check on a player with one aura, so this compares counts
- * against a hand-rolled filter over the same list.
- */
+/** The aura filters, compared by count against a hand-rolled filter over the full list. */
 function checkAuraQueries() {
   const { world } = woc;
   if (typeof world.aurasOn !== 'function') {
@@ -2502,14 +2264,9 @@ function dispelsWrongWay(aura) {
 }
 
 /**
- * `harmful` is a function rather than a field because the loader hands over the game's own
- * aura objects, so there is nowhere to put a computed flag. That leaves two ways to ask
- * one question, and a filter that drifted from the predicate would leave one addon
- * highlighting what the next calls a benefit.
- *
- * `dispellable` is checked as an IMPLICATION rather than against a list of abilities:
- * whatever comes off an ally is harmful and whatever is stripped off an enemy is a
- * benefit, which holds for every effect and needs no fight to check.
+ * The `harmful` predicate and the `{ harmful: true }` query must agree. `dispellable` is
+ * checked as an implication: what comes off an ally is harmful and what is stripped off an
+ * enemy is a benefit, which needs no fight.
  */
 function checkAuraPolarity() {
   const { world } = woc;
@@ -2542,14 +2299,8 @@ function checkAuraPolarity() {
 }
 
 /**
- * The toggle rule, which is the one classifier the loader implements WHOLE.
- *
- * Checked as an INVARIANT rather than against a list of stances, for the reason the
- * dispel check is: a session need not have a form or a stance up. What holds whatever
- * is on you is that the rule reads only an id and a kind, so it must answer the same
- * for a stripped-down pair as for the whole aura. A loader that started consulting a
- * field a party row does not carry would fail here and nowhere else, since every other
- * caller hands it a full aura.
+ * The toggle rule reads only `id` and `kind`, so it must answer the same for that pair as
+ * for the whole aura, or it would break on a party row.
  */
 function checkAuraToggle() {
   const { world } = woc;
@@ -2564,9 +2315,6 @@ function checkAuraToggle() {
     return result('aura toggle', false, `${String(disagreed.length)} read more than id and kind`);
   }
   const modes = all.filter((aura) => world.toggle(aura));
-  // A mode's clock is scaffolding, so anything the rule accepts should be carrying one
-  // of the long backing durations rather than a real one. Reported rather than failed:
-  // the game is free to back a mode with any number it likes.
   if (modes.length === 0) {
     return result('aura toggle', true, 'nothing on you is a mode');
   }
@@ -2581,15 +2329,8 @@ function combatWord(active) {
 }
 
 /**
- * The combat reading, and the honesty of the source it travels with.
- *
- * There is no combat flag on the wire, so this cannot check the answer against anything.
- * What it can check is that the shape holds and that the source is one the loader claims to
- * produce, which catches the reading degrading to a bare boolean or to a source string
- * nothing documents.
- *
- * A `recent` reading means every branch backed by server state declined and a five second
- * timer answered instead, which is the one case an addon may want to treat differently.
+ * The combat reading's shape and source; the answer has nothing to check against. `recent`
+ * means no server-backed branch answered and a five second timer did.
  */
 function checkCombat() {
   const state = woc.world.combat;
@@ -2610,10 +2351,8 @@ function checkCombat() {
 }
 
 /**
- * The combat records against what the published types say they carry. Vacuous until
- * something lands, which is the honest state: it becomes a real check on the first swing of
- * the first fight. Reporting it as passing with nothing seen would be the dishonest
- * version, so the note says which it is.
+ * The combat records against the published types. Vacuous until something lands, and the
+ * note says so rather than reporting a pass with nothing seen.
  */
 function checkCombatRecords() {
   if (contradictions.length > 0) {
@@ -2634,10 +2373,8 @@ function checkCombatRecords() {
 }
 
 /**
- * A mob's target, which is not on the field that looks like it. `targetId` is filled from a
- * selection and a mob does not select, so on every mob it is present, correctly typed and
- * permanently null; what a mob is fighting rides `aggroTargetId`, and its hate table rides
- * `threat`. The harness watches for the day the game starts filling `targetId` on mobs.
+ * A mob's `targetId` is present and permanently null, since a mob does not select; what it
+ * fights rides `aggroTargetId`. This fails if the game starts filling `targetId` on mobs.
  */
 function checkMobTargeting() {
   const mobs = [...woc.world.entities.values()].filter((entity) => entity.kind === 'mob');
@@ -2666,11 +2403,8 @@ function checkMobTargeting() {
 }
 
 /**
- * Both ride `dynamicFields`, so both are real on every entity including your own player.
- *
- * The reading worth having is the COUNT of OTHERS carrying a ranged power, which is the
- * half the shape walk cannot reach: it visits the local player alone, so it can prove the
- * field is a number and say nothing about whether the entity path fills it.
+ * `helmHidden` and `rangedPower` ride every entity record. The count of others carrying a
+ * ranged power is what the shape walk, which visits only the local player, cannot see.
  */
 function checkEntityStats() {
   const { player } = woc.world;
@@ -2693,9 +2427,8 @@ function checkEntityStats() {
 }
 
 /**
- * A shape fault, or a timer with no flag under it. The server omits the swing block for an
- * entity that is not auto-attacking and the client reads that omission as false, so a timer
- * without the flag is a bar counting down to nothing.
+ * A shape fault, or a swing timer on an entity not auto-attacking, which would be a bar
+ * counting down to nothing.
  */
 function swingFault(entity) {
   if (typeof entity.autoAttack !== 'boolean' || typeof entity.swingTimer !== 'number') {
@@ -2708,10 +2441,9 @@ function swingFault(entity) {
 }
 
 /**
- * `autoAttack` and `swingTimer` ride every entity record as of game 0.41.0; an older server
- * answers false and 0 on everybody but you, which looks like nobody fighting and is not
- * failed. `offhandSwingTimer` is self-only, so a non-zero one on anyone else is the wire
- * having moved.
+ * `autoAttack` and `swingTimer` ride every entity record; an older server answers false and 0
+ * for everyone but you, which is not failed. `offhandSwingTimer` is self-only, so a non-zero
+ * one on anyone else means the wire moved.
  */
 function checkSwings() {
   const { player } = woc.world;
@@ -2745,20 +2477,15 @@ function checkSwings() {
 }
 
 /**
- * The sold-price ledger, which is the only record of a completed sale the game keeps.
- *
- * Gated on standing at the Merchant, so it is vacuous the rest of the time. What it checks
- * when it can is the pair that has to reconcile: rows are capped, and the overflow count is
- * what explains a `collectionCopper` the rows do not add up to.
+ * The sold-price ledger, readable only at the Merchant. Rows are capped, so with nothing
+ * omitted they must add up to `collectionCopper`.
  */
 function checkSaleLedger() {
   const { market } = woc.world;
   if (market.status !== 'near') {
     return result('sale ledger', true, 'not at the Merchant, so there is no page to read');
   }
-  // The browse ORDER, new in game 0.37.1. Checked for being one of the two the server can echo
-  // rather than for either in particular, because which one is showing is the player's own
-  // choice in the game's window and this addon must never ask them to change it.
+  // Either order is valid: it is the player's own choice in the game's window.
   const { sort } = market.info;
   if (sort !== 'name' && sort !== 'price') {
     return result('sale ledger', false, `the browse order echoed back as ${typeOf(sort)}: ${sort}`);
@@ -2854,9 +2581,8 @@ function button(label, onClick) {
 }
 
 /**
- * Re-run the live half and repaint, keeping the slow half's last answer. Skipped while the
- * window is hidden: the checks are cheap, but painting a report nobody is looking at is
- * not, and the harness has no business doing DOM work at snapshot rate during a fight.
+ * Re-run the live half and repaint, keeping the slow half's last answer. Skipped while hidden,
+ * so no DOM work happens at snapshot rate during a fight.
  */
 function refresh() {
   if (!win.visible) {
@@ -2865,11 +2591,7 @@ function refresh() {
   renderResults([...runLiveChecks(), ...slowResults]);
 }
 
-/**
- * The full pass, including the slow half, which is what a button press is for. The slow
- * results are then held so a live repaint can show them without redoing a storage round
- * trip on every target change.
- */
+/** The full pass, holding the slow results so a live repaint does not redo them. */
 function run() {
   report.replaceChildren(element('p', undefined, 'Running the checks...'));
   runSlowChecks()
@@ -2889,10 +2611,8 @@ function run() {
 }
 
 /**
- * A timer bar, drained by a frame loop so the fill can be watched moving. The reason a bar
- * is a manual trigger rather than a check: a suite can assert the width string the addon
- * wrote, and cannot see whether the row is legible, whether the icon lines up with the
- * label, or whether the countdown's digits shuffle as they change.
+ * A timer bar drained by a frame loop. Manual, since a suite cannot see legibility, icon
+ * alignment, or digits shuffling as they change.
  */
 function demoBar() {
   const bar = woc.ui.bar({
@@ -2923,14 +2643,8 @@ function demoBar() {
 }
 
 /**
- * The same timer as a square, drained beside the bar so the two can be compared.
- *
- * A row of them rather than one, because everything a tile gets wrong is only visible
- * against its neighbours: whether the wedges sweep the same way, whether the countdown
- * stays put while its digits change, whether a school border reads as a border.
- *
- * One of the three deliberately points at art that does not exist. The kit hides a slot
- * whose image fails, and on a tile that leaves a bare square with its timer still on it.
+ * A row of tiles drained beside the bar, since tile faults show only against neighbours.
+ * One points at missing art, so the kit hides its slot and leaves the timer on a bare square.
  */
 function demoTiles() {
   const row = element('div');
@@ -2965,7 +2679,7 @@ function demoTiles() {
   drain();
 }
 
-/** Warm as it runs out, which is the tone change the kit draws. */
+/** Warm as it runs out. */
 function barTone(fraction) {
   if (fraction <= DEMO_WARN) {
     return 'warn';
@@ -2973,12 +2687,7 @@ function barTone(fraction) {
   return 'default';
 }
 
-/**
- * A settings pane built from the kit, which is the point of the field family. A manual
- * demonstration for the reason the bar is: a suite can assert the value a control reports
- * and cannot see whether the row lines up with the one under it, or whether any of it looks
- * like it belongs in a loader frame.
- */
+/** A settings pane from the kit fields, manual for the reason the bar demo is. */
 function demoForm() {
   const form = element('div', 'woc-form');
   form.style.marginTop = '8px';
@@ -3009,9 +2718,8 @@ function demoForm() {
 }
 
 /**
- * A context menu, opened at the button that asked for it. The half worth looking at is the
- * dismissal: it has to go on Escape, on a click anywhere else including one the game's own
- * controls swallow, and on choosing something. None of that is visible in an assertion.
+ * A context menu at the button. Watch the dismissal: Escape, a click anywhere else (even one
+ * the game swallows), and choosing something.
  */
 function demoMenu(at) {
   woc.ui.menu(at, [
@@ -3021,12 +2729,7 @@ function demoMenu(at) {
   ]);
 }
 
-/**
- * The tooltip in its structured form, on a row that names an ability.
- *
- * A string still works and is what most attachments want; this is the case the
- * builder exists for, where a hovered row says what the game's own tooltips say.
- */
+/** The structured tooltip form, on a row that names an ability. */
 function demoTooltip() {
   const row = element('div', 'woc-row-desc', 'Hover me: a tooltip with a title, art and tones');
   row.style.marginTop = '8px';
@@ -3044,10 +2747,8 @@ function demoTooltip() {
 }
 
 /**
- * A badge to hang on a world anchor. Styled inline from the game's own custom properties
- * rather than from a copy of them, so a badge written this way follows the player's theme.
- * The loader gives an anchor no look of its own, since what belongs over a world point is
- * the addon's business.
+ * A badge for a world anchor, which has no look of its own. Styled from the game's custom
+ * properties so it follows the player's theme.
  */
 function anchorBadge(text) {
   const badge = element('div', undefined, text);
@@ -3062,10 +2763,8 @@ function anchorBadge(text) {
 }
 
 /**
- * A world point that will still mean this point later. The game mutates an entity's `pos`
- * in place rather than replacing it, so holding the object holds "wherever that unit is
- * now" and never "where it was": a distance measured against the live object reads 0.0 yd
- * from anywhere on the map.
+ * A copy of a position. The game mutates `pos` in place, so holding the object tracks the
+ * unit and a distance against it reads 0.0 yd.
  */
 function snapshot(pos) {
   if (pos === null || pos === undefined) {
@@ -3095,11 +2794,7 @@ function platedUnit() {
   return woc.world.target ?? woc.world.player;
 }
 
-/**
- * What the following plate says. With no target it plates you, and the distance from you to
- * yourself is zero: a true number that demonstrates nothing. So it says what it is instead,
- * and the distance appears when there is something to be a distance from.
- */
+/** What the following plate says. Plating yourself shows no distance, since it is zero. */
 function plateText() {
   const unit = platedUnit();
   if (unit === null) {
@@ -3112,12 +2807,8 @@ function plateText() {
 }
 
 /**
- * Two anchors, because the halves fail differently: the following one takes a function
- * and tracks what it is pointed at, while the pinned one is a fixed point captured where
- * you stood, which is the only way to watch the culling work.
- *
- * The labels are rewritten on a slow timer and the positions are NOT: an addon moving
- * these itself would be running a second frame loop beside the loader's.
+ * A following anchor and one pinned where you stood, which is how to watch culling. Only
+ * the labels are rewritten on a timer; positioning is the loader's frame loop.
  */
 function startAnchors() {
   const plate = woc.ui.anchor3d(() => platedUnit()?.pos ?? null, { offset: { y: -PLATE_LIFT } });
@@ -3146,10 +2837,7 @@ function startAnchors() {
 /** The demo's teardown while it is running, or null while it is not. */
 let stopAnchors = null;
 
-/**
- * Put two anchors in the world, or take them away again. A toggle rather than a one-shot:
- * the point of these is to walk around and watch them behave.
- */
+/** Toggle the anchors, so you can walk around and watch them. */
 function demoAnchors() {
   if (stopAnchors !== null) {
     stopAnchors();
@@ -3205,12 +2893,8 @@ function captureKey() {
 }
 
 /**
- * The two announcement surfaces, and the two steps of the louder one. A toast and a banner
- * are easy to confuse in a description and impossible to confuse once both have been seen:
- * one waits its turn at the top of the screen, the other lands over the middle of the view.
- *
- * Both banner sizes get a button because the judgement they need is comparative: a warning
- * is loud enough only relative to what else is on screen during a fight.
+ * A toast (queued at the top) and both banner sizes (over the middle of the view), side by
+ * side because loudness is only judged comparatively.
  */
 const ANNOUNCEMENTS = [
   ['Toast', () => woc.ui.toast(`Uptime ${String(uptimeSeconds())}s`, { timeout: TOAST_MS })],
@@ -3238,8 +2922,7 @@ const ANNOUNCEMENTS = [
 /** The manual half: the surfaces a check cannot assert, only a person can see. */
 function controls() {
   const row = element('div');
-  // Built first so the menu can be opened AT it: `ui.menu` takes an element or a
-  // point, and anchoring to the control that asked is the ordinary case.
+  // Built first so the menu can be anchored to it.
   const menuButton = button('Menu', () => {
     demoMenu(menuButton);
   });
@@ -3268,11 +2951,7 @@ function controls() {
   return row;
 }
 
-/**
- * Repaint on the next tick rather than on every key that moved. Several of the watched keys
- * change on the same frame constantly: taking a target moves `target`, `casts` and
- * `entities` at once.
- */
+/** One debounced repaint, since taking a target moves several watched keys at once. */
 let pending = null;
 
 function scheduleRefresh() {
@@ -3285,10 +2964,8 @@ function scheduleRefresh() {
   }, REFRESH_DEBOUNCE_MS);
 }
 
-// Subscribed for the whole session rather than only while the window is open. The watcher
-// samples a subscribed key once per animation frame, so this does cost something with the
-// report hidden; the reason to accept it is that this is a development addon, and the
-// alternative is unsubscribing on hide with no way to know the window was closed.
+// Subscribed for the session, which costs a sample per frame even while hidden: acceptable
+// for a development addon, and there is no signal for the window closing.
 for (const key of LIVE_KEYS) {
   woc.world.on(key, scheduleRefresh);
 }
@@ -3299,8 +2976,7 @@ function openReport() {
   refresh();
 }
 
-// Bound by hand rather than through `toggleKey`, on the member's own advice: this key
-// does more than toggle. `checkToggleKey` exercises it against `probe` instead.
+// Bound by hand, not through `toggleKey`, since this key does more than toggle.
 woc.keys.bind('toggle', () => {
   win.toggle();
   woc.sound.play('ui_click');
@@ -3327,8 +3003,7 @@ woc.ui.menuEntry({
   onClick: openReport,
 });
 
-// A settings change re-runs the checks, which is what makes the manager's
-// settings form visibly wired rather than merely persisted.
+// Re-running on a settings change shows the manager's form is wired, not merely persisted.
 woc.onSettingsChange(() => {
   woc.log('settings changed, re-running');
   run();
@@ -3338,8 +3013,7 @@ woc.onDispose(() => {
   woc.log(`disposed after ${String(uptimeSeconds())}s`);
 });
 
-// Appended once, after the containers: a live repaint replaces the report and
-// must not take the buttons with it.
+// Outside the report, so a live repaint does not take the buttons with it.
 win.body.insertBefore(controls(), stage);
 
 run();

@@ -1,18 +1,10 @@
-// What competitive bout you are in, across all seven formats.
+// What competitive bout you are in, across all seven formats, as one union
+// discriminated on `format`.
 //
-// One union rather than seven reads, discriminated on `format`, because you ask
-// "am I fighting anyone" before you ask what kind. A duel is a member of it for
-// the same reason: it is a bout with an opponent and a countdown, and an addon
-// that has to check two unrelated reads to answer one question will check one of
-// them.
-//
-// THREE KEYS AT THREE CADENCES SIT BEHIND IT, and the union hides that, so read
-// each member's own type for which. A duel rides every tick. A battleground
-// rides at 1 Hz and is forced fresh on every transition worth acting on. The
-// four arena formats are gated to 0.1 Hz, so anything read from one is up to ten
-// seconds old and is the game's own recoverable baseline rather than a live
-// feed; the members whose live path is the event queue say which events those
-// are.
+// THREE CADENCES SIT BEHIND IT, and the union hides that. A duel updates every
+// tick. A battleground updates at 1 Hz and immediately on every transition worth
+// acting on. The four arena formats update at 0.1 Hz, so a reading can be ten
+// seconds old; the members whose live path is the event queue name those events.
 
 import type { BattlegroundMatch } from './battleground.js';
 import type { FiestaMatch, YumiMatch } from './match-modes.js';
@@ -32,9 +24,8 @@ export interface BoutBase {
   /**
    * The map this bout plays in, or null.
    *
-   * Null on a server that predates the field, and reported as the default for
-   * the Protect Yumi brackets, which play in their own maze band and never show
-   * one.
+   * Null on a server that predates the field. The Protect Yumi brackets report
+   * the default map, since they play in their own maze and never show one.
    */
   map: string | null;
   /** Your side, excluding you. */
@@ -60,9 +51,8 @@ export interface RankedMatch extends BoutBase {
 /**
  * The bout in progress, whatever kind it is. Narrow on `format` first.
  *
- * `BattlegroundMatch` is the one member that does not extend `BoutBase`, and
- * `battleground.d.ts` says why: its roster carries no level, so it publishes one
- * `fighters` list rather than an `allies`/`enemies` pair. It joined at API minor
- * 6; the rest have been here since 2.
+ * `BattlegroundMatch` is the one member that does not extend `BoutBase`: its
+ * roster carries no level, so it has one `fighters` list instead of
+ * `allies`/`enemies`. It joined at API minor 6; the rest have been here since 2.
  */
 export type MatchInfo = BattlegroundMatch | DuelMatch | RankedMatch | FiestaMatch | YumiMatch;

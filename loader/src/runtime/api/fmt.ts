@@ -1,7 +1,4 @@
-// `woc.fmt`, the formatting surface.
-//
-// One frozen object shared by every addon, unlike the rest of `woc`: these carry
-// no addon context and no disposal bag, so there is nothing per-addon to build.
+// `woc.fmt`, one frozen object shared by every addon: nothing here is per-addon.
 
 import type { DurationStyle } from '../../shared/fmt.ts';
 import { compass, count, duration, titleCase } from '../../shared/fmt.ts';

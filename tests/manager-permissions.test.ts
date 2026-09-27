@@ -1,9 +1,5 @@
-// Turning a manifest's declared permissions into sentences a player can weigh.
-//
-// The case that matters is a value this loader does not know, which is what an
-// addon written against a newer loader looks like. Dropping it would understate
-// what is being installed at exactly the moment the player is deciding, so it is
-// shown verbatim instead.
+// An unknown permission comes from an addon written against a newer loader, and is shown
+// verbatim: dropping it would understate what the player is installing.
 
 import { describe, expect, it } from 'vitest';
 import { describePermissions } from '../loader/src/runtime/ui/manager/permissions.ts';
@@ -20,8 +16,6 @@ describe('describePermissions', () => {
     }
   });
 
-  // The player has no reason to know what `net.read` names, so the line has to
-  // be about what the addon can see rather than about the API it calls.
   it('says what a permission lets the addon see, not which API it names', () => {
     const [line] = describePermissions(['net.read']);
 

@@ -1,9 +1,5 @@
-// The aura IDS the game refuses to dispel, read out of the same file the kinds are.
-//
-// Two of `isDispellableAura`'s clauses refuse an aura by ID rather than by any
-// flag on it. One is a declared set and parses like the kinds (a rename throws);
-// the other is an inline literal inside the predicate body, which is a weaker
-// statement parse, and each parse says which it is.
+// The aura IDS `isDispellableAura` refuses outright, from two clauses: a declared set (parsed like
+// the kinds, so a rename throws) and inline literals inside the predicate body (a weaker parse).
 
 const SOURCE = 'src/sim/aura_classify.ts';
 
@@ -63,11 +59,8 @@ function blockAfter(source: string, open: string, close: string, what: string): 
 }
 
 /**
- * The ids the game shows on the debuff surface but refuses to let a player remove.
- *
- * An empty BODY is a real answer, unlike the harmful-kind set: the game can empty
- * this set without the feature going away. A missing DECLARATION is still a hard
- * failure, because it cannot be told from a rename.
+ * The ids the game shows on the debuff surface but refuses to let a player remove. An empty set is
+ * a real answer; a missing declaration throws, since it cannot be told from a rename.
  */
 function displayOverrideIds(source: string): string[] {
   const body = blockAfter(source, DISPLAY_OPEN, DISPLAY_CLOSE, DISPLAY_DECLARED);
@@ -75,13 +68,9 @@ function displayOverrideIds(source: string): string[] {
 }
 
 /**
- * One line of the predicate body, as the ids it refuses by literal.
- *
- * Anchored on the refusal rather than on the id's own `export const` in
- * `paladin_devotion.ts`: only this line says the predicate REFUSES the id, and a
- * release that dropped the clause and kept the constant must stop refusing it.
- * An `aura.id === '...'` guarding anything but `return false;` is a hard failure,
- * not a skip, because collecting it would read a non-refusal as a refusal.
+ * One line of the predicate body, as the ids it refuses by literal. Anchored on the refusal, not on
+ * the id's own constant, so a dropped clause stops the refusal. An id comparison guarding anything
+ * but `return false;` throws, since collecting it would read a non-refusal as a refusal.
  */
 function refusalsOnLine(line: string): string[] {
   const trimmed = line.trim();
@@ -119,10 +108,8 @@ function inlineRefusedIds(source: string): string[] {
 }
 
 /**
- * Every aura id the game refuses to dispel, from both clauses, deduped. Empty is
- * a failure: the inline half is never empty, so nothing found means a rewritten
- * predicate. The declaration is parsed before the body so a rename of the set
- * reports as a rename rather than as "declared and unused".
+ * Every aura id the game refuses to dispel, from both clauses, deduped. Empty throws, as it means a
+ * rewritten predicate. The declaration is parsed first so a rename reports as a rename.
  */
 function undispellableIds(source: string): string[] {
   const found = [...new Set([...displayOverrideIds(source), ...inlineRefusedIds(source)])];

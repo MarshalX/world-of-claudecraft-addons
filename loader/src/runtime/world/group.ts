@@ -1,22 +1,8 @@
 // The group's shared state: loot rolls, master loot, and raid lockouts.
 //
-// Three readings that all belong to the party rather than to the player, and
-// that carry the surface's two awkward facts about time between them.
-//
-// A loot roll's deadline is on the SIM clock, seconds since the world started,
-// which an addon has no way to read. It is published as seconds remaining, the
-// way every other timer on this API is, and answers null until the first
-// snapshot has given the loader a clock to measure against.
-//
-// A raid lockout is the other kind: an absolute epoch millisecond stamp, chosen
-// by the server precisely so it survives a reconnect and a client's own clock
-// drift. That one is published as it is sent, because it is directly comparable
-// with `Date.now()` and turning it into a countdown would throw away the one
-// property it was given for.
-//
-// A loot roll also carries `itemName`, which is worth knowing: an item id
-// resolves to nothing on this API, and this is one of the few places the game
-// hands over a readable name beside one.
+// A loot roll's deadline is on the SIM clock, which an addon cannot read, so it is published as
+// seconds remaining and is null until the loader has the sim's clock. A raid lockout is an epoch
+// millisecond stamp and is published as sent, comparable with `Date.now()`.
 
 import { fieldArray, fieldNumber, fieldString, fieldValue } from '../net/frames.ts';
 import { remainingFrom } from './sim-clock.ts';
@@ -33,11 +19,8 @@ interface LootRollVote {
 }
 
 /**
- * One open roll as the whole group sees it, rather than as this player was asked it.
- *
- * `votes` covers the CANDIDATES rather than the party, so a member with no row
- * was never eligible for the item. The roll NUMBER is not here and is not
- * anywhere: it stays server-side until resolution.
+ * One open roll as the whole group sees it. `votes` covers the CANDIDATES, so a member with no
+ * row was never eligible. The roll number stays server-side until resolution.
  */
 interface LootRollGroupStatus {
   rollId: number;
@@ -71,21 +54,11 @@ interface MasterLoot {
 interface GroupInfo {
   /** Rolls this player has been asked to answer. */
   rolls: readonly LootRoll[];
-  /**
-   * Every open roll in the party with each candidate's answer.
-   *
-   * `rolls` is what this player was asked; this is what the group is doing
-   * about it, and the two overlap rather than nest. Empty when ungrouped.
-   */
+  /** Every open roll in the party with each candidate's answer. Empty when ungrouped. */
   rollStatus: readonly LootRollGroupStatus[];
   /** Master loot settings, or null when the group is not using it. */
   masterLoot: MasterLoot | null;
-  /**
-   * Dungeon id to when its lockout expires, in epoch milliseconds.
-   *
-   * Absolute rather than a countdown, which is how the server sends it and is
-   * the point of it: compare against `Date.now()`.
-   */
+  /** Dungeon id to when its lockout expires, in epoch milliseconds. Compare with `Date.now()`. */
   lockouts: ReadonlyMap<string, number>;
 }
 
@@ -130,17 +103,9 @@ function statusRows(rows: unknown, simNow: number | null): readonly LootRollGrou
 }
 
 /**
- * Every open roll in the party with each candidate's answer.
- *
- * THE ONE READ ON THIS API THAT IS A CALL. The client's mirror field is private
- * and is named by nothing the game tests, so it can be renamed without anything
- * noticing; the accessor is the member the game's own parity suite pins. The
- * call is safe in a way `drainEvents` is not: it walks the pending rolls and
- * allocates a result, and empties nothing the game is about to read.
- *
- * Guarded anyway, because a game update can leave something callable in place
- * that throws when called, and the cost of that has to be an empty list rather
- * than a dead world read.
+ * Every open roll in the party with each candidate's answer, through the game's accessor rather
+ * than its private mirror field, which can be renamed silently. Safe to call: unlike
+ * `drainEvents` it empties nothing. Guarded, since a game member can stay callable and throw.
  */
 function rollStatusOf(world: unknown, simNow: number | null): readonly LootRollGroupStatus[] {
   const read = fieldValue(world, 'lootRollGroupStatus');
@@ -155,12 +120,7 @@ function rollStatusOf(world: unknown, simNow: number | null): readonly LootRollG
 }
 
 /**
- * Master loot, or null when the group is not using it.
- *
- * Null rather than a record with `enabled: false`, because every consumer of
- * this asks "is master loot on" first and the flag would be a second way to
- * answer the same question.
- */
+/** Master loot, or null when the group is not using it (never a record with `enabled: false`). */
 function masterLootOf(party: unknown): MasterLoot | null {
   const master = fieldValue(party, 'master');
   if (master === null || fieldValue(master, 'enabled') !== true) {

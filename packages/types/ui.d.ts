@@ -26,11 +26,8 @@ export type BannerKind = 'info' | 'warn' | 'danger';
 /**
  * How loud a banner is. `large` is the "you are about to die" step.
  *
- * This moves the SIZE AND THE WEIGHT together, and both lines with them, which is
- * why there is no separate weight option. The game's display face has no lowercase
- * and only loads 400 to 700, so a huge light setting of it is less readable than a
- * medium heavy one: the two axes are not independent and offering them as if they
- * were would only offer combinations nobody wants.
+ * It moves size and weight together, for both lines, so there is no separate
+ * weight option.
  */
 export type BannerSize = 'normal' | 'large';
 
@@ -42,9 +39,7 @@ export interface BannerOpts {
   /**
    * Defaults to 'normal', which is already sized to be read across a fight.
    *
-   * Reach for 'large' when missing the warning ends the pull, not for every warning:
-   * if everything is large then nothing is, which is the failure mode a raid mod
-   * hits first.
+   * Use 'large' only when missing the warning ends the pull.
    */
   size?: BannerSize;
   /** A quieter second line, e.g. who the mechanic is on. Set in the UI face. */
@@ -70,36 +65,32 @@ export interface AlertOpts {
 /**
  * An ability id that ships a painted icon file, or any other string.
  *
- * Open for the reason `Cue` is: the set is content, a game release commits art before
- * these types catch up, and a published type must not be able to reject a working
- * addon. The known half is generated from every channel's manifest, so it autocompletes
- * what is actually reachable rather than every ability the game has.
+ * Open because a game release adds art before these types catch up. The known
+ * half is generated from the live manifests, so it autocompletes ids that have a
+ * file, not every ability the game has.
  */
 export type AbilityIconId = KnownSkillIcon | (string & Record<never, never>);
 
 /**
  * An item id that ships a painted icon file, or any other string.
  *
- * Open for the reason `AbilityIconId` is: the set is content, a game release commits
- * art before these types catch up, and a published type must not be able to reject a
- * working addon. The known half is generated from the LIVE manifest, so it
- * autocompletes what most players' games actually have a file for.
+ * Open because a game release adds art before these types catch up. The known
+ * half is generated from the live manifest.
  */
 export type ItemIconId = KnownItemIcon | (string & Record<never, never>);
 
 /**
  * A class the game files skill art under, or any other string.
  *
- * Open because the value you pass is normally `world.player.templateId`, which is a
- * plain string: a closed union would reject the ordinary call.
+ * Open because the value you pass is normally `world.player.templateId`, a plain
+ * string.
  */
 export type IconClass = SkillIconClass | (string & Record<never, never>);
 
 /**
  * Where the game's own art lives.
  *
- * Use these rather than writing a path: the directories are the game's, not the
- * loader's, and a hardcoded one in an addon breaks silently when the game moves
+ * Use these rather than writing a path, which breaks silently when the game moves
  * it. Every builder answers null for an id it cannot make a file name from.
  */
 export interface IconUrls {
@@ -109,14 +100,12 @@ export interface IconUrls {
    * `cls` is the class the ability belongs to. For anything you cast that is
    * `world.player.templateId`, which is the class id for a player entity.
    *
-   * Not every ability ships painted art. The game composites an icon for the rest
-   * on a canvas, from a module no addon can reach, so those have no URL at all: the
-   * ability has an icon in the game and none the loader can point at.
+   * Not every ability ships painted art; the game draws the rest on a canvas, with
+   * no URL to point at.
    *
-   * The game serves a manifest of which ids have a file, so this returns null once
-   * the loader KNOWS there is none. Until that manifest has been read the answer is
-   * optimistic and the image load decides, which is why `ui.bar` hides its own icon
-   * slot on error rather than making every addon handle it. See `preload`.
+   * Null once the loader KNOWS there is no file. Until the class manifest has been
+   * read the answer is optimistic and the image load decides; `ui.bar` and
+   * `ui.tile` hide a failed icon themselves. See `preload`.
    */
   ability: (abilityId: AbilityIconId, cls: IconClass) => string | null;
   /** A mob or npc portrait, by the `templateId` on its entity. */
@@ -124,62 +113,35 @@ export interface IconUrls {
   /**
    * An item's icon, or null when there is none to point at.
    *
-   * The game serves a manifest of which item ids have a file, so this returns null
-   * once the loader KNOWS there is none. Until that has been read the answer is the
-   * URL and the image load decides, which is why `ui.bar` hides its own icon slot on
-   * error. See `preloadItems`.
+   * Null once the loader KNOWS there is no file. Until the manifest has been read
+   * the answer is optimistic and the image load decides. See `preloadItems`.
    *
-   * Weapons used to be permanently absent and are not any more: game 0.36.0 gave
-   * every authored weapon its own painting, and at that release every item in the
-   * game ships a file. Write the null branch anyway. Art is commissioned behind
-   * content, so an item can ship before its picture, and the gap empties and refills
-   * with every release.
-   *
-   * A heroic weapon VARIANT is the one case that looks like a gap and is not: it
-   * ships no file of its own and this answers with its base weapon's painting, which
-   * is what the game draws for it too.
+   * Write the null branch even if every item has art today: an item can ship
+   * before its picture. A heroic weapon VARIANT answers with its base weapon's
+   * painting, as the game draws it.
    */
   item: (itemId: ItemIconId) => string | null;
   /**
    * The name the item's ART was filed under, or null.
    *
-   * NOT the item's name, and the difference is not academic. This is provenance
-   * metadata for the icon file, gated by the game only on being non-empty, so it
-   * drifts whenever content is renamed and the art is not: measured against game
-   * 0.33.0, 281 of 303 agree with the game's own display name and 21 do not.
+   * NOT the item's name: it is provenance for the icon file, and nothing in the
+   * game keeps it in step with the display name when content is renamed.
    *
-   * It also answers for far less than it used to. The manifest keeps a name only for
-   * a CURATED entry, and game 0.36.0 moved the catalogue into unnamed generated
-   * batches, taking 307 named entries down to 39 reagents and bags. Those 39 all
-   * agree with the game today, and that is not a reason to trust the next one:
-   * nothing in the game compares the two.
+   * Only curated entries carry one (a few dozen reagents and bags); null for
+   * everything else and while the manifest has not been read.
    *
-   * Null for an item whose art came from a generated batch, since those carry no
-   * name at all, and null while the manifest has not been read.
-   *
-   * Use it as a labelled fallback, never as the item's name. Nothing on this API can
-   * give you that: the item table is bundled into the game's own chunk.
+   * Use it only as a labelled fallback. Nothing on this API gives an item's name.
    */
   itemArtName: (itemId: ItemIconId) => string | null;
   /**
    * An aura's painted icon, or null when there is none to point at.
    *
-   * New with game 0.39.0, which added the manifest and the directory under it.
-   * Before that release an aura had no icon this API could reach unless it happened
-   * to carry a real ability id, so a mob's aura, an encounter mechanic, a
-   * battleground rune and a set bonus all drew a row with a name and no picture.
+   * Covers the auras NO ability names: a mob's aura, an encounter mechanic, a
+   * battleground rune, a set bonus. An aura applied by an ability carries that
+   * ability's id, which `ability()` answers; try that first, as the game does.
    *
-   * This family is exactly that complement: the auras NO ability names. An aura
-   * applied by an ability you can name carries that ability's id, and `ability()`
-   * answers it, which is the order the game's own resolver checks in too. So try
-   * this one for an aura whose id is not in your spellbook.
-   *
-   * NULL UNTIL THE MANIFEST IS READ, which is the one place this differs from
-   * `ability` and `item`. Those hand back a URL before their manifest lands and let
-   * the image decide, because nearly every id they are asked about does have a
-   * file. This family is closed and small, so a guess would 404 for most ids and
-   * reach the same empty slot having spent a request. Await `preloadAuras` when the
-   * first row you draw needs its icon.
+   * NULL UNTIL THE MANIFEST IS READ, unlike `ability` and `item`, because most
+   * ids have no file here. Await `preloadAuras` when the first row needs its icon.
    */
   aura: (auraId: string) => string | null;
   /**
@@ -193,16 +155,13 @@ export interface IconUrls {
   /**
    * Read the item art manifest, so `item` is exact from its first call.
    *
-   * Optional and never rejects, exactly like `preload`. One request covers every
-   * item in the game, so a bag grid that would rather not flash costs one await.
+   * Optional and never rejects, like `preload`. One request covers every item.
    */
   preloadItems: () => Promise<void>;
   /**
    * Read the aura art manifest, so `aura` can answer at all.
    *
-   * Never rejects, like the other two, and closer to required than they are: `aura`
-   * answers null for everything until this has landed. One request covers every
-   * painted aura in the game.
+   * Never rejects. `aura` answers null for everything until this has landed.
    */
   preloadAuras: () => Promise<void>;
 }
@@ -246,22 +205,19 @@ export interface UiApi {
   /**
    * A centre-screen warning, for the one thing a player must read immediately.
    *
-   * Not a toast, and the difference is not cosmetic: this lands in the middle of
-   * the view and is announced assertively, which interrupts a screen reader. Use
-   * it for a mechanic about to land, not for information.
+   * Announced assertively, interrupting a screen reader: use it for a mechanic
+   * about to land, not for information.
    *
-   * There is ONE slot for the whole loader and a new banner replaces whatever is
-   * up, including another addon's. Stacking these would cover the fight the
-   * warning is about. For anything a player reads at their own pace, use a frame.
+   * There is ONE slot for the whole loader, and a new banner replaces whatever is
+   * up, another addon's included.
    */
   banner: (text: string, opts?: BannerOpts) => Unsubscribe;
   /**
    * A timer row: an icon, a name, a fill behind both, and a figure on the right.
    *
    * Append `bar.el` wherever you want it and call `bar.update()` as the numbers
-   * move. Subscribe for the change and animate from the read: `world.on` fires
-   * when a SET changes, so the bars that exist come from the subscription and how
-   * full each one is comes from a frame loop.
+   * move. `world.on` fires when a SET changes, so which bars exist comes from the
+   * subscription and how full each is comes from a frame loop.
    *
    * Inside a `density: 'compact'` frame the row is drawn compact too.
    */
@@ -270,25 +226,18 @@ export interface UiApi {
    * The square form of the same thing: art, a radial sweep over it, a countdown
    * and a stack count.
    *
-   * Reach for this where the ART is the label and a strip of them is read at a
-   * glance, which is what an aura display and a cooldown row are. Reach for `ui.bar`
-   * where each timer needs a name beside it. There is no linear sweep here because
-   * that is `ui.bar`, and one thing drawn two ways is how two addons end up looking
-   * different for no reason anyone chose.
-   *
-   * It does not animate itself, exactly as a bar does not: subscribe for the set
-   * changing and move `fraction` from a frame loop.
+   * For where the ART is the label, such as an aura strip. Use `ui.bar` where each
+   * timer needs a name. It does not animate itself: move `fraction` from a frame
+   * loop.
    */
   tile: (opts?: TileOpts) => Tile;
   /**
    * A keyed list of rows: created, updated, ordered and destroyed as your data
    * moves. Added in API minor 4.
    *
-   * The other half of drawing a screenful of bars or tiles. Give it what makes two
-   * items the same item across two reads and how to build one, then hand it the set
-   * you want on screen: `sync([...])` destroys what left, builds what arrived,
-   * paints everything and puts the elements in that order, writing nothing to the
-   * document where nothing moved. So it is meant to be called from a frame loop.
+   * `sync([...])` destroys what left, builds what arrived, paints everything and
+   * orders the elements, writing nothing where nothing moved, so it is safe to call
+   * every frame.
    *
    * ```js
    * const rows = woc.ui.list({
@@ -300,9 +249,8 @@ export interface UiApi {
    * rows.sync(running);
    * ```
    *
-   * Without a `parent` nothing is inserted and nothing is ordered, and the list is
-   * the lifecycle alone. That is the form a set of world pins wants, since each pin
-   * is already placed by its own `ui.anchor3d`.
+   * Without a `parent` the list is the lifecycle alone, which suits world pins
+   * placed by their own `ui.anchor3d`.
    */
   list: <T, H extends Destroyable>(opts: ListOpts<T, H>) => List<T, H>;
   /**
@@ -312,13 +260,10 @@ export interface UiApi {
    * const pane = woc.ui.column({ parent: frame.body, gap: 4 });
    * ```
    *
-   * These three write a CLASS rather than a style attribute, which is the whole
-   * reason they exist. An inline style outranks every selector a stylesheet can
-   * spell, so a panel laid out in style writes silently opts out of rules the
-   * loader holds for you, the tap-target floor on a touch screen among them. They
-   * also carry `flex-shrink: 0`, so a screenful of them in a scrolling frame is a
-   * list that scrolls rather than forty rows squeezed until each clips its own
-   * second line.
+   * `column`, `row` and `line` write a CLASS, not a style attribute: an inline
+   * style would opt the panel out of the loader's rules, the touch tap-target
+   * floor among them. They do not shrink, so an overfull frame scrolls instead of
+   * squeezing its rows.
    */
   column: (opts?: StackOpts) => HTMLElement;
   /**
@@ -333,62 +278,43 @@ export interface UiApi {
   /**
    * A sentence the panel says on its own line. Added in API minor 4.
    *
-   * `tone: 'muted'` is the smaller, dimmer note that goes under a figure, drawn in
-   * the game's own secondary text colour at the size the game writes its own
-   * captions at.
+   * `tone: 'muted'` is the smaller, dimmer note under a figure, in the game's own
+   * caption style.
    */
   line: (opts?: LineOpts) => HTMLElement;
   /**
    * On screen or not. Added in API minor 4.
    *
-   * Both halves, and both are needed. `hidden` alone does NOT take a kit element off
-   * the screen: it is a user-agent rule at the lowest priority there is, and the
-   * loader's own sheet is unlayered and more specific, so it outranks it. The class
-   * alone would leave the element in the accessibility tree announcing figures
-   * nobody can see.
+   * Use this rather than `hidden` or a `display` write: the `hidden` attribute
+   * alone does NOT hide a kit element (the loader's sheet outranks it), and writing
+   * `display` back can restore the wrong value. It sets both the attribute and an
+   * `!important` class, so it beats your own inline `display` too, though not an
+   * inline `!important`.
    *
-   * A class rather than a `display` write, so nothing has to remember what the
-   * element was displayed as before it went: `display` is `flex` for some things
-   * and unset for others, and putting back a `flex` that was never there draws a
-   * kit bar's detail beside its figure instead of under it.
-   *
-   * It works on an element you gave an inline `display` of your own, which is the
-   * one case a class would normally lose: the rule behind it is `!important` so
-   * that you never have to know how hiding is implemented in order to hide
-   * something. The only thing it does not beat is an inline `!important`, which is
-   * you overriding the loader deliberately.
-   *
-   * Anything the loader drew: a column, a row, a line, `bar.el`, `tile.el`, or an
-   * element of your own.
+   * Works on anything: a column, a row, a line, `bar.el`, `tile.el`, or an element
+   * of your own.
    */
   show: (el: Element, shown: boolean) => void;
   /**
    * How big one unit is when a box is divided between several of them. Since apiMinor 6.
    *
-   * The arithmetic behind a display that scales with its own frame: a strip of squares
-   * whose height is the icon size, a column of rows dividing the box between them. Every
-   * addon in the catalogue that did this had written the same four steps, and the two
-   * worth having in one place are that the GAPS come out before the division rather than
-   * after, and that the share is FLOORED. A share rounded up is a last row a pixel or two
-   * past the bottom of the box, which a bare frame clips rather than scrolls.
+   * For a display that scales with its frame. The GAPS come out before the
+   * division, and the share is FLOORED so the last unit never overhangs the box.
    *
    * ```js
    * // Eight rows and their gaps, out of the height the player dragged.
    * const row = woc.ui.units(frame.box().h, { count: 8, gap: 3, min: 23, max: 69 });
    * ```
    *
-   * `extra` is space the units never get: the caption band under a strip of art, a footer,
-   * a header row. `min` is also the answer when there is nothing to divide, so a box that
-   * has not been measured yet gives back a usable number rather than a NaN.
+   * `min` is also the answer when there is nothing to divide, so an unmeasured box
+   * gives a usable number, never NaN.
    */
   units: (available: number, opts?: UnitOpts) => number;
   /**
    * One square of item art, at the size the game draws its own bags. Since apiMinor 7.
    *
-   * The game lays every grid of items out at `minmax(42px, 1fr)` over a 4px gap, and
-   * nothing serves that number, so an addon either transcribes it or invents one. Two
-   * in this catalogue had invented two, and grids drawing the same art sat side by side
-   * at different sizes. Use it as the tile's `size` and as the grid's own track:
+   * The game lays item grids out at `minmax(42px, 1fr)` over a 4px gap. Use this as
+   * the tile's `size` and as the grid's track:
    *
    * ```js
    * const cell = woc.ui.itemCell;
@@ -397,15 +323,9 @@ export interface UiApi {
    * const square = woc.ui.tile({ size: cell });
    * ```
    *
-   * A fixed track rather than the game's `1fr`, deliberately: a stretched track
-   * stretches the square in it, and a cell that changes size as the player drags the
-   * frame is worse than a grid that stays put and centres.
-   *
-   * It carries the touch floor with it, which is the reason not to pick a smaller
-   * number for a denser panel. The game's own note ties this figure to keeping every
-   * cell at or above the 40x40 tap target, and the loader's coarse-pointer sheet cannot
-   * reach a tile to enforce it: a tile's size arrives as an inline custom property, and
-   * an inline style outranks every selector a stylesheet can spell.
+   * Use a fixed track, not `1fr`, so cells do not resize as the frame is dragged.
+   * Do not go smaller for a denser panel: this keeps every cell above the 40x40
+   * touch target, and nothing else enforces that for a tile's `size`.
    */
   itemCell: number;
   /** Where the game's own art lives, so no addon writes a path. */
@@ -413,91 +333,64 @@ export interface UiApi {
   /**
    * Copper as the game writes it: `7s 80c`, with empty units left out.
    *
-   * Every amount the game sends is counted in copper, and this is the one place the
-   * split into gold, silver and copper lives, so two addons showing a price cannot
-   * spell it differently.
-   *
-   * For TEXT, which is most of a tooltip line. Where the figure is a readout's own,
-   * pass `{ copper }` as a bar's `value` instead and it is drawn with the game's
-   * coins rather than spelled out.
+   * For TEXT, such as a tooltip line. For a readout's figure, pass `{ copper }` as
+   * a bar's `value` to draw the game's coins.
    */
   money: (copper: number) => string;
   /**
    * Labelled controls for your own settings pane.
    *
-   * Each hands back `{ el, value, set, destroy }`, so a pane that saves to
-   * `woc.storage` reads them all the same way, and `set` moves a control without
-   * calling your handler back, which is what a reset needs.
+   * Each hands back `{ el, value, set, destroy }`; `set` moves a control without
+   * calling your handler, for a reset.
    */
   field: FieldBuilders;
   /**
    * A tab strip. Which pane it reveals is yours: the loader owns the strip only.
-   *
-   * A strip rather than a field, because tabs are navigation rather than a value
-   * the player is setting, and only one of those is worth persisting.
    */
   tabs: (opts: TabsOpts) => Tabs;
   /**
    * A context menu at an element or at a point, for per-row actions.
    *
-   * There is ONE for the whole loader and opening a second closes the first: two
-   * open context menus is not a state anyone means to be in. It closes on select,
-   * on Escape, on a click anywhere else, and when your addon is disabled, which is
-   * the part worth having in the loader rather than in each addon.
+   * There is ONE for the whole loader; opening a second closes the first. It closes
+   * on select, on Escape, on a click elsewhere, and when your addon is disabled.
    *
-   * Returns a close. Calling it once another menu has opened does nothing, so a
-   * late teardown cannot take down someone else's menu.
+   * Returns a close, which does nothing once another menu has opened.
    */
   menu: (at: Element | { x: number; y: number }, items: readonly MenuItem[]) => Unsubscribe;
   /**
    * An element the loader keeps over a point in the world.
    *
-   * Nameplates, ground markers, a target arrow, a pin on a gathering node: all the
-   * same thing, and none of them buildable by an addon, because the projection is
-   * on the game's renderer and nothing else published here needs it.
+   * Nameplates, ground markers, a target arrow, a pin on a gathering node.
    *
    * ```js
    * const plate = woc.ui.anchor3d({ unit: 'target' });
    * plate.el.textContent = woc.world.target.name;
    * ```
    *
-   * A `{ unit }` point is the one to reach for over `() => entity.pos`, because
-   * 'head' puts the element above that unit's MODEL exactly as the game's own
-   * nameplate does, and no addon can work that height out: it comes off the
-   * renderer's view of the unit, not off the wire. Since apiMinor 2.
+   * Prefer a `{ unit }` point over `() => entity.pos`: 'head' sits above the unit's
+   * MODEL as the game's nameplate does, a height no addon can compute. Since
+   * apiMinor 2.
    *
-   * Every anchor shares ONE frame loop with every `woc.onFrame` handler, and
-   * nothing is written unless the point moved on screen, so a camera nobody is
-   * turning costs nothing. It hides itself when the point cannot be trusted (see
-   * `ui.project` for what that covers), when it is off screen by more than
-   * `margin`, and whenever the game cannot be asked at all, which includes every
-   * moment before world entry.
+   * Nothing is written unless the point moved on screen. It hides itself when the
+   * point cannot be trusted (see `ui.project`), when it is off screen by more than
+   * `margin`, and before world entry.
    */
   anchor3d: (at: PointSource, opts?: Anchor3dOpts) => Anchor3d;
   /**
    * Where a world point or a unit is on screen right now, with no element.
    *
-   * `ui.anchor3d` is the right tool when the loader should KEEP something over a
-   * point. This is for the decisions an addon makes ABOUT screen positions: a line
-   * drawn between two units, a list sorted by where things are, which of two
-   * overlapping pins to hide. Measuring a placed element instead forces a
-   * synchronous layout, which on a frame loop is the churn `FrameOpts.onMove`
-   * exists to avoid.
+   * For decisions ABOUT screen positions (a line between two units, which of two
+   * overlapping pins to hide); use `ui.anchor3d` to KEEP an element over a point.
+   * Cheaper than measuring a placed element, which forces a layout.
    *
-   * **Null means do not draw**, and that is the whole safety of this call. It is
-   * null before world entry, null when the game cannot be asked, and null when the
-   * point has no trustworthy screen position: behind the camera, or CLOSER than
-   * the near plane. That last case is the one worth knowing about, because the raw
-   * projection reports finite coordinates for it that are off by any amount, and
-   * the game's own nameplates, chat bubbles and click picking all guard against
-   * exactly it. There is deliberately no `onScreen` flag, because a flag is a
-   * thing you can forget to read.
+   * **Null means do not draw.** It is null before world entry, when the game cannot
+   * be asked, and when the point has no trustworthy screen position: behind the
+   * camera, or CLOSER than the near plane, where the raw projection gives finite
+   * but wrong coordinates.
    *
    * It does NOT test the viewport rectangle: an off-screen point in front of the
-   * camera still projects, which is what an arrow pointing off the edge of the
-   * screen at an off-screen unit is built from. Compare `x` and `y` yourself, and
-   * allow a margin the way `ui.anchor3d` allows 64 pixels by default, because your
-   * element is centred on the point.
+   * camera still projects, which is what an edge arrow needs. Compare `x` and `y`
+   * yourself, with a margin (`ui.anchor3d` defaults to 64 pixels).
    *
    * ```js
    * // How many pixels a 30 yard radius covers on screen right now.
@@ -506,9 +399,8 @@ export interface UiApi {
    * const pixels = centre && edge ? Math.hypot(edge.x - centre.x, edge.y - centre.y) : null;
    * ```
    *
-   * Measure that along the axis you are drawing on: under perspective a ground
-   * radius covers a different number of pixels across than it does up the screen,
-   * which is why the loader publishes no single scale figure. Since apiMinor 2.
+   * Measure along the axis you are drawing on: under perspective a ground radius
+   * covers different pixels across than up the screen. Since apiMinor 2.
    */
   project: (at: WorldPoint | UnitPoint) => ScreenPoint | null;
   /**
@@ -525,12 +417,9 @@ export interface UiApi {
   /**
    * Shows on hover and on focus.
    *
-   * A string is one line, which is what this took before and still does. The
-   * structured form adds a title, an icon from `ui.icon`, and a tone per line, so
-   * a hovered row can say what the game's own tooltips say.
-   *
-   * Everything is written as text, never as markup: an ability name and a player
-   * name both reach this from the wire.
+   * A string is one line. The structured form adds a title, an icon from
+   * `ui.icon`, and a tone per line. Everything is written as text, never as
+   * markup.
    */
   tooltip: (el: Element, content: TooltipInput) => Unsubscribe;
 }

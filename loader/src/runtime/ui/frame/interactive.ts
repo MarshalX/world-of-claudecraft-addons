@@ -1,14 +1,8 @@
 // Making a window movable and resizable, over interactjs.
 //
-// Thin by design: every rule about where the window may end up lives in
-// frame/geometry.ts, and this file only turns pointer gestures into a box and
-// hands it back. interactjs is here for the parts that are genuinely fiddly
-// (pointer capture across the document, touch, the resize edge hit areas), not
-// for the arithmetic.
-//
-// The window is positioned with left/top rather than a transform, because the
-// CSS default centres it with translateX(-50%); once the player has moved it,
-// `data-positioned` on the element turns that centring off (see styles.css).
+// Thin by design: every placement rule lives in frame/geometry.ts, and interactjs handles
+// only pointer capture, touch and edge hit areas. The window is positioned with left/top;
+// `data-positioned` turns off the CSS default's translateX(-50%) centring (styles/chrome.css).
 
 import interact from 'interactjs';
 import {
@@ -34,46 +28,28 @@ interface InteractiveFrameDeps {
   /** Called at the end of a gesture, not during it. */
   onCommit: (box: FrameBox) => void;
   /**
-   * Called on every write of the box, which is what an addon lays out against.
-   *
-   * The pair of `onCommit` rather than a rename of it: one is "the player has
-   * finished, persist this" and the other is "the box is now that", and a display
-   * that scales with its frame has to follow the drag rather than jump when the
-   * pointer comes up. Not called for the initial paint, which is the size the
-   * caller asked for.
+   * Called on every write of the box, so a display that scales with its frame follows the
+   * drag. Not called for the initial paint, which is the size the caller asked for.
    */
   onBox?: (box: FrameBox) => void;
   /**
-   * Which axes the box owns, and therefore which edges resize and which sizes are
-   * written at all. Defaults to both.
-   *
-   * Per axis rather than a flag, because the two are different questions. A small
-   * always-on HUD readout is sized by its CONTENT vertically, so an explicit height
-   * would leave it padded out or clipped as its text changes, while its width is a
-   * column the player reads figures out of and may well want wider.
+   * Which axes the box owns, and therefore which edges resize and which sizes are written. Defaults
+   * to both.
    */
   resize?: SizeAxes;
   /**
-   * The element's live size, for an axis the box does not own.
-   *
-   * Without it, clamping a content-sized frame would use whatever size it had
-   * when it was created, and a frame that has since grown could be dragged most
-   * of the way off screen while the clamp believed it was still on.
+   * The element's live size, for an axis the box does not own. Without it the clamp uses the
+   * size at creation, and a frame that has since grown can be dragged mostly off screen.
    */
   measure?: () => Viewport;
   /**
-   * How small and how large this frame may be. Defaults to the manager's own
-   * minimum and to the viewport.
-   *
-   * Passed on to every clamp, not just the first: without it a re-clamp after a
-   * drag or a viewport change silently inflates an addon frame back to the
-   * manager's 360 by 220, which is a settings window rather than a HUD readout.
+   * How small and how large this frame may be. Defaults to the manager's own minimum and to
+   * the viewport. Applied on every clamp, or a re-clamp inflates a small frame to the default.
    */
   bounds?: SizeBounds;
   /**
-   * The alignment grid a gesture lands on, read per gesture because both the setting
-   * and the arrange mode change under a frame built long before either did. Absent
-   * means off.
+   * The alignment grid a gesture lands on, read per gesture since it changes under the frame.
+   * Absent means off.
    */
   snapGrid?: () => number;
 }
@@ -85,13 +61,8 @@ interface InteractiveFrame {
   place: (box: FrameBox) => void;
   box: () => FrameBox;
   /**
-   * Turn the PLAYER's gestures on and off, leaving every loader write alone.
-   *
-   * Deliberately not a flag on the box keeper. That is the only path a box is
-   * written by, and it serves `place` and `refit` as well as a drag, so a gate
-   * there would stop a frame being restored to its saved position or being
-   * pulled back on screen after the viewport shrank. What a caller wants to stop
-   * is the pointer, so the pointer is what this stops.
+   * Turn the player's gestures on and off, leaving every loader write alone. Do not gate the
+   * box keeper instead: it also serves `place` and `refit`, which must keep working.
    */
   setGestures: (enabled: boolean) => void;
   destroy: () => void;
@@ -101,10 +72,8 @@ function paint(el: HTMLElement, box: FrameBox, axes: SizeAxes): void {
   el.setAttribute('data-positioned', 'true');
   el.style.left = `${box.x}px`;
   el.style.top = `${box.y}px`;
-  // Here because every box, the opening placement included, reaches the element here.
   el.classList.toggle(LABEL_BELOW_CLASS, labelBelow(box.y));
-  // Only the axes the box owns. Writing the other would pin a frame at whatever its
-  // content happened to measure at the moment it was first painted.
+  // Only the owned axes; writing the other would pin it at its first measured size.
   if (axes.w) {
     el.style.width = `${box.w}px`;
   }
@@ -121,22 +90,9 @@ interface BoxKeeper {
   move: (next: FrameBox) => void;
 }
 
-/**
- * The box: clamped on every write, painted on every write.
- *
- * Held apart from the gesture wiring below because it is the whole of the
- * arithmetic and none of the pointer handling. A gesture can only ever PROPOSE a
- * box, so there is no path that writes one which skipped the clamp.
- */
+/** The box: clamped and painted on every write. A gesture can only propose a box. */
 function createBoxKeeper(deps: InteractiveFrameDeps, axes: SizeAxes): BoxKeeper {
-  /**
-   * An axis the box does not own reports what the CONTENT made it.
-   *
-   * Per axis, because a frame may own one and not the other: a column that resizes
-   * across and grows down has a width the player set and a height nothing wrote, and
-   * clamping the second against a number from when it was built would let it be
-   * dragged most of the way off screen while the clamp believed it was still on.
-   */
+  /** An axis the box does not own reports what the content made it, per axis. */
   const withSize = (next: FrameBox): FrameBox => {
     const measured = deps.measure?.();
     if (measured === undefined) {
@@ -153,9 +109,8 @@ function createBoxKeeper(deps: InteractiveFrameDeps, axes: SizeAxes): BoxKeeper 
   };
 
   const bounds: SizeBounds = { min: deps.bounds?.min ?? { w: MIN_WIDTH, h: MIN_HEIGHT } };
-  // Assigned rather than spread: exactOptionalPropertyTypes rejects an explicit
-  // undefined, and an absent maximum has to stay absent for clampSize to read it
-  // as "the viewport" rather than as a cap of undefined.
+  // Assigned, not spread: an absent maximum must stay absent for clampSize to read it as the
+  // viewport, and exactOptionalPropertyTypes rejects an explicit undefined.
   if (deps.bounds?.max !== undefined) {
     bounds.max = deps.bounds.max;
   }
@@ -192,13 +147,8 @@ interface RestrictSizeOpts {
 }
 
 /**
- * The same bounds again, for interactjs to hold the gesture inside.
- *
- * Redundant with the clamp on paper and not in practice: the clamp decides where
- * the frame is DRAWN, while interactjs keeps its own rect, and without this the
- * two diverge as soon as the pointer passes a bound. The frame stops at the
- * bound, the rect keeps growing, and the frame then does nothing at all until the
- * pointer travels all the way back to where the rect agrees with it again.
+ * The same bounds again, for interactjs's own rect. Without it the rect keeps growing past a
+ * bound the drawn frame stopped at, and the frame ignores the pointer until it travels back.
  */
 function restrictOpts(bounds: SizeBounds): RestrictSizeOpts {
   const min = bounds.min ?? { w: MIN_WIDTH, h: MIN_HEIGHT };
@@ -210,11 +160,9 @@ function restrictOpts(bounds: SizeBounds): RestrictSizeOpts {
 }
 
 /**
- * The drag listener, carrying the sub-cell remainder a snapped drag leaves behind:
- * interactjs reports deltas against a box already rounded onto a line, so without it
- * every movement under half a cell rounds straight back and a slow drag never moves
- * the frame. The remainder is bounded by half a cell by construction, so a frame
- * clamped at the viewport edge owes nothing when the pointer comes back.
+ * The drag listener, carrying the sub-cell remainder a snapped drag leaves behind: deltas
+ * arrive against an already-rounded box, so without it a slow drag never moves the frame.
+ * The remainder is at most half a cell.
  */
 function dragMover(
   keeper: BoxWriter,
@@ -238,14 +186,10 @@ interface ResizeEvent {
   edges: ResizeEdges;
 }
 
-/**
- * The resize listener. The edges come off the event, since which one is dragged
- * decides where the snap goes (see frame/snap.ts).
- */
+/** The resize listener. The dragged edge decides where the snap goes (see frame/snap.ts). */
 function resizeMover(keeper: BoxWriter, grid: () => number): (event: ResizeEvent) => void {
   return (event) => {
-    // A left-edge drag changes x and w together. deltaRect carries the origin
-    // shift; without it the window grows leftward and then jumps.
+    // deltaRect carries a left-edge drag's origin shift; without it the window jumps.
     const box = keeper.box();
     keeper.move(
       snapResize(
@@ -264,18 +208,14 @@ function resizeMover(keeper: BoxWriter, grid: () => number): (event: ResizeEvent
 
 /** What a caller may do to the gestures once they are attached. */
 interface Gestures {
-  /** Both of them at once: a frame nobody may move is not one they may resize. */
+  /** Drag and resize together. */
   setEnabled: (enabled: boolean) => void;
   destroy: () => void;
 }
 
 /**
- * Turn pointer gestures into proposed boxes, and hand back the teardown.
- *
- * The interactjs instance deliberately does not leave this function: unsetting it
- * and switching it off are the only things a caller ever wants, and keeping it in
- * here is what stops a later caller reaching around the keeper to move the element
- * itself.
+ * Turn pointer gestures into proposed boxes. The interactjs instance stays in here so no
+ * caller can reach around the keeper to move the element.
  */
 function attachGestures(deps: InteractiveFrameDeps, keeper: BoxKeeper, axes: SizeAxes): Gestures {
   const commit = (): void => {
@@ -285,8 +225,7 @@ function attachGestures(deps: InteractiveFrameDeps, keeper: BoxKeeper, axes: Siz
   const grid = (): number => deps.snapGrid?.() ?? NO_SNAP;
 
   const instance = interact(deps.el).draggable({
-    // Only the title bar starts a drag, so a click on a tab is a click on a
-    // tab. `ignoreFrom` covers the close button living inside the handle.
+    // `ignoreFrom` covers the close button inside the handle.
     allowFrom: deps.handle,
     ignoreFrom: 'button, input, select, textarea',
     listeners: { move: dragMover(keeper, grid), end: commit },
@@ -295,10 +234,7 @@ function attachGestures(deps: InteractiveFrameDeps, keeper: BoxKeeper, axes: Siz
   const resizable = axes.w || axes.h;
   if (resizable) {
     instance.resizable({
-      // The top edge is deliberately not resizable: it is the drag handle, and
-      // an edge that both moves and resizes is a coin flip on every grab. The other
-      // three are per axis, so a frame that owns only its width has no bottom edge
-      // to grab and cannot be dragged into a height nothing will write.
+      // The top edge is the drag handle, so it never resizes. The others follow the owned axes.
       edges: { top: false, left: axes.w, right: axes.w, bottom: axes.h },
       listeners: { move: resizeMover(keeper, grid), end: commit },
       modifiers: [interact.modifiers.restrictSize(restrictOpts(keeper.bounds))],
@@ -306,12 +242,8 @@ function attachGestures(deps: InteractiveFrameDeps, keeper: BoxKeeper, axes: Siz
   }
 
   return {
-    // Partial options, which interactjs MERGES into what is already set: passing
-    // `enabled` alone leaves the listeners, the handle and the modifiers above in
-    // place, and re-passing them here would be a second copy of them to keep in
-    // step. The resize arm is guarded because the same merge cuts the other way:
-    // calling `.resizable()` on a frame that never asked to be one would make it
-    // resizable from the first switch on.
+    // interactjs merges partial options, so `enabled` alone keeps everything set above.
+    // The resize arm is guarded: `.resizable()` on a non-resizable frame would make it one.
     setEnabled: (enabled) => {
       instance.draggable({ enabled });
       if (resizable) {

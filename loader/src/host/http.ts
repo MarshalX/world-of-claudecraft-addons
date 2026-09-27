@@ -1,15 +1,5 @@
-// The manager's cross-origin request API, as a promise.
-//
-// Its own module rather than a corner of gm.ts, because it is the only part of
-// the GM surface that is not a value store: everything else there is about
-// reading and watching keys, and this is the loader's one way out of the
-// sandbox. It is bounded by the userscript's @connect list, and
-// shared/marketplace.ts is what keeps a marketplace URL from naming another
-// host.
-//
-// The callers of this take the shape it exposes, not the manager's: both
-// spellings of the global, both response conventions, and either arm's absence
-// are decided here so nothing downstream has to.
+// The manager's cross-origin request API, as a promise. Both spellings of the global, both
+// response conventions and a missing grant are all resolved here, so callers see one shape.
 
 /** One `name: value` line of the raw responseHeaders blob. */
 const HEADER_LINE_RE = /^([^:]+):\s*(.*)$/;
@@ -53,13 +43,7 @@ type RawRequest = (details: GmRequestDetails) => unknown;
 
 type Requester = (req: HttpRequest) => Promise<HttpResponse>;
 
-/**
- * Header names, lower-cased.
- *
- * The managers hand back one CRLF-joined string rather than a map, and the
- * casing is whatever the server sent, so `ETag` and `etag` both arrive and a
- * case-sensitive lookup finds one of them at random.
- */
+/** Parse the CRLF-joined header blob, lower-casing names since servers send `ETag` or `etag`. */
 function parseHeaders(raw: string | undefined): Record<string, string> {
   const headers: Record<string, string> = {};
   for (const line of (raw ?? '').split(HEADER_SEPARATOR_RE)) {
@@ -109,11 +93,8 @@ function detailsFor(
 }
 
 /**
- * The callback-style GM request, as a promise.
- *
- * Every HTTP status resolves, including 304 and 404: the caller decides what a
- * status means, and a conditional request whose whole purpose is to return 304
- * must not arrive as a rejection. Only a transport failure rejects.
+ * The callback-style GM request, as a promise. Every HTTP status resolves, 304 and 404
+ * included; only a transport failure rejects.
  */
 function createRequester(send: RawRequest): Requester {
   return (req) =>
@@ -123,11 +104,8 @@ function createRequester(send: RawRequest): Requester {
 }
 
 /**
- * The stand-in for a manager that granted no request API.
- *
- * Rejects rather than throwing, so a missing grant reaches the caller's catch
- * and costs marketplaces rather than the loader: the manager and every
- * already-installed addon work from cached source without it.
+ * The stand-in for a manager that granted no request API. Rejects rather than throwing, so it
+ * costs marketplaces only: installed addons still run from cached source.
  */
 function createMissingRequester(): Requester {
   return () =>
@@ -139,12 +117,7 @@ function createMissingRequester(): Requester {
     );
 }
 
-/**
- * The request surface for whatever the manager actually granted.
- *
- * The decision lives here rather than at the call site so the absent case is
- * handled once, next to the message it produces.
- */
+/** The request surface for whatever the manager actually granted. */
 function resolveRequester(send: RawRequest | undefined): Requester {
   if (send === undefined) {
     return createMissingRequester();

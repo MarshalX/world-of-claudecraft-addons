@@ -1,16 +1,8 @@
 // @vitest-environment happy-dom
 
-// The rebinding flow behind the manager's key bindings pane: moving a live
-// binding, listing every binding so a conflict can be reported, refusing a
-// combo that must not be bound, and reading the player's next press.
-//
-// Capture sits here rather than with the listener tests because it is the first
-// half of a rebind: the pane reads one press, then hands the combo to rebind.
-// It is also the one path that deliberately overrides the editable-element
-// guard, since the pane's own combo field has focus the whole time it waits.
-//
-// The listener itself, matching and what still reaches the game, is covered in
-// keys-dispatcher.test.ts.
+// The rebinding flow behind the manager's key bindings pane: moving a live binding, listing
+// bindings for conflicts, refusing a duplicate, and capturing the player's next press. The listener
+// itself is covered in keys-dispatcher.test.ts.
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createKeyDispatcher } from '../loader/src/runtime/keys/dispatcher.ts';
@@ -41,10 +33,7 @@ function press(target: EventTarget, key: Press): KeyboardEvent {
   return event;
 }
 
-/**
- * A listener standing in for the game's own, registered in the BUBBLE phase on
- * the same target. Whether this runs is the whole question.
- */
+/** Stands in for the game's own listener, in the BUBBLE phase on the same target. */
 function gameListener(target: EventTarget) {
   const heard = vi.fn();
   target.addEventListener('keydown', heard);
@@ -123,8 +112,7 @@ describe('capture', () => {
     expect(await capture.done).toBe('Ctrl+Shift+KeyM');
   });
 
-  // The manager's combo field has focus while this waits, so declining there
-  // would make the feature unable to read anything at all.
+  // The manager's combo field has focus while capture waits.
   it('claims the press even while an input has focus', async () => {
     const el = document.createElement('input');
     const { target, dispatcher } = open({ activeElement: el });
@@ -167,7 +155,6 @@ describe('capture', () => {
     expect(game).toHaveBeenCalledOnce();
   });
 
-  // Null, never a hanging promise: the caller is a prompt the player can close.
   it('resolves null when cancelled', async () => {
     const capture = open().dispatcher.capture();
 
@@ -185,8 +172,6 @@ describe('capture', () => {
     expect(await first.done).toBeNull();
   });
 
-  // Cancelling an already-superseded prompt must not cancel the one that
-  // replaced it.
   it('does not let a stale cancel kill the live capture', async () => {
     const { target, dispatcher } = open();
     const first = dispatcher.capture();

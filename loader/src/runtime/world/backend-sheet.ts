@@ -1,7 +1,4 @@
 // The player's own sheet and their group, each projected by its own module.
-//
-// Grouped apart from the derived reads because these describe what the player
-// and their group HAVE, where those describe what is happening around them.
 
 import type { BackendDeps } from './backend-deps.ts';
 import {

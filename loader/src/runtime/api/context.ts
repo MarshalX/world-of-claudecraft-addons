@@ -1,11 +1,5 @@
-// What the `woc` object IS, apart from how it is assembled.
-//
-// Split out of api/index.ts when that file crossed the size limit, and the seam
-// is a real one rather than a place to cut: this file is the CONTRACT (the shape
-// an addon is handed, and the shape the runtime has to supply for one to be
-// built) while index.ts is the assembly and api/bind.ts is the wiring. Nothing
-// here constructs anything, which is why it can be imported by both without a
-// cycle.
+// The contract of the `woc` object: what an addon is handed and what the runtime supplies.
+// index.ts assembles it and bind.ts wires it; nothing here constructs, so both import it freely.
 
 import type { Channel } from '../../shared/hosts.ts';
 import type { AddonManifest } from '../../shared/schema.ts';
@@ -65,41 +59,21 @@ interface WocApi extends TimersApi, LogApi {
   readonly storage: AddonStorageApi;
   /** Publish and subscribe between addons, in this page. */
   readonly bus: BusApi;
-  /** Durations, ids as words, counted nouns, arrows. Pure, and shared by every addon. */
+  /** Durations, ids as words, counted nouns, arrows. */
   readonly fmt: FmtApi;
-  /**
-   * A JSON file from this addon's own directory, declared as `data` in the
-   * manifest. Fetched by the loader at install; this is a cached read.
-   */
+  /** A JSON file declared as `data` in the manifest, fetched at install and read from cache. */
   data: (name: string) => Promise<unknown>;
   /** Hydrated from the manifest schema before the addon's code runs. */
   readonly settings: SettingValues;
   onSettingsChange: (handler: SettingsChangeHandler) => Teardown;
   onDispose: (teardown: Teardown) => Teardown;
-  /**
-   * Run something on the loader's own animation-frame loop.
-   *
-   * `dt` is milliseconds since the previous frame, 0 on the first, clamped at 250.
-   * Top level rather than under `ui`, because a decay curve and a meter's
-   * arithmetic are as much a use of a frame tick as a sweep is.
-   */
+  /** The loader's frame loop. `dt` is ms since the last frame, 0 on the first, clamped at 250. */
   onFrame: (handler: (dt: number) => void) => Teardown;
-  /**
-   * A repaint that runs at most once a frame, however many times it is asked for.
-   *
-   * Returns the function that asks. See runtime/api/paint.ts.
-   */
+  /** A repaint coalesced to once a frame. See runtime/api/paint.ts. */
   paint: PaintApi;
   /** Monotonic milliseconds. Right for an interval, wrong for anything you store. */
   now: () => number;
-  /**
-   * Epoch milliseconds, as `Date.now` reads them.
-   *
-   * Declared next to `now` because the choice between them is the whole hazard:
-   * an author following the prefer-`woc` rule reaches for the monotonic one,
-   * stores it, and gets a stamp that reads as being in the future on the next
-   * page load, with nothing to indicate it.
-   */
+  /** Epoch milliseconds. Store this, never `now`, which reads as the future after a reload. */
   wallClock: () => number;
 }
 
@@ -116,7 +90,7 @@ interface SharedServices {
   dispatcher: KeyDispatcher;
   gameBindings: GameBindings;
   logs: LogBuffer;
-  /** The one animation-frame loop. See runtime/frame-loop.ts. */
+  /** The one animation-frame loop. */
   frames: FrameLoop;
   kit: UiKit;
   channel: Channel;
@@ -125,23 +99,11 @@ interface SharedServices {
   /** The character in play, for per-character frame state. Null before entry. */
   character: () => string | null;
   /**
-   * Resolves the first time there IS a character, which is world entry.
-   *
-   * Per-character state cannot be read before then: there is no key to read it
-   * under. An addon builds its frames at document-start, so without this the one
-   * read of a saved position happens on the landing page, finds nothing, and is
-   * never tried again.
-   *
-   * A function rather than a promise because asking for it costs a world
-   * subscription, and only an addon with a saved frame ever asks.
+   * Resolves at world entry, when per-character state first has a key. A function, not a promise,
+   * because asking costs a world subscription.
    */
   characterKnown: () => Promise<void>;
-  /**
-   * One addon's declared data file, out of the host's install-time cache.
-   *
-   * A function rather than a hub, because there is no event to route and no state
-   * to hold: the host answers, the per-addon surface in api/data.ts memoises.
-   */
+  /** One addon's declared data file, from the host's install-time cache. */
   addonData: (fqid: string, name: string) => Promise<string>;
   now: () => number;
   wallClock: () => number;

@@ -1,8 +1,7 @@
 name: Game catch-up
 
 # Runs .claude/skills/woc-game-catchup against a new game release and opens a
-# draft pull request. AGENTS.md, "The game catch-up run", says why it is shaped
-# this way: read that before changing anything here.
+# draft pull request. The agent gets no git write access; a later job commits its patch.
 
 on:
   workflow_dispatch:
@@ -162,6 +161,10 @@ jobs:
 
             Commit nothing and run no git write command. A later step commits what you leave in
             the working tree.
+
+            Where a release changes something AGENTS.md states, correct the current statement in
+            AGENTS.md in place; never add dated or per-release entries. The history belongs in
+            the report and the commit, not in the instructions.
 
             Write the report to $CATCHUP/report.md, which becomes the body of the pull request.
             And as you FINISH each phase, append one line to $GITHUB_STEP_SUMMARY saying what that

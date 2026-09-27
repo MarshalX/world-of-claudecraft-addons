@@ -1,18 +1,7 @@
 // @vitest-environment happy-dom
 
-// One shape, two renderers, checked on both sides.
-//
-// A labelled control exists twice in this loader and has to: the kit builds it as
-// plain DOM for addons, the manager builds it as preact, and neither can call the
-// other. They were agreeing by accident and had drifted, with Browse and
-// Marketplaces writing a wrapping label with no `for` while the settings form
-// wrote a label that named its control. The two look identical, because the same
-// rules style both, and only one of them gives a control an accessible name.
-//
-// So this suite asserts the SHAPE rather than any one renderer: whatever a pane
-// draws, every field in it names its own control. It is the same guard
-// tests/ui-kit-frame.test.ts and tests/manager-render.test.tsx put on the close
-// glyph, for the same reason and after the same kind of drift.
+// One field shape, two renderers (kit DOM and manager preact): every field either draws
+// names its own control. A label with no `for` looks identical and has no accessible name.
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { DiagnosticsReading } from '../loader/src/runtime/diagnostics.ts';
@@ -82,9 +71,8 @@ function addon(): InstalledAddon {
 }
 
 /**
- * Preact batches state into a microtask, and the stores load asynchronously.
- * The turns chain rather than resolve together, because each one releases the
- * continuation the next is waiting on.
+ * Preact batches state into a microtask and the stores load asynchronously; the turns
+ * chain because each releases the continuation the next is waiting on.
  */
 async function settle(turns = 8): Promise<void> {
   if (turns > 0) {
@@ -107,15 +95,11 @@ function labelOf(field: HTMLElement): Element | null {
 }
 
 /**
- * The control a field's label names, resolved the way a browser resolves it.
- *
- * Null when the label points at nothing, which is the failure this is for: a
- * label with no `for` reads out with no control attached to it, and a label
- * pointing at an id that is not there is worse, because it looks correct.
+ * The control a field's label names, resolved the way a browser resolves it. Null when
+ * the label has no `for` or points at an id that is not there.
  */
 function controlOf(field: HTMLElement): Element | null {
-  // A checkbox's container IS its label, which is the one exception the shape
-  // allows and therefore the one this has to look for rather than trip over.
+  // A checkbox's container IS its label, the one exception the shape allows.
   const label = labelOf(field);
   const wants = label?.getAttribute('for') ?? '';
   if (wants === '') {
@@ -144,9 +128,7 @@ function openManager() {
     }),
     capture: () => Promise.resolve(null),
     logs: createLogBuffer(),
-    // A real catalog behind the two panes that drew nothing without one: an
-    // unreachable pane has no fields, and a guard that passed on an empty pane
-    // would be checking that the manager renders no forms.
+    // A real catalog, since these two panes draw no fields without one.
     market: fakeMarketApi({
       list: () => Promise.resolve([marketState(OFFICIAL, [marketEntry()])]),
     }),
@@ -196,7 +178,7 @@ describe('the kit renderer', () => {
     expect(controlOf(field.el)).not.toBeNull();
   });
 
-  it('takes its classes from the shared shape rather than writing its own', () => {
+  it('takes its classes from the shared shape', () => {
     const field = createText(document, { label: 'A', value: '', onChange: vi.fn() });
 
     expect(field.el.className).toBe(FIELD_CLASS.row);
@@ -205,9 +187,7 @@ describe('the kit renderer', () => {
   });
 });
 
-// The renderer that drifted. Each pane is opened and every field it drew is held
-// to the same rule, so a new pane written the old way fails here rather than
-// being noticed by whoever tries to use the loader with a screen reader.
+// Each pane is opened and every field it drew is held to the same rule.
 describe('the manager renderer', () => {
   it('names a control from every field on an addon page', async () => {
     openManager();

@@ -1,20 +1,8 @@
-// The published API surface, read out of packages/types, so the docs can be held
-// to it.
+// The published API surface, read out of packages/types, so the docs can be held to it.
 //
-// Scoped to the `*Api` interfaces on purpose. The obvious reading of "every
-// exported member is documented" also catches every field on every data shape,
-// which means `agi`, `spi`, `armor` and ninety others: a guard that fires ninety
-// times on the day it lands is a guard somebody deletes in the first week.
-//
-// The line that makes it useful is between what an author has to be TOLD exists
-// and what they find once they are there. `woc.ui.toast()` is the first kind and
-// belongs in prose. `entity.spi` is the second, and autocomplete is its
-// documentation.
-//
-// Matching is on the QUALIFIED name (`net.onEvent`, not `onEvent`) because bare
-// member names collide with ordinary prose. `api` matched the word "API" and
-// `set`, `on` and `get` match almost any page, so the bare form reports success
-// for members nobody wrote about.
+// Scoped to the `*Api` interfaces: those are what an author has to be told exists, while a data
+// shape's fields (`entity.spi`) are documented by autocomplete. Match on the qualified name
+// (`net.onEvent`), since bare names like `on` and `get` match almost any prose.
 
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -88,8 +76,7 @@ function codeOnLine(line: string): Scan {
     return { code: withoutLineComment(line), open: false };
   }
   const before = withoutLineComment(line.slice(0, start));
-  // Shorter than the slice means a `//` came first: `// see /* elsewhere` opens
-  // no block.
+  // Shorter than the slice means a `//` came first: `// see /* elsewhere` opens no block.
   if (before.length < start) {
     return { code: before, open: false };
   }
@@ -107,10 +94,8 @@ function scanLine(line: string, previous: Scan): Scan {
 /**
  * Top-level members only: a nested object literal's fields are not the surface.
  *
- * Comments are stripped before anything is matched or counted. Prose legitimately
- * carries unmatched delimiters (`[-180, 180)`), and counting one drives the depth
- * negative, which drops every member below it and makes the docs guard this feeds
- * quietly stop requiring them.
+ * Strip comments before counting: prose carries unmatched delimiters (`[-180, 180)`), which would
+ * drive the depth negative and silently drop every member below.
  */
 function membersOf(body: string): string[] {
   const found: string[] = [];
@@ -136,13 +121,7 @@ function prefixFor(interfaceName: string): string {
   return stem.charAt(0).toLowerCase() + stem.slice(1);
 }
 
-/**
- * Members that are deliberately not written about, and why.
- *
- * An explicit list rather than a silent skip: "we decided not to document this"
- * is a decision worth recording, and this is the record. Anything not here has to
- * appear in the docs or the suite fails.
- */
+/** Members deliberately not documented, with the reason. Anything else must appear in the docs. */
 export const EXEMPT: Record<string, string> = {
   'woc.clearTimeout':
     'the pair of woc.setTimeout, which is documented; naming it separately teaches nobody anything they did not already assume.',

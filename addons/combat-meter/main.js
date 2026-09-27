@@ -1,27 +1,23 @@
 /// <reference types="@woc-addons/types" />
 
-// Combat Meter: a per-ability breakdown of damage dealt, healing done and damage taken,
-// plus your attack table. Read off `damage` and `heal2`; nothing is sent.
+// Combat Meter: a per-ability breakdown of damage dealt, healing done and damage taken, plus your
+// attack table. Read off `damage` and `heal2`; nothing is sent.
 //
-// A fight ends on an idle timeout, because `inCombat` is not on the wire, and its duration
-// is floored at a second or a burst divides by a fraction and reports a rate nobody hit.
+// A fight ends on an idle timeout, because entity `inCombat` is not on the wire, and its duration
+// is floored at a second so a burst does not report a rate nobody hit.
 //
-// Closed fights are KEPT, newest first, and the panel pages between them; `keep-fights` says
-// how many, counting the one being fought. Each is named after the biggest mob in it, latched
-// as the records land, because a mob that died and despawned is gone from `world.entities`
-// long before the page is opened. The last page adds the kept fights together rather than
-// running a total of its own, so it can only ever report the fights still on the pages behind
-// it. Kept fights are written to THIS CHARACTER's store as each one closes, so a reload keeps
-// them; the fight in progress is not, since storing that would mean a write per hit.
+// Closed fights are KEPT, newest first, and the panel pages between them; `keep-fights` counts the
+// one in progress. Each is named after the biggest mob in it, latched as records land, because a
+// dead mob despawns before the page is opened. The last page adds the kept fights together, so it
+// only reports fights still on the pages behind it. Kept fights are written to THIS CHARACTER's
+// store as each closes; the live one is not, since that would be a write per hit.
 //
-// A pet's output is yours. `damage.sourceOwnerId` says so from game 0.36.0 and `Entity.ownerId`
-// says so otherwise, and both are needed: the record's own owner is the only one that survives
-// the pet despawning with its dying owner, which is precisely when the last exchange lands.
-// Its rows carry the game's own `{pet}: {ability}`.
+// A pet's output is yours: `damage.sourceOwnerId` first, `Entity.ownerId` otherwise, since only the
+// record's own owner survives the pet despawning with its dying owner. Its rows carry the game's
+// `{pet}: {ability}`.
 //
-// Two limits: art covers your own spellbook alone, since an event carries a display name
-// and art is filed under the id, and the overhealing figure is a FLOOR rather than a total,
-// because a fully wasted heal emits no record at all.
+// Art covers your own spellbook alone (events carry a display name, art is filed under the id), and
+// overhealing is a FLOOR, because a fully wasted heal emits no record.
 
 const MS_PER_SECOND = 1000;
 const REPAINT_MS = 500;
@@ -31,16 +27,13 @@ const SECONDS_PER_MINUTE = 60;
 const FRAME_WIDTH = 340;
 const FRAME_HEIGHT = 348;
 /**
- * The height this panel opened at before it grew a fight strip, kept as the floor.
- *
- * A frame's minimum defaults to the size it was declared at, and a saved box is held to the
- * same bounds a dragged one is, so raising the opening height without this would quietly
- * grow every panel already saved at the old one on its owner's next login.
+ * The panel's opening height before the fight strip, kept as the floor: a saved box is held to the
+ * declared bounds, so raising the floor would grow every saved panel on its owner's next login.
  */
 const MIN_FRAME_HEIGHT = 320;
 /** Auto-attacks arrive with no ability at all. */
 const MELEE_LABEL = 'Melee';
-/** A pet the snapshot carries with no name of its own, which nothing has been seen to send. */
+/** A pet the snapshot carries with no name of its own. */
 const PET_LABEL = 'Pet';
 /** What the overhealing figure cannot see, said where the figure is read. */
 const OVERHEAL_NOTE = Object.freeze({
@@ -52,9 +45,8 @@ const OVERHEAL_NOTE = Object.freeze({
 const STORE_KEY = 'fights';
 const STORE_VERSION = 1;
 /**
- * Rows kept per table in a STORED fight. The panel draws at most `max-rows`, which stops at
- * 40, so anything deeper is bytes no page can show. A fight's totals are stored whole and are
- * never summed back from these rows, so trimming them cannot move a figure the summary reports.
+ * Rows kept per table in a STORED fight. The panel draws at most `max-rows` (40), and totals are
+ * stored whole rather than summed from rows, so trimming cannot move a reported figure.
  */
 const STORED_ROWS = 40;
 /** The last page: the kept fights added together. A string, because it is not one of them. */
@@ -68,18 +60,16 @@ const NEWER_LABEL = 'Newer fight';
 const OLDER_GLYPH = '‹';
 const NEWER_GLYPH = '›';
 /**
- * Wider than the density's own 4px, because this row is the one place in the panel where a
- * bordered control sits directly beside plain text: at the shared spacing the arrows read as
- * attached to the name and to the count rather than as controls of their own.
+ * Wider than the density's 4px: at the shared spacing the bordered arrows read as attached to the
+ * plain text beside them.
  */
 const NAV_GAP = 10;
 /** Above and below the strip, on top of the column's own spacing. */
 const NAV_BAND_PX = 4;
 
 /**
- * Attack-table outcomes, in the order they are worth reading. Must hold every kind the
- * wire can send: the line divides by every outcome recorded, so a missing kind still
- * takes its share of the denominator.
+ * Attack-table outcomes, in reading order. Must hold every kind the wire can send, since the line
+ * divides by every outcome recorded.
  */
 const OUTCOMES = ['hit', 'miss', 'dodge', 'parry', 'block', 'resist', 'evade'];
 
@@ -90,9 +80,8 @@ const TABLES = [
 ];
 
 function emptyTally(pet) {
-  // School is the one identifying field on a damage event that does not depend on the
-  // ability id. First seen wins, so one odd event cannot recolour a row mid-fight.
-  // `pet` is fixed by the label, which carries the name, so it never changes after this.
+  // School is the one identifying field that does not depend on the ability id. First seen wins, so
+  // one odd event cannot recolour a row. `pet` is fixed by the label.
   return {
     total: 0,
     count: 0,
@@ -106,12 +95,11 @@ function emptyTally(pet) {
 }
 
 /**
- * `seconds` is null while the fight is open and frozen the moment it closes, which is both
- * how the duration stops decaying and how everything here tells a live fight from a kept one.
+ * `seconds` is null while the fight is open and frozen when it closes, which is how everything
+ * tells a live fight from a kept one.
  *
- * `at` is a WALL CLOCK reading where the other two stamps are monotonic ones, because this is
- * the field that has to survive a page load: a `now()` reading stored and read back on the
- * next load is a time in the future, with nothing about it to say so.
+ * `at` is a WALL CLOCK reading where the other stamps are monotonic, because it survives a page
+ * load: a stored `now()` reads as a future time on the next load.
  */
 function emptyFight(at) {
   return {
@@ -131,15 +119,12 @@ function emptyFight(at) {
 const NO_FIGHT = emptyFight(0);
 NO_FIGHT.seconds = 1;
 
-/** Newest first. `fights[0]` is the fight in progress whenever its `seconds` is still null. */
+/** Newest first. `fights[0]` is the fight in progress whenever its `seconds` is null. */
 let fights = [];
 /**
- * Which page the panel is reading.
- *
- * Null FOLLOWS the newest fight rather than pinning to it, so a new pull takes the view with
- * it. Anything else is the page object itself rather than its index: a closing fight shifts
- * every index along, and a pin by number would silently move the player onto a different
- * fight at exactly the moment they were reading one.
+ * Which page the panel is reading. Null FOLLOWS the newest fight, so a new pull takes the view with
+ * it. Otherwise it is the page object, not its index: a closing fight shifts every index and a
+ * numeric pin would move the player onto another fight.
  */
 let viewing = null;
 let tab = 'dealt';
@@ -149,9 +134,9 @@ function timeoutMs() {
 }
 
 /**
- * The field is already a display name at every site that fills it, so there is nothing
- * to title-case. Deliberately not laundered: if the wire ever starts sending ids,
- * `measured_shot` shows in the panel rather than being tidied into a wrong icon URL.
+ * The field is already a display name at every site, so nothing is title-cased. Not laundered
+ * either: if the wire starts sending ids, `measured_shot` shows rather than being tidied into a
+ * wrong icon URL.
  */
 function labelOf(event) {
   if (typeof event.ability !== 'string' || event.ability.length === 0) {
@@ -161,10 +146,8 @@ function labelOf(event) {
 }
 
 /**
- * Whether an id is you, or something you control.
- *
- * Asked AGAINST the player rather than by resolving both sides to a principal: a resolver
- * that folded in any owned entity would make this a zone-wide damage display.
+ * Whether an id is you, or something you control. Asked AGAINST the player: resolving any owned
+ * entity to its principal would make this a zone-wide display.
  */
 function ownedByPlayer(id, player) {
   if (id === player.id) {
@@ -174,16 +157,10 @@ function ownedByPlayer(id, player) {
 }
 
 /**
- * The same question about a damage record's SOURCE, using the owner the record carries.
- *
- * The snapshot lookup has one blind spot and it is the worst-placed one available: a pet
- * despawns when its owner dies, so around a death the killing exchange's source is already
- * gone from `world.entities` and every one of those records was silently dropped. Game
- * 0.36.0 snapshots the owner onto the record at emit for exactly that, so the field is
- * asked first and the lookup is what answers when it is absent.
- *
- * Still asked AGAINST the player: an owner id is an owner id, and a stranger's pet carries
- * one too.
+ * The same question about a damage record's SOURCE, asking the record's own owner first. A pet
+ * despawns when its owner dies, so the killing exchange's source is already gone from
+ * `world.entities`; the snapshot lookup is the fallback. Still asked against the player, since a
+ * stranger's pet carries an owner too.
  */
 function damageIsMine(event, player) {
   if (event.sourceId === player.id) {
@@ -196,11 +173,9 @@ function damageIsMine(event, player) {
 }
 
 /**
- * The pet's own name when the id is something you control, and null when it is you.
- *
- * `recordOwner` is a damage record's `sourceOwnerId` where there is one, and it is what
- * keeps a despawned pet's rows out of your own: the name is unrecoverable once the entity
- * is gone, so those rows take the generic label rather than reading as your own casts.
+ * The pet's name when the id is something you control, null when it is you. A despawned pet's name
+ * is unrecoverable, so its rows (known through `recordOwner`) take the generic label rather than
+ * reading as your casts.
  */
 function petNameOf(id, player, recordOwner) {
   if (id === player.id) {
@@ -236,8 +211,8 @@ function overhealOf(event) {
 }
 
 /**
- * Which row an event belongs to, and whose it was. The prefix keeps a pet's melee out of
- * the bucket your own auto-attack lands in, and costs no art that was ever reachable.
+ * Which row an event belongs to, and whose. The prefix keeps a pet's melee out of your own
+ * auto-attack bucket.
  */
 function rowFor(event, id, player, recordOwner) {
   const pet = petNameOf(id, player, recordOwner);
@@ -248,8 +223,8 @@ function rowFor(event, id, player, recordOwner) {
 }
 
 /**
- * The gate is the PAIR, never the amount alone: a shield that ate a hit whole leaves
- * `amount: 0` with a real `absorbed`, the only field separating it from a miss.
+ * The gate is the PAIR, never the amount alone: a shield that ate a hit whole leaves `amount: 0`
+ * with a real `absorbed`.
  */
 function landed(event) {
   return event.amount > 0 || absorbedOf(event) > 0;
@@ -304,15 +279,9 @@ function record(fight, id, row, event) {
 }
 
 /**
- * Name the fight after the biggest thing in it, whichever side of the exchange it was on.
- *
- * Read at RECORD time and latched, because the answer is unrecoverable later: a mob despawns
- * when it dies, so by the time a player pages back to the fight that killed it there is
- * nothing in `world.entities` to ask. Biggest by maximum health, which is the game's own
- * choice on the same question and picks the boss out of its own trash.
- *
- * A player is not a name: a duel and a battleground stay unnamed rather than being filed
- * under whoever happened to be hit hardest.
+ * Name the fight after the biggest thing in it, on either side of the exchange. Latched at RECORD
+ * time, because a mob despawns when it dies. Biggest by maximum health, as the game picks the boss
+ * out of its trash. A player is not a name, so a duel or battleground stays unnamed.
  */
 function nameFight(fight, id) {
   const entity = woc.world.entities.get(id);
@@ -326,10 +295,7 @@ function nameFight(fight, id) {
 }
 
 /**
- * How long a fight ran: frozen once it closed, and floored at a second.
- *
- * The floor is the game's own on the same figure: a fight measured at a fraction of a second
- * reports a rate no player sustained for any of it.
+ * How long a fight ran: frozen once closed, floored at a second as the game floors the same figure.
  */
 function fightSeconds(fight, now) {
   if (fight.seconds !== null) {
@@ -351,8 +317,8 @@ function openFight() {
 }
 
 /**
- * Close the fight once nothing has landed for the timeout. The duration is measured to
- * the last event, or every fight would read the timeout longer than it was.
+ * Close the fight once nothing has landed for the timeout. Measured to the last event, or every
+ * fight would read the timeout longer.
  */
 function expireFight(now) {
   const [first] = fights;
@@ -364,8 +330,8 @@ function expireFight(now) {
 }
 
 /**
- * Note that something happened, opening a fight if the last one had closed. Healing
- * counts, or the meter would do nothing for a healer who deals no damage all encounter.
+ * Note that something happened, opening a fight if needed. Healing counts, or a healer's encounter
+ * would never open one.
  */
 function noteActivity() {
   const fight = openFight();
@@ -374,9 +340,8 @@ function noteActivity() {
 }
 
 /**
- * Your attack table, and yours alone. Every outcome counts, since a miss rate is the point.
- * A pet's swing rolls against the PET's hit rating, so the raw `sourceId` keeps it out:
- * the one place a pet is not treated as you.
+ * Your attack table alone. Every outcome counts. A pet's swing rolls against the PET's hit rating,
+ * so the raw `sourceId` keeps it out: the one place a pet is not you.
  */
 function countOutcome(fight, event, player) {
   if (event.sourceId !== player.id) {
@@ -405,9 +370,8 @@ woc.net.onEvent('damage', (event) => {
       record(fight, 'dealt', rowFor(event, event.sourceId, player, event.sourceOwnerId), event);
     }
   }
-  // Damage your pet took is damage you should see, and since game 0.35.0 the server delivers
-  // it on exactly that basis. The prefix names who it LANDED on rather than who dealt it,
-  // which is this table's reading: the ability is the attacker's.
+  // Damage your pet took is shown, and the server delivers it to you. The prefix names who it
+  // LANDED on; the ability is the attacker's.
   if (atMe && landed(event)) {
     nameFight(fight, event.sourceId);
     record(fight, 'taken', rowFor(event, event.targetId, player), event);
@@ -421,8 +385,8 @@ woc.net.onEvent('heal2', (event) => {
   if (player === null || !ownedByPlayer(event.sourceId, player)) {
     return;
   }
-  // `cueOnly` events carry no healing and exist to drive a sound. Skip them on the flag
-  // rather than on the amount: a direct heal legitimately lands at 0 on a full target.
+  // `cueOnly` events carry no healing and exist for a sound. Skip them on the flag, not the amount:
+  // a direct heal can land at 0 on a full target.
   if (event.cueOnly === true) {
     return;
   }
@@ -460,12 +424,9 @@ function mergeFight(into, fight) {
 }
 
 /**
- * The last page: every kept fight added together, worked out when it is READ.
- *
- * A running total kept as the events land would go on counting fights that have since aged
- * out of the cap, so it would report more than any page behind it could account for, and it
- * would have to be stored and reconciled on top of that. Its duration is the fights added
- * up rather than the wall clock, or the rate would be divided by every minute spent walking.
+ * The last page: the kept fights added together when READ. A running total would keep counting
+ * fights that aged out of the cap. Its duration is the fights' durations summed, not the wall
+ * clock, or walking time would dilute the rate.
  */
 function sessionSegment(now) {
   const all = emptyFight(0);
@@ -487,7 +448,7 @@ function pages() {
   return [...fights, SESSION_PAGE];
 }
 
-/** Where the view is pointing. A fight aged out from under the pin takes it back to the newest. */
+/** Where the view points. A fight aged out from under the pin takes it back to the newest. */
 function pageIndex() {
   if (viewing === null) {
     return 0;
@@ -518,7 +479,7 @@ function turnPage(step) {
   }
   const next = Math.min(Math.max(pageIndex() + step, 0), list.length - 1);
   viewing = pinFor(list, next);
-  // Clearing makes the turn instant rather than one repaint late, the same as a tab switch.
+  // Clearing makes the turn instant rather than one repaint late.
   bars.clear();
   draw();
 }
@@ -540,8 +501,7 @@ function pageLabel() {
   if (page === SESSION_PAGE) {
     return SESSION_LABEL;
   }
-  // Liveness beats the name on the page whose figures are still moving: whether what you are
-  // reading is still being fought is the thing to know first, and the tooltip has the rest.
+  // On the page still being fought, liveness beats the name; the tooltip has the rest.
   if (index === 0 && page.seconds === null) {
     return LIVE_LABEL;
   }
@@ -579,8 +539,8 @@ function pageTip() {
 }
 
 /**
- * A frame rather than a window: HUD furniture toggled by a keybind. `resizable` is
- * explicit because the panel is not sized by its content, since `max-rows` goes to 40.
+ * A frame: HUD furniture toggled by a keybind. `resizable` is explicit because `max-rows` goes to
+ * 40, so the panel is not content-sized.
  */
 const panel = woc.ui.frame({
   id: 'meter',
@@ -621,23 +581,19 @@ const strip = woc.ui.tabs({
     draw();
   },
 });
-// The addon's own marking, for its own styling. The kit's classes are already on it.
+// The addon's own marking, for its own styling.
 strip.el.classList.add('woc-meter-tabs');
 
 /**
- * The fight strip: which page is open, and the two steps between pages.
- *
- * Drawn whether or not there is anything to page through, because a row that appeared once
- * a second fight existed would move the figures under the eye of a player mid-pull. The
- * buttons wear `.woc-btn`, the loader's own labelled control, so they answer to the frame's
- * density and to the tap-target floor on a phone without this addon sizing anything.
+ * The fight strip: which page is open, and steps between pages. Always drawn, because a row
+ * appearing with the second fight would move the figures mid-pull. The buttons wear `.woc-btn`, so
+ * they follow density and the touch tap-target floor.
  */
 const nav = woc.ui.row({ className: 'woc-meter-nav', gap: NAV_GAP });
 nav.dataset.role = 'fights';
-// Its own band rather than a third row packed against the two around it: the tab strip carries
-// a rule under it, so with the column's own 4px this strip reads as attached to the tabs above
-// and pressed against the figures below. A margin on the addon's own box, never a size on the
-// controls inside it, which would opt them out of the tap-target floor on a phone.
+// Its own band, because the tab strip's rule and the column's 4px otherwise glue it to the tabs
+// above and the figures below. A margin on this box, never a size on the controls, which would opt
+// them out of the tap-target floor.
 nav.style.margin = `${String(NAV_BAND_PX)}px 0`;
 
 function navButton(glyph, label, step) {
@@ -675,8 +631,8 @@ woc.ui.tooltip(pageName, () => pageTip());
 panel.body.append(strip.el, nav, total, table, outcomes);
 
 /**
- * Keyed on the label, never on position, or two rows swap identities as the ranking moves.
- * Nothing is measured on a row, so the cap can slice before `sync` and `shown` is not needed.
+ * Keyed on the label, never position, or rows swap identities as the ranking moves. Nothing is
+ * measured on a row, so the cap slices before `sync` and `shown` is not needed.
  */
 const bars = woc.ui.list({
   parent: table,
@@ -688,10 +644,9 @@ const bars = woc.ui.list({
 });
 
 /**
- * The art comes from the label through `world.abilities`, the only way back from an
- * event's display name to the id the icon is filed under, so a row with no icon is one
- * this character did not cast. The fill is tinted by school instead, which reaches those
- * rows; healing rows pass nothing, since `heal2` carries no school.
+ * Art comes from the label through `world.abilities`, the only way from a display name to the id
+ * art is filed under, so a row with no icon is one this character did not cast. The fill is tinted
+ * by school instead; healing rows pass none, since `heal2` carries no school.
  */
 // #region school-tint
 function createRow(label, tally) {
@@ -738,8 +693,8 @@ function rowTooltip(label) {
 }
 
 /**
- * Null outside your own spellbook, and for a pet row without asking, since a pet's
- * abilities are in nobody's. The kit hides the slot for a null or a URL that 404s.
+ * Null outside your own spellbook, and for a pet row, since a pet's abilities are in nobody's. The
+ * kit hides the slot for a null or a 404.
  */
 function abilityArt(label, tally) {
   if (tally.pet !== null) {
@@ -769,8 +724,8 @@ function detailText(tally) {
   if (tally.absorbed > 0) {
     parts.push(`${num(tally.absorbed)} absorbed`);
   }
-  // A floor, not a total: a tick that overhealed COMPLETELY sends no record. Hence the
-  // `+`, and hence no percentage, which would divide by a total missing the same ticks.
+  // A floor: a tick that overhealed COMPLETELY sends no record. Hence the `+`, and no percentage,
+  // which would divide by a total missing the same ticks.
   if (tally.overheal > 0) {
     parts.push(`${num(tally.overheal)}+ overhealed`);
   }
@@ -785,8 +740,8 @@ function detailLine(tally) {
 }
 
 /**
- * Per second, and it says so. No share of the rate beside it: share of damage and share of
- * DPS are the same number, since both divide by the one fight duration.
+ * Per second, and it says so. No share of the rate beside it: share of damage and of DPS are the
+ * same number.
  */
 function rateOf(amount, seconds) {
   // Grouped like every other figure, or `1000.0/s` sits beside `1,000 damage`.
@@ -806,7 +761,7 @@ function drawRow(bar, item) {
   });
 }
 
-/** The total and the duration ride the item: per-sync facts, decided in one place. */
+/** The total and the duration ride the item, decided once per sync. */
 function drawTable(fight, seconds) {
   const whole = fight.totals[tab];
   bars.sync(tableRows(fight).map(([label, tally]) => ({ label, tally, whole, seconds })));
@@ -839,8 +794,8 @@ function outcomeLine(fight) {
 }
 
 /**
- * Said on the newest page alone, where it means the fight has closed. Every page behind it
- * is a last fight of its own, and the strip above already says which one is open.
+ * Said on the newest page alone, where it means the fight has closed; the strip already says which
+ * page is open.
  */
 function fightSuffix() {
   const [first] = fights;
@@ -867,8 +822,8 @@ function drawNav() {
 }
 
 /**
- * `{ frame }` holds a repaint asked for while the panel is hidden and performs exactly one
- * when it returns, so nothing here checks visibility. Coalesced: one draw per frame at most.
+ * `{ frame }` holds a repaint asked for while hidden and performs one when it returns, so nothing
+ * here checks visibility. At most one draw per frame.
  */
 const draw = woc.paint(
   () => {
@@ -912,9 +867,8 @@ function storedFight(fight) {
 }
 
 /**
- * The fight in progress is left out, which is what keeps this to one write per fight: a
- * stored live fight would have to be rewritten on every hit to be worth anything, and a
- * stale copy of one read back after a reload would report a fight that never ended.
+ * The fight in progress is left out: storing it would be a write per hit, and a stale copy read
+ * back after a reload would report a fight that never ended.
  */
 async function save() {
   await woc.world.ready;
@@ -986,11 +940,8 @@ function readOutcomes(value) {
 }
 
 /**
- * A stored fight, or null for anything this version cannot read.
- *
- * The totals are read back rather than summed from the rows, because the rows were capped
- * on the way out and the totals were not: a summed total would quietly shrink a big fight
- * every time it was stored and read again.
+ * A stored fight, or null for anything this version cannot read. Totals are read back rather than
+ * summed from the capped rows, which would shrink a big fight every round trip.
  */
 function readFight(stored) {
   if (typeof stored !== 'object' || stored === null) {
@@ -1026,11 +977,8 @@ function readFights(stored) {
 }
 
 /**
- * Read back at world entry, which is when the character these belong to is known.
- *
- * They go BEHIND whatever this session has already measured rather than replacing it: the
- * read settles after the world does, by which time a pull can have started, and a fight
- * happening now is newer than every stored one by definition.
+ * Read back at world entry, when the character is known. They go BEHIND what this session has
+ * measured, since a pull can start before the read settles and is newer by definition.
  */
 async function restore() {
   const stored = await woc.storage.character.get(STORE_KEY, null);
@@ -1054,9 +1002,8 @@ async function forget() {
 }
 
 /**
- * Expiring the fight must keep running while the panel is away, or a fight that closed
- * behind it reopens looking live. Drawing must not, which is the split `woc.paint` owns.
- * Twice a second rather than per event: a hit rate of repaints would sort and rewrite rows.
+ * Expiry keeps running while the panel is away, or a fight that closed behind it reopens looking
+ * live; drawing does not, which is the split `woc.paint` owns. Twice a second, not per event.
  */
 function tick() {
   expireFight(woc.now());
@@ -1067,9 +1014,8 @@ tick();
 load();
 woc.setInterval(tick, REPAINT_MS);
 
-// Everything, rather than the fight in progress alone: with the kept fights still on the
-// pages behind it, resetting only the newest would leave the numbers the player asked to be
-// rid of one press of the strip away, and there is no second control to reach for.
+// Everything, not only the live fight: a reset that left the kept pages would leave the numbers one
+// press away, with no second control.
 woc.keys.bind('reset', () => {
   fights = [];
   viewing = null;
@@ -1080,8 +1026,8 @@ woc.keys.bind('reset', () => {
   draw();
 });
 
-// A changed row cap takes effect on the next repaint rather than at the next hit, and a
-// lowered fight cap drops the oldest pages now rather than at the end of the next fight.
+// A changed row cap takes effect on the next repaint, and a lowered fight cap drops the oldest
+// pages now.
 woc.onSettingsChange(() => {
   fights.length = Math.min(fights.length, woc.settings['keep-fights']);
   draw();

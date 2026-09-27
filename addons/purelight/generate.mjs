@@ -3,29 +3,17 @@
 //   node addons/purelight/generate.mjs --game=/path/to/world-of-claudecraft
 //   node addons/purelight/generate.mjs --game /path/to/world-of-claudecraft
 //
-// The checkout is REQUIRED and never defaulted. Both argument forms are accepted, since the
-// wrong one trips the required-argument error and reads as a missing flag.
+// The checkout is REQUIRED and never defaulted; both argument forms are accepted.
 //
-// WHAT THIS TABLE IS. The game's dispel rule (`isDispellableAura` in src/sim/aura_classify.ts)
-// refuses two classes of aura for a reason the WIRE DOES NOT CARRY:
+// The game's dispel rule (`isDispellableAura` in src/sim/aura_classify.ts) refuses two classes
+// of aura for a reason the wire does not carry: `encounterOwned`, which `wireAura` never emits,
+// and the module-private `DEBUFF_DISPLAY_AURA_IDS`. Both are answerable from the aura's id,
+// which is on the wire. The table lists what the game REFUSES, never what it allows.
 //
-//  - `encounterOwned`, added at game 0.41.0. `wireAura` (server/snapshot_timer_wire.ts) emits
-//    `perm`, `ub`, `und` and `bt` and nothing for this one.
-//  - `DEBUFF_DISPLAY_AURA_IDS`, a module-private set of ids shown on the debuff surface that
-//    are nonetheless refused by every removal path. Also 0.41.0.
-//
-// Both are answerable from the aura's id, which is on the wire. The table lists what the game
-// REFUSES, never what it allows.
-//
-// FILES ARE DISCOVERED, NOT NAMED: every `.ts` under src/sim is scanned for the flag, so a
-// mechanic added to an existing encounter and a new encounter file are both picked up by a
-// regeneration.
-//
-// EVERY READING IS A HARD FAILURE WHEN IT FINDS NOTHING, and no reading has a fallback: a
-// generator that writes what it found is a stale table arriving under a green run.
-//
-// THE OUTPUT MUST SURVIVE BIOME: it collapses an array of primitives onto one line and leaves
-// an array of objects expanded, so every row is an object rather than a bare id string.
+// Every `.ts` under src/sim is scanned rather than named, so a new encounter file is picked up.
+// Every reading fails hard when it finds nothing: writing what was found is a stale table under
+// a green run. Rows are objects rather than bare ids because Biome collapses an array of
+// primitives onto one line.
 
 import { readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -91,8 +79,8 @@ function gamePathFrom(args) {
 }
 
 /**
- * Prove the path is the game before reading it, by package NAME rather than by the presence of
- * `src`: a wrong path with a `src` scans to nothing, which reads as the game dropping the flag.
+ * Prove the path is the game by package NAME: a wrong path with a `src` scans to nothing, which
+ * reads as the game dropping the flag.
  */
 function checkoutVersion(root) {
   let parsed;
@@ -125,9 +113,9 @@ function tsFilesUnder(dir) {
 }
 
 /**
- * Where the object literal enclosing an offset begins. A backwards brace count, which holds
- * because the only braces inside an aura literal are balanced (`{ ...target.pos }`); null when
- * the count never opens.
+ * Where the object literal enclosing an offset begins, by a backwards brace count; this holds
+ * because braces inside an aura literal are balanced (`{ ...target.pos }`). Null when the count
+ * never opens.
  */
 function literalStart(source, at) {
   let depth = NONE;
@@ -148,8 +136,8 @@ function literalStart(source, at) {
 }
 
 /**
- * The `id:` an aura literal was given. The LAST match before the flag, so a nested literal
- * carrying its own id does not answer for the aura enclosing it.
+ * The `id:` an aura literal was given. The LAST match before the flag, so a nested literal's id
+ * does not answer for the enclosing aura.
  */
 function idTokenIn(span) {
   let token = null;
@@ -160,8 +148,8 @@ function idTokenIn(span) {
 }
 
 /**
- * Every `const NAME = 'literal'` in the tree. A name declared twice with two values is recorded
- * as ambiguous rather than resolved last-write, and fails only when an aura's `id:` names it.
+ * Every `const NAME = 'literal'` in the tree. A name declared with two values is ambiguous rather
+ * than last-write, and fails only when an aura's `id:` names it.
  */
 function stringConstants(files) {
   const values = new Map();
@@ -224,8 +212,7 @@ function displayIds(root) {
   if (inside === null) {
     return fail(`${CLASSIFY_FILE} no longer declares ${DISPLAY_SET_NAME} as a Set literal`);
   }
-  // An EMPTY set is a reading, not a failure; only the declaration going missing is, since that
-  // is a rename.
+  // An EMPTY set is a reading; only the declaration going missing fails, since that is a rename.
   return [...inside.matchAll(/'([^']*)'/g)].map((match) => match[1]);
 }
 
@@ -236,7 +223,7 @@ function rowsFrom(owned, display) {
     reasons.set(id, 'encounter');
   }
   for (const id of display) {
-    // Deliberately not overwritten: an id that is both is refused as an encounter's first.
+    // Not overwritten: an id that is both is recorded as an encounter's.
     if (!reasons.has(id)) {
       reasons.set(id, 'display');
     }

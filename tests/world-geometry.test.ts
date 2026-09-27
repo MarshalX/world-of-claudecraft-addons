@@ -68,7 +68,7 @@ function face(live: Record<string, unknown>, radians: number): void {
 }
 
 describe('distanceTo', () => {
-  it('is null before the world is up, which is where an addon first line runs', () => {
+  it('is null before the world is up', () => {
     expect(harness().world.distanceTo({ x: 3, z: 4 })).toBeNull();
   });
 
@@ -89,8 +89,7 @@ describe('distanceTo', () => {
     expect(h.world.distanceTo({ x: -3, z: -4 })).toBe(5);
   });
 
-  // The distance you would WALK: a node on a ledge overhead is not further away
-  // for being overhead, and the game's own harvest gate measures the same axes.
+  // The walking distance, the same axes the game's harvest gate measures.
   it('ignores height on both ends', async () => {
     const h = harness();
     await h.enter();
@@ -118,7 +117,7 @@ describe('bearingTo', () => {
     expect(h.world.bearingTo({ x: 0, z: 10 })).toBeNull();
   });
 
-  // A real state rather than a defensive guard: an unplaced entity carries one.
+  // An unplaced entity carries one.
   it('is null for a facing that is not a finite number', async () => {
     const h = harness();
     await h.enter();
@@ -148,7 +147,7 @@ describe('bearingTo', () => {
     expect(h.world.bearingTo({ x: 10, z: 0 })).toBe(-90);
   });
 
-  it('reports straight behind as -180 rather than 180', async () => {
+  it('reports straight behind as -180, not 180', async () => {
     const h = harness();
     await h.enter();
 
@@ -156,7 +155,7 @@ describe('bearingTo', () => {
     expect(Object.is(h.world.bearingTo({ x: 0, z: -10 }), -180)).toBe(true);
   });
 
-  it('is measured against the player facing rather than the world', async () => {
+  it('is measured against the player facing, not the world', async () => {
     const h = harness();
     await h.enter();
     face(h.live, QUARTER_TURN_LEFT);
@@ -182,7 +181,6 @@ describe('bearingTo', () => {
   });
 });
 
-// What an addon writes on the next line, against the arrow tables two addons ship.
 describe('composed with fmt.compass', () => {
   /** The glyph the two arrow addons draw, from their own arithmetic. */
   const Arrows = ['↑', '↖', '←', '↙', '↓', '↘', '→', '↗'];
@@ -250,13 +248,9 @@ describe('composed with fmt.compass', () => {
     expect(arrow(h.world, { x: 10, z: 0 })).toBe('←');
   });
 
-  // Half-degree steps because a table written the other way round agrees at every
-  // sector CENTRE and disagrees at the seams: `Math.round` breaks a tie toward
-  // +infinity, so negating before rounding sends a tie the other way.
-  //
-  // BOTH shipped forms are compared. The arrow addons divide radians by a radian
-  // sector and this pair divides degrees by 45, so the radian one alone cannot tell
-  // a wrong convention from a unit conversion landing the other side of an ulp.
+  // A reversed table agrees at sector centres and differs only at seams, since `Math.round`
+  // breaks ties toward +infinity. Both unit forms are compared so a wrong convention cannot hide
+  // behind a radian conversion landing the other side of an ulp.
   it('agrees with the shipped arrow arithmetic at half-degree steps, seams included', async () => {
     const h = harness();
     await h.enter();
@@ -282,7 +276,7 @@ describe('composed with fmt.compass', () => {
     expect(seams).toBe(Seams);
   });
 
-  it('draws nothing rather than an arrow when the facing cannot be read', async () => {
+  it('draws nothing when the facing cannot be read', async () => {
     const h = harness();
     await h.enter();
     face(h.live, Number.NaN);

@@ -18,7 +18,7 @@ import { eventsFrame, PLAYER_ENTITY } from '../../tests/fakes/frames.ts';
 import type { SharedHarness } from '../../tests/fakes/shared-services.ts';
 import MANIFEST_TEXT from './addon.json?raw';
 import TABLE_TEXT from './bosses.json?raw';
-// biome-ignore lint/correctness/noUnresolvedImports: Vite's ?raw suffix is a loader directive a static resolver does not model, and an addon file is a function BODY with no exports at all. Same reason as the foretell suite.
+// biome-ignore lint/correctness/noUnresolvedImports: Vite's ?raw suffix is a loader directive a static resolver does not model, and an addon file is a function BODY with no exports at all.
 import SOURCE from './main.js?raw';
 
 const MANIFEST_JSON: unknown = JSON.parse(MANIFEST_TEXT);
@@ -93,7 +93,7 @@ interface TankBlock {
   label: string;
   aura: string;
   perStack: number;
-  /** The heroic per-stack figure, where the encounter splits it. New at game 0.42.0. */
+  /** The heroic per-stack figure, where the encounter splits it. */
   perStackHeroic?: number;
   maxStacks: number;
   /** The game's own published swap point, where the encounter publishes one. */
@@ -652,8 +652,7 @@ async function start(opts: StartOpts = {}): Promise<TocsinHarness> {
     labelOf: (block, row) => textIn(block, row, '.woc-bar-label'),
     detailOf: (block, row) => textIn(block, row, '.woc-bar-detail'),
     valueOf: (block, row) => textIn(block, row, '.woc-bar-value'),
-    // The kit hides with the `hidden` attribute and a class, never with an inline style, so
-    // that is what a suite has to read. See ui/kit/layout.ts.
+    // The kit hides with the `hidden` attribute, never an inline style (ui/kit/layout.ts).
     shows: (block) => {
       const el = blockEl(block);
       return el !== null && !el.hasAttribute('hidden');
@@ -677,10 +676,8 @@ function banner(): string {
 }
 
 /**
- * The card itself, which is what a case asserting a call was NOT repeated has to read. Nothing
- * dismisses a banner under the suite's services, so its text stays in the document for the rest
- * of the case and a second call reads exactly like the first one still being up. Showing one
- * replaces the card, so the NODE is the difference between them.
+ * The card NODE, for asserting a call was not repeated: nothing dismisses a banner here, so its
+ * text alone cannot tell a second call from the first still being up.
  */
 function bannerCard(): Element | null {
   return document.getElementById('woc-banner')?.firstElementChild ?? null;
@@ -720,9 +717,8 @@ describe('the shipped table', () => {
   });
 
   /**
-   * A mechanic with neither an anchor nor a seed counts down once, clamps at zero and calls
-   * the same banner every re-warn floor for the rest of the pull. Drawing the game's own bar
-   * is NOT a way to start a clock; a cast ANCHOR both draws the bar and re-arms.
+   * A mechanic with neither an anchor nor a seed clamps at zero and re-calls every re-warn floor.
+   * Drawing the game's bar does not start a clock; a cast ANCHOR both draws it and re-arms.
    */
   it('gives every mechanic a way to start its clock', () => {
     const phaseSeeds = (row: Encounter): Seed[] => {
@@ -753,9 +749,8 @@ describe('the shipped table', () => {
   });
 });
 
-// The claim this addon makes about its own future: an encounter is added to the TABLE
-// rather than built into the code. These cases are the only place that claim is testable,
-// and they make it by handing the addon a table it has never seen.
+// An encounter is added to the TABLE rather than to the code, tested by handing the addon a
+// table it has never seen.
 describe('an encounter the shipped table does not carry', () => {
   /** The shipped table with one more encounter in it, reusing two of the same block kinds. */
   function withSecondEncounter(): string {
@@ -877,9 +872,8 @@ describe('the wardstone block', () => {
   it('does not credit a channel to a stone the player is not standing at', async () => {
     const h = await start();
     castDeathless(h, 6);
-    // The channel is real and the player is nowhere near a stone, which is what a knockback
-    // or a mis-click looks like. The game's own check is a distance, so this one is too, and
-    // without it the nearest stone would read as held by somebody across the room.
+    // A real channel away from every stone (a knockback, a mis-click): the game's check is a
+    // distance, so without one here the nearest stone reads as held from across the room.
     h.channel(ALDREN, WARD_LEFT, 3);
     h.move(ALDREN, 0, 200);
     h.frame();
@@ -998,10 +992,7 @@ describe('the settings', () => {
     h.frame();
     expect(h.shows('tankStacks')).toBe(false);
     expect(banner()).toContain('TAUNT');
-    // The curse is NOT a heroic tell any more, so the caveat correctly stays. Game
-    // 0.42.0 put Dread Curse on both difficulties, and before it the mere presence
-    // of the aura was proof the fight was heroic. Asserting the caveat is gone here
-    // would be asserting the addon still believes that.
+    // The curse runs on both difficulties, so it is not a heroic tell and the caveat stays.
     expect(h.notes().join(' ')).toContain('Normal figures');
   });
 });
@@ -1085,35 +1076,23 @@ describe('the tank block', () => {
     h.frame();
     expect(h.labelOf('tankStacks', 'tank')).toBe('Bronn');
     expect(h.valueOf('tankStacks', 'tank')).toBe('6 stacks');
-    // Derived from the table rather than written out: the per-stack figure is
-    // content and moved from 0.1 to 0.35 at game 0.42.0, and a literal here is a
-    // second place that has to be remembered.
+    // Derived from the table: the per-stack figure is content, and a literal would go stale.
     expect(h.detailOf('tankStacks', 'tank')).toBe(
       `+${String(Math.round(6 * TANK.perStack * 100))}% damage taken`,
     );
   });
 
-  /**
-   * The inverse of what this asserted until game 0.42.0, and the reason is content
-   * rather than a fix: Dread Curse used to be applied on heroic alone, so seeing it
-   * WAS the difficulty tell. That release put it on both difficulties and split the
-   * per-stack bite instead, so the aura now says nothing about which fight this is
-   * and the caveat has to survive it. Pinned in this direction because a latch that
-   * silently came back would put heroic figures in front of a normal-difficulty
-   * tank with nothing on screen admitting it.
-   */
-  it('does not latch heroic off the curse, which runs on both difficulties now', async () => {
+  /** A latch here would put heroic figures in front of a normal-difficulty tank, unadmitted. */
+  it('does not latch heroic off the curse, which runs on both difficulties', async () => {
     const h = await start();
     h.give(BRONN, aura(TANK.aura, { stacks: 1, remaining: 45, duration: 45 }));
     h.frame();
     expect(h.notes().join(' ')).toContain('Normal figures');
   });
 
-  /** The published swap point, which replaced a share of the cap as the warn threshold. */
   it('calls the swap on the game’s own published stack count', async () => {
-    // Asserted rather than assumed: the point is optional on the shape, because only
-    // an encounter that publishes one carries it, and a table that stopped carrying
-    // Nythraxis's would silently put the threshold back on a share of the cap.
+    // Asserted because the field is optional: without it the threshold silently falls back to
+    // a share of the cap.
     expect(TANK.swapStacks).toBeTypeOf('number');
     const h = await start();
     h.give(BRONN, aura(TANK.aura, { stacks: TANK.swapStacks ?? 0, remaining: 45, duration: 45 }));
@@ -1143,10 +1122,7 @@ describe('the tank block', () => {
 
 describe('the enrage block', () => {
   it('says nothing while the boss is nowhere near it', async () => {
-    // Comfortably above the watch threshold, which moved with the trigger: game
-    // 0.42.0 replaced the 5% Final Stand enrage with the 30% King's Wrath phase, so
-    // the old 500 health in this case is now INSIDE the window rather than nowhere
-    // near it.
+    // Comfortably above the watch threshold of twice the trigger.
     const h = await start({ hp: 900 });
     h.frame();
     expect(h.shows('enrage')).toBe(false);
@@ -1261,11 +1237,7 @@ describe('the banner', () => {
     expect(banner()).toContain('UNHELD');
   });
 
-  /**
-   * The failure this is written against is a mechanic whose clock never gets re-armed: it
-   * clamps at zero and the call is then made every re-warn floor, eight seconds apart, for the
-   * rest of the pull, against a cadence the raid reads as forty-five.
-   */
+  /** A clock never re-armed clamps at zero and re-calls every re-warn floor for the pull. */
   it('calls Deathless Rage once a cycle rather than every re-warn floor', async () => {
     const lead = 4;
     const h = await start({ hp: 500, settings: { 'alert-lead': lead } });
@@ -1282,9 +1254,8 @@ describe('the banner', () => {
     h.frame();
     expect(banner()).toContain(DEATHLESS.label);
     const called = bannerCard();
-    // The game opens the next cast on the tick the cadence runs out and the clock is re-armed
-    // there, so nine seconds on, well past the re-warn floor the repeat used to ride, the card
-    // is still the one the lead put up rather than another saying the same thing.
+    // The next cast re-arms the clock, so nine seconds on, past the re-warn floor, the card is
+    // still the one the lead put up.
     h.advance(lead * 1000);
     castDeathless(h, CHANNELS.castSeconds);
     h.frame();
@@ -1385,9 +1356,8 @@ describe('the mechanic timers', () => {
     h.frame();
     const before = h.valueOf('mechanics', 'soul-rend');
     expect(before).toBe(`~${SOUL_REND.every.toFixed(1)}s`);
-    // Four seconds pass inside the cast. The game's own driver returns early for the whole
-    // of it, so a clock that moved here would be ahead of the encounter by that much for the
-    // rest of the pull.
+    // The game's driver returns early for the whole cast, so a clock that moved here would run
+    // ahead of the encounter for the rest of the pull.
     castDeathless(h, 9);
     h.advance(4000);
     h.frame();
@@ -1400,8 +1370,7 @@ describe('the mechanic timers', () => {
     h.damage('Soul Rend');
     h.frame();
     const before = h.valueOf('mechanics', 'soul-rend');
-    // The raid interrupted the cast, so the boss wears the stun for five seconds and the
-    // driver returns early for all of it, exactly as it does during the cast itself.
+    // An interrupt leaves the boss stunned, and the driver returns early for all of it.
     h.give(BOSS_ID, aura(FREEZE_AURA, { kind: 'stun', remaining: 5, duration: 5 }));
     h.advance(4000);
     h.frame();
@@ -1433,10 +1402,8 @@ describe('the mechanic timers', () => {
   });
 
   /**
-   * The game starts every clock when the fight does, so a pull this addon watched open needs
-   * no observation to count the first of anything. It matters most for Gravebreaker, whose
-   * only anchor is a SPLASH record: a raid standing where it should be takes none, so without
-   * this the row reads "armed, not seen yet" for the whole pull.
+   * A watched pull counts from the game's own opening values. It matters most for Gravebreaker,
+   * whose only anchor is a splash record a well-placed raid never takes.
    */
   it('counts from the game’s own opening values on a pull it watched start', async () => {
     const h = await start({ engaged: false });
@@ -1460,11 +1427,7 @@ describe('the mechanic timers', () => {
     expect(h.valueOf('mechanics', 'deathless')).toBe('7.5s');
   });
 
-  /**
-   * The game re-arms this one where it STARTS the cast, and a cast start is the only edge
-   * there is: the damage a Deathless Rage deals is not dealt at all on the cycles the raid
-   * answers, so a damage anchor would leave the clock dead for exactly the pulls that go well.
-   */
+  /** An answered Rage deals no damage, so the cast starting is the only edge there is. */
   it('re-arms the Deathless Rage clock from the cast starting', async () => {
     const h = await start({ hp: 500 });
     h.frame();
@@ -1833,11 +1796,7 @@ describe('the raid rows in the shipped table', () => {
     expect((IG_BRAND_MECHANIC.anchor ?? []).map((one) => one.kind)).toEqual(['partyAura']);
   });
 
-  /**
-   * Neither of these sets a cast on the boss and both deal damage only to whoever failed to
-   * move, so a damage anchor would leave the clock dead on exactly the cycles the raid
-   * answered correctly.
-   */
+  /** Neither sets a cast, and both damage only whoever failed to move. */
   it('anchors the two silent mechanics on their ground warnings', () => {
     expect(hazardAnchorOf(IG_METEORS)).toBe('ignivarMeteor');
     expect(hazardAnchorOf(mechanicIn(VARKHUL, 'forgestorm'))).toBe('varkhulForgestorm');
@@ -2193,10 +2152,7 @@ describe('a wipe and a reset', () => {
     expect(h.notes().join(' ')).toContain(`${IGNIVAR.name} is down.`);
   });
 
-  /**
-   * A wipe restores the boss to full health and clears its threat, and it does NOT clear the
-   * target field, so without this the next attempt inherits the last one's clocks.
-   */
+  /** A wipe does not clear the boss's target, so the old clocks would otherwise carry over. */
   it('starts a fresh pull when the boss comes back to full health', async () => {
     const h = await startRaid(IGNIVAR, { engaged: false });
     h.frame();

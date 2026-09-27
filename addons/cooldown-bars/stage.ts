@@ -1,33 +1,10 @@
-// Cooldown Bars on the stage: what to put on screen so a picture says what it is.
+// Cooldown Bars on the stage. This is `main.test.ts`'s `start()` without the assertions; keep it
+// that way, or the scenario describes a second, unchecked world.
 //
-// This is `main.test.ts`'s `start()` with the assertions taken out, and keeping it that way is
-// the point: the suite's fixture is the only description of this addon's world anybody has
-// checked, so a scenario that invented its own would be a second one, drifting.
-//
-// Every id, name and length here is the game's own, read off the class table the deployed client
-// ships. Four things in it are load-bearing.
-//
-// `templateId: 'hunter'` on the player is the class, which is the directory the game files skill
-// art under. Without it there is nothing to build an icon URL from and every bar draws with an
-// empty icon slot, which is a picture of a bug this addon does not have.
-//
-// The spellbook is the source of both things this addon cannot read off the wire: an ability's
-// display name and the real length of its cooldown. Both entries are shown under a name an id
-// cannot be turned into, `arcane_shot` as "Fell Shot" and `bestial_wrath` as "Howling Rage".
-//
-// Fell Shot's pool of two is a talent's doing, and it is the hunter's one resolved-after-talents
-// fact. The content table gives that ability no `maxCharges` at all; the Twin Fletching row is
-// what turns it into a pool of two on the spellbook, which is where the "1/2" on that row comes
-// from. `maxCharges` on the wire is the zero the client fills in, reproduced here so that a
-// reading which trusted it would draw "1 of 0". The ability is deliberately not also in the
-// cooldown map: the game deletes that entry while any charge is left.
-//
-// `system_unstuck` is deliberately not in the spellbook, and it is the residue rather than a
-// stand-in for it: a real key of the game's own cooldown map, the five-minute anti-relog timer,
-// shipped in the `cds` payload unfiltered and provably not an ability. So it draws a title-cased
-// id with the question mark that says the name was worked out, a measured denominator, and no
-// icon. A preview showing only resolvable rows would claim a completeness this addon does not
-// have, and the marker is how a row says which kind it is without a legend under the list.
+// `system_unstuck` (the game's anti-relog timer, not an ability) is deliberately off the
+// spellbook so the preview shows a measured row with its `?` mark beside the resolved ones.
+// Fell Shot is deliberately not in the cooldown map: the game deletes that entry while any
+// charge is left.
 
 import type { Scenario, Stage, WorldDraft } from '../../stage/src/stage.ts';
 
@@ -55,20 +32,11 @@ const POOL_RECHARGE = 4.4;
 const CLASS_ID = 'hunter';
 
 /**
- * The spellbook in the game's own shape.
+ * The spellbook in the game's own shape, with `cooldown` the resolved length. `counter_shot` and
+ * `rapid_fire` are left out on purpose so they take the measured path and the mark.
  *
- * `cooldown` here is the resolved length at the rank the player has learned, which is the number
- * the game itself works from and the only honest denominator for a draining bar.
- *
- * Two entries rather than four, because the two ids left out are what make the picture say
- * something. `counter_shot` and `rapid_fire` are real hunter abilities this hunter has not
- * learned, so they take the measured path and the marker, alongside `system_unstuck`, which
- * nobody can ever learn.
- *
- * Every ability drawn here ships art on both channels, and that is a requirement rather than
- * luck. A preview is one committed file, so a row whose icon depends on which game the capture
- * proxied to makes the picture true on one channel and false on the other. Live and pbe share 17
- * hunter ids and disagree about 23, so this is the normal case.
+ * Every ability drawn here must ship art on BOTH live and pbe: a preview records no channel, so
+ * a channel-only icon makes the picture true on one and false on the other.
  */
 const KNOWN = Object.freeze([
   {
@@ -89,10 +57,8 @@ const KNOWN = Object.freeze([
 ]);
 
 /**
- * The session this hunter logged in with, before the addon has run a line. The class and the
- * spellbook are both here rather than in `run`, and the class is the one that bites: a skill icon
- * is filed under it, so a bar built for a cooldown already running when the addon starts asks
- * for its icon before a class set later would exist, and those rows draw blank forever.
+ * The session this hunter logged in with. The class belongs here rather than in `run`: skill art
+ * is filed under it, and a row built before it is set draws blank forever.
  */
 function aHunter(draft: WorldDraft): void {
   draft.set(draft.player, 'templateId', CLASS_ID);
@@ -100,12 +66,8 @@ function aHunter(draft: WorldDraft): void {
 }
 
 /**
- * The charge wire, keyed by ability id. An entry pair rather than an object literal because the
- * key is a name the game owns rather than one this file chose.
- *
- * `maxCharges` is zero on the wire and permanently so, since the server keeps the maximum to
- * itself. Reproduced rather than filled in, because an addon reading it as a real maximum is the
- * trap this field is famous for.
+ * The charge wire, keyed by ability id (an entry pair because the game owns the key's naming).
+ * `maxCharges` is the zero the client holds; the pool size has to come from the spellbook.
  */
 const CHARGE_POOLS = Object.fromEntries([
   [
@@ -135,10 +97,7 @@ const SCENARIOS: readonly Scenario[] = [
     preview: true,
     caption: 'Bars',
     alt: 'a column of named, draining bars, soonest ready at the top.',
-    // The bar budget is set to the five timers this world holds, because the column is sized
-    // for its budget rather than for what is running: left at the default of eight it would
-    // photograph three rows of dead space under the picture, which in a Browse thumbnail
-    // reads as a panel that failed to draw.
+    // The column is sized for its budget, so the default of eight would photograph dead space.
     settings: { layout: 'bars', 'max-bars': SHOWN_TIMERS },
     world: aHunter,
     run: onCooldown,
@@ -154,10 +113,7 @@ const SCENARIOS: readonly Scenario[] = [
     run: onCooldown,
   },
   {
-    // The tint, which no Vitest case can answer for: a suite reads the class the kit wrote and
-    // the colour is a rule in a stylesheet that resolves to '' there. It is the MIXED panel
-    // that is worth looking at rather than the colour, since the two abilities this hunter has
-    // learned are tinted and the three the spellbook cannot answer for stay grey.
+    // Vitest cannot see a stylesheet colour. The learned abilities tint and the rest stay grey.
     id: 'tinted',
     label: 'Tinted by damage school',
     settings: { layout: 'bars', 'max-bars': SHOWN_TIMERS, 'tint-school': true },
@@ -165,8 +121,7 @@ const SCENARIOS: readonly Scenario[] = [
     run: onCooldown,
   },
   {
-    // The state a panel spends most of its life in. An overlay that looks right full and wrong
-    // empty is a thing a player sees far more often than the picture on its Browse row.
+    // The state a panel spends most of its life in.
     id: 'idle',
     label: 'Nothing on cooldown',
     settings: { layout: 'bars' },

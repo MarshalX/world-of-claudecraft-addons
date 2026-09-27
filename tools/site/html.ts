@@ -1,15 +1,6 @@
-// The site's only injection surface, and the reason it is a tagged template.
-//
-// Page content is assembled from data the repository holds rather than from
-// hand-written markup: addon names, authors and descriptions come out of
-// marketplace.json, and a third-party marketplace's index is attacker-controlled
-// by definition. So interpolation escapes by DEFAULT and raw() is the explicit
-// opt-out, rather than the other way round. A template that forgets to escape is
-// then impossible to write by accident; one that needs markup has to say so.
-//
-// A value that is already Html passes through untouched, which is what makes
-// composition work: html`<div>${html`<p>x</p>`}</div>` nests without double
-// escaping, and no caller has to know which of its children were escaped.
+// The site's only injection surface. Addon names and descriptions are data, and a third-party
+// index is attacker-controlled, so interpolation escapes by default and raw() is the opt-out. A
+// value that is already Html passes through, so templates nest without double escaping.
 
 const ESCAPABLE = /["&'<>]/g;
 
@@ -26,13 +17,8 @@ function isHtml(value: unknown): value is Html {
 }
 
 /**
- * One interpolated value, resolved to markup.
- *
- * null and undefined render as nothing rather than as the strings "null" and
- * "undefined", because an optional field left unset is the common case and
- * printing its absence is never what a template meant. false renders as nothing
- * for the same reason, which is what makes `${cond && html`...`}` read correctly;
- * 0 does not, since a zero count is a real value a page may want to show.
+ * One interpolated value, resolved to markup. null, undefined and false render as nothing, so
+ * `${cond && html`...`}` works; 0 renders, since a zero count is a real value.
  */
 function resolve(value: unknown): string {
   if (value === null || value === undefined || value === false) {
@@ -53,11 +39,8 @@ function escapeHtml(value: string): string {
 }
 
 /**
- * Mark a string as already-safe markup, skipping escaping.
- *
- * Every call is a claim that the string cannot carry attacker-controlled markup.
- * The legitimate sources are this module's own output, markdown-it's render (which
- * escapes its own inputs), and shiki's, which does the same.
+ * Mark a string as already-safe markup, skipping escaping. Only for this module's own output,
+ * markdown-it's render and shiki's, which all escape their inputs.
  */
 export function raw(value: string): Html {
   return { html: value };
@@ -69,11 +52,8 @@ export function join(parts: readonly unknown[], separator = ''): Html {
 }
 
 /**
- * Build markup, escaping every interpolation that is not already Html.
- *
- * The tag returns Html rather than a string so that a template which forgets to
- * mark its output cannot be silently re-escaped by the template that includes it,
- * and so that `tsc` catches a page handed a bare string where markup was meant.
+ * Build markup, escaping every interpolation that is not already Html. Returning Html lets `tsc`
+ * catch a bare string where markup was meant.
  */
 export function html(strings: TemplateStringsArray, ...values: readonly unknown[]): Html {
   let out = strings[0] ?? '';

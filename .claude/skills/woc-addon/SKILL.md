@@ -23,19 +23,18 @@ The suite lives beside the addon rather than in `tests/`, because `tests/` is ab
 
 ## Build with the kit, and write less
 
-The single biggest difference between an addon that reads well and one that reads as a mess is how much of it is hand-rolled. Reach for the kit first, every time.
+Reach for the kit first, every time; hand-rolled UI is what makes an addon twice the size it needs to be.
 
-- **`ui.bar` and `ui.tile` are the two timer shapes and there is no third.** `ui.banner` is the centre-screen warning, `ui.toast` the transient note, `ui.alert` the modal, `ui.tooltip` the hover, `ui.field` a settings control, `ui.tabs` a tab strip, `ui.menu` a context menu, `ui.anchor3d` a world-anchored element. Reaching past these into `document.createElement` for something the kit already draws is the most common way an addon ends up twice the size it needed to be.
-- **`.woc-btn` and `.woc-tab` inherit your frame's density.** Using those families is why reusing the kit beats restyling your own: an addon that draws its own buttons stops matching the game the first time the loader restyles.
-- **50 lines per function body is a real gate**, and it is doing you a favour. A builder that outgrows it is usually holding two concerns; split it while writing rather than when the linter says so. Many small named functions is the shape these addons want.
-- **Comments explain intent and non-obvious constraints, never what the code says.** A comment restating the next line is noise; a comment saying which reading is an inference is the most valuable line in the file.
-- Every line spent on scaffolding is a line the feature did not get. That is the whole argument for all of the above.
+- **`ui.bar` and `ui.tile` are the two timer shapes and there is no third.** `ui.banner` is the centre-screen warning, `ui.toast` the transient note, `ui.alert` the modal, `ui.tooltip` the hover, `ui.field` a settings control, `ui.tabs` a tab strip, `ui.menu` a context menu, `ui.anchor3d` a world-anchored element. Do not reach past these into `document.createElement` for something the kit already draws.
+- **`.woc-btn` and `.woc-tab` inherit your frame's density.** An addon that draws its own buttons stops matching the game the first time the loader restyles.
+- **50 lines per function body is a real gate.** A builder that outgrows it is usually holding two concerns; split it while writing, into small named functions.
+- **Comments explain intent and non-obvious constraints, never what the code says.** A comment saying which reading is an inference is the most valuable line in the file.
 
 ## Start by establishing what you can actually read
 
 `packages/types/*.d.ts` is the source of truth for what exists. Read it rather than guessing, and rather than trusting prose that may have drifted. `woc.apiMinor` is how an addon detects a feature at run time.
 
-Then check your idea against **What the game does not give you** at the bottom of this file. Most addon ideas that fail, fail there, and finding out first is much cheaper than finding out after the display is built.
+Then check your idea against **What the game does not give you** at the bottom of this file, before building the display. Most addon ideas that fail, fail there.
 
 The id you choose is permanent. It is the storage namespace, the keybind scope and half of every fully-qualified id, so renaming a published addon orphans every player's settings, keybinds and window position, and shows up in Browse as a second addon installing beside the first.
 
@@ -54,7 +53,7 @@ An existing addon is the best template. What matters:
 
 **`ui.frame`, not `ui.window`, unless the player OPENS the surface to read it and dismisses it with the mouse.** The difference is the ARIA role: a window is `role="dialog"`, a thing the player opened; a frame is `role="group"`, HUD furniture. A close button is `closable` and works on either, so wanting one is not a reason to reach for a window.
 
-**Pick a `density` deliberately.** `comfortable` keeps the game's 40px tap-target floor and is the default so an addon that has not thought about it stays accessible. `compact` gives that floor up for a readout glanced at mid-fight. `bare` drops the panel, padding and title bar, for an overlay that IS its content.
+**Pick a `density` deliberately.** `comfortable` is the game's own desktop scale and the default. `compact` is tighter, for a readout glanced at mid-fight. `bare` drops the panel, padding and title bar, for an overlay that IS its content. The loader applies the touch tap-target floor under a coarse pointer to compact and comfortable alike, so never hand-size a kit control's font or height: an inline style beats that rule. Change padding instead.
 
 **Resizable and a floor come as a pair. Either alone is a bug.**
 
@@ -70,7 +69,7 @@ An existing addon is the best template. What matters:
 
 ## Say what you do not know
 
-This separates an addon worth installing from one that quietly lies, and it is what real play sends back more than anything else.
+An addon that does not say what it does not know is quietly lying.
 
 - An empty grid reads as a MEASUREMENT OF ZERO, which is the one thing it never means. Either say why it is empty ("Out of combat.") or do not be on screen.
 - Put limits on screen, not in a comment. If the data is capped at eight rows, draw no rank number rather than one that looks complete.
@@ -84,13 +83,13 @@ This separates an addon worth installing from one that quietly lies, and it is w
 - **Read live, do not cache a resolver.** A pet, a target and a party member all come and go.
 - **Call anything reached through a game object defensively.** A future game update can leave something callable in place that throws, and the cost of that has to be a missing reading rather than a dead screen.
 - **Subscribe for the SET, animate from the READ.** `world.on` fires when a set changes, never as a number counts down. The subscription decides which rows exist; a frame loop decides how full each one is.
-- **An ability id and its display name have diverged.** A combat record's `ability` is a display NAME; a cooldown map's key is an id. `world.abilities` closes the join both ways for YOUR OWN spellbook and nothing closes it for anything a mob casts, so a title-cased id there is a guess and should be marked as one.
+- **An ability id and its display name have diverged.** A combat record's `ability` is a display NAME; a cooldown map's key is an id. `world.abilities` closes the join both ways for YOUR OWN spellbook, `damage.abilityId` carries the id on a player's primary direct hit only, and `AuraEvent.abilityId` sometimes carries it on an aura application, which is the only route to a mob's. Everywhere else a title-cased id is a guess and should be marked as one.
 - **`world.raw` is unstable by definition** and the manager flags an addon that reaches for it. Never call `world.raw.drainEvents()`: it empties the queue the game's own HUD consumes, which silently eats the player's combat log and loot toasts.
 
 ## Storage and clocks
 
 - `woc.now()` is monotonic and right for measuring an interval. `woc.wallClock()` is epoch and right for anything you STORE or compare against a server timestamp. A stored monotonic stamp reads as being in the future on the next page load, silently.
-- A per-character READ waits for the character; a per-character WRITE refuses before world entry. The asymmetry is deliberate: a write's value was decided before anyone knew whose it was.
+- A per-character READ waits for the character; a per-character WRITE refuses before world entry, because its value was decided before anyone knew whose it was.
 - `storage.character` is scoped to the character in play and cannot read another one. For a cross-character view, key account-wide `storage` on `world.characterKey` rather than inventing a second derivation of who this is.
 - A proximity-gated read is a three-state value: `near` carries the payload, `away` means the player is not at the counter, `unknown` means nothing has decoded yet. **Record only on `near`.** Writing on `away` erases what you stored the moment the player walks away.
 - Clone before an async write. Handing a live object to `storage.set` while you mutate it every paint stores a reading that quietly agrees with itself.
@@ -155,16 +154,16 @@ pnpm validate
 
 ## What the game does not give you
 
-Check here before designing. Each of these is a limit of the wire or the client, not a gap in the loader, so no amount of API reading will find a way round it. `references/limits.md` has the full list with the reasoning and the mitigation for each; these are the ones that most often kill an idea outright:
+Check here before designing. Each is a limit of the wire or the client, not a gap in the loader. `references/limits.md` has the full list with the reasoning and the mitigation for each; these most often kill an idea outright:
 
 - **There is no send API and there never will be.** Every addon is a DISPLAY. Nothing can accept a roll, join a queue, buy a listing, place a marker or cast anything. A feature description that reads as an action is wrong before it is written.
 - **Combat events reach you only for yourself and your group**, within a radius. A meter measures the group it is in. It must never present a total as realm-wide.
-- **A pet's damage is never delivered.** The server filters on player ids and a pet has an entity id, so pet output cannot be metered at all, even though the pet is visible and nameable.
+- **A pet's records carry the pet's entity id.** Matching `sourceId` against your own id drops them: attribute through `damage.sourceOwnerId`, falling back to the pet's `ownerId`. A pet ability has no id and no icon by any route.
 - **Overhealing is never reported.** A healing meter reports EFFECTIVE healing and says so; the overheal cannot be reconstructed from health deltas.
 - **Item names, stats and stack maximums are bundled and unreachable.** Some names come from a served art manifest and are unreliable; the rest an addon learns from loot rolls or embeds itself.
 - **Enemy and ally cooldowns are not sent.** Only your own. Anything about another player's cooldown is an inference from an observed cast and must be presented as one.
 - **Encounter internals are server-side**, and a boss mechanic's timer runs on melee contact rather than on engage, so a first prediction cannot be reliable. Anchor on a sighting and project forward.
 - **There is no terrain height and no world-to-screen scale.** A ground marker is anchored at a guessed height.
-- **A mob's aura has no icon.** The game composites aura art on a canvas from a bundled table, so there is nothing to point at.
+- **Most auras have no icon file.** `ui.icon.aura` covers a small closed family and answers null until `preloadAuras` resolves; the rest are composited on a canvas with nothing to point at. Keep the null branch.
 
 If the thing you need is not on that list and not in `packages/types/`, look at the game's own behaviour before concluding it is impossible, and write down what you find.

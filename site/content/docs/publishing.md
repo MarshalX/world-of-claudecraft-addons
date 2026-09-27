@@ -8,15 +8,13 @@ A marketplace is a GitHub repository with an `addons/` directory and a generated
 
 ## Through the official marketplace
 
-Open a pull request adding your directory. It is reviewed, and once merged it ships to every player, because the official marketplace is built into the loader and cannot be removed.
-
-That is also why review is the limit: the official marketplace is the trust anchor, and the only thing that makes it one is that somebody read the code.
+Open a pull request adding your directory. It is reviewed, and once merged it ships to every player, because the official marketplace is built into the loader and cannot be removed. Review is what makes it the trust anchor.
 
 Addons contributed here are under the repository's MIT licence.
 
 ## Running your own
 
-Copy `.github/workflows/marketplace.yml`. It regenerates the index from the `addon.json` files on every push, so the index and the manifests cannot drift. It also regenerates the addon list this repository prints in its own README, which is a no-op in a repository whose README does not carry the `<!-- addons:start -->` markers: copy the file as it is and only the index step does anything.
+Copy `.github/workflows/marketplace.yml` as it is. It regenerates the index from the `addon.json` files on every push. Its README step does nothing unless your README carries the `<!-- addons:start -->` markers.
 
 Never hand-edit `marketplace.json`.
 
@@ -32,12 +30,12 @@ A source can point at a branch or a tag. Point yours at a tag if you want instal
 
 ## What an FQID is
 
-Every installed addon is identified by its marketplace id plus its addon id. That pair is the storage namespace, so the same addon id published from two different sources is two different addons with two different sets of settings, which is what stops one marketplace from reading another's data.
+Every installed addon is identified by its marketplace id plus its addon id. That pair is the storage namespace, so the same addon id published from two sources is two addons with separate settings and data.
 
 Moving a source to a different tag never changes its id, so everything installed from it keeps its settings, keybinds and data.
 
 ## Updates, and pins
 
-The loader compares your published version against what a player has and offers an update. It never installs one by itself. There is no auto-update to switch on, for any marketplace including the official one: an update is always a player pressing a button.
+The loader compares your published version against what a player has and offers an update. It never installs one by itself, for any marketplace: an update is always a player pressing a button. Bump `version` for every change a player should receive, or nobody already installed gets it.
 
-A player can **pin** an addon, which means "stop offering", not "install that instead". A marketplace serves one version per ref, so there is no older body to go back to. The row stays visible carrying its pin, because the only thing a pin needs a UI for is saying that an update exists and the player's own decision is holding it back.
+A player can **pin** an addon, which means "stop offering", not "install that instead". A marketplace serves one version per ref, so there is no older body to go back to. The row stays visible carrying its pin, saying an update exists and the player's own choice is holding it back.

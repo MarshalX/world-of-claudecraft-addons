@@ -2,26 +2,16 @@
 //
 //   node addons/emberwatch/generate.mjs --game=/path/to/world-of-claudecraft
 //
-// `--game /path` works too. `rules.json` is GENERATED: never hand-edit it, the way
-// `marketplace.json` and `CHANGELOG.md` are never hand-edited. The editorial half
-// below is the source, so a regeneration cannot lose a hand-chosen rule; an edit
-// made in the JSON instead is lost on the next run with nothing to say so.
+// `--game /path` works too. Never hand-edit `rules.json`: `RULES` below is the source, and an
+// edit made in the JSON is lost on the next run.
 //
-// WHAT IS DERIVED AND WHAT IS EDITORIAL, because this is a CURATED starter set and
-// not a mechanical dump of every aura in the game:
+// DERIVED from the checkout: the stamped game version, every rule's display name, the class of an
+// ability-anchored rule (a hard failure if it disagrees with the editorial class), and the class
+// order. EDITORIAL, in `RULES`: which rules exist, their ids, unit, condition, threshold, cue,
+// banner and bout flags, `mine`, and the label suffix ("fading", "ending", "gone"). The
+// class-agnostic rules match on an aura kind and are editorial end to end.
 //
-//   DERIVED from the checkout, and therefore fixed by re-running after a release:
-//   the game version stamped into the file, every rule's display NAME, the class an
-//   ability-anchored rule belongs to (cross-checked against the editorial class,
-//   which is a hard failure if they disagree), and the order the classes come out in.
-//
-//   EDITORIAL, and living in `RULES` below: which rules exist at all, their ids,
-//   which unit each watches, the condition, the threshold, the cue, the banner and
-//   bout flags, `mine`, and the label SUFFIX ("fading", "ending", "gone") that turns
-//   a bare display name into a sentence. The four class-agnostic rules are editorial
-//   end to end, since they match on an aura KIND rather than on one ability.
-//
-// It reads six things, all read-only, and the never-modify-the-game rule stands:
+// It reads, read-only:
 //
 //   src/sim/content/classes.ts        CLASSES for the class order, ABILITIES for
 //                                     every id, its display name and its class.
@@ -37,41 +27,24 @@
 //   src/sim/varkhul_shared_pyre.ts
 //   package.json                      the version stamped into the output.
 //
-// AN ENCOUNTER RULE IS ANCHORED ON THE APPLICATION, NEVER ON THE CONSTANT. A constant can
-// outlive its mechanic (`IGNIVAR_SOAK_AURA_ID` is exported at game 0.41.0 and passed to
-// nothing), so the aura table is built from `ctx.applyAura` bodies and a rule naming an
-// unapplied id is a hard failure.
+// An encounter rule is anchored on the APPLICATION, never on the constant: a constant can
+// outlive its mechanic, so a rule naming an id nothing applies is a hard failure.
 //
-// WHAT A GAME RELEASE CAN INVALIDATE, and what happens when it does. Every one of
-// these is a hard failure that writes nothing, rather than a warning over a file
-// that quietly lost a rule:
+// Every release breakage below throws and writes nothing, because a rule that silently drops out
+// is a rule that can never fire with nothing on screen to say so:
 //
-//  - AN ABILITY ID DISAPPEARS OR IS RENAMED. The rule naming it fails to resolve.
-//    That is the whole reason the ids are checked rather than trusted: a rule for an
-//    ability the game no longer has is a rule that can never fire, and nothing on
-//    screen would ever say so.
-//  - AN ABILITY MOVES CLASS. The derived class stops matching the editorial one.
-//  - AN AURA KIND IS RENAMED. A kind-anchored rule stops matching the vocabulary.
-//  - AN ENCOUNTER AURA CONSTANT GOES, OR STOPS BEING APPLIED. Separate throws: the first
-//    is a release deleting a mechanic, the second is one moving it and leaving the constant.
-//  - A THRESHOLD CONSTANT THE GAME OWNS MOVES. A rule with a `thresholdConst` takes the
-//    number from the checkout; Ignivar's Molten Armor has none, so its threshold is editorial.
-//  - A DISPLAY NAME CHANGES. Not a failure: the new name lands in the output and the
-//    diff shows it, which is the case this generator exists for. `cold_blood` is the
-//    worked example: it is shown in game as "Killer's Calm", the hand-written table
-//    said "Cold Blood", and deriving the name is what caught it.
-//  - THE SOURCE STOPS BEING PARSEABLE BY A TEXT SCAN. These are regexes over
-//    TypeScript rather than a real parse, anchored on the exact indentation the game
-//    formats those tables at. A formatter change breaks the scan, and it breaks it
-//    LOUDLY, because every id then fails to resolve at once.
+//  - an ability id disappears or is renamed, so the rule fails to resolve;
+//  - an ability moves class, so the derived class stops matching the editorial one;
+//  - an aura kind is renamed, so a kind-anchored rule stops matching the vocabulary;
+//  - an encounter aura constant goes, or stops being applied (separate throws);
+//  - a `thresholdConst` the game owns is no longer declared as a number;
+//  - the source stops being parseable: these are regexes anchored on the game's exact
+//    indentation, so a formatter change fails every id at once.
 //
-// Reading a checkout is not the same as reading an endpoint: nothing 404s to tell
-// you the source moved. That is why `--game` is required and is never defaulted, and
-// why the version is read out of the checkout rather than passed in.
-//
-// The output is byte-stable. No timestamp, fixed key order, and the rules sorted by
-// the game's own class order and then by rule id, so a regeneration against an
-// unchanged checkout is a no-op diff and any diff at all means content moved.
+// A display name change is not a failure: the new name lands in the output and shows in the
+// diff. `--game` is required because nothing 404s when a checkout is stale. The output is
+// byte-stable (no timestamp, fixed key order, sorted by class order then id), so any diff means
+// content moved.
 
 import { readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import process from 'node:process';
@@ -87,11 +60,8 @@ const OUTPUT = fileURLToPath(new URL('rules.json', import.meta.url));
 const CLASSES_SOURCE = 'src/sim/content/classes.ts';
 const COMBAT_DIR = 'src/sim/combat';
 /**
- * Where a proc aura is applied without an ability table entry to name it.
- *
- * Listed rather than discovered, because a walk of every `applyAura` in the game
- * would pick up encounter auras and would make the answer depend on directory
- * order. Sorted, and a name collision between two of them is a failure.
+ * Where a proc aura is applied without an ability table entry to name it. Listed, because a walk
+ * of every `applyAura` would pick up encounter auras and depend on directory order.
  */
 const PROC_SOURCES = [
   'src/sim/combat/auto_attack.ts',
@@ -100,10 +70,7 @@ const PROC_SOURCES = [
   'src/sim/combat/frost_mage.ts',
 ];
 
-/**
- * Where a raid boss applies its own auras. A list rather than a walk of `src/sim/encounters`,
- * for the reason PROC_SOURCES is: a new encounter is a rule somebody has to write anyway.
- */
+/** Where a raid boss applies its own auras. Listed: a new encounter needs rules written anyway. */
 const ENCOUNTER_SOURCES = ['src/sim/encounters/ignivar.ts', 'src/sim/encounters/varkhul.ts'];
 
 /**
@@ -116,7 +83,7 @@ const ENCOUNTER_CONST_SOURCES = [
   'src/sim/varkhul_shared_pyre.ts',
 ];
 
-/** The game's own package name, which is what makes a directory the right checkout. */
+/** The game's package name, which proves a directory is the checkout. */
 const GAME_PACKAGE = 'world-of-claudecraft';
 
 const FORMAT = 'emberwatch-rules';
@@ -138,18 +105,17 @@ const OVERPOWER_CHARGES = 2;
 /** Three applications of anything harmful is the point a ramp is worth interrupting. */
 const RAMPING_STACKS = 3;
 /**
- * Ignivar's Molten Armor swap point, which is EDITORIAL: the game declares no constant for it
- * (+35% damage taken a stack, 26 seconds), so it will not move when the game moves. Replace it
- * with a `thresholdConst` the day Ignivar grows one.
+ * Ignivar's Molten Armor swap point is EDITORIAL: the game declares no constant for it, so it
+ * will not follow a game change. Replace it with a `thresholdConst` if Ignivar gains one.
  */
 const MOLTEN_ARMOR_SWAP_STACKS = 2;
 
 /**
- * THE EDITORIAL SET. Everything a checkout cannot decide.
+ * The editorial set: everything a checkout cannot decide.
  *
- * `ability` names the id whose DISPLAY NAME becomes the label and whose existence is
- * checked; `suffix` is the editorial half of the label. A rule with no `ability`
- * matches on a kind or on polarity alone and carries its own `label`.
+ * `ability` names the id whose display name becomes the label and whose existence is checked;
+ * `suffix` is the editorial half of the label. A rule with no `ability` matches on a kind or on
+ * polarity alone and carries its own `label`.
  */
 const RULES = [
   {
@@ -454,8 +420,8 @@ const RULES = [
     suffix: 'ending',
   },
 
-  // The Ignivar raid, added by game 0.41.0. No `bout` on any raid rule: `world.match` is
-  // null in a raid, so a bout clause would switch the rule off.
+  // Ignivar. No `bout` on any raid rule: `world.match` is null in a raid, so a bout clause would
+  // switch the rule off.
   {
     // `gained` rather than a stack threshold: the brand asks you to move away at one stack,
     // and the generic `stacking-on-you` rule already covers the ramp reaching three.
@@ -489,9 +455,9 @@ const RULES = [
     banner: true,
   },
 
-  // The Varkhul raid, from the same release.
+  // Varkhul.
   {
-    // Ignivar's Molten Armor with the swap point stated in the game's own source.
+    // Like Molten Armor, but the game declares the swap point.
     id: 'raid-varkhul-makers-brand',
     cls: ANY,
     unit: 'player',
@@ -544,8 +510,8 @@ const RULES = [
 
 /** A top-level entry in the CLASSES or ABILITIES record: exactly two spaces in. */
 const RECORD_ENTRY_RE = /^ {2}([a-z0-9_]+): \{$/gm;
-/** A property of one of those entries: exactly four. Both quote styles, since
- *  `cold_blood` is named "Killer's Calm" and an apostrophe forces double quotes. */
+/** A property of one of those entries: exactly four. Both quote styles, since an apostrophe in a
+ *  name ("Killer's Calm") forces double quotes. */
 const NAME_RE = /^ {4}name: (?:'([^']*)'|"([^"]*)")/m;
 const CLASS_RE = /^ {4}class: '([a-z]+)'/m;
 /** One `ctx.applyAura(target, { ... })` call with literal fields. */
@@ -573,11 +539,8 @@ function reason(err) {
 }
 
 /**
- * The checkout root, from `--game=X` or `--game X`.
- *
- * Required and never defaulted. This reads a CHECKOUT rather than an endpoint, so
- * nothing will 404 to say the source moved: a default would silently read whatever
- * happened to be at that path, at whatever version it happened to be.
+ * The checkout root, from `--game=X` or `--game X`. Never defaulted: a default would silently read
+ * whatever checkout happened to be at that path.
  */
 function gameArg() {
   const inline = process.argv.map((value) => GAME_FLAG.exec(value)).find((match) => match !== null);
@@ -607,13 +570,7 @@ function read(path) {
   }
 }
 
-/**
- * The checkout's own version, and the proof that this IS the checkout.
- *
- * Both together, because they answer the same question: a generator pointed at the
- * wrong directory is the silent failure every throw in this file exists to prevent,
- * and a package name is the cheapest thing that cannot be true of anywhere else.
- */
+/** The checkout's version, after checking the package name proves this is the game checkout. */
 function gameVersion(checkout) {
   const parsed = JSON.parse(read(`${checkout}/package.json`));
   if (parsed?.name !== GAME_PACKAGE) {
@@ -651,12 +608,7 @@ function section(source, from, to) {
   return source.slice(start, end);
 }
 
-/**
- * The game's own class order, which is the order the output groups rules in.
- *
- * Derived rather than written down, so a class added or reordered by a release moves
- * the file rather than needing this script edited.
- */
+/** The game's class order, which the output groups rules by. Derived, so a release reorders it. */
 function classOrder(source) {
   const found = entriesOf(section(source, 'export const CLASSES', 'export const ABILITIES')).map(
     ([key]) => key,
@@ -684,10 +636,8 @@ function abilities(source) {
 }
 
 /**
- * The proc auras applied straight through `applyAura` with no ability entry.
- *
- * A collision between two files is a failure rather than a first-wins, because a
- * first-wins would make the answer depend on the order this list happens to be in.
+ * The proc auras applied straight through `applyAura` with no ability entry. A name collision
+ * between two files throws, since first-wins would depend on list order.
  */
 function procAuras(checkout) {
   const found = new Map();
@@ -731,9 +681,8 @@ function matchingBrace(source, open) {
 }
 
 /**
- * Every `applyAura(target, { ... })` object body in a source. Brace-matched rather than a
- * bounded regex: an encounter literal runs to fourteen fields with nested braces, and a
- * capped pattern silently matches none of it.
+ * Every `applyAura(target, { ... })` object body in a source. Brace-matched, because an encounter
+ * literal is long and nested and a length-capped regex silently matches none of it.
  */
 function applyAuraBodies(source) {
   const bodies = [];
@@ -802,10 +751,7 @@ function addConst(found, name, value, relative) {
   found.set(name, { value, from: relative });
 }
 
-/**
- * Every encounter aura the game APPLIES, keyed by the id it carries on the wire. Never built
- * from the id constants: a constant can outlive its mechanic.
- */
+/** Every encounter aura the game APPLIES, keyed by wire id. Never built from the id constants. */
 function encounterAuras(checkout, consts) {
   const found = new Map();
   for (const relative of ENCOUNTER_SOURCES) {
@@ -922,11 +868,8 @@ function subjectOf(rule, sources) {
 }
 
 /**
- * One output row, with its keys written in one fixed order.
- *
- * Assigned conditionally rather than spread, so an absent clause is an absent KEY:
- * the addon distinguishes a clause that was not asked from one asked as null, and a
- * null would make the rule match nothing.
+ * One output row, keys in a fixed order. An absent clause must be an absent KEY: the addon reads a
+ * null clause as asked-for, and it would match nothing.
  */
 function rowFor(rule, subject) {
   const row = { id: rule.id, class: rule.cls, label: subject.label, unit: rule.unit };

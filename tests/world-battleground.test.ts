@@ -1,19 +1,7 @@
-// Thornhollow Fields: the two readings and their two watch keys.
-//
-// The case that carries this file is the one `world-match.test.ts` opens with,
-// in a second place: `bgInfo` IS PRESENT FOR EVERY CHARACTER, queued or not, and
-// only its `match` member says a match is on. A reader that answered whenever
-// the key existed would report the whole realm as fighting a battleground.
-//
-// The second is that this is where an enemy PLAYER is identified. A player
-// entity never carries `hostile`, which the game sets on mobs alone, so the
-// roster's `team` against `myTeam` is the only honest answer, and the read has
-// to keep both sides in one list to give it.
-//
-// The third is the cadence split. The key rides at 1 Hz, so the signatures
-// ignore every clock on it, and the events are the live path. A subscription
-// that fired on `timeLeft` would fire once a second for the length of a match to
-// say that time is passing.
+// Thornhollow Fields. `bgInfo` is present for every character, so only its `match`
+// member says a match is on. A player never carries `hostile`, so the roster's `team`
+// against `myTeam` is how an enemy player is identified. The key rides at 1 Hz, so the
+// signatures ignore its clocks.
 
 import { describe, expect, it } from 'vitest';
 import {
@@ -105,8 +93,6 @@ function standingsOf(over: Record<string, unknown> = {}): BattlegroundStandings 
 }
 
 describe('battlegroundOf', () => {
-  // The single most important case in the file, and the same shape as the arena
-  // one: every character carries this key from login, match or no match.
   it('answers null for the reading every idle character receives', () => {
     expect(battlegroundOf(worldWith())).toBeNull();
     expect(battlegroundOf({})).toBeNull();
@@ -127,8 +113,7 @@ describe('battlegroundOf', () => {
     expect(match.capsToWin).toBe(3);
   });
 
-  // A pair the wire did not send would otherwise be `[undefined, undefined]`,
-  // and a NaN reaching a bar's width drops the declaration silently.
+  // A NaN reaching a bar's width drops the declaration silently.
   it('answers a zeroed pair when the wire sent none', () => {
     const bare = battlegroundOf({ bgInfo: { match: {} } }) as BattlegroundMatch;
 
@@ -141,8 +126,7 @@ describe('battlegroundOf', () => {
     expect(matchOf({ state: 'countdown' }).state).toBe('countdown');
   });
 
-  // Guessing a boundary from a value the game has since added would draw a start
-  // gate or an aftermath that is not there. The middle draws neither.
+  // The middle state draws neither a start gate nor an aftermath.
   it('reads an unrecognised state as active', () => {
     expect(matchOf({ state: 'intermission' }).state).toBe('active');
   });
@@ -165,8 +149,7 @@ describe('battlegroundOf', () => {
     expect(match.flags[AZURE].carrierPid).toBeNull();
   });
 
-  // 'carried' and 'dropped' are both claims a display acts on. Home draws
-  // nothing, so it is the safe reading of a state this loader does not know.
+  // Home draws nothing, so it is the safe reading.
   it('reads an unrecognised flag state as home', () => {
     expect(matchOf({ flags: [flagWire({ state: 'returning' }), flagWire()] }).flags[0].state).toBe(
       'home',
@@ -181,7 +164,7 @@ describe('readMatch over a battleground', () => {
     expect(match?.format).toBe('battleground');
   });
 
-  // The order is falling freshness rather than taste: a duel rides every tick.
+  // Ordered by freshness: a duel rides every tick.
   it('answers a duel first', () => {
     const world = {
       duelInfo: { otherPid: THEM, otherName: 'R', state: 'active' },
@@ -192,8 +175,7 @@ describe('readMatch over a battleground', () => {
     expect(readMatch(world)?.format).toBe('duel');
   });
 
-  // The arena key is ten seconds stale where this one is a second stale, and
-  // the game never puts a character in both.
+  // The arena key is ten seconds stale, this one one second.
   it('answers the battleground ahead of an arena bout', () => {
     const world = {
       duelInfo: null,
@@ -256,8 +238,6 @@ describe('the battleground signatures', () => {
     expect(matchSignature(over)).not.toBe(matchSignature(matchOf()));
   });
 
-  // A kill moves the tallies AND the dead column, and both are discrete events a
-  // scoreboard repaints for. The key cannot sample faster than 1 Hz.
   it('reports a kill and a body', () => {
     const killed = matchOf({
       players: [fighterWire(ME, CRIMSON, { kills: 2 }), fighterWire(THEM, AZURE, { dead: true })],
@@ -266,8 +246,7 @@ describe('the battleground signatures', () => {
     expect(matchSignature(killed)).not.toBe(matchSignature(matchOf()));
   });
 
-  // The wire's roster order is not a fact about the match, so a reordering that
-  // changed nothing would otherwise repaint every scoreboard in the match.
+  // Roster order is not a fact about the match.
   it('ignores the roster arriving in another order', () => {
     const swapped = matchOf({ players: [fighterWire(THEM, AZURE), fighterWire(ME, CRIMSON)] });
 
@@ -288,8 +267,7 @@ describe('the battleground signatures', () => {
     expect(battlegroundSignature(ladder)).not.toBe(battlegroundSignature(standingsOf()));
   });
 
-  // The lockout ticks every second and what an addon acts on is the transition
-  // from locked out to clear, exactly as the dungeon finder's cooldown does.
+  // The lockout ticks every second; an addon acts on the transition to clear.
   it('carries the requeue lockout as a boolean', () => {
     const locked = standingsOf({ requeueIn: 30 });
     const nearly = standingsOf({ requeueIn: 2 });

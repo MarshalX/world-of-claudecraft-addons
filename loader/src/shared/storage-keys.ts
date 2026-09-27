@@ -1,22 +1,9 @@
-// The GM storage namespaces, and who owns each one.
+// The GM storage namespaces, split on two independent axes: owner (addon or loader) and scope
+// (account or character). Loader data never shares a namespace with an addon's own keys, or an
+// addon could overwrite it and `storage.keys()` would list it.
 //
-// Four rather than one, and the split is about ownership rather than tidiness.
-// An addon picks its own key names through `woc.storage`, so anything the loader
-// also stored in that namespace would be a name the addon could take: an addon
-// calling `storage.set('values', ...)` would silently become the addon whose
-// settings never persist. Separating them means `storage.keys()` can also answer
-// honestly, with the addon's own keys and nothing the loader put there.
-//
-// The two AXES are ownership and scope, and they are independent: `addon` and
-// `char` are both addon-owned and differ in scope, `ui` and `char` are both
-// per-character and differ in owner. Which is why per-character addon data is a
-// namespace of its own rather than a prefixed key inside `addon`: sharing that
-// namespace would put a key an addon writes for one character in front of
-// `storage.keys()` for every other, and would let a key named after a channel
-// collide with the derivation.
-//
-// Namespaces are prefixes on one flat GM store (see host/storage.ts), so these
-// strings are the whole boundary. They cannot change without stranding data.
+// These are prefixes on one flat GM store, so the strings are the whole boundary and cannot
+// change without stranding data.
 
 import type { Channel } from './hosts.ts';
 
@@ -35,12 +22,7 @@ function characterNamespace(fqid: string): string {
   return `${CHARACTER_NS}:${fqid}`;
 }
 
-/**
- * Loader-owned addon configuration: settings values and keybind overrides.
- *
- * Shared across every host, so installing and configuring an addon once makes it
- * behave the same on live, pbe, and pbe2. Only the manager writes here.
- */
+/** Loader-owned settings and keybind overrides, shared across hosts. Only the manager writes. */
 function configNamespace(fqid: string): string {
   return `${CONFIG_NS}:${fqid}`;
 }
@@ -51,16 +33,9 @@ function uiNamespace(fqid: string): string {
 }
 
 /**
- * Where one per-character value lives, whichever namespace it lives in.
- *
- * ONE derivation for both the loader's frame state and an addon's own
- * per-character store, because "per character" has to mean the same thing in
- * both: a frame and a data key that disagreed about which character they belong
- * to would be two halves of one addon restoring for two different people.
- *
- * The channel is part of the key because character ids are issued per
- * deployment and are not comparable across them, so `char 7` on pbe and `char 7`
- * on live are different characters and must not share a window position.
+ * Where one per-character value lives. The ONE derivation for both frame state and an addon's
+ * character store, so the two always agree on whose data it is. Carries the channel because
+ * character ids are not comparable across deployments.
  */
 function perCharacterKey(channel: Channel, characterId: string | number, name: string): string {
   return `${channel}:${characterId}:${name}`;

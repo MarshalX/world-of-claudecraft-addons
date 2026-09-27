@@ -1,10 +1,5 @@
-// Polling the dev server for a body that moved.
-//
-// The mechanism is the conditional GET, so the test is about which requests are
-// issued and what is emitted, not about timers: the poll is driven directly and
-// the timer is checked separately. What must never happen is a reload emitted
-// for a file nobody touched, because that is a running addon being torn down and
-// rebuilt several times a second.
+// Polling the dev server for a body that moved, over conditional GETs. The poll is driven directly
+// and the timer is checked separately.
 
 import { describe, expect, it, vi } from 'vitest';
 import { createDevWatch } from '../loader/src/host/dev-watch.ts';
@@ -97,9 +92,7 @@ function open(options: Options = {}) {
 }
 
 describe('polling', () => {
-  // The first poll has nothing cached, so every body reads as new. That is the
-  // right answer for a page that just loaded: the running copy came from the
-  // registry cache and may be older than what is on disk.
+  // The running copy came from the registry cache and may be older than what is on disk.
   it('reports the first read of a body as a change', async () => {
     const { watch, reloads } = open();
 
@@ -108,8 +101,6 @@ describe('polling', () => {
     expect(reloads()).toEqual([{ k: 'addon.reload', fqid: LOCAL_FQID }]);
   });
 
-  // The steady state. A version that failed this would tear down and rebuild
-  // every running addon twice a second.
   it('emits nothing for a file nobody touched', async () => {
     const { watch, reloads } = open();
     await watch.poll();
@@ -149,7 +140,6 @@ describe('what is watched', () => {
     expect(http.calls).toEqual([LOCAL_URL]);
   });
 
-  // A disabled addon has no closure to reload, so polling it is pure cost.
   it('leaves a disabled addon alone', async () => {
     const { watch, http } = open({ rows: [row(LOCAL_FQID, false)] });
 
@@ -158,8 +148,7 @@ describe('what is watched', () => {
     expect(http.calls).toEqual([]);
   });
 
-  // Index polling would emit a market.changed on every tick and repaint the
-  // manager continuously to report that nothing moved.
+  // Index polling would emit market.changed on every tick and repaint the manager for nothing.
   it('polls bodies and never the index', async () => {
     const { watch, http } = open();
 
@@ -241,8 +230,6 @@ describe('the timer', () => {
 });
 
 describe('a dev server that is not running', () => {
-  // The ordinary state before `pnpm serve` is started. One failed tick costs a
-  // diagnostic line, never the timer.
   it('emits nothing and keeps polling', async () => {
     const { watch, reloads, http } = open({ files: {} });
 
@@ -265,8 +252,7 @@ describe('a dev server that is not running', () => {
 });
 
 describe('overlapping polls', () => {
-  // A poll still in flight when the interval elapses must not start a second one
-  // against the same URLs, or a slow server produces duplicate reloads.
+  // A slow server would otherwise produce duplicate reloads.
   it('does not run two at once', async () => {
     const { watch, http } = open();
 
@@ -276,10 +262,6 @@ describe('overlapping polls', () => {
   });
 });
 
-// A table an author regenerates is exactly the edit the watcher exists for, and
-// an addon that reads it once at load has no other way to pick it up. The pair
-// below is what catches both a watcher that ignores data files and one that
-// reports a reload on every tick.
 describe('declared data files', () => {
   const DataUrl = 'http://localhost:5180/addons/dev-harness/items.json';
 

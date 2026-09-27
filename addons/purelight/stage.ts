@@ -1,36 +1,17 @@
 // Purelight on the stage: one strip carrying both directions at once.
 //
-// A battleground rather than a raid, and that is the composition rather than a setting. This
-// addon answers two questions with one rule, "what harmful effect can be lifted off a friendly
-// unit" and "what benefit can be stripped off a hostile one", and a raid picture can only show
-// the first: a boss's debuffs all come from a mob. The art is no longer the reason, since a
-// mob's tile now carries the mob's own portrait, but a picture of one direction is still half
-// the addon. In a battleground both halves are on screen and four of the five tiles resolve
-// real ability art.
+// A battleground rather than a raid, because a raid picture shows only the dispel direction (every
+// boss debuff comes from a mob) and the addon also answers what can be purged off a hostile unit.
+// Every id, name, kind, school and duration is the game's own, and ids and names disagree because
+// the game's do (`polymorph` is "Bewitch", `ice_barrier` is "Frostveil").
 //
-// Every id, name, kind, school and duration here is the game's own, and the ids and the names
-// disagree because the game's do: `polymorph` is displayed as "Bewitch", `corruption` as
-// "Blackrot", `curse_of_agony` as "Hex of Anguish" and `ice_barrier` as "Frostveil".
+// The five tiles cover everything the strip can say: Bewitch is control and sorts first (`fear`,
+// `sleep` and `charm` are not aura kinds in this game); Blackrot and Hex of Anguish are damage,
+// longest remaining first; Temporal Exhaustion (`sated`) has no ability art and is the one tile
+// long enough to draw in minutes; Frostveil is a benefit on a hostile unit, a purge.
 //
-// The five tiles are one each of everything the strip can say:
-//
-//  - Bewitch on the tank is control, so it sorts to the front whatever is left on it.
-//    `polymorph` is one of the game's real control kinds, which is what a list naming `fear`,
-//    `sleep`, `charm` and `horror` would miss: none of those is an aura kind in this game, so
-//    this tile would sort below the dots.
-//  - Blackrot and Hex of Anguish are damage, ordered longest-remaining first, which is the
-//    opposite of a cooldown list and for the opposite reason: an effect about to fall off on its
-//    own is the one not worth a global.
-//  - Temporal Exhaustion is the artless case: it is what your own shaman leaves on the group
-//    after Bloodlust, and its aura id is `sated` rather than any ability id, so there is no file
-//    to point at. It also runs 600 seconds, which is the only thing on the strip drawn in
-//    minutes, since a 40 pixel square cannot spell out "552".
-//  - Frostveil is the other direction: a benefit on a hostile unit, which is a purge rather than
-//    a dispel, and the tooltip on it says so.
-//
-// The two enemy casters are entities in the world whether or not they are on the strip, and they
-// have to be: a tile's art is resolved through the caster's class, so a source the world cannot
-// find is a tile with no picture for a reason that has nothing to do with the game.
+// The enemy casters are entities in the world because a tile's art is resolved through the caster's
+// class, and a source the world cannot find draws no picture.
 
 import type { Scenario, Stage, WorldDraft } from '../../stage/src/stage.ts';
 import TABLE from './refused.json' with { type: 'json' };
@@ -39,8 +20,8 @@ const TABLE_FILE = 'refused.json';
 const DATA = { [TABLE_FILE]: JSON.stringify(TABLE) };
 
 /**
- * One id, checked against the shipped table: a regeneration that drops it turns a quietly wrong
- * picture into a scenario that does not start.
+ * One id, checked against the shipped table so a regeneration that drops it fails the scenario
+ * rather than the picture.
  */
 function mustBeRefused(id: string): string {
   if (!TABLE.auras.some((row) => row.id === id)) {
@@ -52,7 +33,7 @@ function mustBeRefused(id: string): string {
 /** The local player's own entity id, which the shared fixture fixes at 661. */
 const PLAYER_ID = 661;
 
-/** Your group. The tank, the other healer, and the shaman who cost you a tile. */
+/** Your group: the tank, the other healer, and the shaman who cost you a tile. */
 const TANK = 701;
 const PRIEST = 702;
 const SHAMAN = 703;
@@ -90,9 +71,8 @@ function member(pid: number, name: string, cls: string): Record<string, unknown>
     dead: 0,
     inCombat: 1,
     group: 1,
-    // Deliberately empty. Rows are what this addon refuses to read: one carries neither a school
-    // nor `unbreakableControl`, which are two of the three clauses, so a row can only ever answer
-    // half the question.
+    // Empty on purpose: the addon never reads rows, which carry neither school nor
+    // `unbreakableControl`.
     auras: [],
   };
 }
@@ -121,11 +101,8 @@ function addEnemies(draft: WorldDraft): void {
 }
 
 /**
- * The skirmish as the addon woke up in it. All of it in `world` rather than in `run`, since every
- * one of these is a fact a session would already have: who is in your group, who is standing in
- * front of you, and what class each of them is. The classes are the half that bites: art is filed
- * per class, and a class stated after the addon has mounted is a class the tiles already built
- * without.
+ * The skirmish as the addon woke up in it. All in `world`, because art is filed per class and a
+ * class stated after mounting is one the tiles were built without.
  */
 function aSkirmish(draft: WorldDraft): void {
   draft.set(draft.player, 'templateId', CLASS_ID);
@@ -134,10 +111,7 @@ function aSkirmish(draft: WorldDraft): void {
   addEnemies(draft);
 }
 
-/**
- * The same group, in front of a boss. The boss is a `mob`, so its effects draw its PORTRAIT: an
- * aura carries no class to file art under.
- */
+/** The same group, in front of a boss. The boss is a `mob`, so its effects draw its PORTRAIT. */
 function aRaid(draft: WorldDraft): void {
   draft.set(draft.player, 'templateId', CLASS_ID);
   draft.set(draft.player, 'name', 'Marshal');
@@ -152,10 +126,9 @@ function aRaid(draft: WorldDraft): void {
 }
 
 /**
- * Put one effect on a unit that is already in the world. The list is replaced rather than pushed
- * onto, because nobody here is carrying more than one thing: reading `unit.auras` back out would
- * be a literal key into a `Record<string, unknown>`, which is the one place Biome and TypeScript
- * want opposite spellings.
+ * Put one effect on a unit already in the world. The list is replaced rather than pushed onto,
+ * because reading `unit.auras` back is a literal key into a `Record<string, unknown>`, where Biome
+ * and TypeScript want opposite spellings.
  */
 function afflict(stage: Stage, id: number, over: Record<string, unknown>): void {
   const unit = stage.entities.get(id);
@@ -165,13 +138,9 @@ function afflict(stage: Stage, id: number, over: Record<string, unknown>): void 
 }
 
 /**
- * Wait for the strip to actually be on screen before drawing into it.
- *
- * A saved frame comes up HIDDEN and is shown once its stored state arrives, and
- * that answer is keyed per character, so it takes a poll to find the character and
- * a storage read to come back. The addon skips the drawing entirely while its
- * frame is hidden, so a scenario that only polls and ticks photographs an empty
- * page and reports success.
+ * Wait for the strip to be on screen. A saved frame comes up HIDDEN until its per-character state
+ * loads, and the addon skips drawing while hidden, so a scenario that only polls and ticks
+ * photographs an empty page.
  */
 async function show(stage: Stage): Promise<void> {
   stage.poll();
@@ -219,8 +188,7 @@ async function midFight(stage: Stage): Promise<void> {
     duration: 600,
     sourceId: SHAMAN,
   });
-  // The mage's own barrier, on the mage. A benefit on a hostile unit, so it is the
-  // one tile here pointing the other way.
+  // The mage's own barrier: a benefit on a hostile unit, the one tile pointing the other way.
   afflict(stage, MAGE, {
     id: 'ice_barrier',
     name: 'Frostveil',
@@ -236,9 +204,8 @@ async function midFight(stage: Stage): Promise<void> {
 }
 
 /**
- * Two real Ignivar mechanics the game refuses beside an ordinary curse, so the picture is ONE
- * tile to act on and a held tile counting two. Deliberately not the preview: the battleground
- * shows both directions and is what the addon IS.
+ * Two real Ignivar mechanics the game refuses beside an ordinary curse: ONE tile to act on and a
+ * held tile counting two. Not the preview, which shows both directions.
  */
 async function inTheForge(stage: Stage): Promise<void> {
   afflict(stage, TANK, {
@@ -294,10 +261,8 @@ const SCENARIOS: readonly Scenario[] = [
     run: inTheForge,
   },
   {
-    // Most of a session, and the state nobody thinks to photograph. A bare frame
-    // with nothing removable in front of you draws nothing at all, which is the
-    // whole point and is also indistinguishable from an addon that is switched
-    // off: the unlock outline is how a player finds it again to move it.
+    // With nothing removable the bare frame draws nothing, indistinguishable from a switched-off
+    // addon; the unlock outline is how a player finds it to move it.
     id: 'clear',
     label: 'Nothing worth a global',
     data: DATA,

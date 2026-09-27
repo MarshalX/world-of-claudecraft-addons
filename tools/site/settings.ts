@@ -1,17 +1,5 @@
-// One declared setting, said in words a player reads rather than in the words a
-// manifest is written in.
-//
-// The manifest's own vocabulary is `boolean`, `number`, `string`, `select`, and
-// that vocabulary belongs on the manifest reference page, which documents the
-// schema for somebody writing one. An addon page is read by somebody deciding
-// whether to install, so a row says "on or off" and "one of", and the DEFAULT is
-// spelled the way the control will show it: a boolean's default is on or off, not
-// `true`.
-//
-// Pure, and separate from the page that renders it, because every rule here is a
-// small decision that is easy to get subtly wrong (an empty string default that
-// prints as nothing at all, a number with a floor and no ceiling) and each one is
-// worth a test. The page turns these into markup and decides nothing.
+// One declared setting in a player's words ("on or off", "one of"), with the default spelled
+// the way the control shows it. The manifest's own vocabulary belongs on the manifest page.
 
 import type { SettingDecl } from '../../loader/src/shared/schema.ts';
 
@@ -29,12 +17,7 @@ function bounds(min: number | undefined, max: number | undefined): string | null
   return null;
 }
 
-/**
- * A boolean's default, in the words a checkbox has.
- *
- * `true` and `false` are what the file says and are not what the player sees:
- * the manager draws a checkbox, and a checkbox is on or off.
- */
+/** A boolean's default, in the words a checkbox has. */
 function onOff(value: boolean): string {
   if (value) {
     return 'on';
@@ -42,12 +25,7 @@ function onOff(value: boolean): string {
   return 'off';
 }
 
-/**
- * A string default, with the empty one named rather than printed.
- *
- * An empty default is common and legitimate (a keyword list nobody has filled
- * in), and printed as `""` beside "default" it reads as a bug in this page.
- */
+/** A string default, with the empty one named rather than printed as `""`. */
 function textDefault(value: string): string {
   if (value === '') {
     return 'empty';
@@ -85,12 +63,8 @@ function summarize(setting: SettingDecl): SettingSummary {
 }
 
 /**
- * One setting as a page prints it.
- *
- * `detail` is what CONSTRAINS the value and is null when nothing does, which is
- * the whole reason it is nullable: a number with no bounds and a number from 0 to
- * 100 are different things to a reader, and an empty string in that slot would
- * render as a stray separator.
+ * One setting as a page prints it. `detail` is what constrains the value, null when nothing
+ * does; an empty string there would render a stray separator.
  */
 export interface SettingSummary {
   readonly id: string;
@@ -105,13 +79,7 @@ export function describeSetting(setting: SettingDecl): SettingSummary {
   return summarize(setting);
 }
 
-/**
- * `4 settings`, `1 setting`, `no settings`.
- *
- * Here rather than in the page because both the card and the addon page count the
- * same things, and because English plurals are exactly the kind of thing that
- * ends up written twice and disagreeing.
- */
+/** `4 settings`, `1 setting`, `no settings`, shared by the card and the addon page. */
 export function countOf(total: number, noun: string): string {
   if (total === 0) {
     return `no ${noun}s`;

@@ -1,10 +1,5 @@
-// Cue playback.
-//
-// Driven against a fake sink rather than a real AudioContext, which is what lets
-// the decisions a player actually notices be asserted in Node: a cue resolves to
-// the URL the pack names, the slider is respected, a family cue picks a variant,
-// and a cue is not machine-gunned by a 20 Hz handler. What surrounds a cue
-// (arming on a gesture, warming, teardown) is in sound-engine-lifecycle.
+// Cue playback against a fake sink. Arming, warming and teardown are in
+// sound-engine-lifecycle.
 
 import { describe, expect, it, vi } from 'vitest';
 import { createSoundEngine, DEFAULT_COOLDOWN_MS } from '../loader/src/runtime/sound/engine.ts';
@@ -29,7 +24,7 @@ describe('the cue list', () => {
     expect(engine.cues()).toEqual([]);
   });
 
-  it('stays empty when the pack is not one', async () => {
+  it('stays empty when the pack is malformed', async () => {
     const { engine } = soundHarness({ pack: { format: 'something-else' } });
     await engine.ready();
 
@@ -48,7 +43,6 @@ describe('playing', () => {
     expect(fetched).toEqual(['/audio/sfx/ui_click.mp3?v=aabb']);
   });
 
-  // The whole advantage of the pack over a directory listing.
   it('multiplies the pack gain, the player slider, and the addon volume', async () => {
     const { engine, started } = soundHarness({ volume: 0.5 });
     await engine.ready();
@@ -91,8 +85,7 @@ describe('playing', () => {
     expect(fetched[0]).toBe('/audio/sfx/combat_block_1.mp3');
   });
 
-  // Degraded and honestly so: it loses the gain and the hash, and only resolves
-  // for a cue whose name is its own file.
+  // Loses the gain and the hash, and resolves only where the name is the file.
   it('falls back to a plain URL for a cue the pack does not list', async () => {
     const { engine, fetched } = soundHarness();
     await engine.ready();
@@ -116,7 +109,7 @@ describe('playing', () => {
     expect(fetched).toHaveLength(1);
   });
 
-  it('retries after a failed fetch rather than poisoning the cue', async () => {
+  it('retries after a failed fetch', async () => {
     const started: Started[] = [];
     let attempt = 0;
     const engine = createSoundEngine({
@@ -144,9 +137,8 @@ describe('playing', () => {
     await engine.ready();
 
     engine.play('ui_click');
-    // Flushed rather than polled: the failing fetch drops its own cache entry
-    // from a .catch, and a waitFor on `attempt` alone would retry while the
-    // rejected promise is still the cached one.
+    // Flushed, not polled: the cache entry is dropped in a .catch, so polling
+    // `attempt` would retry against the still-cached rejection.
     await new Promise((resolve) => {
       setTimeout(resolve, 0);
     });
@@ -158,8 +150,7 @@ describe('playing', () => {
 });
 
 describe('the cooldown', () => {
-  // net.on('snap') fires 20 times a second and playing a cue from one is the
-  // obvious thing to write. Without a floor that is 20 overlapping copies.
+  // A cue played from net.on('snap') would otherwise fire 20 times a second.
   it('drops a repeat inside the default window', async () => {
     const { engine, started, advance } = soundHarness();
     await engine.ready();

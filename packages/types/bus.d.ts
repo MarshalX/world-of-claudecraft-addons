@@ -5,8 +5,8 @@ export interface BusMessage {
   /**
    * The fqid of the addon that sent it, e.g. `official/combat-meter`.
    *
-   * Stamped by the loader. A sender cannot set it, cannot change it, and cannot
-   * claim to be another addon, so it is worth deciding what to trust on.
+   * Stamped by the loader, so a sender cannot claim to be another addon. Safe to
+   * decide trust on.
    */
   readonly from: string;
   readonly topic: string;
@@ -29,10 +29,8 @@ export interface Publication {
 /**
  * Publish and subscribe between addons, inside this page.
  *
- * An addon is one file with no imports and no shared libraries, so this is the
- * only way two of them cooperate. A meter that publishes its per-ability totals
- * lets somebody else write the display without forking the meter; a boss addon
- * that publishes a phase lets three cosmetic addons react to it.
+ * An addon is one file with no imports, so this is the only way two of them
+ * cooperate: a meter publishes its totals and another addon draws them.
  *
  * ```js
  * // in the meter
@@ -42,20 +40,15 @@ export interface Publication {
  * woc.bus.on('official/combat-meter', 'totals', ({ payload }) => draw(payload));
  * ```
  *
- * Four things worth knowing before you design around it:
- *
- *  - **You name the publisher you are listening to**, not just a topic. Two
- *    addons can both publish `totals` without being confused for each other, and
- *    nobody can take a name by publishing under it first. Pass `woc.bus.anySender`
- *    when any publisher will do, and read `from` to see who it was.
- *  - **You never receive your own messages.** You do not need a bus to call your
- *    own code, and self-delivery is how a loop starts.
- *  - **Delivery is synchronous**, inside your `emit` call, so keep handlers cheap
- *    and do not assume a handler ran: nobody may be listening, and the addon you
- *    are talking to may not be installed.
- *  - **There is no request-response, and there will not be.** Awaiting a reply
- *    from an addon that may be disabled, may never have been installed, or may
- *    simply not answer is a hang with no timeout anyone chose. Publish both ways.
+ *  - **You name the publisher you are listening to**, not just a topic, so two
+ *    addons can both publish `totals` and nobody can squat a name. Pass
+ *    `woc.bus.anySender` when any publisher will do, and read `from`.
+ *  - **You never receive your own messages.**
+ *  - **Delivery is synchronous**, inside your `emit` call, so keep handlers cheap.
+ *    Do not assume a handler ran: the addon you are talking to may not be
+ *    installed.
+ *  - **There is no request-response.** A reply from an addon that may be disabled
+ *    or absent is a hang with no timeout. Publish both ways.
  *
  * Payloads stay in this page and never reach the network. Treat anything you
  * publish as readable by every other installed addon.
@@ -91,8 +84,8 @@ export interface BusApi {
    * prices.announce();
    * ```
    *
-   * Topic names are content rather than API: the loader ships none, and the ones
-   * addons here agree on are in the authoring docs.
+   * The loader defines no topic names; the ones official addons agree on are in
+   * the authoring docs.
    *
    * Added in API minor 4.
    */
@@ -104,13 +97,11 @@ export interface BusApi {
    * which of you started first. Your handler may run inside this call or long
    * after it.
    *
-   * Any sender rather than a named one because a hardcoded fqid is right only on
-   * the official marketplace: the same addon installed from a fork publishes
-   * under another name. Read `from` for who answered.
+   * Any sender, because the same addon installed from a fork publishes under
+   * another fqid. Read `from` for who answered.
    *
    * Silence means nobody is publishing and a null payload means a publisher with
-   * nothing yet. Both are ordinary, and worth saying on screen rather than
-   * treating as an error.
+   * nothing yet. Both are ordinary states to show, not errors.
    *
    * ```js
    * woc.bus.follow('prices', (payload) => {

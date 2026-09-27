@@ -1,9 +1,5 @@
-// The source list, and fetching each source's index.
-//
-// The two properties worth the most here are ordering and what cannot be
-// removed. The official source is merged in from the loader build on every read,
-// so it is present with nothing persisted and cannot be edited or dropped. The
-// local dev source sits behind a switch and is never persisted at all.
+// The source list and index fetching. The official source comes from the build on every
+// read; the local dev source sits behind a switch and is never persisted.
 
 import { describe, expect, it } from 'vitest';
 import { DEV_KEY } from '../loader/src/host/dev-settings.ts';
@@ -80,9 +76,7 @@ describe('the source list', () => {
     expect(list[0]?.builtin).toBe(true);
   });
 
-  // fetchedAt null is a different state from an index that was read and found
-  // empty, and the manager renders them differently.
-  it('reports an unfetched source as unfetched rather than as empty', async () => {
+  it('reports an unfetched source as unfetched, not empty', async () => {
     const { market } = open();
 
     expect((await market.api.list())[0]).toMatchObject({
@@ -149,8 +143,7 @@ describe('adding a source', () => {
   });
 });
 
-// The rule lives in the host, not the UI, so hiding the control is presentation
-// and this is what makes a hand-crafted call from the runtime fail too.
+// Enforced in the host, so a hand-crafted call from the runtime fails too.
 describe('removing a source', () => {
   it.each([OFFICIAL_ID, LOCAL_ID])('refuses to remove %s', async (id) => {
     await expect(open().market.api.remove(id)).rejects.toThrow(/ships with the loader/);
@@ -195,8 +188,7 @@ describe('pinning a source to a tag', () => {
     expect(http.calls).toContain(tagged);
   });
 
-  // The id is derived from owner and repo, so everything installed from this
-  // source keeps its fqid and therefore its settings, keybinds, and data.
+  // The id derives from owner and repo, so installed addons keep their fqid and storage.
   it('leaves the id alone, so nothing installed from it loses its storage', async () => {
     const { market } = open({ stored, files: { [tagged]: indexBody() } });
 
@@ -208,8 +200,6 @@ describe('pinning a source to a tag', () => {
     ]);
   });
 
-  // Otherwise a failed read of the new tag would leave the old tag's addons on
-  // screen under the new tag's name.
   it('drops the rows the old ref published, even if the new one cannot be read', async () => {
     const { market } = open({ stored, files: { [THIRD_PARTY]: indexBody() } });
     await market.api.refresh();
@@ -283,9 +273,6 @@ describe('a repository with no marketplace.json', () => {
     expect((await market.api.list())[0]?.degraded).toBe(false);
   });
 
-  // A repository that answers 404 for its listing too is one the loader cannot
-  // see at all, so the message is about the index the player was looking for
-  // rather than about an endpoint they never asked for.
   it('reports the index failure, not the contents API, for a repository it cannot see', async () => {
     const { market } = open({ files: {} });
 
@@ -294,8 +281,7 @@ describe('a repository with no marketplace.json', () => {
     expect((await market.api.list())[0]?.error).toContain('marketplace.json');
   });
 
-  // Answering a rate limit by issuing one request per addon would spend what is
-  // left of the hour finding out there is none.
+  // A 403 is the rate limit, and one request per addon would spend what is left of it.
   it('does not enumerate when the index failed for any reason but a 404', async () => {
     const { market, http } = open({ stored, files: { [THIRD_PARTY]: '{ not json' } });
 
@@ -304,8 +290,6 @@ describe('a repository with no marketplace.json', () => {
     expect(http.calls).not.toContain(contents);
   });
 
-  // An index that is present but invalid is not a fallback case: the source did
-  // publish one, and what it published is the thing to report.
   it('does not enumerate a source whose index is present and malformed', async () => {
     const { market, http } = open({
       stored,
@@ -342,9 +326,7 @@ describe('refreshing an index', () => {
     ]);
   });
 
-  // The repository is private while it is being built, so this is the state the
-  // official source is actually in and the manager has to render it.
-  it('records an HTTP failure as that source own error', async () => {
+  it("records an HTTP failure as that source's own error", async () => {
     const { market } = open({ files: {} });
 
     await market.api.refresh(OFFICIAL_ID);
@@ -393,10 +375,8 @@ describe('refreshing an index', () => {
   });
 });
 
-// The index cache is per session, and before `ensure` nothing ever seeded it: on
-// a fresh install and again after every page reload, Browse drew "no marketplace
-// has been read yet" until the player found Refresh, and the update check
-// compared installed addons against no rows and reported nothing to update.
+// The index cache is per session; without a seed, Browse is blank and the update check
+// reports a false all-clear.
 describe('seeding the indexes', () => {
   it('reads a source that has not been read this session', async () => {
     const { market, http } = open();
@@ -428,10 +408,7 @@ describe('seeding the indexes', () => {
     expect(http.calls).toEqual([OFFICIAL_INDEX]);
   });
 
-  // Every open of the manager calls this, so retrying a source that is simply
-  // unreachable would put a doomed request in front of each of them.
-  // A count rather than a list, since a missing index legitimately costs two
-  // requests: the contents-API fallback is what the second one is.
+  // Every manager open calls this. A count, since a 404 also spends a contents-API request.
   it('does not retry a source whose read failed', async () => {
     const { market, http } = open({ files: {} });
     await market.api.ensure();
@@ -453,10 +430,8 @@ describe('seeding the indexes', () => {
     expect((await market.api.list())[0]?.error).toBeNull();
   });
 
-  // Two calls landing together must not have the second answer before the read
-  // the first started: the manager lists straight afterwards, and a caller that
-  // returned early would list an index that has not arrived.
-  it('joins a read already running rather than returning ahead of it', async () => {
+  // The manager lists straight afterwards, so an early return lists nothing.
+  it('joins a read already running', async () => {
     const { market, http } = open();
 
     await Promise.all([market.api.ensure(), market.api.ensure()]);
@@ -507,8 +482,6 @@ describe('dev mode', () => {
     ]);
   });
 
-  // Persisting it would create a second copy that turning dev mode off could not
-  // take away.
   it('never writes the local source to the persisted list', async () => {
     const { market, storage } = open({
       files: { [LOCAL_INDEX]: indexBody([entry({ id: 'dev-harness' })], 'Local') },
@@ -519,8 +492,6 @@ describe('dev mode', () => {
     expect(storage.cells.get(`${MARKET_NS}:${MARKETS_KEY}`)).toBeUndefined();
   });
 
-  // So the pane has rows to show rather than an empty list the player has to
-  // refresh by hand.
   it('loads the local index as soon as it is enabled', async () => {
     const { market } = open({
       files: { [LOCAL_INDEX]: indexBody([entry({ id: 'dev-harness' })], 'Local') },
@@ -555,8 +526,6 @@ describe('dev mode', () => {
     });
   });
 
-  // A dev server that is not running is the ordinary state, and the pane shows
-  // that reading rather than only the last action's failure.
   it('carries the local source fetch error into the dev reading', async () => {
     const { market } = open({ dev: { enabled: true }, files: { [OFFICIAL_INDEX]: indexBody() } });
 
@@ -567,7 +536,7 @@ describe('dev mode', () => {
     });
   });
 
-  it('reads a corrupt dev setting as off rather than as on', async () => {
+  it('reads a corrupt dev setting as off', async () => {
     const { market } = open({ dev: { enabled: 'yes' as unknown as boolean } });
 
     await expect(market.dev.state()).resolves.toMatchObject({ enabled: false });
@@ -584,8 +553,6 @@ describe('finding one addon', () => {
     expect(found?.row.path).toBe('addons/combat-meter');
   });
 
-  // So installing works straight after adding a source, without the caller
-  // having to know that a refresh has to come first.
   it('loads the index on demand when it has never been read', async () => {
     const { market, http } = open();
 

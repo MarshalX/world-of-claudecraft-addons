@@ -15,17 +15,10 @@ function read(store: Map<string, unknown>, key: string, fallback: unknown): unkn
 /** A callback that must never fire, without an empty block. */
 const noop = (): undefined => undefined;
 
-/** Tampermonkey and Violentmonkey: both GM.* and the legacy GM_* names. */
-/**
- * A request surface that answers nothing.
- *
- * These fakes exist to pin which SURFACE each manager exposes a capability on,
- * not to serve bodies: the suites that fetch use tests/fakes/http.ts. Which arm
- * each source carries follows the GM-object-versus-legacy split that fake
- * already encodes, since the metadata block grants both spellings.
- */
+/** A request surface that answers nothing; suites that fetch use tests/fakes/http.ts. */
 const noRequest = (): void => undefined;
 
+/** Both GM.* and the legacy GM_* names. */
 function fullSource(): GmSource {
   const store = new Map<string, unknown>();
   const listeners = new Map<number, { key: string; cb: NativeListener }>();
@@ -63,25 +56,14 @@ function fullSource(): GmSource {
   };
 }
 
-/**
- * Violentmonkey 2.45, as observed rather than assumed.
- *
- * Its GM object stops at registerMenuCommand, so the promise-based store pairs
- * with the legacy value-change listener. That mix is the shape the loader
- * actually runs on, and neither fullSource nor legacyOnlySource covers it.
- */
 interface TampermonkeySource extends GmSource {
   /** A write from another tab. Own writes echo by themselves, as the real one does. */
   emit: (key: string, value: unknown) => void;
 }
 
 /**
- * Tampermonkey 5.5, as observed rather than assumed.
- *
- * Two things differ from Violentmonkey and both are load-bearing: the listener
- * lives on the GM object, and its id arrives as a promise. It also echoes the
- * calling tab's own writes back with remote false, which Violentmonkey does not,
- * so setValue below fires listeners the same way.
+ * Tampermonkey 5.5, as observed: the listener is on the GM object, its id arrives as a promise, and
+ * the calling tab's own writes echo back with remote false.
  */
 function tampermonkeySource(): TampermonkeySource {
   const store = new Map<string, unknown>();
@@ -151,6 +133,10 @@ interface ViolentmonkeySource extends GmSource {
   emit: (key: string, value: unknown) => void;
 }
 
+/**
+ * Violentmonkey 2.45, as observed: the GM object stops at registerMenuCommand, so the promise store
+ * pairs with the legacy value-change listener.
+ */
 function violentmonkeySource(): ViolentmonkeySource {
   const store = new Map<string, unknown>();
   const listeners = new Map<number, { key: string; cb: NativeListener }>();

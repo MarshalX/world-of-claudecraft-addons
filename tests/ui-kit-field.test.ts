@@ -1,20 +1,7 @@
 // @vitest-environment happy-dom
 
-// The form controls and the tab strip.
-//
-// The styling is the manager's own and is not what this pins: what these builders
-// add is a CONTRACT four controls share, so a pane that saves to storage reads
-// them all the same way. Two halves of it are easy to get subtly wrong and are
-// what the cases below are about.
-//
-// The first is `set`, which must NOT call back. It is what a reset button and a
-// reload use, and a setter that reported itself as a change would write the value
-// it was just given straight back to storage, or loop through an addon that saves
-// on every change.
-//
-// The second is the label's `for`. The document is one id space shared with the
-// game and every other addon, so two checkboxes built by the same addon with the
-// same label must not both answer to the first one's text.
+// The form controls and the tab strip. `set` must not call back, or a reset writes straight
+// back to storage and an addon saving on change loops.
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
@@ -51,8 +38,6 @@ describe('a checkbox', () => {
     expect(onChange).not.toHaveBeenCalled();
   });
 
-  // Beside the box rather than above it: a checkbox reads as a sentence with a
-  // box in front of it, and a label above one reads as a heading for what follows.
   it('puts its label inline, unlike every other field', () => {
     const field = createCheckbox(document, { label: 'Show pet', value: true, onChange: vi.fn() });
 
@@ -71,9 +56,8 @@ describe('a checkbox', () => {
   });
 });
 
-// A select is a button and the kit's own menu rather than a native control, so what a case
-// can reach is the ITEMS it would have opened. `openMenu` is captured rather than run: the
-// real one puts a menu in the document, and what is under test here is the field.
+// A select is a button over the kit's menu, so a case reaches the items it would open;
+// `openMenu` is captured rather than run.
 describe('a select', () => {
   const opened: MenuItem[][] = [];
   const openMenu = (_at: Element, items: readonly MenuItem[]) => {
@@ -146,8 +130,6 @@ describe('a slider', () => {
     expect(onChange).toHaveBeenCalledWith(30);
   });
 
-  // A range input says nothing about where it is. Without the number the player
-  // learns the value by dragging and watching what happens.
   it('shows its number, and moves it with the control', () => {
     const field = createSlider(document, {
       label: 'Window',
@@ -178,8 +160,7 @@ describe('a slider', () => {
 });
 
 describe('a text field', () => {
-  // As you type rather than on blur: a value typed and then abandoned by closing
-  // the window is otherwise silently lost, which is the manager's own behaviour.
+  // On input rather than blur, or a value abandoned by closing the window is lost.
   it('reports as it is typed', () => {
     const onChange = vi.fn();
     const field = createText(document, { label: 'Title', value: '', onChange });
@@ -205,9 +186,8 @@ describe('a text field', () => {
   });
 });
 
-// The document is one id space shared with the game and with every other addon.
-// A label pointing at someone else's input is a control that toggles the wrong
-// thing when its own text is clicked.
+// The document is one id space shared with the game and every addon, so a reused label id
+// would toggle someone else's input.
 describe('every field', () => {
   it('gives its label a control of its own to point at', () => {
     const first = createCheckbox(document, { label: 'Show pet', value: true, onChange: vi.fn() });
@@ -251,8 +231,6 @@ describe('a tab strip', () => {
     expect(strip.active()).toBe('healing');
   });
 
-  // An id nobody declared would otherwise leave the strip with no tab marked at
-  // all, which reads as a broken pane rather than as a bad argument.
   it('falls back to the first tab for an id that is not in the strip', () => {
     const strip = createTabs(document, { tabs: Tabs, active: 'threat', onSelect: vi.fn() });
 
@@ -278,10 +256,8 @@ describe('a tab strip', () => {
     expect(onSelect).not.toHaveBeenCalled();
   });
 
-  // Marked with aria-current rather than the tab role, which promises arrow-key
-  // navigation this does not implement and cannot: the panes are the addon's, so
-  // there is nothing to point aria-controls at. It is also what the manager's own
-  // strip does, and the two are styled by the same rules.
+  // aria-current, because the tab role promises arrow-key navigation and aria-controls, and
+  // the panes are the addon's.
   it('marks the open tab for assistive technology, as a nav rather than a tablist', () => {
     const strip = createTabs(document, { tabs: Tabs, onSelect: vi.fn() });
 

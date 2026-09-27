@@ -1,23 +1,17 @@
 // The ground around you: what is on it, what is lethal on it, and what died
 // on it.
 //
-// Split from `world.d.ts` by subject, the way `ui.d.ts` split. Nothing is
-// re-exported through a per-domain barrel, so the split shows in the import.
-//
-// The one thing to know before touching `LootSlot`: a corpse's whole contents
-// reach EVERY player in range, personal annotations included. The server builds
-// one loot record per corpse per tick and shares it, and the game's own loot
-// window filters on read. So a slot naming somebody else is a slot you can see
-// and cannot take, and `world.corpseLoot()` is the filter rather than the raw
-// list.
+// A corpse's whole contents reach EVERY player in range, personal annotations
+// included, so a slot naming somebody else is one you can see and cannot take.
+// `world.corpseLoot()` applies the game's filter.
 
 import type { InvSlot } from './world-items.js';
 
 /**
  * One stack on a corpse.
  *
- * An `InvSlot` plus the three personal-loot annotations, all of which ride to
- * every player in range rather than only to the player they name.
+ * An `InvSlot` plus the personal-loot annotations, which reach every player in
+ * range.
  */
 export interface LootSlot extends InvSlot {
   /** Entity ids that may EACH take one copy. Absent on an ordinary drop. */
@@ -53,24 +47,16 @@ export interface CorpseView {
   /**
    * The loot window has elapsed, so NOBODY can open this corpse any more.
    *
-   * New at game 0.40.1, and the one arm of the game's own rule with no rights in
-   * it: it refuses before the tap lock is looked at, so this is true even on a
-   * corpse you killed yourself. The entity stays in `world.entities` carrying
-   * its whole `loot` record, and the game's own renderer has already dropped it
-   * from the pickable view, so this is the only thing that tells it from a
-   * corpse you could walk up to and open. `mine` is empty and `copper` is 0
-   * whenever it is set; `all` still reports what the wire carried.
-   *
-   * A display that lists corpses worth walking to has to read this, or it goes
-   * on offering bodies that are no longer there to be looted.
+   * True regardless of rights, even on your own kill. The entity stays in
+   * `world.entities` with its whole `loot` record while the game no longer draws
+   * it, so this is the only thing that tells it from an openable corpse. `mine` is
+   * empty and `copper` 0 whenever it is set; `all` still reports the wire.
    */
   decayed: boolean;
   /**
    * The player who already took the profession harvest, null when nobody has.
    *
-   * Whether the corpse is harvestable AT ALL is bundled content with no served
-   * manifest, so this says who claimed it and never whether there was anything
-   * to claim.
+   * Says who claimed it, never whether the corpse was harvestable at all.
    */
   harvestClaimedBy: number | null;
 }
@@ -78,13 +64,9 @@ export interface CorpseView {
 /**
  * One lethal ring on a rift boss floor, counting down to its detonation.
  *
- * Deliberately NOT a `Hazard`. A hazard's geometry rides the snapshot and the
- * server keeps it; a death zone is mirrored on your client from a spawn event
- * and counted down on your own clock, and the mirror carries no id, no inner
- * radius and no original duration. It is also INCOMPLETE in a way a hazard is
- * not: your client only ever learns about a zone from an event it was in range
- * for, so a zone placed before you entered range is missing and stays missing.
- * The game's own rings have the same hole.
+ * Not a `Hazard`: it is mirrored from a spawn event and counted down locally,
+ * with no id, no inner radius and no original duration. A zone placed before you
+ * came into range is missing and stays missing, as it is in the game's own view.
  */
 export interface DeathZone {
   x: number;
@@ -97,12 +79,9 @@ export interface DeathZone {
 /**
  * Which ground effect a `Hazard` is.
  *
- * Closed rather than open, because a hazard is drawn from the snapshot rather
- * than named by content: a kind exists here only once the loader reads the list
- * that carries it. Three arrived with the Ignivar and Varkhul encounters in game
- * 0.41.0, in API minor 10; the three Nythraxis kinds arrived in API minor 12,
- * and their LISTS are older than that, so an addon reading them wants the minor
- * declared rather than a feature detect.
+ * Closed: a kind exists only once the loader reads the snapshot list carrying
+ * it. The Ignivar and Varkhul kinds arrived in API minor 10 and the Nythraxis
+ * kinds in API minor 12; declare the minor rather than feature-detecting.
  */
 export type HazardKind =
   | 'frostRing'
@@ -116,69 +95,37 @@ export type HazardKind =
   /**
    * A Grave Eruption warning circle, in the window before the ground bursts.
    *
-   * `remaining` counts down to the burst and `duration` is the whole telegraph,
-   * so this is the one hazard kind whose countdown names a moment a player has
-   * to act on rather than a burn running out. The wire also carries a reveal
-   * DELAY (how long the circle is placed before the game draws it) that this
-   * shape has no field for, so a circle can be in this list a moment before it
-   * is on screen.
+   * `remaining` counts down to the burst and `duration` is the whole telegraph.
+   * A circle can be in this list a moment before the game draws it.
    */
   | 'nythraxisGraveEruption'
   /**
    * Burning ground left where a Grave Eruption landed.
    *
-   * ONE kind for a list the wire discriminates into two. Its `k` also admits
-   * `'soul'`, the pool Soul Rend used to leave, which game 0.42.2 retired from
-   * play while keeping the discriminant declared. A second kind would be a name
-   * that can never produce a row, so both arrive here as this one; if Soulfire
-   * ever returns to the fight, it will arrive under this kind until a release
-   * splits it.
+   * The wire also has a retired Soulfire pool variant; if the game revives it,
+   * it arrives under this kind too.
    */
   | 'nythraxisGraveFlame'
   /**
    * A Binding Sigil, live for as long as the raid has to drag the boss onto it.
    *
-   * Game 0.42.2 made its placement KNOWABLE, which is what makes it worth
-   * reading. It used to be a hashed spot in a ring band around the boss's live
-   * position; it is now one of the two platforms flanking the throne, a fixed
-   * offset either side of where the boss SPAWNED rather than of where he is,
-   * alternating every cast. So consecutive sigils sit at mirrored `x` about
-   * that anchor and a display can say which way the drag goes. Which side is
-   * NOT on the wire (the sim keeps it), so compare `x` against the previous
-   * sigil's rather than against a constant.
+   * It lands on one of the two platforms flanking the throne, alternating every
+   * cast, so consecutive sigils sit at mirrored `x`. Which side is NOT on the
+   * wire: compare `x` against the previous sigil's.
    */
   | 'nythraxisBindingSigil';
 
 /**
  * A ground effect with a position, a radius and a life.
  *
- * These are the only ground effects whose geometry rides the snapshot, and they
- * arrive filtered to what is near you. Every other ground AoE announces itself
- * once as a `spellfxAt` event and then lives only in the renderer, so tracking
- * those means keeping your own list from the events.
+ * The only ground effects whose geometry rides the snapshot, filtered to what is
+ * near you. Every other ground AoE announces itself once as a `spellfxAt` event,
+ * so tracking it means keeping your own list.
  *
- * TWO OF VARKHUL'S OWN GROUND EFFECTS ARE NOT HERE, which is worth knowing
- * before building a display of that fight. Its cinder FIRES have no remaining
- * time at all, since they burn until the encounter puts them out, and every
- * field on this shape would have to become optional to admit one. Its cinder
- * ORBS are travelling rather than placed, so a disc drawn at the position on
- * the snapshot marks where the orb has been. Both are visible in the game's own
- * render and neither is readable as a hazard.
- *
- * NYTHRAXIS'S GRAVEFIRE IS NOT HERE EITHER, and it is the same refusal twice
- * over. It is a travelling LINE with a heading, a tail, a head and a half-width
- * and no radius at all, so it has nothing to put in the three fields below that
- * describe a disc; and game 0.42.2 retired it from play, along with the Soulfire
- * pools, so the list it rides is now permanently empty. The three Nythraxis
- * kinds that ARE here are all discs with a real countdown.
- *
- * A rift boss death zone is the one exception the loader closes for you, and it
- * is a `DeathZone` on `world.deathZones` rather than a third `HazardKind`. It
- * carries no id, no inner radius and no original duration, so folding it in here
- * would mean three fields that are a lie on every entry; and its list is a
- * client-side event mirror rather than snapshot state, which is a difference an
- * addon has to be able to see rather than one buried in a discriminant. Draw
- * both by reading both lists.
+ * NOT HERE: Varkhul's cinder FIRES (no remaining time) and cinder ORBS (moving,
+ * so the snapshot position is where the orb has been), and Nythraxis's Gravefire
+ * (a travelling line, not a disc, and retired from play). A rift boss death zone
+ * is a `DeathZone` on `world.deathZones`; read both lists.
  */
 export interface Hazard {
   id: string;

@@ -1,8 +1,4 @@
-// A stand-in for the page's WebSocket constructor.
-//
-// EventTarget gives addEventListener and dispatchEvent for free, which is all
-// the hook uses, so the subclass it installs behaves exactly as it does in a
-// browser.
+// A stand-in for the page's WebSocket constructor. EventTarget supplies everything the hook uses.
 
 import type { SocketCtor } from '../../loader/src/runtime/net/hook.ts';
 

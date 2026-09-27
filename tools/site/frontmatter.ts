@@ -1,14 +1,6 @@
-// Three scalars at the top of a Markdown file, parsed by hand.
-//
-// Not YAML, and not a YAML dependency: the fields are a string, an integer and a
-// string, and a real parser would be a large dependency for `key: value`. The
-// cost of hand-parsing is that the accepted syntax has to be small and strict,
-// which it is below, and the benefit is that an unknown key is a build failure
-// rather than a field that silently does nothing.
-//
-// `order` alone drives the docs sidebar, the aria-current state and the prev/next
-// pagination, so adding a docs page is adding one file with no index to update.
-// That is the thing that rots first in a docs section, and this is why it cannot.
+// Three scalars at the top of a Markdown file, parsed by hand rather than as YAML, so the syntax
+// stays strict and an unknown key fails the build. `order` alone drives the sidebar and the
+// prev/next pagination.
 
 const FENCE = /^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/;
 const LINE = /^([a-z]+):\s*(.*)$/;
@@ -57,12 +49,7 @@ function readOrder(fields: Map<Key, string>, at: string): number {
   return Number(order);
 }
 
-/**
- * Split a Markdown file into its frontmatter and its body.
- *
- * `at` names the file in every error, because the whole value of failing here is
- * that the message says which page is wrong.
- */
+/** Split a Markdown file into its frontmatter and its body. `at` names the file in every error. */
 export function parseFrontmatter(source: string, at: string): Page {
   const match = FENCE.exec(source);
   if (!match?.[1]) {

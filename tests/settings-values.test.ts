@@ -1,10 +1,5 @@
-// Hydrating settings out of storage.
-//
-// The claim under test is TOTALITY: every declared setting gets a value of its
-// declared type no matter what storage held. Addon code reads `woc.settings.x`
-// on its first line and does arithmetic with it, so the failure mode this
-// prevents is not an exception, it is a NaN or an undefined travelling into
-// addon logic and surfacing somewhere else entirely.
+// Every declared setting gets a value of its declared type whatever storage held, so a NaN or an
+// undefined never reaches addon arithmetic.
 
 import { describe, expect, it } from 'vitest';
 import {
@@ -54,8 +49,7 @@ describe('hydrateSettings', () => {
     });
   });
 
-  // Each dimension gets its own wrong value, because a single mixed case would
-  // pass while three of the four coercions were broken.
+  // One wrong value per type, so one broken coercion cannot hide behind the others.
   it.each([
     ['boolean given a string', { 'show-pet': 'yes' }, 'show-pet', true],
     ['boolean given a number', { 'show-pet': 1 }, 'show-pet', true],
@@ -70,19 +64,14 @@ describe('hydrateSettings', () => {
     expect(hydrateSettings(DECLS, stored)[key]).toBe(expected);
   });
 
-  // Clamping rather than rejecting: an addon update that narrows a range should
-  // keep the player's intent at the new edge, not silently reset their choice.
+  // A narrowed range keeps the player's choice at the new edge instead of resetting it.
   it('clamps a stored number into its declared range', () => {
     expect(hydrateSettings(DECLS, { window: 900 })).toMatchObject({ window: 60 });
     expect(hydrateSettings(DECLS, { window: -4 })).toMatchObject({ window: 1 });
   });
 
-  // The belt behind the schema's refine, which is the real fix. A manifest
-  // written before that refine existed, or read by a third-party marketplace's
-  // older validator, still must not hand an addon a number outside the range the
-  // same manifest declared: fifteen addons dropped their own defences on the
-  // strength of that promise, so the promise cannot be conditional on validation
-  // having happened here.
+  // The schema refuses this, but an older validator may not have; addons rely on the clamp
+  // unconditionally.
   it('clamps a DECLARED default that sits outside its own range', () => {
     const overCeiling: SettingDecl = {
       id: 'window',
@@ -111,17 +100,16 @@ describe('hydrateSettings', () => {
 });
 
 describe('coerceSetting', () => {
-  // Null is the "use the default" signal, so a rejected value and a missing one
-  // do not need telling apart by the caller.
+  // Null means "use the default".
   it('answers null for a value the declaration cannot hold', () => {
     expect(coerceSetting(DECLS[0] as SettingDecl, 'true')).toBeNull();
   });
 
-  it('answers the clamped value rather than null for an out-of-range number', () => {
+  it('answers the clamped value for an out-of-range number', () => {
     expect(coerceSetting(DECLS[1] as SettingDecl, 1000)).toBe(60);
   });
 
-  it('accepts a boolean false, which is falsy and must not read as absent', () => {
+  it('accepts a boolean false as present', () => {
     expect(coerceSetting(DECLS[0] as SettingDecl, false)).toBe(false);
   });
 

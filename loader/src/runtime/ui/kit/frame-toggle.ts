@@ -14,7 +14,9 @@ interface Claim {
 }
 
 interface FrameToggleDeps {
-  /** Throws for an undeclared id, which becomes a warning here: a typo must not stop a frame building. */
+  /**
+   * Throws for an undeclared id, which becomes a warning so a typo cannot stop a frame building.
+   */
   bind: (id: string, handler: () => void) => Teardown;
   warn: (message: string, err: unknown) => void;
 }

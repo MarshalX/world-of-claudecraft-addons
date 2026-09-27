@@ -10,32 +10,20 @@
 //   1. `items.json`, the game's own table, right by construction for every id it covers.
 //   2. A loot roll's `itemName`, the same server table spelled out on the wire.
 //   3. `ui.icon.itemArtName`, provenance for a picture and never a name, so it is labelled on
-//      screen and never published.
-// `ui.icon.item` is not a fourth source and names nothing. A null from it is not evidence an id
-// is fake, since an item can ship before its art.
+//      screen and never published. Nothing in the game keeps it in step with the item table.
+// `ui.icon.item` names nothing, and a null from it does not mean an id is fake: an item can ship
+// before its art.
 //
-// SOURCE 3 ANSWERS FOR ALMOST NOTHING NOW, and it is worth knowing why it is still ranked
-// rather than dropped. The manifest keeps a name only for a CURATED entry, and game 0.36.0
-// moved almost the whole catalogue into unnamed generated batches: 307 named entries became
-// 39. Where it does answer it currently agrees with the game, all 38 of the 39 that are items
-// at all, so the last measured divergence (21 of 303, game 0.33.0) is gone. It stays third
-// anyway, because what made it untrustworthy was never the count: nothing in the game compares
-// the two, a content rename rewrites the item table and leaves the art provenance alone, and a
-// source that happens to agree today is not one to put ahead of the table itself.
+// Never write a count of the table here: every count on screen is `table.size` as drawn.
 //
-// NO COUNT OF THE TABLE IS WRITTEN DOWN HERE. Content moves it in one commit, so every count on
-// screen is `table.size` as it is drawn.
+// Quality, kind, slot and every number exist for a table id only. An id from a roll has a name
+// and a quality; one from an art file has neither, and says so rather than guessing.
 //
-// Quality, kind, slot and every number exist for a table id and for nothing else. An id from a
-// roll has a name and a quality; one from an art file has neither, and says so rather than
-// picking a plausible default.
-//
-// The bus is the product rather than the panel. `item` is one newly learned record, `items` is
-// the batch an ask is answered with, and both carry `{ id, name, source }` plus `quality`,
-// `kind`, `slot`, `armorType`, `set`, `heroicOf`, `requiredClass`, `sellValue`, `itemLevel` and
-// `requiredLevel` where the table states them, with anything unknown left OUT rather than sent
-// empty or as a zero. A subscriber on `item` alone hears its own ask answered and takes nothing
-// from it: both topics or neither.
+// The bus is the product. `item` is one newly learned record, `items` is the batch an ask is
+// answered with, and both carry `{ id, name, source }` plus `quality`, `kind`, `slot`,
+// `armorType`, `set`, `heroicOf`, `requiredClass`, `sellValue`, `itemLevel` and `requiredLevel`
+// where the table states them, with anything unknown left out rather than sent empty or as zero.
+// A subscriber must take both topics: on `item` alone it never hears its own ask answered.
 
 /** The frame, and the floor a resize may take it to: chrome plus exactly ONE row of art. */
 const FRAME_TITLE = 'Lorebind';
@@ -48,11 +36,7 @@ const FRAME_MIN_WIDTH = 340;
  */
 const CHROME_HEIGHT = 400;
 
-/**
- * One square of item art, and the gap between two of them. The square is the loader's, which
- * is the game's own bag cell: a grid of items should be the size the game draws one at, and
- * the figure this panel had picked for itself was two pixels off that by coincidence.
- */
+/** One square of item art, the game's own bag cell, and the gap between two of them. */
 const CELL_SIZE = woc.ui.itemCell;
 const CELL_GAP = 4;
 /** The record under the grid draws the same art larger, since it is one item rather than many. */
@@ -88,9 +72,8 @@ function qualityClass(quality) {
 }
 
 /**
- * The game's twelve kinds, bucketed into six shelves. `other` is named as a bucket rather than
- * given a word that would be wrong for three of the four kinds in it. No tab hides anything,
- * since All is a tab.
+ * The game's kinds, bucketed into shelves. `other` is named as a bucket because no one word fits
+ * the kinds in it.
  */
 const KIND_TABS = [
   { id: 'all', label: 'All', kinds: null },
@@ -118,10 +101,7 @@ const SLOTS = [
 /** What the slot control says when it is not filtering. */
 const ANY_SLOT = 'Any slot';
 
-/**
- * The orders the grid can be read in: one lookup and three comparisons. Nothing sorts by id,
- * which is the one order no player thinks in.
- */
+/** The orders the grid can be read in. Nothing sorts by id, which no player thinks in. */
 const SORTS = [
   { label: 'Name', by: 'name' },
   { label: 'Item level', by: 'itemLevel' },
@@ -130,11 +110,9 @@ const SORTS = [
 ];
 const SORT_NAMES = SORTS.map((sort) => sort.label);
 
-/** The data file, which is the first-ranked source and the reason this addon exists. */
+/** The data file, the first-ranked source. */
 const TABLE_FILE = 'items.json';
 
-// The topics. `item` is one record and `items` is a batch of them, which is what
-// `woc.bus.publish` answers an ask with.
 const ITEM_TOPIC = 'item';
 const ITEMS_TOPIC = 'items';
 /** The older ask topic, answered beside the `items:ask` `publish` derives. Drop next release. */
@@ -159,14 +137,9 @@ const SWEEP_MS = MS_PER_SECOND;
 const SEARCHABLE = ['name', 'id', 'quality', 'kind', 'slot'];
 
 /**
- * The kinds the game's own table declares, which is what a `kind` is checked against.
- *
- * A row whose kind is not here is DROPPED, which makes this list the one place a
- * game release can silently shrink what this addon shows. It did at game 0.42.0:
- * `recipe`, `scroll` and `flask` arrived together and 58 items went missing from
- * the browser with nothing raising, because a dropped row looks exactly like an
- * item the game does not have. The suite catches it only because it compares the
- * published count against the table's own length; keep that comparison.
+ * The kinds the game's table declares. A row whose kind is not here is DROPPED, silently, so a
+ * new game kind shrinks the browser with nothing raising. The suite compares the published count
+ * against the table's length to catch that; keep the comparison.
  */
 const KINDS = [
   'weapon',
@@ -213,18 +186,13 @@ const RATING_NAME = {
 };
 
 /**
- * Two numbers the game DRAWS as one, at `Math.min`. All 47 items carrying them state them
- * equal, which makes the min look like an identity: keep both, or an item raising one alone
- * would read as having raised the other too.
+ * Two numbers the game draws as one, at `Math.min`. They are equal today; keep both, or an item
+ * raising one alone would read as having raised the other too.
  */
 const WARFARE_KEYS = ['pvpOffenseRating', 'pvpDefenseRating'];
 const WARFARE_NAME = 'Warfare';
 
-/**
- * The game's own mark for a heroic variant, and the ONLY thing that tells two identically named
- * rows apart: it resolves a variant's display name to its base's unchanged, so 63 pairs in the
- * table read as one name twice.
- */
+/** The mark for a heroic variant, the only thing telling it apart from its same-named base. */
 const HEROIC_TAG = '[HEROIC]';
 
 /** Every plain number the file may carry, checked by type and kept as it stands. */
@@ -248,15 +216,11 @@ const NUMBER_FIELDS = [
 ];
 
 /**
- * What the bus carries beyond the id, the name and the source: shorter than the table's own row,
- * and every field on it is one a consumer cannot work out for itself. The price is copper, the
- * unit the wire uses. `heroicOf` is what separates the 63 pairs that arrive as one name twice.
- * `uniqueEquipped` stays off: nothing draws equipment, and a published field with no reader is a
- * promise kept for nobody.
+ * What the bus carries beyond the id, the name and the source. The price is copper, the wire's
+ * unit. `uniqueEquipped` stays off because nothing reads it.
  *
- * `set` IS THE DISPLAY NAME AND NOT THE SET ID. The game names set bonuses and their proc auras
- * from the id ('emberscreed' procs `set_emberscreed_4pc`) while this publishes 'Creed of Embers
- * Vestments', so a consumer correlating a proc with a set must map name back to id itself.
+ * `set` is the DISPLAY NAME, not the set id: the game names set proc auras from the id
+ * (`set_emberscreed_4pc`), so a consumer correlating a proc with a set maps the name back itself.
  */
 const PUBLISHED_TEXT = ['quality', 'kind', 'slot', 'armorType', 'set', 'heroicOf'];
 const PUBLISHED_NUMBERS = ['sellValue', 'itemLevel', 'requiredLevel'];
@@ -885,8 +849,8 @@ function kindLine(row) {
 }
 
 /**
- * Absent is not poor. The game declares no quality for 96 of its items, and leaving the word out
- * where every other row carries a tier reads as the lowest tier rather than as a fact nobody has.
+ * Absent is not poor. Many items declare no quality, and leaving the word out where every other
+ * row carries a tier reads as the lowest tier rather than as unknown.
  */
 function qualityAndKind(row) {
   const quality = text(row.quality);
@@ -950,13 +914,8 @@ function qualityOf(row) {
 }
 
 /**
- * Two letters for an item the game ships no art for: a grid of blank squares says nothing
- * about which blank is which. Empty where there IS art, or the figure would be a monogram
- * over a picture.
- *
- * Draws for nothing at game 0.36.0, which commissioned the last of it, weapons included. It
- * stays because the game keeps its own ledger of art it has not made yet and refills it
- * whenever content lands ahead of the painting.
+ * Two letters for an item the game ships no art for, so blank squares can be told apart. Empty
+ * where there is art. Keep it even when coverage is complete: content can land ahead of its art.
  */
 function initials(row) {
   if (hasArt(row.id)) {
@@ -1677,7 +1636,7 @@ function sweep() {
   const learned = collectSeen();
   learnFromGroup(woc.world.group);
   describeMarked(tooltipRoot());
-  // Only on a change: a repaint sorts eight hundred names through `localeCompare`.
+  // Only on a change: a repaint sorts the whole table through `localeCompare`.
   if (learned) {
     schedulePaint();
   }

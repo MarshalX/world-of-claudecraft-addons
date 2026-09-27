@@ -1,9 +1,5 @@
-// Which installed addons have a newer version waiting.
-//
-// The property that matters most here is what it stays SILENT about. An update
-// row is an invitation to re-fetch code, so an index that was never read, a
-// marketplace that has been removed, and an addon that two sources both publish
-// each have to produce the right answer rather than a plausible one.
+// Which installed addons have a newer version waiting. An update row invites a re-fetch of code, so
+// an unread index, a removed marketplace and a shared addon id must each stay silent.
 
 import { describe, expect, it } from 'vitest';
 import { computeUpdates } from '../loader/src/host/updates.ts';
@@ -66,15 +62,8 @@ describe('computeUpdates', () => {
     expect(computeUpdates([installed()], offering('1.1.0'))).toEqual([]);
   });
 
-  /**
-   * An update this loader could not run is withheld, not offered.
-   *
-   * The failure it prevents is the quiet one: the newer addon installs, reports
-   * running, and then throws against a member this loader does not have, on
-   * whatever frame first reaches it. Nothing badges that, because the supervisor
-   * only wraps the LOAD. Keeping the working version installed until the loader
-   * catches up is the honest outcome.
-   */
+  // Offered anyway, it would install, report running, and throw later on a missing member, which
+  // nothing badges because the supervisor only wraps the load.
   it('withholds an update needing an API minor this loader does not implement', () => {
     const ahead = [marketState(OFFICIAL, [marketEntry({ version: '1.3.0', apiMinor: 99 })])];
 
@@ -87,8 +76,7 @@ describe('computeUpdates', () => {
     expect(computeUpdates([installed()], ahead)).toEqual([]);
   });
 
-  // Absent reads as 0, which is what an addon published before the minor existed
-  // was written against. A field its author never saw must not refuse it.
+  // Absent reads as 0, the surface an addon predating the field was written against.
   it('offers an update from an addon that declares no minor at all', () => {
     const { apiMinor: _dropped, ...noMinor } = marketEntry({ version: '1.3.0' });
     const ahead = [marketState(OFFICIAL, [noMinor])];
@@ -96,8 +84,6 @@ describe('computeUpdates', () => {
     expect(computeUpdates([installed()], ahead)).toHaveLength(1);
   });
 
-  // Silence is the honest reading of "not looked yet". An empty answer would be
-  // drawn as "everything is up to date", which is a claim nothing established.
   it('reports nothing for a source whose index has never been read', () => {
     const unread = [marketState(OFFICIAL, [], { fetchedAt: null })];
 
@@ -108,9 +94,6 @@ describe('computeUpdates', () => {
     expect(computeUpdates([installed()], [marketState(LOCAL, [marketEntry()])])).toEqual([]);
   });
 
-  // Two sources may legitimately publish the same addon id. The comparison is
-  // keyed on the marketplace as well, or installing from one would be badged
-  // against the other's release schedule.
   it('compares an addon only against the marketplace it came from', () => {
     const mine = installed({}, { marketplace: THIRD_PARTY.id });
     const markets = [
@@ -121,9 +104,7 @@ describe('computeUpdates', () => {
     expect(computeUpdates([mine], markets)).toEqual([]);
   });
 
-  // The pin travels with the row rather than suppressing it: the pane has to be
-  // able to say that an update exists and that the player's own pin is what is
-  // holding it back, which is the only thing a pin needs a UI for.
+  // The pane has to say that an update exists and the player's pin is holding it back.
   it('still reports a pinned addon, carrying its pin', () => {
     const rows = computeUpdates([installed({}, { pin: '1.2.0' })], offering('1.3.0'));
 

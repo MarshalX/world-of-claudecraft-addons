@@ -1,24 +1,12 @@
-// Which GAME classes the loader's own elements wear.
+// Which GAME classes the loader's own elements wear, read from the kit source.
 //
-// It exists to stop one silent failure, which has already happened once. The kit
-// puts `panel` on a frame so the frame inherits the game's border, background and
-// shadow rather than keeping a copy. `tools/theme-core.ts` has to know that, or
-// `pnpm theme` writes a stylesheet with the tokens and none of the rules, and a
-// stage frame renders with no edge at all while every colour on it looks right.
-// Nothing raises, nothing is missing, and the only way to notice is to look at a
-// screenshot and know what a frame is supposed to look like. That is how it was
-// found: reported from the stage as "why does the combat meter have no frame".
+// `tools/theme-core.ts` must transcribe the rule for every such class, or a stage frame gets the
+// game's tokens without the `.panel` rule and renders with no edge; nothing raises, so a test
+// checks that list against this reading. TypeScript so a Vitest suite can import it, since
+// `noNodejsModules` is not exempt under `tests/**`.
 //
-// So the list in theme-core is checked against the kit rather than trusted.
-// TypeScript rather than .mjs for the reason manifests.ts is: a Vitest suite
-// imports it and lets it do the reading, since `noNodejsModules` is not exempt
-// under `tests/**`.
-//
-// The reading is a heuristic and is deliberately a LOUD one. Every class list the
-// loader writes names at least one `woc-` class, so any literal containing one is
-// read as a class list and everything else in it is a game class. A literal that
-// breaks the assumption is over-reported rather than missed, which fails a test
-// rather than shipping a stage that quietly does not match the game.
+// The heuristic: every class list the loader writes names a `woc-` class, so any literal with
+// one is a class list and its other names are game classes. It over-reports rather than misses.
 
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -36,15 +24,7 @@ const LITERAL = /'([^'\n]*)'|"([^"\n]*)"|`([^`]*)`/g;
 /** A `${...}` hole in a template literal, which names no class. */
 const INTERPOLATION = /\$\{[^}]*\}/g;
 
-/**
- * A bare class name.
- *
- * Positive rather than a list of things to exclude, because the strings in this
- * tree that are not class lists are prose, selectors and punctuation, and there
- * is no end to the shapes those take. A name starts with a letter and carries
- * only word characters and hyphens; anything else in a literal is not a class,
- * whatever else it might be.
- */
+/** A bare class name. Matched positively: the non-class strings here take unbounded shapes. */
 const CLASS_NAME = /^[a-zA-Z][\w-]*$/;
 
 /** Every `.ts` and `.tsx` under the UI tree, at any depth. */
@@ -67,20 +47,13 @@ function classesIn(literal: string): string[] {
     .replaceAll(INTERPOLATION, ' ')
     .split(SPACES)
     .filter((token) => token.length > 0);
-  // A class list the loader writes always names at least one of its own, which is
-  // what separates `'woc-close x-btn'` from every other string in the file.
   if (!tokens.some((token) => token.startsWith('woc-'))) {
     return [];
   }
   return tokens.filter((token) => !token.startsWith('woc-') && CLASS_NAME.test(token));
 }
 
-/**
- * Every game class the loader wears, sorted.
- *
- * Read fresh rather than cached: the callers are a test and a CLI, each of which
- * runs once.
- */
+/** Every game class the loader wears, sorted. */
 function gameClassesWorn(): string[] {
   const found = new Set<string>();
   for (const file of uiSources(UI_DIR)) {
@@ -95,13 +68,8 @@ function gameClassesWorn(): string[] {
 }
 
 /**
- * The whole UI tree as one string, for a reader that wants the SOURCE rather than
- * the class names in it.
- *
- * `pnpm theme` uses it to find the custom properties the kit writes from
- * JavaScript, which appear in no stylesheet and would otherwise read as tokens
- * the game had taken away. Same tree and same reason as `gameClassesWorn`: what
- * the loader's own elements carry is decided here rather than in a sheet.
+ * The whole UI tree as one string. `pnpm theme` searches it for custom properties the kit sets
+ * from JavaScript, which appear in no stylesheet and would otherwise read as dropped game tokens.
  */
 function uiSourceText(): string {
   return uiSources(UI_DIR)

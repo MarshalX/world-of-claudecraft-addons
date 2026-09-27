@@ -82,8 +82,7 @@ describe('readGameNow', () => {
     expect(readGameNow(s.deps)).toBeNull();
   });
 
-  // The gap this covers is real: __game is assigned a whole fade after #ui
-  // mounts, so the hud existing is not the same as the hook existing.
+  // __game is assigned a fade after #ui mounts.
   it('answers null while the hud is up but __game has not been assigned', () => {
     const s = stage();
     s.markActive();
@@ -126,9 +125,8 @@ describe('waitForGame', () => {
     await expect(wait.ready).resolves.toBe(s.game());
   });
 
-  // A player can sit on the login screen for as long as they like, and that is
-  // not an error to report.
-  it('waits indefinitely rather than timing out', () => {
+  // A player may sit on the login screen indefinitely.
+  it('waits indefinitely without timing out', () => {
     const s = stage();
     waitForGame(s.deps);
 

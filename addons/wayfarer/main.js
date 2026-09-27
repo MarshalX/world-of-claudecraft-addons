@@ -49,7 +49,7 @@ const CHIP_FONT_PX = 11;
 /** What a chip is drawn on, so the world behind it cannot take the label away. */
 const CHIP_BACKDROP = 'rgb(6 6 10 / 55%)';
 
-/** An empty count, and a whole one: a full bar, a one-item floor, a first character. */
+/** An empty count and a whole one. */
 const NONE = 0;
 const FULL = 1;
 
@@ -324,11 +324,8 @@ function buildFixed(atlas) {
   const built = [];
   for (const zone of zones) {
     for (const poi of zone.pois) {
-      // A hidden poi is one the game stopped drawing on its own map because the
-      // place no longer reads as a landmark (game 0.40.1 put the harbor-town
-      // plat over the Sowfield). Walking somebody to one is this addon's worst
-      // failure, so it is left out of the list. It stays in the exploration
-      // tally below, where the game still counts it.
+      // The game does not draw a hidden poi on its map, so it is left out of the list; it
+      // stays in the exploration tally, where the game still counts it.
       if (!poi.hidden) {
         built.push(poiEntry(zone, poi));
       }
@@ -406,10 +403,9 @@ frame.body.appendChild(list);
 frame.body.appendChild(note);
 
 /**
- * One of the game's own icons, cloned out of the running HUD, or null before there is one.
- *
- * The icon set is markup in a module that is not on `__game` and no file is served for any
- * of it, so a clone of the hydrated node is the only route. Null until the HUD mounts.
+ * One of the game's own icons, cloned out of the running HUD, or null before the HUD mounts.
+ * The icon set is markup in a module not on `__game` and no file is served for it, so a clone
+ * is the only route.
  */
 function gameGlyph(name) {
   const drawn = document.querySelector(`[data-icon="${name}"] > svg`);
@@ -1037,10 +1033,9 @@ function thinPins() {
 }
 
 /**
- * ONE SHAPE in all four states, with the same keys nulled outside a zone. `place` carries
- * WHICH refusal it is, because "in a dungeon", "off the map" and "not read yet" are a fact
- * to act on, a fact to act on, and a reason to wait: a bare null told a consumer none of it.
- * `levelRange` is `{ min, max }` rather than a pair, since `levelRange[1]` is a guess.
+ * ONE SHAPE in all four states, with the same keys nulled outside a zone. `place` says which
+ * refusal it is, since "in a dungeon" and "off the map" are facts and "not read yet" means
+ * wait. `levelRange` is `{ min, max }` because `levelRange[1]` is a guess.
  */
 function zonePayload() {
   const place = currentPlace();

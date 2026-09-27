@@ -1,19 +1,8 @@
-// No two things the loader can register at once claim the same combo.
+// No two binds the loader can register at once claim the same combo. The dispatcher fires EVERY
+// matching registration, so a shared default acts twice on one press. The loader's own binds are
+// included, and combos are compared canonically ('Shift+Alt+KeyE' is 'Alt+Shift+KeyE').
 //
-// A repository-policy check like tests/addons-suites.test.ts, and it exists
-// because the dispatcher does not pick a winner: handleKeyDown fires EVERY
-// registration whose combo matches, so two addons defaulting to the same key is
-// not one of them losing, it is both of them acting on one press. Ledgerline and
-// Longwatch both shipped on Alt+KeyL in v1.2.0 and pressing it toggled both
-// panels at once, which is the failure this guards.
-//
-// It covers the loader's own binds too, since those are registered whether or
-// not any addon is installed, and it compares CANONICAL combos rather than the
-// strings on the manifests: 'Shift+Alt+KeyE' and 'Alt+Shift+KeyE' are one key to
-// a player and would otherwise read as two distinct binds here.
-//
-// It reads the filesystem through tools/manifests.ts rather than directly,
-// because `noNodejsModules` is not exempt under `tests/**`.
+// Reads the filesystem through tools/manifests.ts because `noNodejsModules` is not exempt here.
 
 import { describe, expect, it } from 'vitest';
 import { LOADER_BIND_DECLS, LOADER_OWNER } from '../loader/src/runtime/keys/loader-binds.ts';
@@ -27,12 +16,8 @@ interface Claim {
 }
 
 /**
- * Every bind the loader could have registered at once, canonicalised.
- *
- * A manifest that does not validate is not this suite's failure to report, so it
- * contributes nothing and `pnpm validate` says what is wrong with it. A combo
- * that does not normalise is left as written, so it shows up in the failure
- * message as itself rather than disappearing out of the comparison.
+ * Every bind the loader could register at once, canonicalised. An invalid manifest contributes
+ * nothing (`pnpm validate` reports it); a combo that does not normalise is kept as written.
  */
 function claims(): Claim[] {
   const out: Claim[] = LOADER_BIND_DECLS.map((decl) => ({
@@ -69,14 +54,12 @@ function collisions(): Record<string, string[]> {
 }
 
 describe('the marketplace keybinds', () => {
-  // Across addons AND within one, since a single addon binding two of its own
-  // commands to one key fires both of them the same way.
+  // Within one addon too: two of its own commands on one key fire together.
   it('are claimed by exactly one command each', () => {
     expect(collisions()).toEqual({});
   });
 
-  // The guard on the guard: an empty claim list would make the check above pass
-  // while proving nothing, which is how a broken reader hides.
+  // An empty claim list would pass the check above while proving nothing.
   it('are actually being looked at', () => {
     expect(claims().length).toBeGreaterThan(LOADER_BIND_DECLS.length);
   });

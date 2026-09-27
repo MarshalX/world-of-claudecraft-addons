@@ -1,10 +1,4 @@
-// Every user-facing string the manager renders.
-//
-// Collected rather than inlined for two reasons. The loader has no translation
-// layer yet and this is the list it will need. And the manager is the surface a
-// player reaches when something is already wrong, so the wording of a failure
-// state is worth being able to read in one place rather than hunting through
-// three components.
+// Every user-facing string the manager renders, in one place for a future translation layer.
 
 export const UI_TEXT = {
   unlockFrames: 'Unlock frames',
@@ -186,11 +180,8 @@ export const UI_TEXT = {
 } as const;
 
 /**
- * What a player would do about one named companion, one line per state.
- *
- * Its own table rather than members of UI_TEXT, because the keys are a union the
- * renderer indexes with rather than names a component reaches for, and a state
- * added without its line would then be a missing property rather than a blank.
+ * What a player would do about one named companion, one line per state. Keyed by the state union,
+ * so a state added without its line fails to typecheck.
  */
 export const COMPANION_TEXT = {
   enabled: 'installed and running',

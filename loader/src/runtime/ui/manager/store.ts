@@ -1,10 +1,5 @@
-// What the Installed pane reads, loaded outside the component tree.
-//
-// The load lives here rather than in a component effect so it is a plain object
-// a Node test can drive without rendering anything, and so a reload triggered
-// from outside the tree (the host reporting that another tab wrote to the
-// registry) is an ordinary method call rather than a prop that exists only to
-// invalidate an effect.
+// What the Installed pane reads, loaded outside the component tree so a reload from the host is a
+// plain method call.
 
 import { describeError } from '../../../shared/diag.ts';
 import type { InstalledAddon } from '../../../shared/protocol.ts';
@@ -43,8 +38,7 @@ const IDLE: InstalledState = { status: 'idle', rows: [], error: null };
 
 function createInstalledStore(deps: InstalledStoreDeps): InstalledStore {
   let state = IDLE;
-  // Every load takes a ticket, and only the newest one may write. Without it a
-  // slow first load lands after a fast reload and reinstates the older list.
+  // Only the newest load may write, or a slow first load overwrites a fast reload.
   let ticket = 0;
 
   const commit = (next: InstalledState): void => {
@@ -79,9 +73,7 @@ function createInstalledStore(deps: InstalledStoreDeps): InstalledStore {
     state: () => state,
     reload,
 
-    // No optimistic flip. The host emits registry.changed on a write that
-    // actually changed something, and that is what reloads; showing the new
-    // state first would show one the store may have refused.
+    // No optimistic flip: the host's registry.changed reloads, and the write may be refused.
     setEnabled: (fqid, on) => {
       const { registry } = deps;
       if (registry === null) {
@@ -92,9 +84,7 @@ function createInstalledStore(deps: InstalledStoreDeps): InstalledStore {
       });
     },
 
-    // Also no optimistic removal: the host emits registry.changed on a write
-    // that landed, and that is what takes the row away. A row that vanished and
-    // came back would read as the uninstall having failed silently.
+    // No optimistic removal either, for the same reason.
     uninstall: (fqid) => {
       const { registry } = deps;
       if (registry === null) {

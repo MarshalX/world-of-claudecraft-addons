@@ -1,13 +1,8 @@
-/* The compositions each page arranges its components into.
+/* The compositions each page arranges its components into. Grids are `auto-fit`
+ * with a minimum, so a row collapses when its content runs out of room.
  *
- * Every grid here is `auto-fit` with a minimum rather than a breakpoint, which is
- * why there are so few media queries: a two-column row becomes one column when
- * its own content runs out of room, not when the viewport crosses a number
- * somebody guessed.
- *
- * The widths are load-bearing in one direction: the minimums decide the column a
- * screenshot is displayed in, and every `minWidth` in site/content/shots.json is
- * one of them doubled. Changing a minmax here changes what a screenshot has to be.
+ * Every `minWidth` in site/content/shots.json is one of these minimums doubled,
+ * so changing a minmax here changes what a screenshot has to be.
  */
 
 .hero {
@@ -40,9 +35,8 @@
   margin-top: 44px;
 }
 
-/* A portrait screenshot is capped by height in tools/site/shots.ts, which emits the
- * result as the plate's inline max-width. Only the centring belongs here: an inline
- * max-width beats any stylesheet rule, so a cap written in CSS would never apply. */
+/* tools/site/shots.ts caps a portrait screenshot with an inline max-width, which
+ * beats any rule here, so only the centring belongs in CSS. */
 .shot-portrait .figure-plate {
   margin-inline: auto;
 }
@@ -54,16 +48,14 @@
   align-items: center;
 }
 
-/* The figure leads on alternating rows. `order` rather than a reordered template,
-   so the DOM keeps text before image and a screen reader reads them in that order
-   on every row. */
+/* The figure leads on alternating rows through `order`, so the DOM and a screen
+   reader keep text before image on every row. */
 .feature-flip > figure {
   order: -1;
 }
 
 @media (width <= 700px) {
-  /* Below the breakpoint every row is one column, and a figure that leads there
-     pushes its own heading off the first screen. */
+  /* In one column a leading figure would push its heading off the first screen. */
   .feature-flip > figure {
     order: 0;
   }
@@ -106,8 +98,7 @@
   font-size: 16px;
 }
 
-/* The em dash is decoration, so it is drawn rather than written: a screen reader
-   reading "dash" before each capability adds nothing. */
+/* The dash is drawn, so a screen reader does not read "dash" before each item. */
 .declared li::before {
   content: "—";
   color: var(--muted);
@@ -142,9 +133,7 @@
   font-size: 15px;
 }
 
-/* The install funnel. The step indicator is sticky and full-bleed, so it stays
- * with the reader through a page they scroll a long way down; the column inside
- * keeps it aligned with everything else. */
+/* The install funnel: a sticky full-bleed step bar with a column inside it. */
 .steps-wrap {
   position: sticky;
   top: 0;
@@ -154,10 +143,9 @@
   border-bottom: 1px solid var(--border);
 }
 
-/* `.steps` resets margin and padding, and components.css is concatenated AFTER
-   layout.css, so at equal specificity those beat `.column`'s centring and gutter
-   and the bar rendered flush to the left edge. This selector is more specific, so
-   it puts both back. Keep it if either file is reordered. */
+/* `.steps` resets margin and padding and is concatenated after layout.css, so it
+   beats `.column`'s centring and gutter at equal specificity. This selector puts
+   both back. Keep it if either file is reordered. */
 .steps-wrap .steps {
   position: static;
   border: 0;
@@ -187,8 +175,7 @@
   font-size: 15px;
 }
 
-/* One browser's block. Bordered so a reader can see where the branch they are in
- * begins and ends: the whole instruction is "do only this block". */
+/* One browser's block, bordered so a reader sees where their branch ends. */
 .branch {
   margin-top: 24px;
   border: 1px solid var(--border);
@@ -228,9 +215,7 @@
   padding-left: 4px;
 }
 
-/* A prose page with an optional index beside it: /changelog, and anything else
- * that is one article rather than a section with a sidebar. Narrower than the
- * docs shell because it has no nav column to make room for. */
+/* A single-article prose page with an optional index beside it, like /changelog. */
 .prose-page {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(180px, 220px);
@@ -239,8 +224,7 @@
   align-items: start;
 }
 
-/* The index is a convenience over content that is still reachable by scrolling,
- * so it is the first thing to go. */
+/* The index is the first thing to go. */
 @media (width <= 900px) {
   .prose-page {
     grid-template-columns: minmax(0, 1fr);
@@ -252,11 +236,8 @@
   }
 }
 
-/* Every addon the landing page does not show a card for, as names alone. The
- * point of the strip is HOW MANY there are, which four cards cannot say, and
- * thirty descriptions here would be the catalog page with a different heading.
- * Separators are drawn rather than written, so what is read aloud is a list of
- * names rather than a row of dots. */
+/* Every addon the landing page has no card for, as names alone. Separators are
+ * drawn, so a screen reader reads a list of names and no dots. */
 .addon-strip-head {
   margin: 44px 0 0;
 }

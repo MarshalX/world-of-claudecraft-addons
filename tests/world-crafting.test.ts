@@ -1,15 +1,5 @@
-// The crafting identity, and what counts as a change to it.
-//
-// The whole reason this reading exists is one bit. The client seeds its craft skill
-// counters with an all-zero default and replaces them only when the server's first
-// crafting delta lands, so an addon reading zeroes cannot tell a character with no
-// craft skill from a session that has not been told yet. That is the same shape of
-// trap as a field the server never sends: present, correctly typed, and silently
-// meaning two different things. The game publishes the flag that resolves it, and
-// the loader used to throw the flag away.
-//
-// So the first suite is about `synced` surviving, and the second is about the
-// signature noticing the transitions a crafting panel exists to show.
+// The crafting identity. The client seeds all-zero counters until the first crafting delta,
+// so `synced` is the only thing telling "no craft skill" from "not told yet".
 
 import { describe, expect, it } from 'vitest';
 
@@ -50,7 +40,6 @@ const SYNCED = {
   cadenceBlockedQuests: ['order_hollis_1'],
 };
 
-/** The reading, or a failure: every case below is about what is ON one. */
 function professionsOf(world: unknown): ProfessionInfo {
   const professions = readProfessions(world);
   if (professions === null) {
@@ -68,15 +57,11 @@ describe('the flag the whole reading is for', () => {
     expect(readCraftingIdentity({ craftingIdentity: SYNCED }).synced).toBe(true);
   });
 
-  // The default has to be the cautious one. A world carrying no identity at all is
-  // the same situation as an unsynced one from an addon's point of view.
-  it('reads false, not true, for a world carrying no identity at all', () => {
+  it('reads false for a world carrying no identity at all', () => {
     expect(readCraftingIdentity({}).synced).toBe(false);
     expect(readCraftingIdentity(null).synced).toBe(false);
   });
 
-  // A truthy-but-not-true value is a shape the loader does not recognise, and
-  // claiming synced on one would be the exact failure this flag exists to prevent.
   it('reads false for anything that is not the boolean true', () => {
     expect(readCraftingIdentity({ craftingIdentity: { synced: 1 } }).synced).toBe(false);
   });
@@ -97,8 +82,6 @@ describe('the rest of the identity', () => {
     expect(identity.cadenceBlockedQuests).toEqual(['order_hollis_1']);
   });
 
-  // Absent on an older server, which must read as none blocked rather than as a
-  // missing field an addon has to guard.
   it('reads an empty list for a server that sends no blocked work orders', () => {
     const identity = readCraftingIdentity({ craftingIdentity: { synced: true } });
 
@@ -106,7 +89,7 @@ describe('the rest of the identity', () => {
     expect(identity.knownRecipes).toEqual([]);
   });
 
-  it('drops an entry that is not a recipe id rather than publishing it', () => {
+  it('drops an entry that is not a recipe id', () => {
     const source = { craftingIdentity: { knownRecipes: ['iron_buckle', 7, null] } };
 
     expect(readCraftingIdentity(source).knownRecipes).toEqual(['iron_buckle']);
@@ -126,12 +109,10 @@ describe('the professions reading', () => {
     expect(professions.mobileStation).toBe('cooking');
   });
 
-  it('reads no mobile station as null rather than as an empty craft id', () => {
+  it('reads no mobile station as null', () => {
     expect(professionsOf({}).mobileStation).toBeNull();
   });
 
-  // The pairing that makes the flag usable: zeroes plus `synced: false` is "not told
-  // yet", and the same zeroes plus `synced: true` is a character with no craft skill.
   it('answers unsynced zeroes for a world that has received nothing', () => {
     const professions = professionsOf({});
 
@@ -141,15 +122,13 @@ describe('the professions reading', () => {
 });
 
 describe('what counts as a change', () => {
-  it('changes when the identity syncs, which is the repaint that matters most', () => {
+  it('changes when the identity syncs', () => {
     expect(identitySignature(readCraftingIdentity({ craftingIdentity: SYNCED }))).not.toBe(
       identitySignature(readCraftingIdentity({ craftingIdentity: UNSYNCED })),
     );
   });
 
-  // The regression this pins: replacing an id array with its LENGTH. A work order
-  // coming off cooldown as another goes on is a same-length swap, and it is exactly
-  // the transition a crafting panel is drawn to show.
+  // A signature over an id array's LENGTH misses a same-length swap.
   it('changes when a blocked work order is swapped for another at equal length', () => {
     const before = readCraftingIdentity({
       craftingIdentity: { ...SYNCED, cadenceBlockedQuests: ['order_a'] },

@@ -3,16 +3,9 @@ import { apiSurface, EXEMPT } from '../tools/site/api-surface.ts';
 import { loadDocs } from '../tools/site/docs-source.ts';
 
 /**
- * The guard the docs rest on: a member added to the published API and never
- * written about fails here, in the fast suite, rather than at a deploy.
- *
- * It proves nothing was FORGOTTEN. It cannot prove anything is right: a paragraph
- * describing `world.entities` wrongly passes this test. That limit is real and
- * stated rather than papered over, because the failure it does catch is the one
- * that actually happens.
- *
- * Reading through the tools modules rather than node:fs directly, since
- * noNodejsModules is not exempt in tests/ and AGENTS.md says not to widen it.
+ * A published API member never written about in the docs fails here. It proves nothing
+ * was forgotten, not that anything written is right. Files are read through the tools
+ * modules, since noNodejsModules is not exempt in tests/.
  */
 const surface = apiSurface();
 const prose = loadDocs()
@@ -20,7 +13,7 @@ const prose = loadDocs()
   .join('\n');
 
 describe('the published API surface', () => {
-  it('is found at all, so a parser that silently matches nothing cannot pass', () => {
+  it('is found at all', () => {
     expect(surface.length).toBeGreaterThan(50);
   });
 
@@ -39,8 +32,6 @@ describe('the published API surface', () => {
     ]);
   });
 
-  // Each sub-API is reached through a member of the root, so a prefix with no
-  // matching member means the qualified names this test searches for are wrong.
   it('derives a prefix that the root object actually exposes', () => {
     const rootMembers = new Set(
       surface.filter((one) => one.owner === 'WocApi').map((one) => one.member),
@@ -62,16 +53,14 @@ describe('the authoring docs', () => {
     expect(missing).toEqual([]);
   });
 
-  it('use the qualified form, because a bare member name matches ordinary prose', () => {
-    // `api` matched the word "API" and `set`, `get` and `on` match almost any
-    // page, so bare-name matching reported success for members nobody had written
-    // about. This pins the qualified form rather than trusting it stays.
+  it('use the qualified form', () => {
+    // A bare `set`, `get` or `on` matches almost any page of prose.
     expect(surface.every((one) => one.qualified.includes('.'))).toBe(true);
   });
 });
 
 describe('the exemption list', () => {
-  it('only exempts members that exist, so a rename cannot leave a dead entry', () => {
+  it('only exempts members that exist', () => {
     const qualified = new Set(surface.map((one) => one.qualified));
     for (const name of Object.keys(EXEMPT)) {
       expect(qualified).toContain(name);
@@ -84,8 +73,6 @@ describe('the exemption list', () => {
     }
   });
 
-  // An exemption list that grows without anyone noticing is how a docs section
-  // stops covering its subject one member at a time.
   it('stays small relative to the surface', () => {
     expect(Object.keys(EXEMPT).length).toBeLessThan(surface.length / 5);
   });

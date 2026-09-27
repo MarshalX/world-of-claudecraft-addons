@@ -1,14 +1,7 @@
 // @vitest-environment happy-dom
 
-// Tooltips: the third shared kit surface, split out from ui-kit-overlays.test.ts
-// because attachment lifetime is a topic of its own rather than a variation on
-// how a toast or a modal goes away.
-//
-// One element serves every attachment and is refilled on hover, so the cases
-// that matter are the ones about that element's lifetime: it is not built until
-// something is hovered, a detached anchor stops reaching it, and dispose takes
-// it away along with every listener. The alternative, a node per attachment,
-// means a hundred hidden divs for a hundred rows in an addon's list.
+// One tooltip element serves every attachment and is refilled on hover, so these cases are
+// about that element's lifetime and each attachment's.
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createTooltips, TOOLTIP_ID } from '../loader/src/runtime/ui/kit/tooltip.ts';
@@ -27,10 +20,7 @@ afterEach(() => {
 });
 
 describe('tooltips', () => {
-  // The watcher's scope and the band the tip is drawn in are the same element
-  // here. They differ in the loader (ui/root.ts), and nothing in this suite is
-  // about that difference: every case is about the hover, so one host keeps the
-  // cases readable rather than hiding a decision they could get wrong.
+  // The watched root and the drawing band are one host here; they differ in ui/root.ts.
   function open() {
     const host = root();
     return createTooltips({ doc: document, root: host, layer: host, viewport: () => VIEW });
@@ -54,9 +44,8 @@ describe('tooltips', () => {
     expect(document.getElementById(TOOLTIP_ID)?.hidden).toBe(true);
   });
 
-  // The game's own tooltips answer the mouse only. Shipping that gap to every
-  // addon is the one place the kit is deliberately better than what it matches.
-  it('shows on focus too, so a keyboard reaches it', () => {
+  // The game's own tooltips answer the mouse only; the kit deliberately does better.
+  it('shows on focus too', () => {
     const el = anchor();
     open().attach(el, 'Toggle the meter');
 
@@ -79,7 +68,7 @@ describe('tooltips', () => {
     expect(document.getElementById(TOOLTIP_ID)?.textContent).toBe('two');
   });
 
-  it('creates nothing until something is actually hovered', () => {
+  it('creates nothing until something is hovered', () => {
     open().attach(anchor(), 'one');
 
     expect(document.getElementById(TOOLTIP_ID)).toBeNull();
@@ -108,16 +97,8 @@ describe('tooltips', () => {
   });
 });
 
-// An anchor that leaves the document while it has a tooltip.
-//
-// Reported from a live session: cooldown-bars drops a row the moment its cooldown
-// ends, and a tooltip for a finished ability floated in the middle of the frame
-// indefinitely. `pointerleave` never fires on an element removed while the pointer
-// is over it, and the pointer had not moved, so nothing could clear it.
-//
-// Both halves are the KIT's, never the addon's. An API where every author has to
-// pair an attach with a detach on a lifecycle the loader owns is an API whose
-// leaks belong to whoever forgot.
+// `pointerleave` never fires on an element removed under the pointer, so the kit, never the
+// addon, clears the tooltip and releases the attachment.
 describe('an anchor that leaves the document', () => {
   /** MutationObserver callbacks are microtasks, so a tick settles them. */
   async function settle(): Promise<void> {
@@ -155,14 +136,8 @@ describe('an anchor that leaves the document', () => {
     expect(tip()?.hidden).toBe(true);
   });
 
-  // The attachment goes too, not just the tooltip. A list that rebuilds rows
-  // attaches once per row per rebuild, and every one of those would otherwise sit
-  // in the addon's disposal bag until the addon was disabled.
-  //
-  // The sweep runs on the next attach, which is the moment a rebuild is
-  // definitely happening, and inside the removal observer while a tooltip is up.
-  // Not continuously: an always-on observer would be a standing cost against a
-  // set that only grows when rows are created. So the rebuild is what this drives.
+  // A list that rebuilds rows attaches once per row per rebuild. The sweep runs on the next
+  // attach rather than from an always-on observer, so this drives a rebuild.
   it('releases the attachment on the next attach, leaving the old row inert', () => {
     const { host, tips } = setup();
     const gone = row(host);
@@ -177,9 +152,7 @@ describe('an anchor that leaves the document', () => {
     expect(tip()?.hidden).not.toBe(false);
   });
 
-  // While a tooltip IS up the observer is running, so the release is immediate
-  // rather than waiting for a rebuild that may never come.
-  it('releases it immediately when a tooltip is on screen', async () => {
+  it('releases it immediately while a tooltip is on screen', async () => {
     const { host, tips } = setup();
     const shown = row(host);
     const gone = row(host);
@@ -196,9 +169,7 @@ describe('an anchor that leaves the document', () => {
     expect(tip()?.textContent).toBe('Cold Focus');
   });
 
-  // The subtle one. An addon builds a row by creating it, describing it, and THEN
-  // appending it, so an attachment is legitimately disconnected at birth. Reaping
-  // anything disconnected would kill exactly those.
+  // An addon attaches before appending, so reaping anything disconnected would kill those.
   it('keeps an attachment made before the element was inserted', () => {
     const { host, tips } = setup();
     const pending = document.createElement('div');
@@ -213,11 +184,8 @@ describe('an anchor that leaves the document', () => {
     expect(tip()?.textContent).toBe('Cold Focus');
   });
 
-  // The narrow case the reap alone does NOT cover, which is why the observer also
-  // checks the shown anchor directly. An attachment made before its element was
-  // inserted is not reapable until a sweep has seen it connected, and no sweep
-  // happens between the insert and the hover here. Without the direct check the
-  // tooltip would stay on screen exactly as reported.
+  // An attachment is not reapable until a sweep saw it connected, and none runs here, so the
+  // observer also checks the shown anchor directly.
   it('hides even when the anchor was never swept while connected', async () => {
     const { host, tips } = setup();
     const pending = document.createElement('div');
@@ -232,7 +200,6 @@ describe('an anchor that leaves the document', () => {
     expect(tip()?.hidden).toBe(true);
   });
 
-  // Detaching one row while a DIFFERENT row's tooltip is up must leave it alone.
   it(`does not blank another anchor's tooltip`, () => {
     const { host, tips } = setup();
     const first = row(host);
@@ -247,8 +214,6 @@ describe('an anchor that leaves the document', () => {
     expect(tip()?.textContent).toBe('Cold Focus');
   });
 
-  // The observer exists only while a tooltip is visible, so nothing is watching
-  // once it is hidden. This is the case that would spin if it were always on.
   it('stops watching once the tooltip is hidden', async () => {
     const { host, tips } = setup();
     const el = row(host);
@@ -263,9 +228,8 @@ describe('an anchor that leaves the document', () => {
   });
 });
 
-// The structured form, which the plain string one grew into rather than away
-// from: `ui.tooltip(el, 'text')` is the same call it always was, because a
-// published surface changing shape is what moves the API major.
+// The structured form extends the string one; `ui.tooltip(el, 'text')` must keep working, since
+// a published surface changing shape moves the API major.
 describe('what a tooltip says', () => {
   function open(content: Parameters<ReturnType<typeof createTooltips>['attach']>[1]) {
     const host = root();
@@ -277,7 +241,7 @@ describe('what a tooltip says', () => {
     return document.getElementById(TOOLTIP_ID) as HTMLElement;
   }
 
-  it('draws a bare string as one line, the way it always did', () => {
+  it('draws a bare string as one line', () => {
     const tip = open('Toggle the meter');
 
     expect(tip.textContent).toBe('Toggle the meter');
@@ -299,14 +263,13 @@ describe('what a tooltip says', () => {
     expect(tip.querySelector('.woc-tip-danger')?.textContent).toBe('Requires a ranged weapon');
   });
 
-  it('falls back to the default tone rather than inventing a class', () => {
+  it('falls back to the default tone for an unknown one', () => {
     const tip = open({ lines: [{ text: 'nine', tone: 'chartreuse' as 'warn' }] });
 
     expect(tip.querySelector('.woc-tip-line')?.className).toBe('woc-tip-line woc-tip-default');
   });
 
-  // An ability name and a player name both reach this from the wire, so the one
-  // thing that must never happen is markup being parsed.
+  // Ability and player names come off the wire, so nothing may be parsed as markup.
   it('writes content as text, never as markup', () => {
     const tip = open({ title: '<img src=x onerror=alert(1)>', lines: ['<b>bold</b>'] });
 
@@ -315,8 +278,7 @@ describe('what a tooltip says', () => {
     expect(tip.textContent).toContain('<b>bold</b>');
   });
 
-  // The same slot a bar has: not every ability ships painted art, so a URL that
-  // does not resolve has to collapse rather than leave a broken-image glyph.
+  // Not every ability ships art, so a missing file collapses the slot like a bar's icon.
   it('hides an icon whose art does not exist', () => {
     const tip = open({ title: 'Tame Beast', icon: '/ui/skills/hunter/tame_beast.webp' });
     const icon = tip.querySelector<HTMLImageElement>('.woc-tip-icon');
@@ -332,8 +294,7 @@ describe('what a tooltip says', () => {
     expect(tip.querySelector('.woc-tip-head')).toBeNull();
   });
 
-  // The element is shared, so what the last anchor said must not survive into
-  // the next one: a row with no title after a row with one would keep the title.
+  // The element is shared, so nothing from the previous anchor may survive.
   it('replaces what the previous anchor put there', () => {
     const host = root();
     const tips = createTooltips({ doc: document, root: host, layer: host, viewport: () => VIEW });
@@ -352,14 +313,8 @@ describe('what a tooltip says', () => {
   });
 });
 
-// The second stuck tooltip reported from a live session, both times from Cooldown
-// Bars, and this one with the anchor still on screen.
-//
-// Re-appending an element that is already in the DOM MOVES it, which is a removal
-// and an insertion. The browser drops the hover state on the removal and fires no
-// leave, so nothing the kit was listening for was ever coming again. The list
-// re-appends its rows every animation frame to keep them in order, which made this
-// near-certain within a frame or two of showing a tooltip.
+// Re-appending an element moves it: the browser drops hover state and fires no leave. A list
+// re-appends its rows every frame to keep order, so the kit watches pointer moves instead.
 describe('an anchor the browser has stopped considering hovered', () => {
   function shown(): boolean {
     const tip = document.getElementById(TOOLTIP_ID);
@@ -379,7 +334,7 @@ describe('an anchor the browser has stopped considering hovered', () => {
     return { list, anchor, elsewhere };
   }
 
-  it('goes away when the pointer moves off it, even after it was re-appended', () => {
+  it('hides when the pointer moves off a re-appended anchor', () => {
     const { list, anchor, elsewhere } = setup();
     expect(shown()).toBe(true);
 
@@ -400,9 +355,8 @@ describe('an anchor the browser has stopped considering hovered', () => {
     expect(shown()).toBe(true);
   });
 
-  // The move that matters may be over the game's own DOM rather than over
-  // anything the loader owns, and the game's controls stop propagation.
-  it('goes away for a move over the game, and one that stops propagating', () => {
+  // The move may be over game DOM, whose controls stop propagation.
+  it('hides for a move over the game that stops propagating', () => {
     setup();
     const gameEl = document.createElement('div');
     document.body.appendChild(gameEl);
@@ -415,8 +369,7 @@ describe('an anchor the browser has stopped considering hovered', () => {
     expect(shown()).toBe(false);
   });
 
-  // The listener costs a contains() per pointer move, so it must not outlive the
-  // tooltip that needed it.
+  // The listener costs a contains() per pointer move, so it must not outlive the tooltip.
   it('stops listening once nothing is shown', () => {
     const { anchor, elsewhere } = setup();
     anchor.dispatchEvent(new Event('pointerleave'));

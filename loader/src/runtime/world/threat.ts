@@ -1,15 +1,7 @@
 // A mob's hate table, sorted and measured against the player.
 //
-// The rows themselves are the server's own threat model rather than anything
-// derived here, which is what makes this worth publishing at all: the numbers
-// mean what the game means by them, so a display built on them agrees with the
-// decision the mob is about to make.
-//
-// Two limits ride with the reading rather than being left to be discovered. The
-// table is capped at its top eight rows, so in a large group this describes who
-// is about to pull and cannot describe where the twentieth person stands. And it
-// rides only for a MOB in combat, so an empty reading means "not fighting" or
-// "not a mob", never "everyone is at zero".
+// The rows are the server's own threat numbers. The table is capped at the top eight, and sent
+// only for a MOB in combat, so empty means "not fighting" or "not a mob", never "all at zero".
 
 import type { Entity } from './game-types.ts';
 
@@ -26,11 +18,8 @@ interface ThreatTable {
   /** The top row's threat, or null when the table is empty. */
   top: number | null;
   /**
-   * The player's threat as a fraction of the top, or null when either is absent.
-   *
-   * 1 means they ARE the top row. Worth having as the reading rather than as
-   * arithmetic at every call site, because the interesting question is never the
-   * raw number: it is how close this is to pulling.
+   * The player's threat as a fraction of the top, or null when either is absent. 1 means they ARE
+   * the top row.
    */
   share: number | null;
 }
@@ -43,11 +32,7 @@ const EMPTY: ThreatTable = Object.freeze({
 });
 
 /**
- * The player's own threat, or null.
- *
- * Absent from the table is not the same as zero on it: one means the mob has
- * never noticed them, the other that it has and they are last.
- */
+/** The player's own threat, or null when absent from the table, which is not the same as zero. */
 function rowFor(table: ReadonlyMap<number, number>, playerId: number | null): number | null {
   if (playerId === null) {
     return null;
@@ -72,11 +57,8 @@ function shareOf(mine: number | null, top: number | null): number | null {
 }
 
 /**
- * One entity's hate table, or an empty reading when it has none.
- *
- * `playerId` may be null before world entry, in which case the rows are still
- * reported and `mine` is not: the table is a fact about the mob, and only the
- * comparison needs to know who is asking.
+ * One entity's hate table, or an empty reading when it has none. With a null `playerId` the rows
+ * are still reported, without `mine`.
  */
 function readThreat(entity: Entity | null, playerId: number | null): ThreatTable {
   if (entity === null || !(entity.threat instanceof Map) || entity.threat.size === 0) {

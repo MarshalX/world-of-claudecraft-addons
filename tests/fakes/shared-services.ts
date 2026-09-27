@@ -1,10 +1,5 @@
-// The SharedServices bundle, built once and shared by every addon.
-//
-// Three suites need it now (api assembly, the per-addon loader, the supervisor),
-// so it lives here rather than being rebuilt in each. Everything is real except
-// the four things that would reach outside the process: the socket, the game
-// object, the audio sink, and the SFX pack fetch.
-//
+// The SharedServices bundle every addon is built against. Everything is real except what would
+// reach outside the process: the socket, the game object, the audio sink and the SFX pack fetch.
 // It needs a document, so a suite importing this declares happy-dom.
 
 import type { SharedServices } from '../../loader/src/runtime/api/index.ts';
@@ -38,14 +33,8 @@ import { createFakeStorage, type FakeStorage } from './storage.ts';
 const VIEWPORT = { w: 800, h: 600 };
 
 /**
- * A pack with cues in it rather than an empty one, in the DEPLOYED shape: a
- * variant is a record with a url, NOT a bare string.
- *
- * `cues()` answering empty is indistinguishable from a pack that failed to load,
- * so a suite checking that an addon can name a cue needs at least one to exist.
- * Built from entry pairs because every cue name here is the GAME's, not this
- * project's: a naming convention for our own identifiers has nothing to say
- * about `ui_ready_check`.
+ * A non-empty pack in the deployed shape (a variant is a record with a url), since an empty
+ * `cues()` looks like a failed load. Built from entry pairs because the cue names are the game's.
  */
 const SOUND_PACK = {
   format: 'woc-sfx-runtime-pack',
@@ -67,7 +56,7 @@ const SOUND_PACK = {
         playbackRate: 1,
       },
     ],
-    // Multi-variant, which is what makes a cue not a file.
+    // Multi-variant: a cue is not a file.
     [
       'combat_block',
       {
@@ -98,10 +87,8 @@ interface SharedHarness {
   /** What the key dispatcher listens on, so a suite can press a key at it. */
   keyTarget: EventTarget;
   /**
-   * The arrange-your-UI switch, which decides whether a BARE frame may be dragged
-   * or resized at all. Exposed because the rule cannot be driven any other way:
-   * the loader's own keybind for it is registered in boot.ts, which no suite and
-   * no stage scenario runs. See loader/src/runtime/ui/kit/frame-gestures.ts.
+   * The arrange mode, which gates a bare frame's drag and resize. Exposed because its keybind is
+   * registered in boot.ts, which no suite or stage scenario runs.
    */
   unlock: UnlockMode;
   /** Press a combo, in the manifest's own spelling, e.g. 'Alt+Shift+KeyD'. */
@@ -111,111 +98,47 @@ interface SharedHarness {
   /** Move the addon-visible clock. Reads `woc.now()`, not wall clock. */
   advance: (ms: number) => void;
   /**
-   * Set what `woc.wallClock()` answers, in epoch milliseconds.
-   *
-   * Separate from `advance` rather than moved by it, because the whole point of
-   * having two clocks is that they come apart. A page reload is exactly the case
-   * an addon storing a stamp has to survive, and it is hours of WALL clock beside
-   * a monotonic clock that went back to zero. A suite that could only move both
-   * together could not express it.
-   *
-   * `vi.setSystemTime` does not reach this: the loader binds `shared.wallClock`
-   * by reference when the API is assembled, so the fake has to be the thing that
-   * moves.
+   * Set what `woc.wallClock()` answers, in epoch milliseconds. Independent of `advance` so a suite
+   * can express a reload (wall clock moved, monotonic clock reset). `vi.setSystemTime` does not
+   * reach it, because the API binds `shared.wallClock` by reference at assembly.
    */
   setWallClock: (ms: number) => void;
   /**
-   * Override part of what `net.state` answers.
-   *
-   * Here rather than in each suite because the one field addons actually reach
-   * for, `latencyMs`, cannot be produced by driving this fake: it is measured by
-   * pairing an OUTBOUND input frame's sequence number against the acknowledgement
-   * a later snapshot carries, and only the inbound tap is wired. So a suite that
-   * needs a latency reading has to state one, and stating it in one blessed place
-   * beats every addon inventing its own stub.
-   *
-   * Replaces the accessor rather than a stored value, which is what `net.state`
-   * reads through on every access, so a reading taken after this call sees it.
+   * Override part of what `net.state` answers. `latencyMs` needs an outbound input frame paired
+   * with a later ack and only the inbound tap is wired, so a suite that needs it states it here.
    */
   netState: (patch: Partial<NetState>) => void;
   /**
-   * Seed one addon's data file, as the host's install-time cache holds it: raw
-   * TEXT keyed by the path the manifest declared, not a parsed value.
-   *
-   * Nothing is seeded by default and the default reader REJECTS, so a suite that
-   * means to exercise `woc.data` has to say so. An empty stub that resolved would
-   * make an addon reading a file it never declared look like it worked.
+   * Seed one addon's data file as raw text, as the host's install cache holds it. An unseeded read
+   * rejects, so an addon reading a file it never declared cannot look like it worked.
    */
   addonData: (fqid: string, name: string, text: string) => void;
   dispose: () => void;
 }
 
 interface SharedOptions {
-  /**
-   * The __game handle, so a suite can bring the world up.
-   *
-   * Defaults to a promise that never resolves, because an addon has to be usable
-   * before world entry and a suite that waited for this would hang, not fail.
-   */
+  /** The __game handle. Never resolves by default, since an addon must work before world entry. */
   game?: Promise<unknown>;
   /**
-   * What the loader measures the screen as, for placing frames and popovers.
-   *
-   * An option rather than a constant because the two consumers want opposite
-   * things. A suite wants a viewport that cannot move under it, which is what the
-   * fixed default gives. `stage/` wants the one actually on screen: the addon
-   * root is `position: fixed; inset: 0`, so a frame centred in an 800px viewport
-   * that is really 1600px wide sits visibly off to the left.
-   *
-   * It has to be settable HERE rather than patched afterwards. `api/bind.ts`
-   * copies `shared.viewport` by reference when the addon's surface is assembled,
-   * and `kit/frame.ts` takes it from its deps the same way, so a function
-   * replaced after `loadAddon` is one nothing reads.
+   * What the loader measures the screen as. Suites keep the fixed default; `stage/` passes the real
+   * one. Set it here: `api/bind.ts` and `kit/frame.ts` capture it, so a later patch is never read.
    */
   viewport?: () => { w: number; h: number };
   /**
-   * Where a world point lands on screen, and where a unit is in the world.
-   *
-   * The default pair is blind on purpose: one constant screen point for every
-   * world point, and no unit resolving at all. A suite about a decision an addon
-   * makes wants a camera it cannot accidentally depend on, and one that needs
-   * real positions says so by replacing `kit.project` and `kit.unitPoint`, which
-   * `ui.project` reads per call.
-   *
-   * These two options are for the case that patching cannot reach: `stage/`
-   * needs anchors to be PLACED, and `createAnchors` captures its projector and
-   * its unit resolver when it is built, so a function assigned to `kit`
-   * afterwards moves what `ui.project` answers and not where anything is drawn.
-   * See `stage/src/camera.ts`, which supplies the loader's own two modules over
-   * a fake renderer rather than a stand-in for their answers.
+   * Where a world point lands on screen, and where a unit is. The default is blind: one constant
+   * point and no unit. Patching `kit.project`/`kit.unitPoint` moves `ui.project`, but
+   * `createAnchors` captures both at build, so placing anchors needs these options.
    */
   project?: SharedServices['kit']['project'];
   unitPoint?: SharedServices['kit']['unitPoint'];
   /**
-   * How the skill and item art manifests are read.
-   *
-   * The default never settles, which is the state a row drawn before either
-   * manifest lands is in: `icon.ability` and `icon.item` stay optimistic and
-   * `icon.itemArtName` answers null. That is right for a suite, which wants an
-   * answer that cannot arrive half way through a case.
-   *
-   * `stage/` replaces it with a real fetch, and has to: the stage proxies `/ui/`
-   * to a deployed game, and an addon that LABELS a row from `icon.itemArtName`
-   * photographs as a column of raw item ids without it, which is a picture of the
-   * fake rather than of the addon.
+   * How the art manifests are read. The default never settles, so `icon.ability` and `icon.item`
+   * stay optimistic and `icon.itemArtName` answers null; `stage/` passes a real fetch.
    */
   fetchJson?: (url: string) => Promise<unknown>;
   /**
-   * The game's own minimap label, which is the whole of what `world.zone` is.
-   *
-   * Defaults to null, which is what the reading genuinely is before world entry and what a
-   * suite about a decision wants: the label is a LOCALIZED display name, so an addon that
-   * compared it against anything would be right on one client and wrong on every other.
-   *
-   * It is a function rather than a string because the label moves: the player crosses a border,
-   * and underground the delve painter owns the same element. It cannot be read off the world
-   * object either, in a fake or in the game, since the game publishes no zone at all and the
-   * loader takes this from the HUD.
+   * The game's minimap label, which is all `world.zone` is. Defaults to null.
+   * A function because the label changes as the player moves.
    */
   zoneName?: () => string | null;
 }
@@ -240,22 +163,17 @@ function createSharedServices(
   const root = doc.createElement('div');
   root.id = 'woc-addons';
   doc.body.appendChild(root);
-  // The two stacking bands, built as the loader builds them rather than aliased to
-  // the root. Aliasing would make every band a suite could get wrong the same
-  // element, so a frame mounted into the overlay would pass. See ui/root.ts.
+  // Real bands, not aliases of the root, so a frame mounted in the wrong band fails.
   const hud = doc.createElement('div');
   hud.className = HUD_BAND_CLASS;
   const overlay = doc.createElement('div');
   overlay.className = OVERLAY_BAND_CLASS;
   root.append(hud, overlay);
 
-  // One reader behind every surface that measures the screen. Two of them
-  // disagreeing would put a tooltip off the edge of the viewport its own frame
-  // was placed inside.
+  // One reader for every surface, so a tooltip and its frame agree on the screen.
   const viewport = options.viewport ?? ((): { w: number; h: number } => VIEWPORT);
 
-  // One clock behind both the net hub and woc.now(), so a suite that advances
-  // time moves what an addon measures with and what the bus timestamps by.
+  // One clock behind both the net hub and woc.now().
   let clock = NOW_MS;
   let wall = WALL_CLOCK_MS;
   const now = (): number => clock;
@@ -265,8 +183,6 @@ function createSharedServices(
   const noTimers = { setTimer: () => 0, clearTimer: () => undefined };
   const toaster = createToaster({ doc, root: overlay, ...noTimers });
   const banner = createBanner({ doc, root: overlay, ...noTimers });
-  // Neither settles by default, so `icon.ability` and `icon.item` stay optimistic:
-  // the same state a row drawn before the art manifests land is in.
   const pendingManifest = (): Promise<unknown> => new Promise(() => undefined);
   const fetchJson = options.fetchJson ?? pendingManifest;
   const icons = createIconUrls(
@@ -276,10 +192,7 @@ function createSharedServices(
   );
   const tooltips = createTooltips({ doc, root, layer: overlay, viewport });
   const menus = createMenus({ doc, root: overlay, viewport });
-  // The projector answers, so an addon's anchor lands somewhere; the frame clock
-  // does not, so nothing here runs a loop a suite would have to stop.
-  // The real loop over a clock the suite steps. Nothing runs until `frames.tick`,
-  // so a suite that is not about frames still starts nothing.
+  // The real loop over a clock the suite steps: nothing runs until `frames.tick`.
   const frames = createFrameClock();
   const project =
     options.project ??
@@ -289,7 +202,6 @@ function createSharedServices(
       depth: 10,
       behind: false,
     }));
-  // No unit has a place here: a suite that wants one fakes the world it needs.
   const unitPoint = options.unitPoint ?? ((): null => null);
   const anchors = createAnchors({
     doc,
@@ -301,13 +213,9 @@ function createSharedServices(
   });
   const keyTarget = new EventTarget();
   const dispatcher = createKeyDispatcher({ target: keyTarget, doc });
-  // Held rather than built inline, because the harness hands it back: nothing else
-  // can turn the arrange mode on, and a bare frame's gestures are its to grant.
   const { unlock, snap } = arrangeParts(root);
   const logs = createLogBuffer();
   const stacking = createStacking({ root });
-  // Keyed on the pair, because two addons may legitimately declare the same
-  // file name and reading one another's would be the bug worth catching.
   const dataFiles = new Map<string, string>();
 
   const net = createNetHub({
@@ -328,16 +236,12 @@ function createSharedServices(
       game: options.game ?? new Promise(() => undefined),
       schedule: () => 0,
       cancel: () => undefined,
-      // No damage clock in a fake: the combat reading falls through to its state
-      // branches, which is what a test driving world state wants to exercise.
+      // No damage clock, so the combat reading falls through to its state branches.
       lastDamageAt: () => null,
       now: () => 0,
       zoneName: options.zoneName ?? ((): string | null => null),
       simNow: () => null,
-      // Off the hello frame, exactly as `runtime/surfaces.ts` wires it. Hardwired to
-      // null before, which made `world.characterKey` read `offline/<name>` in every
-      // suite however the hello frame was spelled: an addon keyed on the realm loaded
-      // one market and wrote to another, and the fake was the only thing saying so.
+      // Off the hello frame, as `runtime/surfaces.ts` wires it.
       realm: net.realm,
     }),
     storage: hub,
@@ -407,8 +311,7 @@ function createSharedServices(
     unlock,
     press: (combo) => {
       const parts = combo.split('+');
-      // The last segment is the physical key; everything before it is a
-      // modifier, which is the order the combo strings are written in.
+      // The last segment is the physical key; the rest are modifiers.
       const code = parts.at(-1) ?? '';
       keyTarget.dispatchEvent(
         new KeyboardEvent('keydown', {
@@ -425,10 +328,7 @@ function createSharedServices(
     netState: (patch) => {
       const base = shared.net.state();
       shared.net.state = () => ({ ...base, ...patch });
-      // The realm has its own accessor, because the world backend reads it per
-      // sample and `state()` allocates. A patch that moved one and not the other
-      // would make `net.state().realm` and `world.characterKey` disagree in a
-      // suite, which is precisely the bug the one derivation exists to prevent.
+      // The realm has its own accessor; move both so `world.characterKey` agrees.
       if (patch.realm !== undefined) {
         shared.net.realm = () => patch.realm ?? null;
       }

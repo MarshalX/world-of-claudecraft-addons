@@ -1,18 +1,10 @@
-// The per-session index cache: one reading per source, and the two ways it fills.
+// The per-session index cache. Not persisted: the fetcher's ETag cache already survives a
+// reload. `fetchedAt: null` means "not read this session", which the manager renders
+// differently from an empty index.
 //
-// State is per session rather than persisted: the fetcher's ETag cache is what
-// survives a page reload, so a second copy here would be a second thing to keep
-// in step with it. `fetchedAt: null` therefore means "not read this session",
-// which the manager renders differently from an index that was read and found
-// empty.
-//
-// `load` is what Refresh drives and always goes to the network. `ensure` is what
-// opening the manager drives, and reads each source AT MOST ONCE a session.
-// Without it the map starts empty on every page load and nothing ever seeded it,
-// so Browse drew its "no marketplace has been read yet" note on a fresh install
-// and again after every reload, and the update check compared installed addons
-// against no rows at all, which reads as a clean bill of health rather than as a
-// question nobody asked.
+// `load` (Refresh) always fetches. `ensure` (opening the manager) reads each source AT MOST
+// ONCE a session, and must run: an unseeded cache makes the update check compare installed
+// addons against no rows, which reads as a false all-clear.
 
 import { describeError } from '../shared/diag.ts';
 import type { MarketplaceRef } from '../shared/marketplace.ts';
@@ -59,12 +51,7 @@ function report(deps: IndexDeps, id: string, state: 'ok' | 'error', error?: stri
   deps.emit({ k: 'market.changed', id });
 }
 
-/**
- * Read one source, replacing its state either way.
- *
- * A source that fails keeps whatever rows it published last: it should not also
- * take away what a player is looking at.
- */
+/** Read one source. A failure keeps the rows it published last, adding only the error. */
 async function readInto(
   deps: IndexDeps,
   states: Map<string, IndexState>,
@@ -106,12 +93,8 @@ function createIndexCache(deps: IndexDeps): IndexCache {
     load,
     stateFor: (id) => states.get(id) ?? EMPTY,
 
-    // A source that FAILED counts as attempted, so a broken one is read once and
-    // then left alone: retrying it here would put a doomed request in front of
-    // every open of the window, which is the cost this whole function exists to
-    // pay only once. Refresh is what retries. One already RUNNING is joined
-    // rather than skipped, since skipping it would return to a caller that then
-    // reads an index which has not landed yet.
+    // A FAILED source counts as attempted, or every open would retry it; Refresh retries. A
+    // RUNNING read is joined, not skipped, so the caller never reads an index still in flight.
     ensure: async (refs) => {
       const unread = refs.filter((ref) => running.has(ref.id) || !attempted.has(ref.id));
       await inSeries(unread, load);

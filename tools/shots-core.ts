@@ -1,53 +1,32 @@
-// What `pnpm shots` decides, separate from the browser that carries it out.
-//
-// The same split serve-core.ts and theme-core.ts make: a Vitest suite drives
-// these directly, and `tools/shots.mjs` is the Playwright and sharp around them.
-// Everything here is arithmetic and manifest surgery, which is where the answers
-// that can be wrong live; a screenshot either happens or it does not.
+// What `pnpm shots` decides, separate from the browser that carries it out: a Vitest suite drives
+// this arithmetic and manifest surgery directly, and `tools/shots.mjs` is the Playwright and sharp
+// around it.
 
 /**
  * The narrowest a preview may be, in DEVICE pixels.
  *
- * `PREVIEW_MIN_WIDTH` in `tools/site/build.ts`, which is the slot an addon's card
- * reserves on the catalog page. Repeated rather than imported because the site
- * builder is a different program with a different reason for the number: it uses
- * it to REPORT an undersize shot, and this uses it to avoid producing one.
- *
- * That report currently carves previews out entirely, on the grounds that an
- * addon's preview is a picture of its own fixed-size panel and "cannot be
- * captured wider without zooming the whole game". On the stage it can: the zoom
- * is a device scale factor, and nothing about the game is involved. Once every
- * preview is captured this way the carve-out is worth revisiting.
+ * `PREVIEW_MIN_WIDTH` in `tools/site/build.ts`, the slot an addon's card reserves on the catalog
+ * page. Repeated rather than imported because the site builder uses it to REPORT an undersize
+ * shot, and this uses it to avoid producing one.
  */
 const MIN_DEVICE_WIDTH = 700;
 
 /**
- * How far past the slot a capture has to clear before the smaller scale is
- * accepted, in device pixels.
+ * How far past the slot a capture has to clear before the smaller scale is accepted, in device
+ * pixels.
  *
- * Without it the rule has a cliff with no margin at all, and a difference far
- * too small to be a layout change decides the resolution. `trailmark` is a 300px
- * frame, so its crop is 348 CSS px and 2x lands at 696, four short: it captured
- * at 3x. The same tree measured 350 under a different rasteriser, 2x landed on
- * 700 exactly, and the preview came back at 2x, at half the pixels and with a
- * quest row ellipsised that had fitted before. Two pixels.
- *
- * 16 because the differences that are not layout are the ones to absorb, and the
- * ones measured between CoreText and FreeType over the same fonts, and between
- * runs of one machine, are 2 to 12. Past that a width change is content, and
- * changing scale for content is the rule working. The cliff cannot be removed
- * from a discrete choice, only moved somewhere a renderer cannot reach.
+ * Without it a width difference too small to be a layout change decides the resolution. 16
+ * absorbs the 2 to 12 pixels measured between CoreText and FreeType over the same fonts and
+ * between runs of one machine; past that a width change is content.
  */
 const SLOT_MARGIN = 16;
 
 /**
  * The scale factors a capture may use.
  *
- * Whole numbers only. A fractional one lands a 1px border on a half pixel and the
- * browser resolves that by blending it across two, which on a 2px panel border is
- * visibly softer than the game draws it. 2 is the floor because the manager
- * reserves a 420px box for the full picture and a 1x shot of a 340px panel is
- * blurry inside it; 4 is the ceiling because past it the byte cap binds first.
+ * Whole numbers only: a fractional one lands a 1px border on a half pixel and the browser blends
+ * it across two. 2 is the floor because the manager shows the full picture in a 420px box; 4 is
+ * the ceiling because past it the byte cap binds first.
  */
 const SCALE_MIN = 2;
 const SCALE_MID = 3;
@@ -57,10 +36,8 @@ const SCALES: readonly number[] = [SCALE_MIN, SCALE_MID, SCALE_MAX];
 /**
  * Room around the frame, in CSS pixels.
  *
- * The panel's own shadow is `0 2px 16px`, so it paints up to 18px past the
- * element box and a crop taken at the box alone shears it off on three sides,
- * which reads as a hard edge the game does not have. 24 leaves a little air
- * beyond that, which the letterboxing in every consumer would add anyway.
+ * The panel's shadow is `0 2px 16px`, so it paints up to 18px past the element box and a crop at
+ * the box shears it off.
  */
 const CROP_MARGIN = 24;
 
@@ -82,13 +59,8 @@ interface Rect {
 }
 
 /**
- * The device scale to capture one frame at.
- *
- * Chosen from the frame's CSS width so the narrowest addon still fills the card
- * slot: a 220px-wide strip needs 4x to clear 700 device pixels, and a 340px panel
- * needs 3x. Capturing every addon at one fixed factor would either leave the
- * small ones short or make the large ones needlessly heavy, and the byte cap is
- * real.
+ * The device scale to capture one frame at, chosen from its CSS width so the narrowest addon
+ * still fills the card slot without making the large ones needlessly heavy.
  */
 function scaleFor(cssWidth: number): number {
   const enough = SCALES.find((scale) => fillsSlot(cssWidth, scale));
@@ -98,9 +70,8 @@ function scaleFor(cssWidth: number): number {
 /**
  * The next scale down, or null when there is none.
  *
- * A capture that lands over the byte cap is retried smaller rather than
- * quantised: a palette PNG bands the panel's own gradient, which is the one part
- * of the picture the loader did not draw and cannot be blamed for.
+ * A capture over the byte cap is retried smaller rather than quantised: a palette PNG bands the
+ * panel's gradient.
  */
 function smallerScale(scale: number): number | null {
   const at = SCALES.indexOf(scale);
@@ -113,19 +84,14 @@ function smallerScale(scale: number): number | null {
 /**
  * The next scale up, or null when there is none.
  *
- * `scaleFor` is a PREDICTION, made from a frame measured at 1x, and a prediction
- * is not good enough on its own: a frame sized by its own content lays out a
- * pixel or two differently at another scale factor, and `cooldown-bars` measured
- * 245 CSS px at 1x and captured 228 at 3x, which is 684 device pixels against a
- * 700 slot. So the width is checked against what came BACK and stepped up if it
- * fell short, rather than trusted from what went in.
+ * `scaleFor` predicts from a frame measured at 1x, and a frame sized by its content lays out a
+ * pixel or two differently at another scale, so the width that came BACK is checked and stepped up
+ * if it fell short.
  */
 function largerScale(scale: number): number | null {
   const at = SCALES.indexOf(scale);
-  // The miss has to be caught here and cannot fall through to the read below:
-  // `indexOf` answers -1, and `SCALES[-1 + 1]` is the SMALLEST scale, so an
-  // unrecognised one would read as "step up to 2x" rather than as "no such step".
-  // Running off the top needs no such guard, since the read is already checked.
+  // `indexOf` answers -1 for an unknown scale, and `SCALES[-1 + 1]` would read it as "step up to
+  // the smallest scale".
   if (at === -1) {
     return null;
   }
@@ -133,10 +99,8 @@ function largerScale(scale: number): number | null {
 }
 
 /**
- * Whether a capture fills the card slot it will be shown in.
- *
- * The one place the rule is spelled, because `scaleFor` predicting by one rule
- * and the capture being accepted by another is how the two would drift apart.
+ * Whether a capture fills the card slot it will be shown in. The one place the rule is spelled,
+ * so `scaleFor`'s prediction and the capture's acceptance cannot drift apart.
  */
 function fillsSlot(cssWidth: number, scale: number): boolean {
   return cssWidth * scale >= MIN_DEVICE_WIDTH + SLOT_MARGIN;
@@ -148,17 +112,11 @@ function withinCap(bytes: number): boolean {
 }
 
 /**
- * The crop, in CSS pixels, around what was drawn.
+ * The crop, in CSS pixels, around the union of every frame drawn.
  *
- * The union rather than the first, because an addon may legitimately put up more
- * than one: `cooldown-bars` has two frame ids and a future addon could show both
- * at once. Clamped at the origin so a frame pushed against the top left does not
- * ask for a negative crop, which a browser rejects rather than clamps.
- *
- * The margin is an argument because a SHEET has already had one applied. Each of
- * its panes was cropped to its own frames, in the browser, with room left for the
- * shadow; adding it again out here would put a second margin around the outside
- * only, which is why the first sheet came out with the panels adrift in it.
+ * Clamped at the origin because a browser rejects a negative crop rather than clamping it. The
+ * margin is an argument because a SHEET's panes were each cropped with their own margin already,
+ * and a second one would only pad the outside.
  */
 function cropAround(rects: readonly Rect[], margin: number = CROP_MARGIN): Rect {
   if (rects.length === 0) {
@@ -174,13 +132,8 @@ function cropAround(rects: readonly Rect[], margin: number = CROP_MARGIN): Rect 
 }
 
 /**
- * Where one panel sits, said the way a description should say it.
- *
- * Positional, because that is what the reader of an alt sentence needs from a
- * composite: "on the left" locates a panel in a picture they cannot see, and
- * "the first one" does not. Two is the case that has to read well, since an
- * addon with a layout SETTING has two of them; past that the honest phrasing is
- * a count, because nothing in English usefully names the third of four.
+ * Where one panel sits, for an alt sentence: positional for a pair, since a reader who cannot see
+ * the picture needs "on the left", and a count past that.
  */
 function sideOf(index: number): string {
   if (index === 0) {
@@ -205,13 +158,7 @@ interface Panel {
   alt: string;
 }
 
-/**
- * What comes before one panel's own sentence.
- *
- * The comma after the position is there whether or not a caption follows it: "On
- * the left one." runs the position into the description and reads as a sentence
- * that lost a word.
- */
+/** What comes before one panel's own sentence; the comma after the position is always there. */
 function leadOf(place: string, caption: string | undefined): string {
   if (caption === undefined) {
     return `${place},`;
@@ -222,15 +169,9 @@ function leadOf(place: string, caption: string | undefined): string {
 /**
  * One sentence describing the whole picture, out of one per panel.
  *
- * A single panel keeps its own alt untouched, which is what every preview was
- * before sheets existed. Several are joined with their position and their
- * caption, so the description walks the image in the order somebody looking at
- * it would.
- *
- * Composed rather than written once per sheet because the alt lives on the
- * SCENARIO, beside the fixture that produces that panel, so the two are edited
- * together. The cost is that each panel's sentence has to read as a clause
- * rather than as a paragraph, which is why the shipped ones start lowercase.
+ * A single panel keeps its own alt untouched; several are joined with their position and
+ * caption. Each alt lives on its scenario beside the fixture it describes, so a panel's sentence
+ * has to read as a clause, which is why they start lowercase.
  */
 function previewAlt(panels: readonly Panel[]): string {
   const [only] = panels;
@@ -248,26 +189,18 @@ function previewAlt(panels: readonly Panel[]): string {
 /**
  * The manifest with its preview declared, keys in their original order.
  *
- * Rebuilt key by key rather than spread, because `JSON.stringify` writes
- * insertion order and a spread would drop `preview` at the END of every manifest
- * that did not already have one. Every shipped manifest carries it directly after
- * `entry`, and a tool that reformats the file it is editing turns a one-line diff
- * into a whole-file one.
- *
- * It takes the RAW parsed object rather than the validated manifest, and that is
- * not a convenience. A schema applies defaults, so writing back what validation
- * returned would silently add every optional field the manifest had chosen to
- * leave out, on an addon somebody only asked to have photographed. Validation
- * still runs first, to fail before anything is written.
+ * Rebuilt key by key rather than spread, because a spread puts a new `preview` at the END and
+ * every shipped manifest carries it directly after `entry`. It takes the RAW parsed object rather
+ * than the validated manifest, because writing back what the schema returned would add every
+ * defaulted optional field.
  */
 function withPreview(
   source: Record<string, unknown>,
   alt: string,
   file: string,
 ): Record<string, unknown> {
-  // Computed rather than dotted: Biome wants `source.preview` and TypeScript
-  // forbids dotting into an index signature. See STYLE.md, which names this pair
-  // as the place the two tools want opposite things.
+  // Computed rather than dotted: Biome wants `source.preview` and TypeScript forbids dotting into
+  // an index signature (see STYLE.md).
   const has = (record: Record<string, unknown>, name: string): unknown => record[name];
   const preview = { file, alt };
   const built: Record<string, unknown> = {};
@@ -290,20 +223,9 @@ function renderManifest(manifest: Record<string, unknown>): string {
 }
 
 /**
- * The game a preview is a picture OF, which is LIVE and not the stage's default.
- *
- * `pnpm run stage` proxies to pbe, where drift shows up first, and that is right for
- * a person watching an addon react to a game that has not shipped yet. A preview
- * is the opposite kind of artifact: it is committed, it is what a player reads in
- * Browse, and the player is on live. So this joins `pnpm cues`, `pnpm icons`,
- * `pnpm items` and `pnpm theme` at live rather than inheriting the stage's pbe.
- *
- * It is not a hypothetical difference. pbe is normally AHEAD of live, and the
- * `cooldown-bars` preview was captured while it was, which is the only reason it
- * shows art live had not shipped yet. At game 0.34.0 the two SWAPPED: live
- * carried 0.34.0 while pbe still served 0.33.0, so inheriting pbe would have
- * recaptured that preview WITHOUT art it already had, and the alt text describing
- * it would have become false in the same run.
+ * The game a preview is a picture OF: LIVE, not the stage's pbe default, because a preview is a
+ * committed picture of what a player on live reads in Browse. The channels diverge in both
+ * directions, so capturing from pbe can add or drop art the alt text describes.
  */
 const DEFAULT_HOST = 'https://worldofclaudecraft.com';
 
@@ -324,12 +246,8 @@ function hostFor(argv: readonly string[]): string {
 }
 
 /**
- * The addon ids to narrow to, with the `--host` VALUE removed.
- *
- * The flag itself is dropped by its leading dash. Its value is a bare word that
- * would otherwise read as an addon id, and a URL matches no directory, so
- * `pnpm shots --host <url>` alone would narrow to nothing and then fail claiming
- * no addon has a `stage.ts`, which is a true sentence about the wrong problem.
+ * The addon ids to narrow to, with the `--host` VALUE removed: a URL would otherwise read as an
+ * addon id, match no directory, and narrow the run to nothing.
  */
 function onlyFor(argv: readonly string[]): string[] {
   const valueAt = argv.indexOf('--host') + 1;

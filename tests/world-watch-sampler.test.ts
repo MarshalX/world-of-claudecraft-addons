@@ -5,7 +5,6 @@ import { watchHarness } from './fakes/watch-harness.ts';
 
 const harness = watchHarness;
 
-// The animation-frame loop that drives the watcher.
 describe('the sampler', () => {
   // An addon that never calls world.on must cost nothing at all.
   it('does not run before anything subscribes', () => {
@@ -70,21 +69,15 @@ describe('the sampler', () => {
   });
 });
 
-// An animation frame is not what makes a value move: the server sends 20 snapshots a
-// second and this loop runs at 60 or more, so most frames were sampling to find
-// nothing. A sample is not free either, since `entities` allocates a Set of every id
-// and `casts` rebuilds a Map over every entity in scope.
-//
-// What the floor must NOT do is lose a change, which is why it sits under the
-// snapshot interval rather than on it.
+// Snapshots arrive at 20 Hz and a sample allocates, so frames between them are skipped. The floor
+// sits under the snapshot interval so no change is lost.
 describe('the sample floor', () => {
   it('does not sample again on a frame that came too soon after the last', () => {
     const h = harness();
     const seen = vi.fn();
     h.watcher.on('entities', seen);
 
-    // The first frame samples and takes the baseline, then a change lands and the
-    // very next frame is inside the floor.
+    // The first frame takes the baseline; the next is inside the floor.
     h.frame();
     h.live.entities.set(1, {});
     h.frame();
@@ -92,7 +85,7 @@ describe('the sample floor', () => {
     expect(seen).not.toHaveBeenCalled();
   });
 
-  it('samples on the first frame past the floor, so nothing is lost', () => {
+  it('samples on the first frame past the floor', () => {
     const h = harness();
     const seen = vi.fn();
     h.watcher.on('entities', seen);
@@ -105,8 +98,7 @@ describe('the sample floor', () => {
     expect(seen).toHaveBeenCalledOnce();
   });
 
-  // A caller reaching for `poll` has already decided it wants a sample, and the
-  // suites that drive the watcher by hand depend on getting one.
+  // Suites that drive the watcher by hand depend on `poll` always sampling.
   it('does not apply to an explicit poll', () => {
     const h = harness();
     const seen = vi.fn();
@@ -121,20 +113,8 @@ describe('the sample floor', () => {
   });
 });
 
-// The floor against a real display, which is arithmetic rather than something the
-// frame clock above can demonstrate: a harness runs at whatever rate it is told to.
-//
-// The sampler cannot sample AT the floor, because it only gets to decide on an
-// animation frame. The period it actually achieves is the floor rounded up to the
-// next whole frame, and what has to hold is that the result stays under the interval
-// the server sends on. Otherwise a value could move and move back between two
-// samples and the addon watching it would never be told.
-//
-// A faster monitor is the BETTER case and this is where that is written down, because
-// it is the opposite of the intuition that a higher frame rate means more risk: the
-// rounding is finer the shorter the frame is, so 120 Hz lands on the floor exactly
-// and reports sooner than 60 Hz. The rates that round up hardest are the ones just
-// under a multiple of the floor.
+// The achieved period is the floor rounded up to a whole frame, and it must stay under the
+// snapshot interval or a value can move and move back unseen. Faster displays round more finely.
 describe('the floor against a real refresh rate', () => {
   /** The sim's own rate. A snapshot every 50 ms is what a sample must not miss. */
   const SimIntervalMs = 50;
@@ -152,12 +132,10 @@ describe('the floor against a real refresh rate', () => {
     },
   );
 
-  it('reports sooner on a faster display rather than later', () => {
+  it('reports sooner on a faster display', () => {
     expect(periodAt(120)).toBeLessThanOrEqual(periodAt(60));
   });
 
-  // However fast the display runs, the floor is what decides the rate: this is the
-  // half that stops a 240 Hz monitor from sampling 240 times a second.
   it('holds the rate near the floor however fast the display runs', () => {
     expect(periodAt(240)).toBeGreaterThanOrEqual(SAMPLE_INTERVAL_MS);
   });

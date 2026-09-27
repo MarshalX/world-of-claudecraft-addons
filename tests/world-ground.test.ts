@@ -1,15 +1,5 @@
-// The ground readings: what is lethal on it, and what died on it.
-//
-// Two of these are about a disclosure rather than about a shape. A corpse's
-// whole contents reach every client in interest scope, personal slots included,
-// so the projection is the only thing standing between an addon and a display
-// that shows other players loot they cannot take. The `personalFor` case below
-// is the assertion that matters most in this file.
-//
-// The death zone cases are about the two ways the reading can be wrong without
-// raising: an aliased array, which is what the OFFLINE sim hands back and which
-// the online path happens to avoid, and a method called off the wrong receiver,
-// which the game's own implementation reads `this` in.
+// Ground readings: death zones and corpses. Every client in scope receives a corpse's whole
+// contents, personal slots included, so the projection alone keeps others' loot off a display.
 
 import { describe, expect, it } from 'vitest';
 
@@ -48,12 +38,7 @@ function viewer(over: Partial<LootViewer> = {}): LootViewer {
   return { pid: ME, partyPids: [], ...over };
 }
 
-/**
- * A world whose reader reads `this`, the way the game's own does.
- *
- * The game's implementation walks `this.activeBossDeathZones`, so a loader that
- * pulled the method off the object and called it bare would throw on every read.
- */
+/** A world whose reader reads `this`, as the game's does, so a bare call would throw. */
 function riftWorld(zones: unknown[]): { zones: unknown[]; riftBossDeathZones: () => unknown } {
   return {
     zones,
@@ -84,9 +69,7 @@ describe('deathZonesOf', () => {
   });
 
   it('copies every entry, so a caller cannot reach the sim through the answer', () => {
-    // The OFFLINE sim returns `inst.bossDeathZones` by reference. Nothing in the
-    // online path would show this, which is why it is asserted rather than
-    // assumed.
+    // The offline sim returns its zone array by reference.
     const source = [zone(10, 20, 6, 3)];
     const zones = deathZonesOf(riftWorld(source)) as DeathZone[];
 
@@ -104,11 +87,8 @@ describe('deathZonesOf', () => {
 });
 
 describe('corpseViewOf', () => {
-  // The game's own rule, added at 0.40.1 (src/game/corpse_loot_availability.ts):
-  // once the loot window elapses nobody can open the corpse, whatever their
-  // rights. The entity keeps its whole loot record and stays in the entity map,
-  // so without this the loader goes on offering slots off a body the game has
-  // already dropped from its own pickable view.
+  // Once the loot window elapses nobody can open the corpse (src/game/corpse_loot_availability.ts),
+  // yet the entity keeps its whole loot record and stays in the entity map.
   it('offers nothing off a corpse whose loot window has elapsed, even to its tapper', () => {
     const slot = { itemId: 'iron_ore', count: 3 };
     const dead = corpse({
@@ -128,9 +108,7 @@ describe('corpseViewOf', () => {
     expect(view?.all).toEqual([slot]);
   });
 
-  // The client builds every entity with `corpseTimer` at 0 and only the dynamic
-  // decode ever writes it, so the timer alone says nothing: read without `dead`
-  // it would call every living mob's body decayed.
+  // The client defaults `corpseTimer` to 0 on every entity, so it means nothing without `dead`.
   it('does not read a living mob as decayed on the timer alone', () => {
     const slot = { itemId: 'iron_ore', count: 3 };
     const alive = corpse({ tappedById: ME, corpseTimer: 0, loot: { copper: 480, items: [slot] } });
@@ -141,9 +119,7 @@ describe('corpseViewOf', () => {
     expect(view?.mine).toEqual([slot]);
   });
 
-  // An unreadable timer is deliberately NOT the game's own default of 0. Guessing
-  // decayed would blank a live corpse; guessing open leaves the reading as it was
-  // before the rule existed.
+  // Deliberately not the game's default of 0: guessing decayed would blank a live corpse.
   it('treats a corpse with no readable timer as still inside its window', () => {
     const slot = { itemId: 'iron_ore', count: 3 };
     const unread = corpse({ tappedById: ME, dead: true, loot: { copper: 0, items: [slot] } });
@@ -197,7 +173,7 @@ describe('corpseViewOf', () => {
     expect(view?.copper).toBe(480);
   });
 
-  it('grants shared rights through a roster holding the tapper, and not through one without', () => {
+  it('grants shared rights only through a roster holding the tapper', () => {
     const shared = { itemId: 'iron_ore', count: 3 };
     const dead = corpse({ tappedById: TAPPER, loot: { copper: 60, items: [shared] } });
 
@@ -262,8 +238,7 @@ describe('viewerOf', () => {
 
 describe('deathZoneSignature', () => {
   it('reports two zones at one position as different from one', () => {
-    // The S-rank barrage places a zone under every living member, so two members
-    // standing together produce two identical entries.
+    // A barrage places a zone under every member, so two members standing together make duplicates.
     const one = deathZoneSignature([zone(10, 20, 6, 4)]);
     const two = deathZoneSignature([zone(10, 20, 6, 4), zone(10, 20, 6, 4)]);
 
@@ -292,9 +267,7 @@ describe('corpseSignature', () => {
   });
 
   it('does not move when only the rights of whoever is looking changed', () => {
-    // A party change can flip `sharedRights` and with it `mine`. The corpse is
-    // the same corpse, and an addon watching the ground should not be woken by
-    // somebody joining the group.
+    // A party change flips `sharedRights` and `mine` without changing the corpse.
     const slot = { itemId: 'iron_ore', count: 3 };
     const locked = view({ all: [slot], mine: [], sharedRights: false });
     const opened = view({ all: [slot], mine: [slot], sharedRights: true });
@@ -308,13 +281,8 @@ describe('corpseSignature', () => {
     expect(corpseSignature(view({ harvestClaimedBy: STRANGER }))).not.toBe(before);
   });
 
-  // The corpse decaying is the one change here that can move NOTHING else. It
-  // empties `mine` and `copper`, and `mine` is deliberately not in the signature
-  // while `copper` was already 0 for a viewer with no rights, so on a corpse
-  // somebody else tapped the whole reading is byte-identical across the moment
-  // the game stops letting anyone open it. That is a published field arriving
-  // correctly and never firing its `world.on`, which is why it is asserted on a
-  // corpse with nothing takeable rather than on a full one.
+  // Decay can move nothing else: `mine` is not in the signature and `copper` is already 0 for a
+  // viewer without rights, so `decayed` itself has to be.
   it('moves when the loot window elapses on a corpse holding nothing takeable', () => {
     const slot = { itemId: 'iron_ore', count: 3 };
     const before = corpseSignature(view({ all: [slot], copper: 0, decayed: false }));
@@ -351,9 +319,7 @@ describe('groundReads', () => {
   const noEntities = (): ReadonlyMap<number, Entity> => new Map<number, Entity>();
 
   it('answers null for node cooldowns when the game carries no such member', () => {
-    // The map is a TypeScript-private field with no parity test behind it, so a
-    // rename removes it silently. Null is the reading that says so; an empty map
-    // would read as "nothing is cooling", which is a false all-clear.
+    // A private game field can vanish on rename; an empty map would be a false all-clear.
     expect(groundReads({ player: { id: ME } }, noEntities).nodeCooldowns).toBeNull();
   });
 

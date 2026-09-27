@@ -1,13 +1,7 @@
-/* One addon's own page: the head, and one block per thing its manifest declares.
- *
- * Its own sheet rather than more of pages.css, which had reached the 300-line
- * limit. Split by PAGE, the way components.css says to split by component
- * family: everything here is reached from /addons/<id> and nothing else uses it.
- */
-/* The same two-column row the landing hero is, for a preview that fits in half of
- * it. Which previews those are is decided in tools/site/shots.ts, from the file
- * rather than from this stylesheet: a sheet too wide to read at this size is
- * given the row below instead, and arrives here carrying `addon-head-alone`. */
+/* One addon's own page (/addons/<id>): the head, and one block per thing its
+ * manifest declares. Nothing else uses these rules. */
+/* The landing hero's two-column row, for a preview that fits in half of it.
+ * tools/site/shots.ts decides which; a wider one arrives with `addon-head-alone`. */
 .addon-head {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
@@ -16,8 +10,7 @@
   margin-bottom: 8px;
 }
 
-/* The text when the picture took the next row: held to a reading measure rather
- * than run across 1072px, which is what a one-column grid would have done. */
+/* The text when the picture took the next row, held to a reading measure. */
 .addon-head-alone {
   display: block;
   max-width: 68ch;
@@ -28,10 +21,8 @@
   margin: 20px 0;
 }
 
-/* Centring, in both placements. Only reached by a picture too small to fill the
- * space it was given, which the no-upscale rule in tools/site/shots.ts leaves at
- * its natural size on purpose. One rule rather than two, so neither can outrank
- * the other by accident. */
+/* Centring, in both placements, for a picture tools/site/shots.ts leaves smaller
+ * than its slot (it never upscales). One rule so neither placement can outrank it. */
 .addon-head .figure-plate,
 .addon-head-alone + figure .figure-plate {
   margin-inline: auto;
@@ -48,9 +39,8 @@
   margin-bottom: 8px;
 }
 
-/* A setting is a label and a line of facts about it. The facts are mono because
- * two of the three are literals a player will see in the control itself: an
- * option's own name, and a default that is typed into a field. */
+/* The facts line is mono because an option's name and a default are literals the
+ * player sees in the control itself. */
 .setting-list {
   list-style: none;
   margin: 20px 0 0;

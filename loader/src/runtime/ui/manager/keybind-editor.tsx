@@ -1,15 +1,6 @@
-// The keybind editor, with live conflict warnings.
-//
-// Rendered from the manifest's `keybinds` declarations, so an addon's full
-// keybind list is editable before the addon has ever run. Pressing "Set" hands
-// the next key press to the dispatcher's capture mode, which swallows it: that
-// is the only way to read a combo without the game also acting on it.
-//
-// A conflict WARNS and never blocks. Deliberately overriding a game binding is
-// legitimate, and a player who wants their addon on the key the game uses for
-// something they never do is not making a mistake. The warning does say which
-// side the reading came from, because a conflict list read from storage is
-// incomplete by construction: see keys/game-bindings.ts.
+// The keybind editor, with live conflict warnings, rendered from the manifest so it works before
+// the addon has run. Capture goes through the dispatcher, which swallows the key so the game does
+// not act on it. A conflict warns and never blocks: overriding a game binding is legitimate.
 
 import { describeCombo, isBindable } from '../../../shared/combo.ts';
 import type { KeybindDecl } from '../../../shared/schema.ts';
@@ -29,11 +20,8 @@ interface RowProps {
 }
 
 /**
- * The whole warning as one string, caveat included.
- *
- * The caveat rides on a reading that came from storage, which is incomplete by
- * construction: a key the player has never changed is not in there at all. See
- * keys/game-bindings.ts.
+ * The whole warning as one string. A reading from storage gets a caveat: it holds only keys the
+ * player changed. See keys/game-bindings.ts.
  */
 function conflictText(report: ConflictReading): string {
   const parts = [...report.actions, ...report.addons].join(', ');

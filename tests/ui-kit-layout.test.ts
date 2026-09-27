@@ -1,18 +1,8 @@
 // @vitest-environment happy-dom
 
-// The layout vocabulary.
-//
-// This pins the half that lives in JavaScript: which class an element is built
-// with, which parent it lands in, and what `show` writes. It cannot read the sheet,
-// since every `.css` import resolves to '' under Vitest, so `flex-shrink`, the gap
-// and the tap-target floor are checked by running the loader on the stage. Do not
-// widen that: reading the file needs node:fs, which is not exempt here.
-//
-// Three cases carry the design. That a class is written at all, that `gap` goes
-// through a custom property rather than `el.style.gap` where no rule could reach
-// it, and that hiding sets the class AND the attribute, since the class alone
-// leaves the element in the accessibility tree and the attribute alone is a UA rule
-// the loader's unlayered sheet beats outright.
+// The layout vocabulary's JavaScript half; the sheet is '' under Vitest and is checked on
+// the stage. Hiding sets the class AND the attribute: the class alone stays in the
+// accessibility tree, and the unlayered sheet beats the attribute's UA rule.
 
 import { beforeEach, describe, expect, it } from 'vitest';
 import { createColumn, createLine, createRow, show } from '../loader/src/runtime/ui/kit/layout.ts';
@@ -87,9 +77,7 @@ describe('ui.row', () => {
     expect(createRow(doc, { wrap: false }).classList.contains('woc-layout-row-wrap')).toBe(false);
   });
 
-  // Two SEPARATE custom properties, and neither written as a style property, which
-  // is what keeps the declaration in the loader's sheet. Whether the pair renders as
-  // `gap: 2px 10px` is a stage question.
+  // Two separate custom properties, neither a style property, so the sheet owns the rule.
   it('writes the wrap gap as a second custom property', () => {
     const el = createRow(doc, { wrap: true, gap: 10, wrapGap: 2 });
 
@@ -99,8 +87,7 @@ describe('ui.row', () => {
     expect(el.style.rowGap).toBe('');
   });
 
-  // The sheet defaults the wrap gap to the gap, so a row naming one number must not
-  // carry a second property freezing the other axis.
+  // The sheet defaults the wrap gap to the gap; a second property would freeze that axis.
   it('writes no wrap gap when none was asked for', () => {
     const el = createRow(doc, { gap: 10 });
 
@@ -162,8 +149,6 @@ describe('ui.show', () => {
     expect(el.hasAttribute('hidden')).toBe(false);
   });
 
-  // A shown element carries no display of its own, which is what makes the class
-  // approach need no memory of what it was displaying before.
   it('writes no inline display in either direction', () => {
     const el = createColumn(doc);
 
@@ -183,7 +168,7 @@ describe('ui.show', () => {
     expect(el.hasAttribute('hidden')).toBe(true);
   });
 
-  it('is idempotent, so a paint loop calling it every frame changes nothing', () => {
+  it('is idempotent', () => {
     const el = createRow(doc);
 
     show(el, false);

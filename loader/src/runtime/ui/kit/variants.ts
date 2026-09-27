@@ -1,31 +1,15 @@
 // The four axes a readout can be coloured by, and nothing else.
 //
-// Split out of readout.ts, which now holds only the SLOTS: the elements a row or a
-// square writes text, art and style into, each written only when it moved. These are
-// the vocabularies, which are a different subject with a different reason to change.
-// The slots move when the DOM a readout is made of moves; these move when the GAME
-// adds a school, a tier or a class.
-//
-// Every one of them refuses an unrecognised value rather than guessing a colour, and
-// each says why at its own normalizer. Which axis WINS where a caller sets two is not
-// decided here: it is source order in the sheets, at equal specificity, and each sheet
-// carries the note saying so.
+// These change when the GAME adds a school, a tier or a class. Each refuses an unrecognised
+// value rather than guessing a colour. Which axis WINS where two are set is source order in
+// the sheets, at equal specificity, not anything here.
 
 /** The tones a sheet draws. Anything else falls back to the first. */
 const TONES = Object.freeze(['default', 'warn', 'danger'] as const);
 
 /**
- * The game's own damage schools, which a readout can tint itself by.
- *
- * A SEPARATE axis from tone, not more values on it. Tone is urgency, which is why
- * Cooldown Bars sets 'warn' as an ability comes back up; a school is what KIND of
- * damage a row is made of. Folding them into one enum would make `tone: 'frost'` and
- * `tone: 'danger'` look like alternatives when they answer different questions.
- *
- * The palette is not invented here: the game already publishes one as
- * `--color-debuff-*` custom properties for its own debuff borders, and the loader
- * inherits those like every other token. So a readout tinted by school matches the
- * colour the player already reads on the aura icon for the same school.
+ * The game's own damage schools, a SEPARATE axis from tone (urgency). The palette is the
+ * game's `--color-debuff-*` tokens, so a tint matches the aura icon for the same school.
  */
 const SCHOOLS = Object.freeze([
   'physical',
@@ -38,17 +22,9 @@ const SCHOOLS = Object.freeze([
 ] as const);
 
 /**
- * The game's item quality tiers, which a readout drawing an ITEM can colour itself by.
- *
- * The third axis of the same kind as the other two, and the one an item panel needs: a
- * player picks an item out of a grid by its tier before they read a word of it, and every
- * addon that draws items was otherwise carrying its own copy of six hexes.
- *
- * The palette is the GAME'S, and unlike the schools it is not a token: the game keeps two
- * tables of literals, `QUALITY_COLOR` in `src/ui/icons.ts` for a NAME and the `.q-*` rules
- * in its own stylesheet for a BORDER, which differ only in that common is white as a word
- * and a dimmer grey as an edge. `styles/quality.css` carries both, transcribed, for the
- * reason lorebind carries the item table: nothing serves either of them.
+ * The game's item quality tiers. The palette is not a token: the game keeps two literal
+ * tables (`QUALITY_COLOR` for a name, `.q-*` for a border), which differ only at common.
+ * `styles/quality.css` transcribes both, since nothing serves them.
  */
 const QUALITIES = Object.freeze([
   'poor',
@@ -60,17 +36,9 @@ const QUALITIES = Object.freeze([
 ] as const);
 
 /**
- * The game's nine classes, which a readout drawing a PERSON can colour itself by.
- *
- * The fourth axis, and the only one that is about who rather than what: a school is what
- * kind of damage a row is made of, a tier is what an item is worth, a tone is whether
- * something is about to matter, and a class is who is standing there. A player identifies
- * somebody by it before they read the name, which is why every client that has ever drawn a
- * health bar per class has drawn the bar itself rather than its label.
- *
- * The palette is the GAME'S and is not a token: `CLASSES[cls].color` is a number in its own
- * content table, written into a `--class-color` property wherever the game needs one, so
- * nothing serves it and `styles/unit-class.css` carries the transcription.
+ * The game's nine classes, for a readout drawing a PERSON. The palette is the game's
+ * `CLASSES[cls].color` content table, which nothing serves; `styles/unit-class.css`
+ * transcribes it.
  */
 const UNIT_CLASSES = Object.freeze([
   'warrior',
@@ -101,10 +69,7 @@ interface ReadoutVariants {
 }
 
 /**
- * Which variant classes are on an element right now.
- *
- * The normalized VALUES rather than the class names, so an update repeating the tone
- * a readout already carries costs one comparison and builds no string at all.
+ * Which variants are on an element right now, as normalized values so a repeat builds no string.
  */
 interface VariantState {
   tone: ReadoutTone;
@@ -136,13 +101,7 @@ function normalizeTone(tone: unknown): ReadoutTone {
   return TONES[0];
 }
 
-/**
- * The school, or none for a school the game does not have.
- *
- * No fallback tint: an unrecognised school means the sheet has nothing true to say
- * about the readout, and inventing a colour would claim a damage type that is not the
- * one the event reported. The tone's own colour shows through instead.
- */
+/** The school, or none: a guessed tint would claim a damage type the event did not report. */
 function normalizeSchool(school: unknown): ReadoutSchool | null {
   if (isSchool(school)) {
     return school;
@@ -150,14 +109,7 @@ function normalizeSchool(school: unknown): ReadoutSchool | null {
   return null;
 }
 
-/**
- * The tier, or none for anything the game does not rank.
- *
- * No fallback colour, for the reason a school has none: the game declares no quality at all
- * for 96 of its items, and painting one would claim a tier nobody said. An addon that knows
- * an item is unranked and an addon that has not looked it up both pass null, and both get an
- * item drawn in the panel's own colours.
- */
+/** The tier, or none for anything the game does not rank (many items have no quality). */
 function normalizeQuality(quality: unknown): ReadoutQuality | null {
   if (isQuality(quality)) {
     return quality;
@@ -165,14 +117,7 @@ function normalizeQuality(quality: unknown): ReadoutQuality | null {
   return null;
 }
 
-/**
- * The class, or none for anything that is not one of the nine.
- *
- * No fallback colour, for the reason a school and a tier have none. The id an addon holds is
- * a mob's `templateId` as often as a player's, and a wolf is not a class: painting one would
- * claim a player where there is a beast. A caller that has not looked it up and a caller that
- * knows there is no class both pass null and both get the row's own colours.
- */
+/** The class, or none for anything that is not one of the nine (a mob's `templateId`, say). */
 function normalizeUnitClass(unitClass: unknown): ReadoutClass | null {
   if (isUnitClass(unitClass)) {
     return unitClass;
@@ -185,8 +130,6 @@ function applyTone(el: HTMLElement, prefix: string, tone: unknown, state: Varian
   if (next === state.tone) {
     return;
   }
-  // One call rather than a remove and an add: a readout carries exactly one tone, so
-  // there is nothing to accumulate and nothing left behind to sweep up.
   el.classList.replace(`${prefix}-${state.tone}`, `${prefix}-${next}`);
   state.tone = next;
 }
@@ -247,22 +190,13 @@ function toneClass(prefix: string, tone: unknown): string {
   return `${prefix}-${normalizeTone(tone)}`;
 }
 
-/**
- * Seeded from the tone the builder wrote into `className`.
- *
- * It has to match what is on the element, or the first update would try to replace a
- * class that is not there and leave the built one alongside the new one.
- */
+/** Seeded from the tone the builder wrote into `className`, so the first swap removes it. */
 function variantState(tone: unknown): VariantState {
   return { tone: normalizeTone(tone), school: null, quality: null, unitClass: null };
 }
 
 /**
- * Record the variants, each swapped rather than accumulated.
- *
- * A readout reused for another ability must not end up carrying two schools' classes,
- * or two tones', at once. Which of the two WINS is settled in each sheet by source
- * order at equal specificity, not here: this only records what the caller said.
+ * Record the variants, each swapped rather than accumulated, so a reused readout never carries two.
  */
 function applyVariants(
   el: HTMLElement,

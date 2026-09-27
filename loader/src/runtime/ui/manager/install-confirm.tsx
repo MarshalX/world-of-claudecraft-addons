@@ -1,16 +1,8 @@
 // The confirmation an install goes through, showing what the addon declares.
 //
-// It replaces the browse list rather than floating over it. A modal would need
-// its own focus trap and its own escape handling, and the manager already binds
-// Escape to closing the window: two overlapping meanings for one key is the
-// thing to avoid on a screen that is asking a trust question.
-//
-// The declared permissions are a DISCLOSURE, not a boundary. Addon code runs in
-// the page realm with the page's globals in scope, so a manifest that declares
-// nothing is not thereby prevented from doing anything. The warning under the
-// list says exactly that, because a list of permissions with nothing beside it
-// reads as a sandbox, and there is not one. The wording of each line is in
-// permissions.ts.
+// It replaces the browse list instead of floating over it: a modal would give Escape a second
+// meaning beside closing the window. Declared permissions are a disclosure, not a sandbox, so the
+// trust warning always sits under the list.
 
 import { type BrowseRow, shotOf } from './catalog.ts';
 import { describePermissions } from './permissions.ts';
@@ -46,14 +38,6 @@ interface InstallConfirmProps {
   onCancel: () => void;
 }
 
-/**
- * Who sent the player here, and what they said.
- *
- * The one place a companion's reason is READ rather than hovered. It rides a
- * `title` on the row it came from, which is nothing at all on a touch screen,
- * and this is the screen where it decides something: the player is being asked
- * to install an addon they did not go looking for.
- */
 /** The recommender, and their sentence when they gave one. */
 function saidBy(from: string, reason: string): string {
   if (reason === '') {
@@ -62,6 +46,10 @@ function saidBy(from: string, reason: string): string {
   return `${from}: ${reason}`;
 }
 
+/**
+ * Who sent the player here. The one place a companion's reason is shown as text: elsewhere it is a
+ * `title`, which a touch screen never shows.
+ */
 function Recommendation(props: { from: string; reason: string }) {
   if (props.from === '') {
     return null;

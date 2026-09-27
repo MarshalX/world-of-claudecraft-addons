@@ -1,18 +1,5 @@
-// What each host event makes the runtime do.
-//
-// The case this exists for is `registry.changed`. The registry is the desired
-// set and the supervisor is the actual one, so a write to the registry is the
-// ONLY thing that starts or stops an addon. Install landing enabled means
-// nothing unless that write reaches the resync, and until this suite was written
-// the dispatch that connects them was a closure inside boot.ts that nothing
-// exercised: install could have gone on writing `enabled: true` into a registry
-// nobody re-read, and the addon would have sat there installed and not running
-// with no error anywhere.
-//
-// The second reason is the cross-tab one. The sync hangs off the EVENT rather
-// than off the control that caused it, so a toggle in another tab has to reach
-// the supervisor here. A handler that instead did the work at the click site
-// would pass every test that clicks and fail only on a second tab.
+// What each host event makes the runtime do. A registry write is the only thing that starts or
+// stops an addon, and it acts from the event so a toggle in another tab reaches it too.
 
 import { describe, expect, it, vi } from 'vitest';
 import { createHostEventHandler, type EventTargets } from '../loader/src/runtime/host-events.ts';
@@ -37,8 +24,7 @@ function harness() {
 }
 
 describe('registry.changed', () => {
-  // The whole chain behind "an addon you install starts": install writes the row
-  // enabled, the host announces the write, and this is what acts on it.
+  // Install writes the row enabled, the host announces it, and this starts the addon.
   it('resyncs the running set', () => {
     const { handle, calls } = harness();
 
@@ -65,8 +51,7 @@ describe('the other events', () => {
     expect(calls.open).toHaveBeenCalledTimes(1);
   });
 
-  // Distinct from registry.changed because nothing about the installed set
-  // moved: the same addon at the same version has a different body.
+  // The installed set did not move: the same addon at the same version has a new body.
   it('reloads the one addon whose source changed', () => {
     const { handle, calls } = harness();
 
@@ -76,8 +61,7 @@ describe('the other events', () => {
     expect(calls.resync).not.toHaveBeenCalled();
   });
 
-  // A market or dev change moves nothing the supervisor owns, so it repaints
-  // rather than re-reading the registry and reconciling behind it.
+  // A market or dev change moves nothing the supervisor owns, so it only repaints.
   const repainting: HostEvent[] = [{ k: 'market.changed', id: 'official' }, { k: 'dev.changed' }];
 
   it.each(repainting)('repaints on $k', (event) => {
@@ -98,8 +82,7 @@ describe('the other events', () => {
     expect(calls.deliverStorage).toHaveBeenCalledWith('addon:official/combat-meter', 'seen', 7);
   });
 
-  // Restarting every addon because one of them wrote a storage key would be a
-  // reconcile per write, and addons write on a timer.
+  // Addons write on a timer, so a resync per write would be a reconcile per tick.
   it('does not resync on a storage write', () => {
     const { handle, calls } = harness();
 

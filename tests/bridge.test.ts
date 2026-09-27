@@ -49,12 +49,8 @@ function isMessagePort(value: Transferable): value is MessagePort {
 }
 
 /**
- * happy-dom delivers postMessage but drops the transfer list, so a port would
- * never reach the other side. Only that gap is stubbed: the messages, the
- * listeners, and both real halves are what is under test.
- *
- * Delivery is queued rather than inline because the real postMessage queues a
- * task. Dispatching inline would re-enter the listener that is still running.
+ * happy-dom drops postMessage's transfer list, so only that gap is stubbed. Delivery is
+ * queued like the real one, since inline dispatch would re-enter the running listener.
  */
 function enablePortTransfer(): void {
   const original = globalThis.postMessage.bind(globalThis);
@@ -105,9 +101,6 @@ function memoryGm(): GmAdapter {
     listValues: () => Promise.resolve([...store.keys()]),
     onValueChange: () => () => undefined,
     registerMenuCommand: () => undefined,
-    // No marketplace fetching in either of these suites: they are about the
-    // value store and the bridge, and a request here would be a request the
-    // code under test never makes.
     request: () => Promise.reject(new Error('no http in this fake')),
     scriptVersion: VERSION,
     capabilities: { valueStore: 'gm4', valueChange: 'none', menuCommand: false, http: false },
@@ -122,11 +115,8 @@ interface Handshake {
 }
 
 /**
- * Starts both halves on a fresh nonce.
- *
- * Every test in this file shares one window, and a queued message can outlive
- * the test that sent it. A per-handshake nonce is what keeps one test's traffic
- * from being answered by the next, which is also how it works in the browser.
+ * Starts both halves on a fresh nonce. Tests share one window and a queued message can
+ * outlive its test, so the nonce keeps one test's traffic from answering the next.
  */
 function startHandshake(runtimeNonce?: string): Handshake {
   enablePortTransfer();
@@ -146,8 +136,7 @@ function startHandshake(runtimeNonce?: string): Handshake {
     timeoutMs: TIMEOUT_MS,
   });
 
-  // Both settle in every test, but not always in the same turn, and an
-  // unobserved rejection would be reported against whichever test runs next.
+  // An unobserved rejection would be reported against whichever test runs next.
   hostPort.catch(() => undefined);
   runtime.catch(() => undefined);
 
@@ -185,8 +174,6 @@ describe('runtime injection', () => {
     expect(injected.text()).toBe(bootScript({ nonce, version: VERSION }, RUNTIME_SOURCE));
   });
 
-  // The script has already run by the time it is removed, so leaving it in the
-  // DOM would only hand page code the loader's source.
   it('leaves no script element behind', async () => {
     const { injected } = await connectBoth();
 
@@ -201,8 +188,7 @@ describe('handshake', () => {
     expect(typeof connection.port.postMessage).toBe('function');
   });
 
-  // A host that kept its window listener would hand a second port to whoever
-  // replayed the hello, which is what a missed removeEventListener looks like.
+  // A window listener left behind would hand a second port to whoever replays the hello.
   it('does not answer a second hello once connected', async () => {
     const { nonce } = await connectBoth();
     const offers: MessageEvent[] = [];
@@ -284,8 +270,7 @@ describe('host API over the bridge', () => {
     expect(await connection.host.storage.get(NS, 'scale')).toBeUndefined();
   });
 
-  // The push direction only works if the proxied callback survives the realm
-  // crossing, so it is worth proving over a real port rather than in isolation.
+  // The proxied callback has to survive a real port crossing.
   it('pushes storage changes back to the runtime', async () => {
     const { connection } = await connectBoth();
     const events: HostEvent[] = [];
@@ -301,18 +286,14 @@ describe('host API over the bridge', () => {
     expect(events[0]).toEqual({ k: 'storage.changed', ns: NS, key: 'scale', value: 3 });
   });
 
-  // The registry's state half is real, so an empty answer here means the store
-  // is empty rather than that the member is missing.
   it('answers the registry list from an empty store', async () => {
     const { connection } = await connectBoth();
 
     await expect(connection.host.registry.list()).resolves.toEqual([]);
   });
 
-  // The official source is merged in from the loader build rather than read from
-  // storage, so it is there on the first call with nothing installed and nothing
-  // fetched. `fetchedAt: null` is what says the index has not been read yet, and
-  // it is a different state from an index that was read and was empty.
+  // The official source comes from the build, so it is present before any fetch;
+  // `fetchedAt: null` means unread, which differs from read and empty.
   it('carries the built-in marketplace across the bridge', async () => {
     const { connection } = await connectBoth();
 
@@ -323,17 +304,13 @@ describe('host API over the bridge', () => {
     expect(markets[0]?.fetchedAt).toBeNull();
   });
 
-  // The manager holds the registry directly when it can, so a synchronous throw
-  // would be a different failure for it than for a bridged caller. Comlink turns
-  // a throw into a rejection either way, which is what hides the difference.
-  it('rejects rather than answering emptily for an addon no source offers', async () => {
+  // Comlink turns a throw into a rejection, hiding the difference a direct caller sees.
+  it('rejects an install no source offers', async () => {
     const { connection } = await connectBoth();
 
     await expect(connection.host.registry.install('official/minimap')).rejects.toThrow(NOT_OFFERED);
   });
 
-  // Dev mode is off until the player turns it on, so the local source is not in
-  // the list above and nothing polls localhost on an ordinary session.
   it('reports dev mode off by default', async () => {
     const { connection } = await connectBoth();
 

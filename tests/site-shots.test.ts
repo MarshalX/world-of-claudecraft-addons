@@ -26,7 +26,7 @@ describe('parseShots', () => {
     expect(parseShots(source, AT).size).toBe(1);
   });
 
-  it('rejects a missing alt, which is the field a template must never write', () => {
+  it('rejects a missing alt', () => {
     const { alt, ...noAlt } = ONE;
     expect(() => parseShots(manifest({ a: noAlt }), AT)).toThrow(/alt/);
   });
@@ -59,8 +59,7 @@ describe('measure', () => {
     expect(measure(shot, { width: 901, height: 500 }).maxWidth).toBe(450);
   });
 
-  // A tall narrow panel filling a 496px column made a row twice the height of the
-  // paragraph beside it. Capping by height puts it at about its in-game size.
+  // Filling the column's width would make a tall panel twice the height of its paragraph.
   it('caps a portrait shot by height, not by column width', () => {
     const tall = measure(shot, { width: 810, height: 980 });
     expect(tall.portrait).toBe(true);
@@ -74,8 +73,6 @@ describe('measure', () => {
     expect(small.maxWidth).toBe(100);
   });
 
-  // A large shot is served DOWN to its slot rather than at its own width: a
-  // 3244px capture in a 496px column is 213 kB of AVIF nobody can see.
   it('serves a large shot at its slot width, not its own', () => {
     const big = measure(shot, { width: 3244, height: 1882 });
     expect(big.served).toBe(1000);
@@ -87,8 +84,7 @@ describe('measure', () => {
     expect(measure(shot, { width: 700, height: 400 }).served).toBe(700);
   });
 
-  // The portrait cap feeds the encoder too: shown at 388 CSS px, there is no
-  // reason to encode the full 810 device pixels the file happens to carry.
+  // The portrait cap feeds the encoder too.
   it('serves a portrait shot at its capped size rather than its full width', () => {
     const tall = measure(shot, { width: 810, height: 980 });
     expect(tall.served).toBeLessThan(810);
@@ -125,20 +121,16 @@ describe('undersizeReport', () => {
   });
 });
 
-// The committed manifest has to parse, or the site build fails on a file nobody
-// edited deliberately. Imported rather than read, because noNodejsModules is not
-// exempt in tests/ and AGENTS.md says not to widen that for exactly this want.
-// Whether each named file EXISTS is checked by the build, which is doing the I/O
-// anyway to measure it.
+// Imported rather than read, because noNodejsModules is not exempt in tests/. Whether each
+// named file exists is checked by the build, which does the I/O anyway.
 describe('the committed manifest', () => {
   it('parses', () => {
     const shots = parseShots(JSON.stringify(committed), AT);
     expect(shots.size).toBeGreaterThan(0);
   });
 
-  // The manifest schema requires a caption even though the TYPE allows null: only
-  // a preview synthesised from an addon.json passes null, and none of those are
-  // declared here. Asserting on the parsed value is what pins that.
+  // The type allows a null caption, for a preview synthesised from an addon.json, and none of
+  // those are declared here.
   it('gives every shot a caption and an alt distinct from it', () => {
     for (const shot of parseShots(JSON.stringify(committed), AT).values()) {
       expect(shot.caption).not.toBeNull();
@@ -148,22 +140,16 @@ describe('the committed manifest', () => {
   });
 });
 
-// Where a preview is placed on an addon's page, decided from the FILE rather
-// than from a list of ids: beside the description when it fits there at its own
-// resolution, on a row of its own when it does not. Both mistakes this prevents
-// look the same to a reader, which is a page whose picture is the wrong size for
-// the space it was given.
+// A preview sits beside the description when it fits there at its own resolution and on a row
+// of its own when it does not, decided from the file rather than a list of ids.
 describe('a preview big enough for a row of its own', () => {
   it('keeps a single HUD panel beside the description', () => {
-    // Combat Meter and Facemark as shipped: 776 and 782 device pixels, which is
-    // roughly 390 CSS px, and half a content column is 500.
+    // About 390 CSS px, and half a content column is 500.
     expect(fillsOwnRow({ width: 776, height: 736 })).toBe(false);
     expect(fillsOwnRow({ width: 782, height: 412 })).toBe(false);
   });
 
   it('gives a two-panel sheet the whole row', () => {
-    // Satchel, Longwatch, Ledgerline and Emberwatch: 1900 to 2350 device pixels
-    // of captured detail, none of which can be read at half a column.
     expect(fillsOwnRow({ width: 1904, height: 1086 })).toBe(true);
     expect(fillsOwnRow({ width: 2136, height: 806 })).toBe(true);
     expect(fillsOwnRow({ width: 1984, height: 1446 })).toBe(true);
@@ -171,9 +157,7 @@ describe('a preview big enough for a row of its own', () => {
   });
 
   it('reads the width rather than the shape', () => {
-    // A tall narrow capture is not a sheet however many pixels it is high, and a
-    // wide short strip is not one either until it is actually wide. Both would be
-    // misplaced by an aspect-ratio test, which is the obvious wrong rule here.
+    // An aspect-ratio test misplaces both a tall narrow capture and a wide short strip.
     expect(fillsOwnRow({ width: 736, height: 2000 })).toBe(false);
     expect(fillsOwnRow({ width: 1044, height: 306 })).toBe(false);
   });

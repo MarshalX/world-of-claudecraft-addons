@@ -1,9 +1,4 @@
-// The services mountUi and mountManager need beyond what they are being tested
-// for.
-//
-// Collected here so a suite about HUD injection does not have to construct a
-// keybind dispatcher and a log buffer to say what it is actually about, and so
-// adding a dependency to the UI is one edit rather than one per suite.
+// The services mountUi and mountManager need beyond what a suite is testing.
 
 import { createKeyDispatcher } from '../../loader/src/runtime/keys/dispatcher.ts';
 import { createGameBindings } from '../../loader/src/runtime/keys/game-bindings.ts';
@@ -28,19 +23,12 @@ function createUiHarness(doc: Document): UiHarness {
     storage: createFakeStorage(),
     dispatcher: createKeyDispatcher({ target: new EventTarget(), doc }),
     logs: createLogBuffer(),
-    // No live game and no localStorage, so every combo reads as unbound, which
-    // is what a suite that is not about conflicts wants.
+    // No live game and no localStorage, so every combo reads as unbound.
     gameBindings: createGameBindings({ game: () => null, storage: () => null }),
   };
 }
 
-/**
- * A registry that answers, for a suite that is not about the registry.
- *
- * Every member is present because the manager's type demands all of them, and a
- * suite that only cares about `list` should not have to say what `install` does
- * to make the compiler let it through.
- */
+/** A registry that answers, for a suite that is not about the registry. */
 function fakeRegistry(overrides: Partial<ManagerRegistry> = {}): ManagerRegistry {
   return {
     list: () => Promise.resolve([]),
@@ -63,20 +51,14 @@ function supervisorServices(): Pick<
     statuses: () => [],
     reload: () => Promise.resolve(),
     reloadAll: () => Promise.resolve(),
-    // Fixed rather than locale-dependent: a suite asserting on rendered text
-    // must not depend on the machine's regional settings.
+    // Locale-independent, so rendered text does not depend on the machine.
     formatTime: (at) => `t+${String(at)}`,
   };
 }
 
 /**
- * The one menu every dropdown in the manager opens, built for real.
- *
- * A stub would make every case about a dropdown vacuous: a picker whose opener does nothing
- * puts no menu in the document, so a case that then looked for the chosen row would find
- * nothing and assert against whatever it happened to have. That is not hypothetical, it is
- * what a `<select>`-driving helper degraded into the day the control changed: a button carries
- * a `value` property too, so assigning one and reading it back passed while touching nothing.
+ * The one menu every manager dropdown opens, built for real. A stub opener puts no menu in the
+ * document, which makes every dropdown case pass vacuously.
  */
 function menuService(doc: Document, root: HTMLElement): ManagerDeps['openMenu'] {
   return createMenus({ doc, root, viewport: () => VIEWPORT }).open;

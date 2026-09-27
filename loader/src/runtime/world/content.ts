@@ -1,22 +1,9 @@
-// The two content tables the client hands over, copied once and frozen.
+// The content tables the client hands over, deep-copied once and frozen. The sources are the
+// game's own arrays, so an addon's `.sort()` or `.push()` would reach the game's windows.
 //
-// `recipeList` and `stationPlacements` are plain fields on the client's world
-// holding the game's OWN arrays by identity. Handing either to an addon
-// unwrapped is what `world.entities` was before it got a read-only view, one
-// level worse: a `.sort()` in an addon reorders the table the game's own
-// crafting window renders from, and a `.push()` adds a recipe it will try to
-// draw. So the read is a deep copy, frozen, cached on the identity of the
-// source array.
-//
-// Content cannot change during a session, which is why these two are NOT world
-// keys and must not become them. A signature over the recipe table would walk
-// every recipe on every snapshot to report that nothing moved, which is the same
-// call the dev watcher already makes when it polls bodies rather than the index.
-// The live half of crafting rides `professions`, which is a key already.
-//
-// Neither reader ever returns null. An empty array is the honest answer for a
-// client that has not carried the field, and a static content read has nothing
-// to be "not ready yet" about.
+// Content cannot change during a session, so these must NOT become world keys: a signature
+// would walk every recipe each snapshot to report nothing. The live half of crafting is
+// `professions`. The readers answer an empty array, never null.
 
 import { fieldArray, fieldNumber, fieldString, fieldValue } from '../net/frames.ts';
 
@@ -42,11 +29,8 @@ interface Recipe {
 }
 
 /**
- * One authored civic service point: a mailbox or a noticeboard.
- *
- * No zone and no id, because the game's own list carries neither. It is built
- * from the active world content by kind and position alone, which is enough to
- * put a marker on a map and not enough to name one.
+ * One authored civic service point: a mailbox or a noticeboard. No zone and no id: the game's
+ * list carries neither.
  */
 interface CivicService {
   kind: string;
@@ -68,11 +52,8 @@ const NO_STATIONS: readonly Station[] = Object.freeze([]);
 const NO_CIVIC_SERVICES: readonly CivicService[] = Object.freeze([]);
 
 /**
- * What has already been copied, keyed on the array it was copied FROM.
- *
- * Keyed on the source rather than on a boolean so a world swap re-reads instead
- * of serving the previous world's tables, and weak so a world the page has
- * dropped does not keep its content table alive through the loader.
+ * What has already been copied, keyed weakly on the SOURCE array, so a world swap re-reads and a
+ * dropped world is not kept alive.
  */
 const copies = new WeakMap<object, readonly unknown[]>();
 
@@ -156,14 +137,7 @@ function copyOnce<T>(source: readonly unknown[], one: (entry: unknown) => T): re
   return made;
 }
 
-/**
- * The game's own recipe table, copied and frozen.
- *
- * The copy is not optional and the cache is not an optimisation: the source is
- * the game's live array by identity, so the walk has to produce new frozen
- * entries, and it has to be keyed on the SOURCE rather than on a boolean so a
- * world swap re-reads instead of serving the previous world's tables.
- */
+/** The game's own recipe table, copied and frozen. */
 function readRecipes(world: unknown): readonly Recipe[] {
   const source = tableAt(world, 'recipeList');
   if (source === null) {
@@ -182,13 +156,8 @@ function readStations(world: unknown): readonly Station[] {
 }
 
 /**
- * The authored mailboxes and noticeboards, copied and frozen.
- *
- * The client reads it lazily off the active world content and freezes its own
- * array, so the copy here is not about mutation reaching the game the way it is
- * for the two above. It is about the array being the GAME's: an addon handed it
- * unwrapped could sort it, and the cache would then serve the reordered one back
- * to the game's map window. Cheap either way, since a world ships a handful.
+ * The authored mailboxes and noticeboards, copied and frozen like the others: the source is the
+ * array the game's own map window reads.
  */
 function readCivicServices(world: unknown): readonly CivicService[] {
   const source = tableAt(world, 'civicServicePlacements');

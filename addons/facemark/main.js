@@ -2,92 +2,34 @@
 
 // Facemark: the nameplate the game does not draw.
 //
-// Plates sit on `ui.anchor3d({ unit, over: 'head' })`, the renderer's own point for that
-// unit, which folds in model height, mount lift and scale. None of the three is on the
-// wire, so a fixed offset above `entity.pos` would be right for one creature size only and
-// there must be no offset setting. That point resolves to nothing past roughly eighty
-// yards, where the game draws no model, so the draw distance caps below that rather than
-// above it.
+// Plates sit on `ui.anchor3d({ unit, over: 'head' })`, which folds in model height, mount lift
+// and scale, none of which is on the wire, so there must be no offset setting. That point
+// resolves to nothing past about eighty yards, so the draw distance caps below that.
 //
-// WHICH SIDE SOMEBODY IS ON is not a field, and it is not worked out here either.
-// `entity.hostile` is written when the game builds a mob and nowhere else, so it is false
-// on every player in the world, including the five trying to kill you in a battleground.
-// `world.reaction` is the loader's answer, folding the duel, the arena, the battleground
-// and a pet's owner into one reading, and it is asked ONCE per unit per pass and carried
-// from there. This addon used to rebuild that roster itself; the loader publishing it is
-// what let a hundred lines of it go.
+// Side comes from `world.reaction`, asked once per unit per pass. `entity.hostile` is set only
+// on mobs, so it is false on every player, battleground enemies included.
 //
-// WHAT A PLAYER LOSES BY SWITCHING THE GAME'S OWN PLATES OFF is the measure this is
-// built against, because that is what installing this addon usually means. So the con
-// bands on the level, the raid mark as the game paints it, the emphasis on the current
-// target, the combo pips, the stealth translucency, the dead-player plates and the
-// declutter stack are all here to be a REPLACEMENT rather than an ornament. Where this
-// plate deliberately says less: no guild tag, no deed title or border, no community role
-// and no account badges, all of which are cosmetics on a 132px row, and no quest markers,
-// which need a table the wire has nothing to build from.
+// No plate where the game always draws its own: an NPC and a lootable corpse get the game's
+// plate whatever the player's toggles say (`V` hides living mobs; player plates are options).
 //
-// WHAT THE GAME WILL NOT STOP DRAWING IS NOT DRAWN HERE, which is the rule that decides
-// which units get a plate at all. There are exactly three toggles: `V` (Toggle Nameplates,
-// rebindable, session only) hides LIVING MOBS, and Show Player Nameplates and Show My
-// Nameplate are options. Nothing covers an NPC, and nothing covers a LOOTABLE CORPSE,
-// whose plate and `$` the game draws whatever the player does. A plate under either is the
-// same fact twice in the same square inch, for every player, permanently, which is the
-// same reason the overhead emote is left alone below.
+// Rank (`elite`, `boss`) and rarity (`rare`) are independent flags, so a rare can carry no rank.
+// Neither is on the wire: `longwatch` publishes the game's mob table on the bus, and everything
+// here works with nothing published, because a companion is not a dependency.
 //
-// RANK AND RARITY ARE TWO FLAGS, which is the thing to get right rather than the thing to
-// simplify: `elite`, `boss` and `rare` are three independent booleans on the game's own
-// template, so a rare elite is ordinary and FOUR of the game's rares carry no rank at all.
-// Rank goes on the level and the bar's edge; rarity is a word on the tag row, because a
-// plain rare with rank alone drawn is a level 12 troll that reads exactly like the two
-// ordinary trolls standing beside it. Neither is on the game's own plate.
+// Deliberately omitted: guild tag, deed title, community role and account badges (cosmetics on
+// a 132px row), quest markers (nothing on the wire to build them from), and the overhead emote
+// (the game paints its own bubble over the head regardless).
 //
-// RANK IS NOT ON THE WIRE EITHER, and it does not have to be worked out here. `longwatch`
-// carries the table the game's own `MOBS` is the source of and publishes it on the bus, so
-// this follows the topic and decorates from what arrives. It is complete rather than a
-// roster somebody typed, which is what makes a rank worth drawing at all: the failure to
-// avoid is decorating a few bosses and silently missing the rest. Everything here works
-// with nothing published, because a companion is a note rather than a dependency.
+// A mob's aura has no art, since the game composites aura icons at run time. A cast carries no
+// school, so its bar cannot be tinted. A mob ability's name and an activity sentinel are derived
+// from the id, so both end in a question mark.
 //
-// WHAT A PLAYER IS DOING rides the head row in one word, because in a fight it is a
-// decision rather than a detail: `<AFK>` prefixes the name the way the game's own plate
-// writes it, `mounted` says somebody is leaving rather than fighting, and `resting` says
-// they have to stand up first. That last one is the game's `sitting` field, which is
-// wider than its name: the wire folds sitting, eating and drinking into one bit and there
-// is no way to tell them apart for anybody else, so one honest word covers all three. `AI`
-// is beside them and is not one of them, being a disclosure about the account rather than
-// about the moment.
+// Two loops. Every frame: health, the cast bar, and the one projection the fade and declutter
+// share, since both follow the camera. Every 100 ms: which units have a plate, auras, threat,
+// mark, tags and pips, none of which a watch key reports (`world.on('entities')` is membership).
 //
-// THE OVERHEAD EMOTE IS DELIBERATELY NOT DRAWN, though it is published and readable. The
-// game paints its own bubble over that player's head, on its own canvas, whether or not
-// this addon is running, so a copy on the plate underneath would be the same fact twice
-// in the same square inch of screen. The guild tag is left out for the narrower reason
-// that a 132px row spends its width on a name that is already ellipsised.
-//
-// WHAT NEITHER PLATE SAYS is the other half, and it is a higher bar than parity: a row
-// this narrow earns nothing by saying more. Four things clear it, and each is a decision
-// rather than a detail. A shield laid over the health bar, because a unit at 40 percent
-// with 30 percent of absorb on it is not a unit at 40 percent and every bar in the game
-// says it is. Somebody else's TAP, because without it a plate offers you a fight whose
-// reward is not yours. A caster mob's POOL, three pixels of it, because the question about
-// a thing that is about to cast is whether it can afford to. And a cast pointed AT YOU,
-// which is also the only thing that ever justified a tone on the cast bar: on every mob
-// cast a tone marks the whole world urgent and says nothing.
-//
-// Three things a plate cannot say. An effect a mob applied has no art anywhere, since the
-// game composites aura icons at run time; a player's resolves through the caster's class.
-// A cast bar cannot be tinted, because the wire carries no school for a cast. And a mob
-// ability's name is worked out from its id, as is an ACTIVITY sentinel like crafting, so
-// both end in a question mark.
-//
-// Two loops. Every frame: health, the cast bar, and the one projection per plate that the
-// fade and the declutter stack share. Ten times a second: which units have a plate, the
-// effect strip, the threat edge, the mark, the tags and the pips, none of which any watch
-// key reports. `world.on('entities')` reports membership only, which is why the sampler is
-// under it. The projection moved to the frame loop because both things it feeds are about
-// where the CAMERA is pointing, and at 10 Hz a stack lagged a turn by a tenth of a second.
-//
-// The cap is by distance from the player, never by depth from the camera: depth would
-// change which twelve of forty units get a plate as the player turned.
+// The cap is by distance from the player, never by depth from the camera: depth would change
+// which units get a plate as the player turned.
 
 const SLOW_MS = 100;
 /** Effects on one plate. More than four and the strip becomes the plate. */
@@ -102,17 +44,7 @@ const ROW_GAP = 3;
 const BAR_BACKDROP = 'rgb(6 6 10 / 55%)';
 const PERCENT = 100;
 const DECIMALS = 1;
-/**
- * Health as a COUNT as well as a share, because the two answer different questions.
- *
- * A share says how much of a fight is left and a count says whether your next hit
- * finishes it, and a plate that only ever said 12% cannot answer the second for a
- * boss and a critter in the same glance. Compacted, since a five-figure boss pool
- * would take the whole row: the figure a player acts on is the leading digits.
- *
- * It goes in the bar's LABEL, on the left, which was empty: the share keeps the
- * right where it has always been, so nothing moves and nothing competes.
- */
+/** Health count goes in the bar's label on the left, compacted; the share keeps the right. */
 const THOUSAND = 1000;
 const MILLION = 1_000_000;
 /** Above this a tile's countdown drops its decimal: "12.4" is wider than the tile. */
@@ -127,9 +59,9 @@ const MIN_FADE = 0.35;
 const THREAT_TOP = 1;
 const THREAT_CLOSE = 0.8;
 /**
- * The game builds a control aura's id as `${ability.id}_slow`, so art under the whole id
- * can only 404. Three real ability ids end in one of these (`brain_freeze`, `dismiss_pet`,
- * `revive_pet`), which is why the spellbook is asked before any tail comes off.
+ * The game builds a control aura's id as `${ability.id}_slow`, so art under the whole id 404s.
+ * Real ability ids end in some of these (`brain_freeze`, `dismiss_pet`, `revive_pet`), so the
+ * spellbook is asked before any tail comes off.
  */
 const AURA_SUFFIXES = [
   '_absorb',
@@ -173,13 +105,7 @@ const AFK_TAG = '<AFK>';
 const MOUNTED_NOTE = 'mounted';
 const RESTING_NOTE = 'resting';
 const AI_TAG = 'AI';
-/**
- * The operators' Cheater tag, in the game's own bracketed spelling.
- *
- * The game draws it on its own nameplate and on the target frame, so a plate that
- * left it off would be hiding a sanction the game states, which reads as this
- * addon being broken rather than as the player being clean.
- */
+/** The operators' Cheater tag, spelled as the game draws it on its own plate and target frame. */
 const CHEATER_TAG = '< Cheater >';
 /** The one colour here that is not the game's: its tag colour is not a token. */
 const CHEATER_COLOUR = '#ff6b6b';
@@ -187,13 +113,8 @@ const CHEATER_COLOUR = '#ff6b6b';
 /** The topic `longwatch` publishes its mob table on. `follow` derives `mobs:ask` from it. */
 const RANKS_TOPIC = 'mobs';
 /**
- * What a rank puts after the level, in the game's own spelling.
- *
- * The game writes an elite's level as `{level}+` and draws a boss with a heavier
- * FRAME rather than a suffix, so the second `+` is ours: two ranks that read
- * identically would be worse than one nobody can tell from a normal mob. The
- * colour that used to be here has gone to the health bar's edge, which is where
- * the game puts rank and which is what gave the level back to con.
+ * What a rank puts after the level. The game writes an elite as `{level}+` and marks a boss
+ * by its frame alone, so `++` is ours: the two ranks must not read identically.
  */
 const RANK_SUFFIX = { elite: '+', boss: '++' };
 
@@ -226,17 +147,11 @@ const MARK_SKULL = 7;
 const MARK_BOX = '-50 -50 100 100';
 const MARK_STROKE = 9;
 /**
- * The eight marks as paths, transcribed from the game's own canvas geometry.
+ * The eight marks as paths, transcribed from the game's canvas geometry: mark art is
+ * composited at run time, so there is no file to fetch.
  *
- * Written out rather than worked out, because the source is a `switch` of canvas
- * calls and there is no file to fetch: mark art is composited at run time, so a
- * URL for one does not exist. The star's ten points are radius 42 and 17
- * alternating from straight up, and every other shape is the game's own numbers.
- *
- * `paint-order: stroke` is what makes these match rather than merely resemble.
- * Canvas strokes and then fills, so the fill covers the inner half of the
- * outline; SVG fills first by default, which would double the outline's visible
- * weight and shrink every mark inside it.
+ * Draw with `paint-order: stroke`. Canvas strokes then fills; SVG's default fill-first
+ * doubles the outline's visible weight and shrinks every mark inside it.
  */
 const MARK_PATHS = [
   'M 0,-42 L 10,-13.8 L 39.9,-13 L 16.2,5.3 L 24.7,34 L 0,17 L -24.7,34 L -16.2,5.3 ' +
@@ -265,13 +180,8 @@ const SKULL_FEATURES =
   'M 0,3 L 5,14 L -5,14 Z';
 
 /**
- * The game's own nameplate con bands, which are NOT its tooltip's.
- *
- * `mobNameColor` and `mobTooltipConColor` sit next to each other in the game's own
- * `reaction.ts` with deliberately different spreads, and the plate wants the first:
- * red at 3 levels above you and up, orange 1 to 2 above, yellow down to 2 below,
- * green to 5 below, grey once it is trivial. A corpse is grey whatever its level,
- * and a friendly pet takes the friendly green rather than any band.
+ * The game's nameplate con bands (`mobNameColor`), NOT its tooltip's (`mobTooltipConColor`),
+ * which spread differently. A corpse is grey at any level; a friendly pet takes friendly green.
  */
 const CON_RED = 'rgb(255 68 68)';
 const CON_ORANGE = 'rgb(255 170 51)';
@@ -286,11 +196,8 @@ const CON_YELLOW_FROM = -2;
 const CON_GREEN_FROM = -5;
 
 /**
- * The health bar's edge, which is where the game puts rank and the current target.
- *
- * One axis in the game's own precedence: a boss beats an elite beats whatever you
- * have selected. Rank is here rather than on the level because the level already
- * carries con, and the game makes the same split for the same reason.
+ * The health bar's edge carries rank and the current target, in the game's precedence: boss,
+ * then elite, then target. Rank is not on the level because the level carries con.
  */
 const STROKE_BOSS = 'rgb(255 85 85)';
 const STROKE_ELITE = 'rgb(242 200 75)';
@@ -310,34 +217,15 @@ const STEALTH_FADE = 0.55;
 /** One step over the plate's own size, which is the step the game's own name row takes. */
 const TARGET_FONT = '13px';
 
-/**
- * A shield, over the part of the bar the health does not reach.
- *
- * The game's own hatch, transcribed from `.bar-absorb` in its stylesheet, for the
- * reason the con bands are transcribed: a player already reads this pattern as a
- * shield on their own unit frames, and a flat wash of my own choosing would be a
- * second vocabulary for one thing.
- */
+/** A shield over the bar past the health: the game's own `.bar-absorb` hatch, transcribed. */
 const ABSORB_FILL =
   'repeating-linear-gradient(115deg, rgb(255 255 255 / 42%) 0 5px, rgb(190 225 255 / 16%) 5px 10px)';
 
-/**
- * A caster mob's pool, in the game's own colours for the four resources.
- *
- * `rtype`, `res` and `mres` ride any entity the server gives a resource, which is
- * players and caster mobs, and no nameplate in the game draws them. Three pixels,
- * and only where there is one: the question it answers is whether the thing about
- * to cast can afford to.
- */
+/** A resource strip, drawn only where the entity has a resource (players and caster mobs). */
 const POWER_PX = 3;
 /**
- * The game's own tokens rather than four colours picked to look right.
- *
- * It publishes one per resource for its own bars, so a strip drawn from them is
- * the blue the player already reads as mana on their own frame, and it follows
- * the game's theme picker for free. `ResourceType` is exactly these four today
- * and grew by one at game 0.36.0, so the fallback is a real case rather than a
- * defensive one.
+ * The game's own resource tokens, so the strip follows its theme picker. `ResourceType` is an
+ * open set the game grows, so the fallback is a real case.
  */
 const POWER_COLOURS = {
   mana: 'var(--color-mana)',
@@ -353,17 +241,8 @@ const TAPPED_NAME = 'rgb(150 150 150)';
 /** A cast pointed at YOU, which nothing in the game says anywhere. */
 const AT_YOU = 'at you';
 /**
- * A rare spawn, which is a SEPARATE flag from rank and mostly not an elite.
- *
- * `MobTemplate.elite`, `.boss` and `.rare` are three independent booleans and the
- * table publishes them that way, so four of the game's rares carry no rank at all
- * and read exactly like any other mob: Grubjaw the Glutton is a level 12 troll
- * with nothing to say it is worth crossing a marsh for. The game's own plate does
- * not decorate one either, which makes this something only an addon can say.
- *
- * A WORD rather than a mark, because the mark slot means somebody chose it and
- * the level already carries rank. Silver, which is the colour every client that
- * has ever drawn a rare has drawn it in.
+ * Rarity, a flag separate from rank. A word rather than a mark, because the mark slot means
+ * somebody chose it.
  */
 const RARE_TAG = 'rare';
 const RARE_COLOUR = 'rgb(214 220 235)';
@@ -377,13 +256,9 @@ const UNBREAKABLE = 'unbreakable';
 const CORPSE_NAME = 'rgb(187 187 187)';
 
 /**
- * The game's own declutter thresholds, in screen pixels.
- *
- * Two plates within this box of each other are one stack, and a stack is spread
- * around its own mean so nothing jumps when a third joins. The spatial hash the
- * game uses is deliberately not copied: it exists for forty-odd plates a frame and
- * this addon draws at most forty by its own setting, twelve by default, so the
- * pairwise pass is a dozen comparisons.
+ * The game's declutter thresholds, in screen pixels. Plates within this box are one stack,
+ * spread around its own mean so nothing jumps when a third joins. The plate count is capped by
+ * a setting, so a pairwise pass is enough and the game's spatial hash is not needed.
  */
 const DECLUTTER_X = 80;
 const DECLUTTER_Y = 18;
@@ -402,11 +277,8 @@ const cluster = [];
 const carriers = new Set();
 
 /**
- * Template id to what `longwatch` says about it, empty until it answers.
- *
- * Empty is the ordinary state rather than a failure: the companion may not be installed,
- * may be switched off, or may not have read its table yet. Everything keyed on this
- * degrades to an undecorated plate, which is what the addon drew before.
+ * Template id to what `longwatch` says about it. Empty is the ordinary state (companion absent,
+ * off or not ready), and everything keyed on it degrades to an undecorated plate.
  */
 const ranks = new Map();
 
@@ -474,14 +346,7 @@ function healthText(entity, fraction) {
   return percent(fraction);
 }
 
-/**
- * A player's class, for the bar to tint itself by, and null for everything else.
- *
- * `templateId` is the class id on a PLAYER and a mob template id on anything else, so
- * this is the guard that keeps `boss_wolf` out of a field whose union is nine classes.
- * The kit refuses an unknown value anyway and tints nothing, which is the safe way
- * round, but handing it one would be relying on that rather than saying what is true.
- */
+/** A player's class for the bar tint; `templateId` is a mob template id on anything else. */
 function unitClassOf(entity) {
   if (entity.kind !== 'player') {
     return null;
@@ -489,7 +354,7 @@ function unitClassOf(entity) {
   return entity.templateId;
 }
 
-/** Leading digits only: `1.3K` is what a player acts on, and `1347` is four characters wasted. */
+/** Leading digits only: `1.3K` rather than `1347`. */
 function compact(count) {
   const whole = Math.round(count);
   if (!Number.isFinite(whole) || whole < 0) {
@@ -504,7 +369,7 @@ function compact(count) {
   return String(whole);
 }
 
-/** The count, or nothing for a corpse: a dead unit's zero is the word beside it, not a figure. */
+/** The count, or nothing for a corpse, whose label is the word beside it. */
 function healthCount(entity) {
   if (entity.dead === true) {
     return '';
@@ -516,7 +381,7 @@ function healthCount(entity) {
   return compact(hp);
 }
 
-/** Only the carriers now: which side somebody is on is `world.reaction`, which folds all three bouts. */
+/** Flag carriers only; side comes from `world.reaction`. */
 function fillCarriers() {
   carriers.clear();
   const { match } = woc.world;
@@ -531,16 +396,8 @@ function fillCarriers() {
 }
 
 /**
- * Which side a unit is on, asked ONCE a pass and carried from there.
- *
- * `world.reaction` is the loader's, and it is the answer to a question no field
- * holds: `entity.hostile` is written when the game builds a mob and nowhere else,
- * so a plate reading it paints every duel, arena and battleground opponent
- * friendly-blue. It also folds a pet through its owner, so an enemy's pet reads
- * hostile and yours never reads as a wild mob.
- *
- * Null is a unit the loader has no roster entry for, which cannot happen for
- * anything with a plate, and neutral is the reading that costs least if it does.
+ * Which side a unit is on, asked once a pass. Never `entity.hostile`, which is false on every
+ * player. Null (no roster entry) reads as neutral, the cheapest wrong answer.
  */
 function standing(entity) {
   return woc.world.reaction(entity.id) ?? 'neutral';
@@ -564,18 +421,12 @@ function bareName(entity) {
   return `Unit ${String(entity.id)}`;
 }
 
-/**
- * All four of these are PLAYER fields, so a mob is never asked.
- *
- * Each exists on every entity and holds an inert default on anything that is not a player,
- * which is the trap the published types spend a paragraph on: readable, correctly typed,
- * and written by nobody. The guard is one question rather than four.
- */
+/** The player-only fields (afk, mount, sitting, account marks) hold inert defaults elsewhere. */
 function isPlayer(entity) {
   return entity.kind === 'player';
 }
 
-/** The game's own prefix, in the game's own place, so a plate reads like the one under it. */
+/** The game's own away prefix, before the name as the game writes it. */
 function nameOf(entity) {
   if (isPlayer(entity) && entity.afk === true) {
     return `${AFK_TAG} ${bareName(entity)}`;
@@ -584,16 +435,8 @@ function nameOf(entity) {
 }
 
 /**
- * What a player is DOING, in one word, or nothing.
- *
- * Both are PvP readings before they are anything else: a mounted player is leaving rather
- * than fighting, and a resting one is a player who has to stand up first. Neither is on
- * the game's own plate.
- *
- * `sitting` is the game's field NAME and is wider than the word: the wire folds sitting,
- * eating and drinking into one bit and there is no way to tell them apart for somebody
- * else, so `resting` is the honest label for all three. Mounted wins where both are set,
- * which the game does not allow anyway.
+ * What a player is doing, in one word, or nothing. `sitting` folds sitting, eating and drinking
+ * into one bit on the wire, so `resting` is the label for all three.
  */
 function stateNote(entity) {
   if (!isPlayer(entity)) {
@@ -608,13 +451,7 @@ function stateNote(entity) {
   return '';
 }
 
-/**
- * The operator-set mark on an AI-operated account.
- *
- * A disclosure about WHO is playing rather than a state, which is why it is its own tag
- * beside the state note rather than another word inside it: it does not change, and it is
- * true of an account whatever that account is doing.
- */
+/** The operator-set AI-account mark: its own tag, since it is about the account, not the moment. */
 function aiNote(entity) {
   if (isPlayer(entity) && entity.aiAccount === true) {
     return AI_TAG;
@@ -623,14 +460,8 @@ function aiNote(entity) {
 }
 
 /**
- * The operator-applied Cheater mark, which is the other account-level disclosure.
- *
- * Player-gated exactly as the game gates it: the mark is an ACCOUNT sanction, so a
- * server that ever set the flag on a mob would brand nothing here rather than put a
- * moderation verdict over a wolf. What is deliberately NOT here is any consequence:
- * the tag is said and nothing else changes, no tone, no sort, no filter, because the
- * game keeps the mark power-neutral and a display that treated a marked player as
- * lesser would put the handicap back in from outside.
+ * The operator-applied Cheater mark, player-gated as the game gates it. Label only: no tone,
+ * sort or filter, because the game keeps the mark power-neutral.
  */
 function cheaterNote(entity) {
   if (isPlayer(entity) && entity.cheaterMark === true) {
@@ -644,7 +475,7 @@ function rankOf(entity) {
   return ranks.get(entity.templateId) ?? null;
 }
 
-/** A rare and an elite are two flags, so a rare elite says both and a plain rare still says one. */
+/** Rarity is its own flag, so a rare elite says both and a plain rare still says one. */
 function rareNote(entity) {
   if (rankOf(entity)?.rare === true) {
     return RARE_TAG;
@@ -664,17 +495,7 @@ function levelText(entity) {
   return `${String(level)}${RANK_SUFFIX[rank.rank] ?? ''}`;
 }
 
-/**
- * The one number a player reads before deciding to pull, in the game's own bands.
- *
- * A LEVEL rather than a rank, which used to be here: rank moved to the bar's edge,
- * where the game draws it, precisely so this could have the level back. The bands
- * are `mobNameColor`'s and not `mobTooltipConColor`'s, which sits beside it with a
- * wider spread for the mouseover.
- *
- * Mobs only. The game con-colours no player's level, and it should not: a player
- * three levels above you is not a harder pull, they are a person.
- */
+/** The level's con colour, mobs only: the game con-colours no player's level. */
 function conColour(entity, side, player) {
   if (entity.kind !== 'mob') {
     return '';
@@ -724,12 +545,8 @@ function strokeFor(entity, isTarget) {
 }
 
 /**
- * The game hides a quest-gated mob outright for a player who is not on its quest, so the
- * clutch reads as inert scenery. Drawing over it gives away a designed moment.
- *
- * Hidden only when the table ANSWERED for this template, so with no rank service installed
- * nothing is hidden. The quest log is null before world entry, which is also not on the
- * quest.
+ * The game hides a quest-gated mob from a player not on its quest, so this does too. Only when
+ * the table answered for the template; a null quest log (before world entry) is not on it.
  */
 function questGated(entity) {
   const rank = rankOf(entity);
@@ -744,7 +561,7 @@ function distanceBetween(a, b) {
   return Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z);
 }
 
-/** An unrecognised mode falls back to hostiles, which costs least on a setting from a future manifest. */
+/** An unrecognised mode falls back to hostiles only. */
 function askedFor(entity, side) {
   const mode = woc.settings.show;
   if (mode === 'everything') {
@@ -773,43 +590,17 @@ function quiet(entity, cast) {
 }
 
 /**
- * A dead PLAYER keeps a plate. A dead mob does not, and the reason is the toggle.
- *
- * In a battleground `dead` is match-wide by design, so a grey plate on the far
- * five is the "four of them are down" reading, drawn on the people rather than in
- * a panel, and a player who has switched Show Player Nameplates off has no other
- * way to see it.
- *
- * A LOOTABLE MOB is the case that looks identical and is not. The game draws that
- * corpse's plate with its own `$` and NOTHING TURNS IT OFF: `showNameplates`
- * hides `kind === 'mob' && !dead` only, so the V key leaves every corpse on
- * screen. A plate here would be the same fact twice in the same square inch, for
- * every player, permanently. See the rule at the top of this file.
+ * A dead player keeps a plate; a dead mob does not, because the game's corpse plate cannot be
+ * turned off (`showNameplates` hides living mobs only).
  */
 function corpseWorthDrawing(entity) {
   return entity.kind === 'player';
 }
 
 /**
- * The one plate the game keeps whatever the player does, and the setting for it.
- *
- * Show Player Nameplates hides every other player EXCEPT the one you have selected, so a
- * clicked player stays readable: `e.id !== player.targetId` is the last term of the
- * game's own hidden rule. That exception is the only place a player who switched the
- * game's plates off still gets two, and it follows them around, since it is whatever they
- * are pointed at rather than a fixed unit.
- *
- * ON by default, and the reason is that this is the one case where hiding cannot leave a
- * hole. A player you have selected ALWAYS has a game plate: either Show Player Nameplates
- * is on and everybody has one, or it is off and the target exception spares exactly this
- * unit. So the addon's plate there is always the second one on the same head. Turn it off
- * to have the health count, the class-tinted bar, the effect strip and the cast warning
- * back on the unit you are pointed at, and accept reading two plates over it.
- *
- * PLAYERS ONLY, and that is the whole of why this is not simply "hide the target". The
- * mob rule has no target exception at all, so with mob nameplates off your mob target has
- * no game plate to double, and hiding this addon's would leave the unit you are fighting
- * with nothing over it whatsoever.
+ * A selected player always has a game plate (Show Player Nameplates exempts the target), so
+ * this one would be a second. Players only: the game's mob rule has no target exception, so a
+ * mob target may have no other plate at all.
  */
 function doubledOnTarget(entity, player) {
   if (entity.kind !== 'player' || entity.id !== player.targetId) {
@@ -818,14 +609,7 @@ function doubledOnTarget(entity, player) {
   return woc.settings['hide-selected-player'] === true;
 }
 
-/**
- * An object is out because it has no health, and an NPC because the game will not stop.
- *
- * There is no toggle for an npc plate anywhere in the game: `showNameplates` is
- * mobs, `showPlayerNameplates` is other players, `showOwnNameplate` is you, and
- * an npc is none of the three. So a quest giver wears the game's plate whatever
- * the player does, and a second one under it is noise nobody asked for.
- */
+/** No object (no health) and no NPC: no game toggle hides an NPC's own plate. */
 function platable(entity, player, range) {
   if (entity.id === player.id || entity.kind === 'object' || entity.kind === 'npc') {
     return false;
@@ -847,9 +631,7 @@ function platable(entity, player, range) {
 
 /**
  * Nothing is projected here: which units get a plate must not depend on where the camera points.
- *
- * The side is resolved ONCE per unit and carried on the entry, because it is a
- * lookup rather than a field and four things downstream ask it.
+ * The side is a lookup, so it is resolved once and carried on the entry.
  */
 function collect(player, casts) {
   wanted.length = 0;
@@ -885,7 +667,7 @@ function artId(auraId) {
   return base;
 }
 
-/** Art is filed per player class, so a mob's aura resolves through nothing. `sourceId` is 0 for unsaid. */
+/** Art is filed per player class, so a mob's aura has none. `sourceId` is 0 when unknown. */
 function auraIcon(aura) {
   if (typeof aura.id !== 'string') {
     return null;
@@ -948,12 +730,8 @@ function auraFraction(aura) {
 }
 
 /**
- * A square whose whole face is art has no room for a name, so this is what announces it.
- *
- * `unbreakableControl` is said in WORDS rather than drawn, because the tile's only
- * free channel is its border and that already carries the school. It is worth
- * saying at all because it is the difference between a stun a trinket clears and
- * one an encounter owns, which is a decision rather than a detail.
+ * The tile's accessible name. `unbreakableControl` is said in words because the tile's only
+ * free channel, its border, already carries the school.
  */
 function auraLabel(aura) {
   let named = woc.fmt.titleCase(String(aura.id));
@@ -974,7 +752,7 @@ function auraTone(aura) {
   return 'default';
 }
 
-/** The mark stays ours: this label also reaches an accessible name, where a glued-on `?` reads as part of it. */
+/** The `?` is appended here, not by the kit, because the label also becomes an accessible name. */
 function describe(abilityId) {
   const found = woc.world.abilities.describe(abilityId);
   if (found.known) {
@@ -983,14 +761,7 @@ function describe(abilityId) {
   return { label: `${found.name}${GUESS_MARK}`, guessed: true };
 }
 
-/**
- * One mark, as the game paints it rather than as a word.
- *
- * "Skull" written out is the weakest thing that was ever on this plate and the
- * widest: the glyph is 13px where the word was five characters of a 132px row,
- * which is most of what pays for the rest of what a plate now says. The NAME
- * stays as the accessible name, because a path cannot be read aloud.
- */
+/** One mark as the game paints it. The caller sets the name as the accessible label. */
 function markMarkup(at) {
   const fill = MARK_COLOURS[at] ?? NEUTRAL_NAME;
   const open =
@@ -1015,8 +786,7 @@ function markMarkup(at) {
 }
 
 function buildHead() {
-  // The children are appended in `createPlate`, once the tag group exists: the tags
-  // ride the tail of this row and building them here would put a second concern in it.
+  // Children are appended in `createPlate`, once the tag group that rides this row exists.
   const head = box('div', 'woc-fm-head', {
     display: 'flex',
     alignItems: 'center',
@@ -1035,20 +805,9 @@ function buildHead() {
 }
 
 /**
- * Two tag groups, each against the thing it is about, and each collapsing when empty.
- *
- * One row at the bottom of the plate was the first shape and it was wrong twice
- * over. It DRIFTED: a word under the health bar moved down the plate as a cast bar
- * and an effect strip appeared and went under it, so where it sat meant nothing.
- * And it read as a CAPTION of whatever it happened to be under, which for
- * `resting` was the health bar, a row it has nothing to do with.
- *
- * So who somebody IS rides the END OF THE HEAD ROW, after the level, where the
- * rest of their identity already is and where it costs no height at all: these
- * are one short word each and the name ellipsises, which it was already doing.
- * What is ABOUT TO HAPPEN keeps its own row under the cast bar, beside the cast it
- * is about, because that one is urgent and a name should not be able to push it
- * off the plate.
+ * Two tag groups, each collapsing when empty. Identity tags ride the end of the head row;
+ * alerts get their own row under the cast bar, so a long name cannot push them off the plate.
+ * A single row at the bottom would drift as the cast bar and strip come and go.
  */
 function tagRow(className) {
   return box('div', className, {
@@ -1082,13 +841,7 @@ function buildTags() {
   return { tags, alerts, rare, note, ai, cheater, atYou, taunt, carry };
 }
 
-/**
- * Five pips, drawn over your CURRENT TARGET and nowhere else.
- *
- * They are the player's own points rather than anything about the unit, which is
- * why they sit under the health bar rather than in the head row: the row says who
- * this is, and this says what you have saved up to spend on them.
- */
+/** Five combo pips, drawn over your current target only. */
 function buildPips() {
   const pips = box('div', 'woc-fm-pips', { display: 'none', gap: '3px', justifyContent: 'center' });
   const dots = [];
@@ -1129,10 +882,7 @@ function createPlate(entity) {
   const pipped = buildPips();
   const bars = buildBars();
   const strip = box('div', 'woc-fm-strip', { display: 'flex', gap: '2px' });
-  // Top to bottom, and the order is the reading: who this is and what state they are in,
-  // how hurt they are, what they are casting, what that cast means for you, what is on
-  // them. The identity tags ride the head row's tail and the alert row collapses, so a
-  // plain mob's plate is still a name, a bar and its effects.
+  // Top to bottom is the reading order: identity, health, cast, what it means for you, effects.
   parts.head.append(parts.mark, parts.name, parts.level, tagged.tags);
   plate.append(
     parts.head,
@@ -1147,13 +897,7 @@ function createPlate(entity) {
   return { anchor, plate, strip, ...parts, ...tagged, ...pipped, ...bars, ...freshState() };
 }
 
-/**
- * The health bar, its shield overlay, a caster's pool, and the cast bar.
- *
- * The shield is positioned against the health bar's own box, which is what the
- * wrapper is for: the kit owns the fill inside it and this owns the strip laid
- * over the top, and neither has to know about the other.
- */
+/** The health bar with its shield overlay (positioned against the bar), the pool, the cast bar. */
 function buildBars() {
   const health = woc.ui.bar({ className: 'woc-fm-health' });
   health.el.style.background = BAR_BACKDROP;
@@ -1181,13 +925,8 @@ function buildBars() {
 }
 
 /**
- * What each plate remembers about itself.
- *
- * Every one of these is the last thing WRITTEN rather than the last thing read,
- * so a repaint that would change nothing writes nothing: a style property is a
- * repaint even when the value is identical, and half of these run per frame per
- * plate. The impossible starting values are deliberate, so the first pass always
- * writes.
+ * The last value WRITTEN per plate, so an unchanged repaint writes nothing: a style write is a
+ * repaint even when identical. The impossible starting values make the first pass write.
  */
 function freshState() {
   return {
@@ -1229,7 +968,7 @@ function tileAt(entry, at) {
   return tile;
 }
 
-/** Name, art and school are written only when the slot changes hands: resolving art is the expensive half. */
+/** Name, art and school are written only when the slot changes hands: resolving art is costly. */
 function paintTile(entry, at, aura) {
   const tile = tileAt(entry, at);
   if (entry.slots[at] !== aura.id) {
@@ -1249,7 +988,7 @@ function paintTile(entry, at, aura) {
   tile.el.style.display = '';
 }
 
-/** Unnamed again, or the slot goes on announcing an effect that has gone. */
+/** Clear the label too, or the hidden slot goes on announcing an effect that has gone. */
 function hideTile(entry, at) {
   const tile = entry.tiles[at];
   if (tile === undefined) {
@@ -1274,7 +1013,7 @@ function paintStrip(entry, entity, hide = false) {
   }
 }
 
-/** A mob only: a player keeps no hate table, so an edge from it would be a permanent nothing. */
+/** Mobs only: a player keeps no hate table. */
 function threatShare(entity) {
   if (entity.hostile !== true) {
     return null;
@@ -1305,15 +1044,9 @@ function paintEdge(entry, entity) {
 }
 
 /**
- * A raid mark if somebody set one, and nothing otherwise.
- *
- * The elite diamond and the lootable `$` the game also draws in this slot are
- * both deliberately absent: rank is already on the level and on the bar's edge,
- * and the game's own corpse plate cannot be switched off, so a `$` here could
- * only ever be a second one.
- *
- * The markup is rebuilt only when the mark CHANGES: parsing an SVG is the
- * expensive half and the slow pass runs ten times a second.
+ * A raid mark if somebody set one. The game's elite diamond and `$` are deliberately absent:
+ * rank is on the level and edge, and the game's corpse plate already shows `$`. The markup is
+ * rebuilt only when the mark changes, since parsing SVG is the costly half.
  */
 function paintMark(entry, entity, markers) {
   const at = markers?.get(entity.id) ?? null;
@@ -1330,7 +1063,6 @@ function paintMark(entry, entity, markers) {
   entry.mark.style.display = '';
 }
 
-/** The classic "there is money on this one", in the game's own character. */
 function clearMark(entry) {
   entry.mark.style.display = 'none';
   entry.mark.innerHTML = '';
@@ -1338,14 +1070,7 @@ function clearMark(entry) {
   entry.markAt = -1;
 }
 
-/**
- * The one mark worth the width in a capture-the-flag match.
- *
- * Coloured by the side the carrier is on rather than by the flag they took,
- * because the question a player answers with it is chase or escort. It is the
- * only thing on the plate that says anything a battleground scoreboard cannot,
- * since it is drawn ON the person to chase.
- */
+/** The flag carrier tag, coloured by the carrier's side rather than the flag's: chase or escort. */
 function paintCarry(entry, entity, side) {
   if (!carriers.has(entity.id)) {
     entry.carry.style.display = 'none';
@@ -1358,15 +1083,9 @@ function paintCarry(entry, entity, side) {
   entry.carry.style.display = '';
 }
 
-/** Row two exists only while something is in it, so an ordinary mob costs no height. */
 /**
- * The words for a cast pointed at you, which are NOT on the cast bar.
- *
- * They were, and the preview is what said otherwise: a 132px bar holds an
- * ability name and a countdown, so "at you" was ellipsised off the end of every
- * label long enough to matter, which is most of them. The bar keeps the tone,
- * since a colour costs no width, and the words go on the row that exists for
- * short true things. Nothing in the suite could see this.
+ * "at you" goes on the alert row, not the cast bar: a 132px bar ellipsises it off the end of
+ * most labels. The bar keeps the tone, which costs no width.
  */
 function atYouNote(entity, player) {
   if (castAtYou(entity, player) && entity.castingAbility !== null) {
@@ -1410,13 +1129,7 @@ function showRow(row, holds) {
   }
 }
 
-/**
- * Your own combo points, over the unit they would be spent on.
- *
- * The game's own rule: nothing unless this is your current target, nothing on a
- * dead one, and never more than five. A class that has no combo points reads zero
- * forever, which draws no row at all.
- */
+/** The game's rule: your current target only, never on a dead one, at most five. */
 function comboPips(entity, player) {
   if (player.targetId !== entity.id || entity.dead === true) {
     return 0;
@@ -1469,16 +1182,8 @@ function stealthed(entity) {
 }
 
 /**
- * Whether somebody else got there first, and the loot is theirs.
- *
- * `tappedById` is the first player to damage a mob and it owns the mob's shared
- * loot. Null is nobody, and a 0 would be a real entity id rather than a nobody,
- * which is the trap this reads around. Your own party counts as you: a group's
- * tap is the group's.
- *
- * The game has no equivalent of this ANYWHERE, which is what makes it worth the
- * one colour: without it a plate offers you a fight whose reward is somebody
- * else's.
+ * Whether somebody outside your party tapped the mob and owns its loot. `tappedById` is null
+ * for nobody; test for a number, since 0 would be a real entity id.
  */
 function tappedByAnother(entity, player) {
   const owner = entity.tappedById;
@@ -1496,7 +1201,7 @@ function inParty(pid) {
   return party.members.some((member) => member.pid === pid);
 }
 
-/** A corpse is grey whoever it was, which is the game's own rule and reads as past tense. */
+/** A corpse is grey whoever it was, as in the game. */
 function headColour(entity, side, player) {
   if (entity.dead === true) {
     return CORPSE_NAME;
@@ -1507,13 +1212,7 @@ function headColour(entity, side, player) {
   return nameColourFor(side);
 }
 
-/**
- * A caster mob's pool, which only exists where the server sent one.
- *
- * `resourceType` is the honest test rather than `maxResource`: a resource-less
- * wolf omits all three fields and a zero maximum would read the same as a caster
- * drained to nothing.
- */
+/** Test `resourceType`, not `maxResource`, which a resource-less mob omits along with the rest. */
 function paintPower(entry, entity) {
   const kind = entity.resourceType;
   const max = Number(entity.maxResource);
@@ -1526,13 +1225,7 @@ function paintPower(entry, entity) {
   entry.powerFill.style.width = percent(Math.min(Math.max(Number(entity.resource) / max, 0), 1));
 }
 
-/**
- * A taunt holding this mob on you, while it lasts.
- *
- * Present as a positive only: the field is absence-is-not-evidence, so a plate
- * that said "no taunt" would be claiming something nobody sent. Yours alone, since
- * a taunt on somebody else is their business and this row is 132px wide.
- */
+/** A taunt holding this mob on you. Positive only: absence of the field is not evidence. */
 function tauntNote(entity, player) {
   if (entity.forcedTargetId !== player.id) {
     return '';
@@ -1544,7 +1237,7 @@ function tauntNote(entity, player) {
   return `${TAUNT_TAG} ${seconds(left)}`;
 }
 
-/** The game steps its own name row up for whatever you have selected. This is that step. */
+/** The game steps its name row up one size for your selection. */
 function nameSize(isTarget) {
   if (isTarget) {
     return TARGET_FONT;
@@ -1570,14 +1263,7 @@ function paintSlow(entry, found, markers, player) {
   entry.stealth = stealthed(entity);
 }
 
-/**
- * A corpse keeps its bar, which is where the game and this plate part company.
- *
- * The game hides its own and renames the unit "Corpse of X"; this cannot rename
- * anybody, since the name is the entity's. So the bar stays and carries the word
- * instead, which also keeps the one distinction that matters in a fight: `dead`
- * is true through both halves of dying and only `ghost` says they have released.
- */
+/** A corpse keeps its bar, which carries `dead` or `ghost` since this cannot rename the unit. */
 function paintHealth(entry, entity) {
   const fraction = healthFraction(entity);
   entry.health.update({
@@ -1590,7 +1276,7 @@ function paintHealth(entry, entity) {
   paintAbsorb(entry, entity, fraction);
 }
 
-/** Every shield on a unit, which is damage the health bar alone says is not there. */
+/** The sum of every absorb on a unit. */
 function absorbTotal(entity) {
   const { auras } = entity;
   if (!Array.isArray(auras)) {
@@ -1605,16 +1291,7 @@ function absorbTotal(entity) {
   return total;
 }
 
-/**
- * The shield, laid over the health bar past where health ends.
- *
- * The game draws this on its own unit frames and on NO nameplate, which is the
- * whole reason it is worth the pixels: a unit at 40 percent with a shield worth
- * another 30 is not a unit at 40 percent, and every plate in the game says it is.
- *
- * Drawn by this addon rather than by the kit, because a bar has one fill by
- * design: a second one is this display's problem and not every addon's.
- */
+/** The shield, laid over the health bar past where health ends. The kit's bar has one fill. */
 function paintAbsorb(entry, entity, fraction) {
   const max = Number(entity.maxHp);
   const total = absorbTotal(entity);
@@ -1628,7 +1305,7 @@ function paintAbsorb(entry, entity, fraction) {
   entry.absorb.style.width = percent(Math.max(share, 0));
 }
 
-/** LEFT rather than elapsed, which is the sense the kit draws a fill in. */
+/** Remaining rather than elapsed, the sense the kit draws a fill in. */
 function castFraction(cast) {
   if (!(Number.isFinite(cast.total) && cast.total > 0)) {
     return 0;
@@ -1637,24 +1314,14 @@ function castFraction(cast) {
 }
 
 /**
- * Whether this cast is pointed at YOU.
- *
- * `castTargetId` is filled inside the game's own casting guard, so its absence
- * means "not casting, or casting something untargeted" and never "not at you".
- * Read as a positive only, which is the same rule the taunt tag follows.
+ * Whether this cast is pointed at you. Positive only: an absent `castTargetId` means not
+ * casting or untargeted, never "not at you".
  */
 function castAtYou(entity, player) {
   return entity !== undefined && entity.castTargetId === player.id;
 }
 
-/**
- * No school, since nothing on the wire says one.
- *
- * The TONE is the one thing here that had to wait for a reason to exist. A tone on
- * every mob cast marks the whole world urgent and says nothing; a tone on the cast
- * that is coming at YOU is the plate saying the one thing about a cast bar that
- * changes what a player does, and the game says it nowhere at all.
- */
+/** No school (the wire has none). A tone only on a cast at you: on every cast it says nothing. */
 function paintCast(entry, cast, entity, player) {
   if (cast === null || !woc.settings.casts) {
     entry.cast.el.style.display = 'none';
@@ -1684,16 +1351,8 @@ function castTone(mine) {
 }
 
 /**
- * The art for what is being cast, which resolves for a PLAYER and never for a mob.
- *
- * `castingAbility` is a real ability id rather than a display name, so the join is
- * exact where art exists at all. It is filed per class, and the only class an
- * entity carries is a player's `templateId`, so a boss winding up its signature
- * move has no file anywhere and the kit hides the slot rather than drawing a gap.
- * Same resolution the effect tiles make, for the same reason.
- *
- * An ACTIVITY sentinel (gathering, fishing, the crafting family) is an id for
- * nothing and simply misses, which is the right answer rather than a special case.
+ * Cast art resolves for a player only: art is filed per class and only a player's `templateId`
+ * is a class. An activity sentinel simply misses, which needs no special case.
  */
 function castIcon(cast, entity) {
   if (entity === undefined || entity.kind !== 'player') {
@@ -1702,7 +1361,7 @@ function castIcon(cast, entity) {
   return woc.ui.icon.ability(cast.ability, entity.templateId);
 }
 
-/** `world.markers` is read once rather than per plate: the loader builds that map on every read. */
+/** Read `world.markers` once per pass: the loader builds that map on every read. */
 function slowPass() {
   const { player } = woc.world;
   if (player === null || !shown) {
@@ -1742,13 +1401,8 @@ function fadeAt(depth, entry) {
 }
 
 /**
- * Where each plate landed this frame, for the fade and the stack.
- *
- * ONE projection per plate rather than two: the fade wants the depth and the
- * declutter wants the point, and asking twice for one answer is the kind of thing
- * that is invisible until a crowd. A unit the camera cannot resolve is hidden here
- * and skipped by everything after, which is the honest reading of a point that
- * does not exist rather than a plate frozen where it last was.
+ * One projection per plate feeds both the fade (depth) and the declutter (point). A unit the
+ * camera cannot resolve is hidden and skipped, rather than frozen where it last was.
  */
 function projectAll() {
   spots.length = 0;
@@ -1776,17 +1430,8 @@ function overlapping(a, b) {
 }
 
 /**
- * Nudge apart the plates that would otherwise sit on top of each other.
- *
- * Two mobs standing together project to one point, and until this the second plate
- * was drawn exactly over the first: not a crowded reading but a missing one. The
- * game's own thresholds, its own ascending-id order so a stack does not reshuffle
- * as the camera moves, and its own spread around the cluster's mean rather than
- * from the top, so a third joining pushes both neighbours half a step instead of
- * moving everybody down.
- *
- * Pairwise, over at most a dozen plates. The game reaches for a spatial hash
- * because it draws forty of these a frame; this is a dozen comparisons.
+ * Nudge apart plates that would sit on top of each other, as the game does: ascending id order
+ * so a stack does not reshuffle as the camera moves, spread around the cluster's mean.
  */
 function declutter() {
   spots.sort((a, b) => a.id - b.id);
@@ -1828,11 +1473,8 @@ function spreadCluster() {
 }
 
 /**
- * Scale and stack in ONE transform, written only when either moved.
- *
- * They cannot be two properties: `transform` is one, so a second write would
- * discard the first, and the scale has to come after the translation or the stack
- * offset is multiplied by it and a scaled-down plate stacks too tightly.
+ * Scale and stack share the one `transform`. Scale must come after the translation, or it
+ * multiplies the stack offset.
  */
 function paintTransform(entry, shift) {
   const scale = plateScale();
@@ -1844,7 +1486,7 @@ function paintTransform(entry, shift) {
   entry.plate.style.transform = `translateY(${String(Math.round(shift))}px) scale(${String(scale)})`;
 }
 
-/** A plate whose unit has gone is hidden rather than destroyed: the slow pass owns which plates exist. */
+/** A plate whose unit has gone is hidden, not destroyed: the slow pass owns which plates exist. */
 function fastPass() {
   const { casts, player } = woc.world;
   if (player === null) {
@@ -1879,7 +1521,7 @@ function wayBack() {
   return ` Press ${comboLabel(combo)} to bring them back.`;
 }
 
-/** Only the off case names the chord: plates going away leave nothing on screen to find again. */
+/** Only the off case names the chord: with plates gone, nothing on screen leads back. */
 function announce() {
   if (shown) {
     woc.ui.toast('Facemark: plates on.', { timeout: TOAST_MS });
@@ -1894,7 +1536,7 @@ function remember() {
   });
 }
 
-/** A stored value of the wrong kind is left alone: it is not a request to turn the display off. */
+/** A stored value of the wrong kind is ignored rather than read as off. */
 async function restore() {
   const stored = await woc.storage.get(SHOWN_KEY, true);
   if (typeof stored === 'boolean') {
@@ -1904,16 +1546,8 @@ async function restore() {
 }
 
 /**
- * Take the rank table from whoever is publishing one.
- *
- * `anySender`, which is what `follow` does, because naming `official/longwatch` would be
- * right only on the official marketplace: the same addon installed from a fork publishes
- * under another name. A row that is not the shape below is dropped rather than throwing,
- * so one bad entry cannot cost the other hundred.
- *
- * Silence and a null payload are both ordinary. The first means nobody is publishing and
- * the second a publisher that has not read its table yet, and neither is an error worth
- * putting in front of a player: the plate simply carries no rank.
+ * Take the rank table from any sender (`follow`): `official/longwatch` from a fork publishes
+ * under another name. A malformed row is dropped; silence and a null payload mean no rank.
  */
 function adoptRanks(payload) {
   if (!Array.isArray(payload)) {
@@ -1932,7 +1566,7 @@ woc.bus.follow(RANKS_TOPIC, (payload) => {
   adoptRanks(payload);
 });
 
-// Membership is the one thing a key reports, so a unit walking into range gets a plate at once.
+// Membership is the one change a key reports, so a unit entering range gets a plate at once.
 woc.world.on('entities', () => {
   slowPass();
 });
@@ -1957,7 +1591,7 @@ restore().catch((err) => {
   woc.warn('could not read whether the plates are shown', err);
 });
 
-/** A plate's shape is fixed when it is built, so a settings change is a rebuild rather than a repaint. */
+/** A plate's shape is fixed when built, so a settings change rebuilds rather than repaints. */
 woc.onSettingsChange(() => {
   clearPlates();
   slowPass();

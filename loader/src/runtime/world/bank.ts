@@ -1,13 +1,7 @@
 // The personal bank, the second pooled item store beside the bags.
 //
-// Proximity-gated: the reading exists only while the player stands at a banker.
-// It is deliberately NOT heavy-gated on the server, because it appears from
-// walking up to a bursar rather than from a command this session sent.
-//
-// Capacity is a flat slot budget over ONE list: nothing pins an item to a fixed
-// cell, so there is no `slot` placement to honour the way there is in the bags.
-//
-// Passed through rather than projected, for the reason `market.ts` gives.
+// Proximity-gated: the reading exists only while the player stands at a banker. One list with no
+// fixed cells, unlike the bags. Passed through rather than projected, as in `market.ts`.
 
 import type { HeldSlot } from './game-types.ts';
 import type { ProximityState } from './proximity.ts';
@@ -28,10 +22,8 @@ interface BankInfo {
   /** The pooled contents. Order is the game's; there are no fixed cells. */
   slots: readonly HeldSlot[];
   /**
-   * Total budget: the base allowance, purchased, bonus, and every socketed bag.
-   *
-   * A display total, never a fit answer: the budget is split into two pools, so
-   * `capacity - slots.length` reports space a general deposit can be refused.
+   * Total budget: the base allowance, purchased, bonus, and every socketed bag. A display total
+   * only: it spans two pools, so `capacity - slots.length` is not free space for a deposit.
    */
   capacity: number;
   /** Copper-bought slots. */
@@ -42,7 +34,7 @@ interface BankInfo {
   nextExpansionCost: number | null;
   /** The per-source breakdown behind `bonusSlots`. Always empty offline. */
   bonusSources: readonly BankBonusSource[];
-  /** How many of the bag sockets are open. Game 0.41.0. */
+  /** How many of the bag sockets are open. */
   socketsUnlocked: number;
   /** One entry per socket, always four, null where the socket is empty. */
   socketBags: readonly (string | null)[];

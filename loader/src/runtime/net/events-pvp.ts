@@ -1,15 +1,6 @@
-// The battleground's own event kinds, as the loader claims them.
-//
-// Split from `events.ts` the way the combat records are, and for the same
-// reason the published catalogue splits: one subject per file. Every kind here
-// is PERSONAL, so each carries the `pid` `PersonalEvent` declares, and the
-// server delivers one copy per match member for the kinds that describe the
-// whole field rather than the reader.
-//
-// THESE ARE THE LIVE HALF of `world.battleground` and of the `battleground`
-// member of `world.match`. That key rides at 1 Hz and is forced fresh by most
-// of these; these are the moment itself. A display that wants to announce a
-// capture reads the event and repaints from the key.
+// The battleground's event kinds. Every one is PERSONAL: a field-wide kind arrives once per match
+// member. These are the live moments; `world.battleground` and `world.match` are the 1 Hz state,
+// so announce from the event and repaint from the key.
 
 import type { PersonalEvent } from './events.ts';
 
@@ -71,24 +62,13 @@ interface BgKillEvent extends PersonalEvent {
   victimTeam: number;
 }
 
-/**
- * The match clock crossed one of the game's warning thresholds.
- *
- * `secondsLeft` is the THRESHOLD rather than a live clock, so an event delivered
- * late never announces a number that has already gone stale.
- */
+/** A warning threshold crossed. `secondsLeft` is the threshold, not a live clock. */
 interface BgTimeWarningEvent extends PersonalEvent {
   type: 'bgTimeWarning';
   secondsLeft: number;
 }
 
-/**
- * The result, and the only place a rating DELTA is readable.
- *
- * `world.battleground.rating` is the new figure; the pair here is what it moved
- * from and to. `ended` says whether the match was played out, timed out, or
- * given up, which nothing else can tell apart.
- */
+/** The result, and the only place a rating delta or the way it ended is readable. */
 interface BgEndEvent extends PersonalEvent {
   type: 'bgEnd';
   won: boolean;

@@ -3,10 +3,9 @@ import type { Unsubscribe } from './addon.js';
 /**
  * Where the game half of a conflict reading came from.
  *
- * It travels with the answer because the two are not equally trustworthy. The
- * live profile is the game's own matcher and knows every default binding;
- * 'stored' means only what the player explicitly saved could be read, so no
- * conflicts does NOT mean the key is free.
+ * 'live' is the game's own matcher and knows every default binding. 'stored'
+ * means only what the player explicitly saved could be read, so an empty `game`
+ * list does NOT mean the key is free.
  */
 export type BindingSource = 'live' | 'stored' | 'none';
 

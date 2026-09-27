@@ -1,25 +1,12 @@
-// The game DOM the loader injects into, reproduced from the real markup.
-//
-// Copied from the game rather than invented: the options panel from what
-// options_window.ts renders (the title bar it builds, the .opt-list it appends,
-// the .opt-version it appends after it, and the [data-back] control that only a
-// sub-view carries), and the rail from the static markup in index.html and
-// play.html, where #mm-options really is the last child.
-//
-// Reproducing it exactly is the point. Every one of these details is a thing the
-// injection rules read, and a fake that simplifies one of them tests the fake.
+// The game DOM the loader injects into, copied from the game's own markup (options_window.ts and
+// play.html). Every detail here is something the injection rules read, so do not simplify it.
 
 const MENU_ENTRY_LABELS = ['Interface', 'Controls', 'Graphics', 'Sound'];
 const RAIL_BUTTON_IDS = ['mm-arena', 'mm-social', 'mm-options'];
 
 /**
- * What the game itself puts on a menu row and on a rail button, at game 0.43.2.
- *
- * Exported because the loader's two injections are supposed to wear exactly
- * these, and asserting them against a copy written out in the test would only
- * restate the loader's own constant. `src/ui/options_main_menu_controller.ts:44`
- * builds the first (the row list moved out of `options_window.ts` in that
- * release); `play.html`, every `#mm-*` button, carries the second.
+ * The classes the game puts on a menu row and a rail button, as of game 0.43.2. The loader's
+ * injections must wear these; asserting against a literal would only restate the loader's constant.
  */
 const GAME_OWN_MENU_ENTRY_CLASS = 'btn ui-btn opt-btn';
 const GAME_OWN_RAIL_BUTTON_CLASS = 'micro-btn ui-icon-btn ui-icon-btn--micro';
@@ -53,12 +40,7 @@ export interface GameDom {
   entryPrecedesVersion: () => boolean;
 }
 
-/**
- * The options panel, which the game empties and rebuilds on every view change.
- *
- * #options-menu itself is static markup that outlives every render, which is
- * what the observer relies on.
- */
+/** The options panel, rebuilt on every view change inside a #options-menu that outlives it. */
 export function mountGameMenu(doc: Document): GameDom {
   doc.body.innerHTML = '<div id="ui"></div><div id="options-menu" class="window panel"></div>';
   const menu = doc.getElementById('options-menu') as HTMLElement;
@@ -98,8 +80,6 @@ export function mountGameMenu(doc: Document): GameDom {
       if (entry === null || version === null) {
         return false;
       }
-      // The version line must come after the entry, so the entry never lands
-      // under the build string.
       return entry.compareDocumentPosition(version) === Node.DOCUMENT_POSITION_FOLLOWING;
     },
   };
@@ -122,12 +102,7 @@ export function mountGameVersion(doc: Document, text: string): void {
   doc.body.appendChild(el);
 }
 
-/**
- * The start screen, before world entry.
- *
- * The whole HUD ships inside <template id="game-ui-template">, so none of it is
- * in the document yet. This is what the loader really sees at DOMContentLoaded.
- */
+/** The start screen: the whole HUD is still inside <template id="game-ui-template">. */
 export function mountStartScreen(doc: Document): void {
   doc.body.innerHTML =
     '<div id="game-canvas"></div>' +
@@ -142,12 +117,8 @@ export function mountStartScreen(doc: Document): void {
 }
 
 /**
- * World entry, as the game performs it.
- *
- * mountGameUi() clones the template's content into body before #start-screen, in
- * one insertion, and never removes it. Reproducing the fragment insert matters:
- * it is one mutation record carrying many added nodes, which is what the HUD
- * watcher actually receives.
+ * World entry, as the game performs it: one fragment insert before #start-screen, so the HUD
+ * watcher receives one mutation record carrying many added nodes.
  */
 export function enterWorld(doc: Document): void {
   const template = doc.getElementById('game-ui-template') as HTMLTemplateElement;
@@ -156,14 +127,7 @@ export function enterWorld(doc: Document): void {
   doc.body.classList.add('game-active');
 }
 
-/**
- * Logout, as a soft navigation performs it: the cloned HUD goes, the page stays.
- *
- * The loader's own root is a sibling of #ui precisely so a HUD re-render cannot
- * take it away, which means nothing takes addon UI away when the HUD legitimately
- * goes. A live session found the result: an addon's window sitting on top of the
- * game's landing page, over the PLAY button.
- */
+/** Logout as a soft navigation performs it: the cloned HUD goes and the page stays. */
 export function leaveWorld(doc: Document): void {
   for (const id of ['ui', 'options-menu', 'side-buttons-col-b']) {
     doc.getElementById(id)?.remove();

@@ -6,15 +6,12 @@
 <!--
   The source for site/static/og.png, the social preview card.
 
-  Kept here in site/content/ rather than in site/static/ because content/ is never
-  copied to the output: this file is the RECIPE, and og.png is what ships. To
-  regenerate, copy it into site/dist, open it against `pnpm site:dev`, screenshot
-  #card at 1:1, and write the result to site/static/og.png at exactly 1200x630.
+  A recipe: site/content/ is never copied to the output. To regenerate, copy it
+  into site/dist, open it against `pnpm site:dev`, screenshot #card at 1:1, and
+  write the result to site/static/og.png at exactly 1200x630.
 
-  It is a real page rather than a hand-drawn image so the card cannot drift from
-  the site's own palette and type: the fonts and colours below are the same files
-  and the same values tokens.css uses, and a link preview that looked like a
-  different product would undo the point of having one.
+  The fonts and colours are the same files and values tokens.css uses; keep them
+  in step.
 -->
 <style>
 @font-face {
@@ -43,8 +40,7 @@ html, body { margin: 0; padding: 0; background: rgb(18 18 26); }
   position: relative;
   overflow: hidden;
 }
-/* A single soft pool of gold behind the type, so the card is not a flat
-   rectangle at the small size a link preview actually renders at. */
+/* A soft pool of gold behind the type. */
 #card::after {
   content: '';
   position: absolute;
@@ -68,14 +64,8 @@ html, body { margin: 0; padding: 0; background: rgb(18 18 26); }
   font-size: 34px;
   letter-spacing: 0.07em;
 }
-/* The break is EXPLICIT rather than left to a measure cap. At 15ch the title wrapped
-   to three lines and split "World of ClaudeCraft" across two of them, which reads
-   like splitting a proper noun. The game's name stays whole on one line; a fixed
-   1200x630 card has no reason to leave that to chance.
-
-   70px rather than 78: at 78 the long line measured 1018px against 1024px of
-   available width, which fits and would overflow on any rendering that came out a
-   fraction wider. The break is only deterministic if it has room to be. */
+/* The break is EXPLICIT so "World of ClaudeCraft" stays on one line. At 78px the
+   long line fills 1018 of 1024px and a slightly wider rendering overflows, so 70. */
 h1 {
   font-family: 'Cinzel', Georgia, serif;
   font-weight: 700;
@@ -84,11 +74,8 @@ h1 {
   letter-spacing: 0.02em;
   margin: 0 0 22px;
 }
-/* No measure cap: the tagline is ~56 characters and the card is 1024px wide
-   inside its padding, so it sits on ONE line. At 30ch it broke after "entry" and
-   left "to the game menu." alone on a second line, which reads as an accident at
-   the size a link preview actually renders. `balance` is insurance if the copy
-   ever grows past one line. */
+/* No measure cap, so the tagline sits on ONE line; `balance` covers copy that
+   grows past it. */
 p {
   margin: 0;
   font-size: 27px;

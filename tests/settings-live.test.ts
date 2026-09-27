@@ -1,21 +1,7 @@
 // @vitest-environment happy-dom
 
-// A setting changed in the manager reaching an addon that is already running.
-//
-// Every part of this path is tested somewhere else: `settings-store.test.ts`
-// covers a store taking another tab's write, `manager-config.test.ts` covers the
-// pane, and `storage-hub.test.ts` covers the fan-out. What none of them covers is
-// the whole path with a real addon on the end of it, which is the only shape a
-// player ever meets.
-//
-// It earned a file when a live session reported that a setting "did not apply".
-// The suite exists to answer that question with something other than an opinion:
-// if this is green, an addon that misses a change is missing it in its own code,
-// and the place to look is whether it reads `woc.settings` at the point of use or
-// caches it at load.
-//
-// The manager writes the whole record to `config:<fqid>`/`values`, which is what
-// this drives, so this is the manager's write and not an imitation of it.
+// A setting changed in the manager reaching an addon that is already running, end to end. If
+// this is green, an addon that misses a change is caching `woc.settings` at load.
 
 import { describe, expect, it } from 'vitest';
 import { configNamespace, SETTINGS_KEY } from '../loader/src/shared/storage-keys.ts';
@@ -39,13 +25,7 @@ const MANIFEST = JSON.stringify({
   ],
 });
 
-/**
- * Two readers, deliberately different, because they fail differently.
- *
- * `live()` reads at the point of use, which is what the shipped addons do through
- * their `settingFlag` helpers. `cached` is read once while the body runs, which is
- * the mistake this suite exists to tell apart from a broken loader.
- */
+/** `live()` reads at the point of use; `cached` is read once at load, the addon-side mistake. */
 const SOURCE = `
   const seen = [];
   const cached = woc.settings.cue;
@@ -110,9 +90,7 @@ describe('a setting changed while the addon is running', () => {
     }
   });
 
-  // The failure mode this suite exists to distinguish from a loader defect. An
-  // addon that reads once while its body runs holds that value forever, and the
-  // symptom a player reports is identical to the loader never delivering.
+  // A value read once at load looks to the player exactly like a loader that never delivered.
   it('does NOT reach a value the addon read once at load', async () => {
     const { harness, storage } = await start();
     try {
@@ -125,9 +103,7 @@ describe('a setting changed while the addon is running', () => {
     }
   });
 
-  // A partial record is what the manager writes when only one control moved, and
-  // the store re-hydrates from declarations rather than trusting it, so the other
-  // setting has to come back as its default rather than as undefined.
+  // The store re-hydrates a partial record from the declarations.
   it('leaves an untouched setting at its default rather than undefined', async () => {
     const { harness, storage } = await start();
     try {

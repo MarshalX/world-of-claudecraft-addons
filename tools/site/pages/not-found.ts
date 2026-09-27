@@ -1,9 +1,4 @@
-// 404.html, served from the artifact root by GitHub Pages.
-//
-// Emitted as a real page through the same shell as everything else, so a mistyped
-// URL still lands somewhere that looks like the site and still has the header to
-// navigate out of. Without this file Pages serves its own default, which is the
-// one page on the domain that would look like somebody else's.
+// 404.html, served from the artifact root by GitHub Pages, through the same shell as every page.
 
 import { html } from '../html.ts';
 import type { Page } from '../shell.ts';

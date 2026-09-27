@@ -1,20 +1,12 @@
-// The globals an addon's closure shadows.
-//
-// The point of these is not that they are unreachable, which they are not: the
-// closure runs in the page realm and `Function('return this')()` reaches all of
-// them. The point is that reaching for one out of habit fails immediately and
-// says which API to use, so an addon cannot quietly couple itself to the game's
-// own storage keys or open its own socket.
+// The globals an addon's closure shadows. They stay reachable through the page realm; a
+// shadow makes a habitual reach fail at once and name the sanctioned API.
 
 import { describe, expect, it } from 'vitest';
 import { createShadows, SHADOWED, shadowError } from '../loader/src/runtime/shadow.ts';
 
 const SHADOWED_MESSAGE = /is shadowed inside an addon/;
 
-/**
- * Computed access, because the property being read is arbitrary: the shadow is
- * meant to throw on any name at all, not on one this test chose.
- */
+/** Computed access, since the shadow throws on any property name. */
 function read(shadow: Record<string, unknown>, prop: string): unknown {
   return shadow[prop];
 }
@@ -45,20 +37,15 @@ describe('what is shadowed', () => {
     ]);
   });
 
-  // The names and the values are positional parameters of the generated
-  // function, so a mismatch would hand an addon the wrong shadow under the wrong
-  // name and every error message would point at the wrong API.
+  // Names and values are positional parameters of the generated function.
   it('pairs one value with each name', () => {
     const shadows = createShadows();
 
     expect(shadows.values).toHaveLength(shadows.names.length);
   });
 
-  // A shared proxy would be one object every addon could reach through the error
-  // it throws. Building six per addon costs nothing next to evaluating a file.
-  // Compared through Object.is rather than through toBe: the matcher inspects
-  // both values to build its diff, and inspecting one of these throws, which is
-  // exactly what the rest of this suite is about.
+  // A shared proxy would be reachable by every addon through the error it throws. Compared
+  // with Object.is because toBe inspects both values for its diff, which throws.
   it('builds a fresh set per call', () => {
     const same = Object.is(createShadows().values[0], createShadows().values[0]);
 
@@ -106,21 +93,19 @@ describe('the message', () => {
     expect(shadowError(name).message).toContain(`use ${alternative} instead`);
   });
 
-  // It is a guardrail and the loader says so everywhere else, so the one message
-  // an addon author actually reads must say it too.
+  // It is a guardrail, and the message an author reads must say so.
   it('does not claim to be a security boundary', () => {
     expect(shadowError('localStorage').message).toContain('not as a security boundary');
   });
 });
 
-// Logging one of these while debugging must print what happened rather than
-// throw a second error on top of the first one being investigated.
+// Logging one while debugging must not throw a second error.
 describe('inspecting one', () => {
   it.each([...SHADOWED])('lets %s stringify', (name) => {
     expect(String(shadowFor(name))).toBe(`[shadowed ${name}]`);
   });
 
-  it('stays a function to typeof, so a constructor check does not throw', () => {
+  it('stays a function to typeof', () => {
     expect(typeof shadowFor('WebSocket')).toBe('function');
   });
 });

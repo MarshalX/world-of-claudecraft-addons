@@ -1,16 +1,7 @@
 // @vitest-environment happy-dom
 
-// Browse, Marketplaces, and Updates as they actually render.
-//
-// Rendered rather than asserted on the store, for the reason the settings pane
-// established: the code was right in isolation and the pane came up blank in the
-// game, because a read that threw during render unmounted it. Nothing catches
-// that except rendering.
-//
-// The claims worth the most here are the ones about trust, because they are the
-// ones a defect makes quietly weaker rather than visibly broken: an install has
-// to show what the addon declares before it happens, adding a source has to warn
-// first, and the official source must offer no control that would remove it.
+// Browse, Marketplaces, and Updates as they render. Rendered rather than asserted on the store,
+// because a read that throws during render unmounts the pane and only rendering catches that.
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { DiagnosticsReading } from '../loader/src/runtime/diagnostics.ts';
@@ -135,11 +126,8 @@ async function clickTab(label: string): Promise<void> {
 }
 
 /**
- * A control inside the pane, by its text or its accessible name.
- *
- * Scoped to `.woc-pane` rather than the document, because the tab strip is
- * buttons too and one of them is labelled "Installed", which is also what the
- * Browse row's control says once an addon is.
+ * A control inside the pane, by its text or its accessible name. Scoped to `.woc-pane` because
+ * the tab strip also has an "Installed" button.
  */
 function buttonNamed(label: string): HTMLButtonElement | undefined {
   return [...document.querySelectorAll<HTMLButtonElement>('.woc-pane button')].find(
@@ -193,9 +181,6 @@ describe('the Browse pane', () => {
     expect(text()).toContain(THIRD_PARTY.name);
   });
 
-  // The screenshot is loaded straight from the marketplace by the page, so what a
-  // suite can hold is the URL it resolved and the alt text it carried, which are
-  // the two things a wrong answer here would get wrong.
   it("draws a row thumbnail from the addon's own directory", async () => {
     await browse({
       markets: [
@@ -213,9 +198,6 @@ describe('the Browse pane', () => {
     expect(shot?.getAttribute('alt')).toBe('A meter, mid-fight.');
   });
 
-  // The column is worth drawing only once something on offer has a picture in it.
-  // A list where nothing does is text, and a column of empty frames beside it
-  // would be decoration.
   it('draws no column at all when nothing on offer has a preview', async () => {
     await browse({ markets: [marketState(OFFICIAL, [marketEntry()])] });
 
@@ -226,9 +208,7 @@ describe('the Browse pane', () => {
     expect(document.querySelector('.woc-shot-slot')).toBeNull();
   });
 
-  // Once one addon has a screenshot, every row reserves the slot: otherwise the
-  // rows with a picture indent their text and the rows without do not, which
-  // reads as a defect rather than as a missing picture.
+  // Without the reserved slot, rows with a picture indent their text and rows without do not.
   it('reserves the slot on rows with no preview once any row has one', async () => {
     await browse({
       markets: [
@@ -246,8 +226,7 @@ describe('the Browse pane', () => {
     expect(document.querySelectorAll('.woc-shot-slot')).toHaveLength(1);
   });
 
-  // Asked of every SOURCE rather than of the filtered rows, so typing cannot make
-  // the column appear and disappear under the player's hands.
+  // Asked of every source rather than the filtered rows, so typing cannot toggle the column.
   it('keeps the column while a filter hides every row that has a preview', async () => {
     await browse({
       markets: [
@@ -271,8 +250,6 @@ describe('the Browse pane', () => {
     expect(document.querySelectorAll('.woc-shot-slot')).toHaveLength(1);
   });
 
-  // The confirmation shows one addon on its own, so it has nothing to line up
-  // against and reserves nothing.
   it('reserves no slot on the confirmation for an addon with no preview', async () => {
     await browse({ markets: [marketState(OFFICIAL, [marketEntry()])] });
 
@@ -295,9 +272,7 @@ describe('the Browse pane', () => {
     });
   });
 
-  // Seeding the indexes on the first read is what makes this the ordinary way
-  // for Browse to be empty, and "Refresh to fetch their indexes" is the wrong
-  // advice for it: the index was just fetched, and it answered 404.
+  // "Refresh to fetch their indexes" is wrong advice here: the index was fetched and answered 404.
   it('points at the Marketplaces tab when a source could not be read', async () => {
     await browse({
       markets: [marketState(OFFICIAL, [], { fetchedAt: null, error: 'HTTP 404' })],
@@ -331,9 +306,7 @@ describe('the Browse pane', () => {
     expect(buttonNamed(UI_TEXT.browseInstalled)?.disabled).toBe(true);
   });
 
-  // The trust question. Install must not be one click from a browse row: what
-  // the addon declares, and the fact that the declaration is not enforced, both
-  // have to be on screen before anything is fetched.
+  // Install is never one click: the declaration and the note that it is not enforced come first.
   it('shows the declared permissions and the trust note before installing', async () => {
     const { calls } = await browse({
       markets: [marketState(OFFICIAL, [marketEntry({ permissions: ['net.read', 'storage'] })])],
@@ -350,8 +323,6 @@ describe('the Browse pane', () => {
     expect(document.querySelectorAll('.woc-perms li')).toHaveLength(2);
   });
 
-  // The list the player came from shows it, and then the screen where they
-  // actually decide used to drop it.
   it('shows what the addon says it does', async () => {
     await browse({
       markets: [
@@ -416,8 +387,7 @@ describe('the Marketplaces pane', () => {
     marketState(THIRD_PARTY, [], { builtin: false }),
   ];
 
-  // The rule lives in MarketApi.remove; this is the presentation of it, and the
-  // presentation is what a player experiences as the guarantee.
+  // The rule itself lives in MarketApi.remove; this pins its presentation.
   it('gives the official source no Remove control', async () => {
     await markets({ markets: bothSources });
 
@@ -428,7 +398,7 @@ describe('the Marketplaces pane', () => {
     expect(buttonNamed(`${UI_TEXT.marketsRemove} ${THIRD_PARTY.name}`)).toBeDefined();
   });
 
-  it('says what official means, since it does not mean endorsed by the game', async () => {
+  it('says what official means', async () => {
     await markets({ markets: bothSources });
 
     await until(() => {
@@ -463,8 +433,6 @@ describe('the Marketplaces pane', () => {
     expect(text()).not.toContain(UI_TEXT.marketsDegraded);
   });
 
-  // Adding a source is the friction-carrying act: everything it publishes
-  // becomes code the player has chosen to run, with the page's globals in scope.
   it('carries the trust warning on the add form', async () => {
     await markets();
 
@@ -479,8 +447,6 @@ describe('the Marketplaces pane', () => {
       expect(buttonNamed(UI_TEXT.marketsAdd)).toBeDefined();
     });
 
-    // By id rather than by position: the two controls are named so their labels
-    // can point at them, which is also what makes them findable without counting.
     type('#woc-market-url', 'someone/their-addons');
     type('#woc-market-ref', 'v2.0.0');
     await Promise.resolve();
@@ -522,8 +488,6 @@ describe('the Updates pane', () => {
     return opened;
   }
 
-  // The absence of auto-update is a decision, not an omission, so the pane says
-  // so rather than leaving it to be inferred from nothing happening.
   it('states that auto-update is off and that the rows are from a cached index', async () => {
     await updates();
 
@@ -572,8 +536,6 @@ describe('the Updates pane', () => {
     expect(calls.setPin).toHaveBeenCalledWith(FQID, '1.2.0');
   });
 
-  // A pinned row still appears, so the pane can say an update exists and that
-  // the player's own pin is what is holding it back.
   it('offers a pinned row Unpin instead of Update', async () => {
     await updates({ updates: [{ ...pending, pin: '1.2.0' }] });
 
@@ -609,9 +571,7 @@ describe('the Updates pane', () => {
   });
 });
 
-// The companion note is a NOTE, and the refusal to make it anything else is the
-// design. Its own block rather than another case inside the Browse pane's,
-// because what it asserts is that the pane AROUND it did not change.
+// A companion note gates nothing: every action it offers jumps into a control that already exists.
 describe('companion notes', () => {
   async function browse(options: Options = {}) {
     const opened = open(options);
@@ -622,8 +582,6 @@ describe('companion notes', () => {
     return opened;
   }
 
-  // A companion still GATES nothing. The actions it grew are jumps into controls
-  // that already existed, so the one control this row is about is untouched.
   it('draws a companion note without touching the Install control', async () => {
     await browse({
       markets: [
@@ -640,10 +598,7 @@ describe('companion notes', () => {
     expect(buttonNamed(`${UI_TEXT.browseInstall} Combat Meter`)?.disabled).toBe(false);
   });
 
-  // What the player is looking for is a name. The manifest writes down a bare id
-  // because a fork's copy is the same companion, and drawing that id was most of
-  // why the block read as a footnote about something nobody had heard of.
-  it('draws the name a source offers rather than the bare id it was named by', async () => {
+  it('draws the name a source offers rather than the bare id', async () => {
     await browse({
       markets: [
         marketState(OFFICIAL, [
@@ -659,8 +614,6 @@ describe('companion notes', () => {
     expect(companionNamed('lorebind')).toBeNull();
   });
 
-  // The half that used to have nowhere to live and went into a description
-  // instead, where it is read before the player knows the companion exists.
   it('carries the reason its manifest gave, on the name', async () => {
     await browse({
       markets: [
@@ -680,8 +633,6 @@ describe('companion notes', () => {
     expect(companionNamed('Lorebind')?.title).toContain('publishes the item prices this adds up');
   });
 
-  // The one message the field exists for, and the one a description could not
-  // have carried: the companion is here, and it is switched off.
   it('says when a named companion is installed but switched off', async () => {
     await browse({
       markets: [
@@ -704,9 +655,7 @@ describe('companion notes', () => {
     expect(companionNamed('Lorebind')).not.toBeNull();
   });
 
-  // Browse holds no toggle, so it offers no Enable: an action a pane cannot
-  // honour is worse than no action, and the pane that owns the switch has one.
-  it('offers no Enable in Browse, which has no toggle to offer', async () => {
+  it('offers no Enable in Browse', async () => {
     await browse({
       markets: [
         marketState(OFFICIAL, [
@@ -728,9 +677,7 @@ describe('companion notes', () => {
     expect(buttonNamed(`${UI_TEXT.companionEnable} Lorebind`)).toBeUndefined();
   });
 
-  // Get is the SAME install path the row's own button takes, which is the whole
-  // reason it is allowed to exist: it opens the confirmation, and it opens the
-  // one for the companion rather than for the addon that recommended it.
+  // Get takes the same install path as the row's own button, via the confirmation.
   it('sends Get to the confirmation for the companion, not for the naming row', async () => {
     await browse({
       markets: [
@@ -752,16 +699,12 @@ describe('companion notes', () => {
     await until(() => {
       expect(text()).toContain(`${UI_TEXT.confirmHeading} Lorebind`);
     });
-    // And it says who sent them there, because the reason is otherwise a hover,
-    // and a hover is nothing at all on the screen a decision is being made on.
+    // The confirmation names who recommended the companion.
     expect(text()).toContain(`${UI_TEXT.confirmRecommendedBy} Combat Meter`);
     expect(text()).toContain('publishes the item prices this adds up');
   });
 
-  // The Installed pane holds no install, so its route for a companion nobody has
-  // is a jump to the pane that does, carrying what to look for. The search is
-  // held by the manager rather than by Browse precisely so this survives the tab
-  // switch: a pane that owned its own filter would be rebuilt empty by it.
+  // The search is held by the manager, not Browse, so it survives the tab switch.
   it('sends Find it to Browse with the companion already searched for', async () => {
     open({
       markets: [
@@ -783,15 +726,12 @@ describe('companion notes', () => {
       expect(document.querySelector('.woc-browse')).not.toBeNull();
     });
     expect(document.querySelector<HTMLInputElement>('#woc-browse-search')?.value).toBe('Lorebind');
-    // And the list is actually narrowed to it, rather than the query being
-    // written into a field nothing read.
+    // The list is narrowed, not just the field filled.
     expect(document.querySelectorAll('.woc-row')).toHaveLength(1);
     expect(text()).toContain('Every item in the game.');
   });
 
-  // The failure this shape invites: the pending row was looked up in the FILTERED
-  // list, and a player pressing Get has almost always searched for the addon that
-  // named the companion rather than for the companion.
+  // The pending row is resolved against every row, not the filtered ones.
   it('opens the confirmation for a companion the current search hides', async () => {
     await browse({
       markets: [
@@ -817,11 +757,7 @@ describe('companion notes', () => {
   });
 });
 
-// The Installed pane's thumbnails, here rather than in manager-render.test.tsx
-// because what they actually assert is about the CATALOG: the registry keeps an
-// addon's manifest and not its directory in the repository, so the picture on an
-// installed row can only come from the source list, and every case below is one
-// of the ways that lookup can miss.
+// The registry keeps no directory for an installed addon, so its picture comes from the catalog.
 describe("the Installed pane's thumbnails", () => {
   const shot = { file: 'preview.png', alt: 'The panel, mid-fight.' };
 
@@ -848,9 +784,7 @@ describe("the Installed pane's thumbnails", () => {
     expect(drawn?.getAttribute('alt')).toBe(shot.alt);
   });
 
-  // The column is asked of the installed rows rather than of everything on
-  // offer, unlike Browse: indenting a player's own list because some addon they
-  // have never installed has a picture would be reserving space against nothing.
+  // Unlike Browse, the column is asked of the installed rows only.
   it('draws no column when no installed addon has a picture', async () => {
     await installed({
       markets: [marketState(OFFICIAL, [marketEntry({ preview: shot })])],
@@ -861,8 +795,6 @@ describe("the Installed pane's thumbnails", () => {
     expect(document.querySelector('.woc-shot-slot')).toBeNull();
   });
 
-  // An addon whose source no longer offers it keeps its row and loses its
-  // picture, because nothing the loader still holds says where that picture is.
   it('reserves the slot for a row the catalog cannot place once another has one', async () => {
     await installed({
       markets: [marketState(OFFICIAL, [marketEntry({ preview: shot })])],

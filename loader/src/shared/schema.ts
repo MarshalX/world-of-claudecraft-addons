@@ -1,11 +1,5 @@
-// The manifest and marketplace-index schemas, and the types inferred from them.
-//
-// Shared by the host at install time and by tools/validate.mjs and
-// tools/index.mjs in CI.
-//
-// The runtime must import only TYPES from here. A value import would pull zod
-// into the page-realm bundle; loader/build-runtime.mjs fails the build if it
-// does.
+// The manifest and marketplace-index schemas, used by the host at install and by the tools in CI.
+// The runtime may import only TYPES from here, or zod reaches the page bundle and the build fails.
 
 import { z } from 'zod';
 import { isValidRange } from './gameversion.ts';
@@ -19,12 +13,8 @@ const SEMVER_RE = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/;
 const ENTRY_RE = /^[A-Za-z0-9._-]+(?:\/[A-Za-z0-9._-]+)*$/;
 
 /**
- * A path the loader will join onto a marketplace's base URL.
- *
- * One definition for both places a manifest names a file, because both are the
- * same risk: whatever this accepts is appended to a raw.githubusercontent.com
- * base, so a value that escapes the addon directory is a value that fetches
- * somebody else's.
+ * A path the loader joins onto a marketplace's base URL, so one that escapes the addon directory
+ * fetches somebody else's file. Every file a manifest names goes through this.
  */
 const RelativeFile = z
   .string()
@@ -39,15 +29,7 @@ const MAX_TAGS = 6;
 /** How many sibling data files one addon may declare. */
 const MAX_DATA_FILES = 8;
 
-/**
- * One JSON file in the addon's own directory, readable through `woc.data`.
- *
- * The same relative path `entry` and `preview` are, narrowed to `.json`: the
- * surface hands back a PARSED value, so there is nothing else the loader would
- * parse it as, and a declared `.txt` would be a file `woc.data` could only fail
- * on. Written as a refinement rather than a second `.regex`, because
- * `RelativeFile` already carries one and a refinement composes onto anything.
- */
+/** One JSON file in the addon's own directory, `.json` only because `woc.data` parses it. */
 const DataFile = RelativeFile.refine(
   (p) => p.toLowerCase().endsWith('.json'),
   'must be a .json file, because woc.data parses what it reads',
@@ -56,25 +38,10 @@ const DataFile = RelativeFile.refine(
 /** How many other addons one may be recommended alongside. See `companions`. */
 const MAX_COMPANIONS = 4;
 
-/**
- * How long one companion's reason may be. See `companionReasons`.
- *
- * A sentence rather than a paragraph, because the manager draws it as one hover
- * line on a row: a reason that wrapped four times would be a second description
- * competing with the first, which is the thing this field exists to stop.
- */
+/** How long one companion's reason may be: one sentence, drawn as a single hover line. */
 const MAX_COMPANION_REASON = 140;
 
-/**
- * The screenshot the manager and the site both show.
- *
- * A structure rather than a bare path because a picture with no alt text is a
- * picture nobody using a screen reader can act on, and the one place that text
- * can be written where both consumers see it is the manifest. It is also the
- * reason this replaced an `icon` field that had been declared since the first
- * release and read by nothing: a field with no consumer collects no alt text and
- * teaches nobody it is missing.
- */
+/** The screenshot the manager and the site both show, with the alt text both of them need. */
 export const PreviewDecl = z.object({
   /** Relative to the addon's own directory, e.g. `preview.png`. */
   file: RelativeFile,
@@ -109,10 +76,8 @@ export const SettingDecl = z.discriminatedUnion('type', [
       message: 'min must not exceed max',
       path: ['min'],
     })
-    // values.ts clamps a STORED number, so this is the only other route by which
-    // one reaches an addon outside its declared range. Refused rather than
-    // clamped: `{ default: 100, max: 40 }` is a manifest to fix, and CI catches
-    // it before anything is published.
+    // values.ts clamps a STORED number; an out-of-range default is refused so CI catches the
+    // manifest rather than the loader silently clamping it.
     .refine(
       (s) =>
         (s.min === undefined || s.default >= s.min) && (s.max === undefined || s.default <= s.max),
@@ -145,13 +110,8 @@ export const AddonManifest = z
     version: z.string().regex(SEMVER_RE, 'must be semver, e.g. "1.2.0"'),
     apiVersion: z.number().int(),
     /**
-     * The smallest API minor carrying every member this addon uses.
-     *
-     * Optional, and absent reads as 0, which is what an addon published before the
-     * minor existed was written against. That default is the point: the loader
-     * accepts other people's marketplaces, so an addon already in the wild
-     * declaring only `apiVersion` keeps working rather than being refused by a
-     * field its author never saw.
+     * The smallest API minor carrying every member this addon uses. Absent reads as 0, so a
+     * third-party addon declaring only `apiVersion` is not refused.
      */
     apiMinor: z.number().int().min(0).optional(),
     author: z.string().min(1),
@@ -160,14 +120,9 @@ export const AddonManifest = z
     /** A screenshot in the addon's own directory. Absent is ordinary, not a defect. */
     preview: PreviewDecl.optional(),
     /**
-     * JSON files in this addon's own directory, fetched by the host at install and
-     * read back through `woc.data(name)`.
-     *
-     * Declared rather than discovered, for the reason `entry` is declared: what the
-     * loader will fetch out of a marketplace has to be a fixed list the manifest
-     * states, never a path an addon composes at run time. It is also what makes the
-     * surface refusable, since `woc.data` checks its argument against this list
-     * instead of joining it onto a URL.
+     * JSON files in this addon's own directory, fetched at install and read through
+     * `woc.data(name)`. Declared so the loader fetches a fixed list, and `woc.data` refuses any
+     * name not on it.
      */
     data: z
       .array(DataFile)
@@ -175,40 +130,22 @@ export const AddonManifest = z
       .refine((files) => new Set(files).size === files.length, 'duplicate data file')
       .optional(),
     /**
-     * Other addons this one works better with. A NOTE, never a dependency.
-     *
-     * Bare addon ids rather than fqids: the same addon installed from a fork is a
-     * different fqid and is still the companion the author meant. It gates nothing,
-     * installs nothing, and stops nothing from starting. See the manager's
-     * `companions.ts` for how one is resolved.
+     * Other addons this one works better with. A note that gates nothing. Bare ids, not fqids, so
+     * the same addon installed from a fork still matches.
      */
     companions: z.array(AddonId).max(MAX_COMPANIONS).optional(),
     /**
      * What each named companion ADDS, one short sentence per id.
      *
-     * The half of the field a description used to have to carry. `companions`
-     * answers which addon and the manager answers whether it is here; neither says
-     * why a player should care, so the sentence went into descriptions instead,
-     * where it is read before the player knows the companion exists and cannot say
-     * anything about state.
-     *
-     * A SECOND KEY rather than a richer shape for `companions`, and the reason is
-     * not taste. A marketplace index is one `z.array(MarketplaceEntry)` parse, so
-     * one entry an older loader cannot read fails the whole index and takes that
-     * source dark for every player still on that loader. An unrecognised key is
-     * dropped, which is the compatibility this whole schema already relies on.
-     *
-     * Keyed by an id the same manifest names, enforced below rather than trusted:
-     * two keys describing one relationship is exactly the shape that drifts, and a
-     * reason for an addon nobody named is the drift.
+     * Must stay a separate key: an index is one array parse, so reshaping `companions` would fail
+     * the whole index on an older loader, while an unknown key is dropped. Every key must name a
+     * companion, enforced below.
      */
     companionReasons: z.record(AddonId, z.string().min(1).max(MAX_COMPANION_REASON)).optional(),
     homepage: z.string().url().optional(),
     /**
-     * Browse's filter categories. Same shape as an addon id, so the filter can
-     * compare them without normalizing and two authors cannot publish 'Combat'
-     * and 'combat' as different tags. Bounded because the filter renders one
-     * control per distinct tag across every source in the list.
+     * Browse's filter categories, shaped like an addon id so 'Combat' and 'combat' cannot both
+     * exist. Bounded because the filter draws one control per distinct tag.
      */
     tags: z.array(AddonId).max(MAX_TAGS).optional(),
     gameVersion: z
@@ -245,11 +182,8 @@ export const MarketplaceIndex = z.object({
 });
 
 /**
- * One installed addon, as the registry persists it.
- *
- * Validated on read as well as on write. The record lives in GM storage, which
- * the player can edit and which an older loader may have written in a different
- * shape, so what comes back out is untrusted input like anything else.
+ * One installed addon, as the registry persists it. Validated on read too: GM storage is editable
+ * and may hold an older loader's shape.
  */
 export const InstalledAddon = z.object({
   fqid: z.string().min(1),

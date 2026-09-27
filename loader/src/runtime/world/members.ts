@@ -1,21 +1,9 @@
 // Whether the game still carries each world member under the name the loader reads.
 //
-// A presence check, and a separate concern from `shape.ts`, which asks whether a
-// live entity's FIELDS are the kinds the published types promise. This one asks a
-// question that check cannot: `fieldValue` answers null for a member that is
-// missing and for one that is genuinely null, so a game release that RENAMES a
-// member leaves a reading that is present, correctly typed and permanently empty.
+// `fieldValue` answers null both for a missing member and a null one, so a renamed member reads
+// as permanently empty; the gated economy reads would say `away` all session and look right.
 //
-// That is the `inCombat` failure with a new face, and the proximity-gated economy
-// reads are its worst case: `market`, `mail` and `bank` would all report `away`
-// for an entire session. Unlike a value that never moves, that answer is CORRECT
-// whenever the player is genuinely not standing at the counter, so nothing about
-// it looks wrong from the outside and no amount of watching finds it.
-//
-// This list is a CLAIM, exactly as `ENTITY_SHAPE` is, and it goes stale the same
-// way: a new read off the world object belongs here too. It is presence only,
-// because the kinds are asserted at each read site and there is no useful way to
-// type-check a member nothing has asked for yet.
+// Presence only. Add every new read off the world object here.
 
 /** Every member the loader reads off `__game.world`. */
 const WORLD_MEMBERS: readonly string[] = [
@@ -74,11 +62,8 @@ const WORLD_MEMBERS: readonly string[] = [
 ];
 
 /**
- * Which world members the game no longer carries under the name the loader reads.
- *
- * `in` rather than a value read, deliberately: it walks the prototype chain, so it
- * finds the online client's plain fields and the offline sim's getters alike, and
- * it separates "absent" from "present and null", which is the whole point.
+ * Which world members the game no longer carries under the name the loader reads. Uses `in`,
+ * which finds prototype getters too and separates "absent" from "present and null".
  */
 function checkWorldMembers(value: unknown): readonly string[] {
   if (typeof value !== 'object' || value === null) {

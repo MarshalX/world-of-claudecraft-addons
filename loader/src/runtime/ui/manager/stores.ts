@@ -1,20 +1,10 @@
-// The five stores the manager window reads, and what wakes them.
+// The five stores the manager window reads, and what wakes them. They load outside the component
+// tree, so a reload from another tab does not need the window open.
 //
-// They load outside the component tree, so opening the window paints whatever is
-// already loaded and a reload driven from another tab does not need the window to
-// be open. That is also why they are built here rather than in index.tsx: the
-// wiring between them is a thing with rules of its own, and one of those rules is
-// load-bearing enough to have shipped as a bug.
+// When the installed rows land, the open addon's page is re-checked against them, or an addon
+// updated under an open page draws the new manifest's controls over the old manifest's stores.
 //
-// The rule: when the installed rows land, the open addon's page is re-checked
-// against them. A page renders from its ROW read fresh while its settings and
-// keybind stores were built when the page was opened, so an addon updated under an
-// open page drew the new manifest's controls over the old manifest's stores, and
-// picking a value answered "no setting declared with id '<the new one>'".
-//
-// Its own deps interface rather than the manager's, so nothing here imports
-// index.tsx: that module imports this one. The shapes are compatible because
-// ManagerDeps carries these fields, which is all a structural check asks.
+// Its own deps interface so this module never imports index.tsx, which imports it.
 
 import type { DevApi, MarketApi } from '../../../shared/protocol.ts';
 import type { CatalogRegistry } from './catalog-actions.ts';
@@ -47,21 +37,15 @@ interface ManagerStores {
 }
 
 /**
- * The stores, all repainting through one callback.
- *
- * The selection is assigned after the installed store is built and is only read
- * from that store's callback, which cannot run before this function returns: rows
- * landing is the answer to a request nothing has made yet.
+ * The stores, all repainting through one callback. `selection` is assigned after the installed
+ * store is built; its callback cannot run before this returns, since nothing has loaded yet.
  */
 function createStores(deps: StoresDeps, repaint: () => void): ManagerStores {
   let selection: AddonSelection | null = null;
 
   const store = createInstalledStore({
     registry: deps.registry,
-    // New rows are the moment an addon's manifest can have changed under an open
-    // page. Re-checking here is what keeps the page and its stores on the same
-    // manifest; the selection skips the repaint when nothing about it moved, so a
-    // change to some other addon costs one comparison.
+    // New rows can carry a changed manifest for the open page; re-check it here.
     onChange: () => {
       selection?.refresh();
       repaint();
@@ -85,16 +69,9 @@ function createStores(deps: StoresDeps, repaint: () => void): ManagerStores {
 }
 
 /**
- * What opening the window reads.
- *
- * Loaded on open rather than at boot: a player who never opens the manager should
- * not pay for a bridge round trip. All three are loaded whatever tab is being
- * opened, since deferring to the tab would make every tab's first paint its
- * loading state. The dev reading is three storage reads, and the catalog answers
- * from the indexes as they were last read, having first read any source this
- * session has not read at all. So the FIRST open of a session costs a conditional
- * request per source and every open after it costs none; Refresh is what fetches
- * unconditionally.
+ * What opening the window reads: all three panes on every open, never at boot, whatever the tab.
+ * The catalog fetches at most once a session (a conditional request per source); only Refresh
+ * fetches unconditionally.
  */
 function loadPanes(panes: Pick<ManagerStores, 'store' | 'dev' | 'catalog'>): void {
   panes.store.reload();

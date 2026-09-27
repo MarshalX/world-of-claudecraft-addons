@@ -1,16 +1,9 @@
-/* The addon root and the window chrome every loader window is built from.
- *
- * First of the three sheets runtime/ui/styles/index.ts concatenates, so its
- * rules are the base the other two layer over. Scoping, tokens, and why the
- * whole sheet is injected unlayered are all documented there.
+/* The addon root and the window chrome every loader window is built from. First of the
+ * sheets runtime/ui/styles/index.ts concatenates; scoping and layering are documented there.
  */
 
-/* The root generates NO BOX, which is what lets the two bands inside it sit at
-   different depths of the game. `position: fixed` always creates a stacking
-   context whatever its z-index, so a root that were a layer itself would trap both
-   bands in one and put addon frames back on top of the game's own menus. It still
-   carries the mode classes and the inherited type and colour, both of which reach
-   the bands through `display: contents` normally. See ui/root.ts. */
+/* The root generates NO BOX, so the two bands inside it can sit at different depths of the
+   game; a positioned root would trap both in one stacking context. See ui/root.ts. */
 #woc-addons {
   display: contents;
   font-family: var(--font-ui, system-ui, sans-serif);
@@ -21,16 +14,12 @@
 #woc-addons .woc-overlay-band {
   position: fixed;
   inset: 0;
-  /* A band is a full-screen layer so a window can be centered in it, but it must
-     not eat clicks meant for the world: only what an addon puts inside takes
-     them, and that is decided per frame by kit/frame-chrome.ts. */
+  /* Full-screen, but clicks fall through; each frame decides its own (kit/frame-chrome.ts). */
   pointer-events: none;
 }
 
-/* Under the game's HUD (`#ui` is 10, and 80 or 90 in its other layouts) and over
-   the world (`#game-canvas` is 0, `#nameplates` is 1). This is the whole of the
-   fix for a game window opening behind an addon frame: every one of them, the ESC
-   menu included, is a `.window` INSIDE `#ui`. */
+/* Under the game's HUD (`#ui` is 10, or 80 to 90 in other layouts), whose windows include the
+   ESC menu, and over the world (`#game-canvas` is 0, `#nameplates` is 1). */
 #woc-addons .woc-hud-band {
   z-index: 5;
 }
@@ -40,16 +29,9 @@
   z-index: 100001;
 }
 
-/* `:where()` so this weighs exactly what the `#woc-addons > *` it replaced did,
-   (1,0,0). Two surfaces in kit.css turn the pointer back off at that same weight
-   and win on source order alone: the toast stack, which would otherwise put a dead
-   strip across the top of the world, and the tooltip, which would flicker by
-   leaving the element it was opened from. A band selector carrying its own class
-   would silently outrank both.
-
-   One rule per band rather than one `:where(a, b)`, because the build's scoping
-   guard splits a selector list on commas and would read the second half as an
-   unscoped rule. See loader/build-runtime.mjs. */
+/* `:where()` holds this at (1,0,0), so `#woc-toasts` and `#woc-tooltip` in kit.css turn the
+   pointer back off on source order alone. One rule per band, not `:where(a, b)`: the build's
+   scoping guard splits selector lists on commas (loader/build-runtime.mjs). */
 #woc-addons :where(.woc-hud-band) > * {
   pointer-events: auto;
 }
@@ -59,13 +41,8 @@
 }
 
 #woc-addons .woc-window {
-  /* The game's own --panel-bg is a gradient whose stops are 95% opaque, which is
-     fine for the game because it closes one window when it opens another. The
-     manager opens OVER whatever is already up, most often the game menu it was
-     launched from, and 5% bleed-through of gold-on-dark menu text lands right
-     under our body copy. Backing the theme's own gradient with the theme's own
-     opaque base keeps the look exactly and stops the bleed. Both are game
-     tokens, so a theme switch still retunes the pair together. */
+  /* The game's --panel-bg is 95% opaque, and the manager opens over the game menu, so it is
+     backed with the theme's opaque --panel-base to stop the text beneath bleeding through. */
   background-color: var(--panel-base, rgb(21 21 31));
   background-image: var(--panel-bg);
   position: absolute;
@@ -79,15 +56,12 @@
   padding: 12px;
   gap: 10px;
   border-radius: var(--radius-md, 8px);
-  /* interactjs resizes from the left and bottom edges, which a padding-box
-     measurement makes jump by twice the padding on the first pointer move. */
+  /* A padding-box measurement makes an interactjs edge resize jump on the first move. */
   box-sizing: border-box;
 }
 
-/* Once the player has moved or resized it, the frame primitive owns the box.
-   The centring transform has to go with it, or every left/top it writes is
-   offset by half the window's width. max-height goes too, since an explicit
-   height is now the point. */
+/* Once positioned, the frame primitive owns the box, so the centring transform and max-height
+   go, or every left/top it writes is offset by half the width. */
 #woc-addons .woc-window[data-positioned] {
   transform: none;
   max-height: none;
@@ -99,18 +73,10 @@
   justify-content: space-between;
   gap: 8px;
   cursor: move;
-  /* A drag that selects the title text instead of moving the window reads as
-     the drag having failed. */
+  /* Otherwise a drag selects the title text. */
   user-select: none;
-  /* The title bar is never what gives way when a frame is shorter than what is
-     in it. Only a window's body carries `flex: 1`, so on a frame with an
-     explicit height the default `flex-shrink: 1` distributes the overflow
-     across BOTH children by their basis, and the bar loses its share: the close
-     button holds its own 24px floor while the bar around it collapses, so the
-     glyph sits outside a header that is no longer tall enough for it. The body
-     is what has `overflow: auto` and `min-height: 0`, so it is what should
-     shrink, and shrinking it is what turns a fixed-height frame into a
-     scrolling one. */
+  /* The title bar never shrinks; on a short frame the (scrolling) body gives way instead,
+     or the bar collapses around the close button. */
   flex: 0 0 auto;
 }
 
@@ -120,10 +86,8 @@
   letter-spacing: 0.5px;
 }
 
-/* The game's own `.x-btn`, which this button already WEARS: 14px, a hairline
-   border and four pixels of padding, and no minimum at all. The square is ours,
-   because the mark inside is a 12px path rather than a glyph in a text run and a
-   padding-only box around it is not square. The touch floor is in touch.css. */
+/* This button wears the game's `.x-btn`; the square box is ours, since the mark is a 12px path
+   rather than a glyph. The touch floor is in touch.css. */
 #woc-addons .woc-close {
   background: none;
   border: 1px solid var(--color-border-default, rgb(78 61 29));
@@ -149,9 +113,7 @@
   display: flex;
   flex-wrap: wrap;
   gap: 4px;
-  /* --color-border-default rather than the --color-border-showcase that
-     .panel-title uses: this is a tab strip, not a title rule, and only the
-     former is one of the vars the game's theme system rewrites. */
+  /* --color-border-default, not .panel-title's --color-border-showcase, which is not themed. */
   border-bottom: 1px solid var(--color-border-default, rgb(78 61 29));
   padding-bottom: 6px;
 }
@@ -163,9 +125,8 @@
   color: var(--color-text-muted, rgb(153 141 106));
   cursor: pointer;
   font-family: inherit;
-  /* The game's own window tabs (`.bank-tab`, `.delve-tab`, `.chat-tab`): 13px on
-     roughly seven pixels of vertical padding, and no minimum height. See the
-     note above the compact block for why this is no longer 16px on 40px. */
+  /* The game's own desktop window tabs (`.bank-tab`, `.delve-tab`): 13px on about 7px of
+     padding, no minimum height. The touch floor is in touch.css. */
   font-size: 13px;
   padding: 7px 12px;
 }
@@ -186,28 +147,10 @@
   outline-offset: 2px;
 }
 
-/* Inside anything that scrolls, the ring is drawn INWARDS instead.
- *
- * An outline is painted outside the element's border box and contributes nothing
- * to scrollable overflow, and a scroll container paints nothing outside its own
- * padding box. `.woc-frame-body` and `.woc-pane` both scroll and neither has
- * padding of its own, so every control the loader lays out is flush with that
- * clip edge and the 2px gap above puts the left and right strokes of its ring
- * exactly where they cannot be drawn. What is left is a ring with no sides,
- * which reads as a broken border rather than as focus: reported from a live
- * session against a text field, and equally true of the first tab in a strip and
- * of every button in a pane.
- *
- * Ringing inwards rather than making room for the ring, because room is a layout
- * change to every frame in the loader to fix something painted, and it would
- * still leave the block direction clipped at the two ends of the scrollport. It
- * is also the game's own answer wherever it has the same problem: `.ta-row`,
- * `.delve-tab` and `.ui-dd-item` all carry a negative offset, and only the
- * controls it puts in a padded container keep the gap. The gap above is
- * therefore still the rule everywhere the ring has somewhere to go.
- *
- * A descendant selector rather than a child one, so a scroll container an ADDON
- * builds inside its own frame is covered by the same rule. */
+/* Inside anything that scrolls, the ring is drawn INWARDS instead. A scroll container clips at
+ * its padding box, and controls sit flush against it, so an outside ring loses its sides. The
+ * game uses the same negative offset on its own scrolled controls. A descendant selector, so
+ * an addon's own scroll container is covered too. */
 #woc-addons .woc-frame-body :focus-visible,
 #woc-addons .woc-pane :focus-visible {
   outline-offset: -2px;
@@ -218,34 +161,14 @@
   overscroll-behavior: contain;
 }
 
-/* The compact density (ui.frame/ui.window `density: 'compact'`).
+/* The compact density (ui.frame/ui.window `density: 'compact'`), tighter than the game's own
+ * panels, for a strip glanced at mid-fight.
  *
- * `comfortable` is the default and needs no rules of its own: it is what
- * everything above is already drawn at, which is the scale the GAME draws its own
- * windows at on a desktop. 13px tabs, a 12.5px button, a 15px panel title, a 14px
- * close mark, a 12px tooltip.
+ * `comfortable` needs no rules: everything above is the game's own desktop scale (13px tabs, a
+ * 12.5px button, a 15px title, a 14px close mark, a 12px tooltip). The game's 16px/40px floor
+ * applies under `@media (pointer: coarse)` only, so it lives in touch.css; do not apply it here.
  *
- * It used to be 16px labels on a 40px minimum, on the claim that this was the
- * floor the game holds every control to, and that claim was wrong in a way worth
- * recording. The game holds that floor on TOUCH ONLY. Its own rules say so in as
- * many words: `base.css` floors every focusable control at 16px inside
- * `@media (pointer: coarse)` with a comment about iOS Safari's auto-zoom,
- * `components.css` gives `.ui-dd-item` its 40px inside the same query, and
- * `hud.mobile.css` gives the bank tabs theirs under `body.mobile-touch`. On a
- * desktop the game runs 11px to 13px throughout. So the loader was drawing its
- * chrome about a third larger than every panel it sits beside, which reads as a
- * different application rendered on top of the game rather than as part of it.
- * Reported from a live session, with the Lorebind and Ledgerline panels next to
- * the game's own action bars. The floor is not gone; it moved to touch.css, which
- * is where the game keeps it.
- *
- * What compact now MEANS therefore changed with it. It used to be the escape
- * hatch from the touch floor, and every dense readout had to take it; it is now
- * tighter than the game's own panels, which is a real thing to want for a strip
- * glanced at mid-fight and is no longer something an ordinary window needs.
- *
- * Selectors carry both classes so specificity beats the base `.woc-window`
- * rules whatever order the sheets are concatenated in.
+ * Selectors carry both classes so they beat the base `.woc-window` rules in any sheet order.
  */
 #woc-addons .woc-window.woc-density-compact {
   padding: 8px;
@@ -271,8 +194,7 @@
   padding-bottom: 4px;
 }
 
-/* .woc-btn is declared in panes.css; the compact override lives here with the
-   rest of the density variant, because what it belongs to is the variant. */
+/* .woc-btn is declared in panes.css; its compact override lives with the variant. */
 #woc-addons .woc-density-compact .woc-tab,
 #woc-addons .woc-density-compact .woc-btn {
   font-size: 12px;
@@ -280,77 +202,31 @@
   padding: 2px 8px;
 }
 
-/* No game HUD in the document: the start screen, the character selector, or
- * after a logout that did not reload the page.
- *
- * Addon frames only. The manager stays reachable, because it is how a player
- * finds out the loader is broken and one of its three routes in is host-side and
- * works with no game at all.
- *
- * `display: none` rather than removing them, because a frame carries live state
- * an addon is still writing to: its position, what is on screen in it, and the
- * addon's own tallies. Addons deliberately keep running before world entry, so
- * they can subscribe and prepare while `world.ready` is still pending; what they
- * must not do is put a window over the game's landing page. ui/root.ts sets this
- * at mount and ui/mount.ts clears it on the HUD's first appearance, so the safe
- * state is the one that needs no event to be correct. */
+/* No game HUD in the document (start screen, character select, logout). Addon frames only: the
+ * manager must stay reachable. Hidden rather than removed, since addons keep running and
+ * writing to their frames before world entry. ui/root.ts sets it; ui/mount.ts clears it. */
 #woc-addons.woc-no-hud .woc-addon-frame {
   display: none;
 }
 
-/* The Dev tab's freeze, as far as the stylesheet is concerned. See runtime/freeze.ts.
- *
- * The callback gates hold everything that repaints on a cadence and can do
- * nothing about an animation, which the browser runs with no callback to hold:
- * a toast sliding in and a bar's width transition would both keep moving under
- * a freeze that only stopped timers, and both are exactly what a screenshot
- * catches half way through.
- *
- * `paused`, not `none`. Cancelling an animation snaps its element back to the
- * unanimated state, which for anything mid-entrance means freezing the frame
- * makes it JUMP, and photographing the jump is worse than photographing the
- * motion. Pausing holds the pixels that were on screen when the switch went on.
- *
- * The descendant selector is the point rather than an accident: everything under
- * the root belongs to the loader or to an addon, and an addon's own animations
- * are the main thing being stilled here.
- *
- * !important for the same reason the reduced-motion floor in kit.css carries it,
- * and the argument is stronger here: an addon that animates a bar writes the
- * transition into the style attribute as a matter of course, and an inline style
- * outranks every selector this file can spell. A freeze an addon can animate
- * through is not a freeze, and the switch would then be a control that looks like
- * it worked. */
+/* The Dev tab's freeze for CSS animations and transitions, which runtime/freeze.ts has no
+ * callback to hold. `paused`, not `none`, which would snap elements back mid-entrance. The
+ * descendant selector reaches addon animations too, and !important beats their inline styles. */
 #woc-addons.woc-frozen,
 #woc-addons.woc-frozen *,
 #woc-addons.woc-frozen *::before,
 #woc-addons.woc-frozen *::after {
-  /* biome-ignore lint/complexity/noImportantStyles: a freeze has to outrank the inline styles addon code writes, which is the case !important exists for. Paused rather than none, so the pixels on screen when the switch went on are the ones held. */
+  /* biome-ignore lint/complexity/noImportantStyles: a freeze has to outrank the inline styles addon code writes, which is the case !important exists for. */
   animation-play-state: paused !important;
-  /* biome-ignore lint/complexity/noImportantStyles: same, for the transition half. Without it a bar mid-transition keeps sliding under a freeze and photographs half way. */
+  /* biome-ignore lint/complexity/noImportantStyles: same, for the transition half. */
   transition: none !important;
 }
 
-/* The bare density (ui.frame `density: 'bare'`).
+/* The bare density (ui.frame `density: 'bare'`): chrome removed, only the addon's content.
  *
- * The third position on the axis the enum was chosen for: chrome removed
- * entirely, so what is on screen is the addon's own content and nothing else.
- * A row of timers floating on the HUD rather than a panel holding them.
- *
- * The background is unset rather than made transparent, because the base rule
- * sets a colour AND an image and leaving either behind would show a band under
- * content that has none of its own.
- *
- * There is no title bar to grab, so the whole frame is the drag handle
- * (ui/kit/frame-chrome.ts hands the element itself back as the handle, and
- * interactjs still ignores buttons and fields inside it). Nothing here draws an
- * outline: an overlay that outlined itself would be a panel again.
- *
- * And NO move cursor, which is the half that moves with the gesture rule: a bare
- * frame is dragged only while the arrange mode is on (ui/kit/frame-gestures.ts), so
- * a cursor promising a drag the rest of the time is the panel saying it will do
- * something it then refuses. The mode's own rule below puts the cursor back, on
- * every frame it hands the pointer to, which is the moment it is true again.
+ * The background is unset, not transparent, since the base rule sets a colour AND an image. The
+ * whole frame is the drag handle, but only in arrange mode (ui/kit/frame-gestures.ts), so there
+ * is no move cursor here; the mode's rule below adds it.
  */
 #woc-addons .woc-window.woc-density-bare {
   background-color: transparent;
@@ -358,38 +234,19 @@
   padding: 0;
   gap: 4px;
   border-radius: 0;
-  /* Belt and braces. The game's `panel` class is not applied to a bare frame at
-     all (ui/kit/frame-chrome.ts), which is what actually removes the border; these
-     make sure nothing else can put one back, because an empty bare frame with a
-     border is not an empty frame, it is a dot sitting on the HUD. */
+  /* A bare frame never wears `panel` (ui/kit/frame-chrome.ts); these keep any other border off,
+     since an empty bordered frame is a dot on the HUD. */
   border: none;
   box-shadow: none;
 }
 
-/* A bare overlay CLIPS rather than scrolls.
- *
- * `.woc-frame-body` carries `overflow: auto` for every frame, which is right for a
- * panel holding a list and wrong here: a scrollbar is chrome, and chrome is the
- * whole of what this density removes. Reported from a live session, where scaling
- * a bare strip down put a scrollbar over the game.
- *
- * Clipping rather than scrolling is also the honest behaviour for this shape. A
- * strip is a fixed set of rows an addon chose to show; if it does not fit, the
- * answer is a smaller row or fewer of them, which the addon controls, not a
- * control the player has to operate mid-fight to see a cooldown. An addon that
- * genuinely needs to scroll has asked for the wrong density.
- *
- * The floor that stops this mattering is the addon's own `minHeight`: a bare
- * frame should not be resizable below the content it draws. Clipping is what
- * happens when one has not set it, and a clipped row is a visible bug where a
- * scrollbar is a plausible-looking one. */
+/* A bare overlay CLIPS rather than scrolls: a scrollbar is chrome. An addon that does not fit
+ * should draw smaller or fewer rows, and set `minHeight` so it cannot be resized below them. */
 #woc-addons .woc-window.woc-density-bare .woc-frame-body {
   overflow: hidden;
 }
 
-/* The content is the handle while the mode is on, so the move cursor belongs on the
-   frame and not on what an addon put inside it: a button in a bare frame is still a
-   button. Scoped to the mode along with the cursor it is correcting. */
+/* The move cursor goes on the frame in arrange mode; a button inside keeps its own. */
 #woc-addons.woc-unlocked .woc-density-bare button,
 #woc-addons.woc-unlocked .woc-density-bare input,
 #woc-addons.woc-unlocked .woc-density-bare select,
@@ -397,26 +254,10 @@
   cursor: auto;
 }
 
-/* Which parts of a frame take the pointer (ui.frame `pointer`, see
- * ui/kit/frame-chrome.ts for what the three positions mean and why they exist).
- *
- * The whole of the mechanism, because `pointer-events` INHERITS: turning the
- * frame off turns everything inside it off, and naming a descendant is only ever
- * needed to turn one back ON. So `none` is one declaration, and `content` is that
- * declaration plus the two things a frame draws that must stay live, its title bar
- * and whatever the addon put in its body. A row's own children inherit the `auto`
- * from the row, so an addon's tree is reached however deep it goes.
- *
- * `> *` rather than a descendant selector on purpose: the addon's rows are what is
- * being turned back on, and turning every node under them on individually would
- * override a `pointer-events: none` the addon set on a decoration inside one.
- *
- * What follows from this, and is the whole of what an author has to hold: with
- * `content` you grab the frame by something it DREW. A drag or an edge resize
- * starting over a row works, and one starting over the empty half of the box goes
- * to the game, because there is nothing there. That is the same sentence as the
- * feature, not a second rule, and the unlock mode below is the answer for a frame
- * that is drawing nothing at all. */
+/* Which parts of a frame take the pointer (ui.frame `pointer`, see ui/kit/frame-chrome.ts).
+ * `pointer-events` INHERITS, so `content` turns the frame off and only its title bar and the
+ * body's direct children back on. `> *`, not a descendant selector, so a `pointer-events: none`
+ * an addon set on a decoration inside a row still holds. */
 #woc-addons .woc-window.woc-pointer-content,
 #woc-addons .woc-window.woc-pointer-none {
   pointer-events: none;
@@ -427,69 +268,29 @@
   pointer-events: auto;
 }
 
-/* The arrange-your-UI mode (ui/kit/unlock.ts).
- *
- * While the root carries this class every addon frame is outlined, washed and
- * labelled, so a frame can be found and grabbed even when it is drawing nothing.
- * The minimum size is the load-bearing part: a bare overlay whose content list is
- * empty is zero pixels, and an outline around zero pixels is still nothing to
- * aim at.
- *
- * It is drawn LOUDLY on purpose, and the first version was not. A hairline in the
- * default border colour is a reasonable outline on a blank page and close to
- * invisible over a game: the HUD is dense, the background is whatever the player
- * is standing in, and the one moment this mode is on is the moment the player is
- * hunting for a frame they have already failed to find. There is no cost to being
- * loud here, because the mode is off in play and every pixel of it goes away with
- * the switch.
- *
- * Gold rather than the border token because gold is what this game accents WITH,
- * so the outline reads as a control rather than as a rendering fault.
- *
- * Only addon frames, never the manager: the manager is a window the player
- * already opened deliberately and can already grab by its title bar, and
- * outlining it would put a label over the control that turns the mode off.
+/* The arrange mode (ui/kit/unlock.ts): every addon frame outlined, washed and labelled, with
+ * a minimum size, since an empty bare overlay is zero pixels. Drawn LOUDLY in gold on purpose:
+ * a hairline is invisible over a dense HUD. Never the manager, whose title bar is already a
+ * handle and which holds the switch that turns the mode off.
  */
 #woc-addons.woc-unlocked .woc-addon-frame {
-  /* `outline` rather than a border or a shadow, and not only because it takes
-     part in no layout: the bare density resets `border` and `box-shadow` to strip
-     its chrome, at a specificity this rule does not beat, so either of those would
-     be drawn on every frame EXCEPT the empty overlay this mode exists for. */
+  /* `outline`, since the bare density resets `border` and `box-shadow` at a higher specificity. */
   outline: 2px dashed var(--gold, rgb(255 209 0));
   outline-offset: 3px;
   min-width: 120px;
-  /* The tap-target floor the game holds every control to, rather than the 28px
-     structural floor a frame is allowed to shrink to. This mode is one the player
-     OPERATES, and an empty frame is a target before it is a frame. */
+  /* A tap-target size rather than the 28px structural floor: an empty frame is a target here. */
   min-height: 40px;
   cursor: move;
 }
 
-/* Arrange mode takes the pointer back, whatever the frame's `pointer` policy says.
- *
- * This is the half of the mode that makes it work at all for the frames that need
- * it most: a `content` or `none` overlay is grabbable only where it drew
- * something, and the case the mode exists for is the one that drew nothing. An
- * outline the player can see and cannot grab is worse than no outline.
- *
- * The extra `.woc-window` is specificity rather than decoration. Both pointer
- * rules above are (1,2,0) and so is the outline rule this sits under, so without
- * a third class the winner would be whichever sheet was concatenated last, which
- * is a question nobody should have to ask about arrange mode working. */
+/* Arrange mode takes the pointer back, whatever the frame's `pointer` policy says. The extra
+ * `.woc-window` is specificity: the pointer rules above are (1,2,0) too. */
 #woc-addons.woc-unlocked .woc-window.woc-addon-frame {
   pointer-events: auto;
 }
 
-/* The area, not just the edge. An empty bare frame outlined alone is a hairline
-   rectangle around nothing, which says where a frame's border is without saying
-   that there is a frame there to grab.
-
-   `opacity` on a dedicated element rather than a translucent colour, the same way
-   ui/styles/bar.css tints a fill: the tokens are opaque and a var() cannot be
-   given alpha without color-mix. Over the top rather than behind, so it tints a
-   panel frame as well as a bare one, and it is what makes the whole surface read
-   as claimed by the mode. `pointer-events: none` keeps it out of the drag it is
-   advertising. */
+/* The wash over the whole area. `opacity` on a pseudo-element, as bar.css tints a fill, since
+   the tokens are opaque. Over the top so it tints panel frames too; no pointer events. */
 #woc-addons.woc-unlocked .woc-addon-frame::after {
   content: "";
   position: absolute;
@@ -500,11 +301,8 @@
   pointer-events: none;
 }
 
-/* The name chip: WHICH frame this is, since an outlined empty overlay is otherwise
-   an anonymous gold box. The game draws the same thing in its own edit mode
-   (`.tf-frame-label`), above the frame where it covers nothing the frame drew; the
-   text is composed in ui/kit/frame-chrome.ts, since CSS is unreadable from a Vitest
-   suite and the sheet could reach only the fqid. */
+/* The name chip, above the frame as the game's own `.tf-frame-label` is. Its text is composed
+   in ui/kit/frame-chrome.ts. */
 #woc-addons.woc-unlocked .woc-addon-frame::before {
   content: attr(data-woc-label);
   position: absolute;
@@ -520,17 +318,14 @@
   background: var(--panel-base, rgb(21 21 31));
   border: 1px solid var(--gold-dim, rgb(200 168 56));
   border-radius: var(--radius-sm, 4px);
-  /* The frame it names may be one pixel of someone else's overlay, so the label
-     must not be the thing that is hidden behind it. */
+  /* Never hidden behind another frame. */
   box-shadow: 0 1px 4px rgb(0 0 0 / 0.6);
   pointer-events: none;
 }
 
-/* A frame parked at the top of the viewport has no room above it, so the chip hangs
-   underneath, on a class ui/frame/interactive.ts writes from the frame's own top (the
-   clearance is in ui/frame/geometry.ts). The game does the same with its own
-   `.tf-label-below`; both margins are restated because the base rule lifts the chip
-   with `margin-bottom`, and leaving it standing would offset the chip twice. */
+/* A frame at the top of the viewport gets its chip underneath (ui/frame/interactive.ts writes
+   the class; the clearance is in ui/frame/geometry.ts), as the game's `.tf-label-below` does.
+   Both margins are restated, or the base rule's `margin-bottom` offsets it twice. */
 #woc-addons.woc-unlocked .woc-addon-frame.woc-label-below::before {
   bottom: auto;
   top: 100%;

@@ -1,31 +1,14 @@
 // A timer bar: an icon, a name, a fill behind both, and a figure on the right.
 //
-// This is in the kit because every addon that shows a timer had already written
-// it. Cooldown Bars and Combat Meter each hand-rolled the same row out of about
-// twenty inline style declarations, and the two had drifted apart in the ways that
-// are easy to get wrong rather than in the ways that were deliberate: which part
-// is allowed to shrink, whether the figure reserves its width before the name
-// takes the rest, and whether the numbers are tabular. All three are the
-// difference between a readable row and one that jitters as it counts down.
+// The row is a flex line and the name is the ONLY part allowed to shrink: `min-width: 0` on
+// it gives an ellipsis instead of an overlap. Do not float the figure instead; a long name
+// then runs underneath it. The figure uses tabular numbers so a countdown does not jitter.
 //
-// The layout, stated once: the row is a flex line, the name is the ONLY part
-// allowed to shrink, and `min-width: 0` on it is what actually lets it, because a
-// flex item refuses to go below its content width without it. That single
-// declaration is the difference between an ellipsis and an overlap, and it is why
-// floating the figure instead does not work: a float leaves the figure in the
-// name's inline flow, so a long name runs underneath it.
+// The fill is a sibling behind the content, so its width animates without touching the text.
+// A `fraction` outside 0 to 1 (or NaN) is clamped, since a NaN style silently drops.
 //
-// The fill is a sibling positioned behind the content rather than a background on
-// the row, so its width can be animated without touching the text, and so a
-// partial fill does not tint the label.
-//
-// A `fraction` that is not a real number between 0 and 1 is clamped rather than
-// passed through. A NaN reaching a style property drops the declaration silently,
-// which reads as a bar stuck at its last width, and the arithmetic behind a timer
-// fraction divides by a total an addon may not have yet.
-//
-// The tone and school vocabulary, that clamp, and the decorative art element live in
-// kit/readout.ts, which is what this row and the square one in kit/tile.ts share.
+// The tone and school vocabulary, the clamp and the art element live in kit/readout.ts,
+// shared with the square kit/tile.ts.
 
 import type { Teardown } from '../../disposal.ts';
 import { type MoneyValue, writeValue } from './money.ts';
@@ -57,32 +40,18 @@ const PREFIX = 'woc-bar';
 
 /**
  * How tall the row is, which the sheet turns into a height, a text size and an icon.
- *
- * UNITLESS, where `--woc-tile-size` carries pixels, and the difference is not a
- * style choice. The text is derived as an `em` so a sized row keeps whatever font
- * size the game is set to (see styles/bar.css), and CSS calc cannot divide a length
- * by a length to reach a ratio: a plain number can be multiplied into either unit.
+ * UNITLESS, unlike `--woc-tile-size`: the text is derived as an `em` (styles/bar.css), and
+ * calc cannot divide a length by a length.
  */
 const SIZE_PROPERTY = '--woc-bar-size';
 
 /**
- * Marks a row whose height the caller decided, which is what the sheet keys its
- * derivation off.
- *
- * A class as well as the property, because "sized" is not a thing CSS can ask about
- * a custom property, and every one of those rules has to be inert on a row that
- * never asked: an unsized bar is sized by its own line box and its text is the
- * game's, and both must stay exactly that.
+ * Marks a row whose height the caller decided. A class as well as the property, because CSS
+ * cannot ask whether a custom property is set, and an unsized row must stay untouched.
  */
 const SIZED_CLASS = 'woc-bar-sized';
 
-/**
- * The height the caller asked for, in pixels, or nothing.
- *
- * Nothing leaves the row sized by its content, which is what a bar has always been.
- * Zero and NaN are refused for the reason a tile refuses them: a row of no height is
- * one that was never drawn, and a NaN drops the declaration silently.
- */
+/** The height the caller asked for, in pixels, or nothing. Zero and NaN are refused. */
 function setSize(el: HTMLElement, size: StyleSlot, next: unknown): void {
   if (typeof next !== 'number' || !Number.isFinite(next) || next <= 0) {
     return;
@@ -104,11 +73,8 @@ function setFraction(fill: StyleSlot, fraction: unknown): void {
 }
 
 /**
- * The row, as its own updates address it.
- *
- * Slots rather than elements, because a bar is animated from an addon's frame loop
- * and an update that repeats what is already on screen has to cost nothing. See the
- * note at the top of kit/readout.ts.
+ * The row, as its own updates address it: slots, so a repeated update costs nothing
+ * (kit/readout.ts).
  */
 interface BarParts {
   el: HTMLElement;
@@ -128,16 +94,8 @@ function span(doc: Document, className: string): HTMLElement {
 }
 
 /**
- * The row: a fill behind everything, a head line, and an optional second line.
- *
- * Two levels rather than one flat flex line, because the second line is what makes
- * this a shared primitive instead of a timer-only one. A cooldown row uses the head
- * alone; a meter row puts its hit count and crit rate underneath, and the fill spans
- * BOTH, which is what makes it read as that ability's share of the whole rather than
- * as a countdown on one line of it.
- *
- * The detail element exists whether or not it is used and is hidden while empty, so
- * a row that gains a second line later does not have to be rebuilt.
+ * The row: a fill behind everything, a head line, and an optional second line. The fill
+ * spans both lines. The detail element always exists and is hidden while empty.
  */
 function buildBar(doc: Document, opts: BarOpts): BarParts {
   const el = doc.createElement('div');
@@ -179,75 +137,37 @@ function buildBar(doc: Document, opts: BarOpts): BarParts {
 interface BarUpdate {
   label?: string;
   /**
-   * An icon URL, from `ui.icon`, or null for none.
-   *
-   * Re-shown on every change rather than only on the first: a bar whose icon
-   * failed once and was hidden has to get its slot back when it is pointed at art
-   * that does exist, which happens the moment a row is reused for another ability.
+   * An icon URL, from `ui.icon`, or null. Re-shown on every change, so a reused row recovers from a
+   * 404.
    */
   icon?: string | null;
   /** 0 through 1. Clamped, so a division by a total you do not have yet is safe. */
   fraction?: number;
   /**
-   * The right-hand figure, usually a countdown.
-   *
-   * An amount of copper instead of a string draws it as the game draws money: a
-   * coin per unit, empty units left out, announced as one figure in words. Its own
-   * shape rather than a formatted string, because a row of coins should look the
-   * same whichever addon drew it.
+   * The right-hand figure, usually a countdown. An amount of copper draws coins, as the game does.
    */
   value?: string | MoneyValue;
   /**
-   * Tint the fill by the game's own colour for a damage school.
-   *
-   * Independent of `tone`, and `tone` wins where both are set to something: urgency
-   * is the more urgent thing to show. Null and an unrecognised value both tint nothing
-   * rather than guessing, since a wrong school is a claim about the row that the event
-   * did not make. Null is spelled out because a caller reading a school off an event
-   * legitimately has none for a heal, and should not have to omit the property.
+   * Tint the fill by the game's own colour for a damage school. `tone` wins where both are
+   * set. Null (a heal has no school) and an unrecognised value tint nothing.
    */
   school?: BarSchool | null;
   /**
-   * Colour it by the game's own colour for an item quality tier.
-   *
-   * A THIRD axis rather than more tones: a tier is what an item IS, where a tone is how
-   * urgent a row has become, so an item panel setting both is saying two true things. Null
-   * and an unrecognised value colour nothing, which is the answer for the items the game
-   * ranks at no tier at all.
+   * Colour it by the game's own colour for an item quality tier. Null and unknown colour nothing.
    */
   quality?: BarQuality | null;
   /**
-   * Tint the fill by the game's own colour for a CLASS.
-   *
-   * The fourth axis, and the only one about who rather than what. It colours the FILL
-   * where a tier colours the label, because a class is what the whole row is: a health
-   * bar per class is how every client that has ever drawn one has drawn it.
-   *
-   * Weakest of the three fill claims, so a school tint and a tone both win over it. Null
-   * and anything that is not one of the nine colour nothing, which is the answer for a
-   * mob: the id an addon holds is a `templateId` as often as a class, and a wolf is not
-   * one.
+   * Tint the fill by the game's own colour for a class. School and tone both win over it.
+   * Null and anything that is not one of the nine classes (a mob's `templateId`) tint nothing.
    */
   unitClass?: BarClass | null;
   /** A quieter second line under the head. An empty string hides it again. */
   detail?: string;
   tone?: BarTone;
   /**
-   * How tall the row is, in pixels, art and text with it.
-   *
-   * For a strip whose height is the PLAYER's: a column of these divided between a
-   * frame's box is the shape every timer addon in the catalogue had hand-written,
-   * each of them setting six declarations per row and transcribing the icon box out
-   * of this kit's own sheet to do it.
-   *
-   * Left alone, a row is as tall as its own line box and its text is the game's,
-   * which is what a bar has always been. Anything that is not a positive finite
-   * number leaves it that way rather than drawing a row of no height.
-   *
-   * The text scales WITH the row rather than to a figure in pixels, so a row at its
-   * natural height reads at exactly the size the player's game is set to. Set this
-   * rather than writing a font size onto the row yourself: an inline style beats
-   * every rule in the sheet, including the tap-target floor a phone needs.
+   * How tall the row is, in pixels, art and text with it. Left alone (or not a positive finite
+   * number), the row is as tall as its line box. Set this rather than an inline font size,
+   * which would beat every rule in the sheet, the touch tap-target floor included.
    */
   size?: number;
 }
@@ -273,8 +193,7 @@ function applyText(parts: BarParts, next: BarUpdate): void {
     writeValue(parts.value, next.value);
   }
   if (next.detail !== undefined) {
-    // Hidden rather than emptied, so a row whose detail was switched off does not
-    // leave the gap the second line's own spacing would otherwise still take.
+    // Hidden, not just emptied, so the second line's spacing leaves no gap.
     writeTextHiding(parts.detail, next.detail);
   }
 }
@@ -294,8 +213,7 @@ function createBar(doc: Document, opts: BarOpts = {}): Bar {
     setSize(parts.el, parts.size, next.size);
   };
 
-  // The fraction is written even when the opts said nothing about it, so the row's
-  // own markup states where the fill is rather than leaning on a stylesheet rule.
+  // Always written, so the markup states the fill rather than leaning on a stylesheet default.
   setFraction(parts.fill, opts.fraction);
   update(opts);
   return {

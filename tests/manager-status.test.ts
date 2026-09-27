@@ -1,8 +1,4 @@
-// How an addon's run state is drawn.
-//
-// Two panes render this and both have to agree, and the interesting case is the
-// one with no status at all: an addon the supervisor has not reached yet, and
-// every addon when the bridge never connected.
+// How an addon's run state is drawn, in both panes that render it.
 
 import { describe, expect, it } from 'vitest';
 import type { AddonStatus } from '../loader/src/runtime/supervisor.ts';
@@ -38,9 +34,7 @@ describe('with a status', () => {
   });
 });
 
-// Null rather than a "stopped" default. Before the supervisor has reconciled,
-// and whenever the bridge never connected, no status exists, and drawing
-// "Stopped" then would assert something the loader has not established.
+// No status is null, never "stopped": the loader has not established that the addon stopped.
 describe('with no status', () => {
   it('answers null for an addon the supervisor has not reached', () => {
     expect(statusView([status({ fqid: 'official/other' })], FQID)).toBeNull();

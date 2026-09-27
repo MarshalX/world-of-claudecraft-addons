@@ -58,8 +58,7 @@ describe('extractRegion', () => {
     expect(extractRegion(SOURCE.replaceAll('\n', '\r\n'), 'frame', AT)).toContain('woc.ui.bar');
   });
 
-  // The whole reason for named regions over line ranges: this fails loudly rather
-  // than silently rendering whatever moved into those lines.
+  // Line ranges would silently render whatever moved into them.
   it('throws when the region has been renamed or removed', () => {
     expect(() => extractRegion(SOURCE, 'gone', AT)).toThrow(/no region `gone`/);
   });
@@ -72,7 +71,7 @@ describe('extractRegion', () => {
     expect(() => extractRegion('// #region r\na();', 'r', AT)).toThrow(/never closed/);
   });
 
-  it('throws on an empty region rather than rendering a blank block', () => {
+  it('throws on an empty region', () => {
     expect(() => extractRegion('// #region r\n\n// #endregion', 'r', AT)).toThrow(/is empty/);
   });
 });

@@ -1,10 +1,5 @@
-// `woc.paint`, the coalesced repaint.
-//
-// The seat on the loader's frame loop is taken per request and given up once the
-// repaint has run, so an addon with nothing owed costs nothing. The exception is a
-// repaint owed to a HIDDEN frame, which holds its seat: `Frame` publishes
-// `visible` and no change event, so looking once a frame is the only way to notice
-// the panel returning.
+// `woc.paint`, the coalesced repaint. It holds a frame-loop seat only while a repaint is owed; one
+// owed to a HIDDEN frame keeps its seat, since `Frame` has no visibility event to wait on.
 
 import type { DisposalBag, Teardown } from '../disposal.ts';
 import { type FrameLoop, reportedOnce } from '../frame-loop.ts';
@@ -60,8 +55,7 @@ function createRepaint(deps: PaintDeps, handler: () => void, opts?: PaintOpts): 
   const state: PaintState = { owed: false, off: null, disposed: false };
   const draw = reportedOnce(deps.report, handler);
 
-  // An already-disposed bag runs this at once, so a `paint` call after disable
-  // hands back an inert request rather than one that resurrects the addon's DOM.
+  // A disposed bag runs this at once, so `paint` after disable is inert.
   deps.bag.add(() => {
     state.disposed = true;
     state.owed = false;

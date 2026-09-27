@@ -1,27 +1,13 @@
 // Emberwatch on the stage: what fired, and the rules it fired from.
 //
-// Both frames in one picture, since a strip of tiles is half a rules engine and the pane is
-// where the two questions this addon refuses to answer are written down.
+// Every id, name, kind, school, duration and stack is the game's own; ids and names disagree
+// because the game's do (`arcane_power` displays as "Aether Surge"), which is why art is filed
+// under the id.
 //
-// Every id, name, kind, school, duration and stack is the game's own, and the ids and names
-// disagree because the game's do: `arcane_power` displays as "Aether Surge". That divergence is
-// why art is filed under the id.
-//
-// A fire mage, deliberately: the shipped set carries `hot_streak` for fire and `brain_freeze` for
-// frost, which cannot both be in play, and the pane lists both because a rule is switched off by
-// hand rather than by a spec nothing on the wire states.
-//
-// The five tiles are one of each thing the strip can say, and the two the player did not cast are
-// the reason `artOf` has a second branch: their ids are the mob's own, in no class manifest and in
-// nothing an addon can reach, so those squares carry the applying mob's PORTRAIT. Both mobs here
-// are catalogued templates with committed portrait art, which every mob template has.
-//
-// The dot on the target carries `mine`, which is the clause the whole addon turns on: two mages
-// on one boss both leave a `pyroblast`, and only one is worth a global.
-//
-// The raid scenarios draw the boss PORTRAIT on every square: neither encounter's auras are in
-// the served aura art manifest at game 0.41.0. In `varkhul-soak` the badge reads four BODIES,
-// not four applications.
+// A fire mage: the pane lists both `hot_streak` and `brain_freeze`, since no spec is on the wire.
+// The two tiles the player did not cast carry the applying mob's PORTRAIT, since their ids are in
+// no class manifest. The raid scenarios draw the boss portrait on every square because neither
+// encounter's auras are in the aura art manifest. In `varkhul-soak` the badge reads four BODIES.
 
 import type { Scenario, Stage, WorldDraft } from '../../stage/src/stage.ts';
 import { PLAYER_ENTITY } from '../../tests/fakes/frames.ts';
@@ -37,7 +23,7 @@ const SUMMONER = 721;
 /** The one mob with a stun long enough to photograph. */
 const OGRE = 730;
 
-/** The two raid bosses game 0.41.0 added. Both ship a portrait, which is what fills their tiles. */
+/** The two raid bosses. Both ship a portrait, which is what fills their tiles. */
 const IGNIVAR = 740;
 const VARKHUL = 741;
 
@@ -52,8 +38,8 @@ const SOAK_SHARE = 1.4;
 const CLASS_ID = 'mage';
 
 /**
- * Narrower than the addon's own 420: a bare frame reserves its whole box whether or not anything
- * is drawn in it, and no crop can recover that, so this is the width five squares occupy.
+ * Narrower than the addon's own 420: a bare frame reserves its whole box and no crop recovers it,
+ * so this is the width five squares occupy.
  */
 const STRIP = { box: { x: 24, y: 24, w: 282, h: 63 }, visible: true };
 
@@ -61,10 +47,9 @@ const STRIP = { box: { x: 24, y: 24, w: 282, h: 63 }, visible: true };
 const STRIP_SHUT = { box: STRIP.box, visible: false };
 
 /**
- * One scenario rather than a sheet: a sheet lines panes up on the caption baseline, so a 63px
- * strip beside a 500px panel is stranded at the bottom of an empty column. Wider and taller than
- * the addon's own box, because a mage's rules clip the two notes under them first. The eight
- * raid rules are on every class's pane, so the height covers eighteen rows; check the capture.
+ * One scenario rather than a sheet: a sheet aligns panes on the caption baseline, stranding the
+ * short strip. Larger than the addon's own box so the notes under the rules do not clip; check the
+ * capture when the rule count changes.
  */
 const PANE = { box: { x: 24, y: 110, w: 700, h: 700 }, visible: true };
 
@@ -154,7 +139,7 @@ function afflictTarget(stage: Stage): void {
   stage.set(stage.player, 'targetId', BROODMOTHER);
 }
 
-/** TWO settles: one for the saved frame coming up hidden, one for the data file the manifest declares. */
+/** Two settles: one for the saved frame coming up hidden, one for the declared data file. */
 async function show(stage: Stage): Promise<void> {
   stage.poll();
   await stage.settle();
@@ -216,7 +201,7 @@ function aVarkhulPull(draft: WorldDraft): void {
 
 /**
  * The last twenty seconds of Ignivar: branded at the cap, with the enrage running on the boss.
- * The brand's 600s remaining is the game's own figure; the encounter takes it off by script.
+ * The brand's 600s is the game's own figure; the encounter removes it by script.
  */
 async function ignivarEndgame(stage: Stage): Promise<void> {
   stage.set(stage.player, 'auras', [
@@ -318,8 +303,7 @@ const SCENARIOS: readonly Scenario[] = [
     run: show,
   },
   {
-    // Strip shut on purpose: a banner is what reaches a player not looking at the overlay, and a
-    // strip beside it would crop badly, since the banner sits at a fixed place in the view.
+    // Strip shut: the banner sits at a fixed place in the view, so a strip beside it crops badly.
     id: 'stun',
     label: 'A stun, with the banner it raises',
     preview: true,
@@ -347,8 +331,7 @@ const SCENARIOS: readonly Scenario[] = [
     run: varkhulSoak,
   },
   {
-    // A bare strip with no alert draws nothing at all, which is the point: the unlock outline is
-    // how a player finds it again.
+    // A bare strip with no alert draws nothing; the unlock outline is how a player finds it.
     id: 'quiet',
     label: 'Nothing worth an alert',
     data: { [RULES_FILE]: JSON.stringify(RULES) },

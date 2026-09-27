@@ -1,17 +1,7 @@
 // Which instanced run the player is inside, if any.
 //
-// Deliberately THIN, and the reason is the content rather than the effort. The
-// game's own run record carries a module list, an objective state, an affix
-// list, a rite state and a spawn origin, all of which are delve content and move
-// faster than anything else this API reads. Publishing that shape would mean
-// republishing it every time the mode grows a feature, and an addon written
-// against the wide version would break on a game update that changed a corner of
-// it nobody was using.
-//
-// What is here is the part an encounter display actually asks: which run is
-// this, how far through it am I, and is it over. Anything past that is reachable
-// through `world.raw`, at the addon's own risk, which is exactly what that
-// escape hatch is for.
+// Deliberately thin: the game's run record is fast-changing delve content, so only which run,
+// how far through, and whether it is over are published. The rest is `world.raw`.
 
 import { fieldArray, fieldNumber, fieldString, fieldValue } from '../net/frames.ts';
 

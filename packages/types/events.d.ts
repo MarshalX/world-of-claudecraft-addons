@@ -1,24 +1,13 @@
 // The decoded events the game's socket carries, and what each one holds.
 //
-// Written against a RECORDED session rather than against the game's own type
-// declarations. The two disagree silently and have already done so in both
-// directions, so a kind is described here only if it was seen on the wire, and a
-// field is optional because it was ABSENT from some of the records that carried
-// it rather than because a declaration called it optional.
+// Described from RECORDED sessions: a kind is here only if it was seen on the
+// wire, and a field is optional because some records lacked it. This is a
+// fraction of what the game emits; `net.onEvent` accepts any kind and hands an
+// undescribed one over as `unknown`.
 //
-// What is here is a fraction of what the game can emit, and nothing was taken
-// away by narrowing: `net.onEvent` still accepts any kind, and one that is not
-// described hands the handler `unknown`, which is what every kind did before
-// this file existed.
-//
-// The combat records live in `events-combat.d.ts`. They carry two traps worth
-// knowing before writing a handler: an `ability` on a damage or heal record is a
-// display NAME while an `ability` on a cast is an ID, and a `heal2` record
-// flagged `cueOnly` carries no healing at all.
-//
-// The battleground's live in `events-pvp.d.ts`, which is where the flag plays,
-// the kill feed and the result are. They are the moment `world.battleground` and
-// the `battleground` member of `world.match` report the state of.
+// Combat records are in `events-combat.d.ts` (an `ability` on a damage or heal
+// record is a display NAME, on a cast an ID) and battleground records in
+// `events-pvp.d.ts`.
 
 import type {
   AuraEvent,
@@ -47,10 +36,9 @@ import type {
 /**
  * The recipient a record was routed to, when it is personal.
  *
- * The server delivers some events to one player rather than to everyone nearby
- * and stamps those with the recipient. It is on your own progression, loot and
- * error records, and absent from world-visible ones such as a damage exchange
- * between two other entities.
+ * Present on records delivered to one player (your progression, loot and error
+ * records) and absent from world-visible ones such as a damage exchange between
+ * two other entities.
  */
 export interface PersonalEvent {
   pid?: number;
@@ -112,15 +100,12 @@ export type ChatChannel =
   /**
    * Everyone in the sender's battleground, BOTH teams.
    *
-   * Cross-team on purpose, which is the game's own reason for it: players were
-   * falling back to General to talk to the other side.
    */
   | 'battleground'
   /**
    * A party or raid LEADER's alert, broadcast to every member.
    *
-   * The `/pull` countdown rides this channel, which is why it is worth branching
-   * on: see `textKey` below for reading that countdown without parsing English.
+   * The `/pull` countdown rides this channel: see `ChatEvent.textKey`.
    *
    * Added in API minor 12.
    */
@@ -135,10 +120,8 @@ export type ChatChannel =
 /**
  * One chat line.
  *
- * The sender's class and title ride the record rather than being read off their
- * entity, and the reason is worth knowing: a line in a world or guild channel
- * reaches you from players far outside your interest scope, where no entity for
- * them exists locally at all.
+ * The sender's class and title ride the record because a world or guild line can
+ * come from a player with no local entity.
  */
 export interface ChatEvent extends PersonalEvent {
   type: 'chat';
@@ -157,29 +140,25 @@ export interface ChatEvent extends PersonalEvent {
   /**
    * A stable id for a GENERATED line, where `text` is the English of it.
    *
-   * The same bargain `ErrorEvent.code` offers one level up: `text` is prose that
-   * a locale or a rewording changes under you, and this does not. A line a PLAYER
-   * typed never carries one, so presence is also the test for "the game said
-   * this, not somebody in my party".
+   * Unlike `text`, it does not change with locale or rewording. A line a PLAYER
+   * typed never carries one, so presence means the game said it.
    *
-   * It is a translation key rather than an enum, so treat the set as open and
-   * match the ones you care about. The `/pull` countdown is the one worth naming,
-   * because it is the first thing here an addon could not otherwise read at all:
+   * A translation key, so treat the set as open. The `/pull` countdown is
    * `'hudChrome.pullTimer.start'` with `{ seconds }`, then
    * `'hudChrome.pullTimer.countdown'` with `{ seconds }` at 5, 4, 3, 2 and 1,
    * then `'hudChrome.pullTimer.pull'`, or `'hudChrome.pullTimer.cancel'` if the
    * leader called it off. All four arrive on the `'raidWarning'` channel.
    *
-   * Added in game 0.43.0 and in API minor 12.
+   * Added in API minor 12.
    */
   textKey?: string;
   /**
    * What the game would interpolate into `textKey`'s template, when it has any.
    *
-   * Read the VALUE rather than the rendered `text`: `{ seconds: 5 }` is a number
-   * whatever language the player is in.
+   * Read these rather than the rendered `text`: `{ seconds: 5 }` is a number in
+   * any language.
    *
-   * Added in game 0.43.0 and in API minor 12.
+   * Added in API minor 12.
    */
   textValues?: Record<string, string | number>;
 }
@@ -187,28 +166,24 @@ export interface ChatEvent extends PersonalEvent {
 /**
  * You died, carrying the recap the game builds its death screen from.
  *
- * The two fields are independent, and a recap has to handle each missing on its
- * own. Fall damage has no killer entity to name and still arrives with
- * `killerAbility` set, and a cause the sim could not resolve at all leaves both
- * absent, which is the case that needs a line of its own.
+ * The two fields are independent: fall damage has `killerAbility` and no
+ * `killerId`, and an unresolved cause leaves both absent.
  */
 export interface PlayerDeathEvent extends PersonalEvent {
   type: 'playerDeath';
   /**
    * The entity that landed the kill, BY ID rather than by name.
    *
-   * Resolve it like any other event's entity, through `world.unit` or
-   * `world.entities`, which also means it can name one that has already left your
-   * interest scope by the time you read this. Absent for an untracked source.
+   * Resolve it through `world.entities`; it can name an entity that has already
+   * left your interest scope. Absent for an untracked source.
    */
   killerId?: number;
   /**
    * What killed you, as raw English, and a CAUSE rather than only an ability:
    * environmental damage arrives here as 'Falling'.
    *
-   * A display label like `DamageEvent.ability` and not an id, so the same
-   * divergence applies to it and `world.abilities.byName` is the only route back
-   * to an id, for an ability you happen to know.
+   * A display label, not an id: `world.abilities.byName` maps it back for an
+   * ability you know.
    */
   killerAbility?: string;
 }
@@ -220,23 +195,22 @@ export interface RespawnEvent extends PersonalEvent {
 /**
  * A refused action, with the game's own already-composed line.
  *
- * `text` is the only field every refusal carries, and it is the one to display.
- * The three below ride a SERVER-authored refusal alone, which today is the
- * General chat quota and nothing else, so treat all three as absent: a refusal
- * from the sim (out of range, target dead, bags full) carries none of them, and
- * so does any refusal from a server older than game 0.37.1.
+ * `text` is the only field every refusal carries, and the one to display.
+ * `code`, `channel` and `retryAfterSeconds` ride only a SERVER-authored refusal
+ * (currently the General chat quota), so expect them absent: a sim refusal (out
+ * of range, target dead, bags full) carries none.
  */
 export interface ErrorEvent extends PersonalEvent {
   type: 'error';
   text: string;
   /**
-   * The sim's own coarse label, which has exactly one member today,
-   * `'target_dead'`. Unrelated to `code` below, which comes from the server.
+   * The sim's own coarse label, currently only `'target_dead'`. Unrelated to
+   * `code`.
    */
   reason?: string;
   /**
    * A stable identity for a server-authored refusal, safe to branch on where
-   * `text` is prose that a locale or a rewording can change under you.
+   * `text` is not.
    *
    * Added in API minor 6.
    */
@@ -274,10 +248,7 @@ export interface GatherResultEvent extends PersonalEvent {
   /**
    * This harvest spent the LAST charge of the slotted tool effect.
    *
-   * Present, and only ever true, on that one harvest and on no other, so an addon
-   * can say the effect expired rather than leaving the player to work out why it
-   * stopped helping. Absent on every other harvest, the ones that spent the
-   * earlier charges included.
+   * Present, and only ever true, on that one harvest; absent on every other.
    */
   effectDepleted?: true;
 }
@@ -285,19 +256,16 @@ export interface GatherResultEvent extends PersonalEvent {
 /**
  * What a gather attempt was aimed at.
  *
- * A corpse has no profession of its own: it is gated on the best tool tier across
- * every gathering profession you have, which is why `professionId` is absent on a
- * corpse refusal and present on the other two.
+ * A corpse is gated on your best tool tier across every gathering profession,
+ * so `professionId` is absent on a corpse refusal.
  */
 export type GatherSurface = 'node' | 'corpse' | 'fishing';
 
 /**
  * The server refused a gather, and why.
  *
- * The server's own answer to the question a node panel is already answering
- * locally, which makes it the one thing that can correct a wrong local model the
- * moment it is wrong. Personal and text-free: ids and numbers only, so the line
- * the player reads is yours to compose.
+ * The server's own answer, so it corrects a wrong local model. Ids and numbers
+ * only: the line the player reads is yours to compose.
  */
 export interface GatherDeniedEvent extends PersonalEvent {
   type: 'gatherDenied';
@@ -310,12 +278,8 @@ export interface GatherDeniedEvent extends PersonalEvent {
    * The proficiency at which a tool you ALREADY CARRY would work this target.
    *
    * Present exactly when a tool covering `requiredTier` is in your bags and only
-   * the counter is short, which is the difference between "you need a better
-   * pick" and "you need more practice". Absent means the tool itself is what is
-   * missing, and `requiredTier` is the whole answer.
-   *
-   * Keyed to your bags on purpose: naming a threshold that unlocks nothing you
-   * carry would be a true number and useless advice.
+   * proficiency is short ("more practice"). Absent means the tool is what is
+   * missing ("a better pick").
    */
   wieldProficiency?: number;
 }
@@ -323,8 +287,7 @@ export interface GatherDeniedEvent extends PersonalEvent {
 /**
  * A gathering tool was used with nothing in range to use it on.
  *
- * The one refusal a node panel could have prevented, which is what makes it worth
- * hearing: everything else is a gate, and this is a miss.
+ * The one refusal a node panel could have prevented.
  */
 export interface GatherToolNoNodeEvent extends PersonalEvent {
   type: 'gatherToolNoNode';
@@ -334,9 +297,8 @@ export interface GatherToolNoNodeEvent extends PersonalEvent {
 /**
  * A yield arrived in a lesser form than it was rolled in, because the bags were full.
  *
- * `mark` means the units landed and your signature on them did not. `find` means a
- * pure bonus was dropped outright. Neither is an error the game reports anywhere
- * else, so without this a player sees a jackpot that silently was not one.
+ * `mark` means the units landed without your signature. `find` means a bonus was
+ * dropped outright. The game reports neither anywhere else.
  *
  * At most one per harvest command, even when several yields downgrade.
  */
@@ -396,9 +358,7 @@ export type KnownEventKind = keyof EventPayloads;
 /**
  * Any kind at all.
  *
- * Open for the reason the cue and icon unions are open: the set is content, the
- * game emits far more kinds than are described here, and a published type must
- * never be able to reject a working addon.
+ * Open because the game emits far more kinds than are described here.
  */
 export type EventKind = KnownEventKind | (string & Record<never, never>);
 

@@ -1,6 +1,4 @@
-// The two blocks that appear in both prose and page templates: a screenshot
-// figure and a code block. Built here so a docs page written in Markdown and a
-// hand-built landing section emit the same markup for the same thing.
+// Blocks shared by Markdown prose and hand-built pages, so both emit the same markup.
 
 import { type Html, html, raw } from './html.ts';
 import type { Measured } from './shots.ts';
@@ -11,24 +9,9 @@ const BASE = '/shots';
 /**
  * A screenshot, on its near-black plate, with its caption under it.
  *
- * A PORTRAIT shot is additionally capped by height. The Combat Meter panel and the
- * Game Menu are tall and narrow because the things they show are, and filling a
- * 496px column with one produced a 600px-tall row with the paragraph beside it
- * floating in dead space. Capping the height puts such a shot at roughly the size
- * it occupies in the game, which is also where its rows are most legible. The
- * class is emitted here rather than guessed in CSS because only the generator
- * knows the file's real shape.
- *
- * The plate is capped at the file's natural size in CSS pixels, which is the whole
- * no-upscale rule: a shot wider than its column is unaffected, and a narrower one
- * stops short and centres rather than stretching. So an undersized screenshot is
- * smaller and sharp instead of full-width and soft.
- *
- * Both `alt` and the caption come from the manifest and are never written into a
- * template, so a re-shoot changes the page without a template edit and a
- * description cannot go stale in a second place. An addon's preview carries alt
- * text from its own `addon.json` and no caption, because the card it sits in has
- * already named it.
+ * A portrait shot gets a class that caps its height in CSS; only the generator knows the file's
+ * real shape. The plate is capped at the file's natural size, so a shot is never upscaled.
+ * `alt` and the caption come from a manifest, never a template.
  */
 export function figure(shot: Measured): Html {
   const { stem } = shot;
@@ -52,11 +35,8 @@ export function figure(shot: Measured): Html {
 }
 
 /**
- * A code block, with the file it came from named in its header.
- *
- * `body` is markup rather than text because shiki has already turned it into
- * spans carrying both themes. The copy button is NOT here: it is injected by the
- * client script, so there is no dead button with JavaScript off.
+ * A code block, with the file it came from named in its header. `body` is shiki's markup. The
+ * client script injects the copy button, so there is no dead button with JavaScript off.
  */
 export function codeBlock(body: Html, name: string | null): Html {
   return html`<div class="code">
@@ -65,14 +45,7 @@ export function codeBlock(body: Html, name: string | null): Html {
 </div>`;
 }
 
-/**
- * A slot for a screenshot that has not been taken yet.
- *
- * The design drew these as hatched boxes and they earn their place: a step whose
- * illustration is simply absent reads as a finished step, while a box saying what
- * belongs there reads as a gap. The install page's step 2 is the one that matters,
- * since that is where an install silently does nothing.
- */
+/** A hatched slot for a screenshot not taken yet, so a missing illustration reads as a gap. */
 export function placeholder(lines: readonly string[], caption: string): Html {
   return html`<figure>
   <div class="figure-plate">
@@ -85,14 +58,8 @@ export function placeholder(lines: readonly string[], caption: string): Html {
 /**
  * The install button, shared by the landing page and the install page.
  *
- * The VERSION is omitted when there is no release rather than showing
- * package.json's 0.0.0, which the tag-driven release model leaves permanently
- * unreleased. See tools/site.mjs.
- *
- * The label is fixed, and a filename belongs in `meta` rather than in it: the
- * label is set in Cinzel, which has no lowercase and renders at text sizes as
- * small caps, so `woc-loader.user.js` came out as WOC-LOADER.USER.JS and stopped
- * reading as a filename at all. The meta line is mono, where it reads as typed.
+ * The version is omitted with no release, since package.json always says 0.0.0. Put a filename
+ * in `meta`, never the label: the label is Cinzel, which has no lowercase.
  */
 export function installButton(release: Release | null, href: string, meta: string): Html {
   const version = release && `${release.version} · ${release.size} · `;

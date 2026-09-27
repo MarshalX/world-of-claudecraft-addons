@@ -1,14 +1,5 @@
-// The woc.ui surface handed to addons. Mirrors packages/types/ui.d.ts.
-//
-// A thin per-addon binding over the ONE kit built in ui/mount.ts: one toast
-// stack, one tooltip element, one HUD watcher. What is per-addon is the
-// disposal bag, so everything an addon creates here is released when it is
-// disabled, and the fqid, which namespaces the ids it puts in the game's DOM.
-//
-// Every addon element lands under #woc-addons, a sibling of the game's #ui, so a
-// HUD re-render cannot take it away. The two surfaces that go INSIDE game DOM,
-// micro buttons and menu entries, are the exception by definition and are
-// re-attached by the shared watcher rather than by the addon.
+// The woc.ui surface, mirroring packages/types/ui.d.ts. A per-addon binding over the one kit
+// built in ui/mount.ts: per addon are only the disposal bag and the fqid that namespaces its ids.
 
 import type { DisposalBag, Teardown } from '../disposal.ts';
 import type { AlertOpts } from '../ui/kit/alert.ts';
@@ -46,12 +37,7 @@ import type { MenuEntryOpts, MicroButtonOpts } from './ui-injections.ts';
 import { injectionSurface } from './ui-injections.ts';
 import { layoutSurface } from './ui-layout.ts';
 
-/**
- * The controls a settings pane is made of, grouped like `ui.icon`'s builders.
- *
- * One family answering one question, so it is one member rather than four leaves
- * burying `frame`, `bar` and `tile` among them.
- */
+/** The controls a settings pane is made of, grouped like `ui.icon`'s builders. */
 interface FieldBuilders {
   checkbox: (opts: FieldOpts<boolean>) => Field<boolean>;
   select: (opts: SelectOpts) => Field<string>;
@@ -87,12 +73,7 @@ interface UiApi {
   itemCell: number;
   /** Where the game's own art lives, so no addon writes a path. */
   icon: IconUrls;
-  /**
-   * Copper as the game writes it: `7s 80c`, empty units left out.
-   *
-   * For text, which is most of a tooltip. A readout draws it properly instead: pass
-   * `{ copper }` as a bar's `value` and it is drawn with the game's own coins.
-   */
+  /** Copper as text, `7s 80c`. A bar draws coins instead when given `{ copper }` as `value`. */
   money: (copper: number) => string;
   /** Labelled controls, drawn as the manager draws its own. */
   field: FieldBuilders;
@@ -118,10 +99,7 @@ interface UiDeps {
   doc: Document;
   kit: UiKit;
   fqid: string;
-  /**
-   * The addon's manifest name, for the arrange-mode chip alone. Not on `woc`: an addon
-   * already knows its own name.
-   */
+  /** The manifest name, for the arrange-mode chip only. */
   addonName: string;
   bag: DisposalBag;
   /** Report a throw from addon code the loader called. See `guarded`. */
@@ -151,14 +129,7 @@ function storeFor(deps: UiDeps, opts: FrameOpts): FrameStateStore | null {
   return null;
 }
 
-/**
- * A tooltip's content function, wrapped so a throw cannot break the hover.
- *
- * The function form is called inside the loader's own pointer handling, which is
- * the same position `onMove` runs in and carries the same rule. An addon reading
- * a tally that is not there yet must cost an empty tooltip and a logged warning,
- * not a pointer that stops showing anything for the rest of the session.
- */
+/** Guarded like `onMove`: a throw costs an empty tooltip, not a dead hover for the session. */
 function guardedTooltip(deps: UiDeps, content: TooltipInput): TooltipInput {
   if (typeof content !== 'function') {
     return content;
@@ -173,14 +144,7 @@ function guardedTooltip(deps: UiDeps, content: TooltipInput): TooltipInput {
   };
 }
 
-/**
- * The addon's own `onMove`, wrapped so a throw cannot break the gesture.
- *
- * This runs inside the loader's pointer handling, mid-drag, exactly as a socket
- * tap runs inside the game's own send. The rule is the same one: addon code the
- * loader calls into is guarded, and the cost of a mistake is a logged warning
- * rather than a window that stops following the pointer with no way to let go.
- */
+/** Runs mid-drag inside the loader's pointer handling, so a throw must not break the gesture. */
 function guarded(deps: UiDeps, opts: FrameOpts): FrameOpts {
   const { onMove } = opts;
   if (onMove === undefined) {
@@ -201,8 +165,7 @@ function guarded(deps: UiDeps, opts: FrameOpts): FrameOpts {
 function addonFrame(deps: UiDeps, opts: FrameOpts, chrome: 'frame' | 'window'): AddonFrame {
   const frame = createAddonFrame({
     doc: deps.doc,
-    // The hud band: an addon frame is HUD furniture and belongs under the game's
-    // own windows, which is the whole of why there are two bands. See ui/root.ts.
+    // HUD furniture goes under the game's own windows. See ui/root.ts.
     root: deps.kit.hud,
     fqid: deps.fqid,
     addonName: deps.addonName,
@@ -227,58 +190,38 @@ function addonFrame(deps: UiDeps, opts: FrameOpts, chrome: 'frame' | 'window'): 
   return frame;
 }
 
-/**
- * A bar whose removal is in the bag.
- *
- * The bag holds the removal rather than only a listener: a bar is DOM the addon
- * appended somewhere of its own, and disable is hot with no page reload, so a row
- * left behind would sit in a frame the loader has already taken down, with nothing
- * left running to update it.
- */
+/** The bag holds the DOM removal: disable is hot, so a leftover row would outlive its addon. */
 function addonBar(deps: UiDeps, opts: BarOpts | undefined): Bar {
   const bar = createBar(deps.doc, opts);
   deps.bag.add(bar.destroy);
   return bar;
 }
 
-/**
- * A field whose removal is in the bag, like a bar's and a tile's.
- *
- * Generic over the value so the four builders share one line each rather than one
- * wrapper each: what the bag needs is identical for all of them.
- */
+/** A field whose removal is in the bag, like a bar's. */
 function addonField<T, O>(deps: UiDeps, build: (doc: Document, opts: O) => Field<T>, opts: O) {
   const field = build(deps.doc, opts);
   deps.bag.add(field.destroy);
   return field;
 }
 
-/**
- * A list whose teardown is in the bag, the way a bar's and a tile's removal are.
- *
- * The bag holds the LIST rather than each row: rows come and go on every sync, so a
- * registration per row would grow the bag for the life of the addon with a teardown
- * per row that ever existed. The list already destroys everything it holds.
- */
+/** The bag holds the list, not each row, or it would grow by a teardown per row ever synced. */
 function addonList<T, H extends Destroyable>(deps: UiDeps, opts: ListOpts<T, H>): List<T, H> {
   const list = createList(opts);
   deps.bag.add(list.destroy);
   return list;
 }
 
-/** The same, for the square form: a tile is DOM in someone else's frame too. */
+/** The same, for a tile. */
 function addonTile(deps: UiDeps, opts: TileOpts | undefined): Tile {
   const tile = createTile(deps.doc, opts);
   deps.bag.add(tile.destroy);
   return tile;
 }
 
-/** The four builders, each bagged the same way. See `addonField`. */
 function fieldSurface(deps: UiDeps): FieldBuilders {
   return {
     checkbox: (opts) => addonField(deps, createCheckbox, opts),
-    // The one field that needs a service rather than only a document: its popup IS the
-    // loader's menu, so it is handed the same opener `ui.menu` is.
+    // Its popup is the loader's menu, so it takes the opener `ui.menu` uses.
     select: (opts) =>
       addonField(deps, (doc, one) => createSelect(doc, one, deps.kit.menus.open), opts),
     slider: (opts) => addonField(deps, createSlider, opts),
@@ -318,8 +261,7 @@ function createUi(deps: UiDeps): UiApi {
       return strip;
     },
 
-    // Tracked rather than bagged raw: an addon disabled with a menu open must not
-    // leave it on screen, and closing it by hand must also drop it from the bag.
+    // Tracked, so a manual close also drops it from the bag.
     menu: (at, items) => tracked(bag, kit.menus.open(at, items)),
 
     anchor3d: (at, opts) => addonAnchor(deps, at, opts),
@@ -328,8 +270,7 @@ function createUi(deps: UiDeps): UiApi {
 
     alert: (opts) => {
       const modal = openAlert({ doc: deps.doc, root: kit.overlay }, opts);
-      // The bag closes it if the addon is disabled mid-question, which resolves
-      // the promise rather than leaving the addon's await hanging.
+      // Disable mid-question closes it, which resolves the promise rather than hanging it.
       const drop = bag.add(modal.close);
       return modal.answer.finally(drop);
     },

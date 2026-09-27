@@ -1,9 +1,5 @@
-// Reading the player's SFX slider out of the game's settings blob.
-//
-// Every failure path resolves to the game's own default rather than to silence
-// or to full volume. The blob does not exist until the player first changes a
-// setting, so "not found" is the ordinary case for a new player and has to
-// sound exactly like the game does for them.
+// Reading the player's SFX slider out of the game's settings blob. Every failure resolves to the
+// game's default: the blob does not exist until a player first changes a setting.
 
 import { describe, expect, it } from 'vitest';
 import {
@@ -26,7 +22,7 @@ describe('readSfxVolume', () => {
     expect(readSfxVolume(blob)).toBeCloseTo(0.35);
   });
 
-  it('reads a deliberate mute as a mute rather than as absent', () => {
+  it('reads a deliberate mute as a mute', () => {
     expect(readSfxVolume(JSON.stringify({ sfxVolume: 0 }))).toBe(0);
   });
 
@@ -55,8 +51,7 @@ describe('readSfxVolume', () => {
 });
 
 describe('createVolumeReader', () => {
-  // Read per play rather than cached, so moving the slider takes effect without
-  // a reload. A cached reader would pass every test above and still be wrong.
+  // Read per play, so moving the slider takes effect without a reload.
   it('re-reads storage on every call', () => {
     let raw = '{"sfxVolume":0.2}';
     const volume = createVolumeReader({ read: () => raw });

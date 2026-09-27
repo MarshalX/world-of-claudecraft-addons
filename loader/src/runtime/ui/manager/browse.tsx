@@ -1,15 +1,7 @@
 // Browse: everything every marketplace offers, in one searchable list.
 //
-// Pure render over catalog-store.ts and the pure derivation in catalog.ts. What
-// this file owns beyond drawing is which addon is waiting for a confirmation,
-// and that lives in component state because it is not worth reloading anything
-// to change and means nothing once the pane is closed.
-//
-// Every row carries its source badge, including the official one. Two
-// marketplaces may legitimately publish the same addon id, so a name alone does
-// not say what would be installed, and a badge that appeared only on the
-// duplicates would put the question in front of a player exactly when they had
-// no way to tell it was being asked.
+// Every row carries its source badge, official included: two marketplaces may publish the same
+// addon id, so a name alone does not say what would be installed.
 
 import { useState } from 'preact/hooks';
 import { FIELD_CLASS } from '../kit/field-shape.ts';
@@ -32,22 +24,12 @@ import { Picker } from './picker.tsx';
 import { Preview } from './preview.tsx';
 import { UI_TEXT } from './strings.ts';
 
-/**
- * The half of a companion reading that every row shares.
- *
- * Every row supplies the other half, its own `market`, because a companion id is
- * resolved against the source the addon NAMING it came from before any other.
- */
+/** The companion context every row shares; each row adds its own `market`. */
 type CatalogCompanions = Omit<CompanionContext, 'market'>;
 
 /**
- * The addon a confirmation is open for, and how the player got there.
- *
- * An fqid alone until companions could send one here. `from` and `reason` are
- * empty for the ordinary route, which is a player pressing Install on the row
- * they were reading, and carry the recommender and their sentence when the route
- * in was a companion's Get: the reason otherwise lives only on a hover, and a
- * confirmation is exactly where it decides something.
+ * The addon a confirmation is open for. `from` and `reason` are empty for a row's own Install and
+ * carry the recommender and their sentence when a companion's Get opened it.
  */
 interface Pending {
   fqid: string;
@@ -165,11 +147,8 @@ interface FilterProps {
 }
 
 /**
- * The two filter controls, named so their labels can point at them.
- *
- * Fixed rather than generated: the manager is one window with one Browse pane, so
- * these exist at most once in the document. The `woc-` prefix is what keeps them
- * out of the game's own id space, which this document is shared with.
+ * The filter controls' ids, fixed because the manager has one Browse pane. The `woc-` prefix keeps
+ * them out of the game's id space in this shared document.
  */
 const SEARCH_ID = 'woc-browse-search';
 const TAG_ID = 'woc-browse-tag';
@@ -249,14 +228,7 @@ function emptyNote(emptiness: BrowseEmptiness): string {
   return UI_TEXT.browseNoAddons;
 }
 
-/**
- * The rows, or the right kind of nothing.
- *
- * "Your search matched nothing", "no source has been read yet", "a source could
- * not be read" and "every source is genuinely empty" are one blank list on
- * screen and four different things to do about it, and only the middle two are
- * about Refresh at all.
- */
+/** The rows, or a note saying which of the four kinds of empty this is. */
 function Results(props: ResultsProps) {
   if (props.rows.length === 0) {
     if (props.anyOffered) {
@@ -286,26 +258,14 @@ function Results(props: ResultsProps) {
 interface BrowsePaneProps {
   state: CatalogState;
   store: CatalogStore;
-  /**
-   * The search, held by the manager rather than by this pane.
-   *
-   * Lifted so that a companion's "Find it" in the Installed pane can switch to
-   * this tab with the addon already searched for. A filter this pane owned would
-   * be reset to empty by that switch, which is the one thing that jump must not
-   * do.
-   */
+  /** The search, held by the manager so a companion's "Find it" survives the tab switch. */
   filter: BrowseFilter;
   onFilter: (filter: BrowseFilter) => void;
 }
 
 /**
- * The row a confirmation is open for, looked up in EVERY row rather than the
- * filtered ones.
- *
- * That is what a companion's Get needs and what an earlier version of this got
- * wrong: the player pressed it on a line inside a row they had searched for, and
- * the addon that line names is almost never in the same search, so a lookup in
- * the visible rows would find nothing and the button would do nothing.
+ * The row a confirmation is open for, looked up in EVERY row: a companion's Get names an addon that
+ * is almost never in the player's current search.
  */
 function pendingRow(state: CatalogState, pending: Pending | null): BrowseRow | null {
   if (pending === null) {

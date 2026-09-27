@@ -1,17 +1,6 @@
-// What counts as a change, per world key.
-//
-// A signature deliberately leaves out anything that moves every tick. Aura
-// remaining time and cooldown remaining are the clear cases: including them
-// would make world.on('auras') fire at the frame rate and mean nothing. The
-// question each signature answers is "is this a different set of things", not
-// "has a number moved".
-//
-// `capture` is a DISPATCHER over one group function per subject, and the shape
-// is forced rather than chosen: one switch with a case per key is past the
-// length a function body is allowed, and every key added to it would have to
-// leave through the door rather than through the wall. Each group's predicate
-// and its dispatcher live in that group's own module, so a lane fills in its
-// signatures without touching this file.
+// The world key registry, and `capture`, which dispatches each key to its subject group's
+// signature (see `signature-world.ts` for what a signature leaves out). Each group's predicate
+// and dispatcher live in its own module.
 
 import { fieldNumber, fieldString, fieldValue } from '../net/frames.ts';
 import { abilityIndexSignature } from './abilities.ts';
@@ -91,13 +80,7 @@ function isSheetKey(key: string): key is SheetKey {
   return SHEET_SET.has(key);
 }
 
-/**
- * The keys about the player's own record and their group.
- *
- * They share nothing with the world keys around them: those describe what is
- * happening near the player, and these describe what the player and their group
- * have.
- */
+/** The keys about the player's own record and their group. */
 function sheetCapture(key: SheetKey, value: unknown): string {
   if (key === 'character') {
     return characterSignature(value);
@@ -105,29 +88,18 @@ function sheetCapture(key: SheetKey, value: unknown): string {
   if (key === 'talents') {
     return talentSignature(value);
   }
-  // Which rolls are open and which lockouts stand, never how long is left on
-  // either: a roll's countdown moves every frame and a lockout's is hours.
+  // Which rolls are open and which lockouts stand, never how long is left on either.
   if (key === 'group') {
     return groupSignature(value);
   }
   if (key === 'encounter') {
     return encounterSignature(value);
   }
-  // The two counter maps plus the crafting identity, because the identity's
-  // `synced` flag going true is the moment an unsynced default becomes a real
-  // reading, and nothing else on the key moves when it does. Watching only the
-  // counters would leave a pane showing zeroes it had no reason to repaint.
+  // The identity is in because `synced` going true can move nothing else on the key.
   return professionsSignature(value);
 }
 
-/**
- * The keys the loader COMPUTES over what is near the player.
- *
- * They belong together for the same reason `sheetCapture`'s do: none of these is
- * a member of the game's own world object, so each is a reading the loader
- * assembled, and each signature is a statement about that assembly rather than
- * about a field the game happens to expose.
- */
+/** The keys the loader COMPUTES over what is near the player. */
 function derivedCapture(
   key: 'casts' | 'targetAuras' | 'hazards' | 'markers' | 'combat',
   value: unknown,
@@ -144,10 +116,7 @@ function derivedCapture(
   if (key === 'markers') {
     return markerSignature(value);
   }
-  // The source is in the signature as well as the flag, so a fight that stays
-  // active while the loader's confidence in it changes is reported. A meter
-  // that trusts only the server's own answer needs to hear that moment; one
-  // that does not can ignore it, which is cheaper than never being told.
+  // The source is signed too, so a change in which branch answered is reported.
   return `${String(fieldValue(value, 'active'))}:${fieldString(value, 'source') ?? ''}`;
 }
 
@@ -180,12 +149,7 @@ type WorldKey = (typeof KEYS)[number];
 /** A string for every key but `entities`, where an exact id set is both cheaper and exact. */
 type Capture = string | ReadonlySet<number>;
 
-/**
- * Every key that belongs to no lane group, which is where a new one starts.
- *
- * Its own function rather than the body of `capture`, so the dispatcher above it
- * stays short enough that adding a group is a three line change.
- */
+/** Every key that belongs to no subject group. */
 function worldCapture(key: WorldKey, value: unknown): Capture {
   switch (key) {
     case 'player':

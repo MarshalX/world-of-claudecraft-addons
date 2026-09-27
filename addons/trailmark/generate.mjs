@@ -2,72 +2,31 @@
 //
 //   node addons/trailmark/generate.mjs --game=/path/to/world-of-claudecraft
 //
-// The checkout path is REQUIRED and is never defaulted. A generator that guesses
-// where the game is will happily read a checkout six releases old and write a file
-// that looks exactly like a correct one: nothing tells you a stale working tree is
-// stale, the way a 404 tells you an endpoint moved. So the path is an argument, the
-// target is proved to be the game before a line of content is read, and the game's
-// own version is read out of its package.json and stamped into the output rather
-// than written here by hand.
+// The checkout path is REQUIRED and never defaulted: a guessed path can be a stale checkout that
+// writes a plausible table. The target is proved to be the game first, and its package.json
+// version is stamped into the output.
 //
-// WHAT IT READS, all of it under the checkout:
+// Reads package.json, src/sim/data.ts (QUESTS, CAMPS, GROUND_OBJECTS, NPCS, GATHER_NODES,
+// ESCORTS, MOBS, ZONES and the strip's default x extent) and nodeMaterialFor from
+// src/sim/professions/gathering.ts.
 //
-//   package.json                          the version stamped into the output
-//   src/sim/data.ts                       QUESTS, CAMPS, GROUND_OBJECTS, NPCS,
-//                                         GATHER_NODES, ESCORTS, MOBS, ZONES and
-//                                         the world strip's default x extent
-//   src/sim/professions/gathering.ts      nodeMaterialFor, which is what turns a
-//                                         node's type and zone into the item a
-//                                         harvest of it grants
+// It EVALUATES rather than parses, through vite's SSR module loader, because Eastbrook's NPC
+// positions are computed by `EASTBROOK_LAYOUT` and cannot be read off the page. A release that
+// breaks the sim's module graph therefore breaks this loudly.
 //
-// IT EVALUATES RATHER THAN PARSES, and that is the one decision here worth arguing
-// about. Most of these tables are literals a text parse could read, but the fifteen
-// Eastbrook town NPCs are not: their positions come out of `EASTBROOK_LAYOUT`, which
-// computes stall rotations, building front standing points and facings, so
-// `trader_wilkes` sits at x -7.125851435200138 and no amount of regex reads that off
-// the page. Vite's SSR module loader is what resolves the game's extensionless
-// imports; vite is already a dependency of this repository and nothing new is added
-// for this. The cost is that a game release which breaks the sim's own module graph
-// breaks this too, which is a loud failure rather than a thin table.
+// Everything emitted feeds a copy of the game's `questObjectiveAreas`
+// (src/sim/quest_targets.ts), mirrored by `areasFor` in main.js: when that function grows or
+// changes an arm, both have to follow. The quest-tagged loot join is precomputed into `drops`
+// so the addon ships no loot table.
 //
-// WHAT IT EXTRACTS. Trailmark reproduces `questObjectiveAreas` from the game's own
-// `src/sim/quest_targets.ts`: a kill objective resolves to every camp with that mob
-// id, a collect objective to the camps of mobs whose loot is TAGGED with that quest
-// id plus any ground-object cluster for the item plus the nodes whose harvest yields
-// it, an interact objective to the object cluster or the NPC's point, a gather
-// objective to the matching nodes, and an escort objective to the escortee's start.
-// That leaf function is the thing most likely to move underneath this table: if it
-// grows an arm, or changes what an arm resolves to, this file and `areasFor` in
-// main.js both have to follow it. It HAS moved once already, which is why that
-// sentence is here rather than hypothetical: 0.34.0 added the node-yield arm to
-// collect, and nothing about the emitted table had to change to feed it, because the
-// node rows already carried the item each one yields. Everything emitted here exists
-// to feed that function, plus the zone rectangles the addon resolves a point against.
+// Every array keeps the game's own order (camp and NPC order fix entity ids; zones are tested
+// in order), keys are in a fixed order, and the file ends in a newline, so an unchanged
+// checkout regenerates byte-identical.
 //
-// The quest-tagged loot join is precomputed into `drops` rather than shipping a loot
-// table, because the addon only ever asks the one question `mobsDroppingQuestItem`
-// asks: which mobs drop this item FOR THIS QUEST.
-//
-// DETERMINISTIC. Every array keeps the game's OWN order, which is the one order that
-// is not this script's to choose and is load-bearing inside the game itself: camps
-// spawn in array order and NPCs in insertion order, so both fix entity ids, and the
-// zone list is walked in order by the game's own rectangle test. Keys are written in
-// a fixed order and the file ends in a newline, so re-running against an unchanged
-// checkout produces a byte-identical file and a real diff means real content moved.
-//
-// WHAT A GAME RELEASE COULD INVALIDATE, each of which fails loudly rather than
-// writing a thinner table:
-//
-//  - A quest objective gains a new `type`. The unknown arm would emit its count and
-//    label with no target field, and the addon would resolve it to nowhere. The
-//    objective-type census below fails on a type this script does not know.
-//  - `nodeMaterialFor` stops being a pure function of type and zone. It is called
-//    once per node here, which is exactly how `questObjectiveAreas` calls it.
-//  - A quest names a turn-in NPC that is `dynamic`. Those carry no authored position
-//    and are deliberately left out of `npcs`; the addon says the turn-in is not on
-//    the map rather than pointing somewhere plausible.
-//  - The counts at the bottom move. They are warnings rather than failures, because
-//    content growing is the ordinary case, but an EMPTY table is a failure.
+// It fails rather than writing a thinner table when an objective gains an unknown `type`, or a
+// section comes back EMPTY. Moved counts only warn, since content growing is ordinary.
+// `dynamic` NPCs carry no authored position and are left out, so the addon says a turn-in is
+// not on the map rather than pointing somewhere plausible.
 
 import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -98,7 +57,7 @@ const KNOWN_OBJECTIVE_TYPES = new Set([
   'farm',
 ]);
 
-/** Roughly what the tables carried at game 0.36.0, so a thin parse cannot pass quietly. */
+/** Rough floors for each table, so a thin parse cannot pass quietly. */
 const EXPECTED = Object.freeze({
   zones: 14,
   quests: 204,
@@ -108,10 +67,8 @@ const EXPECTED = Object.freeze({
   nodes: 156,
   escorts: 4,
   drops: 50,
-  // One patch per farming hub, four hubs on the ladder. Here for the EMPTY case
-  // rather than the count: a farm objective whose patches all failed to read
-  // would place its marker over every bed in the world, which looks like an
-  // answer.
+  // One patch per farming hub. Here for the EMPTY case: a farm objective whose patches all failed
+  // to read would circle every bed in the world, which looks like an answer.
   farmPatches: 4,
 });
 
@@ -141,12 +98,8 @@ function gamePathFrom(args) {
 }
 
 /**
- * Prove the path really is the game before loading a module out of it.
- *
- * The package NAME rather than the presence of a directory, because a wrong path
- * that happens to hold a `src` reads as plausible right up until the module graph
- * fails to resolve, and a resolution failure reads as the game having moved
- * something rather than as the path being wrong.
+ * Prove the path is the game before loading a module out of it, by package NAME: a wrong path with
+ * a `src` fails later as a resolution error that reads as the game having moved something.
  */
 function checkoutVersion(root) {
   let parsed;
@@ -165,11 +118,8 @@ function checkoutVersion(root) {
 }
 
 /**
- * The game's own content tables, loaded through its own module graph.
- *
- * `configFile: false` on purpose: the game's vite config is about building the
- * game, and running its plugin chain to read two data modules would make this
- * script depend on a build pipeline it has no business knowing about.
+ * The game's content tables, loaded through its own module graph. `configFile: false`, because the
+ * game's vite config is about building the game and its plugin chain is irrelevant here.
  */
 async function loadTables(root) {
   const server = await createServer({
@@ -192,12 +142,8 @@ async function loadTables(root) {
 }
 
 /**
- * The zone rectangles, in the game's own `ZONES` order.
- *
- * A zone with no x range spans the original strip column, which is the default the
- * game's own rectangle test applies. It is resolved here rather than left absent,
- * so the addon's test is a plain comparison rather than a second place the default
- * has to be remembered.
+ * The zone rectangles, in the game's `ZONES` order. A zone with no x range gets the strip default
+ * here, so the addon's test is a plain comparison.
  */
 function zoneRows(data) {
   return data.ZONES.map((zone) => ({
@@ -247,10 +193,9 @@ function withOptionalTargets(row, objective) {
     }
   }
   if (objective.type === 'farm') {
-    // `action` is carried because it is what the row SAYS (plant or harvest) even
-    // though placement ignores it; `patch` narrows the marker to one patch and is
-    // optional, and its absence is meaningful rather than missing, since the credit
-    // arm never reads it and every bed in the world then qualifies.
+    // `action` is what the row SAYS (plant or harvest), though placement ignores it. `patch` is
+    // optional and its absence is meaningful: the credit arm never reads it, so every bed
+    // qualifies.
     row.action = objective.action;
     if (objective.cropId) {
       row.crop = objective.cropId;
@@ -263,12 +208,8 @@ function withOptionalTargets(row, objective) {
 }
 
 /**
- * Every quest, with the text stripped out.
- *
- * `text` and `completionText` are most of the table's bytes and answer nothing the
- * addon asks: the game's own quest dialog draws them and this display never does.
- * `resolved` is carried because it is the flag that says a quest's requirement is
- * overridden per player, which is the figure the addon has to learn from an event.
+ * Every quest, without `text` and `completionText`, which are most of the bytes and never drawn.
+ * `resolved` is carried because it marks a per-player override the addon must learn from an event.
  */
 function questRows(data) {
   return Object.values(data.QUESTS).map((quest) => {
@@ -305,10 +246,8 @@ function campRows(data) {
 }
 
 /**
- * Ground objects, as an item and its spawn positions.
- *
- * The `name` on the game's own definition is display text the addon never shows: an
- * objective carries its own label, which is what the quest author wrote for it.
+ * Ground objects, as an item and its spawn positions. The definition's `name` is not carried: an
+ * objective carries its own label.
  */
 function objectRows(data) {
   return data.GROUND_OBJECTS.map((def) => ({
@@ -318,11 +257,8 @@ function objectRows(data) {
 }
 
 /**
- * Static NPCs, in insertion order.
- *
- * A `dynamic` NPC is left out and that is the point rather than an omission: the
- * owning system spawns it on demand, so it carries no authored placement, and a
- * position invented for one would be a pin on an empty chapel.
+ * Static NPCs, in insertion order. A `dynamic` NPC is spawned on demand with no authored placement,
+ * so it is left out rather than given an invented position.
  */
 function npcRows(data) {
   return Object.values(data.NPCS)
@@ -331,11 +267,8 @@ function npcRows(data) {
 }
 
 /**
- * Gathering nodes, each resolved to the item a harvest of it grants.
- *
- * The item is what an item-only gather objective is matched against, and it is a
- * function of the node's TYPE and ZONE rather than of the node, so it is resolved
- * here through the game's own `nodeMaterialFor` rather than reproduced.
+ * Gathering nodes, each resolved to the item a harvest grants. That is a function of the node's
+ * TYPE and ZONE, resolved through the game's own `nodeMaterialFor` rather than reproduced.
  */
 function nodeRows(data, gathering) {
   return data.GATHER_NODES.map((node) => ({
@@ -347,17 +280,9 @@ function nodeRows(data, gathering) {
 }
 
 /**
- * One row per farming patch, carrying every bed.
- *
- * The BEDS rather than the patch anchor, because the game's own placement encloses
- * the beds (`pushFarmPatches` in src/sim/quest_targets.ts) and the anchor is their
- * centroid: a patch is a grid on a 5 yard pitch, so enclosing the beds and pinning
- * the centre are different areas and only the first is what the game draws.
- *
- * Its own section rather than a field on the objective for the reason `nodes` is
- * one: several quests name the same patch, and a patchless farm objective is
- * honestly earned at ANY bed in the world, so the placement needs the whole table
- * rather than whatever one objective mentioned.
+ * One row per farming patch with every bed, because the game's placement (`pushFarmPatches`)
+ * encloses the beds and the anchor is their centroid. A section of its own, because a patchless
+ * farm objective is earned at ANY bed and needs the whole table.
  */
 function farmPatchRows(farmPatches) {
   return farmPatches.FARM_PATCHES.map((patch) => ({
@@ -375,14 +300,9 @@ function escortRows(data) {
 }
 
 /**
- * The quest-tagged loot join, precomputed.
- *
- * `mobsDroppingQuestItem` walks every mob template for a loot entry whose item AND
- * quest id both match, because the same item can be tagged for one quest and drop
- * untagged for another. Keyed on that pair here so the addon ships no loot table.
- *
- * Mob order inside a pair, and pair order in the file, are both the game's own
- * `MOBS` merge order, which is fixed by the content modules rather than by this.
+ * The quest-tagged loot join. `mobsDroppingQuestItem` matches item AND quest id, since one item can
+ * be tagged for one quest and untagged for another, so it is keyed on the pair. Order is the game's
+ * `MOBS` merge order.
  */
 function dropRows(data) {
   const byPair = new Map();
@@ -428,11 +348,8 @@ function checkObjectiveTypes(quests) {
 }
 
 /**
- * Counts, so a table that stopped being read cannot pass quietly.
- *
- * A moved count is a WARNING, because content growing is the ordinary case and a
- * generator that refused every content release would be run once. An EMPTY section
- * is a failure: that is a read that stopped working rather than content that moved.
+ * Counts, so a table that stopped being read cannot pass quietly. A moved count WARNS, since
+ * content growing is ordinary; an EMPTY section fails, since that is a broken read.
  */
 function checkCounts(table) {
   for (const [name, want] of Object.entries(EXPECTED)) {
@@ -451,12 +368,9 @@ function isScalar(value) {
 }
 
 /**
- * One line for a value the formatter keeps on one line, or null for one it expands.
- *
- * An object is never inlined, and an array is only as long as everything in it is:
- * `[[58, -58], [73, -70]]` is one line and a list of camps is not. Recursive because
- * a ground object's positions are an array of pairs, which is exactly the shape the
- * first version of this got wrong.
+ * One line for a value the formatter keeps on one line, or null for one it expands. An object is
+ * never inlined; an array is only if everything in it is (`[[58, -58], [73, -70]]` is one line, a
+ * list of camps is not). Recursive for arrays of pairs.
  */
 function inlineOf(value) {
   if (isScalar(value)) {
@@ -502,19 +416,11 @@ function renderValue(value, depth, used) {
 }
 
 /**
- * Serialised the way the repository's own formatter wants it, not by JSON.stringify.
- *
- * Biome formats this file like every other one here, so a generator emitting anything
- * else writes a file the lint gate then rejects, which is a regeneration nobody can
- * commit without a hand edit. This addon's first version packed a row onto one line to
- * keep content diffs short and paid exactly that price. The two rules that differ from
- * `JSON.stringify(value, null, 2)` are both about arrays: one that fits the line width
- * and holds nothing but scalars or arrays of them is kept on one line, and the width is
- * measured including the key in front of it. Objects stay expanded, which is what keeps
- * a moved camp to a one-line diff even now that a camp is five lines.
- *
- * Verified against the formatter rather than reasoned about: rendering the shipped file
- * through this and then through `biome check --write` is byte for byte the same file.
+ * Serialised the way Biome formats it, not by JSON.stringify, or the regenerated file fails the
+ * lint gate. The differences are both about arrays: one that fits the line width (key included) and
+ * holds only scalars or arrays of them stays on one line. Objects stay expanded, so a moved camp is
+ * a one-line diff. Rendering the shipped file through this and then `biome check --write` must be a
+ * no-op.
  */
 function render(table) {
   return `${renderValue(table, NONE, NONE)}\n`;
@@ -538,15 +444,14 @@ function build(gameVersion, data, gathering, farmPatches) {
 
 async function main() {
   const root = gamePathFrom(process.argv.slice(2));
-  // The identity check FIRST, before the module graph is touched: a wrong path
-  // reported as a resolution failure reads as the game having moved something.
+  // The identity check FIRST, before the module graph is touched: a wrong path reported as a
+  // resolution failure reads as the game having moved something.
   const gameVersion = checkoutVersion(root);
   const { data, gathering, farmPatches } = await loadTables(root);
   const table = build(gameVersion, data, gathering, farmPatches);
   checkObjectiveTypes(table.quests);
   checkCounts(table);
-  // Beside this script rather than anywhere an argument could name, so the only
-  // file this can write is the one it exists to write.
+  // Beside this script, never a path an argument could name.
   const out = join(import.meta.dirname, OUT_FILE);
   writeFileSync(out, render(table));
   console.log(`generate: wrote ${out} from ${GAME_PACKAGE_NAME} ${gameVersion}`);

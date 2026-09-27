@@ -1,7 +1,5 @@
-// Decoding for the frames the game's world socket carries.
-//
-// The game parses every frame itself. We parse our own copy off the raw string,
-// so nothing an addon does to a frame can reach what the game is about to read.
+// Decoding the world socket's frames. We parse our own copy off the raw string, so nothing an addon
+// does to a frame reaches what the game reads.
 
 /** Frames the client dispatches on, from the inbound handler in src/net/online.ts. */
 const INBOUND_TYPES = [
@@ -19,15 +17,9 @@ const INBOUND_TYPES = [
 ] as const;
 
 /**
- * Outbound fields that are session credentials, redacted before any addon sees
- * the frame.
- *
- * The client's first frame on every socket, including every reconnect, is
- * `{t:'auth-world-N', token, character, clientSeed}` and `token` is the account
- * bearer token in plaintext (src/net/online.ts buildWebSocketAuthMessage).
- * Matching on the field name rather than the frame type is deliberate: the type
- * carries a version number, and a future frame that gains a token is covered
- * without anyone remembering to come back here.
+ * Outbound credential fields, redacted before any addon sees the frame. The auth frame on every
+ * socket, `{t:'auth-world-N', token, ...}`, carries the bearer token. Matched on the field NAME,
+ * not the frame type, because the type carries a version number.
  */
 const SECRET_FIELDS = ['token', 'clientSeed'];
 
@@ -46,12 +38,7 @@ export function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-/**
- * A frame, or null for anything that is not one.
- *
- * Binary frames are rejected rather than decoded: the game's socket is JSON text
- * in both directions, so a Blob or ArrayBuffer here is somebody else's traffic.
- */
+/** A frame, or null. Binary data is somebody else's traffic: the game's socket is JSON text. */
 export function parseFrame(data: unknown): Frame | null {
   if (typeof data !== 'string') {
     return null;
@@ -92,13 +79,7 @@ export function fieldNumber(source: unknown, key: string): number | null {
   return null;
 }
 
-/**
- * A field rendered for a signature, covering every scalar the game uses.
- *
- * Numbers alone is not enough: entity flags like `dead` and `inCombat` are
- * booleans, and reading those as numbers drops them from a signature without
- * failing, which looks exactly like a field that never changes.
- */
+/** Every scalar kind: a boolean flag read as a number silently drops out of a signature. */
 export function fieldScalar(source: unknown, key: string): string {
   const value = fieldValue(source, key);
   if (typeof value === 'number' || typeof value === 'boolean' || typeof value === 'string') {
@@ -115,12 +96,7 @@ export function fieldArray(source: unknown, key: string): readonly unknown[] {
   return [];
 }
 
-/**
- * A copy of an outbound frame with every credential field blanked.
- *
- * Returns the frame itself when it carries none, so the common case of an input
- * frame at 20 Hz allocates nothing.
- */
+/** A copy with credentials blanked, or the frame itself when it has none, allocating nothing. */
 export function redactOutbound(frame: Frame): Frame {
   const secrets = SECRET_FIELDS.filter((field) => Object.hasOwn(frame, field));
   if (secrets.length === 0) {
@@ -133,13 +109,7 @@ export function redactOutbound(frame: Frame): Frame {
   return copy as Frame;
 }
 
-/**
- * Freeze a parsed frame and everything under it, so one addon's handler cannot
- * change what the next one sees.
- *
- * Freezing before recursing makes this safe on a cyclic graph, though JSON.parse
- * cannot produce one.
- */
+/** Deep-freeze, so one addon's handler cannot change what the next one sees. */
 export function deepFreeze<T>(value: T): T {
   if (typeof value !== 'object' || value === null || Object.isFrozen(value)) {
     return value;

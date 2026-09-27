@@ -1,15 +1,6 @@
-// What counts as a change on the three counters, the two badges and the ring.
-//
-// The measurement that shapes all three gated signatures: NOTHING in these
-// payloads counts down. No wired market row carries an expiry, no mail message
-// carries one, and the bank has no timer at all. So unlike `auras` and
-// `cooldowns` there is no ticking field to leave out, and the only question is
-// the size of the walk.
-//
-// The answer is the same for all three: the CLOSED arms are constant work. A
-// gated key reads `away` for nearly all of a session, so the walk over a page, a
-// mailbox or a bank runs only while the player is standing at the counter with
-// something subscribed.
+// What counts as a change on the counters, the badges and the buyback ring. Nothing in these
+// payloads counts down, so there is no ticking field to leave out. The closed arms are constant
+// work, so a page, mailbox or bank is walked only while the player stands at the counter.
 
 import { fieldArray, fieldNumber, fieldString, fieldValue } from '../net/frames.ts';
 import { inventorySignature } from './signature-world.ts';
@@ -29,22 +20,14 @@ type EconomyKey = (typeof ECONOMY_KEYS)[number];
 
 const ECONOMY_SET: ReadonlySet<string> = new Set<string>(ECONOMY_KEYS);
 
-/**
- * Takes a plain string rather than a `WorldKey`.
- *
- * `signature.ts` imports this module, so naming its key union here would be a
- * cycle for no gain: the narrowing a caller wants happens against whatever
- * union it already holds.
- */
+/** Takes a plain string: naming `WorldKey` would be an import cycle with `signature.ts`. */
 function isEconomyKey(key: string): key is EconomyKey {
   return ECONOMY_SET.has(key);
 }
 
 /**
- * The status alone, or null when the reading is `near` and has to be walked.
- *
- * Reads `status` and nothing else, which is what keeps a closed arm constant
- * work: touching `info` first would walk a page the player is nowhere near.
+ * The status alone, or null when the reading is `near` and has to be walked. Reads nothing but
+ * `status`, which keeps a closed arm constant work.
  */
 function closed(state: unknown): string | null {
   const status = fieldString(state, 'status');
@@ -62,17 +45,9 @@ function slotsOf(source: unknown, field: string): string {
 /**
  * The query the server echoed back, which is what says a page changed meaning.
  *
- * `sort` rides here beside the five filter axes even though it narrows nothing,
- * because the id list cannot stand in for it: a book of one row, or a page whose
- * rows happen to come back in the same order, reorders into an identical listing
- * array under a different reading of the same book.
- *
- * `collapseLowest` rides for the same reason at the case where it is hardest to
- * see. It does move the counts, since the collapse runs before both of them, but
- * on a book where every matched item has exactly one listing it moves nothing at
- * all: same rows, same ids, same counts, same bounds, and a page that now means
- * one price floor per item rather than one listing per row. The flag is the only
- * thing that differs there, so it is the only thing that can report the change.
+ * `sort` and `collapseLowest` are in although they narrow nothing: a re-sort or a collapse can
+ * return an identical listing array (one row, or one listing per item) under a different
+ * meaning, and the flag is then the only thing that differs.
  */
 function queryOf(info: unknown): string {
   return [
@@ -96,12 +71,8 @@ function collapseMark(info: unknown): string {
 }
 
 /**
- * The Sell tab's price reference, id and price together.
- *
- * Both, because either alone is ambiguous: the price moves when another seller
- * undercuts while the same item stays staged, and the id moves when the player
- * stages something whose floor happens to match. Neither touches a listing on the
- * page being browsed, so nothing else in this signature can stand in for it.
+ * The Sell tab's price reference, id and price together: either can move without the other,
+ * and neither touches the browsed page.
  */
 function sellReferenceOf(info: unknown): string {
   // biome-ignore lint/security/noSecrets: a field name copied from the game, which the entropy heuristic cannot tell from a token
@@ -119,33 +90,16 @@ function readMark(message: unknown): string {
 }
 
 /**
- * The page, by listing id.
+ * The page, by listing id. A listing is immutable once created and ids come from a monotonic
+ * counter, so price, count and seller cannot move under a live id.
  *
- * Ids alone identify the rows, and that is proved rather than assumed: a listing
- * is immutable once created (the game offers list, buy, cancel and collect and no
- * edit, and a buy takes the whole stack) and ids come from a monotonic per-boot
- * counter. So price, count and seller cannot move under a live id, and a digest
- * of every field would be a walk over 120 rows to report what the ids already do.
+ * The query echo is in because a fresh join resets the server's query while the window's
+ * controls survive.
  *
- * The query echo is in because a fresh join silently resets the server's own
- * query while the window's controls survive, and an addon watching the echo is
- * the only thing that can see that happen.
- *
- * `collectionSales` and `collectionSalesOmitted` are NOT read here, and an addon
- * still sees every sale. That works by COINCIDENCE rather than by design, and the
- * coincidence is worth stating because it is the kind that stops being true
- * quietly: a sale is also the moment its listing leaves the book, so the id list
- * above changes on the same snapshot that appends the row. The ledger is
- * therefore covered by the signature of something else.
- *
- * Two things would break it, and neither would raise. A HOUSE sale, or any future
- * sale that does not retire a listing, would append a row while the ids stand
- * still. And a collect DRAINS the array, which is only caught because
- * `collectionCopper` goes to 0 in the same breath; a partial collect that left the
- * copper alone would empty the rows unnoticed. Add both fields here rather than
- * widening the id list if either becomes possible. They are cheap to hash, and
- * the only reason they are absent is that the array is capped at 50 and the
- * counter beside it already summarises the overflow.
+ * `collectionSales` is covered only by coincidence: a sale retires its listing, so the id list
+ * changes on the same snapshot, and a collect zeroes `collectionCopper`. A sale that retires no
+ * listing, or a partial collect that leaves the copper, would go unseen; sign
+ * `collectionSales` and `collectionSalesOmitted` here if either becomes possible.
  */
 function marketSignature(state: unknown): string {
   const away = closed(state);
@@ -165,14 +119,9 @@ function marketSignature(state: unknown): string {
 }
 
 /**
- * Which letters are in the box and what is still in each.
- *
- * Subjects and bodies are deliberately out: a body is free text, so including it
- * would make the capture as large as everything a player has ever been sent, for
- * no change an id cannot already report. `read`, `copper` and the attachment
- * count ARE in, because marking a letter read and taking a parcel both mutate a
- * letter IN PLACE, so the same id is the same row with different contents and an
- * id list alone would report that nothing moved.
+ * Which letters are in the box and what is still in each. Subjects and bodies are out (free
+ * text an id already covers); `read`, `copper` and the attachment count are in, because reading
+ * a letter or taking a parcel mutates it in place under the same id.
  */
 function mailSignature(state: unknown): string {
   const away = closed(state);
@@ -251,12 +200,9 @@ function stockSignature(stock: unknown): string {
 }
 
 /**
- * The vault, by what is in it and how much of it is bought.
- *
- * The stock is sorted by id, unlike the market page and the buyback ring: the
- * record round-trips through Postgres jsonb online and comes back re-ordered, so
- * signing key order would fire on every re-serialization of an unchanged store.
- * `special` keeps its array order, because the player selects those rows by index.
+ * The vault, by what is in it and how much of it is bought. The stock is sorted by id because
+ * the server's jsonb round-trip reorders it; `special` keeps array order, since rows are picked
+ * by index.
  */
 function vaultSignature(state: unknown): string {
   const away = closed(state);
@@ -283,12 +229,7 @@ function craftStockSignature(stock: unknown): string {
 }
 
 /**
- * The four keys the player stands at, and the four they carry with them.
- *
- * The gated four answer their STATUS when there is nothing to walk, so the walk
- * over a page, a mailbox, a bank or a vault happens only while the player is at
- * the counter.
- */
+/** The four keys the player stands at, and the four they carry with them. */
 function economyCapture(key: EconomyKey, value: unknown): string {
   if (key === 'market') {
     return marketSignature(value);

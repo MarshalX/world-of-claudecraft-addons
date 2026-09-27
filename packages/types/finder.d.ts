@@ -1,13 +1,10 @@
 // The Dungeon Finder: your own queue state, and the realm's premade board.
 //
-// Two readings rather than one because they have different scopes and different
-// lifetimes. Your finder state rides your own payload; the board is realm-wide
-// and shared by every session, so it is null until your client's mirror has
-// synced rather than null because you are not queued.
+// The board is realm-wide, so it is null until your client has synced it, which
+// says nothing about whether you are queued.
 //
-// NOTHING HERE IS AN ACTION. `world.finder` cannot join a queue, answer a
-// proposal, create a listing or accept an applicant, and the game's own facet is
-// explicit that the finder never teleports anyone.
+// NOTHING HERE IS AN ACTION: `world.finder` cannot join a queue, answer a
+// proposal, create a listing or accept an applicant.
 
 /** The three composition roles. Closed: the matcher has exactly three buckets. */
 export type FinderRole = 'tank' | 'healer' | 'dps';
@@ -30,9 +27,8 @@ export interface FinderQueue {
 /**
  * A live availability proposal.
  *
- * COUNTS AND NO NAMES, deliberately: participants stay anonymous until the group
- * forms, so there is nobody to look up. `remaining` is whole seconds and comes
- * off the wire already counted down, unlike a loot roll's deadline.
+ * COUNTS AND NO NAMES: participants stay anonymous until the group forms.
+ * `remaining` is whole seconds, already counted down.
  */
 export interface FinderProposal {
   id: number;
@@ -60,7 +56,7 @@ export interface FinderApplicant {
 export interface FinderListing {
   id: number;
   activityId: string;
-  /** Listing tags. Content, so open rather than a closed union. */
+  /** Listing tags. An open set of content ids. */
   tags: readonly string[];
   applicants: readonly FinderApplicant[];
 }

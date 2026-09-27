@@ -2,79 +2,35 @@
 //
 //   node addons/lorebind/generate.mjs --game=/path/to/world-of-claudecraft
 //
-// WHAT IT READS DIRECTLY, all of it inside the checkout and none of it written to
-// (the bundle below then pulls in whatever `data.ts` imports):
+// It reads `package.json` (the version stamp), `src/sim/data.ts` (the `ITEMS` merge), and the
+// three modules behind what the game DERIVES rather than declares: `item_level.ts`,
+// `item_level_req.ts` and `equipment_rules.ts` (`isUniqueEquipped`). Nothing in the checkout is
+// written to.
 //
-//   package.json          the game version, stamped into the output
-//   src/sim/data.ts       the `ITEMS` merge, which is the table itself, and the
-//                         list of content modules merged into it
-//   src/sim/item_level.ts and src/sim/item_level_req.ts, for the two numbers the
-//                         game DERIVES rather than declares: an item's level and
-//                         the character level needed to equip it
-//   src/sim/equipment_rules.ts, for the one FLAG it derives the same way:
-//                         `isUniqueEquipped`, which no ItemDef carries
+// Each is bundled with esbuild in memory and imported, so the table is what the game actually
+// assembles: several content modules build entries programmatically and a textual scrape would
+// miss them. The derivations are called rather than copied, because a copy keeps answering the
+// old rule after the game changes how it is spelled, with no diff to show for it.
 //
-// It bundles those with esbuild IN MEMORY and imports the result, so what it
-// reads is the table the game actually assembles rather than a regex over
-// source. That matters because `ITEMS` is a merge of two dozen content modules,
-// several of which build their entries programmatically, and a textual scrape
-// would silently miss those. The three derivations are called rather than copied
-// for the same reason: `requiredLevelFor` reads where an item DROPS, which is a
-// second index over the whole of content, and a reimplementation of it here
-// would be right on the day it was written. `isUniqueEquipped` is `quality ===
-// 'legendary'` today and is a one-line copy anybody would make, which is exactly
-// why it is called instead: the game's own comment says it is derived from the
-// quality so that a new legendary cannot forget to opt in, and the day that
-// stops being how the rule is spelled, a copy here goes on answering the old
-// question with no diff to show for it.
+// A row carries what the game's item tooltip draws plus `sellValue` and `priceHonor`, which the
+// tooltip does not; `fields` in the output says so. Dropped for having no reader: the quest
+// binding, the no-sell and no-discard flags, pickup denial strings, the mount key, weapon procs
+// and set bonuses. Procs and bonuses are effect lists the game renders with its own module, so
+// copying the data without the renderer would put a raw shape on screen.
 //
-// WHAT IT EXTRACTS is what the game's own item tooltip draws, plus the two
-// prices, which is the whole point of the table: an addon that can only NAME an
-// item is a lookup box, and a player opens an item browser to compare two
-// helmets. So a row carries the stats, the ratings, the Warfare pair, the
-// weapon's damage and speed, the armor class, what a consumable restores, what a
-// bag holds, the set it belongs to, whether it is soulbound and whether it is
-// unique-equipped, the base id a heroic variant upgrades, the two derived
-// levels, and what a vendor and a Quartermaster charge.
+// The game path is required and never defaulted, and it is checked: a directory that is not
+// this game fails loudly instead of producing an empty table.
 //
-// The two PRICES are the one deliberate step past the tooltip, which draws
-// neither: `sellValue` because no addon API states a price at all and a bag
-// panel adding up what it holds is otherwise guessing, and `priceHonor` because
-// it is the same fact in the other currency and a Warfare piece has no other
-// price to read. `fields` in the output says as much, rather than claiming the
-// file is a transcription of the tooltip when it is a little more than one.
+// The output is byte-deterministic (ids in code point order, fixed key order), so any diff after
+// a regeneration is real content.
 //
-// WHAT IT STILL DROPS is everything with no reader: the quest binding, the
-// no-sell and no-discard flags the client enforces, the pickup denial strings,
-// the mount key, weapon procs and set BONUSES.
-// The procs and the bonuses are the two worth naming, because they are content a
-// player reads: both are structured effect lists whose rendering is a module of
-// the game's own, and copying the data without the renderer would put a raw
-// shape on screen. They are a candidate for later, not an oversight.
+// Two content assumptions a release can break silently, which the printed report is for:
 //
-// THE GAME PATH IS REQUIRED AND IS NEVER DEFAULTED. Nothing tells you a checkout
-// is stale the way a 404 tells you an endpoint moved, so a remembered path is a
-// silent way to regenerate against a game nobody is running. It is also checked
-// rather than trusted: a directory that is not this game fails loudly instead of
-// producing an empty table.
+//   KINDS. `main.js` drops a row whose kind is not in its own `KINDS`, so a new kind quietly
+//   shrinks the codex. Compare the printed kinds against it and move both together.
 //
-// THE OUTPUT IS BYTE-DETERMINISTIC. Ids sorted by code point, fixed key order,
-// two-space indent, trailing newline. Re-running against an unchanged checkout
-// rewrites the same bytes, so a regeneration that produces no diff proves the
-// content did not move and any diff at all is real content.
-//
-// TWO CONTENT ASSUMPTIONS A GAME RELEASE COULD INVALIDATE, both of which show up
-// as output rather than as a crash:
-//
-//   The KIND vocabulary. `main.js` carries its own copy of the twelve kinds and
-//   DROPS a row whose kind is not among them, so a release that adds a thirteenth
-//   would quietly shrink the codex. This script prints every distinct kind it
-//   saw; compare that against `KINDS` in `main.js` and move both together.
-//
-//   Quality and slot being OPTIONAL. 96 items declare no quality and 284 no slot
-//   at game 0.35.0, and the absence is meaningful rather than a gap to fill in.
-//   If a release makes either mandatory, the counts printed here go to zero and
-//   the "unknown" rows in the codex disappear on their own.
+//   Quality and slot are OPTIONAL and their absence is meaningful. If a release makes either
+//   mandatory the printed counts go to zero and the codex's "unknown" rows disappear.
 
 import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
@@ -126,12 +82,8 @@ function gamePathFrom(args) {
 }
 
 /**
- * Prove the directory really is the game, and hand back its version.
- *
- * Both halves are checked because they fail differently: a path that is not a
- * checkout at all fails on the manifest, and a checkout whose layout has moved
- * fails on the module, and reporting one for the other sends the next person
- * looking in the wrong place.
+ * Prove the directory is the game and hand back its version. The manifest and the module are
+ * checked separately so "not a checkout" and "layout moved" are reported as what they are.
  */
 function gameVersionAt(gamePath) {
   const manifest = join(gamePath, 'package.json');
@@ -152,13 +104,7 @@ function gameVersionAt(gamePath) {
   return version;
 }
 
-/**
- * The game's `ITEMS`, bundled in memory and imported.
- *
- * `write: false` plus a data URL because this script may write exactly one file
- * and that file is `items.json`. A scratch bundle on disk would be a second one,
- * and it would be somewhere neither this directory nor the caller chose.
- */
+/** One game module, bundled in memory and imported: `items.json` is the only file written. */
 async function bundle(gamePath, entry) {
   const esbuild = await import('esbuild');
   const built = await esbuild.build({
@@ -174,13 +120,7 @@ async function bundle(gamePath, entry) {
   return await import(url);
 }
 
-/**
- * The game's `ITEMS`, its set table, and the three derivations, all imported for real.
- *
- * Four bundles rather than one because they are four entry points of the game's own; each
- * is built in memory and imported, and none of them is written anywhere. `write: false` plus a
- * data URL because this script may write exactly one file and that file is `items.json`.
- */
+/** The game's `ITEMS`, its set table, and the three derivations, one bundle per entry point. */
 async function readGame(gamePath) {
   const data = await bundle(gamePath, DATA_MODULE);
   const level = await bundle(gamePath, LEVEL_MODULE);
@@ -228,13 +168,7 @@ function repoPath(specifier) {
   return `${SIM_DIR}/${specifier.replace(LEADING_DOT_RE, '')}.ts`;
 }
 
-/**
- * Which files the table was actually merged from, in merge order.
- *
- * DERIVED rather than written down, which is the point: a release that adds a
- * zone adds a content module to that argument list, and the next regeneration
- * records it without anybody remembering to.
- */
+/** Which files the table was merged from, in merge order, so a new content module is recorded. */
 function provenanceFrom(source) {
   const merge = MERGE_RE.exec(source);
   if (merge === null) {
@@ -273,10 +207,8 @@ function put(row, key, value) {
 }
 
 /**
- * The six primary stats, in the game's own order, plus armor.
- *
- * Copied one key at a time rather than spread, because `stats` is a Partial and a spread
- * would carry a key the game adds later into a file whose reader has never heard of it.
+ * The six primary stats, in the game's order, plus armor. Copied key by key: a spread would
+ * carry a stat the game adds later into a file whose reader has never heard of it.
  */
 const STAT_KEYS = ['str', 'agi', 'sta', 'int', 'spi', 'armor'];
 
@@ -295,13 +227,9 @@ function statsOf(def) {
 }
 
 /**
- * The Warfare pair, which the game keeps as two numbers and DRAWS as one.
- *
- * Both are copied because they are two declarations and the file's job is to hold what the game
- * declares; the one number a reader wants is `Math.min` of them, which is how both the tooltip
- * and the compare arrows work it out, and which cannot be recovered from a single stored min.
- * They are equal on all 47 items that carry them at game 0.35.0, so a min looks like an identity
- * today and is not one.
+ * The Warfare pair, which the game keeps as two numbers and draws as their `Math.min`. Both are
+ * stored because they are two declarations; they happen to be equal today, which does not make
+ * the min an identity.
  */
 function warfareOf(def) {
   const row = {};
@@ -352,11 +280,8 @@ function weaponOf(def) {
 }
 
 /**
- * What the character has to be to use it, and what it is worth at a vendor.
- *
- * `requiredLevel` is the DERIVED number rather than the declared one, because the declared
- * one is usually absent: the game works it out from where the item drops and only a handful
- * of items pin it. A 1 is dropped like every other zero, since every character is level 1.
+ * What the character has to be to use it. `requiredLevel` is the DERIVED number, since the
+ * declared one is usually absent; a 1 is dropped because every character is at least level 1.
  */
 function gatesOf(def, derive) {
   const row = {};
@@ -374,17 +299,8 @@ function gatesOf(def, derive) {
 }
 
 /**
- * The two facts about an item that are about WHICH ITEM IT IS rather than about what it does.
- *
- * `heroicOf` is the base id a heroic dungeon variant upgrades, and it is the only thing in the
- * game that ties two identically NAMED rows together: the game resolves a variant's display name
- * to its base's unchanged, so `direfang_quiver` and `heroic_direfang_quiver` both read "Direfang
- * Quiver" and 63 pairs in the table do the same. Without it a reader has an id prefix to guess
- * from, and guessing an id out of a string is the mistake this whole file exists to make
- * unnecessary.
- *
- * `uniqueEquipped` is asked of the game rather than worked out, for the reason in the header,
- * and is written only where it is true: `false` on 825 rows would be a fact nobody reads.
+ * Which item this is. `heroicOf` is the only link between a heroic variant and its base, which
+ * share a display name. `uniqueEquipped` is asked of the game and written only where true.
  */
 function identityOf(row, def, derive) {
   put(row, 'heroicOf', def.heroicOf);
@@ -394,11 +310,8 @@ function identityOf(row, def, derive) {
 }
 
 /**
- * One item, in the one key order the file uses.
- *
- * Every field is written only where the game declares or derives one. Absent is a different
- * answer from empty: 96 items carry no quality, most carry no stats, and a row filling either
- * in would put a fact on screen the game never stated.
+ * One item, in the file's one key order. A field is written only where the game declares or
+ * derives one: absent differs from empty, and filling it in states a fact the game never did.
  */
 function rowOf(id, def, derive) {
   const row = { id, name: def.name, kind: def.kind };
@@ -455,14 +368,9 @@ function rowsOf(game) {
 }
 
 /**
- * Biome's own formatter, run over the rendered file.
- *
- * `JSON.stringify` and Biome disagree about exactly one thing, and it took a row with an
- * array in it to find out: stringify expands every array one element per line and Biome
- * collapses one that fits inside the line width, so `requiredClass` came out four lines long
- * and `pnpm check` failed on a file this script had just written. Reimplementing that rule
- * here would be a second formatter to keep in step with the real one, so the real one is what
- * runs. It is the same binary `pnpm lint` calls.
+ * Biome's own formatter over the rendered file. `JSON.stringify` expands every array while
+ * Biome collapses one that fits the line, so unformatted output fails `pnpm check`; running
+ * the real formatter avoids keeping a second copy of its rule.
  */
 function formatted(json) {
   return execFileSync('pnpm', ['exec', 'biome', 'format', '--stdin-file-path=items.json'], {
@@ -471,11 +379,7 @@ function formatted(json) {
   });
 }
 
-/**
- * The file, in the shape Biome's JSON formatter prints, because anything else fails
- * `pnpm check`. `name` still gets its own line, so a RENAME, which is the diff this
- * table exists to make visible at all, stays a one-line diff.
- */
+/** The file. `name` gets its own line, so a rename stays a one-line diff. */
 function render(gameVersion, provenance, rows) {
   const fields =
     "what the game's own item tooltip draws, plus the two prices it does not: id, name and kind " +
@@ -506,13 +410,7 @@ function report(rows) {
   console.log(`generate: ${family}, ${String(warfare)} carry Warfare`);
 }
 
-/**
- * A function rather than a run of top-level statements.
- *
- * Module-scope bindings named `source`, `version` and `rows` are shadowed by the
- * parameters of nearly every function above, and the names are right in both
- * places; keeping the script body in its own scope is what lets them stay right.
- */
+/** A function so `source`, `version` and `rows` stay out of module scope, where params shadow them. */
 async function main() {
   const gamePath = gamePathFrom(argv.slice(2));
   const version = gameVersionAt(gamePath);

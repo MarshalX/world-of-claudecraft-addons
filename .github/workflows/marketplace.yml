@@ -1,19 +1,14 @@
 name: Generated files
 
-# Two files are DERIVED from addons/*/addon.json and are never hand-edited:
-# marketplace.json, which the loader fetches, and the addon section of README.md
-# between its `<!-- addons:start -->` markers. Regenerating both here is what
-# keeps either from drifting from the folders on disk.
+# Regenerates the two files DERIVED from addons/*/addon.json: marketplace.json and
+# the README's addon section between its `<!-- addons:start -->` markers.
 #
-# ONE job rather than one workflow each, and that is not tidiness. Both push to
-# main on the same event, so as two workflows they would check out the same commit
-# and the second push would be rejected as non-fast-forward: a failure that shows
-# up only when both files happen to change, which is exactly the day nobody wants
-# to debug a bot. One job, one commit, no race by construction.
+# Keep this ONE job. As two workflows on the same push, both would check out the
+# same commit and the second push would be rejected as non-fast-forward, only on
+# the day both files change.
 #
-# This is also the file site/content/docs/publishing.md tells a third-party
-# marketplace to copy. `pnpm readme` treats a README with no markers as nothing to
-# do, so the copy regenerates their index and leaves their README alone.
+# site/content/docs/publishing.md tells third-party marketplaces to copy this file.
+# `pnpm readme` treats a README with no markers as nothing to do.
 on:
   push:
     branches: [main]

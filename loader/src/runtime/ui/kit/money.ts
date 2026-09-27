@@ -1,30 +1,14 @@
 // Copper, drawn the way the game draws it.
 //
-// The game counts money in copper and shows it as coin PARTS: a small disc per unit
-// followed by its figure, empty units left out entirely, so 780 reads as a silver
-// disc, 7, a copper disc, 80. Four addons already print money and every one of them
-// wrote its own `${gold}g ${silver}s ${copper}c`, which is the same arithmetic four
-// times and a readout that looks like nothing else on screen.
+// The game counts money in copper and shows it as coin PARTS: a disc per unit followed by its
+// figure, empty units left out, so 780 reads as a silver disc, 7, a copper disc, 80.
 //
-// It lives in the kit for the reason the kit exists at all: an addon is one file,
-// and everything the kit does not carry comes out of it. It sits beside `readout.ts`
-// rather than inside it because money is a subject of its own, unrelated to the tone
-// and school vocabulary that file is about.
+// THE DISCS ARE OURS, WITH THE GAME'S COLOURS. Do not wear the game's `.coin.g`: the loader
+// would then depend on `g`, `s` and `c` as game classes, which `tools/kit-classes.ts` and
+// `pnpm theme` would pick up. `styles/kit.css` names where the gradients came from.
 //
-// THE DISCS ARE OURS, WITH THE GAME'S COLOURS, which is the opposite of what a frame
-// does with `panel`. A frame WEARS the game's class so it inherits a border, a
-// background and a shadow it would otherwise keep a drifting copy of. A coin is three
-// gradients, and the game files them under a bare `.coin` with single-letter
-// modifiers (`.coin.g`), so wearing them would have the loader declaring `g`, `s` and
-// `c` as game classes it depends on: `tools/kit-classes.ts` reads what the kit wears
-// and `pnpm theme` copies the rules for every one of them. `styles/kit.css` names
-// where the three gradients came from.
-//
-// IT IS ANNOUNCED AS ONE IMAGE, the way `tile-name.ts` announces a tile, and for the
-// same reason: the discs carry the units and a disc reads as nothing at all, so a
-// figure left to be read child by child says "low 7 80". The spoken form spells the
-// units out in words rather than repeating the `7s 80c` a sighted reader gets, since
-// a screen reader saying "seven ess" is not what the row means.
+// IT IS ANNOUNCED AS ONE IMAGE, like `tile-name.ts`, with the units spelled out in words,
+// since the discs read as nothing and the figure alone reads as "low 7 80".
 
 import { type TextSlot, writeText } from './readout.ts';
 
@@ -49,13 +33,7 @@ const COPPER_UNIT = UNITS[2] as (typeof UNITS)[number];
 interface MoneyValue {
   /** Copper, which is what every amount the game sends is counted in. */
   copper: number;
-  /**
-   * A word before the coins, e.g. `low` or `asking`.
-   *
-   * Part of the figure rather than of the caller's own label, because it belongs
-   * where the number is: a bare amount at the end of a row reads as the price, and a
-   * row whose figure is the cheapest ever seen rather than today's has to say so.
-   */
+  /** A word before the coins, e.g. `low` or `asking`, part of the figure and of its spoken form. */
   prefix?: string;
 }
 
@@ -66,12 +44,8 @@ interface MoneyPart {
 }
 
 /**
- * The units an amount is made of, empty ones left out.
- *
- * Copper survives an amount of nothing, so a free item reads as `0c` rather than as
- * an empty row. Anything that is not a finite number is nothing rather than a guess:
- * a price divided by a count the caller does not have yet is exactly how a NaN gets
- * this far, and `NaNg NaNs NaNc` is worse than a zero.
+ * The units an amount is made of, empty ones left out. Copper survives zero, so a free item
+ * reads `0c`. A non-finite amount (a NaN from dividing by a missing count) reads as zero.
  */
 function wholeCopper(copper: number): number {
   if (!Number.isFinite(copper)) {
@@ -128,13 +102,8 @@ function buildPart(doc: Document, part: MoneyPart): HTMLElement {
 }
 
 /**
- * What the slot holds, as a string that changes exactly when the drawing would.
- *
- * The memo `writeText` keeps, and it matters more here: an addon animating a readout
- * from its own frame loop calls `update` per row per frame, and rebuilding five
- * elements each time to draw the figure that is already there is the allocation the
- * slots exist to avoid. It carries a space, which no class name does, so a money
- * signature can never collide with a string somebody wrote through `writeText`.
+ * What the slot holds, as a string that changes exactly when the drawing would, so a per-frame
+ * `update` rebuilds nothing. It carries a space, so it never collides with a `writeText` memo.
  */
 function moneySignature(value: MoneyValue): string {
   return `money ${value.prefix ?? ''} ${String(value.copper)}`;
@@ -173,11 +142,8 @@ function isMoney(value: unknown): value is MoneyValue {
 }
 
 /**
- * A readout's figure, whichever of the two forms it was given in.
- *
- * The two share one slot, so writing text has to take back what money put on the
- * element: a row reused for a plain countdown would otherwise still be announced as
- * the amount it used to hold, which is the kind of stale label nobody ever sees.
+ * A readout's figure, whichever of the two forms it was given in. Writing text takes back the
+ * image role money set, or a reused row would still be announced as the old amount.
  */
 function writeValue(slot: TextSlot, value: string | MoneyValue): boolean {
   if (isMoney(value)) {

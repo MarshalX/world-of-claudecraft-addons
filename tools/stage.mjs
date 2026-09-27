@@ -1,20 +1,9 @@
-// `pnpm run stage`: serve the addon stage on :5182. The `run` is required, since
-// pnpm owns `stage` as a subcommand of its own; AGENTS.md carries the detail.
+// `pnpm run stage`: serve the addon stage on :5182. The `run` is required, since pnpm owns `stage`
+// as a subcommand of its own. This is the socket only; everything it decides is in stage-core.ts.
 //
-// One addon, mounted in a real browser through the real loader over a scripted
-// fake world, so a preview screenshot does not need the state it pictures to be
-// reachable by playing. See stage/src/stage.ts for why that is the hard part.
-//
-// The socket only. Everything it decides lives in stage-core.ts.
-//
-// It bundles once itself, AFTER binding the port, so that the bind is what makes
-// two stage runs exclusive: `stage/stage.js` is one file every scenario shares,
-// and a build ahead of the bind rewrites it under whoever already holds the port.
-// Run `pnpm build:stage --watch` beside it to rebuild while editing a scenario or
-// a loader module. Editing an addon's own `main.js` needs no rebuild at all, since
-// the page fetches it. A NEW `addons/<id>/stage.ts` does need a restart, for the
-// same reason the dev watcher polls bodies and not the index: discovering files on
-// a timer is a rebuild per tick to report that nothing moved.
+// It bundles once AFTER binding the port, so the bind is what makes two stage runs exclusive over
+// the one shared `stage/stage.js`. Run `pnpm build:stage --watch` beside it to rebuild; an addon's
+// `main.js` needs no rebuild since the page fetches it, and a NEW `stage.ts` needs a restart.
 
 import { readFile } from 'node:fs/promises';
 import { createServer } from 'node:http';
@@ -52,13 +41,7 @@ function gameHost() {
   return given.replace(TRAILING_SLASH, '');
 }
 
-/**
- * No caching anywhere on this server.
- *
- * The opposite of serve.mjs, which is ETag-driven because the loader polls it.
- * Nothing polls this: every request is a person reloading to see a change they
- * just made, and a 304 there is the change appearing not to have happened.
- */
+/** No caching: every request is a person reloading to see a change they just made. */
 function send(res, body, type) {
   res.writeHead(OK, {
     'content-type': type,
@@ -77,12 +60,8 @@ async function sendFile(res, file, type, missing) {
 }
 
 /**
- * Hand back what the deployed game answers, headers stripped to the one that
- * matters.
- *
- * The upstream body is passed through verbatim; only the content type follows
- * it. Copying the rest would carry caching and security headers that describe a
- * response served from another origin under another policy.
+ * Hand back what the deployed game answers, with only its content type: the other headers describe
+ * a response from another origin under another policy.
  */
 async function proxy(res, target) {
   const upstream = await fetch(target);
@@ -128,15 +107,8 @@ async function handle(req, res, host) {
 }
 
 /**
- * Start the server and resolve once it is accepting connections.
- *
- * Exported because `pnpm shots` runs it in-process rather than asking for a
- * second terminal: that whole run is one command somebody types a few times a
- * year, and "start the stage first" is a step whose failure arrives as a
- * connection refused three layers down inside Playwright.
- *
- * It rejects rather than exiting, so a caller that owns a browser can still shut
- * it down. `main` below is what turns a failure into an exit code.
+ * Start the server and resolve once it is accepting connections. Exported for `pnpm shots`, which
+ * runs it in-process; it rejects rather than exiting so that caller can still close its browser.
  */
 function serveStage(host = gameHost()) {
   const server = createServer((req, res) => {
@@ -148,8 +120,7 @@ function serveStage(host = gameHost()) {
 
   return new Promise((resolve, reject) => {
     server.once('error', (err) => {
-      // Named, because the overwhelmingly likely cause is the one this bind
-      // exists to refuse, and "EADDRINUSE" three layers down does not say so.
+      // The likely cause is the second run this bind exists to refuse, so name it.
       reject(
         new Error(
           `could not listen on ${STAGE_HOST}:${String(STAGE_PORT)}: ${err.message}. ` +

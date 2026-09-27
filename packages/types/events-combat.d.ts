@@ -1,9 +1,4 @@
-// The combat records, split from the rest of the catalogue in `events.d.ts`.
-//
-// Not an arbitrary split to fit a file: these are the records an author reaches
-// for first, they are the ones carrying the traps described below, and they are
-// the only ones with a shape subtle enough to need explaining at length. The map
-// from a kind to its record lives in `events.d.ts` and covers both files.
+// The combat records. The map from a kind to its record lives in `events.d.ts`.
 
 import type { School } from './entity.js';
 import type { PersonalEvent } from './events.js';
@@ -11,12 +6,11 @@ import type { PersonalEvent } from './events.js';
 /**
  * How an attack landed.
  *
- * `evade` is the one worth reading twice. It is a wild mob refusing a DIRECT hit while
- * immune, always at `amount: 0`, and it never says the pull is over. It had one cause until
- * game 0.41.4 and has two since: a mob that broke leash, which HAS dropped its hate table
- * and is walking home, and a mob pinned in place inside a dungeon or raid room because it
- * cannot reach you, which has NOT and swings again the moment it can. Nothing on the record
- * separates them, so treat an evade as an outcome you took and never as an ending.
+ * `evade` is a mob refusing a DIRECT hit while immune, always at `amount: 0`. It
+ * has two causes the record does not separate: a mob that broke leash and is
+ * walking home, and a mob pinned in a dungeon or raid room because it cannot reach
+ * you, which keeps its hate table and swings again when it can. Never read an
+ * evade as the pull ending.
  */
 export type DamageKind = 'hit' | 'miss' | 'dodge' | 'parry' | 'block' | 'resist' | 'evade';
 
@@ -26,19 +20,12 @@ export interface DamageEvent extends PersonalEvent {
   /**
    * Who owned the source when the record was emitted, for a pet or guardian.
    *
-   * The one thing `world.entities.get(sourceId)?.ownerId` cannot answer. A pet
-   * despawns when its owner dies, so the killing blow's source is gone from the
-   * snapshot by the time an addon reads it, and a meter resolving the owner from
-   * the snapshot drops exactly the damage around a death. This is snapshotted at
-   * emit, so it survives that.
+   * Taken at emit, so it survives the pet despawning when its owner dies, which
+   * `world.entities.get(sourceId)?.ownerId` does not. Read this first and fall
+   * back to that lookup.
    *
-   * Absent for anything with no owner, which is every player's own record and
-   * every mob's, so absence means "nobody owned this" rather than "not known".
-   * Still ask the question AGAINST your own id: an owner id is an owner id, and
-   * a stranger's pet carries one too.
-   *
-   * Added in game 0.36.0, so a server older than that sends nothing and the
-   * snapshot lookup stays the fallback.
+   * Absent means "nobody owned this" (a player's or a mob's own record). Compare
+   * it AGAINST your own id: a stranger's pet carries an owner id too.
    */
   sourceOwnerId?: number;
   targetId: number;
@@ -48,24 +35,24 @@ export interface DamageEvent extends PersonalEvent {
   /**
    * The ability's DISPLAY NAME, or null for an auto-attack swing.
    *
-   * Not an id, and the difference is not cosmetic: one recorded session showed
-   * the same character casting `measured_shot` and dealing damage attributed to
-   * "Fell Shot". `world.abilities.byName` converts it, for an ability you know;
-   * a mob's ability is not in your spellbook and resolves to null there.
+   * Not an id: ids and names diverge. `world.abilities.byName` converts it for an
+   * ability you know; a mob's or pet's ability resolves to null there.
    */
   ability: string | null;
   /**
    * The ability's stable content ID, on a PLAYER's primary direct hit only.
+   *
+   * NULL, not absent, on everything else (auto-attacks, periodic ticks, echoed or
+   * fanned-out copies, every mob and pet record), so test the value, not the key,
+   * and fall back to `school`. Absent only from a server predating the field.
    */
   abilityId?: string | null;
   kind: DamageKind;
   /**
    * Absorbed by a shield. Absent when nothing absorbed any of it, and never 0.
    *
-   * The damage side needs none of the disambiguation `Heal2Event.absorbed`
-   * carries, because `kind` already draws the distinction: a fully absorbed hit
-   * is a `hit` landing at `amount: 0`, where a swing that never connected says
-   * `miss`, `dodge`, `parry`, `resist` or `evade` instead.
+   * A fully absorbed hit is a `hit` at `amount: 0`; a swing that never connected
+   * has another `kind`.
    */
   absorbed?: number;
   /** Set when a ranged shot's animation already began at projectile launch. */
@@ -75,9 +62,8 @@ export interface DamageEvent extends PersonalEvent {
 /**
  * A heal, and the ONLY heal record that can be attributed.
  *
- * The kind is `heal2` rather than `heal`, and the difference matters: the plain
- * `heal` kind carries a target and an amount with nothing to credit it to, so a
- * meter built on that one can show incoming healing and can never show who did it.
+ * The plain `heal` kind carries no source, so a meter crediting healers reads
+ * `heal2`.
  */
 export interface Heal2Event extends PersonalEvent {
   type: 'heal2';
@@ -91,32 +77,17 @@ export interface Heal2Event extends PersonalEvent {
    * How much of this heal a heal-absorb shield ate before it could land.
    * Absent when nothing absorbed any of it, and never 0.
    *
-   * This is the other half of the `cueOnly` warning below, and the two are one
-   * story rather than two rules. `amount: 0` on a heal is ambiguous on its own:
-   * it means EITHER the target was already at full health OR a shield devoured
-   * the whole thing, and those deserve opposite feedback, since the first is a
-   * wasted cast and the second is a target sitting at low health who is not
-   * being healed at all. This field is what separates them. An `amount: 0`
-   * carrying `absorbed` was eaten; an `amount: 0` with no `absorbed` was
-   * overhealing.
+   * It separates the two meanings of `amount: 0`: with `absorbed`, a shield ate
+   * the heal (a low target not being healed); without it, the target was full.
    *
-   * Absent does NOT mean nothing was absorbed anywhere, only that this record is
-   * not reporting any. A direct heal, a heal-over-time tick and a damage-over-time
-   * leech report it (from game 0.41.0 for the periodic two; an older server
-   * reports none on a tick). A channel's own self-heal tick never touches a
-   * shield. A tick entirely eaten by a shield arrives as `amount: 0` carrying
-   * `absorbed`.
+   * A direct heal, a heal-over-time tick and a damage-over-time leech report it.
+   * A channel's self-heal tick never touches a shield.
    *
-   * TWO REDIRECT PATHS drain the shield without reporting it: Chronomancy's
-   * Temporal Echo and the paladin's Beacon of Light transfer emit a `heal2` with
-   * `overheal` and no `absorbed`, and no record at all when the shield eats the
-   * whole heal. A meter that totals drained shields undercounts every beacon
-   * transfer into a shielded target.
+   * TWO REDIRECT PATHS drain a shield without reporting it: Chronomancy's Temporal
+   * Echo and the paladin's Beacon of Light transfer emit `overheal` and no
+   * `absorbed`, and no record at all when the shield eats the whole heal.
    *
-   * Genuinely ABSENT rather than null, which is worth saying because the adjacent
-   * `DamageEvent.abilityId` is the opposite: that one rides every record and is
-   * null when it has nothing to say, while this key is simply not written. Test
-   * it against undefined, never against null.
+   * ABSENT, never null (unlike `DamageEvent.abilityId`): test against undefined.
    */
   absorbed?: number;
   /** Set on a periodic tick of a heal over time, never on the cast itself. */
@@ -127,30 +98,21 @@ export interface Heal2Event extends PersonalEvent {
    * How much of this heal was lost to the target's missing-health clamp.
    * Absent when none of it was, and never 0.
    *
-   * This is the number the `absorbed` note above reasons around without having:
-   * an `amount: 0` carrying no `absorbed` was overhealing, and this says how
-   * much. It is computed AFTER absorb consumption, so `absorbed` and `overheal`
-   * describe different lost healing and adding them double-counts nothing.
+   * Computed AFTER absorb consumption, so `absorbed` and `overheal` never overlap.
    *
-   * WHICH WASTE IT SEES DEPENDS ON HOW THE HEALING WAS DELIVERED. A DIRECT HEAL
-   * always emits, so a cast into a full-health target arrives as `amount: 0`
-   * carrying the whole cast as `overheal`. A PERIODIC TICK (a heal-over-time
-   * tick, or a damage-over-time leech) emits only when some healing landed or a
-   * shield was drained, so a tick into an unshielded full-health target is
-   * invisible. DERIVED HEALING (a beacon transfer, a cascade, a channel's
-   * self-heal) emits nothing when nothing landed.
-   *
-   * So a percentage summed from this field reads LOW by an amount that grows the
-   * longer a target sits at full health. Present it as "overhealing seen on
-   * landed heals", or restrict the figure to direct heals, where it is exact.
+   * A DIRECT HEAL always emits, so one into a full target carries the whole cast
+   * here. A PERIODIC TICK emits only when some healing landed or a shield was
+   * drained, and DERIVED HEALING (a beacon transfer, a cascade, a channel's
+   * self-heal) emits nothing when nothing landed, so those wastes are invisible.
+   * An overheal percentage therefore reads LOW; label it "on landed heals", or
+   * restrict it to direct heals, where it is exact.
    */
   overheal?: number;
   /**
    * This record carries NO healing and exists only to drive a sound.
    *
-   * Ignore it in anything that counts, and do so ON THIS FLAG: `amount` is
-   * always 0 here, and a genuine direct heal also lands at 0 on a full-health
-   * target, so an amount test throws away real casts along with these.
+   * Skip it ON THIS FLAG, never on `amount === 0`: a genuine direct heal also
+   * lands at 0 on a full-health target.
    */
   cueOnly?: boolean;
 }
@@ -158,11 +120,9 @@ export interface Heal2Event extends PersonalEvent {
 /**
  * An effect arriving on or leaving an entity.
  *
- * `name` is a DISPLAY NAME, the same string a damage record carries. The four
- * attribution fields below can identify the effect instead, but only on some
- * records: test each one for presence rather than assuming it. To know which
- * aura is on an entity right now, read that entity's own aura list, which
- * carries ids, stacks and durations on every entry.
+ * `name` is a DISPLAY NAME. The four optional fields below appear only on some
+ * records, so test each for presence. For what is on an entity now, read its own
+ * aura list, which carries ids on every entry.
  */
 export interface AuraEvent extends PersonalEvent {
   type: 'aura';
@@ -180,6 +140,11 @@ export interface AuraEvent extends PersonalEvent {
   sourceId?: number;
   /**
    * The aura's stable content ID, and the ONLY route to a mob ability's id.
+   *
+   * Present on a gain, a refresh, and the fade of an aura displaced by
+   * re-application; absent on most fades (expiry, dispel), and on any ability
+   * that applies no aura. On a stack bump it is the CASTING ability's id, which
+   * differs where two abilities share an aura kind. Keep the `name` path working.
    */
   abilityId?: string;
   /** Stack count at application. Absent on the bare emits, not 0. */
@@ -188,9 +153,8 @@ export interface AuraEvent extends PersonalEvent {
    * This gain DISPLACED a same-id same-name aura already on the target: a
    * re-application rather than a fresh one.
    *
-   * No fade is emitted for the aura it replaced, so a duration tracker counting
-   * gains against fades needs this to avoid double-counting. Nothing on the
-   * record could previously distinguish the two.
+   * No fade is emitted for the aura it replaced, so a tracker counting gains
+   * against fades needs this to avoid double-counting.
    */
   refresh?: boolean;
 }
@@ -204,11 +168,9 @@ export interface DeathEvent extends PersonalEvent {
 /**
  * A cast beginning. NOT emitted for a mob.
  *
- * It fires for a player's cast, a pet's cast, and for the timed ACTIVITIES the
- * game runs through the same cast machinery. A mob's mechanic sets its cast
- * state directly instead, so a boss warning built on this receives silence and
- * cannot tell that from a boss that never casts. Watch `world.casts` for
- * anything but your own casting.
+ * It fires for a player's cast, a pet's cast, and the game's timed ACTIVITIES.
+ * A mob's cast reaches you only through `world.casts`, which is what to watch
+ * for anything but your own casting.
  */
 export interface CastStartEvent extends PersonalEvent {
   type: 'castStart';
@@ -235,21 +197,12 @@ export interface CastStartEvent extends PersonalEvent {
    * ]);
    * ```
    *
-   * THE SET GROWS WITH THE GAME, so match the ones you care about and let an
-   * unrecognised value fall through as an ability id rather than treating the
-   * list as complete. A sentinel never resolves in `world.abilities` and never
-   * has icon art.
+   * THE SET CHANGES WITH THE GAME in both directions, so match the ones you care
+   * about and let an unrecognised value fall through as an ability id. A sentinel
+   * never resolves in `world.abilities` and has no icon art.
    *
-   * It also SHRINKS, which the advice above already covers and which is worth
-   * naming once because it has happened: `'farming'` was a sentinel of its own
-   * for the planting cast and game 0.43.0 removed it outright. An addon that had
-   * enumerated the list and branched on a member now has a branch that can never
-   * be taken, and nothing anywhere reports that.
-   *
-   * `demon_heal` is a real cast, the warlock's channel that heals their own
-   * demon, and the game keeps it out of its own activity bundle. It is listed
-   * here because it has no ability definition, so it never resolves in
-   * `world.abilities` and has no art: handle it as a sentinel.
+   * `demon_heal` is the warlock's demon-healing channel. It has no ability
+   * definition, so handle it as a sentinel.
    */
   ability: string;
   /** Cast length in seconds. */
@@ -268,9 +221,8 @@ export interface CastStopEvent extends PersonalEvent {
  * A visual cue for the renderer, and one of the few places a mob's ability id
  * appears at all.
  *
- * Emitted for presentation, so it says nothing about damage. Correlating one
- * with the damage that follows is guesswork, and a mispairing draws the wrong
- * ability's art, which is worse than drawing none.
+ * It says nothing about damage. Pairing one with the damage that follows is
+ * guesswork, and a mispairing draws the wrong ability's art.
  */
 export interface SpellFxEvent extends PersonalEvent {
   type: 'spellfx';
@@ -300,9 +252,8 @@ export interface SpellFxAtEvent extends PersonalEvent {
    * An ability ID, carried only where the ground cast has authored art of its
    * own. Absent leaves you the school and nothing else.
    *
-   * An ID, not the display name a `damage` or `heal2` record carries, so this is
-   * the field to build an icon URL from and never the one to match a meter row
-   * against.
+   * An ID, not a display name: build an icon URL from it, never match a meter row
+   * against it.
    */
   ability?: string;
   /** Blast radius in yards, when the effect has one. */

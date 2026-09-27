@@ -1,13 +1,5 @@
-// The Dungeon Finder readings.
-//
-// Two absences carry this file and both are easy to flatten by accident. A
-// listing's `needed` is null when the activity enforces no composition at all,
-// which is not a listing that needs nobody. And the board is null before the
-// client's mirror has synced, which is not a realm with no listings on it.
-//
-// The third is a clock that looks like the loot roll's and is not: a proposal's
-// `remaining` has already been counted down on the server, so running it through
-// the sim-clock conversion would subtract a clock from a duration.
+// Dungeon Finder readings. A null `needed` means no composition is enforced, a null board
+// means not yet synced, and a proposal's `remaining` is already counted down server-side.
 
 import { describe, expect, it } from 'vitest';
 import { readFinder, readFinderBoard } from '../loader/src/runtime/world/finder.ts';
@@ -67,13 +59,11 @@ describe('readFinder', () => {
     expect(finder?.queue).toEqual({ activities: ['thornpeak'], waited: 92 });
   });
 
-  it('drops a role the matcher does not have rather than guessing at it', () => {
+  it('drops a role the matcher does not have', () => {
     expect(readWith({ roles: ['healer', 'bard'] })?.roles).toEqual(['healer']);
   });
 
-  // `buildInfoFor` reports a queue for the live unit OR the one a proposal is
-  // holding, so a reader that decided for itself would drop the player out of
-  // the display at exactly the moment their proposal is on screen.
+  // `buildInfoFor` reports a queue for the live unit OR the one a proposal is holding.
   it('keeps a queue that a proposal is holding', () => {
     const held = readWith({
       queue: { activities: ['thornpeak'], waited: 140 },
@@ -84,8 +74,7 @@ describe('readFinder', () => {
     expect(held?.proposal?.id).toBe(5);
   });
 
-  // The mirror of the loot roll case, and the two are easy to confuse: this one
-  // arrives already counted down.
+  // Unlike the loot roll, this arrives already counted down.
   it('passes the proposal deadline through untouched', () => {
     expect(readWith({ proposal: PROPOSAL })?.proposal?.remaining).toBe(23);
     expect(readWith({ proposal: PROPOSAL })?.proposal?.acceptedByRole).toEqual({
@@ -102,8 +91,6 @@ describe('readFinder', () => {
     ).toBe('accepted');
   });
 
-  // The wire wraps one number in a one-field object, which is nothing an addon
-  // should have to unwrap.
   it('flattens the application to the listing id, and its absence to null', () => {
     expect(readWith({ myApplication: { listingId: LISTING } })?.appliedTo).toBe(LISTING);
     expect(readWith()?.appliedTo).toBeNull();
@@ -133,8 +120,6 @@ describe('readFinder', () => {
 });
 
 describe('readFinderBoard', () => {
-  // The two absences are different things to draw: "not synced yet" against
-  // "nobody is listing".
   it('answers null before the first sync and an array after it', () => {
     expect(readFinderBoard({})).toBeNull();
     expect(readFinderBoard({ dungeonFinderBoard: null })).toBeNull();
@@ -149,9 +134,7 @@ describe('readFinderBoard', () => {
     expect(row?.members[0]?.role).toBe('dps');
   });
 
-  // Zeroing it would tell a player that a listing with no composition at all
-  // needs nobody, when the question does not apply to it.
-  it('keeps a null composition null rather than filling it with zeroes', () => {
+  it('keeps a null composition null', () => {
     expect(readFinderBoard({ dungeonFinderBoard: [rowWire({ needed: null })] })?.[0]?.needed).toBe(
       null,
     );
@@ -177,8 +160,7 @@ describe('finderSignature', () => {
     expect(finderSignature(blocked)).not.toBe(finderSignature(base));
   });
 
-  // A proposal meter is the whole display and each acceptance is the discrete
-  // event a player is watching for, so the counts are in despite being numbers.
+  // Acceptance counts are in despite being numbers: each one is an event a player watches.
   it('reports an acceptance landing and ignores the proposal countdown', () => {
     const pending = readWith({ proposal: PROPOSAL });
     const ticking = readWith({ proposal: { ...PROPOSAL, remaining: 4 } });
@@ -219,9 +201,8 @@ describe('boardSignature', () => {
     expect(boardSignature(swapped)).toBe(boardSignature(base));
   });
 
-  // Without the count both would render as the empty string, and the first sync
-  // of an idle realm would notify nobody that the board had arrived.
-  it('separates a board that has synced and is empty from one that has not synced', () => {
+  // Without the count both render as '', and an idle realm's first sync notifies nobody.
+  it('separates a synced empty board from an unsynced one', () => {
     expect(boardSignature(readFinderBoard({ dungeonFinderBoard: [] }))).not.toBe(
       boardSignature(readFinderBoard({})),
     );

@@ -1,5 +1,4 @@
-// What the Installed pane reads. No rendering involved: the store is a plain
-// object precisely so its states can be driven directly.
+// What the Installed pane reads, driven directly with no rendering.
 
 import { describe, expect, it, vi } from 'vitest';
 import {
@@ -83,8 +82,7 @@ describe('loading', () => {
     expect(store.state().status).toBe('failed');
   });
 
-  // An unreachable store carries no error to quote, because nothing was tried.
-  // The pane distinguishes that from a read that failed.
+  // Nothing was tried, so there is no error to quote.
   it('reports an unreachable registry as failed with no error text', () => {
     const store = createInstalledStore({ registry: null, onChange: vi.fn() });
 
@@ -93,8 +91,7 @@ describe('loading', () => {
     expect(store.state()).toEqual({ status: 'failed', rows: [], error: null });
   });
 
-  // Without the ticket a slow first load lands after a fast second one and
-  // reinstates the older list, which looks like the toggle silently reverting.
+  // Otherwise a slow first load lands after a fast second one and reinstates the older list.
   it('ignores a load that a newer one has overtaken', async () => {
     const { registry, settle } = deferredRegistry();
     const store = createInstalledStore({ registry, onChange: vi.fn() });
@@ -111,8 +108,6 @@ describe('loading', () => {
     expect(store.state().rows).toEqual([addon('official/newer')]);
   });
 
-  // The pane paints from state() on every change, so a load that does not report
-  // is a load the player never sees.
   it('reports every transition to its subscriber', async () => {
     const onChange = vi.fn();
     const store = createInstalledStore({
@@ -143,9 +138,7 @@ describe('toggling', () => {
     expect(setEnabled).toHaveBeenCalledWith(FQID, false);
   });
 
-  // No optimistic flip: the host emits registry.changed on a real write, and
-  // that is what reloads. Painting the new state first would show one the store
-  // may have refused.
+  // No optimistic flip: registry.changed after a real write is what reloads.
   it('does not move the row until a reload says so', () => {
     const store = createInstalledStore({
       registry: fakeRegistry({
@@ -160,8 +153,6 @@ describe('toggling', () => {
     expect(store.state().rows).toEqual([]);
   });
 
-  // A rejected write must surface. Silently swallowing it leaves a toggle that
-  // snaps back with no explanation.
   it('reports a rejected write without dropping the rows', async () => {
     const store = createInstalledStore({
       registry: fakeRegistry({

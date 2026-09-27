@@ -1,18 +1,8 @@
 // @vitest-environment happy-dom
 
-// The loader's one keydown listener: which press fires a handler, and what
-// still reaches the game.
-//
-// The load-bearing claim is negative: an UNCLAIMED key reaches the game
-// untouched. The dispatcher runs in the capture phase, ahead of the game's own
-// bubble-phase handler, so calling stopImmediatePropagation too eagerly would
-// quietly degrade the controls of a game the player is still playing, and
-// nothing would report it. Every test that asserts propagation is asserting
-// that.
-//
-// The registry the manager drives on top of this listener, rebinding, conflict
-// listing, and reading the player's next press, is covered in
-// keys-dispatcher-rebinding.test.ts.
+// The loader's one keydown listener: which press fires a handler, and what still reaches the game.
+// It runs in the capture phase ahead of the game, so an UNCLAIMED key must pass through untouched.
+// Rebinding, conflicts and key capture are in keys-dispatcher-rebinding.test.ts.
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createKeyDispatcher, isEditing } from '../loader/src/runtime/keys/dispatcher.ts';
@@ -43,10 +33,7 @@ function press(target: EventTarget, key: Press): KeyboardEvent {
   return event;
 }
 
-/**
- * A listener standing in for the game's own, registered in the BUBBLE phase on
- * the same target. Whether this runs is the whole question.
- */
+/** Stands in for the game's own listener, in the BUBBLE phase on the same target. */
 function gameListener(target: EventTarget) {
   const heard = vi.fn();
   target.addEventListener('keydown', heard);
@@ -193,8 +180,7 @@ describe('what reaches the game', () => {
     expect(game).toHaveBeenCalledOnce();
   });
 
-  // Claimed means claimed: the game must not also act, and neither must the
-  // browser, since a player who bound Ctrl+KeyS meant the addon, not a save.
+  // Neither the game nor the browser may act: a player who bound Ctrl+KeyS meant the addon.
   it('stops a claimed key reaching the game', () => {
     const { target, dispatcher } = open();
     const game = gameListener(target);
@@ -283,8 +269,6 @@ describe('isEditing', () => {
     expect(isEditing({ activeElement: null })).toBe(false);
   });
 
-  // The caret sits in the container of a contenteditable region, so a node
-  // nested inside one has to be found by walking up.
   it('is true for a node inside a contenteditable region', () => {
     const region = document.createElement('div');
     region.setAttribute('contenteditable', 'true');

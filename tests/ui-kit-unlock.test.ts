@@ -1,12 +1,7 @@
 // @vitest-environment happy-dom
 
-// The arrange-your-UI mode.
-//
-// One class on the root, which is the whole mechanism: the outlines, the minimum
-// size that makes an empty overlay grabbable, and the labels are all CSS keyed
-// off it. So what is worth testing is the state machine around it, and in
-// particular that a subscriber hears about a change made from somewhere else,
-// because the mode has two switches and they must not disagree.
+// The arrange mode: one class on the root that all its CSS keys off, and a state
+// machine that keeps its two switches in agreement.
 
 import { describe, expect, it } from 'vitest';
 import { createUnlockMode, UNLOCKED_CLASS } from '../loader/src/runtime/ui/kit/unlock.ts';
@@ -19,7 +14,7 @@ function root(): HTMLElement {
 }
 
 describe('the unlock mode', () => {
-  it('starts off, because it is a setup mode rather than a way to play', () => {
+  it('starts off', () => {
     const el = root();
     const mode = createUnlockMode(el);
 
@@ -27,7 +22,7 @@ describe('the unlock mode', () => {
     expect(el.classList.contains(UNLOCKED_CLASS)).toBe(false);
   });
 
-  it('marks the root, which is what every rule keys off', () => {
+  it('marks the root', () => {
     const el = root();
     const mode = createUnlockMode(el);
 
@@ -37,9 +32,7 @@ describe('the unlock mode', () => {
     expect(el.classList.contains(UNLOCKED_CLASS)).toBe(true);
   });
 
-  // The manager's checkbox and the loader's keybind are two switches on one
-  // mode. Without this the checkbox would show the opposite of the screen after
-  // the key was pressed with the window open.
+  // The manager's checkbox and the keybind are two switches on one mode.
   it('tells a subscriber when it was flipped from somewhere else', () => {
     const mode = createUnlockMode(root());
     const seen: boolean[] = [];
@@ -74,8 +67,7 @@ describe('the unlock mode', () => {
     expect(seen).toEqual([]);
   });
 
-  // Disposal has to leave the page as it found it: a root still carrying the
-  // class would outline every frame with nothing left to turn it off.
+  // A leftover class would outline every frame with nothing to turn it off.
   it('takes the class back off the root when disposed', () => {
     const el = root();
     const mode = createUnlockMode(el);

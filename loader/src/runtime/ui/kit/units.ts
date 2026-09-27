@@ -1,19 +1,11 @@
 // How big one unit is when a box is divided between several of them.
 //
-// The arithmetic every addon that scales with its frame had written for itself, in
-// five places that agreed about the hard parts and differed in the ways that are easy
-// to get wrong. All five: take a fixed extra off the box (a caption band under a strip
-// of squares), take the gaps off before dividing rather than after, floor the share,
-// and hold the answer between a floor and a ceiling.
+// Take a fixed extra off the box, take the gaps off BEFORE dividing, FLOOR the share, and
+// hold it between a floor and a ceiling. A share rounded up puts the last row past the bottom
+// of a box that clips rather than scrolls.
 //
-// Flooring is the half that has to be exactly right. A share rounded UP is a strip
-// whose last row is a pixel or two past the bottom of the box, and a bare frame clips
-// rather than scrolls, so the cost is the bottom row quietly missing.
-//
-// The floor is applied HERE as well as being stated on the frame, and that is not
-// belt and braces: a box arrives from a restore and from a viewport clamp as well as
-// from a drag, and a bound a frame states is about the BOX rather than about what the
-// addon divides out of it.
+// The minimum is applied here as well as on the frame: a frame's bounds are about the box,
+// not about the units divided out of it.
 
 /** What the caller is dividing between. Everything but the count has a sane default. */
 interface UnitOpts {
@@ -38,9 +30,7 @@ function units(available: number, opts: UnitOpts = {}): number {
   }
   const gaps = (count - 1) * (opts.gap ?? 0);
   const share = Math.floor((available - (opts.extra ?? 0) - gaps) / count);
-  // The floor last, so it beats a ceiling under it. That is the order frame/geometry.ts
-  // resolves the same contradiction in: a max below a min is one somebody has to break,
-  // and only one of the two is about the display staying readable.
+  // The floor last, so it beats a ceiling under it, as in frame/geometry.ts.
   return Math.max(Math.min(share, max), min);
 }
 

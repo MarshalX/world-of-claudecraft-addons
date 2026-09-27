@@ -6,9 +6,8 @@ import {
 } from '../loader/src/runtime/world/abilities.ts';
 
 /**
- * A resolved entry in the game's own shape: the content `def` plus what talents
- * resolved to. Shaped from a live PBE client rather than from the game's
- * declarations, which is why the resolved cooldown differs from the def's.
+ * A resolved entry as a live client holds it: the content `def` plus what talents
+ * resolved to, so the resolved cooldown differs from the def's.
  */
 function resolved(overrides: Record<string, unknown> = {}): Record<string, unknown> {
   return {
@@ -48,32 +47,23 @@ describe('the ability projection', () => {
     const read = createAbilityReader();
     const info = read(world([resolved()])).byId('arcane_shot');
 
-    // The def says 6 and 25; talents moved both, and a countdown drawn from the
-    // def's numbers would be wrong for anyone who has spent a point.
+    // Talents moved both def figures (6 and 25).
     expect(info?.cooldown).toBe(5.4);
     expect(info?.cost).toBe(55);
     expect(info?.rank).toBe(3);
   });
 
-  it('answers null rather than guessing at a name nobody knows', () => {
+  it('answers null for an unknown name', () => {
     const read = createAbilityReader();
     const book = read(world([resolved()]));
 
-    // Every mob ability reaches a meter exactly like this: a display name with
-    // no id behind it.
+    // Every mob ability arrives as a display name with no id behind it.
     expect(book.byName('Cleave')).toBeNull();
     expect(book.byId('cleave')).toBeNull();
   });
 
-  /**
-   * The charge pool is the resolved total already, not a base to add a bonus to.
-   *
-   * Shaped from a live hunter carrying the charge talent: `charges: 2` alongside
-   * `bonusCharges: 1` and no `def.maxCharges`, which the game documents as a base of
-   * one. Summing the two would publish three uses for a two-use pool, and the field
-   * name is inviting enough that someone will try.
-   */
-  it('reads a charge pool as the resolved total, never adding the bonus again', () => {
+  /** `charges` already includes `bonusCharges`; summing them publishes three uses for two. */
+  it('reads a charge pool as the resolved total', () => {
     const read = createAbilityReader();
     const pooled = resolved({
       def: { id: 'trailbreak', name: 'Trailbreak' },
@@ -110,7 +100,7 @@ describe('the ability description', () => {
   it('answers the game own name for an ability the player knows', () => {
     const read = createAbilityReader();
 
-    // A derived name would answer "Arcane Shot" here, which the id cannot betray.
+    // A name derived from the id would answer "Arcane Shot".
     expect(read(world([resolved()])).describe('arcane_shot')).toEqual({
       name: 'Fell Shot',
       school: 'arcane',
@@ -137,10 +127,9 @@ describe('the ability description', () => {
     expect(guess.known).toBe(false);
   });
 
-  it('derives rather than throwing on the landing page, where the book is empty', () => {
+  it('derives a name on the landing page, where the book is empty', () => {
     const read = createAbilityReader();
 
-    // An addon's first line runs at document-start, with no world at all.
     expect(emptyAbilities().describe('aimed_shot')).toEqual({
       name: 'Aimed Shot',
       school: null,
@@ -151,14 +140,7 @@ describe('the ability description', () => {
 });
 
 describe('the ability memo', () => {
-  /**
-   * The reason the reader is stateful at all.
-   *
-   * A live client hands back a fresh array AND fresh entry objects on every
-   * snapshot, twenty times a second. Rebuilding on each one would allocate
-   * constantly and hand an addon a different object every frame, so a cached
-   * `AbilityInfo` could never be compared by identity.
-   */
+  /** A live client hands back fresh entry objects on every snapshot, 20 times a second. */
   it('holds identity across snapshots that changed nothing', () => {
     const read = createAbilityReader();
     const first = read(world([resolved()]));
@@ -188,7 +170,7 @@ describe('the ability memo', () => {
     expect(second.byName('Measured Shot')?.id).toBe('aimed_shot');
   });
 
-  it('freezes what it hands out, so one addon cannot edit another addon read', () => {
+  it('freezes what it hands out', () => {
     const read = createAbilityReader();
     const info = read(world([resolved()])).byId('arcane_shot');
 
@@ -201,7 +183,7 @@ describe('the ability memo', () => {
 
 /** The three fields read off the DEF, which talent resolution never touches. */
 describe('the ability shape read off the def', () => {
-  it('publishes the charge stage count, which makes the live stage computable', () => {
+  it('publishes the charge stage count', () => {
     const read = createAbilityReader();
     const charged = resolved({
       def: { id: 'glacial_front', name: 'Glacial Front', castTime: 2.4, empowerStages: 4 },
@@ -213,7 +195,7 @@ describe('the ability shape read off the def', () => {
     expect(read(world([resolved()])).byId('arcane_shot')?.empowerStages).toBeUndefined();
   });
 
-  it('publishes a channel as its length and tick count, not as a flag', () => {
+  it('publishes a channel as its length and tick count', () => {
     const read = createAbilityReader();
     const channelled = resolved({
       def: {
@@ -255,7 +237,6 @@ describe('the ability signature', () => {
   it('changes on rank, and not on a resolved figure moving', () => {
     expect(abilityIndexSignature({ known: [{ id: 'a', rank: 1 }] })).toBe('a#1');
     expect(abilityIndexSignature({ known: [{ id: 'a', rank: 2 }] })).not.toBe('a#1');
-    // A cooldown ticking is not a different spellbook.
     expect(abilityIndexSignature({ known: [{ id: 'a', rank: 1, cooldown: 3 }] })).toBe('a#1');
   });
 

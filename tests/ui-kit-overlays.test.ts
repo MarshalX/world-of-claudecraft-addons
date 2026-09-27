@@ -1,14 +1,6 @@
 // @vitest-environment happy-dom
 
-// Toasts and modals: the two announcement surfaces the kit shares across every
-// addon rather than letting one own. Tooltips are the third and live in
-// ui-kit-tooltip.test.ts.
-//
-// The common thread is that each keeps ONE element for the whole loader and
-// moves or refills it. The alternative, one node per toast, means a hundred
-// hidden divs for a hundred rows in an addon's list. Both also have to settle:
-// a toast releases its timer and a modal resolves its promise however it went
-// away, including when the addon was disabled out from under it.
+// Toasts and modals. Each settles however it goes away, including on addon disable.
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { DEFAULT_BUTTONS, openAlert } from '../loader/src/runtime/ui/kit/alert.ts';
@@ -76,7 +68,7 @@ describe('toasts', () => {
     expect(toasts()).toEqual(['one', 'two']);
   });
 
-  it('announces politely rather than by stealing focus', () => {
+  it('announces politely without stealing focus', () => {
     const { toaster: t } = toaster();
 
     t.show('one');
@@ -120,8 +112,7 @@ describe('toasts', () => {
     expect(toasts()).toEqual(['sticky']);
   });
 
-  // The oldest goes rather than the newest being refused: the newest message is
-  // the one the player is most likely to be waiting for.
+  // The newest message is the one the player is most likely waiting for.
   it('drops the oldest once the column is full', () => {
     const { toaster: t } = toaster();
 
@@ -207,8 +198,6 @@ describe('modals', () => {
     expect(await modal.answer).toBe('no');
   });
 
-  // The addon's await is usually mid-way through something it has to finish or
-  // abandon cleanly, so being disabled must release it rather than hang it.
   it('resolves when closed because the addon was disabled', async () => {
     const modal = open({ message: 'Note', buttons: [{ id: 'no', label: 'No', cancel: true }] });
 

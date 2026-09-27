@@ -1,14 +1,5 @@
-// The inter-addon bus.
-//
-// An addon is one file with no imports, so this is the only way two of them
-// cooperate, and that raises what a hole in it costs: there is no second route
-// for two addons to reach each other by if this one is wrong.
-//
-// Most of what is pinned here is the three refusals rather than the delivery.
-// Delivery is a Set and a loop. The refusals (a sender cannot claim to be
-// somebody else, a subscriber cannot be handed a squatter's messages, an emit
-// cannot recurse forever) are the parts that would each look fine in review and
-// only show up in a session with two addons installed.
+// The inter-addon bus. Mostly pins the refusals: a sender cannot claim to be somebody else, a
+// subscriber is never handed a squatter's messages, and an emit cannot recurse forever.
 
 import { describe, expect, it, vi } from 'vitest';
 import { createBus } from '../loader/src/runtime/api/bus.ts';
@@ -86,7 +77,6 @@ describe('publishing', () => {
   });
 });
 
-// The stamp is what makes a subscriber's trust decision worth anything.
 describe('who a message is from', () => {
   it('stamps the sending addon', () => {
     const { addon } = bus();
@@ -98,8 +88,6 @@ describe('who a message is from', () => {
     expect(seen[0]?.from).toBe(METER);
   });
 
-  // A sender that could overwrite its own stamp could impersonate any addon a
-  // subscriber decided to trust, which is the whole value of the field.
   it('cannot be overwritten by the sender', () => {
     const { addon } = bus();
     const seen: BusMessage[] = [];
@@ -114,9 +102,7 @@ describe('who a message is from', () => {
   });
 });
 
-// Naming the publisher is what stops one addon taking a topic name by
-// publishing under it first. Detecting it afterwards would mean every
-// subscriber has to remember to check, which is the version nobody writes.
+// Naming the publisher prevents squatting, instead of every subscriber having to check `from`.
 describe('naming the publisher', () => {
   it('does not deliver the same topic from a different addon', () => {
     const { addon } = bus();
@@ -140,8 +126,6 @@ describe('naming the publisher', () => {
     expect(from).toEqual([METER, BARS]);
   });
 
-  // You do not need a bus to call your own code, and self-delivery is how a loop
-  // starts: an addon that both publishes and listens would answer itself.
   it('never delivers an addon its own message, even on the wildcard', () => {
     const { addon } = bus();
     const meter = addon(METER);
@@ -179,8 +163,6 @@ describe('unsubscribing', () => {
     expect(handler).not.toHaveBeenCalled();
   });
 
-  // A stray timer firing after disable would otherwise wake other addons'
-  // handlers on behalf of an addon that is no longer running.
   it('stops a disabled addon emitting at all', () => {
     const { addon } = bus();
     const handler = vi.fn();
@@ -193,8 +175,7 @@ describe('unsubscribing', () => {
     expect(handler).not.toHaveBeenCalled();
   });
 
-  // A handler that unsubscribes during delivery must not cost the addon after it
-  // the message: iterating a Set that is being mutated silently skips whoever moved.
+  // Iterating a Set that is being mutated silently skips entries.
   it('still delivers to the rest when a handler unsubscribes mid-delivery', () => {
     const { addon } = bus();
     const later = vi.fn();
@@ -207,11 +188,8 @@ describe('unsubscribing', () => {
     expect(later).toHaveBeenCalledTimes(1);
   });
 
-  // The reverse, and the one a snapshot alone gets wrong: iterating a copy means
-  // a subscriber dropped DURING this delivery is still in the copy, so without
-  // re-checking the live set an addon torn down mid-emit would be called anyway.
-  // Subscribed in this order deliberately, since a Set delivers in insertion
-  // order and the dropper has to run first for there to be anything to prove.
+  // A snapshot still holds a subscriber dropped mid-delivery, so the live set is re-checked. The
+  // dropper subscribes first, since a Set delivers in insertion order.
   it('does not deliver to a subscriber another handler just dropped', () => {
     const { addon } = bus();
     const dropped = vi.fn();
@@ -239,8 +217,6 @@ describe('a handler that throws', () => {
     expect(after).toHaveBeenCalledTimes(1);
   });
 
-  // Reported to whoever WROTE the handler. The addon that sent the message has
-  // nothing it could do about somebody else's bug.
   it('is reported against the subscribing addon, not the sender', () => {
     const { addon, errors } = bus();
     addon(BARS).api.on(METER, 'totals', () => {
@@ -264,9 +240,7 @@ describe('a handler that throws', () => {
   });
 });
 
-// Delivery is synchronous, so A -> B -> A is a cycle even though nobody receives
-// their own messages. Unbounded synchronous recursion is a hung tab, and a hung
-// tab in a game is not a bug report, it is a wipe.
+// Delivery is synchronous, so A -> B -> A recurses; unbounded, it hangs the tab.
 describe('a cycle between two addons', () => {
   it('stops rather than hanging, and says so', () => {
     const diag = captureDiag();
@@ -282,8 +256,7 @@ describe('a cycle between two addons', () => {
     diag.restore();
   });
 
-  // The depth is restored afterwards, or one cycle would mute the bus for the
-  // rest of the session and every addon after it would look broken instead.
+  // Otherwise one cycle mutes the bus for the rest of the session.
   it('leaves the bus working afterwards', () => {
     const diag = captureDiag();
     const { addon } = bus();
@@ -301,8 +274,6 @@ describe('a cycle between two addons', () => {
     expect(after).toHaveBeenCalledTimes(1);
   });
 
-  // A real chain is one or two links deep: a meter emits, a display redraws and
-  // announces that it did. The cap must not be under that.
   it('allows a chain shorter than the cap', () => {
     const { addon } = bus();
     const one = addon('a/one');
@@ -396,8 +367,7 @@ describe('publish and follow', () => {
     expect(asks).toHaveBeenCalledTimes(1);
   });
 
-  // Without this, a publisher whose value never moves after startup never reaches
-  // a follower that started first: its ask went out before the publisher existed.
+  // The follower's ask went out before the publisher existed.
   it('reaches a follower that started before it, with nobody calling announce', () => {
     const { addon } = bus();
     const heard = vi.fn();
@@ -408,7 +378,6 @@ describe('publish and follow', () => {
     expect(heard).toHaveBeenCalledWith({ ore: 4 }, METER);
   });
 
-  // What a null return is for: an answer a follower can ignore.
   it('announces at publish even with nothing to say yet', () => {
     const { addon } = bus();
     const heard = vi.fn();

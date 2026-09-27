@@ -1,10 +1,6 @@
 // @vitest-environment happy-dom
 
-// The `woc` object an addon is handed.
-//
-// Assembly, so what is asserted is the wiring rather than any one surface: every
-// domain is present, identity and game facts are readable, settings are hydrated
-// BEFORE the addon's first line, and one disposal releases everything at once.
+// The `woc` object an addon is handed: the wiring, not any one surface.
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createAddonApi } from '../loader/src/runtime/api/index.ts';
@@ -59,13 +55,11 @@ describe('what an addon is handed', () => {
     for (const domain of ['net', 'world', 'ui', 'sound', 'keys', 'storage'] as const) {
       expect(api.woc[domain]).toBeTypeOf('object');
     }
-    // A surface added to bind.ts but not to the Pick would be absent here and
-    // present in the published types, which is the drift nothing else catches.
+    // A surface added to bind.ts but not to the Pick is absent here only.
     expect(api.woc.data).toBeTypeOf('function');
   });
 
-  // api-ui.test.ts proves a passed name reaches the frame; this is what says the
-  // name passed is the MANIFEST's, since the chip falls back to the fqid quietly.
+  // The chip falls back to the fqid silently, so pin that the manifest name is passed.
   it("labels a frame with the manifest's name, not the fqid", () => {
     const { api } = open();
 
@@ -123,9 +117,7 @@ describe('what an addon is handed', () => {
     expect(open().api.woc.now()).toBe(1234);
   });
 
-  // Two clocks, and the obvious slip is binding the monotonic one to both. The
-  // fake supplies distinct readings so this is a value comparison rather than a
-  // shape check.
+  // The fake gives the two clocks distinct readings, so binding one to both fails.
   it('answers the wall clock separately from the monotonic one', () => {
     const { api } = open();
 
@@ -151,8 +143,6 @@ describe('woc.data', () => {
     await expect(api.woc.data('items.json')).resolves.toEqual({ sword: 'Sword' });
   });
 
-  // The membership check is against THIS addon's manifest, so an addon that
-  // declared nothing cannot read a file another addon shipped.
   it('refuses a name this addon did not declare', async () => {
     const { api } = open();
 
@@ -161,9 +151,7 @@ describe('woc.data', () => {
 });
 
 describe('settings', () => {
-  // The whole reason settings are a store rather than reads through
-  // woc.storage: an addon does arithmetic with woc.settings.window on its first
-  // line, so the value has to be there before its code runs.
+  // An addon reads woc.settings on its first line, so values land before its code runs.
   it('are hydrated before the addon would run', async () => {
     const hub = createFakeStorage();
     await hub.set(configNamespace(FQID), SETTINGS_KEY, { window: 30 });
@@ -204,8 +192,6 @@ describe('settings', () => {
 });
 
 describe('the world before world entry', () => {
-  // The facade is built at boot, so every read answers null rather than
-  // throwing at an addon holding woc.world from its first line.
   it('answers null rather than throwing', () => {
     const { api } = open();
 
@@ -264,15 +250,9 @@ describe('logging', () => {
   });
 });
 
-// `woc.onFrame`, the shared animation tick.
-//
-// What is worth pinning here is the BAG, not the loop (tests/frame-loop.test.ts
-// owns that): disable is hot with no page reload, so a handler the addon never
-// unsubscribed has to stop when its addon does, and an explicit unsubscribe has to
-// drop the bag's hold as well, which is the half that is easy to lose when a
-// member is added by copying its neighbour.
+// The loop itself is tests/frame-loop.test.ts; this pins the disposal bag's hold.
 describe('onFrame', () => {
-  it('runs on the loader own loop', () => {
+  it("runs on the loader's own loop", () => {
     const { api, frames } = open();
     const handler = vi.fn();
 
@@ -306,9 +286,7 @@ describe('onFrame', () => {
     expect(bag.size).toBe(before);
   });
 
-  // A handler that throws once throws every frame, so reporting each one would
-  // write sixty lines a second into the log the manager tails. The subscription is
-  // KEPT: the cost of a mistake is a warning, not a surface that stops working.
+  // A throwing handler throws every frame, so one report is enough; it stays subscribed.
   it('reports a throwing handler once and keeps calling it', () => {
     const { api, frames } = open();
     const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);

@@ -1,13 +1,7 @@
 // @vitest-environment happy-dom
 
-// The Cooldown Bars example, run through the real loader.
-//
-// The behaviour worth pinning is the one the addon exists to demonstrate: the
-// subscription reports the SET of running cooldowns changing, and the numbers
-// move in a frame loop that reads the world directly. A suite can tell those two
-// apart, which is the point: a bar that only moved when the set changed would
-// sit still for the whole cooldown and look broken, and one that rebuilt itself
-// every frame would restart its own fill forever.
+// The Cooldown Bars example, run through the real loader. The subscription reports the SET of
+// running cooldowns changing and the numbers move in a frame loop; these cases keep the two apart.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { validateManifest } from '../../loader/src/shared/schema.ts';
@@ -33,9 +27,9 @@ interface FrameBox {
 }
 /** One tap-target square: the strip's icon size, and its floor on both axes. */
 const TILE_FLOOR = 40;
-/** A bar's natural height, which is the column's floor and the row it opens at. */
+/** A bar's natural height, which the column opens at. */
 const BAR_HEIGHT = 23;
-/** The gap between two timers, which the height budget is stated over. */
+/** The gap between two timers. */
 const ROW_GAP = 3;
 /** How narrow the column may be dragged, well under the width it opens at. */
 const MIN_COLUMN_WIDTH = 120;
@@ -43,11 +37,8 @@ const MIN_COLUMN_WIDTH = 120;
 const MIN_BAR_HEIGHT = 14;
 
 /**
- * What a budget of rows works out to, stated the way the addon states it.
- *
- * Restated here rather than imported, because an addon is a function body with no exports:
- * these four numbers are a transcription, and a suite that derived them from the addon could
- * not fail when the addon changed one.
+ * What a budget of rows works out to. These numbers are transcribed from the addon rather
+ * than derived from it, so the suite fails when the addon changes one.
  */
 function stack(height: number, rows: number): number {
   return rows * height + (rows - 1) * ROW_GAP;
@@ -58,27 +49,20 @@ const CRAMPED: FrameBox = { x: 20, y: 20, w: 90, h: 20 };
 const MANIFEST_JSON: unknown = JSON.parse(MANIFEST_TEXT);
 const PLAYER_ID = PLAYER_ENTITY.id;
 /**
- * Long enough to clear the addon's global-cooldown floor, and also the published length of
- * `bestial_wrath` below, which is the game's own 120. Those being the same number keeps most
- * of this suite reading the same way whether the total was published or observed; the cases
- * where the two answers differ use a different ability on purpose.
+ * Long enough to clear the global-cooldown floor, and also `bestial_wrath`'s published length,
+ * so most cases read the same whether the total was published or observed.
  */
 const LONG = 120;
-/** `arcane_shot`'s published length, which is the game's own 6. */
+/** `arcane_shot`'s published length. */
 const FELL_SHOT = 6;
 /**
- * The size of `arcane_shot`'s charge pool, as the spellbook resolves it. Two because of a
- * talent: the content table gives Fell Shot no `maxCharges` at all, and the Twin Fletching
- * row is what turns that into a pool of two. A reading taken from the content table would
- * find no pool here.
+ * The size of `arcane_shot`'s charge pool as the spellbook resolves it, after the talent that
+ * grants it. The content table gives the ability no pool at all.
  */
 const POOL = 2;
 /**
- * Enough cooldowns to fill the bar budget, which the manifest defaults to eight.
- *
- * Every id is a real hunter ability and none of them is in the fake spellbook below, so
- * each raises a MEASURED row: what they are is irrelevant to the case they exist for,
- * which is that a ninth row has nowhere to be drawn.
+ * Enough cooldowns to fill the default budget of eight. None is in the fake spellbook, so
+ * each raises a MEASURED row.
  */
 const CROWD = [
   'multi_shot',
@@ -93,8 +77,7 @@ const CROWD = [
 
 const teardown: Array<() => void> = [];
 
-// The frame loop is the whole subject, so it has to be drivable. Vitest's fake
-// timers cover requestAnimationFrame as well as the timer functions.
+// Vitest's fake timers cover requestAnimationFrame, which is what makes the frame loop drivable.
 beforeEach(() => {
   vi.useFakeTimers();
 });
@@ -115,10 +98,8 @@ interface BarsHarness extends SharedHarness {
   /** Put an ability on cooldown, or move what is left on it. */
   cooldown: (abilityId: string, seconds: number) => void;
   /**
-   * Set a charge pool, the way a snapshot carrying `achg` and `achr` would. `maxCharges` is
-   * written as the zero the client actually holds rather than as a real maximum, so a reading
-   * that took the pool size from here instead of from the spellbook would draw "1 of 0" and
-   * be caught.
+   * Set a charge pool the way a snapshot would. `maxCharges` is the zero the client actually
+   * holds, so a reading that took the pool size from here would draw "1 of 0" and be caught.
    */
   charges: (abilityId: string, pool: { charges: number; recharge: number; length: number }) => void;
   /** Re-read the world, which is what turns a set change into a handler call. */
@@ -147,13 +128,9 @@ function barFor(abilityId: string): Element | null {
 }
 
 /**
- * Start the addon, optionally with settings already stored. Seeded before the addon loads,
- * because the loader hydrates settings and then evaluates: an addon reads `woc.settings`
- * while it builds its first frame, which is when the layout is decided.
- *
- * This is the raw start, before the overlay has come up. Nearly every case wants `run`
- * instead; this exists for the cases whose subject is the window between a frame being built
- * and its stored state landing.
+ * Start the addon with settings seeded before it loads, since the layout is decided while it
+ * builds its first frame. This returns before the overlay has come up; nearly every case wants
+ * `run`, and this is for cases about the window before the stored frame state lands.
  */
 async function start(
   settings: Record<string, unknown> = {},
@@ -167,22 +144,12 @@ async function start(
   );
   const cooldowns = new Map<string, number>();
   const abilityCharges: Record<string, unknown> = {};
-  // `templateId` on a player is the CLASS, which is the directory the game files a
-  // skill icon under. Without it there is nothing to build an icon URL from.
+  // `templateId` on a player is the CLASS, which is the directory skill icons are filed under.
   const player = liveEntity({ set: { cooldowns, abilityCharges, templateId: 'hunter' } });
-  // The spellbook in the game's own shape, and the source of both things the addon cannot get
-  // off the wire: an ability's display name and its resolved length.
-  //
-  // Every id and name here is the game's own. Both hunter abilities are shown under a name an
-  // id cannot be turned into: `arcane_shot` is "Fell Shot" and `bestial_wrath` is "Howling
-  // Rage". Fell Shot also carries the pool of two the Twin Fletching talent resolves, which is
-  // what `abilityCharges.maxCharges` zero-fills and never reports.
-  //
-  // Every other id this suite uses is deliberately absent, `system_unstuck` first among them.
-  // That one is a real key of the game's own cooldown map (the anti-relog timer, shipped in
-  // the `cds` payload unfiltered) and is provably not an ability, so it is exactly the case
-  // the spellbook can never answer and it keeps the fallback name, the measured denominator
-  // and the re-baselining covered.
+  // The spellbook in the game's own shape: the only source of a display name and a resolved
+  // length. Both names differ from what their ids suggest, on purpose. Every other id used here
+  // is deliberately absent, `system_unstuck` (the game's anti-relog timer, a real key of its
+  // cooldown map and not an ability) first among them.
   const known = [
     {
       def: { id: 'arcane_shot', name: 'Fell Shot', school: 'arcane', requiresTarget: true },
@@ -225,8 +192,8 @@ async function start(
     },
     poll: () => harness.shared.world.watcher.poll(),
     frame: () => vi.advanceTimersToNextFrame(),
-    // Read off the attribute rather than the dataset, which is an index
-    // signature: the linter wants dot access there and the compiler forbids it.
+    // The attribute, not the dataset: the linter wants dot access on an index signature and
+    // the compiler forbids it.
     drawn: () =>
       [...document.querySelectorAll('[data-ability]')].map(
         (el) => el.getAttribute('data-ability') ?? '',
@@ -240,18 +207,14 @@ async function start(
 }
 
 /**
- * `start`, plus the wait for the overlay to come up. A frame that saves its state starts
- * hidden and is shown once that state arrives, keyed per character, so it takes a watcher
- * sample and then a storage read. A hidden frame is the state the addon's own frame loop
- * stands down for.
+ * `start`, plus the wait for the overlay to come up. A saved frame starts hidden until its
+ * per-character state arrives, which takes a watcher sample and then a storage read.
  */
 async function run(
   settings: Record<string, unknown> = {},
   frames: Record<string, { box: FrameBox; visible: boolean }> = {},
 ): Promise<BarsHarness> {
   const harness = await start(settings, frames);
-  // The sample is what resolves the character; the settle is what lets the read
-  // keyed on it come back.
   harness.poll();
   await settleFrames();
   return harness;
@@ -262,8 +225,7 @@ describe('its manifest', () => {
     expect(validateManifest(MANIFEST_JSON).ok).toBe(true);
   });
 
-  // It never touches the socket, so it must not ask for it. A permission an addon does not use
-  // is one every player is asked to grant for nothing.
+  // It never touches the socket, so it must not ask for it.
   it('asks for no network permission', () => {
     expect(manifest().permissions).toEqual(['world.read', 'ui', 'keys']);
   });
@@ -296,8 +258,6 @@ describe('which bars are up', () => {
     expect(h.drawn()).toEqual([]);
   });
 
-  // A global cooldown rides almost every press, so bars for those would be a
-  // row that flickers once a second and tells you nothing you did not just do.
   it('hides a cooldown shorter than the global cooldown', async () => {
     const h = await run();
 
@@ -307,7 +267,6 @@ describe('which bars are up', () => {
     expect(h.drawn()).toEqual([]);
   });
 
-  // Soonest ready first, because that is the order the next decision is made in.
   it('draws the soonest ready at the top', async () => {
     const h = await run();
 
@@ -319,9 +278,7 @@ describe('which bars are up', () => {
     expect(h.drawn()).toEqual(['multi_shot', 'bestial_wrath', 'system_unstuck']);
   });
 
-  // The label the game itself uses, which a cooldown map cannot supply: it is keyed by id, and
-  // the id and the display name have diverged. Reading `arcane_shot` as "Arcane Shot" names an
-  // ability nothing else in the game calls that.
+  // The cooldown map is keyed by id, and ids and display names have diverged.
   it('calls an ability what the game calls it, not what its id suggests', async () => {
     const h = await run();
 
@@ -332,10 +289,8 @@ describe('which bars are up', () => {
     expect(barFor('arcane_shot')?.textContent).not.toContain('Arcane Shot');
   });
 
-  // An id the spellbook does not carry is not always an ability at all: the game's own
-  // anti-relog timer rides the same cooldown map under `system_unstuck`. A guess from the id
-  // beats a blank row, and the mark beside it is what says the guess is a guess. It is
-  // foretell's exactly, because the two addons hedge the same fact.
+  // An id the spellbook does not carry may not be an ability at all. The mark is foretell's,
+  // because the two addons hedge the same fact.
   it('marks a name it worked out from the id', async () => {
     const h = await run();
 
@@ -345,8 +300,6 @@ describe('which bars are up', () => {
     expect(barFor('system_unstuck')?.textContent).toContain('System Unstuck?');
   });
 
-  // And never on a name the game itself supplied, or the mark would say nothing:
-  // a hedge that is on every row is a hedge nobody reads.
   it('leaves a name off the spellbook unmarked', async () => {
     const h = await run();
 
@@ -357,9 +310,7 @@ describe('which bars are up', () => {
     expect(barFor('arcane_shot')?.textContent).not.toContain('Fell Shot?');
   });
 
-  // A tile has no room for a label, so the mark has to reach the accessible name:
-  // that string is the only thing naming the ability for a screen reader, and an
-  // unmarked one there would be the guess presented as fact.
+  // A tile draws no label, so the mark has to reach the accessible name.
   it('marks the name on a tile too', async () => {
     const h = await run({ layout: 'tiles' });
 
@@ -389,9 +340,7 @@ describe('the drain', () => {
     expect(h.fillOf('bestial_wrath')).toBe('100.00%');
   });
 
-  // The claim the whole example is built to demonstrate: the subscription is
-  // not what moves the number. Nothing is polled here and nothing is published;
-  // only a frame passes, and the bar has to follow the world on its own.
+  // The subscription does not move the number: nothing is polled here, only a frame passes.
   it('follows the cooldown down without another set change', async () => {
     const h = await run();
     h.cooldown('bestial_wrath', LONG);
@@ -404,9 +353,7 @@ describe('the drain', () => {
     expect(h.leftOf('bestial_wrath')).toBe('60.0s');
   });
 
-  // The whole point of reading the spellbook: found half spent, drawn half full, on the first
-  // frame it exists. The measured rule would call 2.7 the total and open this bar at 100
-  // percent with nothing on screen to say so.
+  // Found half spent, drawn half full on its first frame. The measured rule would open it full.
   it('fills an ability you know against its published length', async () => {
     const h = await run();
 
@@ -416,10 +363,8 @@ describe('the drain', () => {
     expect(h.fillOf('arcane_shot')).toBe('50.00%');
   });
 
-  // A pool size is per ability, off that ability's own spellbook entry, and "known but with no
-  // pool" is a different answer from "not known at all". Howling Rage is in this hunter's
-  // spellbook and carries no `charges`, so a reading that took the pool from the spellbook as
-  // a whole would draw "1/2" on this row instead of "1".
+  // The pool size comes from this ability's own entry, which carries no `charges`, so a reading
+  // taken from the spellbook as a whole would draw "1/2" here.
   it('draws a bare count for a known ability whose entry carries no pool', async () => {
     const h = await run();
 
@@ -429,9 +374,7 @@ describe('the drain', () => {
     expect(h.leftOf('bestial_wrath')).toBe('6.0s (1)');
   });
 
-  // The residue, and the reason `rebaseline` survives. An item cooldown is in no
-  // spellbook, so there is no length to divide by and the bar is filled from whatever
-  // it was found at rather than from a guess.
+  // With no published length, the bar is filled against what it was found at.
   it('treats what it first saw as full for an ability outside your spellbook', async () => {
     const h = await run();
 
@@ -443,8 +386,6 @@ describe('the drain', () => {
     expect(h.fillOf('system_unstuck')).toBe('50.00%');
   });
 
-  // A rebuild must not restart the fill: the bar keeps the total it was created
-  // with, or every unrelated cooldown starting would reset every other bar.
   it('keeps its fill when an unrelated cooldown starts', async () => {
     const h = await run();
     h.cooldown('bestial_wrath', LONG);
@@ -475,18 +416,9 @@ describe('disabling it', () => {
   });
 });
 
-// A cooldown that does not simply run down.
-//
-// The game has three shapes of this and the addon meets all three. `clearCooldowns` deletes an
-// entry outright. Refunds and shaves lower it while it keeps running. And a shared cooldown
-// re-arms an entry that is already running: casting one shaman shock sets the cooldown on
-// every shock, so an entry with two seconds left jumps back to six.
-//
-// The third is the one that bites, and only on a measured row. The set of running ids has not
-// changed, so the subscription does not fire and the bar keeps the total it was built with,
-// which may now be smaller than what is left. A row that took its denominator from the
-// spellbook already has the right number, which is why every case below that turns on
-// re-learning uses an ability the fake spellbook does not carry.
+// Three shapes: `clearCooldowns` deletes an entry, a shave lowers it while it runs, and a shared
+// cooldown re-arms a running entry (one shaman shock resets every shock). A re-arm changes no id,
+// so only a measured row can go wrong, and the re-learning cases use abilities off the spellbook.
 describe('a cooldown that is reset or re-armed', () => {
   it('drops the bar when another ability clears the cooldown outright', async () => {
     const h = await run();
@@ -500,7 +432,6 @@ describe('a cooldown that is reset or re-armed', () => {
     expect(h.drawn()).toEqual([]);
   });
 
-  // A shave keeps the entry, so the bar has to follow it down without a set change.
   it('follows a cooldown that was shortened while running', async () => {
     const h = await run();
     h.cooldown('combustion', 60);
@@ -513,13 +444,9 @@ describe('a cooldown that is reset or re-armed', () => {
     expect(h.leftOf('combustion')).toBe('30.0s');
   });
 
-  // The failure a MEASURED row can reach: first seen part-way down, then re-armed to its
-  // full length by a shared cooldown. A bar that keeps its first total has a denominator
-  // smaller than what is left, and reads full for the whole difference.
+  // A measured row first seen part-way down and then re-armed has to take the new total.
   it('rebaselines when the remaining time goes back up', async () => {
     const h = await run();
-    // Found mid-cooldown, which is what happens when the addon loads during one
-    // or when a shave landed before the first sample.
     h.cooldown('earth_shock', 2);
     h.poll();
 
@@ -535,11 +462,8 @@ describe('a cooldown that is reset or re-armed', () => {
     expect(h.fillOf('earth_shock')).toBe('50.00%');
   });
 
-  // The other direction cannot be detected, and this pins that it is not pretended otherwise.
-  // A reset and re-press onto a shorter cooldown, landing below the old remaining, produces 30
-  // then 15 then 10, which is what draining looks like. If a frame catches the gap at zero the
-  // bar is dropped and rebuilt correctly; if none does, it reads low until the cooldown next
-  // reaches zero.
+  // UNDETECTABLE: a re-press onto a shorter cooldown below the old remaining (30, 15, 10) looks
+  // like draining. It reads low unless a frame catches the gap at zero.
   it('reads a shorter re-press as a drain, which is all it can do', async () => {
     const h = await run();
     h.cooldown('system_unstuck', 30);
@@ -553,7 +477,6 @@ describe('a cooldown that is reset or re-armed', () => {
     expect(h.fillOf('system_unstuck')).toBe('33.33%');
   });
 
-  // And when a frame does catch the gap, the rebuild is what gets it right.
   it('rebuilds from the new length when a frame catches the reset', async () => {
     const h = await run();
     h.cooldown('system_unstuck', 30);
@@ -567,8 +490,6 @@ describe('a cooldown that is reset or re-armed', () => {
     expect(h.fillOf('system_unstuck')).toBe('100.00%');
   });
 
-  // The same sequence on an ability you do know needs none of that reasoning: the denominator
-  // never moved, so 40 of a published 120 is simply 40 of 120.
   it('reads a shorter re-press correctly for an ability you know', async () => {
     const h = await run();
     h.cooldown('bestial_wrath', LONG);
@@ -582,21 +503,8 @@ describe('a cooldown that is reset or re-armed', () => {
     expect(h.fillOf('bestial_wrath')).toBe('33.33%');
   });
 
-  // The same re-arm, on a row nobody can see.
-  //
-  // The bar budget cuts the LIST and not the reading: a row past it is taken out of the
-  // panel and kept, so it goes on watching its own cooldown. That is what this pins, and
-  // it is the one thing here a player could not work out from the screen.
-  //
-  // Watching matters because a measured row learns its length from a remaining that goes
-  // UP, and the increase is the only signal there is. A row that stopped following while
-  // it was cut would come back with whatever it happened to be at as its total, which is
-  // 100% of a cooldown that is ten seconds in: not a missing bar but a confident and
-  // wrong one, with nothing on screen saying it is a guess.
-  //
-  // So the re-arm to 180 has to be seen while the row is off the bottom of the list, and
-  // the drain to 170 has to happen before it comes back, or a row that only caught up on
-  // its way back into view would pass this too.
+  // A row past the budget is hidden, not dropped, so it still sees a re-arm. Both the re-arm and
+  // the drain happen while it is cut, so a row that only caught up on its way back fails.
   it('keeps following a cooldown that is past the bar budget', async () => {
     const h = await run();
     // Eight soonest, none of them in the fake spellbook, so every row here is measured.
@@ -625,17 +533,9 @@ describe('a cooldown that is reset or re-armed', () => {
   });
 });
 
-// The one denominator that comes off the wire rather than out of the spellbook.
-//
-// A recharge is not the ability's cooldown, so `world.abilities` does not carry it and could
-// not: `rechargeLength` rides the charge pool itself. That makes these rows exact from their
-// first frame, and it is why the charge reading wins wherever both describe one ability.
-//
-// The pool size is the other way round: nowhere on the wire, since `maxCharges` is zero-filled
-// by the client, and in the spellbook.
-//
-// The subscription cannot see any of this. A charge coming back while the pool still holds a
-// use changes no cooldown id, so only the frame loop can raise or drop the row.
+// `rechargeLength` rides the charge pool, so these rows are exact from their first frame; the
+// pool SIZE comes only from the spellbook, since `maxCharges` is zero-filled. A charge returning
+// changes no cooldown id, so only the frame loop can raise or drop the row.
 describe('an ability regenerating a charge', () => {
   it('raises a bar from the frame loop, with no cooldown set change', async () => {
     const h = await run();
@@ -646,7 +546,6 @@ describe('an ability regenerating a charge', () => {
     expect(h.drawn()).toEqual(['arcane_shot']);
   });
 
-  // The whole point: half of a published twelve, right the first time it is drawn.
   it('fills against the published length rather than against what it first saw', async () => {
     const h = await run();
 
@@ -656,9 +555,6 @@ describe('an ability regenerating a charge', () => {
     expect(h.fillOf('arcane_shot')).toBe('50.00%');
   });
 
-  // "1/2", not "1". The wire's maximum is the zero the client filled in and the spellbook's is
-  // the resolved pool size, so the denominator drawn here has to be the second one: `h.charges`
-  // writes `maxCharges: 0` precisely so a reading that took it from the pool would show it.
   it('shows how many uses are left out of how many there are', async () => {
     const h = await run();
 
@@ -668,8 +564,6 @@ describe('an ability regenerating a charge', () => {
     expect(h.leftOf('arcane_shot')).toBe(`6.0s (1/${String(POOL)})`);
   });
 
-  // A pool on an ability outside your kit has a size nowhere at all, and the bare count is the
-  // honest answer. Drawing "1 of 0" from `maxCharges` is the failure this shape avoids.
   it('draws a bare count for a pool the spellbook does not carry', async () => {
     const h = await run();
 
@@ -690,9 +584,7 @@ describe('an ability regenerating a charge', () => {
     expect(h.drawn()).toEqual([]);
   });
 
-  // A pool that has emptied is ALSO on the ordinary cooldown wire, so both readings
-  // describe the same ability. One row, and the charge reading wins, because it is
-  // the one with a real total.
+  // An emptied pool is also on the cooldown wire; the charge reading wins, having a real total.
   it('does not draw the same ability twice when the pool is empty', async () => {
     const h = await run();
 
@@ -704,8 +596,6 @@ describe('an ability regenerating a charge', () => {
     expect(h.fillOf('arcane_shot')).toBe('75.00%');
   });
 
-  // A fresh recharge starting is not a re-arm to learn from: the length is already
-  // known, so a remaining that goes back up must not become the new denominator.
   it('does not re-baseline off a published length', async () => {
     const h = await run();
     h.charges('arcane_shot', { charges: 1, recharge: 3, length: 12 });
@@ -719,8 +609,6 @@ describe('an ability regenerating a charge', () => {
     expect(h.fillOf('arcane_shot')).toBe('50.00%');
   });
 
-  // An addon that walked the pools every frame when there are none would be paying
-  // for a feature almost no class has.
   it('costs nothing for a player with no charge abilities', async () => {
     const h = await run();
 
@@ -730,15 +618,7 @@ describe('an ability regenerating a charge', () => {
   });
 });
 
-// The two shapes a timer can take.
-//
-// The layout is chosen when a row is built, which is why a settings change tears the rows down
-// instead of repainting them: an element cannot change from a bar into a tile, and a display
-// that kept its old elements would answer the setting only for cooldowns that started
-// afterwards.
-//
-// What the shapes share is asserted too. Everything between the builder and the screen (which
-// rows exist, their order, the re-baselining, the tone) is written once.
+// The layout is chosen when a row is built, so a settings change tears the rows down.
 describe('the tile layout', () => {
   function tileFor(abilityId: string): HTMLElement | null {
     return document.querySelector(`.woc-tile[data-ability="${abilityId}"]`);
@@ -759,8 +639,6 @@ describe('the tile layout', () => {
     expect(document.querySelector('.woc-bar')).toBeNull();
   });
 
-  // A strip, not a column: the frame is content-sized, so this one declaration is
-  // the difference between a row of squares and a stack of them.
   it('lays the strip out across rather than down', async () => {
     await run({ layout: 'tiles' });
 
@@ -769,8 +647,7 @@ describe('the tile layout', () => {
     expect(list?.style.flexDirection).toBe('row');
   });
 
-  // The sweep takes the elapsed share while the addon holds a remaining, so a half-spent
-  // cooldown is the case that tells a correct conversion from an inverted one.
+  // The sweep is the ELAPSED share; half spent is what tells that from an inverted one.
   it('sweeps the square as the cooldown runs down', async () => {
     const h = await run({ layout: 'tiles' });
     h.cooldown('bestial_wrath', LONG);
@@ -782,8 +659,6 @@ describe('the tile layout', () => {
     expect(sweepOf('bestial_wrath')).toBe('50.00%');
   });
 
-  // 40 pixels of art has no room for "119.4s", so the seconds lose their decimal
-  // and anything over a minute is drawn in minutes.
   it.each([
     [4.2, '5'],
     [30, '30'],
@@ -797,9 +672,6 @@ describe('the tile layout', () => {
     expect(tileFor('bestial_wrath')?.querySelector('.woc-tile-value')?.textContent).toBe(shown);
   });
 
-  // A bar carries its charge count in the same figure as the time; a tile has a corner for it,
-  // which is the one place the two shapes genuinely differ. The corner takes a number, so the
-  // pool size the bar draws as "1/2" lives in the tooltip instead.
   it('puts a charge count in the corner instead of in the countdown', async () => {
     const h = await run({ layout: 'tiles' });
 
@@ -810,8 +682,6 @@ describe('the tile layout', () => {
     expect(tileFor('arcane_shot')?.querySelector('.woc-tile-value')?.textContent).toBe('6');
   });
 
-  // The shared half: ordering is not part of either builder, so it has to survive
-  // the switch. Soonest ready first still, left to right.
   it('keeps the soonest ready first', async () => {
     const h = await run({ layout: 'tiles' });
 
@@ -822,8 +692,6 @@ describe('the tile layout', () => {
     expect(h.drawn()).toEqual(['bestial_wrath', 'system_unstuck']);
   });
 
-  // The ability's name is nowhere on a tile: the art is the label. So the name has
-  // to reach assistive technology some other way, and that is what `label` is for.
   it('announces the ability it cannot draw a name for', async () => {
     const h = await run({ layout: 'tiles' });
 
@@ -833,8 +701,7 @@ describe('the tile layout', () => {
     expect(tileFor('arcane_shot')?.getAttribute('aria-label')).toContain('Fell Shot');
   });
 
-  // Another tab writing the setting, which is how it actually changes: the manager
-  // is a different surface and the storage change is what reaches a running addon.
+  // A remote storage write is how the manager's setting change reaches a running addon.
   it('swaps every row when the setting changes under it', async () => {
     const h = await run();
     h.cooldown('bestial_wrath', LONG);
@@ -847,8 +714,7 @@ describe('the tile layout', () => {
     expect(tileFor('bestial_wrath')).not.toBeNull();
   });
 
-  // A rebuild destroys rows, and a destroyed row must not be left in the map: the
-  // next frame would append an element belonging to nothing back into the strip.
+  // A destroyed row left in the map would be appended back into the strip next frame.
   it('leaves no orphan behind when it swaps', async () => {
     const h = await run();
     h.cooldown('bestial_wrath', LONG);
@@ -861,14 +727,8 @@ describe('the tile layout', () => {
   });
 });
 
-// Resizing the strip, which is how a player picks the icon size.
-//
-// The height is the size: the loader owns a resizable frame's box and reports it through
-// `onMove`, and the addon writes that height onto every tile. Measuring the element instead
-// would force a layout on every frame of a display that already writes styles every frame.
-//
-// Driven here by the saved box, because that is the same path a drag takes: the restore lands
-// asynchronously and reports through the same callback.
+// The strip's height is the icon size. Driven by the saved box, which takes the same path a drag
+// does and is the only one a Node suite can reach.
 describe('the size of the strip', () => {
   function sizeOf(abilityId: string): string {
     const tile = document.querySelector<HTMLElement>(`.woc-tile[data-ability="${abilityId}"]`);
@@ -888,10 +748,7 @@ describe('the size of the strip', () => {
     expect(sizeOf('bestial_wrath')).toBe('40px');
   });
 
-  // The tile is drawn before the restore lands, which is the live path: a tile already on
-  // screen has to be resized rather than rebuilt, or a drag would throw away the art the
-  // browser has decoded on every pointer move. `start` rather than `run`, because that window
-  // is the subject.
+  // Drawn before the restore lands, so the tile has to be resized in place rather than rebuilt.
   it('resizes a tile that is already on screen', async () => {
     const h = await start(
       { layout: 'tiles' },
@@ -906,9 +763,7 @@ describe('the size of the strip', () => {
     });
   });
 
-  // The two layouts save separately. Sharing one key would restore a column of
-  // five bars' worth of height into the strip, which opens it with icons the size
-  // of a portrait.
+  // The two layouts save separately, or a column's height would open the strip huge.
   it('does not take its height from the box the bars layout saved', async () => {
     const h = await run(
       { layout: 'tiles' },
@@ -922,10 +777,7 @@ describe('the size of the strip', () => {
     expect(sizeOf('bestial_wrath')).toBe('40px');
   });
 
-  // Both bounds are stated, and these two cases are why. A bare frame's body clips rather than
-  // scrolls, so a strip dragged under one square would cut a cooldown in half; and a frame
-  // that states no bounds takes the size it opened at as its floor. Driven by the saved box,
-  // because that is the same path a drag takes.
+  // A bare frame clips, so under one square a tile would be cut in half.
   it('holds the strip at one square when a saved box is shorter', async () => {
     const h = await run({ layout: 'tiles' }, { tiles: { box: CRAMPED, visible: true } });
 
@@ -936,9 +788,7 @@ describe('the size of the strip', () => {
     expect(sizeOf('bestial_wrath')).toBe(`${TILE_FLOOR}px`);
   });
 
-  // The width is only room to grow into, so its floor is one square rather than the
-  // width the strip opened at: a player watching two cooldowns should be able to
-  // take the invisible drag area back down to what the strip actually draws.
+  // Without a stated floor, a frame takes the size it opened at as its minimum.
   it('lets the strip be dragged narrower than it opened', async () => {
     await run({ layout: 'tiles' }, { tiles: { box: CRAMPED, visible: true } });
 
@@ -946,14 +796,8 @@ describe('the size of the strip', () => {
   });
 });
 
-// Resizing the column, which is how a player picks the row height.
-//
-// The column divides its box between the BUDGET of rows rather than the rows on screen, and
-// that is the case worth pinning: dividing between what is up would resize every row a player
-// is reading the moment a cooldown starts, which is exactly when they are reading it.
-//
-// Driven by the saved box for the reason the strip's cases are: a restore reports through the
-// same `onMove` a drag does, and it is the only one a Node suite can reach.
+// The column divides its box between the BUDGET of rows, never the rows on screen. Driven by the
+// saved box, for the reason the strip's cases are.
 describe('the size of the column', () => {
   function columnEl(): HTMLElement | null {
     return document.querySelector<HTMLElement>('[data-woc-frame="bars"]');
@@ -988,9 +832,7 @@ describe('the size of the column', () => {
     expect(heightOf('bestial_wrath')).toBe(String(BAR_HEIGHT));
   });
 
-  // The art and the text go with the row, and the KIT is what takes them there: this addon
-  // asks for a height and `styles/bar.css` derives the rest from it. Sizing the row here
-  // would mean writing a font size inline, which beats the tap-target floor on a phone.
+  // The kit derives art and text from the height; an inline font size would beat the touch floor.
   it('asks the kit for a row scaled to the box', async () => {
     const h = await run({ 'max-bars': 2 }, { bars: { box: Tall, visible: true } });
 
@@ -1003,8 +845,6 @@ describe('the size of the column', () => {
     expect(rowOf('bestial_wrath')?.style.fontSize).toBe('');
   });
 
-  // A row that appeared after the drag, which is most of them: the box is held rather than
-  // re-read, so a bar built mid-fight has to come up matching the ones beside it.
   it('builds a later row at the size the box already reported', async () => {
     const h = await run({ 'max-bars': 2 }, { bars: { box: Tall, visible: true } });
 
@@ -1017,9 +857,6 @@ describe('the size of the column', () => {
     expect(heightOf('arcane_shot')).toBe(String(BAR_HEIGHT * 2));
   });
 
-  // The budget is the divisor, so a row keeps its height while the set of them changes. A
-  // column dividing its box between the rows currently up would shrink every one of these the
-  // moment the second cooldown started.
   it('keeps a row the same height when another cooldown starts', async () => {
     const h = await run({ 'max-bars': 2 }, { bars: { box: Tall, visible: true } });
 
@@ -1033,9 +870,6 @@ describe('the size of the column', () => {
     expect(heightOf('bestial_wrath')).toBe(before);
   });
 
-  // A player watching one cooldown should be able to have a panel the size of one cooldown,
-  // so the floor is a single row rather than the budget's worth of them. The loader's own
-  // structural floor is what stops it going below something grabbable.
   it('lets the column be dragged down to a single row', async () => {
     const h = await run({ 'max-bars': 8 }, { bars: { box: CRAMPED, visible: true } });
 
@@ -1047,9 +881,7 @@ describe('the size of the column', () => {
     expect(Number(heightOf('bestial_wrath'))).toBe(MIN_BAR_HEIGHT);
   });
 
-  // Below the budget's worth of rows the height stops making them thinner, since they are
-  // already at their floor, and starts showing fewer of them. A bare frame clips rather than
-  // scrolls, so the alternative is a row cut in half at the bottom edge saying nothing.
+  // Rows already at their floor: a bare frame clips, so it shows fewer instead of half a row.
   it('draws fewer rows when the box cannot hold the budget', async () => {
     const h = await run({ 'max-bars': 8 }, { bars: { box: CRAMPED, visible: true } });
 
@@ -1064,10 +896,8 @@ describe('the size of the column', () => {
     expect(h.drawn().length).toBeGreaterThan(0);
   });
 
-  // The strip is limited by its WIDTH, which is only room to grow into, so its count is the
-  // budget and nothing else. It shares one `shown` predicate with the column, and the first
-  // version of the column's counting divided a strip's one-tile height by a row's pitch and
-  // silently took the strip from five tiles to two. Nothing but the committed preview saw it.
+  // The strip shares `shown` with the column; dividing its one-tile height by a row's pitch
+  // would cut it to two tiles.
   it('draws the whole budget as tiles whatever the strip is a row of', async () => {
     const h = await run({ layout: 'tiles', 'max-bars': 8 });
 
@@ -1081,8 +911,6 @@ describe('the size of the column', () => {
     expect(h.drawn()).toHaveLength(CROWD.length);
   });
 
-  // The width has a floor of its own, well under the width the column opens at: a name is
-  // allowed to be cut short, and a player who wants a narrow strip of figures may have one.
   it('lets the column be dragged narrower than it opened', async () => {
     await run({}, { bars: { box: CRAMPED, visible: true } });
 
@@ -1092,10 +920,7 @@ describe('the size of the column', () => {
   });
 });
 
-// Colouring a timer by its damage school, which is the game's vocabulary and not this
-// addon's: the kit tints from the custom properties the game gives its own debuff borders, so
-// a row coloured this way matches what the player already reads on an aura icon. There is
-// deliberately no way to pass a colour, here or in any addon.
+// The kit tints from the game's own debuff-border palette; no addon can pass a colour.
 describe('tinting a timer by its school', () => {
   function classesOf(abilityId: string): string {
     return barFor(abilityId)?.className ?? '';
@@ -1119,10 +944,7 @@ describe('tinting a timer by its school', () => {
     expect(classesOf('arcane_shot')).toContain('woc-bar-school-arcane');
   });
 
-  // The rows this addon MARKS are the ones the spellbook does not carry, so there is nothing
-  // to colour them by: an item cooldown and the anti-relog timer are not made of any kind of
-  // damage. Guessing would put an invented claim on exactly the rows that already say the
-  // least about themselves.
+  // A row the spellbook does not carry has no school to colour by.
   it('leaves a measured row uncoloured', async () => {
     const h = await run({ 'tint-school': true });
 
@@ -1142,10 +964,8 @@ describe('tinting a timer by its school', () => {
   });
 });
 
-// What a timer says when you hover it. A function rather than a string, because the answer
-// changes every frame: an attachment made when the row was built would report what was left at
-// the moment the ability went on cooldown. It is also the only place the two layouts say the
-// same thing, since a tile has room for neither the name nor the charge count.
+// The tooltip is a function, since a string attached at build time would report what was left
+// when the cooldown started.
 describe('the tooltip on a timer', () => {
   function hover(abilityId: string): string {
     document
@@ -1176,9 +996,6 @@ describe('the tooltip on a timer', () => {
     expect(hover('bestial_wrath')).toContain('60.0s left');
   });
 
-  // The honest half, and it is the exception rather than the rule. A cooldown outside your
-  // spellbook is measured against what it had left when first seen, which is a floor rather
-  // than the length, and the row itself has nowhere to say so.
   it('admits when it does not know the full length', async () => {
     const h = await run();
 
@@ -1188,8 +1005,6 @@ describe('the tooltip on a timer', () => {
     expect(hover('system_unstuck')).toContain('length unknown');
   });
 
-  // And it must not say it about a row it does know the length of: the line belongs only on a
-  // measured row, never on one whose length was a call away.
   it('says nothing about an unknown length for an ability you know', async () => {
     const h = await run();
 
@@ -1199,9 +1014,6 @@ describe('the tooltip on a timer', () => {
     expect(hover('arcane_shot')).not.toContain('length unknown');
   });
 
-  // The long version of the mark, for the player who hovers it to find out. The
-  // marked label alone says a name is a guess; this says why, and it is the only
-  // place the addon can name the id it guessed FROM.
   it('explains the mark on a worked-out name', async () => {
     const h = await run();
 
@@ -1213,8 +1025,6 @@ describe('the tooltip on a timer', () => {
     expect(said).toContain('system_unstuck');
   });
 
-  // Nothing at all for a name the game supplied, for the same reason the label
-  // carries no mark: that one is the game's own name and needs no defending.
   it('explains nothing about the name of an ability you know', async () => {
     const h = await run();
 
@@ -1224,9 +1034,7 @@ describe('the tooltip on a timer', () => {
     expect(hover('arcane_shot')).not.toContain('Worked out from');
   });
 
-  // A charge pool publishes a real length, so its bar is measured against the
-  // truth and the tooltip must not claim otherwise. It is also where a tile gets the
-  // pool size, since the square's own corner takes a number and cannot show one.
+  // A charge pool's length is published, and the tooltip is where a tile shows the pool size.
   it('says nothing about an unknown length for a charge pool', async () => {
     const h = await run();
 
@@ -1238,9 +1046,6 @@ describe('the tooltip on a timer', () => {
     expect(said).toContain(`1 of ${String(POOL)} charges ready`);
   });
 
-  // The residue again: no pool size anywhere, so the count stands alone rather than being
-  // given a denominator the game never stated. The count is still known, so the line is written
-  // out in the number it is rather than hedged as `charge(s)`.
   it('names no pool size for a pool the spellbook does not carry', async () => {
     const h = await run();
 
@@ -1259,8 +1064,6 @@ describe('the tooltip on a timer', () => {
     expect(hover('double_charge')).toContain('2 charges ready');
   });
 
-  // The tile is the case that needs it most: the square carries the sweep and a
-  // countdown, and nothing else at all.
   it('says the same thing under a tile', async () => {
     const h = await run({ layout: 'tiles' });
     h.cooldown('arcane_shot', LONG);
@@ -1270,13 +1073,8 @@ describe('the tooltip on a timer', () => {
   });
 });
 
-// Rows are re-ordered, not re-appended.
-//
-// `appendChild` on an element already in the document moves it, which is a removal and an
-// insertion, and the browser drops an element's hover state on the removal. Doing that to
-// every row on every animation frame strands the tooltip on whatever the pointer was over.
-// The kit takes a tooltip down when its anchor leaves the document; this is the other
-// half, which is not handing it that problem sixty times a second.
+// Re-appending a row already in the document drops its hover state, so doing it every frame
+// strands the tooltip. Rows are only moved when the order changes.
 describe('how rows are placed', () => {
   it('leaves a row alone when its position has not changed', async () => {
     const h = await run();
@@ -1291,7 +1089,6 @@ describe('how rows are placed', () => {
     h.frame();
     h.frame();
 
-    // Nothing was inserted or removed, so nothing was moved.
     expect(observer.takeRecords()).toEqual([]);
     expect(document.querySelector('[data-ability="bestial_wrath"]')).toBe(first);
     observer.disconnect();
@@ -1311,11 +1108,9 @@ describe('how rows are placed', () => {
   });
 });
 
-// The icon comes from the loader's own URL builder rather than from a path the addon
-// wrote, which is what makes a game update that moves the directory one edit in the
-// loader instead of a silent break in every addon.
+// The icon URL comes from the loader's builder, so a moved art directory is one loader edit.
 describe('the skill icon', () => {
-  it('points at the art for the ability, filed under the player"s class', async () => {
+  it('points at the art for the ability, filed under the player class', async () => {
     const h = await run();
 
     h.cooldown('bestial_wrath', LONG);
@@ -1324,9 +1119,7 @@ describe('the skill icon', () => {
     expect(h.iconOf('bestial_wrath')).toBe('/ui/skills/hunter/bestial_wrath.webp');
   });
 
-  // Not every ability ships painted art. The kit hides the slot when the image
-  // fails, so the row loses its icon and keeps its label rather than showing a
-  // broken-image glyph.
+  // Not every ability ships art; the kit hides the slot on a failed load.
   it('collapses the slot when the art does not exist', async () => {
     const h = await run();
     h.cooldown('tame_beast', LONG);

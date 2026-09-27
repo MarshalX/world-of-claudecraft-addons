@@ -1,44 +1,22 @@
 // Which abilities the deployed game ships a painted icon FILE for.
 //
-// The game draws an icon for every ability, but only some are files: the rest are
-// composited on a canvas by a module an addon cannot reach and has no URL at all. So
-// `icon.ability()` can be right about a subset and is silent about the remainder, and
-// before this existed the only way to tell those apart was to load the image and
-// watch it fail. A blank icon slot meant either "the game has no file for this" or
-// "the loader built the wrong id", which is an ambiguity that cost a long session
-// chasing a bug in the second category while looking at rows from the first.
+// Only some abilities are files; the rest are canvas-composited by the game with no URL. The
+// served `/ui/skills/<class>/mapping.json` says which, so a blank slot means "no file" rather
+// than "the loader built the wrong id". Read live, never bundled: it changes with releases.
 //
-// The manifest the game serves at `/ui/skills/<class>/mapping.json` settles it, and
-// reading it from the game rather than bundling a copy is the same call the sound
-// pack makes: it is content, it changes on a game release, and a copy would go stale
-// while looking authoritative.
-//
-// The read stays SYNCHRONOUS, which is the constraint everything here is shaped
-// around: `icon.ability()` is called while building a row, and an addon drawing a
-// frameful of bars cannot await per row. So a class is fetched in the background on
-// first use and the answer is optimistic until it lands: unknown means "hand back the
-// URL and let the image decide", which is exactly the behaviour that came before, so
-// the first row of a session is never worse off than it was. Every row after it is
-// exact. `preload` is for an addon that wants the first one exact too.
+// The read is SYNCHRONOUS, since `icon.ability()` is called while building a row. A class is
+// fetched in the background on first use and the answer is optimistic until it lands (the
+// image load decides). `preload` makes the first row exact too.
 
 /** What one class's manifest is known to contain, or that it could not be read. */
 type ClassArt = ReadonlySet<string> | 'unreadable';
 
 interface SkillArt {
-  /**
-   * Read a class's manifest, resolving once the answer is known either way.
-   *
-   * Never rejects. A manifest that cannot be read is a permanent "unknown", not an
-   * error an addon should handle: the game still draws the icon, and the loader
-   * simply cannot say in advance whether a URL will resolve.
-   */
+  /** Read a class's manifest. Never rejects: an unreadable manifest is a permanent "unknown". */
   preload: (cls: string) => Promise<void>;
   /**
-   * Whether this class ships a file for this ability.
-   *
-   * Null while the manifest for that class has not been read, which is a third
-   * answer rather than a false: the caller must not turn "not known yet" into "no
-   * icon", or every first row would lose an icon it was entitled to.
+   * Whether this class ships a file for this ability. Null means not read yet, which is not a
+   * false.
    */
   has: (cls: string, id: string) => boolean | null;
 }
@@ -52,11 +30,8 @@ function manifestUrl(cls: string): string {
 }
 
 /**
- * The ability ids a manifest names, or null for a payload that is not one.
- *
- * Deliberately lenient about entries it cannot read while being strict about the
- * shape: one malformed entry loses one icon, whereas rejecting the whole manifest
- * loses the certainty for every ability in the class.
+ * The ability ids a manifest names, or null for a payload that is not one. Lenient per entry
+ * and strict on shape: one malformed entry loses one icon, not the whole class.
  */
 function idsFrom(manifest: unknown, cls: string): ReadonlySet<string> | null {
   if (typeof manifest !== 'object' || manifest === null) {
@@ -85,9 +60,7 @@ function createSkillArt(deps: SkillArtDeps): SkillArt {
     try {
       known.set(cls, idsFrom(await deps.fetchJson(manifestUrl(cls)), cls) ?? 'unreadable');
     } catch {
-      // A class with no manifest is the ordinary case for a class the game does not
-      // have, so this is a reading rather than a fault. Recorded so it is not retried
-      // on every row for the rest of the session.
+      // A class with no manifest is ordinary. Recorded so it is not retried on every row.
       known.set(cls, 'unreadable');
     }
   };
@@ -107,8 +80,7 @@ function createSkillArt(deps: SkillArtDeps): SkillArt {
     has: (cls, id) => {
       const art = known.get(cls);
       if (art === undefined) {
-        // Start the read, and answer "not known" for this call. Nothing awaits it:
-        // the point of the cache is that the row after this one is exact.
+        // Start the read and answer "not known" for this call; later rows are exact.
         ensure(cls).catch(() => undefined);
         return null;
       }

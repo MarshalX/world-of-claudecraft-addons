@@ -6,15 +6,12 @@
 <!--
   The source for screenshots/banner.png, the README header.
 
-  Same recipe as og.html, and here for the same reason: kept in site/content/,
-  which is never copied to the output, so the file is the RECIPE and the PNG is
-  what ships. Regenerate by copying it into site/dist, opening it against
-  `pnpm site:dev`, screenshotting #banner at 1:1, and writing the result to
-  screenshots/banner.png.
+  A recipe like og.html: site/content/ is never copied to the output. Regenerate
+  by copying it into site/dist, opening it against `pnpm site:dev`, screenshotting
+  #banner at 1:1, and writing the result to screenshots/banner.png.
 
-  Deliberately SHORT. og.png is 1200x630 because a social card is a fixed shape;
-  a README header at that ratio renders 462px tall at the width GitHub gives it
-  and pushes every word below the fold. This is 1200x300.
+  Deliberately 1200x300: at og.png's ratio the README header pushes every word
+  below the fold.
 -->
 <style>
 @font-face {
@@ -44,7 +41,7 @@ html, body { margin: 0; padding: 0; background: rgb(18 18 26); }
   position: relative;
   overflow: hidden;
 }
-/* One soft pool of gold so the strip is not a flat rectangle. */
+/* A soft pool of gold behind the strip. */
 #banner::after {
   content: '';
   position: absolute;

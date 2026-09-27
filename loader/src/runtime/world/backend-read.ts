@@ -1,9 +1,4 @@
-// The one assertion every backend group makes.
-//
-// Reading a member off the game's world object is a CLAIM about a repository
-// this one cannot compile against, and every group makes the same one, so it
-// lives here rather than being written once per module. `shape.ts` is what keeps
-// the claim honest, against the live player, once per session.
+// The one assertion every backend group makes; `shape.ts` checks it against the live game.
 
 import { fieldValue } from '../net/frames.ts';
 

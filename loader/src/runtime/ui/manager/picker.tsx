@@ -1,17 +1,5 @@
-// The manager's dropdown: the same control `ui.field.select` is, drawn by preact.
-//
-// The manager had two native `<select>` elements, and a native select's popup is drawn by the
-// operating system: outside the document, in the system font, beyond styling. Inside a dark
-// fantasy HUD that reads as a hole in the window. The kit stopped using one (see
-// kit/picker.ts) and this is the other renderer of the same control, in the same shape
-// `field-shape.ts` already governs for the other three fields, so an addon's settings pane and
-// the manager's own cannot drift apart.
-//
-// The opener it calls is module state, in picker-menu.ts beside the stores that already live
-// that way. It is here rather than threaded through five components that have no other reason
-// to know about it, and it is in its OWN module because a file exporting a component may
-// export nothing else: `useComponentExportOnlyModules` is what says so, and it is right, since
-// a preact refresh reloads a component module and would drop any state kept beside one.
+// The manager's dropdown: the same control as `ui.field.select` (kit/picker.ts), drawn by preact.
+// Never a native `<select>`: its popup is drawn by the OS, outside every rule the loader has.
 
 import { CARET_BOX, CARET_PATH } from '../kit/caret-glyph.ts';
 import { openPickerMenu } from './picker-menu.ts';
@@ -20,14 +8,7 @@ import { openPickerMenu } from './picker-menu.ts';
 const CARET_SIZE = 12;
 const CARET_STROKE = 1.6;
 
-/**
- * The caret, as JSX.
- *
- * The second of two renderers over one geometry, exactly as the close mark is: the kit builds
- * its picker as plain DOM and needs markup, and preact would otherwise need
- * `dangerouslySetInnerHTML` for something that does not need it. `aria-hidden` because the
- * button already carries its own name.
- */
+/** The caret, as JSX: the preact renderer of the geometry in kit/caret-glyph.ts. */
 function CaretGlyph() {
   return (
     <svg viewBox={CARET_BOX} width={CARET_SIZE} height={CARET_SIZE} aria-hidden="true">

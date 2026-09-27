@@ -1,15 +1,5 @@
-// The cue-name union: how it is derived, and that the checked-in file is what
-// the generator would write.
-//
-// What this does NOT check is the one thing nobody can check offline: whether
-// the union still matches the deployed game. That answer is a 119 kB fetch, and
-// a suite that made it would fail on a flight and pass against whatever was
-// served that morning. So the guard here is the narrower, honest one, the same
-// one the game repo puts on its own generated files: the artifact is exactly
-// what its generator produces, and a hand-edit is a failure rather than a
-// surprise the next regeneration silently reverts.
-//
-// Staleness is a release-time question and is answered by running `pnpm cues`.
+// The cue-name union: how it is derived, and that the checked-in file is what the generator
+// would write. Staleness against the deployed game is checked by running `pnpm cues`.
 
 import { describe, expect, it } from 'vitest';
 // biome-ignore lint/correctness/noUnresolvedImports: Vite's ?raw suffix is a loader directive a static resolver does not model. Same reason as the addon suites.
@@ -37,8 +27,7 @@ function sourceInFile(): string {
 
 describe('reading a pack', () => {
   it('names every cue, sorted', () => {
-    // Built rather than written as a literal: cue names are the GAME's
-    // identifiers, and a naming rule for ours has nothing to say about them.
+    // Built rather than literal: cue names are the game's identifiers, not ours to lint.
     const clips = Object.fromEntries(
       ['ui_click', 'amb_rain', 'combat_block'].map((n) => [n, clip()]),
     );
@@ -46,9 +35,7 @@ describe('reading a pack', () => {
     expect(cueNames(pack(clips))).toEqual(['amb_rain', 'combat_block', 'ui_click']);
   });
 
-  // The pack is what a cue means. A directory listing would count the variant
-  // FILES, which on the live pack is 432 against 220 cues, so more than half the
-  // names it produced would not resolve.
+  // A directory listing would count variant files, most of which are not cue names.
   it('counts a multi-variant family as one cue', () => {
     const multi = { variants: [{ id: '1' }, { id: '2' }, { id: '3' }], gain: 1 };
     const clips = Object.fromEntries([['combat_block', multi]]);
@@ -56,8 +43,7 @@ describe('reading a pack', () => {
     expect(cueNames(pack(clips))).toEqual(['combat_block']);
   });
 
-  // Each of these would otherwise generate a file that compiles, publishes, and
-  // silently takes autocomplete away from every author.
+  // Each would otherwise generate a file that compiles and silently loses autocomplete.
   it.each([
     ['not an object', 42],
     ['a payload with the wrong format tag', { format: 'something-else', clips: { a: {} } }],
@@ -92,16 +78,13 @@ describe('the checked-in file', () => {
     expect(sourceInFile()).toContain('/audio/sfx/runtime-pack.json');
   });
 
-  // Formatting and header only, and deliberately so: the names are read back
-  // OUT of this file, so a name added by hand would be rendered straight back
-  // in and this would pass. What it catches is an edited header, a lost
-  // "do not hand-edit", and drifted layout.
+  // Catches the header and layout only: names are read back out of this file, so a
+  // hand-added name round-trips.
   it('is laid out exactly the way the generator writes it', () => {
     expect(GENERATED_TEXT).toBe(renderCueTypes(namesInFile(), sourceInFile()));
   });
 
-  // This is the arm that catches a name someone typed in, since a hand-added
-  // cue lands in whatever spot looked right rather than in code-point order.
+  // Catches a hand-added name, which rarely lands in code-point order.
   it('is sorted and free of duplicates', () => {
     const names = namesInFile();
 

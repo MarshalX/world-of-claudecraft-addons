@@ -1,14 +1,7 @@
 // The Dungeon Finder: your own queue state, and the realm's premade board.
 //
-// Two readings rather than one because they have different scopes and different
-// lifetimes. Your finder state rides your self payload; the board is realm-wide
-// and viewer-independent, serialized once per tick and shared by every session,
-// so it is null until the client's mirror has synced rather than null because
-// you are not queued.
-//
-// NOTHING HERE IS AN ACTION. This cannot join a queue, answer a proposal, create
-// a listing or accept an applicant, and the game's own facet is explicit that
-// the finder never teleports anyone.
+// Your finder state rides your self payload; the board is realm-wide and null only until the
+// client's mirror has synced. Read-only: nothing here joins, answers, lists or accepts.
 
 import { fieldArray, fieldNumber, fieldString, fieldValue } from '../net/frames.ts';
 
@@ -31,11 +24,8 @@ interface FinderQueue {
 }
 
 /**
- * A live availability proposal.
- *
- * COUNTS AND NO NAMES, deliberately: participants stay anonymous until the group
- * forms, so there is nobody to look up. `remaining` is whole seconds and comes
- * off the wire already counted down, unlike a loot roll's deadline.
+ * A live availability proposal: counts, no names, since participants stay anonymous until the
+ * group forms. `remaining` is whole seconds, already counted down by the server.
  */
 interface FinderProposal {
   id: number;
@@ -128,10 +118,7 @@ function needsOf(source: unknown): RoleNeeds {
 }
 
 /**
- * Open slots, or null for an activity that enforces no composition.
- *
- * NULL IS NOT ZERO. Zeroing it would tell a player that a listing with no
- * composition at all needs nobody, when the question does not apply to it.
+ * Open slots, or null for an activity that enforces no composition. Null is not zero needs.
  */
 function neededOf(source: unknown): RoleNeeds | null {
   if (source === null) {
@@ -141,11 +128,7 @@ function neededOf(source: unknown): RoleNeeds | null {
 }
 
 /**
- * Your queue, which the server also reports while a proposal holds you.
- *
- * Passed through as sent for that reason: a reader that decided for itself
- * whether a queue is live would drop the player out of the display at exactly
- * the moment their proposal is on screen.
+ * Your queue, passed through as sent: the server keeps reporting it while a proposal holds you.
  */
 function queueOf(queue: unknown): FinderQueue | null {
   if (queue === null) {
@@ -166,11 +149,8 @@ function responseOf(response: string | null): FinderProposal['response'] {
 }
 
 /**
- * The live proposal.
- *
- * `remaining` is passed through untouched: the server has already counted it
- * down against its own clock, unlike a loot roll's deadline, and running it
- * through the sim-clock conversion would subtract a clock from a duration.
+ * The live proposal. `remaining` is already a duration, so it must not go through the sim-clock
+ * conversion a loot roll's deadline does.
  */
 function proposalOf(proposal: unknown): FinderProposal | null {
   if (proposal === null) {
@@ -251,11 +231,7 @@ function rowOf(row: unknown): FinderListingRow {
 }
 
 /**
- * The realm's open listings, or null before the first sync.
- *
- * The two absences are DIFFERENT and both reach a display: null is "the mirror
- * has not synced yet" and an empty array is "nobody is listing". So the array
- * has to be tested for rather than the key's presence.
+ * The realm's open listings: null before the first sync, empty when nobody is listing.
  */
 function readFinderBoard(world: unknown): readonly FinderListingRow[] | null {
   const board = fieldValue(world, 'dungeonFinderBoard');

@@ -1,11 +1,5 @@
-// The world-anchored half of woc.ui: an element kept over a point, and the same
-// point with no element at all.
-//
-// Split out of api/ui.ts on the axis the published types split on, so the loader
-// mirror and packages/types/ui-anchor.d.ts stay legible against each other. Both
-// members here are the same read: `anchor3d` asks the loader to KEEP something
-// over a point, `project` asks where a point is right now and leaves the drawing
-// to the addon.
+// The world-anchored half of woc.ui, mirroring packages/types/ui-anchor.d.ts: `anchor3d` keeps an
+// element over a point, `project` says where a point is and leaves the drawing to the addon.
 
 import type { Anchor3d, Anchor3dOpts, PointSource } from '../ui/kit/anchor3d.ts';
 import type { UnitPoint, WorldPoint } from '../world/anchor-point.ts';
@@ -27,20 +21,11 @@ function worldPointOf(deps: UiDeps, at: WorldPoint | UnitPoint): WorldPoint | nu
 }
 
 /**
- * Where a point is on screen, or null when it must not be drawn.
+ * Null when the point must not be drawn: a point behind the camera projects to finite, wrong
+ * coordinates. A null, not an `onScreen` flag, because a flag can be forgotten.
  *
- * The null is the whole safety of this call, and it is why the surface publishes
- * no `onScreen` flag: a flag is a thing an addon can forget to read, and
- * forgetting it is precisely the mistake. A point nearer than the camera's near
- * plane projects to coordinates that are finite and wrong by any amount, which is
- * what the game's own nameplates, chat bubbles and click picking all guard
- * against before trusting a projection. A null cannot be ignored without a type
- * error and a throw on the first line that reads `.x`.
- *
- * The VIEWPORT RECTANGLE is deliberately not tested. An off-screen point in front
- * of the camera still projects, which is what an arrow pointing off the edge of
- * the screen at an off-screen unit is built from; turning that into a null would
- * remove a feature to save an addon one comparison.
+ * The viewport rectangle is deliberately NOT tested: an off-screen point still projects, which is
+ * what an edge arrow is built from.
  */
 function projected(deps: UiDeps, at: WorldPoint | UnitPoint): ScreenPosition | null {
   const world = worldPointOf(deps, at);
@@ -54,13 +39,7 @@ function projected(deps: UiDeps, at: WorldPoint | UnitPoint): ScreenPosition | n
   return { x: point.x, y: point.y, depth: point.depth };
 }
 
-/**
- * An anchor whose removal is in the bag.
- *
- * The bag holds the removal rather than a listener: an anchor left behind would go
- * on being positioned by the shared frame loop, over a world its addon has stopped
- * reading. It is the one leak here that costs a frame callback for the session.
- */
+/** Bagged, or a leftover anchor keeps costing the shared frame loop for the session. */
 function addonAnchor(deps: UiDeps, at: PointSource, opts: Anchor3dOpts | undefined): Anchor3d {
   const anchor = deps.kit.anchors.add(at, opts);
   deps.bag.add(anchor.destroy);

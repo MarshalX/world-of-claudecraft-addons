@@ -1,23 +1,9 @@
 // The controls an addon's own settings pane is made of.
 //
-// The CSS for all of these already existed: `.woc-field`, `.woc-input`,
-// `.woc-toggle` and `.woc-btn` are what the manager's own forms are drawn with,
-// and they already answer to a frame's density. What was missing was any way for
-// an addon to REACH them, so an addon writing a settings pane hand-rolled inline
-// styles and ended up with a form that looked foreign inside a loader frame.
-//
-// Grouped under `ui.field` rather than four more members on `ui`, the same way
-// `ui.icon` groups its URL builders: this is one family answering one question,
-// and spreading it across the top level would bury `frame`, `bar` and `tile`
-// among leaves. A tab strip is NOT in the family and is `ui.tabs`, because tabs
-// are navigation rather than a value the player is setting.
-//
-// Every builder returns the same three things: the element to place, the value to
-// read, and a setter, so a pane that saves to `woc.storage` reads them all the
-// same way. The change callback is the only thing an addon has to wire.
-//
-// WHAT a field is made of is in kit/field-shape.ts, shared with the manager's own
-// preact forms. This file is one of that shape's two renderers.
+// Drawn with the same classes as the manager's own forms, so they answer to a frame's
+// density. Every builder returns the element, the value and a setter; the change callback is
+// the only thing an addon wires. The structure is kit/field-shape.ts, shared with the
+// manager's preact renderer.
 
 import type { Teardown } from '../../disposal.ts';
 import { FIELD_CLASS } from './field-shape.ts';
@@ -69,12 +55,8 @@ function buildRow(doc: Document, label: string, control: HTMLElement, id: string
 }
 
 /**
- * A unique id per control, so a label's `for` points at its own input.
- *
- * The document is one id space shared with the game and with every other addon,
- * and a label pointing at someone else's checkbox is a control that toggles the
- * wrong thing when its text is clicked. A counter rather than the addon's fqid
- * because a single addon can build two of the same field.
+ * A unique id per control, so a label's `for` points at its own input in a document shared
+ * with the game and every addon. A counter, since one addon can build two of the same field.
  */
 let built = 0;
 function nextId(): string {
@@ -88,13 +70,7 @@ function destroyer(el: HTMLElement): Teardown {
   };
 }
 
-/**
- * A checkbox, drawn as the manager draws its own: the box before its label.
- *
- * The one field whose label is beside the control rather than above it, because a
- * checkbox reads as a sentence with a box in front of it and a label above one
- * reads as a heading for something else.
- */
+/** A checkbox, drawn as the manager draws its own: the box before its label. */
 function createCheckbox(doc: Document, opts: FieldOpts<boolean>): Field<boolean> {
   const id = nextId();
   const row = doc.createElement('label');
@@ -127,12 +103,8 @@ function createCheckbox(doc: Document, opts: FieldOpts<boolean>): Field<boolean>
 }
 
 /**
- * A dropdown, drawn by the loader rather than by the operating system.
- *
- * It was a native `<select>` until its popup was looked at: the list is drawn by the OS, in
- * the OS font, outside the document and beyond styling, which puts a white system menu in the
- * middle of a dark fantasy HUD. The game replaced its own selects for the same reason. See
- * kit/picker.ts, which is the button and the kit's own menu.
+ * A dropdown drawn by the loader (kit/picker.ts). Never a native `<select>`: its popup is
+ * drawn by the OS, outside the document and beyond styling.
  */
 function createSelect(doc: Document, opts: SelectOpts, openMenu: OpenMenu): Field<string> {
   const id = nextId();
@@ -157,13 +129,7 @@ function createSelect(doc: Document, opts: SelectOpts, openMenu: OpenMenu): Fiel
   };
 }
 
-/**
- * A slider with its value beside the label, which is not decoration.
- *
- * A range input says nothing about where it is. The game's own sliders show the
- * number, and one that does not turns "how long is this window" into a guess the
- * player makes by dragging and watching what happens.
- */
+/** A slider with its value beside the label, as the game's own sliders show it. */
 function createSlider(doc: Document, opts: SliderOpts): Field<number> {
   const id = nextId();
   const input = doc.createElement('input');
@@ -210,9 +176,7 @@ function createText(doc: Document, opts: TextOpts): Field<string> {
   if (opts.placeholder !== undefined) {
     input.placeholder = opts.placeholder;
   }
-  // `input` rather than `change`: a pane that saves as you type is the behaviour
-  // the manager's own settings form has, and waiting for a blur means a value
-  // typed and then abandoned by closing the window is silently lost.
+  // `input`, not `change`: waiting for a blur loses a value typed before closing the window.
   input.addEventListener('input', () => {
     opts.onChange(input.value);
   });

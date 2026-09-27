@@ -1,17 +1,9 @@
 /// <reference types="@woc-addons/types" />
 
-// A keyed list, from the set that changes to the rows on screen.
-//
-// A real file rather than prose in a template, so it is linted like everything
-// else and cannot drift from the API it claims to demonstrate. The API page
-// includes the `list` region; nothing else here is shown anywhere.
-//
-// It is also the shape three members were built for at once: the list owns which
-// rows exist, `woc.paint` owns when they are redrawn, and `woc.fmt` owns what the
-// figures say. Written without them this is a Map, a reconcile pass, a boolean
-// beside a `requestAnimationFrame` and a division by 60.
+// A keyed list, from the set that changes to the rows on screen. The API page
+// includes the `list` region; it is a real file so it is linted like the rest.
 
-/** As many rows as the panel holds. Everything else stays measured, off screen. */
+/** As many rows as the panel holds; the rest stay in the list, off screen. */
 const MAX_ROWS = 8;
 
 // #region list

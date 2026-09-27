@@ -1,22 +1,14 @@
 // What a unit token is resolved against.
 //
-// One derivation, because `world.unit('target')` and an anchor pinned to
-// `{ unit: 'target' }` have to mean the same unit. Two readings of one token that
-// could disagree would be an addon drawing a nameplate over somebody its own
-// readout is not describing, and the disagreement would only appear in the frame
-// between a target changing and a repaint.
+// One derivation, so `world.unit('target')` and an anchor pinned to `{ unit: 'target' }` always
+// mean the same unit.
 
 import type { Entity } from './game-types.ts';
 import type { WorldHub } from './hub.ts';
 import { readonlyMapView } from './readonly-map.ts';
 import type { UnitContext } from './units.ts';
 
-/**
- * Before world entry there is no entity map, and every token resolves to nothing.
- *
- * A shared frozen view rather than a fresh Map per call: this is read on every
- * frame by every anchor, and the answer before world entry is always the same.
- */
+/** The empty entity map before world entry, shared since every anchor reads it every frame. */
 const NO_ENTITIES: ReadonlyMap<number, Entity> = readonlyMapView(new Map<number, Entity>());
 
 /** The live context, re-read per call: the backend is null until world entry. */

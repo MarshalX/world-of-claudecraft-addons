@@ -1,20 +1,6 @@
-// The three readings the loader computes rather than reads.
-//
-// `casts` carries the weight here. A mob's cast never emits a `castStart` event:
-// the event fires for a player cast, a pet's cast and the game's timed activities,
-// and the mob path assigns cast state directly instead. That state reaches the client only on
-// the per-entity wire, so this derivation is the ONLY way an addon can see a boss
-// cast at all, and the tests below are written against the fields the wire
-// actually carries (`cast`, `castRem`, `castTot`, `chan`) as the client names them
-// on the entity (`castingAbility`, `castRemaining`, `castTotal`, `channeling`).
-//
-// The hazard reading is narrower than it sounds and the tests say so. THIS
-// COMMENT USED TO SAY there were two of them, a frost ring and a temporal
-// hourglass, and that they were the only ground effects whose geometry rides the
-// snapshot. The second half is still the point and the first half has been wrong
-// since game 0.41.0, which put three raid warnings on the same shape; there are
-// eight now. The families that ride the snapshot are still the only ones
-// readable at all, so everything else on the ground is invisible here by design.
+// A mob cast emits no `castStart`, so `castsOf` is the only way an addon sees a boss cast; the
+// fixtures use the entity's names (`castingAbility`), never the wire's (`cast`). Only ground
+// effects whose geometry rides the snapshot are readable as hazards.
 
 import { describe, expect, it } from 'vitest';
 
@@ -62,21 +48,18 @@ describe('castsOf', () => {
     expect([...casts.keys()]).toEqual([248]);
   });
 
-  // The client clears the field to null, but an entity built before the first
-  // snapshot carries the empty string, and an empty ability id is not a cast.
+  // An entity built before the first snapshot carries the empty string.
   it('does not treat an empty ability id as a cast', () => {
     expect(castsOf(roster([[248, { castingAbility: '' }]])).size).toBe(0);
   });
 
-  // A channel drains rather than completes, so a mod warning on a hardcast and one
-  // warning on a channel are different warnings.
   it('carries the channel flag', () => {
     const casts = castsOf(roster([[248, { castingAbility: 'inferno', channeling: true }]]));
 
     expect(casts.get(248)?.channeling).toBe(true);
   });
 
-  it('reads the whole roster rather than the player alone', () => {
+  it('reads the whole roster, not the player alone', () => {
     const casts = castsOf(
       roster([
         [248, { castingAbility: 'soul_rend' }],
@@ -87,9 +70,7 @@ describe('castsOf', () => {
     expect(casts.size).toBe(2);
   });
 
-  // Cast fields are mutated in place on an entity the game already owns, so there
-  // is nothing to invalidate a cache against: a held map would answer with the
-  // cast that was running when it was built.
+  // Cast fields are mutated in place, so a cached map would go stale undetectably.
   it('follows a cast that starts after the first read', () => {
     const live = new Map<number, Entity>([[248, entity({})]]);
 
@@ -132,15 +113,13 @@ describe('hazardsOf', () => {
     expect(hazards?.[0]).toEqual({ ...ring, kind: 'frostRing' });
   });
 
-  // An hourglass has no safe middle. Leaving the field absent would make every
-  // consumer write the same `?? 0` to answer "am I inside it".
   it('gives a hazard with no hole an inner radius of zero', () => {
     const hazards = hazardsOf({ activeFrostRings: [], activeTemporalHourglasses: [hourglass] });
 
     expect(hazards?.[0]?.innerRadius).toBe(0);
   });
 
-  it('drops an entry with no id or no radius rather than publishing a partial one', () => {
+  it('drops an entry with no id or no radius', () => {
     const hazards = hazardsOf({
       activeFrostRings: [{ x: 1, z: 1, radius: 4, remaining: 3 }, ring],
       activeTemporalHourglasses: [{ id: 'no-radius', x: 0, z: 0, remaining: 3 }],
@@ -149,9 +128,7 @@ describe('hazardsOf', () => {
     expect(hazards?.map((hazard) => hazard.id)).toEqual(['ring-1']);
   });
 
-  // Null, not an empty list: an older game that carries neither member is a
-  // different answer from a game standing on clean ground, and an addon drawing a
-  // hazard overlay wants to know which it is looking at.
+  // Null means "not readable here", which differs from clean ground.
   it('answers null when the game carries neither collection', () => {
     expect(hazardsOf({ entities: new Map() })).toBeNull();
     expect(hazardsOf(null)).toBeNull();
@@ -162,11 +139,8 @@ describe('hazardsOf', () => {
   });
 });
 
-// The Nythraxis floor. These four families have ridden the snapshot since before
-// this table read any of them, so the fixtures are the client's own decoded row
-// shapes (src/net/ground_telegraph_wire.ts), which is where the field names come
-// from: the wire says `r`/`dur`/`rem` and the client renames them on decode, so a
-// test written against the wire's names would pass against nothing.
+// Fixtures are the client's decoded rows (src/net/ground_telegraph_wire.ts); the wire's
+// `r`/`dur`/`rem` are renamed on decode, so fixtures using them would match nothing.
 describe('hazardsOf over the Nythraxis families', () => {
   const eruption = {
     id: '248:ge:3:0',
@@ -197,7 +171,7 @@ describe('hazardsOf over the Nythraxis families', () => {
     remaining: 15,
   };
 
-  it('reads all three as hazards of their own kinds', () => {
+  it('reads each family as its own hazard kind', () => {
     const hazards = hazardsOf({
       activeNythraxisGraveEruptions: [eruption],
       activeNythraxisGraveFlames: [flame],
@@ -211,10 +185,8 @@ describe('hazardsOf over the Nythraxis families', () => {
     ]);
   });
 
-  // The countdown is the whole reason to read an eruption, and it counts to the
-  // BURST rather than to a burn running out, which is the opposite of the other
-  // two. `warningLead` is a reveal delay the published shape has no field for and
-  // is dropped rather than folded into one that means something else.
+  // An eruption counts down to the burst. `warningLead` has no published field and is dropped
+  // instead of being folded into one that means something else.
   it('carries the eruption countdown and drops the reveal delay', () => {
     const hazards = hazardsOf({ activeNythraxisGraveEruptions: [eruption] });
 
@@ -230,11 +202,8 @@ describe('hazardsOf over the Nythraxis families', () => {
     });
   });
 
-  // One list, two wire kinds, one published kind. `'soul'` was the Soulfire pool
-  // Soul Rend used to leave and game 0.42.2 retired it from play while leaving the
-  // discriminant declared, so a second published kind could never produce a row.
-  // If it ever comes back it arrives here, which is what this pins.
-  it('publishes a retired soul pool under the one grave-flame kind', () => {
+  // The game still declares the `'soul'` flame kind but never produces it.
+  it('publishes a soul flame under the grave-flame kind', () => {
     const hazards = hazardsOf({
       activeNythraxisGraveFlames: [{ ...flame, id: '248:gf:8', kind: 'soul' }],
     });
@@ -242,10 +211,8 @@ describe('hazardsOf over the Nythraxis families', () => {
     expect(hazards?.[0]?.kind).toBe('nythraxisGraveFlame');
   });
 
-  // The refusal, and the assertion that says it is a refusal rather than an
-  // oversight: a Gravefire is a travelling line with a heading and a half-width
-  // and no radius at all, so `null` here is the loader reporting that it read no
-  // hazard list on this world rather than reporting clean ground.
+  // A Gravefire is a travelling line with no radius, so it is refused, and null reports that no
+  // hazard list was read, not clean ground.
   it('refuses the travelling gravefire line outright', () => {
     expect(
       hazardsOf({
@@ -275,9 +242,8 @@ describe('markersOf', () => {
     expect(markers?.get(248)).toBe(1);
   });
 
-  // The keys are entity ids, and a plain object has string keys. An addon looking
-  // one up holds a number, off an entity, so the map has to be keyed on numbers.
-  it('keys on numbers rather than on the object"s strings', () => {
+  // An addon looks a marker up by a numeric entity id.
+  it("keys on numbers, not the object's strings", () => {
     const markers = markersOf({ markers: Object.fromEntries([['250', 4]]) });
 
     expect(markers?.has(250)).toBe(true);
@@ -289,9 +255,7 @@ describe('markersOf', () => {
     expect(markers?.size).toBe(0);
   });
 
-  // Solo the game sends nothing, so the mirror is an empty object rather than
-  // absent, and this cannot be told apart from a group that has marked nothing.
-  // That is why the read is documented as needing `world.party` beside it.
+  // Solo is indistinguishable from a group that marked nothing, hence `world.party` beside it.
   it('answers an empty map for an ungrouped player', () => {
     expect(markersOf({ markers: {} })?.size).toBe(0);
   });

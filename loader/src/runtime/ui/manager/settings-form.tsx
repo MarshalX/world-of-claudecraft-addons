@@ -1,17 +1,6 @@
-// Settings, rendered from the manifest schema.
-//
-// Pure render over a values object plus the declarations, so the manager can
-// draw an addon's settings without running it. That is what makes settings
-// editable for a DISABLED addon, which is the case that matters: an addon that
-// misbehaves is one a player disables first and reconfigures second.
-//
-// Every control is committed on change rather than behind a Save button. The
-// store persists per field and a running addon sees each edit through its own
-// change event, so a Save would be a second concept for no extra safety.
-//
-// The SHAPE of a field is kit/field-shape.ts, shared with the plain-DOM builders
-// an addon gets as `ui.field`. This is one of that shape's two renderers, and the
-// classes come from there so a rename cannot style half the loader's fields.
+// Settings, rendered from the manifest, so a disabled addon can be configured without running it.
+// Each control commits on change; there is no Save. The field shape and classes come from
+// kit/field-shape.ts, shared with `ui.field`, so the two renderers cannot drift.
 
 import type { SettingDecl } from '../../../shared/schema.ts';
 import type { SettingValue, SettingValues } from '../../settings/values.ts';
@@ -62,8 +51,7 @@ function NumberField(props: FieldProps & { domId: string }) {
         max={decl.max}
         onChange={(event) => {
           const raw = (event.currentTarget as HTMLInputElement).valueAsNumber;
-          // A cleared field reads as NaN, which the store would reject. Holding
-          // the previous value keeps the field usable while it is being retyped.
+          // A cleared field reads as NaN; keep the previous value while it is retyped.
           if (Number.isFinite(raw)) {
             props.onChange(decl.id, raw);
           }

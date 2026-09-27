@@ -1,27 +1,10 @@
 // A square timer: art with a radial sweep over it, a figure, and a count.
 //
-// The other shape of what kit/bar.ts draws. A bar is the linear form and suits a
-// list of things you are waiting on, one per line with room for a name; a tile is
-// the square form and suits a strip of them where the ART is the label, which is
-// what an aura display and a cooldown row both are.
+// The square form of kit/bar.ts, for a strip where the ART is the label. One primitive
+// serves both auras (stacks) and cooldowns (charges). The sweep is RADIAL only; the linear
+// form is `ui.bar`.
 //
-// ONE primitive, not two. This was designed as a cooldown sweep and an aura icon
-// and they collapsed on contact: an aura is art with a duration and a stack count,
-// a cooldown is art with a duration and a charge count, and the sweep, the tint and
-// the two figures are the same parts in both. Two builders would have been the same
-// element twice with the parts renamed, and the seam between them would have been
-// which of two identical things an author was supposed to pick.
-//
-// The sweep is RADIAL and there is no linear option, because the linear form of this
-// is `ui.bar`. A kit offering two ways to draw one thing is how two addons end up
-// looking different for no reason anyone chose.
-//
-// Nothing here animates. `fraction` moves when the caller moves it, exactly as a
-// bar's fill does: the loader would otherwise run a frame loop per tile to recompute
-// a countdown the addon already has to compute to know the tile should exist. That
-// is the project's standing pattern, subscribe for the change and animate from the
-// read, and a kit that quietly broke it would make every addon pay for a loop it
-// cannot see.
+// Nothing here animates: `fraction` moves when the caller moves it, as a bar's fill does.
 
 import type { Teardown } from '../../disposal.ts';
 import type { ArtSlot, StyleSlot, TextSlot } from './readout.ts';
@@ -46,11 +29,8 @@ const DECIMALS = 2;
 const PREFIX = 'woc-tile';
 
 /**
- * How big the square is, in pixels, which the sheet reads.
- *
- * A custom property rather than a width and a height, so one write sizes the art,
- * the sweep and the text together, and so the compact density can move the DEFAULT
- * without overriding an addon that asked for a size: an inline property beats a rule.
+ * How big the square is, in pixels. A custom property, so one write sizes art, sweep and text
+ * together, and the compact density can move the default without overriding an explicit size.
  */
 const SIZE_PROPERTY = '--woc-tile-size';
 
@@ -64,13 +44,8 @@ type TileSchool = ReadoutSchool;
 type TileQuality = ReadoutQuality;
 
 /**
- * Point the sweep at how much time is LEFT, the same sense a bar's fill has.
- *
- * The sheet needs the opposite number. Its wedge is a conic gradient whose
- * transparent arc runs from the top clockwise to where the timer has got to, so what
- * it takes is the ELAPSED share, and a full tile is 0% rather than 100%. Converting
- * here is what keeps the public surface consistent with `ui.bar`: an addon that has
- * a remaining and a total should never have to work out which way round this one is.
+ * Point the sweep at how much time is LEFT, as a bar's fill does. The sheet's conic wedge
+ * takes the ELAPSED share, so it is converted here.
  */
 function setFraction(sweep: StyleSlot, fraction: unknown): void {
   const elapsed = 1 - clampFraction(fraction);
@@ -78,12 +53,7 @@ function setFraction(sweep: StyleSlot, fraction: unknown): void {
 }
 
 /**
- * A size in pixels, or nothing.
- *
- * Nothing leaves the sheet's own default in place, which is the game's tap-target
- * floor. Zero and NaN are refused rather than written: a zero-sized tile is invisible
- * and unhittable, and a NaN drops the declaration silently, so both would read as a
- * tile that was never created.
+ * A size in pixels, or nothing, which leaves the sheet's 40px default. Zero and NaN are refused.
  */
 function setSize(size: StyleSlot, next: unknown): void {
   if (typeof next === 'number' && Number.isFinite(next) && next > 0) {
@@ -92,11 +62,8 @@ function setSize(size: StyleSlot, next: unknown): void {
 }
 
 /**
- * The square, as its own updates address it.
- *
- * Slots rather than elements, because a strip of tiles is animated from an addon's
- * frame loop and an update repeating what is already on screen has to cost nothing.
- * See the note at the top of kit/readout.ts.
+ * The square, as its own updates address it: slots, so a repeated update costs nothing
+ * (kit/readout.ts).
  */
 interface TileParts {
   el: HTMLElement;
@@ -115,22 +82,14 @@ function span(doc: Document, className: string): HTMLElement {
   return el;
 }
 
-/**
- * The square: art, the wedge over it, and the two figures over that.
- *
- * The order is the stack. The sweep has to darken the art and not the figures, which
- * are what a player reads at a glance while the wedge is only the shape of the time
- * left, so DOM order does the layering and nothing here needs a z-index.
- */
+/** The square: art, the wedge over it, and the two figures over that. DOM order is the stacking. */
 function buildTile(doc: Document, opts: TileOpts): TileParts {
   const el = doc.createElement('div');
   el.className = `${PREFIX} ${toneClass(PREFIX, opts.tone)}`;
   if (opts.className !== undefined) {
     el.classList.add(opts.className);
   }
-  // A tile with no label is hidden from assistive technology, and it starts without
-  // one, so the built element states that rather than waiting for the first update
-  // to say it. That is also what lets `applyName` trust its own record of the name.
+  // Starts unnamed and therefore hidden, which `applyName`'s record relies on.
   el.setAttribute('aria-hidden', 'true');
   const size = styleSlot(el, SIZE_PROPERTY);
   setSize(size, opts.size);
@@ -158,19 +117,8 @@ function buildTile(doc: Document, opts: TileOpts): TileParts {
 /** Everything a tile can be told, all of it optional on an update. */
 interface TileUpdate {
   /**
-   * What the tile is, for assistive technology. It is never drawn.
-   *
-   * There is nowhere to put a name on a square whose whole face is the art, so this
-   * is the accessible name of the tile as a WHOLE, recomposed with the figures
-   * whenever one of them moves. See `applyName` for what a tile without one does.
-   *
-   * `null` puts it BACK to unnamed, which is what a tile being reused for something
-   * else needs. Without it a name could be set and never unset, so a tile that had
-   * held a thing and now holds nothing went on announcing what used to be in it: a
-   * bag grid found exactly that, where a square vacated by a stack kept the stack's
-   * name. Passing `''` reaches the same place by a different road, since a name
-   * composes to nothing and the tile goes back to being decorative art, but it says
-   * "this is called the empty string" rather than "this has no name".
+   * The tile's accessible name as a whole, recomposed with the figures; never drawn. `null`
+   * puts it back to unnamed, which a reused tile needs so it stops announcing its old content.
    */
   label?: string | null;
   /** An icon URL, from `ui.icon`, or null for none. */
@@ -184,26 +132,13 @@ interface TileUpdate {
   /** Tint the border by the game's own colour for a damage school. */
   school?: TileSchool | null;
   /**
-   * Colour it by the game's own colour for an item quality tier.
-   *
-   * A THIRD axis rather than more tones: a tier is what an item IS, where a tone is how
-   * urgent a row has become, so an item panel setting both is saying two true things. Null
-   * and an unrecognised value colour nothing, which is the answer for the items the game
-   * ranks at no tier at all.
+   * Colour it by the game's own colour for an item quality tier. Null and unknown colour nothing.
    */
   quality?: TileQuality | null;
   tone?: TileTone;
   /**
-   * The square's side in pixels. Defaults to the game's tap-target floor.
-   *
-   * On the update rather than only at creation, because a strip that scales with
-   * the frame it sits in has to move the tiles that are already on screen. The
-   * alternative is destroying and rebuilding every tile on every pointer move of a
-   * resize, which throws away the art the browser has decoded.
-   *
-   * Anything that is not a positive finite number leaves the current size alone. A
-   * zero-sized tile is invisible and unhittable, and a NaN drops the declaration,
-   * so both would read as a tile that had gone missing.
+   * The square's side in pixels. Defaults to 40. Accepted on update, so a strip can scale with
+   * its frame without rebuilding tiles. Anything not a positive finite number is ignored.
    */
   size?: number;
 }
@@ -235,12 +170,7 @@ function countText(count: number | null): string {
   return String(count);
 }
 
-/**
- * The two figures, each hidden while it has nothing to say.
- *
- * Hidden rather than emptied, so an empty slot cannot take a shadow or a background
- * with it, and so a tile that is only art is only art.
- */
+/** The two figures, each hidden (not just emptied) while it has nothing to say. */
 function applyText(parts: TileParts, state: TileState, next: TileUpdate): void {
   if (next.value !== undefined) {
     state.value = next.value;
@@ -272,8 +202,7 @@ function createTile(doc: Document, opts: TileOpts = {}): Tile {
     applyName(parts.el, state);
   };
 
-  // Written even when the opts said nothing about it, so the tile's own markup
-  // states where the sweep is rather than leaning on the sheet's fallback.
+  // Always written, so the markup states the sweep rather than leaning on the sheet's fallback.
   setFraction(parts.sweep, opts.fraction);
   update(opts);
   return {

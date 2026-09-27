@@ -1,13 +1,7 @@
 // One addon's own page: settings, keybinds, and its log tail.
 //
-// Reached from a row in the Installed pane and reachable for a DISABLED addon,
-// which is the case that matters. An addon that misbehaves is one a player
-// turns off first and reconfigures second, and a settings screen that needed
-// the addon running would be unavailable exactly then.
-//
-// The stores this writes to are the same ones a running addon reads, so an edit
-// here reaches a live addon through the store's change event. Nothing in this
-// file knows whether the addon is running.
+// Reachable for a DISABLED addon, since a misbehaving addon is turned off before it is
+// reconfigured. Edits go to the same stores a running addon reads.
 
 import { useState } from 'preact/hooks';
 import type { InstalledAddon } from '../../../shared/protocol.ts';
@@ -32,8 +26,7 @@ function LogTail(props: { entries: readonly LogEntry[] }) {
   if (props.entries.length === 0) {
     return <p className="woc-note">{UI_TEXT.logsEmpty}</p>;
   }
-  // Newest last, matching a console, so a player reading top to bottom follows
-  // the order things happened.
+  // Newest last, matching a console.
   const shown = props.entries.slice(-TAIL_LINES);
   return (
     <ul className="woc-log">
@@ -60,13 +53,7 @@ interface EditDeps {
   onFailed: (err: unknown) => void;
 }
 
-/**
- * The three edits this page makes, bound to one addon's loaded stores.
- *
- * Built only from inside the branch that already has the stores, which is what
- * lets each of them be written without a null arm: the controls that call them
- * do not render until the stores are there.
- */
+/** The three edits this page makes, bound to one addon's loaded stores. */
 function editActions(deps: EditDeps): EditActions {
   const { config } = deps;
   return {
@@ -76,8 +63,7 @@ function editActions(deps: EditDeps): EditActions {
         .capture()
         .then(async (combo) => {
           deps.setCapturing(null);
-          // Null is a cancelled prompt, which is not a failure and must not
-          // clear a binding.
+          // Null is a cancelled prompt and must not clear a binding.
           if (combo !== null) {
             await config.keybinds.set(id, combo);
           }
@@ -105,13 +91,7 @@ interface EditorsProps {
   capture: () => Promise<string | null>;
 }
 
-/**
- * The editable half of the page: settings and keybinds over the loaded stores.
- *
- * Which key is waiting for a press, and the last write that failed, live here
- * rather than a level up because both belong to these two forms and to nothing
- * else on the page.
- */
+/** The editable half of the page: settings and keybinds over the loaded stores. */
 function AddonEditors(props: EditorsProps) {
   const { addon, config } = props;
   const [capturing, setCapturing] = useState<string | null>(null);
@@ -201,18 +181,9 @@ interface ActionProps {
 }
 
 /**
- * The three controls, with the enable toggle first because it is the one that
- * decides whether the others mean anything.
- *
- * The toggle is here as well as on the Installed row on purpose. An addon
- * reaches this page in whatever state it is in, and a page that reports STOPPED
- * or FAILED with no way to act on it is a dead end: the control that fixes what
- * the badge says has to be next to the badge.
- *
- * Reload is disabled while the addon is stopped rather than silently doing
- * nothing. It re-evaluates a RUNNING addon, so with nothing running there is
- * nothing for it to do, and a button that answers a click with no visible effect
- * reads as a broken loader.
+ * The page's controls. The toggle repeats the Installed row's so a STOPPED or FAILED badge has its
+ * fix beside it. Reload re-evaluates a RUNNING addon, so it is disabled while stopped rather than
+ * answering a click with nothing.
  */
 function DetailActions(props: ActionProps) {
   return (

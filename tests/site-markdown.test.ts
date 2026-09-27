@@ -30,9 +30,7 @@ const context: Context = {
     }
     return SHOT;
   },
-  // Prose cannot reference an addon preview, so nothing in this suite reaches it.
-  // It throws rather than returning a stand-in, since a rendering path that
-  // started asking for one would be a change worth failing on.
+  // Prose cannot reference an addon preview, so a path that asks for one should fail.
   preview(id) {
     throw new Error(`prose asked for the preview of \`${id}\``);
   },
@@ -51,9 +49,8 @@ describe('prose', () => {
     expect(renderer.render('A **bold** claim.', context).html).toContain('<strong>bold</strong>');
   });
 
-  // html: false is the decision being pinned here: the two things a page needs
-  // beyond Markdown have their own syntax, so raw HTML is a mistake.
-  it('escapes raw HTML rather than passing it through', () => {
+  // html: false. Shots and includes have their own syntax, so raw HTML is a mistake.
+  it('escapes raw HTML', () => {
     const out = renderer.render('<script>alert(1)</script>', context).html;
     expect(out).not.toContain('<script>');
     expect(out).toContain('&lt;script&gt;');
@@ -83,19 +80,19 @@ describe('headings', () => {
 });
 
 describe('shot references', () => {
-  it('renders a lone shot reference as a block-level figure, not inside a paragraph', () => {
+  it('renders a lone shot reference as a block-level figure', () => {
     const out = renderer.render('![](shot:combat-meter)', context).html;
     expect(out).toMatch(/<figure[ >]/);
     expect(out).not.toMatch(/<p>\s*<figure/);
   });
 
-  it('takes alt and caption from the manifest, never from the page', () => {
+  it('takes alt and caption from the manifest', () => {
     const out = renderer.render('![](shot:combat-meter)', context).html;
     expect(out).toContain(SHOT.alt);
     expect(out).toContain(SHOT.caption);
   });
 
-  it('caps the plate at natural size so an undersized shot is never upscaled', () => {
+  it('caps the plate at natural size', () => {
     expect(renderer.render('![](shot:combat-meter)', context).html).toContain('max-width:405px');
   });
 

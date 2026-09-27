@@ -1,6 +1,4 @@
-// The economy reads on `woc.world`: the group whose closed arm is a STATUS rather
-// than a null, which is why the `UNKNOWN` fallback lives here and not in
-// `world-reads.ts`.
+// The economy reads on `woc.world`, whose closed arm is a STATUS rather than a null.
 
 import type { BankState } from '../world/bank.ts';
 import type { InvSlot } from '../world/game-types.ts';
@@ -12,12 +10,8 @@ import type { VaultState } from '../world/vault.ts';
 import { fromBackend } from './world-reads.ts';
 
 /**
- * The counters the player walks up to, and the badges that outlive them.
- *
- * Four of the eight answer a STATUS rather than a value, because the server gates
- * them on where the player is standing. Before the game exists those four answer
- * `unknown` rather than null, the choice `combat` and `abilities` make: they are
- * never-null readings, so there is nothing for a null to mean.
+ * The counters the player walks up to, and their badges. The proximity-gated four answer a status,
+ * and `unknown` before the game exists, never null.
  */
 export function economyReads(hub: WorldHub) {
   return {

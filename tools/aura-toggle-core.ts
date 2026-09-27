@@ -1,19 +1,8 @@
-// The game's TOGGLE-aura rule, read out of the checkout beside the dispel one.
+// The game's TOGGLE-aura rule (`isToggleAura`): whether an aura is a MODE (stance, form, stealth,
+// carried flag, rotation bank) whose long finite duration is scaffolding and gets no countdown.
+// It reads only `kind` and `id`, both on the wire, so the loader mirrors it exactly.
 //
-// `isToggleAura` (src/sim/aura_classify.ts) answers whether an aura is a MODE
-// rather than a timed effect: a stance, a druid form, stealth, Ghost Wolf, the
-// carried flag, or one of the never-ageing rotation banks. The sim backs each
-// with a long finite duration, 3600s or a whole match, which is SCAFFOLDING and
-// not information, so the game prints no countdown for one.
-//
-// It reads two facts, `kind` and `id`, and `wireAura` sends both, so unlike
-// `isDispellableAura` this is a rule the loader can implement EXACTLY. That is
-// why it is worth mirroring at all: there is no clause here we cannot see.
-//
-// FOUR declarations across TWO files, because the predicate's third term calls
-// into another module. They are read together and merged into the two sets the
-// predicate actually needs, since nothing downstream has cause to tell a toggle
-// id from a persistent-engine one.
+// Four declarations across two files, since the predicate's third term calls into another module.
 
 /** Where each declaration lives, relative to the checkout root. */
 const CLASSIFY = 'src/sim/aura_classify.ts';
@@ -48,13 +37,7 @@ function namesOnLine(where: string, declared: string, line: string): string[] {
   return found;
 }
 
-/**
- * The members of one declared set, or a throw.
- *
- * Never answers short. A set that quietly loses names generates a file that
- * compiles and then prints a countdown under every stance in the game, which is
- * the exact drift the game's own one-classifier rule exists to prevent.
- */
+/** The members of one declared set. Throws rather than answering short or empty. */
 function setMembers(where: string, source: string, open: string, declared: string): string[] {
   const at = source.indexOf(open);
   if (at === -1) {
@@ -80,12 +63,8 @@ function setMembers(where: string, source: string, open: string, declared: strin
 }
 
 /**
- * The proof the three sets we parse are the three the predicate consults.
- *
- * Without it, a release that keeps all four declarations and rewrites the
- * predicate to consult something else generates a rule the game no longer uses,
- * and nothing anywhere fails. The same guard `inlineRefusedIds` puts on
- * `DEBUFF_DISPLAY_AURA_IDS`, for the same reason.
+ * Throws unless the predicate still consults every term parsed here, so a rewritten predicate with
+ * the declarations left in place cannot generate a rule the game no longer applies.
  */
 function checkPredicate(source: string): void {
   const at = source.indexOf(`export function ${PREDICATE}(`);
@@ -117,13 +96,7 @@ interface ToggleRule {
   timed: string[];
 }
 
-/**
- * The whole rule, from both files.
- *
- * The two id sets are MERGED because the predicate ORs them and nothing
- * downstream can use the difference. Both counts are reported by the CLI so a
- * regeneration still says which side moved.
- */
+/** The whole rule, from both files. The two id sets are merged because the predicate ORs them. */
 function toggleRule(classify: string, persistent: string): ToggleRule {
   checkPredicate(classify);
   const authored = setMembers(CLASSIFY, classify, IDS_OPEN, IDS);

@@ -1,10 +1,5 @@
-// Reading a marketplace that has no marketplace.json.
-//
-// Driven through the real fetcher over the fake transport rather than by
-// stubbing the fetch out, because what this path IS is a request count: one
-// listing plus one per directory, against a limit of sixty an hour. A stub would
-// let a version that issued them concurrently, or issued one per addon on every
-// refresh, pass without anything noticing.
+// Reading a marketplace that has no marketplace.json, through the real fetcher, because the
+// request count is the behaviour: one listing plus one per directory, against sixty an hour.
 
 import { describe, expect, it } from 'vitest';
 import { enumerateAddons, MAX_ENUMERATED } from '../loader/src/host/contents-fallback.ts';
@@ -68,8 +63,7 @@ describe('enumerating a repository with no index', () => {
 
     const addons = await enumerateAddons(fetcher, MARKET);
 
-    // Sorted by directory name, which is why combat-meter leads: the listing
-    // order the API happens to answer in is not what the manager shows.
+    // Sorted by directory name, whatever order the API answered in.
     expect(addons.map((row) => [row.id, row.path])).toEqual([
       ['combat-meter', 'addons/combat-meter'],
       ['cooldown-bars', 'addons/cooldown-bars'],
@@ -137,9 +131,7 @@ describe('enumerating a repository with no index', () => {
     }
   });
 
-  // The directory is what the index publishes as `path` and the id is what the
-  // fqid is built from, so a mismatch would install an addon whose storage
-  // namespace names a directory that does not hold it.
+  // The fqid comes from the id and `path` from the directory, so the two must agree.
   it('skips a directory whose manifest claims a different id', async () => {
     const capture = captureDiag();
     try {
@@ -169,9 +161,7 @@ describe('enumerating a repository with no index', () => {
     await expect(enumerateAddons(fetcher, MARKET)).rejects.toThrow(/no addons\/ directory/);
   });
 
-  // Refused rather than truncated. One request per addon against sixty an hour
-  // means a repository this size cannot be read this way even once, and showing
-  // the first forty would be a silent lie about what the source offers.
+  // Refused, never truncated: showing the first forty would misstate what the source offers.
   it('refuses a repository too large to read one addon at a time', async () => {
     const dirs = Array.from({ length: MAX_ENUMERATED + 1 }, (_, at) => `addon-${String(at)}`);
     const { fetcher, http } = open({ [CONTENTS]: listing(dirs) });

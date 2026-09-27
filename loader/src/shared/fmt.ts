@@ -51,12 +51,8 @@ function coarseForm(whole: number): string {
 }
 
 /**
- * Whether there is a figure to format at all. Zero is one, so this cannot be a
- * falsy test.
- *
- * Null coerces to 0 through the arithmetic below, so without this a null
- * `bearingTo` draws as dead ahead and a null `LootRoll.remaining` as a roll
- * timer already at 0.
+ * Whether there is a figure to format. Not a falsy test, since zero is one; null must not reach
+ * the arithmetic, where it coerces to 0 and draws as dead ahead or an expired timer.
  */
 function given(value: number | null): value is number {
   return value !== null && Number.isFinite(value);

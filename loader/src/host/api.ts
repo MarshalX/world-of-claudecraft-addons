@@ -1,10 +1,4 @@
 // Assembles the object the host exposes over the bridge.
-//
-// Build order is a dependency chain rather than a preference: the fetcher needs
-// the GM request surface, the marketplace service needs the fetcher, the
-// registry needs the marketplace service to know where an addon's files are, and
-// the dev watcher needs both the registry and the marketplace service to know
-// which bodies to poll.
 
 import { diagError } from '../shared/diag.ts';
 import type { DevApi, HostApi, HostEvent } from '../shared/protocol.ts';
@@ -18,9 +12,8 @@ import type { HostStorage } from './storage.ts';
 type Subscriber = (event: HostEvent) => void;
 
 /**
- * A subscriber is a Comlink proxy back into the page realm, so a delivery can
- * fail for reasons that have nothing to do with the event: a closed port, or a
- * handler that threw. One failing subscriber must not stop the rest.
+ * A subscriber is a Comlink proxy into the page realm and can fail on a closed port or a
+ * throwing handler; one failure must not stop the rest.
  */
 function publish(subscribers: ReadonlySet<Subscriber>, event: HostEvent): void {
   for (const subscriber of subscribers) {
@@ -72,13 +65,7 @@ function buildServices(deps: HostApiDeps, emit: (event: HostEvent) => void) {
   return { market, registry, watch };
 }
 
-/**
- * Every dev change re-syncs the watcher.
- *
- * Both switches decide whether it should be running, and the host is where that
- * is enforced: the runtime can turn dev mode on through the bridge and must not
- * also have to remember to restart the timer.
- */
+/** Every dev switch re-syncs the watcher here, so the runtime never has to restart it. */
 function wrapDev(market: MarketService, watch: DevWatch): DevApi {
   return {
     state: market.dev.state,
@@ -93,10 +80,7 @@ function wrapDev(market: MarketService, watch: DevWatch): DevApi {
   };
 }
 
-/**
- * The storage members are forwarded one by one rather than spread, so onChange
- * and dispose stay on this side of the bridge.
- */
+/** Storage members are forwarded one by one, not spread, so onChange and dispose stay here. */
 function createHostApi(deps: HostApiDeps): HostServices {
   const { storage } = deps;
   const subscribers = new Set<Subscriber>();
@@ -104,15 +88,13 @@ function createHostApi(deps: HostApiDeps): HostServices {
     publish(subscribers, event);
   };
 
-  // Subscribed once here rather than once per subscriber: a second manager tab
-  // would otherwise make every storage write arrive twice in the first.
+  // Once here, not per subscriber, or a second subscriber would double every storage event.
   storage.onChange((ns, key, value) => {
     emit({ k: 'storage.changed', ns, key, value });
   });
 
   const { market, registry, watch } = buildServices(deps, emit);
-  // Started from the persisted setting rather than from a call, so hot reload
-  // survives a page reload the same way every other setting does.
+  // From the persisted setting, so hot reload survives a page reload.
   watch.sync();
 
   return {
@@ -131,8 +113,7 @@ function createHostApi(deps: HostApiDeps): HostServices {
         keys: (ns) => storage.keys(ns),
       },
 
-      // The bridge outlives every subscriber, so the unsubscribe is deliberately
-      // not surfaced: the port closing is what ends delivery.
+      // No unsubscribe: the port closing is what ends delivery.
       subscribe: (onEvent) => {
         subscribers.add(onEvent);
         return Promise.resolve();

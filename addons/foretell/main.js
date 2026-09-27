@@ -38,21 +38,16 @@ const IMPACT_SECONDS = 1;
 /** An anchored bar has no column to be sized by, so it carries its own width. */
 const ANCHOR_WIDTH = 180;
 /**
- * What one NAMED bar and the gap under it occupy: 19 and 13 inside 2px of padding, plus
- * the column's 3. One constant, because the row height and the declutter step both measure
- * a named bar. A constant rather than `offsetHeight`, which is a synchronous layout per
- * row per frame, and it fails silently either way: too small clips, too large floats.
+ * What one NAMED bar and the gap under it occupy: 19 and 13 inside 2px of padding, plus the
+ * column's 3. Shared by the row height and the declutter step. A constant because
+ * `offsetHeight` would be a synchronous layout per row per frame.
  */
 const ROW_PITCH = 39;
 /** How many steps a bar may be lifted before it is left where it belongs. */
 const MAX_LIFT_STEPS = 4;
 /** What a worked-out ability name is marked with. See the header. */
 const GUESS_MARK = '?';
-/**
- * The narrowest the list may be dragged. The addon's own floor, above the loader's
- * structural one, and it is about reading a row: the countdown on the right never
- * shrinks and the ability name is the only part that can.
- */
+/** The narrowest the list may be dragged: the countdown never shrinks, only the name. */
 const MIN_FRAME_WIDTH = 120;
 
 /** The column, which outlives the frame, so a layout change is one append. */
@@ -77,13 +72,9 @@ function listHeight(count) {
 }
 
 /**
- * The overlay, or null when the bars are anchored in the world.
- *
- * Bare, because nothing is casting most of the time and the empty state is what a session
- * mostly looks at; the cost is that an empty frame has no pixels to drag, which the unlock
- * mode answers. A bare frame has no title bar, so no close button and no `closable`: the
- * ways back are the keybind and the rail menu. Both bounds are stated because a resizable
- * frame with none takes its opening size as its floor.
+ * The overlay, or null when the bars are anchored in the world. Bare, because it is empty most
+ * of the time. Both bounds are stated because a resizable frame with none takes its opening
+ * size as its floor.
  */
 function buildFrame() {
   if (drawsAnchors()) {
@@ -122,13 +113,8 @@ function visible() {
 
 /**
  * What to call this ability, what to tint it, and whether both were worked out.
- *
- * One lookup answering all three, since they have one source: `world.abilities` covers
- * your own kit, so a friendly caster using something you also know is named and tinted
- * properly, and every mob mechanic comes back marked as a guess with no school. The mark
- * is the addon's: `describe` reports `known: false` as a fact and leaves the presentation
- * here, since the same string also reaches an accessible name. It goes on the label, which
- * is the one form of hedge that survives the anchored layout.
+ * `world.abilities` covers only your own kit, so every mob mechanic comes back marked as a
+ * guess with no school.
  */
 function describe(abilityId) {
   const found = woc.world.abilities.describe(abilityId);
@@ -303,18 +289,15 @@ function wanted(entity, cast) {
 }
 
 /**
- * The setting held inside the box, or the setting alone when anchored, since that layout
- * has no frame. Dropping the surplus rather than clipping is what makes the drag a control,
- * and the soonest-first order is what makes it safe to drop from the end.
+ * The setting held inside the box, or the setting alone when anchored. Surplus rows are
+ * dropped rather than clipped, safely from the end since the list is soonest-first.
  */
 function rowCap() {
   const budget = barBudget();
   if (frame === null) {
     return budget;
   }
-  // The loader's own answer rather than a copy of it: reading the box costs nothing,
-  // where measuring the element would cost a layout on every frame this is called from,
-  // and there is no opening height to seed since `onMove` never reports one.
+  // `frame.box()` costs no layout, and `onMove` never reports the opening height.
   const fits = Math.floor(frame.box().h / ROW_PITCH);
   return Math.max(Math.min(budget, fits), 1);
 }
@@ -370,11 +353,8 @@ function createRow(entry) {
 }
 
 /**
- * Name the row, and only when the ability it is drawing changed. A caster that finishes
- * one mechanic and starts another keeps its row, so the label, the art and the school
- * have to follow it. The kit drops a write that repeats what a slot already holds, so
- * doing this every frame would cost a spellbook lookup and a URL per row per frame to
- * arrive at the string already there.
+ * Name the row, only when the ability it is drawing changed: a caster starting another
+ * mechanic keeps its row. Doing this every frame would cost a spellbook lookup per row.
  */
 function name(row, entry) {
   if (row.ability === entry.cast.ability) {
@@ -460,9 +440,8 @@ function buildList() {
 let bars = buildList();
 
 /**
- * Where every anchored bar is on screen, nearest caster first. The same point the anchor
- * itself is placed from, so the two cannot disagree. A null is left out rather than
- * defaulted, since the loader has already hidden that anchor.
+ * Where every anchored bar is on screen, nearest caster first, from the same point the anchor
+ * is placed from. A null is left out, since the loader has already hidden that anchor.
  */
 function onScreen(entries) {
   const found = [];
@@ -529,11 +508,7 @@ function setLift(row, entry, lift) {
   row.bar.update({ detail: liftDetail(entry, lift) });
 }
 
-/**
- * Take the anchored bars off each other, nearest first, so the caster in your face keeps
- * the place it earned. Depth is what makes that ordering possible: it is a real distance
- * from the camera, so it survives a camera the player is swinging.
- */
+/** Take the anchored bars off each other, nearest caster first so it keeps its place. */
 function stack(entries) {
   const taken = [];
   for (const { row, entry, at } of onScreen(entries)) {
@@ -583,11 +558,7 @@ woc.keys.bind('toggle', () => {
   frame.toggle();
 });
 
-/**
- * Throw the rows away and build the layout again. A row's shape is decided when it is
- * built: an anchored bar lives in an anchor the loader positions and a listed one lives
- * in the column, and neither can become the other.
- */
+/** Rebuild the layout: a row's shape (anchored or listed) is decided when it is built. */
 function rebuild() {
   // Destroyed rather than cleared: `parent` is fixed at build, and the layout decides it.
   bars.destroy();

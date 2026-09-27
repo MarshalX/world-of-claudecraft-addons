@@ -1,16 +1,7 @@
 // @vitest-environment happy-dom
 
-// Which loader window is in front.
-//
-// There was no answer before this. Windows are absolutely positioned siblings
-// with no z-index, so overlap fell out of DOM order and clicking a buried one
-// left it buried. With the manager and two addon frames open at once, that is not
-// a polish problem: the window behind is unusable.
-//
-// One listener on the root does all of it, so what is asserted here is that the
-// listener's reach is right (the manager and every addon frame, by the class they
-// share), that the overlay bands are out of its scope, and that the ceiling is
-// enforceable rather than merely high.
+// One listener on the root orders every loader window: it must reach the manager and
+// every addon frame, leave the overlay bands alone, and enforce the ceiling.
 
 import { afterEach, describe, expect, it } from 'vitest';
 import { createStacking, WINDOW_Z_CEILING } from '../loader/src/runtime/ui/kit/stacking.ts';
@@ -27,10 +18,8 @@ afterEach(() => {
 });
 
 /**
- * A loader window, which is what the raise keys on.
- *
- * `mark` is set as an attribute rather than through `dataset`, which is an index
- * signature: the linter wants dot access there and the compiler forbids it.
+ * A loader window. `mark` is set as an attribute because `dataset` is an index
+ * signature, where the linter wants dot access and the compiler forbids it.
  */
 function window_(host: HTMLElement, mark: string): HTMLElement {
   const el = document.createElement('section');
@@ -46,7 +35,7 @@ function z(el: HTMLElement): number {
   return Number(el.style.zIndex);
 }
 
-/** A pointerdown on something INSIDE a window, which is the real case. */
+/** A pointerdown on something inside a window. */
 function clickInside(el: HTMLElement): void {
   const child = el.querySelector('button');
   child?.dispatchEvent(new Event('pointerdown', { bubbles: true }));
@@ -70,7 +59,6 @@ describe('clicking a window', () => {
     expect(z(second)).toBeGreaterThan(z(first));
   });
 
-  // The reported case: the buried one has to come forward, not just the newest.
   it('brings a buried window back to the front', () => {
     const { host } = setup();
     const first = window_(host, 'first');
@@ -83,9 +71,7 @@ describe('clicking a window', () => {
     expect(z(first)).toBeGreaterThan(z(second));
   });
 
-  // The click almost never lands on the window element itself; it lands on a row,
-  // a button, a tab. Capture phase, so a child that stops propagation cannot make
-  // its own window unraisable.
+  // Capture phase, so a child that stops propagation cannot bury its own window.
   it('raises from a click on any descendant', () => {
     const { host } = setup();
     const win = window_(host, 'only');
@@ -99,8 +85,6 @@ describe('clicking a window', () => {
     expect(z(win)).toBeGreaterThan(0);
   });
 
-  // Tabbing into a buried window and having it stay buried is the keyboard
-  // version of the same bug.
   it('raises on focus as well as on pointer', () => {
     const { host } = setup();
     const first = window_(host, 'first');
@@ -112,9 +96,7 @@ describe('clicking a window', () => {
     expect(z(first)).toBeGreaterThan(z(second));
   });
 
-  // The manager is a `.woc-window` too, which is the whole reason the listener
-  // keys on that class rather than on anything addon-specific: the two kinds of
-  // window overlap each other and have to be in one order.
+  // The listener keys on `.woc-window` so the manager and addon frames share one order.
   it('treats the manager as one of them', () => {
     const { host } = setup();
     const frame = window_(host, 'frame');
@@ -149,23 +131,13 @@ describe('clicking a window', () => {
 });
 
 /**
- * Both ceiling cases drive the counter to WINDOW_Z_CEILING one raise at a time,
- * which is a hundred thousand style writes each. That is around a quarter of a
- * second on an idle machine and comfortably past the default five second budget
- * on a loaded one: they timed out in a full parallel run while passing alone,
- * once this suite grew enough to make the machine contend.
- *
- * The cost is inherent rather than accidental. What is under test is that the
- * ceiling is ENFORCED, and the only way in from outside is to reach it, so
- * making this cheap would mean exposing the counter for a test to preset.
+ * Both ceiling cases raise WINDOW_Z_CEILING times, which can pass the default five
+ * second budget on a loaded machine. Reaching the ceiling is the only way in from outside.
  */
 const CEILING_TIMEOUT_MS = 30_000;
 
 describe('the ceiling', () => {
-  // Toasts, the modal backdrop and the tooltip sit above WINDOW_Z_CEILING, so
-  // "above every window" has to be true of every window there can ever be, not
-  // just of the ones anyone expects. Without the renumbering pass the only
-  // defence is that nobody clicks that many times, which is not a defence.
+  // Toasts, the modal backdrop and the tooltip sit above WINDOW_Z_CEILING.
   it(
     'renumbers rather than climbing into the overlay bands',
     () => {
@@ -181,20 +153,13 @@ describe('the ceiling', () => {
 
       expect(z(first)).toBeLessThanOrEqual(WINDOW_Z_CEILING);
       expect(z(second)).toBeLessThanOrEqual(WINDOW_Z_CEILING);
-      // And the order the renumbering preserved is the order it was raised in.
       expect(z(second)).toBeGreaterThan(z(first));
     },
     CEILING_TIMEOUT_MS,
   );
 
-  // A window that has been closed must not hold a slot in the renumbering, or a
-  // long session would renumber ever-growing lists of dead elements.
-  //
-  // Read off the SLOT the surviving bottom window lands in, which is the only
-  // thing about the pruning that is observable from outside: with the dead one
-  // dropped the live pair renumbers to 1 and 2, and with it retained they would
-  // start at 2 instead. Asserting the top window's value would not tell the two
-  // apart, which is what the first version of this test got wrong.
+  // Read off the bottom window's slot: pruned, the live pair renumbers to 1 and 2;
+  // retained, it starts at 2. The top window's value cannot tell the two apart.
   it(
     'drops windows that have left the document when it renumbers',
     () => {

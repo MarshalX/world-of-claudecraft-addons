@@ -2,27 +2,23 @@
 //
 //   node addons/veinsight/generate.mjs --game=/path/to/world-of-claudecraft
 //
-// The checkout path is REQUIRED and is never defaulted. A generator that guesses
-// where the game is will happily read a checkout six releases old and write a file
-// that looks exactly like a correct one: nothing tells you a stale working tree is
-// stale, the way a 404 tells you an endpoint moved. So the path is an argument, the
-// target is checked to actually be the game, and the game's own version is read out
-// of it and stamped into the output rather than written here by hand.
+// The checkout path is REQUIRED and never defaulted: a guessed path can be a stale checkout
+// that writes a plausible file. The target's package name is checked and its version is
+// stamped into the output.
 //
-// WHAT IT READS, all of it under the checkout:
+// WHAT IT READS, all under the checkout:
 //
 //   package.json                          the version stamped into the output
 //   src/sim/content/gather_nodes.ts       GATHER_NODES, and GATHER_NODE_TYPES for
 //                                         the order the three types are listed in
 //   src/sim/content/items.ts              every item whose `use` is a gatherTool,
 //                                         and the display NAME of every yield
-//   src/sim/professions/gathering.ts      NODE_TYPE_BY_PROFESSION, which is what
-//                                         files a tool under the node type it opens,
+//   src/sim/professions/gathering.ts      NODE_TYPE_BY_PROFESSION, which files a tool
+//                                         under the node type it opens,
 //                                         NODE_HARVEST_TABLE for the respawn length
 //                                         of each type, and GATHER_GAIN_TIER_STEP
 //   src/sim/professions/gathering_materials.ts  NODE_MATERIAL_TABLE, for what a
-//                                         zone's node of each type yields. Split out
-//                                         of gathering.ts at game 0.41.0
+//                                         zone's node of each type yields
 //   src/sim/professions/wield_gate.ts     WIELD_REQUIREMENT_BY_TIER, the proficiency
 //                                         each tool tier needs before it will swing
 //   src/sim/professions/wheel.ts          the two reduced-gain multipliers
@@ -33,44 +29,27 @@
 //   src/sim/data.ts                       the ZONES array, for the canonical order
 //   src/sim/content/*.ts                  every `ZoneDef` export, for id and name
 //
-// EVERY TUNING FIGURE IS READ RATHER THAN WRITTEN DOWN HERE, and the wield ladder
-// is the case that makes the rule worth restating. Its five thresholds are pinned
-// by the game's own suite against the live gain curve, which means a curve retune
-// moves them with nothing on the wire to announce it, exactly like the respawn
-// length that was 120 and is now 240. A hardcoded ladder here would go on locking
-// and unlocking nodes by the old numbers, and no test on either side would notice.
+// EVERY TUNING FIGURE IS READ, never written here: the respawn length, the wield ladder and
+// the charm bonus all move on a game retune with nothing on the wire to announce it.
 //
-// It writes ONE file, `nodes.json` beside this script, and can write nothing else:
-// the destination is resolved from `import.meta.dirname` rather than from the
-// working directory or from an argument.
+// It writes ONE file, `nodes.json` beside this script, resolved from `import.meta.dirname`.
 //
-// DETERMINISTIC. Nodes keep the game's own authoring order, which is load-bearing in
-// the game itself (the world-gen draw order depends on it) and is therefore the one
-// order that cannot be arbitrary. Zones keep the order of the game's `ZONES` array
-// for the same reason. Tools are sorted by node type and then by tier, which is NOT
-// the item table's order: that table interleaves the tier 4 and 5 tools into a later
-// block, so sorting is what makes a newly authored tool land in one predictable place
-// instead of wherever it was appended. Re-running against an unchanged checkout
-// produces a byte-identical file.
+// DETERMINISTIC. Nodes keep the game's authoring order (the world-gen draw order depends on
+// it) and zones keep the `ZONES` array's order. Tools are sorted by type then tier, because
+// the item table interleaves tiers and a new tool should land in one predictable place.
 //
-// WHAT A GAME RELEASE COULD INVALIDATE. This is a text parse rather than an import,
-// because importing `src/sim/data.ts` would drag most of the game's simulation in,
-// and because the tables are content rather than code. Each assumption below fails
-// LOUDLY, with a message naming the file, rather than writing a thinner table:
+// This is a text parse rather than an import, because importing `src/sim/data.ts` drags in
+// most of the simulation. Each assumption fails LOUDLY, naming the file, rather than writing a
+// thinner table; do not add fallbacks:
 //
-//  - Every field this reads is an inline literal. A node whose `pos` was computed
-//    from a constant, or a tool whose tier came from a shared table, would not be
-//    seen. The counts are asserted after parsing so that shows up as a failure.
-//  - A node object's `pos` is written on one line as `pos: { x: N, z: N }`.
+//  - Every field read is an inline literal; the counts are asserted after parsing.
+//  - A node's `pos` is written on one line as `pos: { x: N, z: N }`.
 //  - A `ZoneDef` carries `id` and `name` as direct members.
-//  - Fishing is excluded because it has no world nodes: its rods route to a separate
-//    surface entirely, so `NODE_TYPE_BY_PROFESSION` has no entry for it, and that
-//    absence is the filter rather than a name written out here.
+//  - Fishing has no world nodes and no `NODE_TYPE_BY_PROFESSION` entry, and that absence is
+//    the filter.
 //
-// WHAT IT DELIBERATELY DOES NOT EMIT: zone rectangles. Veinsight resolves no point to
-// a zone, so it has no rectangle test to feed. Every node row carries its own zone id
-// and the only zone question left, which zone the PLAYER is in, comes over the bus
-// from a zone publisher. See the header of `main.js` for why that is refused locally.
+// Zone rectangles are deliberately not emitted: every node row carries its own zone id, and
+// the player's zone comes over the bus (see the header of `main.js`).
 
 import { readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -82,10 +61,8 @@ const GAME_PACKAGE_NAME = 'world-of-claudecraft';
 const NODES_FILE = 'src/sim/content/gather_nodes.ts';
 const ITEMS_FILE = 'src/sim/content/items.ts';
 const GATHERING_FILE = 'src/sim/professions/gathering.ts';
-// NODE_MATERIAL_TABLE alone lives here. Game 0.41.0 split it out of
-// gathering.ts, which failed this generator outright rather than silently:
-// `objectAfter` fails on a missing export, so the table could not go stale
-// behind a source that had moved.
+// NODE_MATERIAL_TABLE is declared here. gathering.ts only re-exports it, and a re-export
+// line has no object literal behind it to parse.
 const MATERIALS_FILE = 'src/sim/professions/gathering_materials.ts';
 const WIELD_FILE = 'src/sim/professions/wield_gate.ts';
 const WHEEL_FILE = 'src/sim/professions/wheel.ts';
@@ -97,13 +74,10 @@ const CONTENT_DIR = 'src/sim/content';
 /** Every count the shipped table is expected to carry, asserted after the parse. */
 const EXPECTED_TYPES = 3;
 const EXPECTED_NODES = 156;
-// 15 since before game 0.40.1: the committed table has carried 15 zones while
-// this said 14, so every run printed a count warning that was already answered.
-// Corrected so the next one that fires means something.
 const EXPECTED_ZONES = 15;
 const EXPECTED_TOOLS = 15;
 const EXPECTED_WIELD_RUNGS = 5;
-/** Three types across fourteen zones, which is every cell of the material matrix. */
+/** Every cell of the type by zone material matrix. */
 const EXPECTED_MATERIALS = 42;
 /** Nine yields with a fine grade: three zone rungs by three node types. */
 const EXPECTED_GRADES = 9;
@@ -183,11 +157,8 @@ function readOrFail(path, why) {
 }
 
 /**
- * Prove the path really is the game before reading a line of content out of it.
- *
- * The package NAME rather than the presence of a directory, because a wrong path
- * that happens to hold a `src` reads as plausible right up until the tables come
- * back empty, and an empty table is what this whole check exists to never ship.
+ * Prove the path is the game by its package NAME before reading any content: a wrong path
+ * holding a `src` reads as plausible until the tables come back empty.
  */
 function checkoutVersion(root) {
   const text = readOrFail(join(root, 'package.json'), 'is this the game checkout?');
@@ -224,13 +195,8 @@ function matchEnd(text, from, where) {
 }
 
 /**
- * The literal ASSIGNED after `marker`, as text.
- *
- * Everything is measured from the `=` rather than from the marker, and that is the
- * whole of why this helper exists: a declaration carries its TYPE between the two,
- * so `export const GATHER_NODES: GatherNodeDef[] = [` has a `[` that belongs to the
- * annotation. Searching from the marker finds that one, matches its `]` one
- * character later, and reads an empty table with nothing raising.
+ * The literal ASSIGNED after `marker`, as text. Measured from the `=`, because the type
+ * annotation in `GATHER_NODES: GatherNodeDef[] = [` has a `[` that would read as empty.
  */
 function literalAfter(text, marker, opener, where) {
   const at = text.indexOf(marker);
@@ -362,16 +328,8 @@ function readTypeByProfession(source) {
 }
 
 /**
- * Seconds each node type takes to come back, out of the game's own NODE_HARVEST_TABLE.
- *
- * Read rather than written down for the reason the tool tiers are: it is a TUNING
- * figure, so it moves on a content pass with nothing to announce it. Game 0.34.0
- * doubled it from 120 to 240 alongside the density pass, and while the addon carried
- * its own 120 every node with over two minutes left drew a bar pinned at full.
- *
- * Emitted per type even though all three currently agree, because the game's table is
- * keyed per type: collapsing them to one number here would be this file deciding they
- * are the same question, and the next tune that splits them would go unnoticed.
+ * Seconds each node type takes to come back, out of NODE_HARVEST_TABLE. Emitted per type
+ * because the game keys it per type, so a tune that splits them is not lost.
  */
 function readRespawnSeconds(source, types) {
   const literal = objectAfter(source, 'export const NODE_HARVEST_TABLE', GATHERING_FILE);
@@ -392,14 +350,8 @@ function readRespawnSeconds(source, types) {
 }
 
 /**
- * Node type to the gathering profession that works it, which is the direction the
- * addon reads it in: a node knows its type and needs the profession to look a
- * proficiency counter up under.
- *
- * Inverted from the game's own map rather than written out, so a profession
- * renamed or a type re-filed arrives here rather than being missed. A type with no
- * profession is a failure: without one there is no counter to read and the whole
- * wield gate silently stops applying to that type.
+ * Node type to the profession that works it, inverted from the game's map. A type with no
+ * profession fails: without one the wield gate silently stops applying to it.
  */
 function readProfessionByType(typeByProfession, types) {
   const byType = {};
@@ -415,16 +367,8 @@ function readProfessionByType(typeByProfession, types) {
 }
 
 /**
- * Tool tier to the gathering proficiency it takes to swing one (R22).
- *
- * REFUSED rather than defaulted, like the respawn map: this is the whole of the
- * addon's wield gate, and a ladder read as empty would report every owned tool as
- * usable, which is the exact state this table exists to correct.
- *
- * Two passes because the table's values are named constants rather than literals:
- * the rungs are declared one per exported `TIER_N_..._PROFICIENCY` and the frozen
- * object references them. A one-pass regex over the object would read five
- * identifiers and no numbers.
+ * Tool tier to the gathering proficiency it takes to swing one. Two passes, because the
+ * ladder's values are named `TIERn_TOOL_WIELD_PROFICIENCY` constants rather than literals.
  */
 function readWieldLadder(source) {
   const named = new Map();
@@ -447,14 +391,9 @@ function readWieldLadder(source) {
 }
 
 /**
- * The proficiency-gain curve, which is what decides whether a node still teaches
- * you anything: every `step` points of proficiency is one gain tier, scored
- * against the node's own tier, and a node that many tiers below pays `reduced`,
- * then `minimal`, then nothing.
- *
- * The two multipliers are the crafting wheel's, because gathering scores against
- * the same four-state curve. Read from there rather than restated, for the reason
- * every other figure here is read.
+ * The proficiency-gain curve: every `step` points is one gain tier, and a node that many
+ * tiers below pays `reduced`, then `minimal`, then nothing. The multipliers are the crafting
+ * wheel's, since gathering scores against the same curve.
  */
 function readGain(gatheringSource, wheelSource) {
   return {
@@ -465,12 +404,8 @@ function readGain(gatheringSource, wheelSource) {
 }
 
 /**
- * What one harvest yields, as node type to zone to the base item id.
- *
- * The unit counts are deliberately NOT emitted. They are a function of the rarity
- * roll alone, so they are the same number for every node of every type in every
- * zone, which makes them a fact about gathering rather than about a node, and a
- * panel of nodes has nowhere honest to put one.
+ * Node type to zone to the base item one harvest yields. Unit counts are not emitted: they
+ * depend on the rarity roll alone, never on the node.
  */
 function readMaterials(source, types) {
   const literal = objectAfter(source, 'export const NODE_MATERIAL_TABLE', MATERIALS_FILE);
@@ -489,25 +424,7 @@ function readMaterials(source, types) {
   return byType;
 }
 
-/**
- * The fine grade of each yield and the zone rung it sits at, which together are
- * the whole of the D8 upgrade rule: a tool STRICTLY above the rung, at a node of
- * at least that rung, mints the fine id instead of the base one.
- *
- * The rung is keyed to the MATERIAL rather than to the node, and the game's own
- * comment says why: a rule reading the node's tier would make fine Osmium farmable
- * off a Thornpeak tier-1 vein with a tier-2 pick.
- */
-/**
- * Each slotted tool effect's KIND and the magnitude it adds.
- *
- * Both are read rather than written down, for the reason the wield ladder is. The
- * quality charm's bonus of 1 lands exactly ON the fine threshold from bare hands,
- * a margin the game's own suite pins, so a retune to 2 would change which nodes
- * mint a fine grade with nothing on the wire to announce it. The KIND is read for
- * a plainer reason: the three shipped charms are one of each, and only the quality
- * one touches the comparison this addon draws.
- */
+/** Each slotted tool effect's KIND and bonus; only the quality kind touches the grade. */
 function readEffects(source) {
   const literal = objectAfter(source, 'const TOOL_EFFECTS', EFFECTS_FILE);
   const byId = {};
@@ -517,6 +434,10 @@ function readEffects(source) {
   return byId;
 }
 
+/**
+ * The fine grade of each yield and the rung it sits at: a tool STRICTLY above the rung, at a
+ * node of at least that rung, mints the fine id. The rung is keyed to the MATERIAL, not the node.
+ */
 function readGrades(source) {
   const literal = objectAfter(source, 'const MATERIAL_GRADE_ROWS', GRADES_FILE);
   const byBase = {};
@@ -527,10 +448,8 @@ function readGrades(source) {
 }
 
 /**
- * The game's own display name for every id a row can name, and it is not optional
- * polish: an id is not a name here. `thorium_ore` is shown to players as "Osmium
- * Ore", `silverleaf_herb` as "Sheenleaf Herb", and a table that title-cased the id
- * would say "Thorium Ore" forever with no regeneration able to fix it.
+ * The game's own display name for every yield id. An id is not a name (`thorium_ore` shows
+ * as "Osmium Ore"), so a title-cased id would be wrong with no regeneration able to fix it.
  */
 function readItemNames(source, ids) {
   const declared = new Map();
@@ -576,12 +495,7 @@ function itemIdBefore(source, before) {
   return found;
 }
 
-/**
- * Every gathering tool, filed under the node type its profession opens.
- *
- * Fishing falls out here rather than being named: it has no world nodes, so the
- * game's own profession map has no entry for it and the lookup simply misses.
- */
+/** Every gathering tool under the node type its profession opens. Fishing misses the lookup. */
 function readTools(source, typeByProfession) {
   const tools = [];
   TOOL_USE_RE.lastIndex = NONE;
@@ -623,9 +537,7 @@ function collectZoneDecls(source, where, into) {
 function readZoneDecls(root) {
   const dir = join(root, CONTENT_DIR);
   const byExport = new Map();
-  // Sorted, so a filesystem that hands entries back in a different order cannot move
-  // a byte of the output. The ZONES array decides what is emitted and in what order;
-  // this only has to find every declaration.
+  // Sorted so directory order cannot move a byte; the ZONES array decides emitted order.
   for (const entry of readdirSync(dir).sort()) {
     if (entry.endsWith('.ts')) {
       collectZoneDecls(readFileSync(join(dir, entry), 'utf8'), entry, byExport);
@@ -682,12 +594,8 @@ function checkCounts(table, types) {
 }
 
 /**
- * Every tool the table offers has a rung on the ladder.
- *
- * A missing one is the quiet failure this whole gate has to avoid: the addon reads
- * an absent requirement as no requirement, so a tier the ladder forgot would be
- * reported as swingable by anyone carrying it, which is the pre-R22 behaviour the
- * table exists to replace.
+ * Every tool the table offers has a rung on the ladder: the addon reads an absent rung as no
+ * requirement, so a forgotten tier would read as swingable by anyone carrying it.
  */
 function checkLadderCovers(table) {
   for (const tool of table.tools) {
@@ -701,9 +609,7 @@ function checkLadderCovers(table) {
 
 /** The shipped file's shape, built in the key order it is written in. */
 function build(root) {
-  // The identity check FIRST, before a line of content is read. Reading the node
-  // table first would report a wrong path as a missing source file, which reads as
-  // the game having moved something rather than as the path being wrong.
+  // Identity FIRST, or a wrong path reads as the game having moved a source file.
   const gameVersion = checkoutVersion(root);
   const nodeSource = readOrFail(join(root, NODES_FILE), 'the node table');
   const types = readTypes(nodeSource);
@@ -736,8 +642,6 @@ function build(root) {
 function main() {
   const root = gamePathFrom(process.argv.slice(2));
   const table = build(root);
-  // Beside this script rather than anywhere an argument could name, so the only file
-  // this can write is the one it exists to write.
   const out = join(import.meta.dirname, 'nodes.json');
   writeFileSync(out, `${JSON.stringify(table, null, INDENT)}\n`);
   const counts = `${String(table.nodes.length)} nodes, ${String(table.zones.length)} zones`;

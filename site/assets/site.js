@@ -1,12 +1,6 @@
-// The site's only client-side JavaScript: a theme toggle, copy buttons, and the
-// catalog's tag filter.
-//
-// Every control here is INJECTED rather than written into the markup, so a
-// visitor with JavaScript off gets no dead button: no toggle, no copy button, and
-// a catalog that is simply the whole grid. The theme still follows
-// prefers-color-scheme without this file; the flash-preventing read of the stored
-// choice is inline in the head, because an external script cannot run before
-// paint whatever its attributes say.
+// Theme toggle, copy buttons and the catalog's tag filter. Every control is
+// injected, so a visitor with JavaScript off gets no dead button. The stored theme
+// is read inline in the head, since an external script cannot run before paint.
 
 const Key = 'woc-theme';
 const FeedbackMs = 1400;
@@ -105,12 +99,10 @@ function addCopyButton(block) {
   headFor(block).append(button);
 }
 
-/** The tags one card declares, from the attribute the generator wrote. */
 function tagsOf(card) {
   return (card.dataset.tags ?? '').split(' ').filter(Boolean);
 }
 
-/** Every tag on the page, alphabetical, with how many cards carry each. */
 function countTags(cards) {
   const counts = new Map();
   for (const card of cards) {
@@ -131,13 +123,7 @@ function chip(tag, label, count) {
   return button;
 }
 
-/**
- * Show the cards carrying `tag`, and say how many that is.
- *
- * `hidden` rather than a class, so the cards that are filtered out are out of the
- * accessibility tree too: a screen reader announcing thirty-one cards under a
- * filter reading "combat 8" would be describing a page nobody is looking at.
- */
+/** `hidden`, not a class, so filtered-out cards leave the accessibility tree too. */
 function applyTag(cards, chips, status, tag) {
   for (const card of cards) {
     card.hidden = tag !== AllTags && !tagsOf(card).includes(tag);

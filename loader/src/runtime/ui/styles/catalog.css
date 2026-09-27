@@ -1,13 +1,5 @@
-/* Browse, Marketplaces, Updates, and the install confirmation.
- *
- * Split from panes.css, which had outgrown a file anyone reads top to bottom.
- * The seam is by SUBJECT rather than by line count: panes.css holds what every
- * pane is made of (notes, rows, badges, buttons, fields), and this holds the
- * four surfaces that are about marketplaces. Nothing here is referenced from
- * outside those four.
- *
- * Third of the sheets runtime/ui/styles/index.ts concatenates, after panes.css,
- * because the rules below refine elements panes.css defines.
+/* Browse, Marketplaces, Updates, and the install confirmation. After panes.css, whose
+ * elements these refine.
  */
 
 #woc-addons .woc-browse,
@@ -19,9 +11,7 @@
   gap: 8px;
 }
 
-/* Wraps rather than scrolls: the manager window is resizable and narrow is a
-   normal width for it, where a fixed two-column filter bar would clip the tag
-   control off the right edge. */
+/* Wraps rather than scrolls, since the manager is often narrow. */
 #woc-addons .woc-filters {
   display: flex;
   flex-wrap: wrap;
@@ -40,8 +30,7 @@
   margin-top: 2px;
 }
 
-/* A category, not a state: no border, so it does not read as another status
-   badge sitting under the description. */
+/* A category, not a state: no border, so it does not read as a status badge. */
 #woc-addons .woc-tag {
   color: var(--color-text-muted, rgb(153 141 106));
   background: rgb(255 255 255 / 6%);
@@ -52,14 +41,8 @@
   letter-spacing: 0.04em;
 }
 
-/* Companions: what the author says this addon works better with, whether it is
-   here, and the one thing to do about it.
-
-   The label stays quiet and the NAME does not. What the block used to draw was a
-   bare lower-case id at 11px grey, which reads as a footnote about something the
-   player has never heard of; the name is what they are actually looking for, so
-   it sits at the description's own size and colour and the state is the
-   qualifier beside it. */
+/* Companions: what this addon works better with, whether it is here, and the one thing to do
+   about it. The label is quiet; the NAME reads at the description's size and colour. */
 #woc-addons .woc-companions {
   display: flex;
   flex-wrap: wrap;
@@ -75,8 +58,7 @@
   letter-spacing: 0.04em;
 }
 
-/* One companion is one unbreakable run: its name, its state and its button
-   belong together, and a wrap between them reads as two companions. */
+/* One companion never wraps, or it reads as two. */
 #woc-addons .woc-companion {
   display: inline-flex;
   align-items: center;
@@ -94,34 +76,26 @@
   opacity: 0.75;
 }
 
-/* Installed and running is the case that needs no attention, so it is the one
-   that recedes: its name drops back to the label's own colour. Every other state
-   is either something to do or something that cannot be done here. */
+/* Installed and running needs no attention, so it recedes. */
 #woc-addons .woc-companion-enabled .woc-companion-name {
   color: inherit;
 }
 
-/* Switched off and available are the two a player can act on from this window,
-   which is why they are the two that brighten. */
+/* Switched off and available are actionable here, so they brighten. */
 #woc-addons .woc-companion-disabled .woc-companion-state,
 #woc-addons .woc-companion-offered .woc-companion-state {
   color: var(--color-text-default, rgb(214 202 168));
   opacity: 1;
 }
 
-/* Smaller than a row's own buttons and deliberately so: it is an action about a
-   line inside a row, and at the row buttons' weight it would compete with the
-   Install and Configure controls that act on the addon the row is about. The
-   touch floor in touch.css still reaches it, because that query names .woc-btn
-   and this carries it. */
+/* Smaller than the row's own buttons, which act on the row's addon. touch.css still reaches it
+   through .woc-btn. */
 #woc-addons .woc-companion-action {
   font-size: 11px;
   padding: 1px 8px;
 }
 
-/* A source is a block rather than a .woc-row: its readout, its notes, and its
-   controls each want a full line, and the ref field pushes past what a row's
-   trailing action group can hold at a narrow width. */
+/* A block rather than a .woc-row: readout, notes and controls each want a full line. */
 #woc-addons .woc-market {
   display: flex;
   flex-direction: column;
@@ -136,8 +110,7 @@
   flex-wrap: wrap;
 }
 
-/* The description is the main thing this screen is asking about, so it reads at
-   the pane's body size rather than at the size it takes in a list row. */
+/* The description reads at the pane's body size here, not a list row's. */
 #woc-addons .woc-confirm .woc-row-desc {
   font-size: 13px;
   line-height: 1.5;
@@ -153,25 +126,14 @@
   font-size: 13px;
 }
 
-/* A dash rather than a bullet, so each line reads as a claim the author made
-   rather than as an item in a feature list. */
+/* A dash rather than a bullet: each line is a claim the author made. */
 #woc-addons .woc-perms li::before {
   content: "\2014\00a0";
   color: var(--color-text-muted, rgb(153 141 106));
 }
 
-/* An addon's screenshot, in the two sizes the manager shows it at.
- *
- * `object-fit: contain` on a fixed box rather than a natural-size image: these
- * are captures of whatever the author framed, so a cooldown strip is tall and
- * narrow and a meter is wide, and letting each set its own height would make a
- * list of rows step up and down. Contain stops short and centres instead, which
- * is the same trade the site's own figure makes.
- *
- * The box is reserved by width and height here rather than by the file's real
- * dimensions, so nothing reflows when a preview finishes loading. That matters
- * more than usual: these load over the network while the player is reading the
- * list they are in. */
+/* An addon's screenshot, in the two sizes the manager shows it at. `object-fit: contain` in a
+ * fixed box, so captures of any shape keep the rows even and nothing reflows on load. */
 #woc-addons .woc-shot {
   display: block;
   object-fit: contain;
@@ -180,12 +142,8 @@
   background: rgb(0 0 0 / 45%);
 }
 
-/* Fixed rather than flexible, and it does not shrink: a row's text is what wraps
-   when the window narrows, because a thumbnail below about this size stops being
-   a picture of anything.
- *
- * The empty slot is the same box with nothing drawn in it, so a row without a
- * screenshot still starts its text where every other row does. */
+/* Fixed and unshrinking; the row's text wraps instead. The empty slot is the same box, so
+ * text aligns across rows. */
 #woc-addons .woc-shot-thumb,
 #woc-addons .woc-shot-slot {
   flex: 0 0 auto;
@@ -193,21 +151,15 @@
   height: 54px;
 }
 
-/* An addon with no screenshot, in a list where other addons have one.
- *
- * Dashed and dimmer than a real thumbnail's edge, which is the whole distinction
- * it has to carry: a solid frame with nothing in it reads as a picture that
- * failed to load, and this is a picture that was never taken. Nothing is written
- * inside it, because the words would be the same words on every such row. */
+/* An addon with no screenshot: dashed and dimmer, so it does not read as a failed load. */
 #woc-addons .woc-shot-slot {
   border: 1px dashed var(--color-border-default, rgb(78 61 29));
   border-radius: var(--radius-sm, 4px);
   opacity: 0.4;
 }
 
-/* Height fixed rather than capped, so the confirmation does not grow under the
-   player's pointer when the picture arrives. Keep in step with BOX in
-   manager/preview.tsx, which reserves the same box on the element. */
+/* Height fixed rather than capped, so the confirmation does not grow under the pointer. Keep in
+   step with BOX in manager/preview.tsx. */
 #woc-addons .woc-shot-full {
   width: 100%;
   height: 200px;

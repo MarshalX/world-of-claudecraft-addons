@@ -38,7 +38,7 @@ describe('the snap setting', () => {
   });
 
   // Outside the mode there are no lines on screen to explain a quantized drag.
-  it('gives no grid while the arrange mode is off, however it is set', () => {
+  it('gives no grid while the arrange mode is off', () => {
     const snap = createSnapStore({ storage: null, channel: CHANNEL });
     const unlock = mode(snap);
 

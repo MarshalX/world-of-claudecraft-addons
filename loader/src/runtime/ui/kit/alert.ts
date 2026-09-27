@@ -1,14 +1,10 @@
 // A modal question, resolving to the id of the button the player pressed.
 //
-// The promise ALWAYS resolves, including when the modal is dismissed with
-// Escape or torn down because the addon was disabled. An addon awaiting an
-// answer is usually mid-way through something it has to finish or abandon
-// cleanly, and a rejection there means its catch runs at teardown time, which
-// is exactly when it can no longer safely create anything. The dismissal value
-// is the cancel button's id, or null when there is none.
+// The promise ALWAYS resolves, including on Escape or teardown at disable: a rejection would
+// run the addon's catch at teardown, when it can no longer safely create anything. The
+// dismissal value is the cancel button's id, or null when there is none.
 //
-// Escape is captured, so the game does not also close whatever it has open
-// behind the modal. One key press closes one thing.
+// Escape is captured, so the game does not also close whatever is open behind the modal.
 
 import type { Teardown } from '../../disposal.ts';
 
@@ -45,11 +41,7 @@ const DEFAULT_BUTTONS: readonly AlertButton[] = [
   { id: 'ok', label: 'OK', primary: true, cancel: true },
 ];
 
-/**
- * The capture flag, in its OBJECT form rather than the boolean shorthand, so the
- * listener is actually removable. See keys/dispatcher.ts for why that is not the
- * same thing.
- */
+/** The capture flag in its OBJECT form, so the listener is removable (see keys/dispatcher.ts). */
 const CAPTURE = { capture: true } as const;
 
 function buttonClass(spec: AlertButton): string {
@@ -149,8 +141,7 @@ function openAlert(deps: AlertDeps, opts: AlertOpts): OpenAlert {
   doc.addEventListener('keydown', onKey, CAPTURE);
 
   deps.root.appendChild(backdrop);
-  // Focused after mounting, so the player can answer from the keyboard without
-  // hunting for where focus went.
+  // Focused after mounting, so the player can answer from the keyboard.
   const primary = row.querySelector('.woc-btn-primary') ?? row.firstElementChild;
   (primary as HTMLElement | null)?.focus();
 

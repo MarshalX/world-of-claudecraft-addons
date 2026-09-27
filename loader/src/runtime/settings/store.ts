@@ -1,15 +1,6 @@
-// One addon's settings: the live values, the write path, and the change fan-out.
-//
-// Settings are exposed to addons SYNCHRONOUSLY as `woc.settings`, which is the
-// whole reason this exists as a store rather than as reads through
-// `woc.storage`. An addon reads `woc.settings.window` on its first line, so the
-// values have to be in hand before its code runs; `hydrate()` is awaited by the
-// lifecycle, and everything after that is in memory.
-//
-// A write applies locally before it goes to the host. The host echoes every
-// write back as a storage change, so waiting for the echo would leave a window
-// in which the manager has painted the new value and `woc.settings` still reads
-// the old one.
+// One addon's settings, exposed SYNCHRONOUSLY as `woc.settings`, so `hydrate()` is awaited before
+// the addon's code runs. A write applies locally before the host echoes it, or the manager would
+// paint the new value while `woc.settings` still read the old one.
 
 import { diagError } from '../../shared/diag.ts';
 import type { SettingDecl } from '../../shared/schema.ts';
@@ -51,12 +42,7 @@ function asRecord(stored: unknown): Readonly<Record<string, unknown>> {
   return stored as Record<string, unknown>;
 }
 
-/**
- * Fan one change out to every subscriber.
- *
- * Copied first and each call guarded, so a handler that subscribes, unsubscribes
- * or throws cannot cost the addons after it in the set their notification.
- */
+/** Copied and guarded, so one handler cannot cost the rest their notification. */
 function publishTo(
   handlers: ReadonlySet<SettingsChangeHandler>,
   values: SettingValues,
@@ -72,13 +58,8 @@ function publishTo(
 }
 
 /**
- * Read the persisted record once and apply it.
- *
- * A store with nothing declared has nothing to read, and reaching the bridge for
- * it would make every addon pay a round trip for an empty object. It also keeps
- * hydrate() working with no host connected. A read that fails leaves the
- * defaults in place rather than rejecting, since an addon cannot start without
- * settings and defaults are settings.
+ * Skipped with nothing declared, saving a bridge round trip. A failed read keeps the defaults
+ * rather than rejecting, since an addon cannot start without settings.
  */
 async function hydrateFrom(
   deps: SettingsStoreDeps,
@@ -95,12 +76,7 @@ async function hydrateFrom(
   }
 }
 
-/**
- * The value `set` will store, or a throw naming which rule the write broke.
- *
- * `set` is async, so both of these reach the addon as a rejection rather than as
- * a synchronous throw.
- */
+/** The value `set` stores, or a throw (a rejection, since `set` is async) naming the rule. */
 function coerceWrite(deps: SettingsStoreDeps, id: string, value: SettingValue): SettingValue {
   const decl = findSetting(deps.decls, id);
   if (decl === null) {
@@ -127,8 +103,7 @@ function createSettingsStore(deps: SettingsStoreDeps): SettingsStore {
     publish();
   };
 
-  // Another tab's write, and the echo of this tab's own. Both land here, so a
-  // subscriber sees one shape whichever it was.
+  // Another tab's write and this tab's echo both land here.
   const stopWatching = deps.hub.onChange(ns, (key, value) => {
     if (key === SETTINGS_KEY) {
       apply(value);
@@ -150,8 +125,7 @@ function createSettingsStore(deps: SettingsStoreDeps): SettingsStore {
       try {
         await deps.hub.set(ns, SETTINGS_KEY, { ...values });
       } catch (err) {
-        // Put the player's screen back to what is actually stored rather than
-        // leaving a value that looks saved and is not.
+        // Revert to what is stored rather than show a value that looks saved.
         values = previous;
         publish();
         throw err;

@@ -1,32 +1,16 @@
-// The camera a stage scenario is photographed through.
+// The camera a stage scenario is photographed through, for addons that draw in the
+// WORLD (a nameplate, a ground ring, a pin) and so put nothing in a frame.
 //
-// An addon that draws in the WORLD (a nameplate, a ground ring, a pin over a node)
-// puts nothing in a frame, so without a camera there is nothing to photograph: the
-// suites' shared fake resolves no unit at all and answers one constant screen point
-// for every world point, which is deliberate there and useless here.
+// It fakes the game's RENDERER, not the answers: `runtime/world/anchor-point.ts` and
+// `runtime/world/project.ts` run their own arithmetic on top of it. Stubbing their
+// answers would photograph a stage that agrees only with itself.
 //
-// It is a fake RENDERER rather than a pair of stub functions, and that is the whole
-// design. `runtime/world/anchor-point.ts` and `runtime/world/project.ts` are the two
-// modules that turn a unit into a place on screen, and both of them read the game's
-// renderer: the per-entity view for the model height, the mount lift and the scale,
-// and the camera matrix for the near-plane guard. Stubbing their ANSWERS would mean a
-// picture of a stage that agrees with itself and nothing else, which is the same
-// mistake as reimplementing a frame here. So the stage supplies what the game supplies
-// and the loader's own arithmetic runs on top of it.
+// The eye sits over the player's shoulder, six yards back and three and a half up,
+// looking down world -z, so it follows a scenario that moves the player. It never
+// turns, so repeated captures stay identical.
 //
-// The camera sits over the PLAYER's own shoulder, six yards back and three and a half
-// up, looking straight down world -z. Over the player rather than at a fixed world
-// point because a scenario states where its units are relative to the player it is
-// about, and a fixed eye would put the whole picture off screen for any scenario that
-// moved the player. It does not turn: nothing here is animated, and a preview that
-// moved between captures would produce a diff on every `pnpm shots`.
-//
-// EVERY ENTITY HAS A VIEW, because the stage is drawing all of them. In a real session
-// a missing view means the game is not drawing that unit, which is what makes a plate
-// hide past about eighty yards; that state is reachable here by putting a unit out of
-// the camera's reach rather than by leaving its view out, and the alternative (a view
-// map a scenario has to remember to fill) would fail as an anchor that silently never
-// appears.
+// EVERY ENTITY HAS A VIEW. To hide a plate, put the unit out of the camera's reach;
+// a view map a scenario had to fill would fail as an anchor that silently never shows.
 
 import {
   createUnitPoints,
@@ -47,10 +31,9 @@ const NEAR = 0.1;
 const SIXTH_TURN = 6;
 const HALF_FOV_TAN = Math.tan(Math.PI / SIXTH_TURN);
 
-/** Two, named, because a half of something is not a magic number. */
 const HALF = 2;
 
-/** A 4x4 identity, column-major, which is the layout three lays a matrix out in. */
+/** The rotation columns of a 4x4 identity, column-major as three lays it out. */
 const IDENTITY_COLUMNS = Object.freeze([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0]);
 
 /** How tall the game is drawing a unit whose scenario did not say, in yards. */
@@ -95,12 +78,7 @@ interface StageCamera {
   model: (id: number, spec: ModelSpec) => void;
 }
 
-/**
- * One field off a shapeless fake.
- *
- * A helper for the reason STYLE.md gives: Biome wants a literal key and TypeScript
- * forbids dotting into an index signature, so the read goes through a variable.
- */
+/** Reads through a variable: Biome wants a literal key, TypeScript forbids the dot. */
 function field(target: Fake, name: string): unknown {
   return target[name];
 }
@@ -132,11 +110,9 @@ function viewMatrix(deps: CameraDeps): number[] {
 }
 
 /**
- * Where a world point lands, in the shape the game's own renderer answers in.
- *
- * `depth` is not on this answer and must not be: the renderer does not report one,
- * and `world/project.ts` derives it from the camera matrix. Two sources for it here
- * would be two chances to disagree about how far away something is.
+ * Where a world point lands, in the shape the game's renderer answers in. No
+ * `depth`: the renderer reports none, and `world/project.ts` derives it from the
+ * camera matrix.
  */
 function screenPoint(deps: CameraDeps, x: number, y: number, z: number): unknown {
   const at = eye(deps);
@@ -164,13 +140,7 @@ function viewFor(entity: Fake, spec: ModelSpec | undefined): ModelView {
   };
 }
 
-/**
- * Bring the view map in line with the entity map.
- *
- * Run on every read of the game rather than at mount, because a scenario adds units
- * after the addon is up and an anchor asks per frame. It is a handful of entities and
- * a Map write only when one arrives or leaves.
- */
+/** Runs on every read of the game, since a scenario adds units after mount. */
 function syncViews(
   deps: CameraDeps,
   views: Map<number, ModelView>,
@@ -198,7 +168,7 @@ function targetOf(deps: CameraDeps, entities: ReadonlyMap<number, Entity>): Enti
   return entities.get(targetId) ?? null;
 }
 
-/** The unit context the loader resolves a token through. Only entities matter here. */
+/** The unit context the loader resolves a token through. */
 function contextOf(deps: CameraDeps): UnitContext {
   const entities = deps.entities as unknown as ReadonlyMap<number, Entity>;
   return {
@@ -215,9 +185,7 @@ function createStageCamera(deps: CameraDeps): StageCamera {
   const renderer = {
     views,
     worldToScreen: (x: number, y: number, z: number): unknown => screenPoint(deps, x, y, z),
-    // The elements are read per projection rather than built once, because the eye
-    // follows the player and a matrix captured at mount would answer for wherever
-    // the player was standing before the scenario moved them.
+    // A getter, because the eye follows the player after a scenario moves them.
     camera: {
       near: NEAR,
       matrixWorldInverse: {

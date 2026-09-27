@@ -1,18 +1,5 @@
-// The README's addon section, generated from the manifests.
-//
-// The section this replaced was three hand-written paragraphs, and it described
-// the three addons that existed the week it was written for as long as it took
-// somebody to count. Regenerating it is `pnpm readme`, and `tests/tools-readme`
-// fails when the committed file and the manifests disagree, which is what makes
-// this different from the version that went stale: the drift is a red run rather
-// than something a reader notices a year later.
-//
-// The featured addons are the ones the landing page shows, from tools/featured.ts,
-// because the site and the README picking different favourites is a small lie
-// about what the project thinks is worth installing. How many there are is read
-// from that list too, right down to the word in the sentence introducing them.
-// Everything else on the page is the addon's own manifest: its name, its
-// description, its screenshot and that screenshot's alt text.
+// The README's addon section, generated from the manifests. The featured addons come from
+// tools/featured.ts, shared with the landing page; everything else is the addon's own manifest.
 
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -30,13 +17,8 @@ const README = join(ROOT, 'README.md');
 const CATALOG_URL = 'https://woc.marshal.dev/addons';
 
 /**
- * How wide a featured screenshot is drawn, in CSS pixels.
- *
- * A cap rather than a size. Previews are captured at whatever scale fills the
- * site's card slot, so their files run from 776px to 1904px wide and a single
- * fixed width would upscale the narrow ones into a blur. Half the file's natural
- * width is the retina reading, and the cap is what keeps a wide panel from
- * running the width of a README nobody scrolls sideways.
+ * The widest a featured screenshot is drawn, in CSS pixels. A cap rather than a size, because
+ * previews are captured at varying scales and a fixed width would upscale the narrow ones.
  */
 const MAX_WIDTH = 440;
 
@@ -45,14 +27,7 @@ const RETINA = 2;
 /** A sentence ends at a full stop followed by the start of another one. */
 const SENTENCE_END = /\.\s+(?=[A-Z])/;
 
-/**
- * The first sentence of a description, for the list of everything.
- *
- * A description runs from one line to a paragraph, and thirty paragraphs is the
- * catalog page pasted into a README. Truncating on the sentence rather than on a
- * character count is what keeps it readable: every description in this repository
- * opens by saying what the addon is, and the sentences after it qualify.
- */
+/** The first sentence of a description, for the list of everything. */
 function firstSentence(text: string): string {
   const found = SENTENCE_END.exec(text);
   if (!found) {
@@ -71,14 +46,7 @@ function link(addon: CatalogAddon): string {
   return `[${addon.name}](addons/${addon.id})`;
 }
 
-/**
- * One featured addon: a line, then its own screenshot.
- *
- * A featured addon MUST declare a preview, and this throws rather than quietly
- * emitting a nameless paragraph, for the reason the site build throws on the same
- * condition: the whole point of featuring an addon is the picture, and a silent
- * skip would leave a README that looks finished.
- */
+/** One featured addon: a line, then its own screenshot. Throws when it declares no preview. */
 function featuredBlock(addon: CatalogAddon): string {
   const { preview } = addon;
   if (preview === null) {
@@ -106,13 +74,7 @@ function chosen(catalog: readonly CatalogAddon[]): CatalogAddon[] {
   });
 }
 
-/**
- * The line about the addons that ship for AUTHORS rather than for players.
- *
- * Generated from the excluded rows for the reason the catalog page's line is: a
- * README that lists thirty-one while the game's Browse offers thirty-two invites
- * exactly one bug report, and hand-writing the exception is how it goes stale.
- */
+/** The line naming the addons that ship for AUTHORS, so the README count matches Browse. */
 function toolsLine(tools: readonly CatalogAddon[]): string[] {
   if (tools.length === 0) {
     return [];
@@ -142,14 +104,7 @@ function renderAddons(all: readonly CatalogAddon[]): string {
   return blocks.join('\n\n');
 }
 
-/**
- * Replace the generated region, leaving everything around it alone.
- *
- * A missing marker is an error rather than an append: the section has a place in
- * the document (under "What ships with it", above "For addon authors"), and a
- * generator that guessed where to put it would move it on the first edit that
- * removed a marker by accident.
- */
+/** Replace the generated region, leaving everything around it alone. Throws on a missing marker. */
 function spliceReadme(source: string, section: string): string {
   const from = source.indexOf(START);
   const to = source.indexOf(END);

@@ -2,7 +2,7 @@
  * The three boxes a panel is assembled out of, and the one way to hide any of
  * them. `woc.ui.column`, `woc.ui.row`, `woc.ui.line` and `woc.ui.show`.
  *
- * Added in API minor 4.
+ * Added in API minor 4, every option below included.
  */
 
 /** Where a row's items sit against each other. Defaults to `center`. */
@@ -12,34 +12,27 @@ export type RowAlign = 'baseline' | 'center' | 'end' | 'start';
 export type LineTone = 'default' | 'muted';
 
 export interface StackOpts {
-  /** Appended here when given. Added in API minor 4. */
+  /** Appended here when given. */
   parent?: Element;
-  /**
-   * Added alongside the kit's own class, so your own CSS still reaches it.
-   *
-   * Added in API minor 4.
-   */
+  /** Added alongside the kit's own class, so your own CSS still reaches it. */
   className?: string;
   /**
    * Pixels. Defaults to the density's own spacing: the frame's gap in a comfortable
    * frame, tighter in a compact or bare one.
    *
-   * The one number these take, deliberately. They write classes rather than styles
-   * because an inline style outranks every selector a stylesheet can spell, so a
-   * panel laid out in style attributes opts out of rules the loader holds for you,
-   * the tap-target floor on a touch screen among them.
-   *
-   * Added in API minor 4.
+   * The only number these take. Lay a panel out with these rather than inline
+   * styles: an inline style outranks every stylesheet rule, so it opts out of
+   * rules the loader holds for you, the touch-screen tap-target floor among them.
    */
   gap?: number;
 }
 
 export interface RowOpts extends StackOpts {
-  /** Wrap onto more lines. Default false. Added in API minor 4. */
+  /** Wrap onto more lines. Default false. */
   wrap?: boolean;
   /**
-   * Defaults to `center`. Reach for `baseline` where a small label sits beside a
-   * bigger figure, since centring lines up neither of them. Added in API minor 4.
+   * Defaults to `center`. Use `baseline` where a small label sits beside a bigger
+   * figure, since centring lines up neither of them.
    */
   align?: RowAlign;
   /**
@@ -50,19 +43,17 @@ export interface RowOpts extends StackOpts {
    * woc.ui.row({ wrap: true, gap: 10, wrapGap: 2 });
    * ```
    *
-   * A gap wide enough to separate the figures across the line drops the wrapped
-   * line far enough to read as a second strip.
-   *
-   * Added in API minor 4.
+   * Without it, a gap wide enough to separate figures across the line drops the
+   * wrapped line far enough to read as a second strip.
    */
   wrapGap?: number;
 }
 
 export interface LineOpts {
-  /** Appended here when given. Added in API minor 4. */
+  /** Appended here when given. */
   parent?: Element;
-  /** Added alongside the kit's own class. Added in API minor 4. */
+  /** Added alongside the kit's own class. */
   className?: string;
-  /** Defaults to `default`. Added in API minor 4. */
+  /** Defaults to `default`. */
   tone?: LineTone;
 }

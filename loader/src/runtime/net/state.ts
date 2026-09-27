@@ -17,12 +17,8 @@ interface Mutable {
   /** Whether any socket has opened yet, which is what makes the next one a reconnect. */
   opened: boolean;
   /**
-   * The server's own clock in seconds, off the snapshot head. Null before the first.
-   *
-   * Not on `NetState`, which is the addon-facing reading: a raw sim time is a number
-   * whose only correct use is a subtraction against a deadline the addon would also
-   * have to be handed. `world.group` does that subtraction and publishes the answer
-   * in seconds remaining, the way everything else on the world API reports a time.
+   * The server clock in seconds, off the snapshot head. Not on `NetState`: its only use is a
+   * subtraction against a deadline, which `world.group` does and publishes as seconds remaining.
    */
   simTime: number | null;
 }
@@ -46,8 +42,7 @@ function applyHello(state: Mutable, frame: Frame, latency: LatencyTracker): void
   state.pid = fieldNumber(frame, 'pid');
   state.seed = fieldNumber(frame, 'seed');
   state.realm = fieldString(frame, 'realm');
-  // A hello means a fresh transport: the server restarts input acking at zero,
-  // so samples timed against the old sequence would pair the wrong frames.
+  // A fresh transport restarts input acking at zero, so old samples would mispair.
   latency.reset();
 }
 
@@ -60,17 +55,13 @@ function applySnap(state: Mutable, frame: Frame, latency: LatencyTracker, at: nu
   if (tickHz !== null && tickHz > 0) {
     state.tickHz = tickHz;
   }
-  // Some of what the game sends is a DEADLINE rather than a duration, and a deadline
-  // is meaningless without the clock it was measured against. A loot roll expires at
-  // `ctx.time + 30`, where `ctx.time` is this, and nothing on the client keeps it:
-  // the client reads it off each snapshot, uses it while decoding, and drops it.
+  // Kept because some fields are deadlines against this clock (a loot roll expires at
+  // `time + 30`), and the client itself drops it after decoding.
   const time = fieldNumber(frame, 'time');
   if (time !== null) {
     state.simTime = time;
   }
-  // The ack rides the self record, not the snapshot head, and the server omits
-  // `self` on a snapshot that carries no self state. Read at the head it is
-  // always absent, which costs no error and silently never measures anything.
+  // The ack rides `self`, not the head; read at the head it is silently always absent.
   const ack = fieldNumber(fieldValue(frame, 'self'), 'ack');
   if (ack !== null) {
     latency.noteAck(ack, at);
@@ -96,20 +87,13 @@ export interface NetStateTracker {
   snapshot: () => NetState;
   /** The sim's clock in seconds, or null before the first snapshot. */
   simNow: () => number | null;
-  /**
-   * The realm off the hello frame, or null before one has arrived.
-   *
-   * A direct accessor rather than `snapshot().realm` because `snapshot`
-   * allocates and freezes an object per call, and the world sampler reads this
-   * at up to forty times a second whenever an addon watches `characterKey`.
-   */
+  /** The hello frame's realm. Not `snapshot().realm`, which allocates on every sampler read. */
   realm: () => string | null;
 }
 
 /**
- * `connected` follows the game's own meaning: an open socket is not enough, the
- * server has to have accepted the session with a hello. An `error` frame clears
- * it, because that is what the server sends before closing.
+ * `connected` means the server accepted the session with a hello, not merely an open socket. An
+ * `error` frame clears it, since the server sends one before closing.
  */
 export function createNetStateTracker(
   latency: LatencyTracker = createLatencyTracker(),

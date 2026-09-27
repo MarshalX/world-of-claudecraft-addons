@@ -1,14 +1,7 @@
-// The one close mark, and the only place its geometry is written.
+// The one close mark, and the only place its geometry is written. The frame builder reads
+// it as markup and the manager's preact as JSX, so neither needs `dangerouslySetInnerHTML`.
 //
-// The frame builder is plain DOM and needs markup as
-// a string; the manager is preact and renders JSX, and handing preact raw markup
-// would mean `dangerouslySetInnerHTML` for something that does not need it. So
-// both read the same `d`, `viewBox` and stroke width from here, and what cannot
-// drift is the part that would be visible if it did.
-//
-// `currentColor` rather than a fixed fill: the existing hover and focus rules on
-// `.woc-close` set `color`, so the mark takes the gold with the button and stays
-// correct under the game's theme picker.
+// `currentColor`, so the hover and focus rules on `.woc-close` colour it.
 
 /** Two strokes crossing, inset from the box so it is not corner to corner. */
 const CLOSE_PATH = 'M4 4 L12 12 M12 4 L4 12';
@@ -16,12 +9,7 @@ const CLOSE_VIEWBOX = '0 0 16 16';
 const CLOSE_SIZE = 12;
 const CLOSE_STROKE_WIDTH = 1.75;
 
-/**
- * The mark as markup, for the non-preact caller.
- *
- * `aria-hidden` because the button carries the accessible name: a path cannot be
- * read aloud, and a screen reader announcing the SVG as well would say it twice.
- */
+/** The mark as markup, for the non-preact caller. `aria-hidden`: the button carries the name. */
 function closeGlyphMarkup(): string {
   return (
     `<svg viewBox="${CLOSE_VIEWBOX}" width="${String(CLOSE_SIZE)}" ` +

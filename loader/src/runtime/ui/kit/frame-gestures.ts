@@ -1,34 +1,16 @@
 // Who may move a frameless overlay, and when.
 //
-// A `density: 'bare'` frame is dragged by its own content, because there is no
-// title bar to grab: kit/frame-chrome.ts hands the gesture layer `handle: el`. Its
-// pointer policy then hands the pointer back over exactly what the addon DREW, so
-// the only grabbable parts of an overlay are the rows a player reads and clicks,
-// and any press that travels a few pixels moves the panel. Six of the frames in
-// the official catalogue are in that position.
-//
-// So both gestures are confined to arrange mode, which already outlines every
-// frame, floors it at a grabbable size and takes the pointer back over the whole
-// box. A chromed frame is untouched: its handle is a title bar that exists to be
-// grabbed and its edges are on a visible border, so neither gesture is ambiguous
-// and neither is available by accident.
-//
-// This is the same reasoning `pointerOf` already encodes. `content` is there so a
-// bare overlay does not take gestures over pixels it did not draw; this covers the
-// pixels it did.
+// A `density: 'bare'` frame is dragged by its own content (kit/frame-chrome.ts hands over
+// `handle: el`), and the only grabbable parts are the rows a player clicks, so any press that
+// travels a few pixels would move it. Both gestures are therefore confined to arrange mode,
+// which outlines every frame and takes the pointer over the whole box. Chromed frames are
+// untouched.
 
 import type { Teardown } from '../../disposal.ts';
 import type { FrameDensity } from './frame-chrome.ts';
 import type { UnlockMode } from './unlock.ts';
 
-/**
- * How far a press travels before it counts as an attempted drag.
- *
- * A press that never moves is a click on whatever the addon drew, and a player
- * clicking a row has not asked to move anything. Without the slop the hint would
- * fire on the first click of a session, which teaches the wrong thing about a
- * gesture that was not refused.
- */
+/** How far a press travels before it counts as an attempted drag, so a click raises no hint. */
 const DRAG_SLOP = 4;
 
 interface GestureGateDeps {
@@ -41,13 +23,8 @@ interface GestureGateDeps {
 }
 
 /**
- * Watch for a drag that this frame is currently refusing.
- *
- * There is no event for one: interactjs with `enabled: false` simply never starts,
- * so the only way to know a player tried is to watch the press ourselves. The move
- * and the release are watched on the DOCUMENT rather than the element, because a
- * drag that begins on a row leaves it almost immediately and a listener on the
- * element would miss exactly the gesture it is looking for.
+ * Watch for a drag that this frame is refusing; disabled interactjs raises no event. The move
+ * and release are watched on the DOCUMENT, since a drag leaves the row almost immediately.
  */
 function watchRefusal(el: HTMLElement, note: () => void): Teardown {
   const doc = el.ownerDocument;
@@ -76,13 +53,7 @@ function watchRefusal(el: HTMLElement, note: () => void): Teardown {
   };
 }
 
-/**
- * Follow the mode, and hand back the teardown for both halves.
- *
- * Applied once at build as well as on every change, because a frame created while
- * the mode is already on has to be movable from its first frame rather than from
- * the next time somebody flips the switch.
- */
+/** Follow the mode, applied at build too, since the mode may already be on. */
 function createGestureGate(deps: GestureGateDeps): Teardown {
   let watching: Teardown | null = null;
 
@@ -105,12 +76,7 @@ function createGestureGate(deps: GestureGateDeps): Teardown {
   };
 }
 
-/**
- * The two things the gate needs from outside the kit, carried together.
- *
- * One field on the frame rather than two, because they are one answer: a mode with
- * nothing to say when it refuses is a frame that goes quiet for no stated reason.
- */
+/** The two things the gate needs from outside the kit, carried together. */
 interface FrameArrange {
   unlock: UnlockMode;
   /** Say that frames are locked, once per refused gesture. See kit/arrange-hint.ts. */
@@ -125,12 +91,8 @@ interface GateRequest {
 }
 
 /**
- * A gate for the frames the rule is about, and nothing for the rest.
- *
- * Only a BARE frame, because only a bare frame is grabbed by what it drew. And
- * only where the mode was passed at all, which is every frame in a running loader
- * and few in a suite: without it the gestures are simply live, which is what a
- * frame did before there was a rule.
+ * A gate for bare frames only, and only where the mode was passed (always in a running loader,
+ * rarely in a suite). Without it the gestures are live.
  */
 function gateFor(request: GateRequest): Teardown {
   const { arrange } = request;

@@ -37,8 +37,7 @@ describe('createNonce', () => {
     expect(createNonce(crypto)).toMatch(HEX_NONCE);
   });
 
-  // A dropped leading zero would shorten the nonce and, worse, let two distinct
-  // byte sequences collide on one string.
+  // A dropped leading zero would let two distinct byte sequences collide on one string.
   it('pads every byte to two digits', () => {
     expect(createNonce(fixedEntropy)).toBe('05'.repeat(16));
   });
@@ -67,8 +66,7 @@ describe('boot payload', () => {
     expect(Object.hasOwn(scope, BOOT_GLOBAL)).toBe(false);
   });
 
-  // A runtime that dies before claiming the payload would otherwise leave the
-  // nonce readable, and page code could replay the hello for the host's port.
+  // A nonce left readable would let page code replay the hello for the host's port.
   it('removes the global when the runtime throws before claiming it', () => {
     const scope: Record<string, unknown> = {};
 
@@ -98,8 +96,7 @@ describe('boot payload', () => {
     expect(takeBootPayload({ ...scope })).toBeNull();
   });
 
-  // Object.prototype carries no `nonce`, but the guard is what keeps that true
-  // for a scope whose prototype someone else populated.
+  // Guards against a scope whose prototype someone else populated.
   it('ignores an inherited nonce', () => {
     const scope: Record<string, unknown> = { [BOOT_GLOBAL]: Object.create({ nonce: NONCE }) };
 

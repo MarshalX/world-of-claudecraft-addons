@@ -1,23 +1,11 @@
-// The reading behind `pnpm tables`: given a data table before and after its
-// generator ran, say whether the game actually moved anything.
-//
-// Three states, and the middle one is the one that gets decided wrongly. A table
-// records which game version it was read from, so regenerating against a new
-// release rewrites that stamp whether or not a single row changed. UNCHANGED and
-// STAMP both mean the game moved nothing a player can see; CONTENT means it did.
-// The distinction is what decides an addon version bump, and bumping for a stamp
-// ships a download that tells the player nothing changed.
-//
-// Pure on purpose. Spawning the generators and touching the tree is the entry
-// point's job, so everything here can be tested against strings.
+// The reading behind `pnpm tables`: given a data table before and after its generator ran, say
+// whether the game moved anything. A regeneration rewrites the version stamp whether or not a row
+// changed, so STAMP means nothing a player can see moved and must not get a version bump, while
+// CONTENT must.
 
 /**
- * A line recording which game version the table was read from.
- *
- * Field names were never standardised across the generators: `game`,
- * `gameVersion`, and one nested inside a `source` object. Matching the VALUE
- * shape rather than the key covers all of them, and covers a new generator's
- * spelling for free.
+ * A line recording which game version the table was read from. The generators disagree on the
+ * key (`game`, `gameVersion`, one nested in `source`), so this matches the value's shape too.
  */
 const STAMP_LINE = /"(?:game|gameVersion)"\s*:\s*"\d+\.\d+(?:\.\d+)?"/;
 
@@ -65,10 +53,8 @@ function summary(rows: readonly TableRow[]): string[] {
 }
 
 /**
- * Whether a regeneration changed the table, only its stamp, or nothing.
- *
- * A differing line count is content by definition: a stamp is one line replaced
- * in place, so a table that grew or shrank gained or lost rows.
+ * Whether a regeneration changed the table, only its stamp, or nothing. A differing line count is
+ * content, since a stamp is one line replaced in place.
  */
 export function classifyTable(before: string, after: string): TableState {
   if (before === after) {
@@ -91,12 +77,7 @@ export function renderReport(rows: readonly TableRow[]): string {
   return [...body, '', ...summary(rows)].join('\n');
 }
 
-/**
- * Non-zero only when a generator FAILED.
- *
- * A moved table is the expected result of a game release rather than an error,
- * so it must not fail a script somebody wired into a check.
- */
+/** Non-zero only when a generator FAILED; a moved table is the expected result of a release. */
 export function exitCodeFor(rows: readonly TableRow[]): number {
   if (rows.some((row) => row.state === 'error')) {
     return EXIT_FAILURE;

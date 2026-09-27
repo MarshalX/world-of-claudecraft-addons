@@ -2,15 +2,12 @@
 
 // Cadence, run through the real loader.
 //
-// The claim worth pinning is the one the addon exists for: the swing bar resets the moment
-// the game re-arms the timer, which is when the swing landed, and not when the damage event
-// describing that swing turns up. Those are two different moments on the wire and the event
-// is the later of them, so a display driven by it runs down to zero, sits there for a round
-// trip and jumps. The suite drives both halves: a re-armed timer with no event, and an
-// event with no re-arm.
+// The swing bar resets when the game re-arms the timer, which is when the swing landed, not when
+// the later damage event arrives; a display driven by the event runs to zero, sits for a round trip
+// and jumps. The suite drives a re-armed timer with no event and an event with no re-arm.
 //
-// Nothing in this addon is driven by a subscription except combat, so almost every case
-// advances a frame rather than polling the watcher.
+// Only combat is a subscription, so almost every case advances a frame rather than polling the
+// watcher.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { validateManifest } from '../../loader/src/shared/schema.ts';
@@ -105,22 +102,18 @@ function textIn(key: string, selector: string): string {
 }
 
 /**
- * Whether something is really on screen. Both halves, because `[hidden]` is a UA rule at the
- * lowest priority there is and the loader's own unlayered sheet beats it outright: measured
- * on the stage, the strip with the attribute alone still computes `display: flex`.
- *
- * The class is the half that actually hides it. Every `.css` import resolves to '' under
- * Vitest, so the rule behind it cannot be seen from here.
+ * Whether something is really on screen. Both halves, because the loader's unlayered sheet beats
+ * the UA `[hidden]` rule, so the attribute alone leaves the strip at `display: flex`. The class
+ * does the hiding, and its CSS resolves to '' under Vitest.
  */
 function shown(el: HTMLElement): boolean {
   return !(el.hidden || el.classList.contains('woc-hidden'));
 }
 
 /**
- * Let the async frame restore land before reading what the addon drew. A frame that saves
- * its state starts hidden and is shown once the stored answer arrives, keyed per character,
- * so it takes a watcher sample and a storage read. The addon's own loop stands down while
- * the frame is hidden.
+ * Let the async frame restore land. A saved frame starts hidden until its per-character state
+ * loads, which takes a watcher sample and a storage read, and the addon's loop stands down while
+ * hidden.
  */
 async function settleFrames(): Promise<void> {
   await Promise.resolve();
@@ -132,9 +125,8 @@ async function start(
   settings: Record<string, unknown> = {},
   storage: FakeStorage = createFakeStorage(),
 ): Promise<CadenceHarness> {
-  // A rogue: energy, combo points, and a weapon with a real swing speed. The swing timer and
-  // the global cooldown ride the self record, so everything the addon reads is written onto
-  // this one entity.
+  // A rogue: energy, combo points and a weapon with a real swing speed. Everything the addon reads
+  // rides this one self entity.
   const player = liveEntity({
     set: {
       templateId: 'rogue',
@@ -146,8 +138,8 @@ async function start(
     },
   });
   const entities = new Map<number, unknown>([[PLAYER_ID, player]]);
-  // The spellbook in the game's own shape. The id and the display name have
-  // diverged, which is the whole reason `world.abilities` exists.
+  // The spellbook in the game's shape. The id and display name diverge, which is why
+  // `world.abilities` exists.
   const known = [
     {
       def: { id: 'arcane_shot', name: 'Fell Shot', school: 'arcane', requiresTarget: true },
@@ -157,8 +149,8 @@ async function start(
       cooldown: 5.4,
     },
   ];
-  // The movement read is gated on both `spectating` and the wire version: left unstated,
-  // every speed case passes on null.
+  // The movement read is gated on `spectating` and the wire version: left unstated, every speed
+  // case passes on null.
   const world: Record<string, unknown> = {
     entities,
     player,
@@ -193,8 +185,7 @@ async function start(
         }),
       );
     },
-    // `world.unit('target')` reads the player's `targetId` against the entity map, so both
-    // halves are needed.
+    // `world.unit('target')` reads `targetId` against the entity map, so both halves are needed.
     target: (id, fields = {}) => {
       entities.set(
         id,
@@ -213,8 +204,8 @@ async function start(
     untarget: () => {
       Object.assign(player, { targetId: null });
     },
-    // The loader reads `reconMoveSpeedMult`, gated on the v2 movement wire and on not
-    // spectating, so all three are stated. Null is the field taken away, the offline shape.
+    // `reconMoveSpeedMult` is gated on the v2 movement wire and not spectating, so all three are
+    // stated. Null is the offline shape.
     speed: (mult) => {
       Object.assign(world, { movementWireVersion: 2, spectating: null });
       if (mult === null) {
@@ -228,8 +219,7 @@ async function start(
     },
     latency: (ms) => harness.netState({ latencyMs: ms }),
     poll: () => harness.shared.world.watcher.poll(),
-    // The loader's own loop, stepped by hand. The addon is on `woc.onFrame`, so nothing it
-    // draws happens until the shared tick runs.
+    // The addon is on `woc.onFrame`, so nothing it draws happens until the shared tick runs.
     frame: () => harness.frames.tick(),
     drawn: () =>
       [...document.querySelectorAll('[data-row]')].map((el) => el.getAttribute('data-row') ?? ''),
@@ -244,8 +234,8 @@ async function start(
       }
       return band.style.width;
     },
-    // Filled and spent are one colour at two opacities, which is also the only
-    // half of a pip happy-dom keeps: its parser drops a `var()` outright.
+    // Filled and spent are one colour at two opacities; opacity is also the only half happy-dom
+    // keeps, since it drops a `var()`.
     pips: () =>
       [...document.querySelectorAll<HTMLElement>('.woc-cadence-pip')].map(
         (pip) => pip.style.opacity === '1',
@@ -270,8 +260,8 @@ describe('its manifest', () => {
     expect(validateManifest(MANIFEST_JSON).ok).toBe(true);
   });
 
-  // It reads the socket only for the round trip behind the latency band, and it
-  // never plays a cue or writes a key of its own.
+  // It reads the socket only for the round trip behind the latency band, and plays no cue and
+  // writes no key of its own.
   it('asks for the world, the socket, a frame and a key, and nothing else', () => {
     expect(parseManifest(MANIFEST_TEXT).permissions).toEqual([
       'world.read',
@@ -281,15 +271,9 @@ describe('its manifest', () => {
     ]);
   });
 
-  // The smallest minor carrying every member the file reads. `woc.ui.column`,
-  // `woc.ui.row` and `woc.ui.show` for the strip and its pips, `woc.fmt.titleCase`
-  // for the cast label, and `toggleKey` on the frame options were minor 4; the two
-  // that moved it to 6 are `size` on a bar, which is how a row is scaled now, and
-  // `frame.box()`, which is where the height being divided comes from.
-  //
-  // The target row moves nothing: `world.unit`, `Entity.swingTimer` and `Entity.autoAttack`
-  // were published before 6. `Entity.offhandSwingTimer` and `Entity.offhandWeapon` are
-  // published at minor 10.
+  // The smallest minor carrying every member the file reads: `ui.column`, `ui.row`, `ui.show`,
+  // `fmt.titleCase` and `toggleKey` at 4; bar `size` and `frame.box()` at 6;
+  // `Entity.offhandSwingTimer` and `Entity.offhandWeapon` at 10.
   it('declares the minor every member it reads is carried by', () => {
     expect(parseManifest(MANIFEST_TEXT).apiMinor).toBe(10);
   });
@@ -308,9 +292,8 @@ describe('which rows are on the strip', () => {
     expect(h.drawn()).toEqual(['swing', 'cast', 'power']);
   });
 
-  // A row with nothing to say stays where it is. The strip is read by muscle
-  // memory at a fixed spot, and a cast row that appeared as a cast started would
-  // move the two rows above it at the exact moment they are being watched.
+  // A row with nothing to say stays put: the strip is read by muscle memory, and a cast row
+  // appearing as a cast starts would move the rows being watched.
   it('keeps an idle row in place rather than removing it', async () => {
     const h = await run();
 
@@ -324,8 +307,8 @@ describe('which rows are on the strip', () => {
   });
 });
 
-// Nothing publishes how long a swing takes. What is readable is how much is left, so the row
-// learns its length from the reset, and the reset is the swing landing.
+// Nothing publishes a swing's length, so the row learns it from the reset, which is the swing
+// landing.
 describe('the swing timer', () => {
   it('drains as the timer runs down, with no subscription in between', async () => {
     const h = await run();
@@ -340,8 +323,8 @@ describe('the swing timer', () => {
     expect(h.valueOf('swing')).toBe('1.2s');
   });
 
-  // The game re-arms the timer on the snapshot that resolved the swing; the damage event
-  // describing that same swing arrives afterwards.
+  // The game re-arms the timer on the snapshot that resolved the swing; the damage event arrives
+  // afterwards.
   it('resets the instant the timer is re-armed, before any damage event', async () => {
     const h = await run();
     h.self({ swingTimer: SWING_SPEED });
@@ -356,8 +339,7 @@ describe('the swing timer', () => {
     expect(h.fillOf('swing')).toBe('100.00%');
   });
 
-  // The other half, which a display built on the event would fail: the damage lands while
-  // the timer is still running down, so the bar must ignore it and keep draining.
+  // The damage lands while the timer is still running, so the bar must ignore it and keep draining.
   it('ignores the damage event that follows a swing', async () => {
     const h = await run();
     h.self({ swingTimer: SWING_SPEED });
@@ -383,9 +365,8 @@ describe('the swing timer', () => {
     expect(h.fillOf('swing')).toBe('50.00%');
   });
 
-  // `weapon.speed` is the unhasted speed and the period the timer resets to is the hasted
-  // one, which nothing publishes. Without the relearn a hasted rogue's bar would top out at
-  // three quarters and never fill.
+  // `weapon.speed` is unhasted and the reset period is hasted, which nothing publishes. Without the
+  // relearn a hasted bar tops out short and never fills.
   it('learns a hasted swing from the reset rather than from the weapon', async () => {
     const h = await run();
     h.self({ swingTimer: 0.2 });
@@ -401,9 +382,8 @@ describe('the swing timer', () => {
     expect(h.fillOf('swing')).toBe('50.00%');
   });
 
-  // The seed is off by the melee haste stat and by nothing else. Every other term of the
-  // game's swing period is a published aura carrying a plain multiplier, so a slowed player's
-  // first bar is measured against the slowed period.
+  // The seed is off only by the melee haste stat: every other term of the swing period is a
+  // published aura multiplier, so a slowed player's first bar uses the slowed period.
   it('seeds a slowed swing from the aura as well as the weapon', async () => {
     const h = await run();
 
@@ -416,9 +396,7 @@ describe('the swing timer', () => {
     expect(h.fillOf('swing')).toBe('50.00%');
   });
 
-  // The other half of the same rule: a haste aura is on the wire exactly as a slow is, so it
-  // belongs in the seed for the same reason. Without this the first bar of a hasted swing is
-  // measured against the bare weapon speed and tops out at two thirds.
+  // A haste aura is on the wire like a slow, so it belongs in the seed too.
   it('seeds a hastened swing from the aura as well as the weapon', async () => {
     const h = await run();
 
@@ -431,9 +409,8 @@ describe('the swing timer', () => {
     expect(h.fillOf('swing')).toBe('50.00%');
   });
 
-  // A slow and a haste at once, which is the game's own arithmetic rather than two
-  // independent adjustments: the slows multiply the period and the hastes divide the result
-  // through one additive bucket.
+  // A slow and a haste at once, in the game's arithmetic: slows multiply the period and hastes
+  // divide it through one additive bucket.
   it('seeds a swing that is slowed and hastened at once', async () => {
     const h = await run();
 
@@ -461,7 +438,7 @@ describe('the swing timer', () => {
   });
 });
 
-// `world.moveSpeedMult` is the server's net multiplier with no breakdown, new at game 0.41.0.
+// `world.moveSpeedMult` is the server's net multiplier with no breakdown.
 describe('the movement speed row', () => {
   const On = { 'show-speed': true };
   const speedRow = (): HTMLElement => rowFor('speed') as HTMLElement;
@@ -472,8 +449,7 @@ describe('the movement speed row', () => {
     expect(h.drawn()).toEqual(['swing', 'gcd', 'cast', 'power']);
   });
 
-  // Null is "no answer": before world entry, offline, spectating, or on the older movement
-  // wire, where a 1 would sit while the player really was snared.
+  // Null is "no answer": before world entry, offline, spectating, or on the older movement wire.
   it('says nothing at all when the field has no answer', async () => {
     const h = await run(On);
     h.speed(null);
@@ -483,8 +459,8 @@ describe('the movement speed row', () => {
     expect(shown(speedRow())).toBe(false);
   });
 
-  // A moderator spectate repoints the client's player at somebody else and the server skips
-  // the block carrying this field.
+  // A moderator spectate repoints the client's player and the server skips the block carrying this
+  // field.
   it('says nothing while spectating somebody else', async () => {
     const h = await run(On);
     h.speed(0.5);
@@ -529,7 +505,7 @@ describe('the movement speed row', () => {
     expect(shown(speedRow())).toBe(false);
   });
 
-  // A mount is +60% to +80% for as long as the journey lasts.
+  // A mount is +60% to +80% for the whole journey.
   it('stays quiet while mounted', async () => {
     const h = await run(On);
     h.speed(1.6);
@@ -540,7 +516,7 @@ describe('the movement speed row', () => {
     expect(shown(speedRow())).toBe(false);
   });
 
-  // Empty is the on-foot answer, so a falsy gate on it would silence the row for everybody.
+  // Empty is the on-foot answer, so a falsy gate would silence the row for everybody.
   it('still speaks on foot, where the mount key is empty rather than absent', async () => {
     const h = await run(On);
     h.speed(0.4);
@@ -552,7 +528,7 @@ describe('the movement speed row', () => {
     expect(h.valueOf('speed')).toBe('40%');
   });
 
-  // A released spirit is a flat 1.25 returned before the aura scan, with no aura to explain it.
+  // A released spirit is a flat 1.25 with no aura to explain it.
   it('stays quiet for a ghost, whose 1.25 has no aura behind it', async () => {
     const h = await run(On);
     h.speed(1.25);
@@ -563,8 +539,8 @@ describe('the movement speed row', () => {
     expect(shown(speedRow())).toBe(false);
   });
 
-  // Slow immunity gates only the game's `slow` arm, so an immune player carrying a snare
-  // computes exactly 1.
+  // Slow immunity gates only the game's `slow` arm, so an immune player carrying a snare computes
+  // exactly 1.
   it('is quiet for a slow-immune player carrying a snare, without a rule for it', async () => {
     const h = await run(On);
     h.speed(1);
@@ -638,9 +614,8 @@ describe('the movement speed row', () => {
   });
 });
 
-// `offhandWeapon.speed` is the unhasted base and not the period: the game resets this clock
-// to `offhand.speed * swingIntervalMult(p)`, and neither melee haste nor the stance mastery
-// is on the wire.
+// `offhandWeapon.speed` is the unhasted base: the game resets to `offhand.speed *
+// swingIntervalMult(p)`, and neither melee haste nor stance mastery is on the wire.
 describe('the offhand swing timer', () => {
   const On = { 'show-offhand-swing': true };
   /** Duskfang Dirk, in the shape the self record carries a weapon. */
@@ -666,8 +641,8 @@ describe('the offhand swing timer', () => {
     expect(shown(rowFor('oswing') as HTMLElement)).toBe(false);
   });
 
-  // Asserted before any frame runs, since the first frame hides the row either way: the
-  // hidden row and the box stated for one fewer line have to agree.
+  // Asserted before any frame, since the first frame hides the row either way: the hidden row and
+  // the box stated one line shorter must agree.
   it('opens at the same height as a strip without it, before any frame runs', async () => {
     await run(On);
 
@@ -677,8 +652,8 @@ describe('the offhand swing timer', () => {
     expect(shown(rowFor('oswing') as HTMLElement)).toBe(false);
   });
 
-  // A shield fills `offhandItemId` and leaves the weapon null; the game derives dual-wield
-  // from the weapon alone.
+  // A shield fills `offhandItemId` and leaves the weapon null; dual-wield derives from the weapon
+  // alone.
   it('draws no row for a shield, which fills the item id and not the weapon', async () => {
     const h = await run(On);
     h.self({ offhandWeapon: null, offhandItemId: 'bulwark_of_the_vale' });
@@ -709,7 +684,7 @@ describe('the offhand swing timer', () => {
     h.self({ ...dual(Dirk, 'duskfang_dirk'), offhandSwingTimer: 1.6 });
     h.frame();
 
-    // Five lines and their four gaps inside the 62px the frame opened at.
+    // Five lines and four gaps inside the 62px the frame opened at.
     expect(heightFor('swing')).toBe('10');
   });
 
@@ -744,8 +719,8 @@ describe('the offhand swing timer', () => {
     expect(h.fillOf('oswing')).toBe('25.00%');
   });
 
-  // The game decrements this clock BEFORE it checks whether you are attacking, so with the
-  // swing off it drains to zero and sits there.
+  // The game decrements this clock BEFORE checking whether you are attacking, so with the swing off
+  // it drains to zero and sits there.
   it('says off when auto-attack is off, rather than sitting at zero', async () => {
     const h = await run(On);
 
@@ -756,9 +731,9 @@ describe('the offhand swing timer', () => {
     expect(h.fillOf('oswing')).toBe('0.00%');
   });
 
-  // The swap frame's timer must be LOWER than the frame before it: a timer jumping up reads
-  // as a swing landing and the relearn corrects it whether or not anything was discarded.
-  // 0.6 against the shiv's own 1.2 seed is half, and against the dirk's stale 1.6 is 37.5%.
+  // The swap frame's timer must be LOWER than the one before: a jump up reads as a swing landing
+  // and would relearn regardless. 0.6 is half the shiv's 1.2 seed and 37.5% of the dirk's stale
+  // 1.6.
   it('throws the learned period away when the offhand is swapped', async () => {
     const h = await run(On);
     h.self({ ...dual(Dirk, 'duskfang_dirk'), offhandSwingTimer: 1.6 });
@@ -773,14 +748,13 @@ describe('the offhand swing timer', () => {
     expect(h.fillOf('oswing')).toBe('50.00%');
   });
 
-  // The transition a key on the weapon's SPEED could not see. A discard falls back to the
-  // SEED, not a full bar: 0.4 remaining reads a quarter on a discard and a half on a period
-  // that survived.
+  // A key on weapon SPEED could not see this. A discard falls back to the SEED: 0.4 remaining reads
+  // a quarter on a discard and a half on a surviving period.
   it('throws it away across an unequip and a re-equip of the same weapon', async () => {
     const h = await run(On);
     h.self({ ...dual(Dirk, 'duskfang_dirk'), offhandSwingTimer: 0.2 });
     h.frame();
-    // Jumping UP is the swing landing, and 0.8 is what this hand actually swings at.
+    // Jumping UP is the swing landing, and 0.8 is this hand's real period.
     h.self({ offhandSwingTimer: 0.8 });
     h.frame();
     h.self({ offhandSwingTimer: 0.4 });
@@ -833,8 +807,8 @@ describe('the offhand swing timer', () => {
   });
 });
 
-// The server sends `swing` only for an auto-attacking entity and the client reads presence
-// as `autoAttack`. No weapon speed rides it, so the row knows only what it watched.
+// The server sends `swing` only for an auto-attacking entity and the client reads presence as
+// `autoAttack`. No weapon speed rides it, so the row knows only what it watched.
 describe("the target's swing timer", () => {
   const TargetId = 7001;
   const SecondId = 7002;
@@ -867,8 +841,7 @@ describe("the target's swing timer", () => {
     expect(h.labelOf('tswing')).toBe('Target');
   });
 
-  // The server omits `swing` for an entity that is not auto-attacking, and so does every
-  // server older than 0.41.0.
+  // The server omits `swing` for an entity that is not auto-attacking.
   it('says off for a target that is not auto-attacking', async () => {
     const h = await run(On);
     h.target(TargetId, { autoAttack: false, swingTimer: 0 });
@@ -919,7 +892,7 @@ describe("the target's swing timer", () => {
     expect(h.fillOf('tswing')).toBe('100.00%');
   });
 
-  // Guessed 2.6, real 4: without the relearn this bar runs off the end of its own scale.
+  // Guessed 2.6, real 4: without the relearn this bar runs off its own scale.
   it('learns the real period from the reset edge and drains against it', async () => {
     const h = await run(On);
     h.target(TargetId, swinging(2.6));
@@ -938,7 +911,7 @@ describe("the target's swing timer", () => {
     expect(h.fillOf('tswing')).toBe('25.00%');
   });
 
-  // Carrying 4 over would draw this add's full one-second swing as a quarter of a bar.
+  // Carrying 4 over would draw this add's one-second swing as a quarter of a bar.
   it('throws the learned period away when the target changes', async () => {
     const h = await run(On);
     h.target(TargetId, swinging(4));
@@ -981,7 +954,7 @@ describe("the target's swing timer", () => {
     expect(h.fillOf('tswing')).toBe('0.00%');
   });
 
-  // A row taking the player's swing would pass every case above that never sets one.
+  // A row reading the player's swing would pass every case above.
   it('reads the target and not the player, when both are swinging', async () => {
     const h = await run(On);
     h.self({ swingTimer: SWING_SPEED });
@@ -1004,12 +977,11 @@ describe("the target's swing timer", () => {
   });
 });
 
-// The row where the arithmetic exists, which separates it from the swing above it. Every term
-// of the game's own formula is published, so the length is computed rather than learned and
-// the bar is right on the first press of a session. The cases below are one per term.
+// Every term of the game's GCD formula is published, so the length is computed and the bar is right
+// on the first press. One case per term.
 describe('the global cooldown', () => {
-  // The fixture is a rogue, so its base is 1.0. A row that had to watch for a
-  // re-arm would divide this by its 1.5 seed and draw two thirds.
+  // The fixture is a rogue, base 1.0. A row that learned from a re-arm would divide by its 1.5 seed
+  // and draw two thirds.
   it('is exact on the first press, with no re-arm ever observed', async () => {
     const h = await run();
 
@@ -1031,8 +1003,7 @@ describe('the global cooldown', () => {
     expect(h.valueOf('gcd')).toBe('0.5s');
   });
 
-  // A rogue's base is a third shorter than everyone else's, and it is the only class the
-  // game singles out.
+  // A rogue's base is a third shorter; the only class the game singles out.
   it('gives a rogue the shorter base and nobody else', async () => {
     const h = await run();
 
@@ -1051,8 +1022,8 @@ describe('the global cooldown', () => {
     expect(h.fillOf('gcd')).toBe('100.00%');
   });
 
-  // Haste from an aura is added to the stat rather than already folded into it, so an
-  // implementation reading the stat alone draws a bar long by whatever the player has running.
+  // Haste auras add to the stat rather than being folded in, so reading the stat alone draws a bar
+  // too long.
   it('adds a haste aura on top of the stat', async () => {
     const h = await run();
 
@@ -1067,8 +1038,7 @@ describe('the global cooldown', () => {
     expect(h.fillOf('gcd')).toBe('100.00%');
   });
 
-  // No amount of haste takes it under the floor. Without one, this player's length would come
-  // out at half a second and the bar would read three quarters full where it is half.
+  // No haste takes it under the floor; without it this length would be half a second.
   it('never divides past the floor', async () => {
     const h = await run();
 
@@ -1102,8 +1072,7 @@ describe('the cast bar', () => {
     expect(h.labelOf('cast')).toBe('Fell Shot');
   });
 
-  // An ability outside your own spellbook resolves to nothing, and a readable
-  // guess beats a blank row on the thing you are currently casting.
+  // An ability outside your spellbook resolves to nothing, and a readable guess beats a blank row.
   it('falls back to the id for an ability it does not know', async () => {
     const h = await run();
 
@@ -1113,11 +1082,9 @@ describe('the cast bar', () => {
     expect(h.labelOf('cast')).toBe('Summon Water Elemental');
   });
 
-  // `castingAbility` also carries an ACTIVITY sentinel, which is what the game runs
-  // gathering, fishing and the crafting family through, and the set grows with the game. The
-  // lane draws it like any other cast, because the game's own cast bar is drawing the same
-  // thing. The case is here to fail if anyone adds an exclusion list of sentinels, since such
-  // a list is stale the day the game adds one.
+  // `castingAbility` also carries ACTIVITY sentinels (gathering, fishing, crafting), a set that
+  // grows with the game. The lane draws them as the game's cast bar does; this fails if someone
+  // adds a sentinel exclusion list.
   it('draws an activity cast the same way', async () => {
     const h = await run();
 
@@ -1156,8 +1123,8 @@ describe('the cast bar', () => {
   });
 });
 
-// The part the game's own cast bar does not draw. It is a measurement of the round trip and
-// never a claim about what the server does with a press that arrives during a cast.
+// The game's cast bar does not draw this. It measures the round trip and claims nothing about what
+// the server does with a press during a cast.
 describe('the latency band', () => {
   it('covers the share of the cast the round trip accounts for', async () => {
     const h = await run();
@@ -1169,8 +1136,8 @@ describe('the latency band', () => {
     expect(h.bandWidth()).toBe('15.00%');
   });
 
-  // Null until the first pairing, which is every session's first seconds and every
-  // reconnect. A band drawn from a guess would be a made-up number on screen.
+  // Null until the first pairing, at the start of every session and reconnect. A band from a guess
+  // would be a made-up number.
   it('draws nothing before a round trip has been measured', async () => {
     const h = await run();
 
@@ -1203,8 +1170,7 @@ describe('the latency band', () => {
     expect(h.bandWidth()).toBe('');
   });
 
-  // A round trip longer than the cast covers the whole bar rather than overflowing
-  // it: the honest reading there is that the cast is shorter than your latency.
+  // A round trip longer than the cast covers the whole bar rather than overflowing.
   it('stops at the whole bar', async () => {
     const h = await run();
     h.latency(3000);
@@ -1228,8 +1194,7 @@ describe('the resource and the combo points', () => {
     expect(h.valueOf('power')).toBe('45');
   });
 
-  // The game's `ResourceType` is exactly these four. `focus` is the hunter's and arrived with
-  // the 0.36.0 class rebuild; before it, a hunter was on mana and this suite pinned that.
+  // The game's `ResourceType` is exactly these four.
   it('names each of the four kinds the game sends', async () => {
     const h = await run();
 
@@ -1246,8 +1211,7 @@ describe('the resource and the combo points', () => {
     }
   });
 
-  // The fallback, and it earned its keep: `focus` went through it for a release, so a hunter
-  // read a vague word rather than nothing at all. It stays for the next one.
+  // The fallback for a resource kind a later release adds: a vague word beats nothing.
   it('falls back for a kind the game does not send yet', async () => {
     const h = await run();
 
@@ -1266,8 +1230,8 @@ describe('the resource and the combo points', () => {
     expect(h.pips()).toEqual([true, true, true]);
   });
 
-  // There is no maximum on the wire, so the strip is as wide as the most points this session
-  // has shown. Writing five in would be a claim about every class in the game.
+  // No maximum is on the wire, so the strip is as wide as the most points seen. Writing five in
+  // would be a claim about every class.
   it('keeps the slots it has seen rather than claiming a maximum', async () => {
     const h = await run();
     h.self({ comboPoints: 4 });
@@ -1279,9 +1243,8 @@ describe('the resource and the combo points', () => {
     expect(h.pips()).toEqual([true, false, false, false]);
   });
 
-  // The pips are a line of their own and the frame's height is stated for the rows alone, so
-  // every line has to divide the box: on the one class that has them the strip would stand
-  // taller than its own box and a bare frame clips.
+  // The pips are their own line and the frame's height was stated for the rows, so every line
+  // divides the box; otherwise the bare frame clips.
   it('makes room for the pips out of the box the rows had', async () => {
     const h = await run();
     expect(heightFor('swing')).toBe('14');
@@ -1289,7 +1252,7 @@ describe('the resource and the combo points', () => {
     h.self({ comboPoints: 2 });
     h.frame();
 
-    // Five lines and their four gaps inside the 62px the frame opened at.
+    // Five lines and four gaps inside the 62px the frame opened at.
     expect(heightFor('swing')).toBe('10');
     expect(shown(pipStrip())).toBe(true);
   });
@@ -1304,8 +1267,8 @@ describe('the resource and the combo points', () => {
   });
 });
 
-// The frame's own visibility is the player's and the loader persists it, so the setting hides
-// the content instead. On a bare frame that is the same thing on screen.
+// The frame's visibility is the player's and the loader persists it, so the setting hides the
+// content; on a bare frame that looks the same.
 describe('hiding it out of combat', () => {
   it('draws nothing while nothing is fighting', async () => {
     const h = await run({ 'hide-out-of-combat': true });
@@ -1313,10 +1276,8 @@ describe('hiding it out of combat', () => {
     expect(shown(h.strip())).toBe(false);
   });
 
-  // The half a suite is the only place to catch: the strip is a flex column drawn
-  // by a loader rule, so the attribute on its own leaves it on screen. Measured on
-  // the stage, where `.woc-cadence` computes `display: flex` at 62px with the
-  // attribute set and `display: none` at 0px once the class goes on.
+  // The strip is a flex column drawn by a loader rule, so the attribute alone leaves it on screen;
+  // the class is what sets `display: none`.
   it('hides it by the class as well as by the attribute', async () => {
     const h = await run({ 'hide-out-of-combat': true });
 
@@ -1340,8 +1301,8 @@ describe('hiding it out of combat', () => {
   });
 });
 
-// Rows are placed once and never moved. An element removed and re-inserted loses the hover
-// state the browser was tracking on it, with no leave event to say so.
+// Rows are placed once. An element removed and re-inserted loses its hover state with no leave
+// event.
 describe('how the strip is drawn', () => {
   it('adds and removes nothing on a frame that only moves numbers', async () => {
     const h = await run();
@@ -1355,8 +1316,8 @@ describe('how the strip is drawn', () => {
     h.frame();
     const first = rowFor('swing');
     const observer = new MutationObserver(() => undefined);
-    // childList on the two lists rather than the whole subtree: the countdowns
-    // rewrite their own text every frame, which is the display working.
+    // childList on the two lists rather than the subtree: the countdowns rewrite their own text
+    // every frame.
     observer.observe(h.strip(), { childList: true });
     observer.observe(pipStrip(), { childList: true });
 
@@ -1371,14 +1332,10 @@ describe('how the strip is drawn', () => {
   });
 });
 
-// A frame's minimum size defaults to the size it opened at, so a strip that stated no bounds
-// takes the kit's own fallback (240 by 120) as its floor, which is nearly twice what four
-// 14px rows measure. Both bounds are stated from the row-height setting instead.
-//
-// What is observable from a suite is the inline box the loader paints, which is where every
-// bound has already been applied. The gestures themselves are not: interactjs does not move a
-// box under happy-dom, which has no layout. So the smaller box arrives the way a player's own
-// would across a login, out of the per-character frame state.
+// A frame's minimum defaults to its opening size, so without bounds the kit fallback (240 by 120)
+// would be the floor. Both bounds are stated from the row-height setting. interactjs moves nothing
+// under happy-dom, so the smaller box arrives through saved frame state and the painted inline box
+// is asserted.
 describe('how small the strip can be made', () => {
   const savedBox = async (hub: FakeStorage, box: { w: number; h: number }): Promise<void> => {
     await hub.set(uiNamespace(FQID), perCharacterKey(CHANNEL, CHARACTER, 'strip'), {
@@ -1393,8 +1350,7 @@ describe('how small the strip can be made', () => {
   it('opens at the height its rows actually take', async () => {
     await run();
 
-    // Four 14px rows and the three 2px gaps between them, and nothing else: a
-    // bare frame has no chrome to allow for.
+    // Four 14px rows and three 2px gaps: a bare frame has no chrome.
     expect(frameEl().style.height).toBe('62px');
   });
 
@@ -1414,9 +1370,8 @@ describe('how small the strip can be made', () => {
     expect(frameEl().style.width).toBe('120px');
   });
 
-  // The rows follow the box, which is what makes a shorter frame a smaller strip rather than
-  // a clipped one. The gaps come out of the box first: four rows in 60px is 13 each and not
-  // 15, and the difference is the bottom row hanging out of a frame whose density clips.
+  // The gaps come out of the box first: four rows in 60px is 13 each, not 15, or the bottom row
+  // hangs out of a clipping frame.
   it('scales the rows down with the box', async () => {
     const hub = createFakeStorage();
     await savedBox(hub, { w: 120, h: 60 });
@@ -1426,10 +1381,8 @@ describe('how small the strip can be made', () => {
     expect(heightFor('swing')).toBe('13');
   });
 
-  // The floor is the row height setting's own minimum, spread over every line the strip can
-  // be asked to draw. Below it the lines stop shrinking, so the frame would clip them rather
-  // than get smaller. Five lines and not four: the combo pips arrive mid-session, on a class
-  // whose points cannot be known when the bounds are stated.
+  // The floor is the row-height setting's minimum over every line the strip can draw. Five lines,
+  // since the combo pips can arrive mid-session.
   it('holds it at what its lines need at their smallest', async () => {
     const hub = createFakeStorage();
     await savedBox(hub, { w: 120, h: 32 });
@@ -1439,8 +1392,8 @@ describe('how small the strip can be made', () => {
     expect(frameEl().style.height).toBe('48px');
   });
 
-  // 42 is under the floor above and over the one a row fewer makes, so this is the
-  // row count deciding it and nothing else.
+  // 42 is under the floor above and over the one a row fewer makes, so only the row count decides
+  // it.
   it('takes that floor down with a row the player switched off', async () => {
     const hub = createFakeStorage();
     await savedBox(hub, { w: 120, h: 42 });
@@ -1460,8 +1413,7 @@ describe('how small the strip can be made', () => {
   });
 });
 
-// The tooltip is where the band is allowed to be a paragraph rather than a
-// colour, and both of the addon's honest sentences live there.
+// The tooltip is where the band is explained in words.
 describe('what a row says under the pointer', () => {
   function hover(key: string): string {
     rowFor(key)?.dispatchEvent(new Event('pointerenter'));
@@ -1474,9 +1426,8 @@ describe('what a row says under the pointer', () => {
     expect(hover('swing')).toContain('not when its damage arrives');
   });
 
-  // The band is a measurement of a round trip. Nothing published says what the
-  // server does with a press that arrives during a cast, so a row that implied a
-  // press inside the band is safe would be this addon inventing a rule.
+  // The band measures a round trip. Nothing published says what the server does with a press during
+  // a cast, so implying the band is safe would invent a rule.
   it('calls the band what it is and refuses to promise anything with it', async () => {
     const h = await run();
     h.latency(120);
@@ -1510,9 +1461,7 @@ describe('its keybind', () => {
 });
 
 describe('changing a setting under it', () => {
-  // Another tab writing the value, which is how a setting actually changes: the
-  // manager is a different surface and the storage change is what reaches a
-  // running addon.
+  // Another tab writing the value, which is how a setting change reaches a running addon.
   it('rebuilds the rows the setting decides', async () => {
     const h = await run();
     expect(h.drawn()).toEqual(['swing', 'gcd', 'cast', 'power']);
@@ -1536,10 +1485,8 @@ describe('changing a setting under it', () => {
 });
 
 describe('disabling it', () => {
-  // The frame handler is the loader's to unsubscribe, which is most of why the addon
-  // is on the shared tick: the loop keeps scheduling itself for as long as anything
-  // is subscribed, so a handler left behind is a browser callback running against
-  // DOM that has already gone.
+  // The loop reschedules while anything is subscribed, so a handler left behind runs against DOM
+  // that is gone.
   it('leaves no frame, no keybind, and nothing on the shared loop', async () => {
     const h = await run();
     h.self({ swingTimer: 2 });

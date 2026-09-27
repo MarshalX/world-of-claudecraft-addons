@@ -1,13 +1,6 @@
-// Which menu the manager's dropdowns open, held for the whole manager.
-//
-// Module state, deliberately. There is exactly one menu in the loader and exactly one manager,
-// so the alternative is threading an opener through five components that have no other reason
-// to know about it. It sits beside the stores that already live this way, and it is in its own
-// module rather than in `picker.tsx` because a file exporting a component may export nothing
-// else.
-//
-// A picker rendered before this is set opens nothing rather than throwing, which is the same
-// answer as a manager that never mounted.
+// Which menu the manager's dropdowns open. Module state, since there is one menu and one manager;
+// its own module because a file exporting a component (picker.tsx) may export nothing else. A
+// picker rendered before this is set opens nothing.
 
 import type { MenuItem } from '../kit/menu.ts';
 import type { OpenMenu } from '../kit/picker.ts';

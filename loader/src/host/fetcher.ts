@@ -1,18 +1,9 @@
 // Conditional GET over the userscript manager's cross-origin request API.
 //
-// The @connect allowlist bounds this to raw.githubusercontent.com,
-// api.github.com, and localhost, and shared/marketplace.ts is what keeps a
-// marketplace URL from naming anything else.
-//
-// Every response is cached with its ETag, so a refresh that finds nothing new
-// costs a 304 with no body. That is the common case for a marketplace index,
-// and it is also what makes dev-server polling cheap enough to run on a timer:
-// `changed` on the outcome is the whole answer to "should this addon reload".
-//
-// The cache goes through the GM adapter rather than through host/storage.ts on
-// purpose. That store publishes every write as a storage.changed event across
-// the bridge, and a poll that wrote an ETag entry twice a second would flood the
-// runtime with events about nothing.
+// Every response is cached with its ETag, so an unchanged refresh costs a bodiless 304, which
+// is what makes dev-server polling affordable. The cache writes through the GM adapter and not
+// host/storage.ts, because that store publishes every write across the bridge and a poll would
+// flood the runtime with events about nothing.
 
 import type { GmAdapter } from './gm.ts';
 
@@ -32,12 +23,7 @@ interface CacheEntry {
 interface FetchOutcome {
   /** The body, from the response or from the cache on a 304. */
   body: string;
-  /**
-   * False when the server confirmed the cached copy is still current.
-   *
-   * This is what the dev watcher polls on, and what lets an index refresh skip
-   * re-parsing and re-publishing an index that did not move.
-   */
+  /** False when the server confirmed the cached copy is still current. */
   changed: boolean;
 }
 
@@ -63,12 +49,8 @@ function cacheKey(url: string): string {
 }
 
 /**
- * One header, by name.
- *
- * A computed read rather than `headers.etag`, because
- * noPropertyAccessFromIndexSignature forbids dotting into a string map and the
- * lint rule that would rewrite it back reads the two as interchangeable. The
- * same idiom is `fieldValue` in runtime/net/frames.ts.
+ * One header, by name. A function because noPropertyAccessFromIndexSignature forbids
+ * `headers.etag` and Biome's useLiteralKeys rewrites `headers['etag']` back to it.
  */
 function header(headers: Record<string, string>, name: string): string | undefined {
   return headers[name];
@@ -87,15 +69,8 @@ function readEntry(raw: unknown): CacheEntry | null {
 }
 
 /**
- * A failed response, carrying its status.
- *
- * The status is the diagnosis often enough to be worth carrying verbatim: 404 on
- * a raw.githubusercontent.com URL is a private or renamed repository, and 403 is
- * the unauthenticated rate limit. It is a field rather than only a substring of
- * the message because one caller branches on it: a marketplace with no
- * marketplace.json falls back to enumerating the repository, and it must do that
- * for a missing file and NOT for a rate limit, which would spend the rest of the
- * hour's quota discovering it is out of quota.
+ * A failed response, carrying its status. The contents fallback branches on it: it runs on a
+ * 404 and must NOT run on a 403, the rate limit, which it would only deepen.
  */
 class HttpError extends Error {
   readonly status: number;
@@ -131,19 +106,15 @@ function conditionalHeaders(entry: CacheEntry | null): Record<string, string> {
 }
 
 /**
- * Record what a 2xx response established, and say whether it moved.
- *
- * A server with no ETag leaves no way to tell a re-fetch from a change, so it is
- * reported as changed. Over-reporting costs a redundant reload; the other
- * direction would silently pin an addon to a stale body.
+ * Record what a 2xx response established, and say whether it moved. A server with no ETag is
+ * always reported changed: a redundant reload is cheaper than an addon pinned to a stale body.
  */
 async function storeFresh(store: FreshStore): Promise<FetchOutcome> {
   const { cache, url, entry, body, etag } = store;
   if (etag !== undefined && etag.length > 0) {
     await cache.setValue(cacheKey(url), { etag, body } satisfies CacheEntry);
   } else if (entry !== null) {
-    // The server stopped issuing ETags for this URL. Keeping the old one would
-    // make the next request conditional against a validator nothing will match.
+    // The server stopped issuing ETags; the old one would validate against nothing.
     await cache.deleteValue(cacheKey(url));
   }
   return { body, changed: entry === null || entry.body !== body };
@@ -164,8 +135,7 @@ function createFetcher(deps: FetcherDeps): Fetcher {
 
     if (res.status === NOT_MODIFIED) {
       if (entry === null) {
-        // Only reachable if the entry was dropped between the read and the
-        // response, since the conditional header is what invites a 304 at all.
+        // Reachable only if the entry was dropped between the read and the response.
         throw new Error(`${url} answered 304 with nothing cached to answer from`);
       }
       return { body: entry.body, changed: false };

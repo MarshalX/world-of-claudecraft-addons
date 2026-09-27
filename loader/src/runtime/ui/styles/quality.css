@@ -1,23 +1,12 @@
-/* The colour the game writes an item's NAME in, and the two places the kit writes it.
+/* The colour the game writes an item's NAME in: `QUALITY_COLOR` in the game's
+ * `src/ui/icons.ts`, transcribed, since the game hard-codes it. The BORDER table lives in
+ * tile.css and differs at common (white as a word, grey as an edge). No addon passes its own
+ * colour, so every addon draws the same purple for epic.
  *
- * `QUALITY_COLOR` in the game's `src/ui/icons.ts`, transcribed. The BORDER table is a second
- * one and lives in tile.css beside the rule it has to sit between; they differ at one tier,
- * where common is white as a word and a dimmer grey as an edge. Neither is a custom property:
- * the game hard-codes both, so both are transcriptions with the same standing as the item
- * table an addon has to carry, and both move when the game's do.
- *
- * The point of having it here at all is that a tier is the fact a player picks an item out of
- * a grid by, and a browser, a bag panel and a market ledger drawing three different purples
- * for epic would be worse than none of them drawing any. So no addon may pass a colour, the
- * same refusal the school tints make.
- *
- * Written as rgb(), which is this sheet family's notation, against a source written as hex:
- * poor #9d9d9d, common #ffffff, uncommon #1eff00, rare #0070dd, epic #a335ee, legendary
- * #ff8000. */
+ * Source hex: poor #9d9d9d, common #ffffff, uncommon #1eff00, rare #0070dd, epic #a335ee,
+ * legendary #ff8000. */
 
-/* The text family, for an element an addon drew itself: a chip, a heading, a name in a record
-   under a grid. Documented for reuse the way `.woc-btn` and `.woc-tab` are, since the
-   alternative is every addon holding its own copy of these six values. */
+/* The text family, for an element an addon drew itself. Published for reuse like `.woc-btn`. */
 #woc-addons .woc-quality-poor {
   color: rgb(157 157 157);
 }
@@ -42,9 +31,8 @@
   color: rgb(255 128 0);
 }
 
-/* A bar is a NAME with a fill behind it, so its tier colours the name rather than the row.
-   The fill is the school's and the row is the tone's, so all three axes can be set on one bar
-   without any of them taking another's property. */
+/* On a bar, the tier colours the name; the fill is the school's and the row the tone's, so the
+   axes never contend for a property. */
 #woc-addons .woc-bar-quality-poor .woc-bar-label {
   color: rgb(157 157 157);
 }

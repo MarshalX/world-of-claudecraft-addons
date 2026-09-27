@@ -1,10 +1,6 @@
 // @vitest-environment happy-dom
 
-// The manager as it actually renders, mounted into a document.
-//
-// These assert what a player would see: which pane is showing, what the empty
-// and unreachable states say, and that closing takes the window away rather
-// than hiding it.
+// The manager as it renders, mounted into a document.
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { DiagnosticsReading } from '../loader/src/runtime/diagnostics.ts';
@@ -137,9 +133,7 @@ describe('opening and closing', () => {
     expect(document.querySelector('.woc-window')).not.toBeNull();
   });
 
-  // The window carries the game's panel class so it inherits the game's border,
-  // background, and tokens, but never `window`, which is display: none and
-  // positioned for life inside the HUD's zoomed #ui.
+  // The game's `window` class is display: none and positioned for the zoomed #ui.
   it('takes the game panel look without the game window layout', () => {
     open(null);
 
@@ -148,9 +142,8 @@ describe('opening and closing', () => {
     expect(window_?.classList.contains('window')).toBe(false);
   });
 
-  // Unmounted rather than hidden: a hidden window keeps its Escape handler live,
-  // which would swallow the game's own close key with nothing on screen.
-  it('unmounts the window on close rather than hiding it', () => {
+  // A hidden window would keep its Escape handler and swallow the game's close key.
+  it('unmounts the window on close', () => {
     const manager = open(null);
 
     manager.close();
@@ -167,8 +160,6 @@ describe('opening and closing', () => {
     expect(manager.isOpen()).toBe(false);
   });
 
-  // The handler is removed with the window, so a later Escape must reach the
-  // game rather than being stopped by a listener nothing is behind.
   it('stops intercepting Escape once closed', () => {
     const manager = open(null);
     manager.close();
@@ -214,9 +205,7 @@ describe('the installed pane', () => {
     expect(text()).toContain('1.2.0');
   });
 
-  // Selected by its accessible name rather than by being the only toggle in the
-  // pane: the arrange-your-UI switch is a toggle here too, and a positional
-  // selector would silently start clicking that one instead.
+  // Selected by accessible name: the arrange-your-UI switch is a toggle here too.
   it('sends a toggle to the registry', async () => {
     const setEnabled = vi.fn(() => Promise.resolve());
     open({ list: () => Promise.resolve([addon()]), setEnabled });
@@ -236,14 +225,9 @@ describe('the installed pane', () => {
     await vi.waitFor(() => {
       expect(document.querySelector('.woc-unlock-row')).not.toBeNull();
     });
-    // Shown with nothing installed too: a player who came here to find a window
-    // they cannot see should find the control that shows them where it is.
     expect(text()).toContain('Unlock frames');
   });
 
-  // The state the whole companion field exists for, and until now the one a
-  // player could read and do nothing about. Enable is not a second path to
-  // anything: it is this pane's own toggle, pointed at another row.
   it('switches a companion back on through the same call its own row makes', async () => {
     const setEnabled = vi.fn(() => Promise.resolve());
     open({
@@ -269,9 +253,6 @@ describe('the installed pane', () => {
     expect(setEnabled).toHaveBeenCalledWith('official/ledgerline', true);
   });
 
-  // Nothing to do about it, so nothing to press. A button that ran an addon's
-  // own state back over itself would be a control that changes nothing, which is
-  // worse than the absence of one.
   it('offers no action for a companion that is already running', async () => {
     open({
       list: () =>
@@ -292,8 +273,7 @@ describe('the installed pane', () => {
     expect(document.querySelector('.woc-companion-action')).toBeNull();
   });
 
-  // The host emits registry.changed when another tab writes, and the runtime
-  // turns that into invalidate(). Without a re-read this tab shows a stale list.
+  // Another tab's write reaches this one as invalidate().
   it('re-reads on invalidate', async () => {
     const list = vi.fn(() => Promise.resolve([]));
     const manager = open({ list, setEnabled: vi.fn() });
@@ -333,9 +313,7 @@ describe('the tabs', () => {
     expect(text()).toContain('132 ms');
   });
 
-  // A tab that renders nothing reads as a broken loader, so every one of them
-  // has to put SOMETHING on screen, including with no bridge behind it. The
-  // per-pane suites check what; this checks that none is a blank rectangle.
+  // A blank tab reads as a broken loader; the per-pane suites check the content.
   it.each(TABS.map((tab) => tab.label))(
     'draws something on the %s tab, with no bridge connected',
     async (label) => {
@@ -349,16 +327,9 @@ describe('the tabs', () => {
   );
 });
 
-// The close mark, which drifted once and was reported from a live session: the
-// frame builder had been moved to a stroked path and the manager still rendered
-// the `×` character from its strings module, so one loader showed two different
-// close buttons on screen at the same time.
-//
-// Nothing pinned the manager's, which is exactly why. Both renderers now read one
-// geometry from kit/close-glyph.ts, and each has a test naming that constant, so a
-// renderer that stops using it fails here rather than in a screenshot.
+// Both close-button renderers read kit/close-glyph.ts; each suite pins CLOSE_PATH.
 describe('the close button', () => {
-  it('draws the shared glyph rather than a text character', () => {
+  it('draws the shared glyph', () => {
     const manager = open(null);
     const close = document.querySelector('.woc-close');
 
@@ -367,8 +338,7 @@ describe('the close button', () => {
     manager.dispose();
   });
 
-  // A glyph is not text. It sat in the strings module, which is the one place a
-  // future translation pass would look, and a translated close mark is nonsense.
+  // The strings module is what a translation pass touches.
   it('is not carried in the strings module', () => {
     expect(Object.keys(UI_TEXT)).not.toContain('closeGlyph');
   });

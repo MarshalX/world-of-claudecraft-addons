@@ -3,10 +3,9 @@
 // The atlas is the shipped file rather than a fixture, so every rectangle, point and level
 // range below is the game's own.
 //
-// WHERE THE PLAYER STANDS IS ARITHMETIC. The camera looks down world -z over the player's
-// shoulder, so a pin's screen offset is its x distance over its depth: the standpoint is
-// chosen to put the whole Eastbrook corridor inside the crop and everything across the
-// width of the vale outside it.
+// The camera looks down world -z over the player's shoulder, so a pin's screen offset is its
+// x distance over its depth: the standpoint puts the Eastbrook corridor inside the crop.
+// Re-derive it whenever the game moves Eastbrook, or the panel photographs an empty road.
 
 import type { Scenario, Stage, WorldDraft } from '../../stage/src/stage.ts';
 import ATLAS from './atlas.json' with { type: 'json' };
@@ -15,18 +14,10 @@ const DATA_FILE = 'atlas.json';
 const DATA = { [DATA_FILE]: JSON.stringify(ATLAS) };
 
 /**
- * Sixty-three yards due north of Eastbrook, with the town in front of the camera. Re-derived at
- * game 0.40.1: it was (0, 60), which was that same sixty-three yards north of where the town USED
- * to stand, and the New Eastbrook program moved the town to (-14, -102). Left where it was, the
- * panel photographed a stretch of road with no town in it at all.
- *
- * The four nearest are the graveyard, Wolf Run, the forge and the town's mailbox, which is still
- * one row of each of four categories. TWO of them are pinned rather than four, and both halves of
- * that are geometry rather than a fault: the camera looks down -z whatever the character faces,
- * so Wolf Run and the forge are behind it, and the town's own pin lands within a few pixels of
- * its mailbox's, which the pin thinning then drops. Standpoints that pin four were tried and each
- * cost the town its row; a panel north of Eastbrook that does not name Eastbrook is the worse
- * picture.
+ * Sixty-three yards due north of Eastbrook, with the town in front of the camera. The four
+ * nearest rows are four categories; only TWO are pinned, because Wolf Run and the forge are
+ * behind the camera and the town's pin is thinned against its mailbox's. A standpoint that
+ * pins four costs the town its row.
  */
 const STANDPOINT = { x: -14, y: 5, z: -39 };
 
@@ -37,13 +28,9 @@ const STANDPOINT = { x: -14, y: 5, z: -39 };
 const FACING_SOUTH = Math.PI;
 
 /**
- * The atlas's own `gy_eastbrook`, given a height the atlas cannot carry. The prowler standing on
- * it is what makes that one pin a MEASUREMENT and its pillar dashed among the dotted ones.
- *
- * It was `reliquary_hill` until game 0.40.1, which moved that poi from (-5, -52) to (-136, 112),
- * a hundred and ninety yards behind this camera. The prowler went on standing at the old
- * coordinate, where there is now no poi at all, so the height it was placed to measure belonged
- * to nothing and every pillar in the picture came out dotted.
+ * The atlas's own `gy_eastbrook`, given a height the atlas cannot carry. The prowler standing
+ * on it makes that one pin a MEASUREMENT, its pillar dashed among the dotted ones; if the
+ * point moves in the atlas, move the prowler with it.
  */
 const HILL = { x: -2, y: 9, z: -70 };
 const PROWLER_ID = 4101;

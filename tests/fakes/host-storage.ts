@@ -1,9 +1,4 @@
-// A namespaced key-value store shaped like the host's, for suites about the
-// things built on top of it.
-//
-// Real multi-key storage rather than one cell. The registry now writes an
-// installed list AND one cached source body per addon, so a single-cell fake
-// would let a bug that wrote the source over the list pass unnoticed.
+// A namespaced multi-key store shaped like the host's, so a write landing on the wrong key shows.
 
 import type { StorageApi } from '../../loader/src/shared/protocol.ts';
 

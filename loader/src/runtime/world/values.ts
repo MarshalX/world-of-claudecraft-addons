@@ -1,13 +1,6 @@
-// What each world key reports, and what the matching read returns.
-//
-// One declaration for both so a key can never mean two things: the read and the
-// subscription are the same value by construction, which is what lets
-// `world.on('casts', ...)` hand over a typed map without the addon narrowing it.
-//
-// It has a module of its own because it is the one place the game's own shapes
-// and the loader's derived ones meet. The keys themselves stay authoritative in
-// `signature.ts`, which holds the array `world.on` validates against and the
-// capture behind each one; `tests/world-shape.test.ts` asserts the two agree.
+// What each world key reports and what the matching read returns, declared once so the read and
+// the subscription are the same type. The key list itself is authoritative in `signature.ts`;
+// `tests/world-shape.test.ts` asserts the two agree.
 
 import type { AbilityIndex } from './abilities.ts';
 import type { ArenaStandings } from './arena.ts';
@@ -49,19 +42,13 @@ export interface WorldValues {
   bags: readonly (string | null)[] | null;
   copper: number | null;
   /**
-   * The zone name the game is displaying, or null before the HUD exists.
-   *
-   * Localized display text rather than an id: the zone table is content the
-   * loader cannot reach, so this is read off the game's own minimap label.
+   * The zone name the game is displaying, or null before the HUD exists. Localized text read off
+   * the minimap label, not an id.
    */
   zone: string | null;
   /**
-   * Who is playing, as the key per-character state is filed under. Null before
-   * world entry.
-   *
-   * Watchable because a character SWITCH inside one page load is real: the game
-   * clones and removes its HUD rather than reloading, so an addon holding a
-   * per-character view has to be told when it is looking at somebody else.
+   * Who is playing, as the key per-character state is filed under. Null before world entry.
+   * Watchable because a character switch happens without a page reload.
    */
   characterKey: string | null;
   character: CharacterInfo | null;
@@ -72,11 +59,9 @@ export interface WorldValues {
   /**
    * The competitive bout in progress, or null when you are not in one.
    *
-   * Three keys at three cadences: a duel every tick, a battleground at 1 Hz and
-   * forced fresh on every transition, and everything else up to ten seconds old
-   * because the arena self key is gated to 0.1 Hz. This is the recoverable
-   * baseline a reload restores from; the live path for a Fiesta or Yumi bout is
-   * the event queue, and for a battleground it is the `bg*` events.
+   * Cadences differ: a duel every tick, a battleground at 1 Hz plus every transition, arena
+   * formats up to ten seconds stale. The live path for Fiesta and Yumi is the event queue, and
+   * for a battleground the `bg*` events.
    */
   match: MatchInfo | null;
   /** Where you stand and what you are queued for. Present whether or not you play. */
@@ -99,40 +84,17 @@ export interface WorldValues {
   markers: ReadonlyMap<number, number> | null;
   /** Lethal rings on a rift boss floor. Not `hazards`, and the type says why. */
   deathZones: readonly DeathZone[] | null;
-  /**
-   * Entity id to what one corpse holds and what you could take off it.
-   *
-   * Never null, like `casts`: it is a lookup surface the loader builds rather
-   * than a value the game hands over.
-   */
+  /** Entity id to what one corpse holds and what you could take off it. Never null. */
   corpses: ReadonlyMap<number, CorpseView>;
   /** Gathering node id to seconds until YOU can harvest it. Per player, not shared. */
   nodeCooldowns: ReadonlyMap<string, number> | null;
   /** Where your own body is lying while your spirit is a ghost. Yours alone. */
   corpse: Vec3 | null;
-  /**
-   * The player's own spellbook, with lookups by id and by display name.
-   *
-   * Never null, like `entities` and `casts` and unlike the rest: it is a lookup
-   * surface, and making every call site guard the namespace before asking it a
-   * question would be a null check per event in a combat handler. Empty until
-   * the world is up.
-   */
+  /** The player's own spellbook, with lookups by id and display name. Never null; empty early. */
   abilities: AbilityIndex;
-  /**
-   * Whether the player is fighting, with the signal that answered.
-   *
-   * Never null, like `abilities` and `casts`: it is a derived reading rather
-   * than a value the game hands over, so before the world exists it is simply
-   * inactive rather than unknown.
-   */
+  /** Whether the player is fighting, with the signal that answered. Never null. */
   combat: CombatState;
-  /**
-   * The Merchant's book, or why you cannot see it.
-   *
-   * Never null, like `combat`: `status: 'unknown'` is the before-world-entry
-   * answer, so a null beside it would say the same thing twice.
-   */
+  /** The Merchant's book, or why you cannot see it. Never null: `'unknown'` before world entry. */
   market: MarketState;
   /** Whether gold or goods wait at the Merchant. Ungated, so a badge always works. */
   marketCollectPending: boolean | null;

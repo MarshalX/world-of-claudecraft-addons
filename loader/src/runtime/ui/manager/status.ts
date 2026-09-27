@@ -1,9 +1,4 @@
-// How one addon's run status is drawn, as a pure function of the status list.
-//
-// Separate from the panes that render it because two of them show it and both
-// have to agree: the Installed row and the addon's own page. It is also the
-// piece worth a Node test, since the interesting case is the one with no status
-// at all, which is what an addon looks like before the supervisor has reached it.
+// How one addon's run status is drawn, shared by the Installed row and the addon's own page.
 
 import type { AddonStatus } from '../../supervisor.ts';
 import { UI_TEXT } from './strings.ts';
@@ -31,12 +26,8 @@ const TONES = {
 } as const;
 
 /**
- * The view for one addon, or null when there is nothing to say.
- *
- * Null rather than a "stopped" default. Before the supervisor has reconciled,
- * and whenever the bridge never connected, no status exists, and drawing
- * "Stopped" then would assert something the loader has not established. An
- * enabled addon showing no badge for a moment is the honest reading.
+ * The view for one addon, or null when no status exists yet (before the supervisor reconciles, or
+ * with no bridge). Never default to "Stopped", which would claim something not yet known.
  */
 function statusView(statuses: readonly AddonStatus[], fqid: string): StatusView | null {
   const status = statuses.find((candidate) => candidate.fqid === fqid);

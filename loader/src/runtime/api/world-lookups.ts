@@ -1,7 +1,5 @@
-// Everything on `woc.world` that takes an ARGUMENT.
-//
-// None of it can be a getter, so none of it is a world key and none of it can be
-// subscribed to: watch the key an answer comes from and ask again in the handler.
+// Everything on `woc.world` that takes an argument, so none of it is a watchable key: watch the key
+// an answer comes from and ask again in the handler.
 
 import {
   type AuraQuery,
@@ -40,11 +38,8 @@ const FULL_TURN_DEGREES = 360;
 const BEARING_SIGN = -1;
 
 /**
- * Into -180 <= turn < 180, so straight behind is always -180.
- *
- * A reading already in range is returned UNTOUCHED: the modulo round trip is not
- * the identity on those and can move the last bit onto a sector tie, which steps
- * `fmt.compass` a sector.
+ * Into -180 <= turn < 180. An in-range reading is returned UNTOUCHED: the modulo round trip can
+ * move its last bit onto a sector tie and step `fmt.compass` a sector.
  */
 function halfTurns(degrees: number): number {
   // Straight ahead arrives as -0, which `Object.is` and a test will not match.
@@ -59,7 +54,7 @@ function halfTurns(degrees: number): number {
   return degrees;
 }
 
-/** Null before world entry, which is the one case `mine` cannot be answered in. */
+/** Null before world entry, where `mine` cannot be answered. */
 function playerIdOf(ctx: UnitContext): number | null {
   if (ctx.player === null) {
     return null;
@@ -132,12 +127,7 @@ export function lookups(hub: WorldHub) {
   };
 }
 
-/**
- * How far a point is and which way to turn to it.
- *
- * Flat, because it is the distance you would WALK and the one the game's own gates
- * measure. Null with no player, which is where an addon's first line runs.
- */
+/** Flat, the distance you walk and the one the game's gates measure. Null with no player. */
 export function geometryReads(hub: WorldHub) {
   const player = (): Entity | null => fromBackend(hub, (backend) => backend.player);
 

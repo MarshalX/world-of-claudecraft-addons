@@ -12,8 +12,7 @@ export const HOST_CHANNELS: Readonly<Record<string, Channel>> = Object.freeze({
 });
 
 export function channelForOrigin(origin: string): Channel | null {
-  // Object.hasOwn, not a bare index: a plain read walks the prototype chain, so
-  // an origin of '__proto__' or 'constructor' resolves to a truthy object.
+  // A bare index walks the prototype chain, so '__proto__' would resolve to an object.
   if (!Object.hasOwn(HOST_CHANNELS, origin)) {
     return null;
   }
@@ -26,11 +25,8 @@ export function isGameHost(origin: string): boolean {
 }
 
 /**
- * The scope key for per-character UI state such as frame positions.
- *
- * Character ids are not comparable across deployments, so the channel is part of
- * the key. Addon settings and enable state are shared across hosts and do not
- * use this.
+ * The scope key for per-character UI state. Carries the channel because character ids are not
+ * comparable across deployments.
  */
 export function characterScope(channel: Channel, characterId: string | number): string {
   return `${channel}:${characterId}`;

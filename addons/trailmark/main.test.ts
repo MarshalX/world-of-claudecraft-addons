@@ -1,16 +1,13 @@
 // @vitest-environment happy-dom
 
-// Trailmark, run through the real loader.
+// Trailmark, run through the real loader, against the shipped `quests.json`; a case about a bad row
+// doctors the real file.
 //
-// Every case drives objective-to-location resolution through the shipped `quests.json` rather
-// than a stub, and a case about a bad row doctors the real file.
+// The world is EMPTY apart from the player: the answer comes off the table, never off interest
+// scope, and a suite that seeded the mobs could not tell the difference.
 //
-// The first section runs with an EMPTY WORLD on purpose: the answer comes off the table and
-// never off interest scope, so an addon resolving from entities would draw nothing here and
-// look perfectly correct standing next to the mob.
-//
-// The two clocks are driven separately, as in the longwatch suite: `advance` moves the
-// monotonic clock a page load throws away and `setWallClock` moves the one it does not.
+// `advance` moves the monotonic clock a page load throws away; `setWallClock` moves the one it
+// keeps.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { validateManifest } from '../../loader/src/shared/schema.ts';
@@ -37,12 +34,9 @@ const CHANNEL = 'pbe';
 const STORE_KEY = 'trail';
 const TABLE_FILE = 'quests.json';
 /**
- * The highest minor anything this addon calls arrived in. `woc.data`, `woc.onFrame`,
- * `woc.wallClock` and `ui.project` are 2; `ui.list`, `world.distanceTo`, `world.bearingTo`
- * and `fmt.compass` are 4.
- *
- * A frame's own `toggleKey` is 4 as well and is deliberately NOT on that list: the toggle
- * is bound by hand, for the reason written above the bind in `main.js`.
+ * The highest minor anything this addon calls arrived in: `woc.data`, `woc.onFrame`,
+ * `woc.wallClock` and `ui.project` are 2; `ui.list`, `world.distanceTo`, `world.bearingTo` and
+ * `fmt.compass` are 4. A frame's `toggleKey` is not used; see the bind in `main.js`.
  */
 const NEEDS_MINOR = 4;
 
@@ -68,9 +62,8 @@ const AMENDS = 'q_prof_amends_smith';
 /** The escort that starts on Farshore, which shares Eastbrook Vale's z band. */
 const FARSHORE = 'q_fs_bram_come_home';
 /**
- * The three work orders, one per gathering profession. Each is a collect objective naming a
- * material that only a gathering node yields, which is the shape the classic collect lookups
- * cannot answer: nothing drops it tagged for the quest and no crate of it is placed.
+ * The three work orders, one per gathering profession. Each collects a material only a node yields,
+ * which the classic collect lookups cannot answer: nothing drops it tagged and no crate is placed.
  */
 const FORGE_ORDER = 'q_prof_workorder_forge';
 const TOOLWORKS_ORDER = 'q_prof_workorder_toolworks';
@@ -78,12 +71,9 @@ const APOTHECARY_ORDER = 'q_prof_workorder_apothecary';
 
 const WOLVES_KEY = `${WOLVES}#0`;
 /**
- * The nearer wolf camp's x. Standing at this x and a lower z is due south of it.
- *
- * It was 24 until game 0.40.1, whose New Eastbrook program moved both wolf camps: the nearer
- * one is now authored at (-10, 6) with a 28.5 yard spawn radius, and the far one at (12, 52).
- * Every standpoint in the bearing block below is chosen against those, because a case that
- * says "due north" and no longer stands due north is asserting on an arrow by accident.
+ * The nearer wolf camp's x, authored at (-10, 6) with a 28.5 yard spawn radius. Every standpoint in
+ * the bearing block is chosen against it; re-derive them if the camp moves, or a "due north" case
+ * asserts on an arrow by accident.
  */
 const WOLF_CAMP_X = -10;
 /** The nearer wolf camp itself, for the standpoints that have to be placed against it. */
@@ -108,15 +98,10 @@ const TURN_IN_KEY = `${BOARS}!`;
 /** How many camps the shipped table gives Forest Wolves, and boars. */
 const WOLF_CAMPS = 2;
 /**
- * How many ore nodes the table carries, and how many are inside the pin reach.
- *
- * A gather objective resolves to every node of its type, which is the game's own answer. Two of
- * the fifty-two sit more than two thousand yards from the origin the player starts at here, and
- * two thousand is the manifest's own maximum for the distance setting: the loader clamps a
- * larger value to it, so the case below asks for five thousand and gets the ceiling.
- *
- * The figure is content and moves with a release; what the case is actually about is that the
- * answer is every node rather than the near ones, and that the pin budget keeps that off screen.
+ * How many ore nodes the table carries, and how many are inside the pin reach. Two sit past two
+ * thousand yards, the manifest's maximum distance, so the case asks for five thousand and gets the
+ * ceiling. The figures are content; the case is about the answer being every node and the pin
+ * budget keeping that off screen.
  */
 const ORE_NODES = 52;
 const ORE_IN_RANGE = 50;
@@ -142,9 +127,8 @@ interface Extra {
 }
 
 /**
- * Three saved boxes, which is how a resize is driven here: the same path a drag takes, since the
- * loader owns a resizable frame's box, restores a saved one asynchronously, and reports it
- * through `onMove`.
+ * Three saved boxes, which is how a resize is driven: the loader owns a resizable frame's box,
+ * restores a saved one asynchronously and reports it through `onMove`, as a drag does.
  */
 const TALL: FrameBox = { x: 20, y: 20, w: 300, h: 400 };
 const SHORT: FrameBox = { x: 20, y: 20, w: 300, h: 90 };
@@ -163,8 +147,8 @@ interface Progress {
 const teardown: Array<() => void> = [];
 
 beforeEach(() => {
-  // For the redraw's interval and nothing else. Every stamp this addon takes reads
-  // `woc.wallClock()`, which the harness owns and `vi.setSystemTime` cannot reach.
+  // For the redraw's interval only. Every stamp reads `woc.wallClock()`, which the harness owns and
+  // `vi.setSystemTime` cannot reach.
   vi.useFakeTimers();
 });
 
@@ -181,9 +165,9 @@ function manifest() {
 }
 
 /**
- * Write a field on a live entity. A computed access, because the fixture is a
- * `Record<string, unknown>`: the linter wants dot access on a literal key and the compiler
- * forbids it on an index signature.
+ * Write a field on a live entity. Computed access, because the fixture is a `Record<string,
+ * unknown>`: the linter wants dot access on a literal key and the compiler forbids it on an index
+ * signature.
  */
 function setField(entity: Fake, field: string, value: unknown): void {
   entity[field] = value;
@@ -218,11 +202,7 @@ interface QuestRow {
   [field: string]: unknown;
 }
 
-/**
- * The shipped table with one quest changed, as a hand edit would leave it.
- *
- * Built from the real file so a case about a bad row is a case about THIS table.
- */
+/** The shipped table with one quest changed, as a hand edit would leave it. */
 function doctored(id: string, patch: Record<string, unknown>): string {
   const file = JSON.parse(TABLE_TEXT) as { quests: QuestRow[] };
   const quests = file.quests.map((quest) => {
@@ -283,9 +263,8 @@ interface TrailHarness extends SharedHarness {
 }
 
 /**
- * Start the addon over a world holding nothing but the player. The entity map is deliberately
- * empty apart from the player in every case: this addon must never need an entity to answer
- * where an objective happens, and a suite that seeded the mobs could not tell the difference.
+ * Start the addon over a world holding nothing but the player: the addon must never need an entity
+ * to answer where an objective happens.
  */
 async function start(
   settings: Record<string, unknown> = {},
@@ -300,8 +279,7 @@ async function start(
       visible: true,
     });
   }
-  // Eastbrook Vale: z 0 is inside its band and x 0 inside the world strip, which
-  // is the rectangle test the addon does from position alone.
+  // Eastbrook Vale: z 0 is inside its band and x 0 inside the world strip.
   const player = liveEntity({
     set: { templateId: 'hunter', pos: { x: 0, y: 5, z: 0 }, kind: 'player' },
   });
@@ -377,10 +355,9 @@ async function start(
 }
 
 /**
- * `start`, plus the wait for the panel to come up and one draw in it. A frame that saves its
- * state starts hidden and is shown once that state arrives, keyed per character, and this addon
- * draws nothing while it is hidden. The extra tick is because the panel comes up asynchronously;
- * it moves no clock, so every case still starts at `NOW`.
+ * `start`, plus the wait for the panel and one draw. A saved frame starts hidden until its
+ * per-character state loads, and the addon draws nothing while hidden. The extra tick moves no
+ * clock, so every case starts at `NOW`.
  */
 async function run(
   settings: Record<string, unknown> = {},
@@ -405,18 +382,14 @@ describe('its manifest', () => {
     expect(validateManifest(MANIFEST_JSON).ok).toBe(true);
   });
 
-  // Every one of these is spent. The socket for the three quest events, the world
-  // for the log and the position, storage for the learned counts, ui for the panel
-  // and the pins, and keys for the toggle and the cycle. No sound: nothing here
-  // interrupts the player with a noise.
+  // Every one is used: socket for the quest events, world for the log and position, storage for
+  // learned counts, ui for panel and pins, keys for toggle and cycle. No sound.
   it('asks for exactly what it uses', () => {
     expect(manifest().permissions).toEqual(['net.read', 'world.read', 'ui', 'storage', 'keys']);
   });
 
-  // `data` is what puts the tables in their own file, and the minor is what the surface reading
-  // it needs. An older loader strips an unknown manifest key rather than refusing it, so without
-  // the minor this addon would install on a loader with no `woc.data`, start, and find its only
-  // content file missing.
+  // An older loader strips an unknown manifest key such as `data`, so without the minor this would
+  // install on a loader with no `woc.data` and find its only content file missing.
   it('declares the table and the minor that reads it', () => {
     expect(manifest().data).toEqual([TABLE_FILE]);
     expect(manifest().apiMinor).toBe(NEEDS_MINOR);
@@ -427,14 +400,12 @@ describe('its manifest', () => {
   });
 });
 
-// THE DONE WHEN. An objective in a zone the player has never entered still points
-// the right way, and the world here holds nobody but the player to prove it.
+// An objective in a zone the player has never entered still points the right way.
 describe('an objective in a zone the player has never entered', () => {
   it('still names the zone and the distance', async () => {
     const h = await run({}, undefined, [{ questId: HUNTSMAN, counts: [0] }]);
 
-    // Huntsman Deral is authored at 18, 1104: eleven hundred yards north of the
-    // player, in a zone with no entity of any kind in scope.
+    // Huntsman Deral is authored at 18, 1104, in a zone with no entity in scope.
     expect(h.detailOf(HUNTSMAN_KEY)).toBe('The Veiled Hollow, 1104 yd ↑');
   });
 
@@ -446,9 +417,8 @@ describe('an objective in a zone the player has never entered', () => {
   });
 });
 
-// The derivation itself, one case per objective shape, all against the shipped
-// table. These are the game's own rules from `src/sim/quest_targets.ts`, so a
-// change here is a change to what the game's own map would draw.
+// The game's own rules from `src/sim/quest_targets.ts`, one case per objective shape, against the
+// shipped table.
 describe('resolving an objective to a place', () => {
   it('sends a kill objective to every camp with that mob', async () => {
     const h = await run({}, undefined, [{ questId: WOLVES, counts: [0] }]);
@@ -458,8 +428,8 @@ describe('resolving an objective to a place', () => {
     expect(h.detailOf(WOLVES_KEY)).toBe('Eastbrook Vale, 12 yd ↗');
   });
 
-  // The join is on the loot entry's quest id, not on the item alone: the same
-  // item can be tagged for one quest and drop untagged for another.
+  // The join is on the loot entry's quest id, not the item alone: one item can be tagged for one
+  // quest and untagged for another.
   it('sends a collect objective to the camps of the tagged droppers', async () => {
     const h = await run({}, undefined, [{ questId: BOARS, counts: [0] }]);
 
@@ -468,8 +438,7 @@ describe('resolving an objective to a place', () => {
     expect(h.detailOf(BOARS_KEY)).toBe('Eastbrook Vale, 92 yd ↙');
   });
 
-  // Six crates scattered over the bandit camp become ONE circle: the centroid
-  // plus the distance to the farthest of them, which is the game's own bound.
+  // Six crates over the bandit camp become ONE circle: the centroid plus the farthest crate.
   it('sends a collect objective to one circle over a ground-object cluster', async () => {
     const h = await run({}, undefined, [{ questId: SUPPLIES, counts: [0] }]);
 
@@ -483,8 +452,7 @@ describe('resolving an objective to a place', () => {
     expect(pinsOf(h, HUNTSMAN_KEY)).toBe(1);
   });
 
-  // Every ore node in the game, which is what the game's own map draws for it.
-  // The pin budget is what keeps that from being thirty-three tiles on screen.
+  // Every ore node in the game, as the game's map draws it; the pin budget keeps that off screen.
   it(`sends a gather objective to every node of that type, ${String(ORE_NODES)} of them`, async () => {
     const h = await run({ 'pin-distance': 5000 }, undefined, [{ questId: ORE, counts: [0] }]);
 
@@ -493,13 +461,9 @@ describe('resolving an objective to a place', () => {
   });
 
   /**
-   * The arm game 0.42.0 added, and the generator refused to write a table without:
-   * a farm objective is credited by planting or harvesting at a garden bed, and
-   * before this it resolved to nowhere while looking like an ordinary quest.
-   *
-   * The circle encloses the patch's beds rather than pinning its anchor, so the
-   * assertion is that the pin lands where the beds are: the anchor is their
-   * centroid, which on a 5 yard grid sits BETWEEN them.
+   * A farm objective is credited by planting or harvesting at a garden bed. The circle encloses the
+   * patch's beds, so the pin lands on the beds: the anchor is their centroid, which on a 5 yard
+   * grid sits BETWEEN them.
    */
   it('sends a farm objective to the beds of the patch it names', async () => {
     const h = await run({ 'pin-distance': 5000 }, undefined, [{ questId: FARM, counts: [0] }]);
@@ -515,8 +479,7 @@ describe('resolving an objective to a place', () => {
     expect(h.detailOf(ESCORT_KEY)).toContain('The Frostveil Reach');
   });
 
-  // A dungeon boss has no camp, so the game's own map draws no area for it
-  // either. Saying so beats pinning somewhere plausible.
+  // A dungeon boss has no camp, so the game's own map draws no area for it either.
   it('says a kill objective with no camp is nowhere on the map', async () => {
     const h = await run({}, undefined, [{ questId: HOLLOW, counts: [0] }]);
 
@@ -524,10 +487,8 @@ describe('resolving an objective to a place', () => {
     expect(pinsOf(h, HOLLOW_KEY)).toBe(0);
   });
 
-  // A work order asks for a gathered material: no mob drops it tagged for the quest and no crate
-  // of it is placed, so the two classic collect lookups both come back empty. The arm that
-  // answers it is `nodeYieldClusters`, reached from the collect branch of `questObjectiveAreas`,
-  // so the game's own map circles the veins. All three shipped work orders are this shape.
+  // A work order asks for a gathered material, which only `nodeYieldClusters` (the collect branch
+  // of `questObjectiveAreas`) answers, so the game's map circles the veins.
   it.each([
     [FORGE_ORDER, FORGE_ORDER_KEY],
     [TOOLWORKS_ORDER, TOOLWORKS_ORDER_KEY],
@@ -540,8 +501,8 @@ describe('resolving an objective to a place', () => {
   });
 });
 
-// THE SECOND CLAIM. The required count is learned from the event, because the
-// per-player override that decides it is on the wire and off the published type.
+// The required count is learned from the event, because the per-player override is on the wire and
+// off the published type.
 describe('the required count', () => {
   it('draws the shipped definition as a lower bound until it learns one', async () => {
     const h = await run({}, undefined, [{ questId: AMENDS, counts: [2] }]);
@@ -550,8 +511,8 @@ describe('the required count', () => {
     expect(h.classesOf(AMENDS_KEY)).toContain('woc-bar-warn');
   });
 
-  // The quest whose requirement the server genuinely overrides: five in the
-  // definition, `5 + 3 * switchCount` for a character who has switched twice.
+  // The quest the server genuinely overrides: five in the definition, `5 + 3 * switchCount` for a
+  // character who has switched twice.
   it('takes the exact figure off the progress event', async () => {
     const h = await run({}, undefined, [{ questId: AMENDS, counts: [2] }]);
 
@@ -563,16 +524,14 @@ describe('the required count', () => {
     expect(h.classesOf(AMENDS_KEY)).toContain('woc-bar-default');
   });
 
-  // The definition can only ever be too SMALL, so a count already past it is a
-  // better lower bound than the definition is.
+  // The definition can only be too SMALL, so a count already past it is the better lower bound.
   it('floors the bound at what is already banked', async () => {
     const h = await run({}, undefined, [{ questId: AMENDS, counts: [7] }]);
 
     expect(h.figureOf(AMENDS_KEY)).toBe('7/7+');
   });
 
-  // An exact figure is what closes a row. A lower bound that has been reached
-  // cannot say the objective is finished, so the row stays and stays marked.
+  // Only an exact figure closes a row; a reached lower bound cannot say the objective is finished.
   it('keeps an objective on screen while the bound is only a bound', async () => {
     const h = await run({}, undefined, [{ questId: AMENDS, counts: [5] }]);
 
@@ -584,9 +543,8 @@ describe('the required count', () => {
     expect(h.drawn()).not.toContain(AMENDS_KEY);
   });
 
-  // The three quest kinds are undescribed by the published catalogue, so the payload is
-  // `unknown` and every field is checked here. A bad denominator would be written to disk and
-  // outlive the session that produced it.
+  // The quest events are unpublished, so the payload is `unknown` and every field is checked. A bad
+  // denominator would be written to disk.
   it('refuses a progress record that is not one', async () => {
     const h = await run({}, undefined, [{ questId: AMENDS, counts: [2] }]);
 
@@ -601,11 +559,9 @@ describe('the required count', () => {
   });
 });
 
-// The learned figures are per CHARACTER, because the override behind them is per
-// player: an alt who has switched archetype twice needs a different denominator
-// for the same quest than the main who never has.
+// Learned figures are per CHARACTER, because the override is per player.
 describe('remembering what it learned', () => {
-  it('writes the figures under this character"s own key', async () => {
+  it('writes the figures under the current character key', async () => {
     const h = await run({}, undefined, [{ questId: AMENDS, counts: [2] }]);
 
     h.progress({ questId: AMENDS, objectiveIndex: 0, current: 3, required: 11 });
@@ -615,10 +571,9 @@ describe('remembering what it learned', () => {
     expect(stored.required[AMENDS_KEY]).toBe(11);
   });
 
-  // Wall clock, never `woc.now()`. A monotonic stamp restarts near zero on every
-  // page load, so a stored one reads as being in the future on the next session
-  // with nothing to indicate it.
-  it('stamps the record with the wall clock", not the monotonic one', async () => {
+  // Wall clock, never `woc.now()`: a monotonic stamp restarts near zero on every page load and
+  // reads as future on the next session.
+  it('stamps the record with the wall clock, not the monotonic one', async () => {
     const h = await run({}, undefined, [{ questId: AMENDS, counts: [2] }]);
     h.advance(90_000);
 
@@ -661,10 +616,9 @@ describe('remembering what it learned', () => {
     expect(h.figureOf(AMENDS_KEY)).toBe('2/5+');
   });
 
-  // A character switch inside one page load is real: the game clones and removes
-  // its HUD rather than reloading. The previous character's denominators would be
-  // shown under this one's name and written back out under their key.
-  it('forgets the previous character"s figures on a switch', async () => {
+  // The game swaps characters without reloading, so the previous character's denominators would
+  // show and be written under this one.
+  it('forgets the previous character figures on a switch', async () => {
     const h = await run({}, undefined, [{ questId: AMENDS, counts: [2] }]);
     h.progress({ questId: AMENDS, objectiveIndex: 0, current: 2, required: 11 });
     h.tick();
@@ -678,11 +632,9 @@ describe('remembering what it learned', () => {
   });
 });
 
-// The tables come from a FILE, and `woc.data` hands back `unknown`, so the shape
-// is a claim this addon checks rather than one it can lean on.
+// `woc.data` hands back `unknown`, so the table's shape is checked rather than trusted.
 describe('the table it reads', () => {
-  // Fails the moment anybody pastes the table back into the source, which is the
-  // only way this addon quietly stops being a file plus a reader again.
+  // Fails if the table is pasted back into the source.
   it('carries no quest of its own', () => {
     expect(SOURCE).not.toContain(WOLVES);
     expect(SOURCE).not.toContain('forest_wolf');
@@ -704,9 +656,8 @@ describe('the table it reads', () => {
     expect(h.drawn()).toContain(BOARS_KEY);
   });
 
-  // A missing section costs the half that needed it and nothing else: without the
-  // camps a kill objective resolves nowhere, and the interact objective is still
-  // answered by the NPC table.
+  // A missing section costs only the half that needed it: without camps a kill objective resolves
+  // nowhere, and the NPC table still answers the interact objective.
   it('keeps going when a whole section is missing', async () => {
     const h = await run(
       {},
@@ -732,10 +683,9 @@ describe('the table it reads', () => {
   });
 });
 
-// A quest with nothing left to do is a reward waiting to be collected, so it gets
-// a row and a pin of its own naming whoever takes it. `world.quests.log` carries
-// the state, so this needs no event: the `questReady` toast is the interrupt, and
-// this is the display.
+// A quest with nothing left to do gets a row and a pin naming whoever takes it. `world.quests.log`
+// carries the state, so no event is needed: the `questReady` toast is the interrupt, and this is
+// the display.
 describe('a quest waiting to be handed in', () => {
   const Ready = [{ questId: BOARS, counts: [5], state: 'ready' }];
 
@@ -753,18 +703,15 @@ describe('a quest waiting to be handed in', () => {
     expect(pinsOf(h, TURN_IN_KEY)).toBe(1);
   });
 
-  // Ahead of the focus, and ahead of everything still being worked: a turn-in
-  // buried under an active quest's objectives is a turn-in forgotten for an hour.
+  // Ahead of the focus and everything still being worked, so a turn-in is not buried.
   it('leads the list, ahead of an active quest', async () => {
     const h = await run({}, undefined, [{ questId: WOLVES, counts: [0] }, ...Ready]);
 
     expect(h.drawn()[0]).toBe(TURN_IN_KEY);
   });
 
-  // An NPC the sim walks in mid-encounter rather than placing has no position at all. No shipped
-  // quest reaches this today, because the one that names a spawned-on-demand turn-in names a
-  // placed NPC beside it, so it is driven through a doctored table: the branch is kept because
-  // the table is game content.
+  // An NPC the sim spawns on demand has no position. No shipped quest reaches this, so it is driven
+  // through a doctored table; the branch stays because the table is game content.
   it('says so when nothing placed can take it', async () => {
     const table = doctored(BOARS, { turnIn: ['brother_aldric_raid'] });
     const h = await run({}, undefined, Ready, { table });
@@ -773,8 +720,7 @@ describe('a quest waiting to be handed in', () => {
     expect(pinsOf(h, TURN_IN_KEY)).toBe(0);
   });
 
-  // A turn-in has no denominator, so the lower-bound marking every objective row
-  // wears would be a claim about nothing.
+  // A turn-in has no denominator, so it wears no lower-bound marking.
   it('wears no lower-bound marking', async () => {
     const h = await run({}, undefined, Ready);
 
@@ -783,25 +729,23 @@ describe('a quest waiting to be handed in', () => {
   });
 });
 
-// The tooltip carries the two things the row cannot: why the denominator reads
-// the way it does, and how wide the place actually is.
+// The tooltip carries what the row cannot: why the denominator reads as it does, and how wide the
+// place is.
 describe('what a row says under the pointer', () => {
   function hover(key: string): string {
     rowFor(key)?.dispatchEvent(new Event('pointerenter'));
     return document.getElementById('woc-tooltip')?.textContent ?? '';
   }
 
-  // The game pads a camp's own spawn radius by four yards, and the nearer wolf
-  // camp is authored at 28.5. A distance measured to the centre is ambiguous
-  // without this: twelve yards to a spot and twelve yards to a thirty-three yard
-  // sweep are different rides.
-  it('says how wide the nearest area is, with the game"s own padding on it', async () => {
+  // The game pads a camp's spawn radius by four yards, and the nearer wolf camp is authored at
+  // 28.5. A distance to the centre is ambiguous without the width.
+  it('says how wide the nearest area is, game padding included', async () => {
     await run({}, undefined, [{ questId: WOLVES, counts: [0] }]);
 
     expect(hover(WOLVES_KEY)).toContain('reaches 33 yd from that point');
   });
 
-  it('says a lone point is the game"s six yard circle', async () => {
+  it('says a lone point is a six yard circle', async () => {
     await run({}, undefined, [{ questId: HUNTSMAN, counts: [0] }]);
 
     expect(hover(HUNTSMAN_KEY)).toContain('reaches 6 yd from that point');
@@ -813,9 +757,8 @@ describe('what a row says under the pointer', () => {
     expect(hover(AMENDS_KEY)).toContain('At least this many');
   });
 
-  // The one caveat an authored NPC point earns and a camp does not: the sim
-  // nudges every static NPC out of buildings and deep water at world init, so the
-  // live entity can stand a yard or two from the table.
+  // The sim nudges static NPCs out of buildings and deep water at world init, so the live entity
+  // can stand a yard or two from the table.
   it('says an NPC position is authored rather than measured', async () => {
     await run({}, undefined, [{ questId: HUNTSMAN, counts: [0] }]);
 
@@ -829,9 +772,8 @@ describe('what a row says under the pointer', () => {
   });
 });
 
-// The zone match is done from POSITION against the shipped rectangles and never
-// from `world.zone`, which is localized display text: an addon comparing that
-// against a string works in English and matches nothing anywhere else.
+// The zone match is from POSITION against the shipped rectangles, never `world.zone`, which is
+// localized display text.
 describe('which zone an objective is in', () => {
   it('names the zone from the rectangle the point falls in', async () => {
     const h = await run({}, undefined, [{ questId: ESCORT, counts: [0] }]);
@@ -848,9 +790,8 @@ describe('which zone an objective is in', () => {
     expect(h.drawn()).toEqual([WOLVES_KEY]);
   });
 
-  // The rectangle is half-open on both axes and the x bounds are load-bearing. The Farshore sits
-  // at x 180 to 540 and shares Eastbrook Vale's z band, so a test on z alone reports an objective
-  // standing on Farshore as being in Eastbrook Vale.
+  // The rectangle is half-open and the x bounds matter: the Farshore (x 180 to 540) shares
+  // Eastbrook Vale's z band, so a z-only test puts it in Eastbrook Vale.
   it('does not put a Farshore point in the zone sharing its band', async () => {
     const h = await run({ 'pin-distance': 2000 }, undefined, [{ questId: FARSHORE, counts: [0] }]);
 
@@ -858,7 +799,7 @@ describe('which zone an objective is in', () => {
     expect(h.detailOf(FARSHORE_KEY)).not.toContain('Eastbrook');
   });
 
-  // The same rectangle read from the player's side rather than the objective's.
+  // The same rectangle read from the player's side.
   it('does not put a player outside the strip in the zone sharing its band', async () => {
     const h = await run({ 'other-zones': false }, undefined, [
       { questId: WOLVES, counts: [0] },
@@ -871,8 +812,7 @@ describe('which zone an objective is in', () => {
     expect(h.drawn()).toEqual([FARSHORE_KEY]);
   });
 
-  // Nothing watches for a border crossing and nothing needs to: the filter is
-  // re-resolved on every draw.
+  // The filter is re-resolved on every draw, so nothing watches for a border crossing.
   it('follows the player across a border with no set change', async () => {
     const h = await run({ 'other-zones': false }, undefined, [
       { questId: WOLVES, counts: [0] },
@@ -886,12 +826,10 @@ describe('which zone an objective is in', () => {
   });
 });
 
-// Which way to turn, which is a fact about the character rather than the camera. The sign is the
-// one thing here that cannot be caught by looking: an arrow that points consistently the wrong
-// way round reads as a working display right up until somebody follows it.
+// The bearing is relative to the character, not the camera. A consistently reversed arrow looks
+// like a working display, so the sign is pinned.
 describe('the bearing on a row', () => {
-  // Walked due south of the nearer wolf camp, which puts it dead ahead of a character
-  // whose `facing` starts at 0, which is +z.
+  // Due south of the nearer wolf camp: dead ahead of a character whose `facing` starts at 0 (+z).
   it('points straight ahead for an objective the character is facing', async () => {
     const h = await run({}, undefined, [{ questId: WOLVES, counts: [0] }]);
 
@@ -911,10 +849,8 @@ describe('the bearing on a row', () => {
     expect(h.detailOf(WOLVES_KEY)).toBe('Eastbrook Vale, 23 yd ↓');
   });
 
-  // The sign. `facing` grows as the character turns left, so with the character looking up +z an
-  // objective due +x is on their left, and the sectors have to run that way. Walked to
-  // twenty-three yards due west of the nearer wolf camp, which puts that camp at +x and nothing
-  // else in the way of reading it.
+  // `facing` grows as the character turns left, so facing +z an objective due +x is on their left.
+  // Standing due west of the nearer wolf camp puts it at +x.
   it('puts an objective at +x on the left of a character facing +z', async () => {
     const h = await run({}, undefined, [{ questId: WOLVES, counts: [0] }]);
 
@@ -924,13 +860,9 @@ describe('the bearing on a row', () => {
     expect(h.detailOf(WOLVES_KEY)).toBe('Eastbrook Vale, 23 yd ←');
   });
 
-  // All EIGHT, because three of them is a table nobody has read the other five entries
-  // of, and the failure this section exists for is a table written the other way round:
-  // that one agrees at ahead and behind and disagrees everywhere in between.
-  //
-  // The character stands due south of the nearer wolf camp, which puts it at a bearing
-  // of exactly 0, and then turns left through a full circle 45 degrees at a time.
-  // Turning your body left moves the world right, so the arrow steps clockwise.
+  // All EIGHT, because a table written the other way round agrees at ahead and behind and disagrees
+  // everywhere between. The character stands due south of the camp (bearing 0) and turns left 45
+  // degrees at a time; the world moves right, so the arrow steps clockwise.
   it('steps through all eight sectors as the character turns', async () => {
     const h = await run({}, undefined, [{ questId: WOLVES, counts: [0] }]);
     h.walkTo(WOLF_CAMP_X, 0);
@@ -945,8 +877,8 @@ describe('the bearing on a row', () => {
     }
   });
 
-  // A field the game stopped sending is the ordinary way this goes wrong, and an
-  // arrow defaulted to straight ahead would be confidently wrong on every row.
+  // An arrow defaulted to straight ahead would be confidently wrong on every row when the field
+  // goes missing.
   it('draws no arrow at all when the facing cannot be read', async () => {
     const h = await run({}, undefined, [{ questId: WOLVES, counts: [0] }]);
 
@@ -957,20 +889,18 @@ describe('the bearing on a row', () => {
   });
 });
 
-// The pins, which are anchors the loader holds over the world rather than
-// children of the panel.
+// The pins are anchors over the world, not children of the panel.
 describe('the world pins', () => {
   it('leaves out an area past the pin distance', async () => {
     const h = await run({ 'pin-distance': 100 }, undefined, [{ questId: HUNTSMAN, counts: [0] }]);
 
     expect(pinsOf(h, HUNTSMAN_KEY)).toBe(0);
-    // The ROW is still there: not pinning something eleven hundred yards away is
-    // not the same as declining to say where it is.
+    // The ROW stays: not pinning something far away is not declining to say where it is.
     expect(h.drawn()).toContain(HUNTSMAN_KEY);
   });
 
-  // `ui.project` answering null means DO NOT DRAW, and that covers a point behind
-  // the camera and one closer than the near plane as well as one off the edge.
+  // `ui.project` answering null means DO NOT DRAW, covering behind the camera and the near plane as
+  // well as off the edge.
   it('hides a pin whose point cannot be projected', async () => {
     const h = await run({}, undefined, [{ questId: WOLVES, counts: [0] }]);
     h.frame();
@@ -998,9 +928,8 @@ function pinVisibility(): string {
   return document.querySelector<HTMLElement>('.woc-tm-pin')?.style.visibility ?? '';
 }
 
-// The panel is resizable, so its content has to reflow with the box: the row
-// budget comes off the box `onMove` hands over, and anything past it is reported
-// as a count rather than clipped.
+// The row budget comes off the box `onMove` hands over, and anything past it is counted rather than
+// clipped.
 describe('the panel resizing', () => {
   const three = [
     { questId: WOLVES, counts: [0] },
@@ -1023,8 +952,7 @@ describe('the panel resizing', () => {
   });
 
   // The floor is one row, never the current count: bounds cannot be restated after the frame is
-  // built, so a floor set while three rows showed would trap the player who later has one. The
-  // loader clamps a saved box to the bounds the frame declared.
+  // built. The loader clamps a saved box to the declared bounds.
   it('never falls below one row', async () => {
     const h = await run({}, undefined, three, { saved: CRAMPED });
 
@@ -1032,8 +960,7 @@ describe('the panel resizing', () => {
   });
 });
 
-// An empty grid reads as a measurement of zero, which is the one thing it never
-// means. Every empty state here says which one it is.
+// An empty grid reads as a measurement of zero, so every empty state says which one it is.
 describe('when there is nothing to draw', () => {
   it('says there are no quests in the log', async () => {
     const h = await run();
@@ -1058,9 +985,8 @@ describe('when there is nothing to draw', () => {
     teardown.push(harness.dispose);
     await settle();
 
-    // Not asserted: that no row was built. An addon runs before world entry by design and the
-    // loader is what keeps its frames off the landing page. What must not happen is a world
-    // anchor, because there is no world to hang one in.
+    // Rows are not asserted absent: the loader keeps frames off the landing page. A world anchor
+    // must not appear, since there is no world.
     expect(document.querySelectorAll('.woc-tm-anchor')).toHaveLength(0);
   });
 });
@@ -1085,8 +1011,7 @@ describe('the focused quest', () => {
     expect(h.drawn()[0]).toBe(WOLVES_KEY);
   });
 
-  // The rotation is over the LOG's order rather than the drawn list, so a quest
-  // the zone filter hid is still reachable.
+  // The rotation is over the LOG's order, so a quest the zone filter hid is still reachable.
   it('moves to the next active quest on the keybind', async () => {
     const h = await run({ 'auto-track': false }, undefined, [
       { questId: WOLVES, counts: [0] },
@@ -1103,8 +1028,7 @@ describe('the focused quest', () => {
   });
 });
 
-// The one thing this addon does that interrupts: saying where a ready quest is
-// handed in, at the moment it becomes possible.
+// The one interruption: saying where a ready quest is handed in, when it becomes possible.
 describe('a quest going ready', () => {
   it('says who to hand it in to and where they are', async () => {
     const h = await run({}, undefined, [{ questId: BOARS, counts: [5] }]);
@@ -1115,9 +1039,8 @@ describe('a quest going ready', () => {
     expect(h.toast()).toContain('Eastbrook Vale');
   });
 
-  // An NPC the sim walks in mid-encounter rather than placing carries no position at all. No
-  // shipped quest reaches this today, so the case is driven through a doctored table: the branch
-  // is kept because the table is game content and the next release owes this addon nothing.
+  // An NPC the sim spawns on demand has no position. No shipped quest reaches this, so it is driven
+  // through a doctored table.
   it('says the turn-in is not on the map when the NPC is spawned on demand', async () => {
     const table = doctored(BOARS, { turnIn: ['brother_aldric_raid'] });
     const h = await run({}, undefined, [{ questId: BOARS, counts: [5] }], { table });

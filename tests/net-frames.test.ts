@@ -17,8 +17,7 @@ describe('parseFrame', () => {
     expect(parseFrame(text({ t: 'hello', pid: 661 }))?.t).toBe('hello');
   });
 
-  // The game's socket is JSON text both ways, so anything else on it belongs to
-  // somebody other than the game and decoding it would be a guess.
+  // The game's socket is JSON text both ways, so anything else is not the game's.
   it.each([
     ['a binary frame', new ArrayBuffer(4)],
     ['malformed JSON', '{ not json'],
@@ -44,7 +43,7 @@ describe('field readers', () => {
     expect(fieldArray('nope', 'a')).toEqual([]);
   });
 
-  it('refuses a number that is not finite, so a NaN never reaches state', () => {
+  it('refuses a number that is not finite', () => {
     expect(fieldNumber({ tick: Number.NaN }, 'tick')).toBeNull();
     expect(fieldNumber({ tick: Number.POSITIVE_INFINITY }, 'tick')).toBeNull();
   });
@@ -55,8 +54,7 @@ describe('field readers', () => {
     expect(fieldNumber(fieldValue(frame, 'self'), 'ack')).toBe(12);
   });
 
-  // Entity flags are booleans. Reading them with a number-only reader drops them
-  // silently, which looks exactly like a field that never changes.
+  // A number-only reader drops boolean flags silently, like a field that never changes.
   describe('fieldScalar', () => {
     it('renders a boolean, which fieldNumber cannot', () => {
       expect(fieldNumber({ dead: false }, 'dead')).toBeNull();
@@ -78,9 +76,7 @@ describe('field readers', () => {
 });
 
 describe('redactOutbound', () => {
-  // The client's first frame on every socket, including every reconnect, carries
-  // the account bearer token. Without this an addon subscribing to net.onSend is
-  // handed it.
+  // The first frame on every socket, reconnects included, carries the bearer token.
   it('blanks the token and the client seed on the auth frame', () => {
     const redacted = redactOutbound(AUTH_FRAME);
 
@@ -103,8 +99,7 @@ describe('redactOutbound', () => {
     expect(AUTH_FRAME.token).toBe('bearer-abc123');
   });
 
-  // An input frame is the 20 Hz case, so the common path has to be allocation
-  // free rather than copying every frame just in case.
+  // Input frames go at 20 Hz, so the common path must not allocate.
   it('returns the frame itself when there is nothing to redact', () => {
     const input = { t: 'input', seq: 4 };
     expect(redactOutbound(input)).toBe(input);

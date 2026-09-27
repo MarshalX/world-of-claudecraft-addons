@@ -1,14 +1,8 @@
 // Everything the loader puts inside the game's own HUD, behind one watcher.
 //
-// The loader's manager routes and every addon's `ui.microButton` and
-// `ui.menuEntry` land here, for two reasons. The HUD does not exist until world
-// entry and can in principle be replaced, so each of them needs the same
-// waiting and re-attaching, which is a MutationObserver each if they each own
-// one. And an addon enabled while the player is already in the world has to
-// attach immediately rather than wait for a HUD mount that already happened.
-//
-// Registration order is the attach order, so the loader's own button stays
-// first on the rail and addon buttons follow in the order they were added.
+// The loader's manager routes and every addon's `ui.microButton` and `ui.menuEntry` share one
+// wait-and-reattach watcher, and one registered while the HUD is up attaches immediately.
+// Registration order is the attach order, so the loader's own button stays first.
 
 import type { Teardown } from '../../disposal.ts';
 import { mountMenuEntry } from '../esc-inject.ts';
@@ -50,9 +44,7 @@ function mountOne(doc: Document, spec: InjectionSpec): Mounted {
   if (spec.kind === 'menu') {
     return mountMenuEntry({ doc, id: spec.id, label: spec.label, onOpen: spec.onOpen });
   }
-  // Assigned rather than spread, so an absent glyph never reaches the property
-  // at all: exactOptionalPropertyTypes rejects an explicit undefined there, and
-  // the button falls back to the loader's own glyph.
+  // Assigned, not spread: exactOptionalPropertyTypes rejects an explicit undefined.
   const button: MicroButtonDeps = { doc, id: spec.id, label: spec.label, onOpen: spec.onOpen };
   if (spec.glyph !== undefined) {
     button.glyph = spec.glyph;
@@ -61,7 +53,6 @@ function mountOne(doc: Document, spec: InjectionSpec): Mounted {
 }
 
 function createGameInjector(deps: InjectorDeps): GameInjector {
-  // Insertion-ordered, which a Map preserves, so the rail keeps its order.
   const specs = new Map<string, InjectionSpec>();
   const mounted = new Map<string, Mounted>();
 
@@ -84,8 +75,7 @@ function createGameInjector(deps: InjectorDeps): GameInjector {
       }
     },
   };
-  // Assigned rather than spread for the same reason `glyph` is above:
-  // exactOptionalPropertyTypes rejects an explicit undefined on an optional.
+  // Assigned, not spread, as `glyph` is above.
   if (deps.onPresence !== undefined) {
     hudDeps.onPresence = deps.onPresence;
   }
@@ -97,8 +87,7 @@ function createGameInjector(deps: InjectorDeps): GameInjector {
         throw new Error(`a game injection with id '${spec.id}' is already registered`);
       }
       specs.set(spec.id, spec);
-      // The HUD may already be up, in which case there is no mount event coming
-      // and this is the only chance to attach.
+      // The HUD may already be up, with no mount event coming.
       if (hud.attached()) {
         mounted.set(spec.id, mountOne(deps.doc, spec));
       }

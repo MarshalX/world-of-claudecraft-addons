@@ -1,15 +1,7 @@
 // @vitest-environment happy-dom
 
-// The keybind editor on an addon's page in the manager, as it actually renders.
-//
-// Split out of manager-detail.test.tsx, which keeps the rest of the page (how it
-// is reached, the settings form, the log tail); every case here turns on a combo,
-// so they read as one topic and the two files stay within the length budget.
-//
-// The addon is deliberately DISABLED, as it is in the sibling suite. Rebinding is
-// something a player does to an addon they have just turned off, so an editor that
-// needed the addon running would be unavailable exactly when it is wanted. Nothing
-// in this suite runs any addon code.
+// The keybind editor on an addon's page in the manager. The rest of the page is in
+// manager-detail.test.tsx. The addon is DISABLED: the editor must work without it running.
 
 import { afterEach, describe, expect, it } from 'vitest';
 import type { DiagnosticsReading } from '../loader/src/runtime/diagnostics.ts';
@@ -96,9 +88,8 @@ function forwardedAction(code: string): string | null {
 }
 
 /**
- * Preact batches state into a microtask, and the stores load asynchronously.
- * The turns chain rather than resolve together, because each one releases the
- * continuation the next is waiting on.
+ * Preact batches state into a microtask and the stores load asynchronously. The turns chain
+ * because each one releases the continuation the next is waiting on.
  */
 async function settle(turns = SETTLE_TURNS): Promise<void> {
   if (turns > 0) {
@@ -251,8 +242,7 @@ describe('the keybind editor', () => {
     expect(document.querySelector('.woc-combo')?.textContent).toBe('Alt+D');
   });
 
-  // A conflict WARNS and never blocks: deliberately overriding a game binding is
-  // legitimate.
+  // Deliberately overriding a game binding is legitimate.
   it('warns about a game binding without disabling anything', async () => {
     await openEditor({ game: gameWithForward });
 

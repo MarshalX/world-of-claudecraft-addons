@@ -1,20 +1,5 @@
-// Aura polarity: what is working against the unit carrying it, and what can be
-// taken off.
-//
-// Separate from world-auras.test.ts, which is about the three query filters. The
-// subject here is the game's classification rule, and it is the one place in the
-// loader where a wrong answer is silent in both directions: a missed debuff is a
-// row a healer never sees, and a false positive is a global cooldown spent on
-// something that was never removable.
-//
-// The regression that motivated the whole lane is the first case below. A party
-// row's `neg` flag is a SIGN test on the aura's magnitude and nothing more, so a
-// dot (positive per-tick figure), a root and a stun (both 0) never carry it. The
-// published comment on the field said "1 when the effect is a debuff", the row
-// filter implemented `debuff` as `neg === 1` on the strength of that, and a
-// shipped healer addon used that filter as its primary one. The result was a
-// removable-effects strip that dropped every dot, root, silence and hex in the
-// group.
+// The game's aura classification: harmful, dispellable and toggle. A party row's `neg` is only a
+// sign test on the magnitude, so a dot, a root and a stun never carry it.
 
 import { describe, expect, it } from 'vitest';
 import {
@@ -49,34 +34,27 @@ describe('isHarmful, on a full aura', () => {
     expect(isHarmful(aura({ kind: 'silence', value: 0 }))).toBe(true);
   });
 
-  // The magnitude is never consulted for a kind in the set, which is the mistake
-  // a `value`-shaped field invites: a heal-over-time and a damage-over-time both
-  // carry a large positive per-tick figure and they are opposite effects.
+  // A hot and a dot both carry a large positive per-tick figure and are opposite effects.
   it('does not read the magnitude for a kind in the set', () => {
     expect(isHarmful(aura({ kind: 'hot', value: 400 }))).toBe(false);
     expect(isHarmful(aura({ kind: 'dot', value: 400 }))).toBe(true);
   });
 
-  // The second clause, and it is not redundant with the set. `debuff_ap` is the
-  // AUTHORED drain and is in the set; a mob sapping attack power reuses the
-  // ordinary buff kind and flips the sign, and a set-only implementation calls
-  // that a benefit.
+  // A mob sapping attack power reuses the buff kind with a negative sign, which the kind set
+  // alone calls a benefit.
   it('answers true for a buff kind whose magnitude went negative', () => {
     expect(isHarmful(aura({ kind: 'buff_ap', value: -60 }))).toBe(true);
     expect(isHarmful(aura({ kind: 'buff_ap', value: 60 }))).toBe(false);
   });
 
-  // The generated set is a release behind the day a release adds to it, and the
-  // conservative direction is the published contract. A throw here would be an
-  // addon crash on the day the game ships a kind.
-  it('answers false for a kind from a future release rather than throwing', () => {
+  // The generated set lags a release that adds a kind; a throw would crash addons that day.
+  it('answers false for an unknown kind without throwing', () => {
     expect(isHarmful(aura({ kind: 'kind_from_a_future_release' }))).toBe(false);
   });
 });
 
 describe('isHarmful, on a party row', () => {
-  // THE PURELIGHT REGRESSION. No `neg`, because the server only sets it from
-  // `value < 0` and a dot's per-tick figure is positive.
+  // The server sets `neg` only from `value < 0`, and a dot's per-tick figure is positive.
   it('answers true for a dot with no neg flag at all', () => {
     const row: PartyMemberAura = { id: 'corruption', kind: 'dot', remaining: 8 };
 
@@ -91,10 +69,8 @@ describe('isHarmful, on a party row', () => {
     expect(isHarmful(stun)).toBe(true);
   });
 
-  // The row form of the sign clause. A row carries no value, and `neg` is the
-  // server's own test on that value, so this is the same function rather than an
-  // approximation of it.
-  it('reads neg for the sign clause, which is the only thing neg answers', () => {
+  // A row carries no value, and `neg` is the server's own sign test on it.
+  it('reads neg for the sign clause only', () => {
     const drain: PartyMemberAura = { id: 'wail', kind: 'buff_ap', neg: 1 };
     const gift: PartyMemberAura = { id: 'rally', kind: 'buff_ap' };
 
@@ -104,8 +80,6 @@ describe('isHarmful, on a party row', () => {
 });
 
 describe('the debuff filter a healer addon calls', () => {
-  // The end-to-end form of the same regression, at the call site a shipped addon
-  // actually uses. Every row here would have been dropped before the fix.
   const rows: PartyMemberAura[] = [
     { id: 'corruption', kind: 'dot', remaining: 8 },
     { id: 'entangle', kind: 'root', remaining: 4 },
@@ -142,12 +116,9 @@ describe('the harmful clause on an entity query', () => {
 });
 
 describe('isDispellable', () => {
-  // One case per clause, because each is the difference between a cast that does
-  // something and a global cooldown thrown away. There is no case for the fifth
-  // clause the GAME has, `encounterOwned`, and there cannot be: the wire does not
-  // carry it, so a fixture setting it would be asserting on a field no client
-  // ever sees.
-  it('refuses control an encounter owns, whatever else is true of it', () => {
+  // One case per clause. The game's `encounterOwned` clause has no case: the wire never
+  // carries it.
+  it('refuses unbreakable control, whatever else is true of it', () => {
     expect(
       isDispellable(aura({ kind: 'stun', school: 'shadow', unbreakableControl: true }), false),
     ).toBe(false);
@@ -157,18 +128,14 @@ describe('isDispellable', () => {
     expect(isDispellable(aura({ kind: 'bleed_vuln', school: 'physical' }), false)).toBe(false);
   });
 
-  // The recovery sicknesses. On the wire as `und` since well before game
-  // 0.41.0 and read by nothing here until this pass, so the loader was
-  // promising a dispel the game refuses.
   it('refuses an undispellable penalty', () => {
     expect(isDispellable(aura({ kind: 'dot', school: 'shadow', undispellable: true }), false)).toBe(
       false,
     );
   });
 
-  // A permanent aura has no natural expiry and the game refuses it in BOTH
-  // directions, so the offensive half has to be pinned too: polarity is the
-  // clause that would otherwise let a permanent buff through.
+  // The game refuses a permanent aura in both directions; polarity alone would let a permanent
+  // buff through offensively.
   it('refuses a permanent aura in either direction', () => {
     const permanentBuff = aura({
       kind: 'buff_haste',
@@ -181,8 +148,7 @@ describe('isDispellable', () => {
     expect(isDispellable(permanentBuff, false)).toBe(false);
   });
 
-  // The two ids the game refuses whatever every flag on them says: neither
-  // carries `perm`, `ub` or `und`, so every flag clause answers yes to both.
+  // The game refuses these two ids outright; neither carries `perm`, `ub` or `und`.
   it('refuses a resource state the game only surfaces as an aura', () => {
     const ascension = aura({ id: 'divine_ascension', kind: 'buff_haste', value: 0.2 });
 
@@ -199,7 +165,7 @@ describe('isDispellable', () => {
     expect(isDispellable(ready, false)).toBe(false);
   });
 
-  it('keeps refusing by id alone, rather than by the kind it happens to ride', () => {
+  it('refuses by id, not by the kind it rides', () => {
     expect(isDispellable(aura({ id: 'corruption', kind: 'dot', school: 'shadow' }), false)).toBe(
       true,
     );
@@ -209,9 +175,7 @@ describe('isDispellable', () => {
     expect(isDispellable(aura({ kind: 'dot', school: 'shadow' }), false)).toBe(true);
   });
 
-  // Dispel has a DIRECTION: offensive strips a benefit off an enemy. A predicate
-  // that only implemented the friendly half is right for a healer addon and
-  // wrong as a loader primitive.
+  // An offensive dispel strips a benefit off an enemy.
   it('inverts the polarity for an offensive dispel', () => {
     const buff = aura({ kind: 'buff_haste', school: 'arcane', value: 0.2 });
 
@@ -220,30 +184,21 @@ describe('isDispellable', () => {
   });
 });
 
-// A THIRD classifier off the same game file, and the only one of the three the
-// loader implements whole: it reads an id and a kind, and `wireAura` sends both.
-//
-// The failure it prevents is silent in the way this whole lane is. A stance and
-// a form carry a 3600s duration the sim needs only so the value is JSON-safe,
-// and `remaining` counts down through it, so every field a timer is drawn from
-// is present, well typed, and fiction. A bar under a Cat Form drains over an
-// hour and nothing anywhere says it should not have been drawn.
+// A stance or form carries a fictional 3600s duration that `remaining` counts down through, so a
+// timer drawn from it is wrong without any field saying so.
 describe('isToggle', () => {
   it('answers a mode by its kind, whatever the id riding it', () => {
     expect(isToggle(aura({ id: 'cat_form', kind: 'form_cat' }))).toBe(true);
     expect(isToggle(aura({ id: 'battle_stance', kind: 'battle_stance' }))).toBe(true);
   });
 
-  // Ghost Wolf rides `buff_speed`, which Sprint also rides at 15 seconds and
-  // very much wants a countdown, so the game separates the two by id alone.
+  // Ghost Wolf and Sprint share `buff_speed`; the game separates them by id alone.
   it('answers a mode by its id where the kind cannot say', () => {
     expect(isToggle(aura({ id: 'ghost_wolf', kind: 'buff_speed' }))).toBe(true);
     expect(isToggle(aura({ id: 'sprint', kind: 'buff_speed' }))).toBe(false);
   });
 
-  // The inverse override, and the reason the timed clause runs FIRST: Greater
-  // Invisibility reuses the rogue stealth machinery and is a fixed 20s buff, so
-  // a set-only implementation hides the one countdown in the family worth having.
+  // The timed override runs first: Greater Invisibility rides `stealth` and is a fixed 20s buff.
   it('keeps a genuine timed buff riding a toggle kind', () => {
     expect(isToggle(aura({ id: 'greater_invisibility', kind: 'stealth' }))).toBe(false);
     expect(isToggle(aura({ id: 'vanish', kind: 'stealth' }))).toBe(true);
@@ -257,9 +212,8 @@ describe('isToggle', () => {
     expect(isToggle(aura({ id: 'corruption', kind: 'dot' }))).toBe(false);
   });
 
-  // Either shape, unlike isDispellable, and for a stated reason rather than by
-  // accident: the rule needs an id and a kind, and a party row carries both.
-  it('answers a party row, which carries everything the rule reads', () => {
+  // Unlike isDispellable, the rule needs only an id and a kind, which a party row carries.
+  it('answers a party row', () => {
     const row: PartyMemberAura = { id: 'bear_form', kind: 'form_bear', remaining: 3599 };
 
     expect(isToggle(row)).toBe(true);

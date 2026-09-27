@@ -1,15 +1,8 @@
-// The server's own movement-speed multiplier for the player, sent on the
-// reconciliation self wire as `msm` and held on `ClientWorld extends
-// ReconWireState`.
+// The server's movement-speed multiplier for the player, sent on the reconciliation self wire.
+// Not in `members.ts`: it is legitimately absent on the offline sim.
 //
-// DELIBERATELY NOT in `members.ts`: the field is legitimately absent on the
-// offline sim, and that list reports a missing member as drift.
-//
-// Null for no world, the offline sim, a spectating session (the server skips the
-// reconciliation block) and a session on movement wire version 1. The v1 case is
-// why the read tests the wire version: there the client's field sits at its
-// constructed default of 1 forever, which would publish as "unimpeded" for a
-// player who is snared.
+// Null for no world, the offline sim, a spectating session and movement wire version 1, where
+// the client's field sits at its default of 1 forever and would read "unimpeded" while snared.
 
 import { fieldNumber, fieldValue } from '../net/frames.ts';
 

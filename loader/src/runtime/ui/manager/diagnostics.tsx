@@ -1,8 +1,5 @@
-// The Diagnostics pane: what the loader can currently see.
-//
-// Read fresh on every render rather than held in state. The reading is cheap,
-// and a stale diagnostics pane is worse than none: it is consulted precisely
-// when something has changed underneath it.
+// The Diagnostics pane: what the loader can currently see. Read fresh on every render, since the
+// pane is consulted precisely when something has changed underneath it.
 
 import type { DiagnosticsReading } from '../../diagnostics.ts';
 import type { GameVersion } from '../../game-version.ts';

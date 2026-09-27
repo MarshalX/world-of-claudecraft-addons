@@ -1,9 +1,5 @@
-// Unit token resolution.
-//
-// The case worth the whole module is `targettarget` against a mob: the field an
-// addon would reach for is present on every mob and written on none, so a
-// resolver that reads it passes every test written with a player fixture and is
-// blank in the game. Both kinds are asserted here for that reason.
+// Unit token resolution. `targettarget` is asserted on both a mob and a player, since a
+// mob's `targetId` is present and never written.
 
 import { describe, expect, it } from 'vitest';
 import type { Entity } from '../loader/src/runtime/world/game-types.ts';
@@ -72,9 +68,8 @@ describe('resolveUnit', () => {
     expect(resolveUnit('target', ctx)).toBe(boss);
   });
 
-  // The trap. A mob tracks what it is fighting on aggroTargetId, and its
-  // targetId is null forever, so reading the obvious field finds nothing.
-  it("reads a mob target's victim from its aggro field, not from targetId", () => {
+  // A mob tracks what it is fighting on aggroTargetId; its targetId is null forever.
+  it("reads a mob target's victim from its aggro field", () => {
     const tank = entity(TANK);
     const boss = entity(BOSS, { kind: 'mob', aggroTargetId: TANK, targetId: null });
     const ctx = context([entity(ME), boss, tank], { target: boss });
@@ -82,7 +77,7 @@ describe('resolveUnit', () => {
     expect(resolveUnit('targettarget', ctx)).toBe(tank);
   });
 
-  it("reads a player target's victim from targetId, which is where a player carries it", () => {
+  it("reads a player target's victim from targetId", () => {
     const boss = entity(BOSS, { kind: 'mob' });
     const enemy = entity(TANK, { kind: 'player', targetId: BOSS });
     const ctx = context([entity(ME), enemy, boss], { target: enemy });
@@ -96,7 +91,7 @@ describe('resolveUnit', () => {
     expect(resolveUnit('targettarget', context([entity(ME), boss], { target: boss }))).toBeNull();
   });
 
-  it('finds the pet by ownership, since nothing else marks one', () => {
+  it('finds the pet by ownership', () => {
     const pet = entity(PET, { kind: 'mob', ownerId: ME });
     const wild = entity(BOSS, { kind: 'mob', ownerId: null });
 
@@ -104,9 +99,7 @@ describe('resolveUnit', () => {
     expect(resolveUnit('pet', context([entity(ME), wild]))).toBeNull();
   });
 
-  // party counts the others and raid counts everyone, so the same member has a
-  // different index under each form. Getting this backwards puts the player in
-  // their own party frame.
+  // party counts the others and raid counts everyone, so one member has two indices.
   it('counts party tokens past yourself and raid tokens from the top', () => {
     const ctx = context([entity(ME), entity(BOSS), entity(TANK)], {
       party: roster(ME, BOSS, TANK),
@@ -118,9 +111,8 @@ describe('resolveUnit', () => {
     expect(resolveUnit('raid2', ctx)?.id).toBe(BOSS);
   });
 
-  // A row can name someone the entity map has never heard of, and that is the
-  // ordinary case in a raid rather than an error.
-  it('answers null for a member who is too far away to have an entity', () => {
+  // Ordinary in a raid, not an error.
+  it('answers null for a member too far away to have an entity', () => {
     const ctx = context([entity(ME)], { party: roster(ME, BOSS) });
 
     expect(resolveUnit('party1', ctx)).toBeNull();
@@ -131,7 +123,7 @@ describe('resolveUnit', () => {
     expect(resolveUnit('raid1', context([entity(ME)]))).toBeNull();
   });
 
-  it('answers null for a token that is not one, rather than throwing', () => {
+  it('answers null for a token that is not one', () => {
     const ctx = context([entity(ME)]);
 
     expect(resolveUnit('party0', ctx)).toBeNull();

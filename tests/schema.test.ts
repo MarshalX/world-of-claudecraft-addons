@@ -16,9 +16,7 @@ const valid = {
 const withField = (key: string, value: unknown) => ({ ...valid, [key]: value });
 
 describe('validateManifest', () => {
-  // The path is appended to a marketplace base URL, so it carries the same risk
-  // `entry` does and is validated by the same shape. A preview that escaped the
-  // addon directory would fetch, and show, somebody else's file.
+  // The path is appended to a marketplace base URL, so it carries the same risk `entry` does.
   it('refuses a preview that traverses out of the addon directory', () => {
     const r = validateManifest({ ...valid, preview: { file: '../other/shot.png', alt: 'x' } });
     expect(r.ok).toBe(false);
@@ -29,9 +27,6 @@ describe('validateManifest', () => {
     expect(r.ok).toBe(false);
   });
 
-  // Both halves are required together: a file with no description is a picture a
-  // screen reader announces as nothing, and a description with no file is nothing
-  // at all.
   it('refuses a preview missing either half', () => {
     expect(validateManifest({ ...valid, preview: { file: 'preview.png' } }).ok).toBe(false);
     expect(validateManifest({ ...valid, preview: { alt: 'x' } }).ok).toBe(false);
@@ -60,7 +55,7 @@ describe('validateManifest', () => {
     expect(r.ok).toBe(true);
   });
 
-  it('reports every issue in one pass, not just the first', () => {
+  it('reports every issue in one pass', () => {
     const r = validateManifest({ ...valid, id: 'Bad Id', version: 'nope', apiVersion: 'x' });
     expect(r.ok).toBe(false);
     if (r.ok) {
@@ -105,7 +100,7 @@ describe('validateManifest', () => {
     expect(validateManifest(withField('entry', 'src/main.js')).ok).toBe(true);
   });
 
-  it('accepts real semver ranges, not just bare comparators', () => {
+  it('accepts semver ranges beyond bare comparators', () => {
     for (const range of ['>=0.31.0', '^0.31.0', '~0.31.0', '>=0.31.0 <0.33.0', '0.31.x']) {
       expect(validateManifest(withField('gameVersion', range)).ok).toBe(true);
     }
@@ -149,8 +144,7 @@ describe('validateManifest', () => {
     expect(r.ok).toBe(false);
   });
 
-  // The surface hands back a PARSED value, so a declared .txt would be a file
-  // woc.data could only ever fail on.
+  // woc.data hands back a parsed value, so it could only fail on a .txt.
   it('refuses a data file that is not .json', () => {
     expect(validateManifest(withField('data', ['items.txt'])).ok).toBe(false);
   });
@@ -159,14 +153,11 @@ describe('validateManifest', () => {
     expect(validateManifest(withField('data', ['items.json'])).ok).toBe(true);
   });
 
-  // Same base shape as `entry` and `preview.file`, so the same traversal risk is
-  // refused by the same rule: whatever this accepts is appended to a raw base.
   it('refuses a data file that traverses out of the addon directory', () => {
     expect(validateManifest(withField('data', ['../other/items.json'])).ok).toBe(false);
   });
 
-  // A duplicate would be fetched twice at install and stored once, so the
-  // manifest and the cache would disagree about how many files there are.
+  // A duplicate is fetched twice and stored once, so manifest and cache would disagree.
   it('refuses a duplicate data file', () => {
     expect(validateManifest(withField('data', ['a.json', 'a.json'])).ok).toBe(false);
   });
@@ -177,8 +168,7 @@ describe('validateManifest', () => {
     expect(validateManifest(withField('data', files.slice(0, 8))).ok).toBe(true);
   });
 
-  // Bare addon ids, never fqids: the same addon installed from a fork is a
-  // different fqid and is still the companion the author meant.
+  // The same addon from a fork has a different fqid and is still the companion meant.
   it('accepts companions as bare addon ids', () => {
     expect(validateManifest(withField('companions', ['lorebind'])).ok).toBe(true);
   });
@@ -191,10 +181,7 @@ describe('validateManifest', () => {
     expect(validateManifest(withField('companions', ['a', 'b', 'c', 'd', 'e'])).ok).toBe(false);
   });
 
-  // The compatibility this key exists in the shape it does for. A manifest naming bare ids and
-  // nothing else is every manifest published before the reasons landed, and it has to keep
-  // validating unchanged: a marketplace index is one array parse, so an entry this rejected
-  // would take the whole source down rather than one addon.
+  // A marketplace index is one array parse, so rejecting this would take a whole source down.
   it('accepts companions with no reasons at all', () => {
     expect(validateManifest(withField('companions', ['lorebind'])).ok).toBe(true);
   });
@@ -209,9 +196,7 @@ describe('validateManifest', () => {
     expect(validateManifest(manifest).ok).toBe(true);
   });
 
-  // Two keys describing one relationship is the shape that drifts, so the tie between them is
-  // enforced rather than trusted: a reason for an addon nobody named is the drift, and it is a
-  // CI failure rather than a line the manager silently never draws.
+  // Two keys describing one relationship drift, so the tie is enforced in CI.
   it('refuses a reason for an addon it does not name', () => {
     const manifest = {
       ...valid,
@@ -244,14 +229,6 @@ describe('validateManifest', () => {
   });
 });
 
-/**
- * A number setting's three range rules, together because they are one subject.
- *
- * Split out of the `validateManifest` block rather than added to it: that block
- * was at the 200-line ceiling `tests/**` allows a function, and the fix for a
- * suite that outgrows one is a real subject to split on rather than a raised
- * threshold.
- */
 describe('a number setting declared range', () => {
   it('rejects a min that exceeds its max', () => {
     const r = validateManifest({
@@ -261,11 +238,8 @@ describe('a number setting declared range', () => {
     expect(r.ok).toBe(false);
   });
 
-  // The one way a number could reach an addon outside its declared range. Every
-  // other route is closed by values.ts clamping what storage held, and nothing
-  // clamped the DECLARATION's own default, so a manifest could hand an addon 100
-  // for a setting whose ceiling it had just said was 40. Fifteen addons now read
-  // `woc.settings` directly on the strength of that guarantee.
+  // values.ts clamps stored values; this closes the declared default, so addons can read
+  // `woc.settings` without a guard.
   it('rejects a default outside that range, from either side', () => {
     const over = validateManifest({
       ...valid,
@@ -280,9 +254,8 @@ describe('a number setting declared range', () => {
     expect(under.ok).toBe(false);
   });
 
-  // The guard against an over-eager refine. A bound is inclusive, and a setting
-  // that declares neither has no range to be outside of.
-  it('accepts a default sitting exactly on either bound, and one with no bounds', () => {
+  // Bounds are inclusive.
+  it('accepts a default on either bound, and one with no bounds', () => {
     const r = validateManifest({
       ...valid,
       settings: [

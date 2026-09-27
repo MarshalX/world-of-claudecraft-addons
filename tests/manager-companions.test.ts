@@ -1,8 +1,4 @@
 // Resolving one addon's `companions` list against what is actually installed.
-//
-// The whole reason the field exists is the state, so every case here is a state
-// a description could not have carried: installed but switched off, installed
-// from somewhere else, offered but not taken, and named by nobody.
 
 import { describe, expect, it } from 'vitest';
 import type { CompanionContext } from '../loader/src/runtime/ui/manager/companions.ts';
@@ -33,7 +29,7 @@ function stateOf(ids: readonly string[], context: CompanionContext): string[] {
 }
 
 describe('companionNotes', () => {
-  it('is empty for an addon that names none, which is the ordinary case', () => {
+  it('is empty for an addon that names none', () => {
     expect(companionNotes(undefined, ctx())).toEqual([]);
   });
 
@@ -52,8 +48,6 @@ describe('companionNotes', () => {
     expect(stateOf(['lorebind'], context)).toEqual(['enabled']);
   });
 
-  // The one sentence this whole field exists for. Absent and switched off look
-  // identical to an addon and are two different things for a player to do.
   it('reads an installed and disabled companion as disabled, not as absent', () => {
     const context = ctx({
       installed: new Map([['official/lorebind', false]]),
@@ -63,16 +57,13 @@ describe('companionNotes', () => {
     expect(stateOf(['lorebind'], context)).toEqual(['disabled']);
   });
 
-  // A bare id rather than an fqid is the point: the same addon installed from a
-  // fork is a different fqid and is still the companion the author meant.
+  // A companion is a bare id, so a copy from a fork (a different fqid) still counts.
   it('resolves a companion installed from a different marketplace', () => {
     const context = ctx({ installed: new Map([['gh:someone/forks/lorebind', true]]) });
 
     expect(stateOf(['lorebind'], context)).toEqual(['enabled']);
   });
 
-  // Two installations, and the naming addon's own source is the one that speaks
-  // for it: that is the copy an author testing against their own marketplace has.
   it('prefers the naming addon own source when two sources both offer it', () => {
     const context = ctx({
       market: 'official',
@@ -91,16 +82,12 @@ describe('companionNotes', () => {
     expect(stateOf(['lorebind'], context)).toEqual(['offered']);
   });
 
-  // An id no source in the player's list carries is not an error and must not
-  // read as one: a companion may live on a marketplace they have never added.
+  // A companion may live on a marketplace the player has never added.
   it('reads an id no source offers as unknown rather than failing', () => {
     expect(stateOf(['lorebind'], ctx())).toEqual(['unknown']);
   });
 });
 
-// A manifest writes down a bare id and a player is looking for a name. Both are
-// available here and neither was reaching the note, which is most of why the
-// block read as a footnote about something nobody had heard of.
 describe('what a note is called', () => {
   it('names an installed companion from the registry', () => {
     const context = ctx({
@@ -117,9 +104,7 @@ describe('what a note is called', () => {
     expect(note?.name).toBe('Lorebind');
   });
 
-  // The registry over the catalog, because the registry keeps its own copy of the
-  // manifest: an addon whose source has since been dropped from the list still has
-  // a name, and that name is the one the player installed.
+  // The registry keeps its own manifest copy, so a dropped source still leaves a name.
   it('prefers the installed name over the offered one', () => {
     const context = ctx({
       installed: new Map([['official/lorebind', true]]),
@@ -130,14 +115,11 @@ describe('what a note is called', () => {
     expect(companionNotes(['lorebind'], context)[0]?.name).toBe('Lorebind');
   });
 
-  // Not a shrug. Nobody offers it and nobody has it, so the id is genuinely all
-  // that is known, and inventing a prettier one would be inventing a fact.
   it('falls back to the bare id for a companion nothing knows', () => {
     expect(companionNotes(['lorebind'], ctx())[0]?.name).toBe('lorebind');
   });
 });
 
-// The half that used to have nowhere to live and went into descriptions instead.
 describe('why a note is there', () => {
   it('carries the reason its manifest gave for that id', () => {
     const notes = companionNotes(['lorebind'], ctx(), { lorebind: 'publishes item prices' });
@@ -152,8 +134,7 @@ describe('why a note is there', () => {
   });
 });
 
-// The fqid is a TARGET, not a gate: the panes point an existing control at it,
-// and a note with nothing to point at has to say so rather than guess.
+// The fqid is what the panes point an existing control at; it gates nothing.
 describe('what an action would act on', () => {
   it('targets the installation for a companion that is here', () => {
     const context = ctx({

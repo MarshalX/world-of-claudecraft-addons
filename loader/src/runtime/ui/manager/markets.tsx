@@ -1,15 +1,9 @@
-// The Marketplaces pane: where addons come from, and what that costs in trust.
+// The Marketplaces pane: where addons come from, and what that costs in trust. Pure render over
+// catalog-store.ts.
 //
-// Pure render over catalog-store.ts. The official source renders first with no
-// remove control and no ref field, because both of those come from the loader
-// build: the list here is presentation of a rule the host enforces, not the rule
-// itself. canRemoveMarketplace is called in MarketApi.remove, so a hand-crafted
-// call from the page realm fails the same way a missing button does.
-//
-// The local dev source is built in too, and for a different reason: it is never
-// persisted, so there is nothing to remove and the Dev tab's switch is what takes
-// it away. Both read as "ships with the loader" on this pane, which is true of
-// each for its own reason and is the part a player needs.
+// Built-in sources get no remove control and no ref field. Hiding them is presentation only: the
+// host enforces canRemoveMarketplace in MarketApi.remove. The local dev source is removed by the
+// Dev tab's switch.
 
 import { useState } from 'preact/hooks';
 import { type MarketplaceRef, OFFICIAL_ID } from '../../../shared/marketplace.ts';
@@ -27,13 +21,7 @@ function refOf(ref: MarketplaceRef): string | null {
   return ref.source.ref;
 }
 
-/**
- * Where a source's files come from: its ref, or the dev server's origin.
- *
- * The dev server has no ref because it reads a directory, but the row still has
- * to say where it is pointing, or the local source would be the one entry in
- * this list with nothing under its name.
- */
+/** Where a source's files come from: its ref, or the dev server's origin. */
 function locationOf(ref: MarketplaceRef): { label: string; value: string } {
   if (ref.source.kind === 'local') {
     return { label: UI_TEXT.devOrigin, value: ref.source.origin };
@@ -106,12 +94,8 @@ function PinControl(props: { current: string; busy: boolean; onPin: (ref: string
 }
 
 /**
- * What a built-in source is, and for the official one what "official" means.
- *
- * Official to this loader, not to the game: the game is a separate project under
- * a different owner and does not endorse this. That sentence goes on the pane
- * rather than only in the README, because this list is where a player forms the
- * impression it corrects.
+ * What a built-in source is. The official one also says it is official to this loader, not
+ * endorsed by the game, on the pane where a player would otherwise assume so.
  */
 function BuiltinNote(props: { state: MarketplaceState }) {
   if (!props.state.builtin) {
@@ -205,22 +189,14 @@ function MarketRow(props: RowProps) {
   );
 }
 
-/**
- * The add form, with the trust warning above the fields rather than after them.
- *
- * Adding a source is the friction-carrying act in this design: everything it
- * publishes becomes code the player has chosen to run, with the page's globals
- * in scope. The warning is what that friction is, so it comes before the input
- * and not as a footnote under the button.
- */
-/**
- * The add form's two controls, named so their labels can point at them.
- *
- * Fixed for the reason Browse's are: one manager window, one Marketplaces pane.
- */
+/** The add form's two control ids, fixed because there is one Marketplaces pane. */
 const URL_ID = 'woc-market-url';
 const REF_ID = 'woc-market-ref';
 
+/**
+ * The add form. The trust warning goes above the fields: everything a source publishes becomes
+ * code the player chose to run.
+ */
 function AddForm(props: { busy: boolean; onAdd: (url: string, ref: string) => void }) {
   const [url, setUrl] = useState('');
   const [ref, setRef] = useState('');

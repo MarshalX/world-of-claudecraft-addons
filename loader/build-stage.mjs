@@ -1,18 +1,8 @@
-// Bundle the addon stage into one IIFE for `stage/index.html`.
+// Bundle the addon stage into one IIFE for `stage/index.html`. It carries none of the runtime
+// build's guards: it is a `<script src>` on a loopback page with no game to restyle.
 //
-// A second bundle rather than a mode of build-runtime.mjs, because they are two
-// different programs that happen to share a directory of modules. The runtime is
-// injected as `<script>` textContent into a page the loader does not control and
-// carries the guards that come with that; this is a `<script src>` on a loopback
-// page and carries none of them, since there is no game here to restyle and no
-// player to charge for a source map.
-//
-// The entry is GENERATED rather than committed. The scenario registry is one
-// import per `addons/*/stage.ts` and esbuild has no glob, so a committed list
-// would be a file every new addon has to remember to edit, and forgetting would
-// look exactly like a scenario that does not work. Discovering them also means
-// `pnpm run stage` picks up a scenario written while it was running, on the next
-// build, with nothing to wire up.
+// The entry is generated from `addons/*/stage.ts` because esbuild has no glob, and a committed
+// list would silently drop any addon that forgot to edit it.
 
 import { readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
@@ -40,14 +30,7 @@ function scenarioDirs() {
     .sort();
 }
 
-/**
- * The entry module, as text.
- *
- * The registry is built from entry pairs rather than an object literal for the
- * reason `useNamingConvention` exists: an addon id is a kebab-case name this
- * project chose for a directory, not a JavaScript identifier, and half of them
- * are not valid ones.
- */
+/** The entry module, as text. Built from pairs because a kebab-case addon id is no identifier. */
 function entryModule(dirs) {
   const imports = dirs
     .map((dir, i) => `import { SCENARIOS as s${String(i)} } from '../addons/${dir}/stage.ts';`)
@@ -56,9 +39,8 @@ function entryModule(dirs) {
   return `import { start } from './src/main.ts';
 ${imports}
 
-// start() reports its own failures into the page status line and never rejects.
-// A catch here that wrote into the body would REPLACE its children and delete
-// that line, which is exactly what it used to do.
+// start() reports its own failures into the page status line and never rejects. A catch here
+// that wrote into the body would replace its children and delete that line.
 start(new Map([
 ${pairs}
 ]));
@@ -78,27 +60,18 @@ function options(dirs) {
     format: 'iife',
     target: 'es2022',
     platform: 'browser',
-    // The loader's sheets are imported as text, the same way the runtime build
-    // takes them, so what the stage injects is byte for byte what ships.
+    // As text, like the runtime build, so the stage injects byte for byte what ships.
     loader: { '.css': 'text' },
-    // Unminified with a map, which is the opposite of the runtime's default and
-    // right for the same reason: nobody downloads this, and the whole point of
-    // the page is to be able to see what the loader did.
+    // Unminified with a map: nobody downloads this, and the page exists to inspect the loader.
     sourcemap: 'inline',
     logLevel: 'info',
   };
 }
 
 /**
- * Bundle once, for a caller that has already claimed the stage.
- *
- * Exported because both stage entry points now build AFTER binding the stage
- * port rather than before it, which they cannot do from a `&&` in a script. The
- * port is what makes two stage runs exclusive, and this writes the ONE
- * `stage/stage.js` every scenario shares, so a build on the far side of that bind
- * rewrites the bundle under a run already serving it. That presented as a 15
- * second `waitForSelector`, which reads as a broken scenario rather than as a
- * second run.
+ * Bundle once, for a caller that has already bound the stage port. Callers must build after
+ * the bind: the port is what makes stage runs exclusive, and this rewrites the one
+ * `stage/stage.js` a running stage is serving.
  */
 async function buildStage() {
   const dirs = scenarioDirs();
@@ -117,8 +90,7 @@ async function main() {
   await buildStage();
 }
 
-// Guarded now that this module is imported as well as run: an unconditional call
-// would build on the import, which is exactly the write the callers moved.
+// Only when run directly: importing this module must not build before the caller binds the port.
 if (argv[1] === fileURLToPath(import.meta.url)) {
   await main();
 }

@@ -1,10 +1,7 @@
 /* The page column, the header and footer, and the docs shell.
  *
- * Three column widths, all from the design: 1120px for the landing and catalog,
- * 1000px for /install (a funnel reads better narrow), and 1320px for /docs, which
- * is the only three-column page. The Mobile design page is not a page; it is the
- * responsive spec for / and /install, so it lives here and in components.css as
- * media queries rather than as a seventh template.
+ * Three column widths: 1120px for the landing and catalog, 1000px for /install,
+ * and 1320px for /docs, the only three-column page.
  */
 
 .column {
@@ -47,7 +44,7 @@
   min-height: var(--tap);
 }
 
-/* The rotated gold square, which is also the favicon. One mark, two renderers. */
+/* The rotated gold square, which is also the favicon. */
 .lockup::before {
   content: "";
   width: 10px;
@@ -91,10 +88,8 @@
   font-size: 15.5px;
 }
 
-/* Two blocks rather than three equal columns. As a three-up grid the middle cell
-   was the only one whose text did not fit, so it alone wrapped to two lines and
-   the row read as ragged rather than as three items. The legal block now stacks
-   its two lines ON PURPOSE and the links sit opposite. */
+/* Two blocks: the legal block stacks its two lines and the links sit opposite.
+   Three equal columns leave only the middle one wrapping, which reads as ragged. */
 .site-footer > .column {
   padding-block: 32px 44px;
   display: flex;
@@ -160,8 +155,7 @@
 }
 
 @media (width <= 1100px) {
-  /* The on-this-page aside is the first thing to go: it is a convenience over
-     content that is still reachable by scrolling. */
+  /* The on-this-page aside is the first thing to go. */
   .docs {
     grid-template-columns: minmax(200px, 230px) minmax(0, 1fr);
     gap: 36px;

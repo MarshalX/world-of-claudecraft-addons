@@ -2,54 +2,33 @@
 
 // Veinsight: every gathering node in the world, pinned where it actually is.
 //
-// A gathering node is never an entity: the server spawns nothing for one and the snapshot
-// carries nothing about one, so the renderer draws them from an authored table and the
-// only thing on the wire is your own respawn timers. This file is the join, and the table
-// is `nodes.json`, which `generate.mjs` writes from a game checkout. Never hand-edit it.
+// A node is never an entity: the snapshot carries nothing about one, so the pins come from
+// `nodes.json`, which `generate.mjs` writes from a game checkout. Never hand-edit it. The
+// only thing on the wire is `world.nodeCooldowns`, which is per PLAYER: a node with no entry
+// is ready for you whatever anybody else did to it.
 //
-// The cooldowns are facts. `world.nodeCooldowns` is per PLAYER: a node with no entry is
-// ready for you whatever anybody else did to it, and it rides the snapshot, so it
-// survives a reload with nothing stored.
+// The gate has TWO halves. A tool covers its own tier and every tier below it, and every
+// tier above the first also demands a gathering proficiency before it will swing, so a
+// mithril pick at mining 0 opens nothing. The game draws the same lock on its minimap. The
+// answers are open, `Tool` for nothing carried that covers the tier, and `Skill` for a
+// covering tool that will not swing yet; the split reads the BAGS, so a denial only names a
+// threshold that would put something the player already owns to work.
 //
-// The gate is a fact and it has TWO halves, which is the whole reason this file was
-// rewritten. A tool covers its own tier and every tier below it and bare hands cover
-// nothing, and since R22 a tool also has to WIELD: every tier above the first demands a
-// gathering proficiency before it will swing, and the harvest command resolves the
-// player's tool through that filter rather than through what they own. So a mithril pick
-// at mining 0 opens nothing, and reporting it as a tier 3 tool would offer every vein in
-// range to somebody the server refuses at all of them. The game draws that lock on its own
-// minimap, so getting this wrong is not a missing feature, it is this panel contradicting
-// the map beside it.
+// The same counter decides two more things: a node three gain tiers below you teaches
+// nothing, and a tool STRICTLY above a yield's rung, at a vein of at least that rung, mints
+// the fine grade of that yield.
 //
-// The three answers are open, `Tool` for nothing carried that covers the tier, and `Skill`
-// for a covering tool that will not swing yet. The second and third are split on what is
-// in the BAGS rather than on the counter, because the number worth naming is the one that
-// would put something you already have to work: telling somebody who carries only the
-// tier 3 pick that 40 opens tier 2 names a threshold that unlocks nothing they own.
-//
-// Two facts ride on the same counter once it is being read. A node stops paying
-// proficiency three gain tiers below you, which on a table of 138 tier 1 nodes out of 156
-// means most of a circuit quietly stops teaching a gatherer past 75, and nothing in the
-// game says so. And a tool STRICTLY above a yield's own rung, at a vein of at least that
-// rung, mints the fine grade of that yield instead of the plain one, which is the only
-// reason to carry a better tool than the gate demands.
-//
-// The height is always an INFERENCE and each pin's pillar says which of three kinds, since
-// the table carries no y and ground height is a function of a world seed no addon can
-// call:
+// The table carries no y, and ground height needs a world seed no addon can call, so each
+// pin's pillar says which of three inferences placed it:
 //
 //   harvested  read off your own feet when a harvest landed. Exact.
 //   sampled    an entity stood within a few yards. Captured once, since tracking slides
 //              a marker up a ramp.
 //   guessed    nothing better, so the pin sits at your own height.
 //
-// A pin is a tile on a pillar rather than a flat disc for that reason: a disc at the wrong
-// height reads as a bug, and a pillar that starts high still points at one spot.
-//
-// The zone filter cannot be answered alone. The loader publishes no zone id, because the
-// game's own resolver clamps rather than answering null and would name an overworld zone
-// for a player in a dungeon. Every node row carries its own `zoneId`, so what is missing
-// is one bus topic, and without a publisher the filter degrades to every zone and says so.
+// The zone filter needs a `zone` bus publisher: the loader publishes no zone id, because the
+// game's resolver clamps and would name an overworld zone for a player in a dungeon. Without
+// a publisher the filter lists every zone and the note says so.
 
 /** Yards the game lets you harvest from, `INTERACT_RANGE` in `src/sim/types.ts`. */
 const REACH_YARDS = 5;
@@ -154,17 +133,9 @@ let zoneNames = new Map();
 /** Node type to the tools that open it, each with the tier it covers. */
 let toolsByType = new Map();
 /**
- * Node type to the seconds a harvested node of it takes to come back, off the game's own
- * `NODE_HARVEST_TABLE`.
- *
- * It comes out of the data file rather than being written down here, because it is a
- * tuning number that moves on a content pass with nothing on the wire to announce it. A
- * constant here is wrong silently, since the fill is clamped: dividing by 120 while the
- * server counts down from 240 draws a bar pinned at full for the whole first half.
- *
- * Per type because the game's table is keyed per type; all three agree today. Empty until
- * the data file lands, and nothing draws against it before then: `readTable` refuses a
- * file that does not carry a positive figure for every type.
+ * Node type to its respawn seconds, off the game's `NODE_HARVEST_TABLE`. Read from the data
+ * file because a content pass retunes it silently, and a stale constant draws bars pinned at
+ * full since the fill is clamped. `readTable` refuses a file missing any type.
  */
 let respawnByType = new Map();
 /**
@@ -174,13 +145,9 @@ let respawnByType = new Map();
  */
 let professionByType = new Map();
 /**
- * Tool tier to the proficiency it takes to swing one, off the game's own frozen ladder.
- *
- * In the table for the reason `respawnByType` is: it is a tuning figure pinned by the
- * game's suite against its live gain curve, so a retune moves it with nothing on the wire
- * to announce it. An UNKNOWN tier reads as no requirement, which is what
- * `wieldRequirementForTier` does, and the generator refuses a table whose ladder misses a
- * tier some shipped tool has, so the two together mean an unknown tier cannot ship.
+ * Tool tier to the proficiency it takes to swing one, in the table for the reason
+ * `respawnByType` is. An unknown tier reads as no requirement, as the game's
+ * `wieldRequirementForTier` does; the generator refuses a ladder missing a shipped tier.
  */
 let wieldByTier = new Map();
 /** The gain curve, or null when the file carries none and no row says what it teaches. */
@@ -344,13 +311,7 @@ function readGrades(value) {
   return byItem;
 }
 
-/**
- * Effect id to what it adds, for the QUALITY charms only.
- *
- * The other two kinds are dropped here rather than filtered at every read: a quantity
- * charm and a respawn charm change nothing this panel draws, so carrying them would put
- * rows in the map that every caller would then have to know to ignore.
- */
+/** Effect id to what it adds, QUALITY charms only: the other kinds change nothing drawn. */
 function readEffects(value) {
   const bonuses = new Map();
   if (typeof value !== 'object' || value === null) {
@@ -399,12 +360,9 @@ function readRespawn(value) {
 /**
  * The file's three arrays and the three maps nothing can be drawn without, or null.
  *
- * The split between what is refused here and what merely warns below is whether a
- * missing block would make a standing claim WRONG or would only leave a new line out.
- * The respawn map is every bar's denominator, and the profession map and the wield
- * ladder are the two halves of the gate, so a file without them would draw a panel
- * saying nodes are open that are not. The material table and the gain curve cost a
- * tooltip line each, so they degrade.
+ * A block is refused when its absence would make a claim WRONG (the respawn denominator,
+ * both halves of the gate) and merely warned about when it only drops a tooltip line (the
+ * materials, the gain curve).
  */
 function readTable(file) {
   if (typeof file !== 'object' || file === null) {
@@ -477,9 +435,8 @@ function listLength() {
 const note = document.createElement('div');
 note.className = 'woc-vs-note';
 note.style.opacity = '0.75';
-// Indented to the rows rather than to the body: with no padding of its own the sentence
-// starts 7px left of every label below it and ends hard against the panel's border, and a
-// line of text touching a border reads as one that has been cut off.
+// Indented to the rows: unpadded, the line starts left of every label and touches the
+// panel's border, which reads as cut off.
 note.style.padding = `2px ${String(TEXT_INSET_PX)}px 4px`;
 
 const list = document.createElement('div');
@@ -488,18 +445,13 @@ list.style.display = 'flex';
 list.style.flexDirection = 'column';
 list.style.gap = '3px';
 
-/**
- * The WIDTH is the player's and the height is the content's, which is the only shape this
- * panel can take: the row count is a setting, so a height it owned could only clip the rows
- * or leave a gap under them. A node name and its distance are what the width is for.
- */
+/** Width only: the row count is a setting, so an owned height would clip rows or gap. */
 const frame = woc.ui.frame({
   id: 'nodes',
   title: 'Veinsight',
   width: FRAME_WIDTH,
   resizable: 'width',
-  // Stated, or the width it opens at is also the narrowest it can ever be. The floor is
-  // where the distance starts crowding the name off rather than a figure of its own.
+  // Stated, or the opening width is also the narrowest it can ever be.
   minWidth: MIN_FRAME_WIDTH,
   density: 'compact',
   closable: true,
@@ -507,9 +459,8 @@ const frame = woc.ui.frame({
 });
 
 /**
- * The column the content lays out in, which must NOT restate the frame's width: the
- * loader already holds a content-sized frame to it, and the frame's padding is inside that
- * number, so a column stating it again is 20px too wide and clips its own rows.
+ * Must NOT restate the frame's width: the frame's padding is inside that number, so a column
+ * stating it again is too wide and clips its own rows.
  */
 const column = document.createElement('div');
 column.className = 'woc-vs-column';
@@ -540,13 +491,9 @@ function coolingFor(node) {
 }
 
 /**
- * The tier of every matching tool in the bags, or null for bags that cannot be read.
- *
- * The BAGS rather than the equipment: a gathering tool has no slot and the game's own gate
- * scans the inventory. Every tier rather than the best one, because the two halves of the
- * gate ask different questions of the same scan: what you can swing now is the best tier
- * your counter clears, and what a denial should NAME is the cheapest counter that would
- * put something you already carry to work.
+ * The tier of every matching tool in the bags, or null for bags that cannot be read. The
+ * bags because a gathering tool has no slot; every tier because the two halves of the gate
+ * ask different questions of the same scan.
  */
 function carriedTiers(type) {
   const bags = woc.world.inventory;
@@ -566,13 +513,9 @@ function carriedTiers(type) {
 }
 
 /**
- * Your counter in the profession that works this type, or null before it can be read.
- *
- * Null and zero are different answers and both are real. Null is the sheet not having
- * arrived, which is before world entry, and it must not be read as zero: zero LOCKS every
- * tool above the first, so a panel that guessed it would black out most of the world for a
- * second on every login. A sheet that HAS arrived carrying nothing for this profession is
- * a genuine zero, which is what `coerceProficiency` reads it as.
+ * Your counter in the profession that works this type, or null before the sheet arrives.
+ * Null must not become zero, which LOCKS every tool above the first; an arrived sheet with
+ * no entry is a genuine zero, as `coerceProficiency` reads it.
  */
 function proficiencyFor(type) {
   const sheet = woc.world.professions;
@@ -622,11 +565,7 @@ function usableTier(type) {
 
 /**
  * The smallest counter at which something ALREADY IN THE BAGS would work this node, or
- * null when nothing carried covers its tier at all.
- *
- * Keyed to the bags on purpose, which is the game's own reasoning for the same read:
- * naming the threshold of a tier the player does not own would name a number that unlocks
- * nothing for them.
+ * null when nothing carried covers its tier. A threshold for an unowned tool unlocks nothing.
  */
 function minWieldFor(node) {
   const carried = carriedByType.get(node.type) ?? null;
@@ -659,13 +598,8 @@ function gateFor(node) {
 }
 
 /**
- * What the gate cannot read, named rather than lumped together.
- *
- * Two halves with two causes, and today only one of them can actually fire: the profession
- * sheet arrives with the player, so a panel drawing a row has a counter by construction,
- * while the bags legitimately lag. Named separately anyway, because a note reporting the
- * wrong one of two states is worse than a note reporting neither, and the two reads come off
- * different members that nothing makes arrive together.
+ * What the gate cannot read, named separately: the bags and the counter come off different
+ * members that nothing makes arrive together, and naming the wrong one misleads.
  */
 function unreadable() {
   const missing = [];
@@ -799,12 +733,8 @@ function takeable(node) {
 }
 
 /**
- * Both locks are WORDS in both places: a pin abbreviating either would say something else.
- *
- * They are kept apart because they ask the player for different things. `Tool` is a trip to
- * a vendor or a crafter, and `Skill` is a stretch of gathering with what is already in the
- * bags, so collapsing them into one word would hide the only one of the two a player can
- * act on where they are standing.
+ * Both locks are WORDS on the row and the pin, and kept apart: `Tool` is a trip to a vendor,
+ * `Skill` is more gathering with what is already in the bags.
  */
 function figureIn(node, time) {
   const gate = gateFor(node);
@@ -822,10 +752,8 @@ function figureIn(node, time) {
 }
 
 /**
- * The row's right-hand figure. "Tool" is a state rather than a time, and says so.
- *
- * Bounded by one respawn, 240 seconds for every type in `nodes.json`, so only the minute
- * and second tiers render. A content change past an hour would turn `60m 0s` into `1h 0m`.
+ * The row's right-hand figure. Bounded by one respawn, so only the minute and second tiers
+ * of `'coarse'` render; a respawn past an hour would start showing `1h 0m`.
  */
 function figureFor(node) {
   return figureIn(node, (left) => woc.fmt.duration(left, 'coarse'));
@@ -938,16 +866,9 @@ function teachLine(node) {
 }
 
 /**
- * What a slotted quality charm adds to the grade comparison, or 0.
- *
- * Three ways to be nothing, and all three are the game's own: no slot on this profession's
- * tool, a spent one, and a charm of another kind. The game's fourth, suppressing a quality
- * charm where the fine grade is out of reach at all, is deliberately NOT here: `yieldFor`
- * already gates the fine grade on `reachable`, so a copy of that rule in this function
- * would be a second owner of one decision and could never change the answer.
- *
- * A `prompt` slot counts, because the game's own grade PREVIEW passes `effectUseConfirmed`
- * as true and this is a preview: asking what a node WOULD yield spends no charge.
+ * What a slotted quality charm adds to the grade comparison, or 0 for no slot, a spent one,
+ * or another kind. The game's reachability suppression is left to `yieldFor`, which already
+ * gates on `reachable`. A `prompt` slot counts: the game's grade preview confirms it too.
  */
 function qualityBonusFor(type) {
   const sheet = woc.world.professions;
@@ -963,13 +884,10 @@ function qualityBonusFor(type) {
  * What this node yields YOU: the zone's material for its type, upgraded to the fine grade
  * where your tool outclasses the material at a vein of at least the material's own rung.
  *
- * The tool tier read here is the game's `effectiveGradeToolTier`: your best WIELDABLE tool
- * plus whatever a usable quality charm adds. Both halves are needed and the charm's is the
- * one that used to be a disclosure, since a tool sitting exactly ON the material's rung
- * mints a fine grade with a charm and a plain one without, and the panel could not tell.
- *
- * Null when the table carries no material for the zone, which is a future zone whose
- * content landed before its yields did rather than a node that gives nothing.
+ * The tool tier is the game's `effectiveGradeToolTier`: your best WIELDABLE tool plus a
+ * usable quality charm, since a tool exactly ON the rung mints fine only with a charm.
+ * Null when the table carries no material for the zone, which is a zone whose yields have
+ * not landed rather than a node that gives nothing.
  */
 function yieldFor(node) {
   const base = materialByType.get(node.type)?.get(node.zone);
@@ -1017,10 +935,8 @@ function createRow(node) {
   const bar = woc.ui.bar({ label: labelFor(node), className: 'woc-vs-row' });
   bar.el.dataset.node = node.id;
   bar.el.style.borderLeft = `${String(ROW_EDGE_PX)}px solid ${TYPE_TINT[node.type]}`;
-  // The same width back on the other side, and invisible. A border sits outside the kit's
-  // padding, so an edge on one side alone makes the row lopsided and puts the figure
-  // nearer the panel's border than anything else on the row. Mirrored rather than
-  // measured, so it stays right if the kit's padding moves.
+  // Mirrored invisibly: a border sits outside the kit's padding, so one edge alone makes
+  // the row lopsided.
   bar.el.style.borderRight = `${String(ROW_EDGE_PX)}px solid transparent`;
   woc.ui.tooltip(bar.el, () => rowTooltip(node));
   return bar;
@@ -1088,13 +1004,7 @@ function opacityFor(node) {
   return String(COOLING_OPACITY);
 }
 
-/**
- * The art of what one harvest here would hand YOU, or null when there is none to point at.
- *
- * On both the row and the pin, and it moves with the gate rather than with the node: the
- * fine grade has art of its own, so a tool good enough to mint it changes the picture as
- * well as the sentence.
- */
+/** The art of what one harvest here would hand YOU, which changes with the fine grade. */
 function yieldIcon(node) {
   const found = yieldFor(node);
   if (found === null) {
@@ -1402,10 +1312,8 @@ function load() {
   });
 }
 
-// The key set changing is the only signal a node becoming yours again produces; the
-// seconds counting down are not one. The other two are the two halves of the gate, and
-// the counter is watched for the same reason the bags are: crossing a wield rung opens
-// every node of a tier at once with nothing else on screen moving to explain it.
+// The key set changing is the only signal a node becoming yours again produces. The other
+// two are the halves of the gate: crossing a wield rung opens a whole tier at once.
 woc.world.on('nodeCooldowns', redraw);
 woc.world.on('inventory', redraw);
 woc.world.on('professions', redraw);
@@ -1465,21 +1373,18 @@ woc.bus.follow('zone', (payload) => {
 // is the exception and rides the frame loop below.
 woc.setInterval(redraw, MS_PER_SECOND);
 
-// The legs only: everything else would be sixty rewrites a second of strings that did
-// not change.
+// The legs only: nothing else moves with the camera.
 woc.onFrame(() => {
   for (const leg of legs) {
     paintLeg(leg);
   }
 });
 
-// Bound by hand rather than with the frame's own `toggleKey`, DECLINED because this key
-// does two things: `toggleKey` only toggles, and the pins are anchors over the world that
-// nothing else takes down. No visibility callback on `FrameOpts` to hang the redraw on.
+// Not the frame's `toggleKey`: that only toggles, and the pins are world anchors nothing
+// else takes down. `FrameOpts` has no visibility callback to hang the redraw on.
 woc.keys.bind('toggle', () => {
   frame.toggle();
-  // Now rather than up to a second from now: somebody who just hid the panel should not
-  // watch its pins hang over the world waiting for the next tick.
+  // Now, so the pins do not hang over the world until the next tick.
   redraw();
 });
 

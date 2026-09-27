@@ -49,8 +49,7 @@ describe('createFrameBus', () => {
   });
 
   describe('throttle', () => {
-    // snap fires 20 times a second. Without this an addon that touches the DOM
-    // per frame costs the player frames.
+    // snap fires 20 times a second.
     it('drops everything inside the window and passes the first after it', () => {
       const { bus, advance } = harness();
       const seen = vi.fn();
@@ -120,8 +119,6 @@ describe('createFrameBus', () => {
       expect(after).toHaveBeenCalledOnce();
     });
 
-    // A handler throwing 20 times a second forever is the failure this exists
-    // for: it has to stop costing everyone else.
     it('is dropped after five consecutive throws', () => {
       const { bus, errors } = harness();
       const bad = vi.fn(() => {
@@ -138,7 +135,7 @@ describe('createFrameBus', () => {
       expect(errors.at(-1)?.quarantined).toBe(true);
     });
 
-    it('survives when a success resets the count, so a flake is not fatal', () => {
+    it('resets the count on a success', () => {
       const { bus } = harness();
       let calls = 0;
       const flaky = vi.fn(() => {
@@ -169,8 +166,7 @@ describe('createFrameBus', () => {
     });
   });
 
-  // The set is mutated mid-dispatch by once, by quarantine, and by any handler
-  // that unsubscribes. Iterating it directly would skip or repeat subscribers.
+  // once, quarantine and unsubscribing handlers all mutate the set mid-dispatch.
   describe('mutation during dispatch', () => {
     it('does not deliver to a subscriber an earlier handler removed', () => {
       const { bus } = harness();
@@ -197,11 +193,8 @@ describe('createFrameBus', () => {
   });
 
   describe('size and hasSubscribers', () => {
-    // `hasSubscribers` is what decides whether a 20 Hz frame is frozen at all, per
-    // TOPIC rather than across the bus: the loader itself subscribes at boot, so a
-    // count across every topic is never zero and could never gate anything. `size`
-    // is the bookkeeping check, which is what these cases are really pinning: an
-    // unsubscribe has to leave nothing behind.
+    // `hasSubscribers` is per topic because the loader subscribes at boot, so a
+    // bus-wide count is never zero. `size` pins that unsubscribe leaves nothing behind.
     it('counts across topics and drops back to zero', () => {
       const { bus } = harness();
       const offA = bus.subscribe('snap', vi.fn());
@@ -216,7 +209,7 @@ describe('createFrameBus', () => {
       expect(bus.hasSubscribers('hello')).toBe(true);
     });
 
-    it('forgets an emptied topic rather than leaving it behind', () => {
+    it('forgets an emptied topic', () => {
       const { bus } = harness();
       bus.subscribe('snap', vi.fn())();
 
@@ -233,22 +226,14 @@ describe('createFrameBus', () => {
   });
 });
 
-// Which clock reading a throttle window is measured from. Its own block rather than
-// one more case under `throttle`, because the subject is not the throttle: it is that
-// `deliver` runs ADDON code in the middle of a publish, so the clock moves by an
-// amount one addon decides and another addon pays for.
+// `deliver` runs addon code mid-publish, so a slow handler moves the clock for the
+// subscribers after it.
 describe('the timestamp a publish is measured at', () => {
-  // Every subscriber on a topic is being told about the SAME frame, so the window
-  // is measured from when that frame arrived and not from when the handler ahead
-  // of it happened to finish. `deliver` runs addon code, so without one timestamp
-  // for the whole publish a slow addon silently ate its neighbour's window, by an
-  // amount that depended on what the slow addon was doing.
-  it('measures the window from the frame rather than from the handler before it', () => {
+  // One timestamp per publish, since every subscriber is told about the same frame.
+  it('measures the window from the frame arrival', () => {
     const { bus, advance } = harness();
     const seen = vi.fn();
-    // A neighbour that is slow ONCE. A neighbour that costs the same every time
-    // shifts the stamp and the reading by the same amount and cannot show this:
-    // what leaks is the DIFFERENCE between one frame's neighbour and the next's.
+    // Slow once: a constant cost shifts both readings equally and hides the leak.
     let slow = true;
     bus.subscribe('snap', () => {
       if (slow) {
@@ -262,8 +247,7 @@ describe('the timestamp a publish is measured at', () => {
     advance(80);
     bus.publish('snap', 'b');
 
-    // 120 ms since the frame that was delivered, so the window is up. Stamped from
-    // when the neighbour finished it would read as 80 ms and drop this frame.
+    // 120 ms since the delivered frame; stamped after the neighbour it would read 80.
     expect(seen.mock.calls.flat()).toEqual(['a', 'b']);
   });
 });

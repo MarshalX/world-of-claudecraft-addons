@@ -1,15 +1,7 @@
 // Transient messages.
 //
-// One stack for the whole loader rather than one per addon, so two addons
-// reporting something at once produce a readable column instead of two piles in
-// the same corner. The stack element is created on the first toast and left in
-// place: it is an empty div with no pointer events, and creating it per toast
-// would mean a layout thrash on every message.
-//
-// Toasts are announced to assistive technology through a live region rather than
-// by moving focus. Stealing focus for a message the player did not ask for would
-// interrupt whatever they were typing, and a toast is by definition not worth
-// that.
+// One stack for the whole loader, created on the first toast and left in place (an empty div
+// with no pointer events). Announced through a polite live region, never by moving focus.
 
 import type { Teardown } from '../../disposal.ts';
 
@@ -48,8 +40,6 @@ function ensureStack(deps: ToasterDeps): HTMLElement {
   }
   const stack = deps.doc.createElement('div');
   stack.id = STACK_ID;
-  // polite rather than assertive: a toast is informational, and assertive
-  // interrupts a screen reader mid-sentence.
   stack.setAttribute('aria-live', 'polite');
   stack.setAttribute('role', 'status');
   deps.root.appendChild(stack);
@@ -73,8 +63,7 @@ function createToaster(deps: ToasterDeps): Toaster {
       const stack = ensureStack(deps);
       const el = deps.doc.createElement('div');
       el.className = `woc-toast woc-toast-${opts?.kind ?? 'info'}`;
-      // textContent, never innerHTML: the text may come from a game event, a
-      // player name, or another addon, and none of those are markup.
+      // textContent, never innerHTML: the text may come from the wire.
       el.textContent = text;
       stack.appendChild(el);
 
@@ -94,8 +83,7 @@ function createToaster(deps: ToasterDeps): Toaster {
       }
       live.push({ el, dismiss });
 
-      // The oldest goes rather than the newest being refused: the newest message
-      // is the one the player is most likely to be waiting for.
+      // The oldest goes; the newest is the one the player is most likely waiting for.
       while (live.length > MAX_VISIBLE) {
         live[0]?.dismiss();
       }

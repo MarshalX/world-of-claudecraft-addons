@@ -1,45 +1,25 @@
-// Cue playback: the pack, the buffer cache, the cooldowns, and the gain math.
-//
-// Everything here is host-agnostic and drives an AudioSink, so the decisions a
-// player notices (a cue is not machine-gunned by a 20 Hz handler, the slider is
-// respected, a variant family sounds varied) are decided somewhere a Node test
-// can reach. web-audio.ts is the only file that knows what an AudioContext is.
+// Cue playback: the pack, the buffer cache, the cooldowns and the gain math. Host-agnostic over an
+// AudioSink so a Node test reaches it; web-audio.ts is the only file that knows an AudioContext.
 
 import { diagError } from '../../shared/diag.ts';
 import type { Teardown } from '../disposal.ts';
 import { fallbackCueUrl, fetchSoundPack, type SoundClip, type SoundPack } from './pack.ts';
 
-/**
- * The floor between two plays of the same cue.
- *
- * `net.on('snap')` fires 20 times a second, and an addon that plays a cue from
- * one is the obvious thing to write. Without a floor that is 20 overlapping
- * copies a second, which is not a sound, it is a noise. 120 ms is short enough
- * that a deliberate rapid cue still reads as rapid.
- */
+/** The floor between two plays of one cue, so one played from a 20 Hz snap handler is not noise. */
 const DEFAULT_COOLDOWN_MS = 120;
 
 const DEFAULT_VOLUME = 1;
 const MIN_GAIN = 0;
 const MAX_ADDON_VOLUME = 1;
 
-/** What an unlisted cue is assumed to be tuned at, having no pack entry to say. */
+/** The tuning assumed for a cue the pack does not list. */
 const UNTUNED_GAIN = 1;
 const UNTUNED_RATE = 1;
 
-/** What a decoded buffer is to this module: something the sink handed back. */
 type DecodedAudio = unknown;
 
 interface AudioSink {
-  /**
-   * Whether output is actually flowing.
-   *
-   * A boolean rather than the context's own state, because that state has four
-   * values and only one of them means "will be heard": browsers start
-   * `suspended` until a user gesture, and iOS moves to `interrupted` for a phone
-   * call. Every not-running case is handled the same way, so naming them here
-   * would only invite a check that forgets one.
-   */
+  /** A boolean, not the context state: of its four values only `running` will be heard. */
   running: () => boolean;
   resume: () => Promise<void>;
   decode: (bytes: ArrayBuffer) => Promise<DecodedAudio>;
@@ -72,13 +52,7 @@ interface SoundEngine {
   cues: () => string[];
   /** Reads the pack if nothing has yet, and resolves once it is in, failed or not. */
   ready: () => Promise<void>;
-  /**
-   * Start reading the pack without waiting for it.
-   *
-   * For a caller that knows a cue is coming but is not playing one yet, which is
-   * what an addon declaring the `sound` permission is telling the loader. Without
-   * it the read starts on the first `play`, and that cue takes the fallback URL.
-   */
+  /** Start the pack read without waiting, so the first `play` does not take the fallback URL. */
   warm: () => void;
   play: (cue: string, opts?: PlayOpts) => void;
   preload: (cues: readonly string[]) => Promise<void>;
@@ -90,12 +64,8 @@ interface SoundEngine {
 const GESTURE_EVENTS = ['pointerdown', 'keydown'] as const;
 
 /**
- * Captured, so a game handler calling stopPropagation cannot cost the loader the
- * one gesture it needs to start audio at all.
- *
- * The OBJECT form, never the boolean shorthand. Node's EventTarget accepts a
- * boolean on addEventListener and then ignores it on removeEventListener, so the
- * shorthand leaves the listener attached and the teardown silently does nothing.
+ * Captured, so a game stopPropagation cannot eat the gesture that starts audio. The object form:
+ * Node's EventTarget ignores a boolean on removeEventListener, so the teardown would do nothing.
  */
 const CAPTURE = { capture: true } as const;
 
@@ -142,8 +112,7 @@ function createBufferCache(deps: Pick<SoundEngineDeps, 'fetchBytes' | 'sink'>): 
         .fetchBytes(url)
         .then((bytes) => deps.sink.decode(bytes))
         .catch((err: unknown) => {
-          // Dropped from the cache so a transient failure can be retried, rather
-          // than poisoning the cue for the rest of the session.
+          // Dropped so a transient failure is retried rather than poisoning the cue.
           buffers.delete(url);
           throw err;
         });
@@ -157,13 +126,7 @@ function createBufferCache(deps: Pick<SoundEngineDeps, 'fetchBytes' | 'sink'>): 
   };
 }
 
-/**
- * The engine's mutable state.
- *
- * Held in one record rather than in closure variables so the play path is a
- * plain function a reader can follow top to bottom, and so `disposed` keeps its
- * declared `boolean` type across the awaits that have to re-check it.
- */
+/** One record, not closure variables, so `disposed` keeps its `boolean` type across awaits. */
 interface EngineState {
   pack: SoundPack;
   disposed: boolean;
@@ -174,18 +137,8 @@ interface EngineState {
 }
 
 /**
- * Start the pack read, or hand back the one already running.
- *
- * The pack is 119 kB and used to be fetched when the engine was BUILT, which is at
- * loader boot, so every page load paid for it whether or not a single installed
- * addon ever played a cue. It is content the game serves for its own audio, and
- * fetching it alongside the game's own boot assets is a request the player waits
- * behind for something most sessions never use.
- *
- * The read reports its own failures and resolves with an empty pack, so there is
- * nothing here to reject and a failed read is not retried: a second attempt would
- * fetch the same missing file again on the next cue, and the fallback path already
- * covers the case.
+ * Start the pack read once, lazily: it is 119 kB and most sessions never play a cue. A failed read
+ * resolves empty and is not retried; the fallback URL covers it.
  */
 function startPack(deps: Pick<SoundEngineDeps, 'fetchJson'>, state: EngineState): void {
   state.loading ??= fetchSoundPack(deps.fetchJson).then((pack) => {
@@ -196,7 +149,7 @@ function startPack(deps: Pick<SoundEngineDeps, 'fetchJson'>, state: EngineState)
 /** The same read, for a caller that has to wait for it. */
 function ensurePack(deps: Pick<SoundEngineDeps, 'fetchJson'>, state: EngineState): Promise<void> {
   startPack(deps, state);
-  // `startPack` always leaves one behind. The coalesce is for the type alone.
+  // The coalesce is for the type alone.
   return state.loading ?? Promise.resolve();
 }
 
@@ -223,10 +176,8 @@ function playCue(deps: SoundEngineDeps, state: EngineState, cue: string, opts?: 
     return;
   }
 
-  // A sound requested before the player has clicked anything is dropped
-  // rather than queued: a suspended context does not discard what was
-  // started on it, so queueing means every dropped cue fires at once the
-  // moment the player finally clicks.
+  // Dropped, not queued: a suspended context keeps what was started on it, so every queued cue
+  // would fire at once on the first click.
   if (!deps.sink.running()) {
     deps.sink.resume().catch(() => undefined);
     return;
@@ -240,8 +191,7 @@ function playCue(deps: SoundEngineDeps, state: EngineState, cue: string, opts?: 
   state.buffers
     .get(chooseVariant(clip, deps.pick))
     .then((decoded) => {
-      // Re-checked after the await: the addon may have been disabled while
-      // its first play of a cue was still fetching.
+      // Re-checked: the addon may have been disabled mid-fetch.
       if (!state.disposed) {
         deps.sink.start(decoded, gain, rate);
       }
@@ -300,9 +250,7 @@ function createSoundEngine(deps: SoundEngineDeps): SoundEngine {
 
   return {
     cues: () => {
-      // Answers what is known NOW, as it always has, and starts the read so the
-      // next call can answer properly. An addon listing cues before the pack has
-      // landed got an empty array before this was lazy too.
+      // Answers what is known now and starts the read for the next call.
       startPack(deps, state);
       return [...state.pack.keys()].sort();
     },
@@ -314,10 +262,7 @@ function createSoundEngine(deps: SoundEngineDeps): SoundEngine {
     },
 
     play: (cue, opts) => {
-      // Kicked off, never awaited. `play` has always been able to run before the
-      // pack landed and falls back to a guessed URL when it does, so awaiting here
-      // would change a cue that is merely untuned into one that is late. What keeps
-      // that window small is `warm`, called when an addon declaring sound starts.
+      // Never awaited: before the pack lands, a cue plays untuned from a guessed URL, not late.
       startPack(deps, state);
       playCue(deps, state, cue, opts);
     },

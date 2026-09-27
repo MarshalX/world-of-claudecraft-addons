@@ -1,21 +1,8 @@
-// The running game's version and build, read from the page.
-//
-// The game compiles __APP_VERSION__ and __APP_BUILD_ID__ in as Vite defines, so
-// there is no global to ask. The only external surface is the footer element the
-// game's syncBuildInfo() fills in, which reads "v0.31 build 1a2b3c4d5e6f".
-//
-// Two things about that text are load-bearing. It is written by the game after
-// its own boot, so before then the element still holds the hardcoded fallback
-// from the document and carries no build id at all. And the version is
-// FORMATTED: the game strips a trailing ".0" before displaying it, so "0.31.0"
-// reaches the page as "0.31" and has to be restored to three parts before
-// anything compares it to a manifest's gameVersion range.
+// The game's version and build, from the footer syncBuildInfo() fills in ("v0.31 build 1a2b3c").
+// There is no global; the version is compiled in. Before boot the footer holds a fallback with no
+// build id, and the game strips a trailing ".0", which must be restored before a range compare.
 
-/**
- * Tolerant on purpose. The separator between version and build is presentation
- * that a game update may restyle, and the build segment is absent until
- * syncBuildInfo() runs, so neither is part of the match.
- */
+/** Tolerant: the separator is presentation and the build segment appears only after boot. */
 const VERSION_TEXT = /^\s*v(\d+\.\d+(?:\.\d+)?)\b(?:.*?\bbuild\s+(\S+))?/;
 
 const FULL_VERSION_PARTS = 3;

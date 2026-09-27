@@ -17,7 +17,7 @@ export type FrameType =
 export interface SubscribeOpts {
   /**
    * At most one call per N ms, leading edge: the first frame in each window is
-   * delivered and the rest are dropped rather than deferred.
+   * delivered and the rest are dropped, not deferred.
    *
    * Worth setting on 'snap', which fires 20 times a second.
    */
@@ -56,19 +56,15 @@ export interface NetApi {
   /**
    * One decoded event kind out of the 'events' frames.
    *
-   * The handler's argument is typed FROM THE KIND for every kind `EventPayloads`
-   * describes, so `onEvent('damage', ...)` receives a `DamageEvent` with nothing
-   * to narrow. Any other kind is still accepted and hands over `unknown`: the
-   * game emits far more kinds than are described there, and describing some took
-   * none of the others away.
+   * The handler's argument is typed from the kind for every kind `EventPayloads`
+   * describes, so `onEvent('damage', ...)` receives a `DamageEvent`. Any other
+   * kind is still accepted and hands over `unknown`.
    *
-   * `castStart` does NOT cover a mob. It is emitted for a player cast, a pet's
-   * cast and the timed activities the game runs through the same machinery, and
-   * never for a mob: every mob mechanic that shows a cast bar sets its cast state
-   * directly, and that state reaches you only on the per-entity snapshot. So a
-   * boss mod written on this event receives silence, and has no way to tell that
-   * from a boss that never casts. Read `world.casts`, or subscribe with
-   * `world.on('casts', ...)`, for anything but your own casting.
+   * `castStart` NEVER covers a mob. It fires for a player cast, a pet's cast and
+   * the game's timed activities; a mob's cast state reaches you only on the
+   * snapshot, so a boss mod on this event hears silence it cannot tell from a
+   * boss that never casts. Read `world.casts`, or `world.on('casts', ...)`, for
+   * anything but your own casting.
    */
   onEvent: <K extends EventKind>(
     kind: K,

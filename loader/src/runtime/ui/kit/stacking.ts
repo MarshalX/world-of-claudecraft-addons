@@ -1,33 +1,17 @@
 // Which loader window is in front.
 //
-// There was no answer before this: windows are absolutely positioned siblings
-// with no z-index, so overlap fell out of DOM order and clicking a buried one
-// left it buried. With the manager and several addon frames open at once that is
-// not a polish problem, it is the window behind being unusable.
+// Windows are absolutely positioned siblings, so without this overlap falls out of DOM order.
 //
-// ONE listener on the root, not one per window. The root contains every loader
-// window there is, so `closest('.woc-window')` from the event target reaches the
-// manager and every addon frame with no per-surface wiring, and any window a
-// future feature adds participates the day it lands. Capture phase, so a child
-// that stops propagation cannot make its own window unraisable.
-//
-// `focusin` as well as `pointerdown`, for the same reason tooltips answer focus:
-// tabbing into a buried window and having it stay buried is the keyboard version
-// of the same bug.
-//
-// Only `.woc-window` is raised. Toasts, the modal backdrop and the tooltip sit in
-// their own bands ABOVE the ceiling below, so they are never candidates and can
-// never be pushed under a window by a click.
+// ONE capture-phase listener on the root, resolving `closest('.woc-window')`, so every window
+// participates with no wiring and a child that stops propagation cannot bury its own window.
+// `focusin` as well as `pointerdown`, for keyboard users. Toasts, the modal and the tooltip
+// sit above the ceiling below and are never raised.
 
 import type { Teardown } from '../../disposal.ts';
 
 /**
- * The highest z-index a window may hold, and the floor of the overlay bands.
- *
- * The counter renormalises rather than running away, so this is a real ceiling
- * and not a hope: a toast can be declared above every possible window instead of
- * above every window anyone expects. Kept in step with the overlay values in
- * styles/kit.css, which start one above it.
+ * The highest z-index a window may hold; the counter renormalises at it. Keep in step with the
+ * overlay values in styles/kit.css, which start one above it.
  */
 const WINDOW_Z_CEILING = 100_000;
 
@@ -48,12 +32,7 @@ interface Stacking {
 }
 
 /**
- * Renumber every tracked window from 1, preserving their current order.
- *
- * Reached only when the counter hits the ceiling, which takes as many raises as
- * the ceiling is high. It exists so the ceiling is enforceable: without it the
- * only defence against a window climbing into the toast band is that nobody
- * clicks that many times, which is not a defence.
+ * Renumber every tracked window from 1, preserving their order, when the counter hits the ceiling.
  */
 function renormalise(tracked: Set<HTMLElement>): number {
   const live = [...tracked].filter((el) => el.isConnected);
@@ -88,8 +67,7 @@ function createStacking(deps: StackingDeps): Stacking {
       return;
     }
     const win = target.closest(WINDOW_SELECTOR);
-    // Inside the root by construction, since the listener is on it. The instance
-    // check is what makes the style write safe rather than assumed.
+    // The instance check makes the style write safe.
     if (win instanceof HTMLElement) {
       raise(win);
     }

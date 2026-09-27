@@ -1,12 +1,5 @@
-// `pnpm cues`: regenerate the cue-name union from a deployed game's sound pack.
-//
-// Run by hand after a game release adds a cue, not on every build. The pack is
-// 119 kB over the network and the answer changes a few times a year, so wiring
-// it into the build would spend a request per build to write the same file.
-//
-// It reads the LIVE host by default, because the published types describe what
-// most players are running. Point it at pbe with --host to pick up a cue before
-// it ships: `pnpm cues --host https://pbe.worldofclaudecraft.com`.
+// `pnpm cues`: regenerate the cue-name union from a deployed game's sound pack. Run by hand after a
+// game release. Reads LIVE by default; `--host https://pbe.worldofclaudecraft.com` reads pbe.
 
 import { writeFileSync } from 'node:fs';
 import process from 'node:process';

@@ -1,10 +1,5 @@
-// A sound engine over a fake sink, a manual clock, and a scripted variant picker.
-//
-// Shared by the playback and lifecycle suites, which both need a whole engine
-// rather than a stub: the cooldown, the gesture gate, and disposal are all
-// engine state, so the only way to assert on them is to drive a real one. The
-// clock is manual because the cooldown is the thing under test, and the picker
-// is scripted because a variant chosen at random is not an assertion.
+// A real sound engine over a fake sink, a manual clock and a scripted variant picker, since the
+// cooldown, gesture gate and disposal are engine state.
 
 import {
   type AudioSink,
@@ -16,8 +11,7 @@ import {
 export const PACK = {
   format: 'woc-sfx-runtime-pack',
   version: 1,
-  // Built from entry pairs: cue names are the game's own and are not ours to
-  // rename into camelCase.
+  // Entry pairs, because the cue names are the game's and not ours to camelCase.
   clips: Object.fromEntries([
     [
       'ui_click',

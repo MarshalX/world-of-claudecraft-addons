@@ -1,15 +1,8 @@
-/* The surfaces the loader owns and an addon merely asks for: addon frames, toasts,
- * modals, and the tooltip. The two an addon assembles itself have sheets of their
- * own, bar.css and banner.css, because they change for different reasons.
- *
- * Ordered after chrome.css in runtime/ui/styles/index.ts, so a frame rule here can
- * refine the window chrome that sheet set up without extra specificity to do it. The
- * rail glyph and the reduced-motion floor close this file: both are floors for
- * anything the loader puts on screen, wherever its rules live.
+/* The surfaces the loader owns and an addon asks for: addon frames, toasts, modals, and the
+ * tooltip. After chrome.css, so a frame rule refines the window chrome on source order.
  */
 
-/* Addon frames. The window chrome in chrome.css is shared; these are the
-   differences a light HUD frame needs. */
+/* Addon frames: the differences from the shared window chrome. */
 #woc-addons .woc-addon-frame {
   padding: 8px;
   gap: 6px;
@@ -21,8 +14,7 @@
   min-height: 0;
 }
 
-/* A frame is sized by its content, so it must not inherit the manager window's
-   width floor or its flex-fill body. */
+/* A frame is sized by its content, not the manager window's width floor or flex-fill body. */
 #woc-addons .woc-chrome-frame {
   width: auto;
   max-height: none;
@@ -32,30 +24,12 @@
   flex: 1;
 }
 
-/* The one way anything the loader draws goes off screen: `ui.show`, and the frame
- * visibility state machine in kit/frame-visibility.ts.
- *
- * !important, and this is the third rule in the loader that carries it for the
- * SAME reason the reduced-motion floor below and the freeze in chrome.css do.
- * Addon code sets inline styles as a matter of course, and an inline style
- * outranks every selector a stylesheet can spell, so without this a hide utility
- * loses to the element it is pointed at: `lorebind` gives its item grid an inline
- * `display: grid`, and its empty band stayed on screen through both `hidden` and
- * this class. A hide a stylesheet can step over is a bug; one that ADDON CODE
- * steps over is a promise the loader cannot keep, and `ui.show` is nothing but
- * that promise.
- *
- * The alternative was to have `ui.show` clear the inline display instead, and it
- * is worse: the display an element was built with is the addon's own (grid here,
- * flex elsewhere, unset often), so clearing it means remembering it to put it
- * back, which is the WeakMap `ui.show` exists to delete. A class that only ever
- * adds `display: none` needs no memory of anything.
- *
- * What this does NOT beat is an inline `!important`, which nothing can. That is
- * an addon deliberately overriding the loader on its own element, and it is not
- * a case worth defending against. */
+/* The one way anything the loader draws goes off screen: `ui.show`, and
+ * kit/frame-visibility.ts. !important, because it has to beat an inline `display` addon code
+ * sets. Do not clear the inline display instead: restoring it would need a memory of each
+ * element's own display. */
 #woc-addons .woc-hidden {
-  /* biome-ignore lint/complexity/noImportantStyles: a hide utility's whole job is to win, and the thing it has to beat is the inline display addon code writes, which is the case !important exists for. See the note above. */
+  /* biome-ignore lint/complexity/noImportantStyles: a hide utility has to beat the inline display addon code writes, which is the case !important exists for. */
   display: none !important;
 }
 
@@ -68,12 +42,9 @@
   flex-direction: column;
   align-items: center;
   gap: 6px;
-  /* The stack is a layout box over the middle of the screen. Letting it take
-     clicks would put a dead strip across the top of the world. */
+  /* Or the stack puts a dead strip across the top of the world. */
   pointer-events: none;
-  /* The three overlay bands start one above kit/stacking.ts's WINDOW_Z_CEILING,
-     which the stacking counter renormalises rather than exceeds. So these are
-     above EVERY possible window, not just above the ones anyone expects. */
+  /* The overlay values start one above kit/stacking.ts's WINDOW_Z_CEILING; keep them in step. */
   z-index: 100001;
 }
 
@@ -104,8 +75,7 @@
   align-items: center;
   justify-content: center;
   background: rgb(0 0 0 / 55%);
-  /* Above the manager, which a modal may be asked from, and above every addon
-     window whatever order they were clicked in. See the note on .woc-toasts. */
+  /* Above every window, the manager included. See the note on .woc-toasts. */
   z-index: 100002;
 }
 
@@ -148,15 +118,12 @@
   padding: 6px 10px;
   font-size: 12px;
   max-width: 280px;
-  /* A tooltip that took the pointer would flicker: entering it would leave the
-     element that opened it. */
+  /* Or entering the tooltip leaves its anchor and it flickers. */
   pointer-events: none;
   z-index: 100003;
 }
 
-/* Inside a tooltip. The head is the icon and the name; the lines are the body.
-   Structured content is kit/tooltip-content.ts; a plain string renders as one
-   line, so a tooltip that was a sentence before this existed is unchanged. */
+/* Inside a tooltip (kit/tooltip-content.ts): the head is the icon and the name, then lines. */
 #woc-tooltip .woc-tip-head {
   display: flex;
   align-items: center;
@@ -168,8 +135,7 @@
   width: 20px;
   height: 20px;
   border-radius: 3px;
-  /* The art is square; cropping keeps an ability recognisable where squashing
-     would not, the same reason kit/bar.ts crops its own slot. */
+  /* Cropped, not squashed, as a bar's icon is. */
   object-fit: cover;
 }
 
@@ -187,10 +153,8 @@
   margin-top: 2px;
 }
 
-/* Tone is what a line MEANS. Four named colours and no way to pass one, for the
-   reason a bar's school tint has none: two addons saying the same kind of thing
-   should look the same. The two error colours are the game's own tokens; muted is
-   the token it writes secondary text in. */
+/* Tone is what a line MEANS. Named colours only, never a passed one, so two addons saying the
+   same kind of thing look the same. All are the game's own tokens. */
 #woc-tooltip .woc-tip-muted {
   color: var(--color-text-muted, rgb(153 141 106));
 }
@@ -207,21 +171,10 @@
   color: var(--color-text-error, rgb(255 143 133));
 }
 
-/* An element the loader keeps over a world point (kit/anchor3d.ts).
- *
- * Fixed, because the projection is in viewport pixels measured from the canvas,
- * which is itself fixed at the viewport origin. The root is `position: fixed;
- * inset: 0` and unscaled, so those pixels are already this element's left and top.
- * The game's own floating text divides the same numbers by its UI scale, and that
- * is because it lives inside the zoomed #ui; copying it here would be wrong.
- *
- * Centred on the point by transform rather than by margin, so an addon can size
- * its content freely without the loader having to measure it. Anything else about
- * the placement is the addon's `offset`, in pixels.
- *
- * Under the windows and over nothing else: a marker in the world must not cover a
- * panel the player opened, and it is not a window itself. Pointer events are off,
- * because the world underneath it is what a click there is meant for. */
+/* An element the loader keeps over a world point (kit/anchor3d.ts). The projection is in
+ * viewport pixels and the band is unscaled, so do not divide by the game's UI scale (its own
+ * floating text does, because it lives inside the zoomed #ui). Centred by transform, so the
+ * loader never measures it. Pointer events off, so clicks reach the world. */
 #woc-addons .woc-anchor3d {
   position: fixed;
   transform: translate(-50%, -50%);
@@ -229,18 +182,13 @@
   z-index: 1;
 }
 
-/* Hidden rather than moved off screen: behind the camera and past the edge are
-   both states where the element has no place, and an element parked at -9999px is
-   still an element the browser lays out. */
+/* Hidden rather than parked off screen, which the browser would still lay out. */
 #woc-addons .woc-anchor3d-off {
   display: none;
 }
 
-/* Rail-button glyphs, sized to match the game's own micro-button icons.
-   These two selectors are the only unscoped rules in the sheet, because these
-   are the only loader elements that live inside the game's own DOM rather than
-   under #woc-addons. Both are pinned to the loader's id namespace, so neither
-   can match anything the game owns. */
+/* Rail-button glyphs, sized like the game's own micro-button icons. The only rules outside
+   #woc-addons, since these buttons live in the game's DOM; the loader's id prefix scopes them. */
 [id^="woc-addon-micro-"] svg,
 #woc-addons-micro-button svg {
   width: 20px;
@@ -252,26 +200,14 @@
   stroke-linejoin: round;
 }
 
-/* The reduced-motion floor, over everything the loader draws.
- *
- * This rule was written BEFORE anything animated and would not have worked when
- * something finally did. Its original note said no !important was needed because an
- * unlayered rule already outranks the game's layered ones, which is true and beside
- * the point: that is about the GAME's rules and says nothing about the loader's own,
- * where ordinary specificity applies as usual. `#woc-addons *` is one id, and any
- * rule that actually sets an animation names a class too, so it wins. The banner's
- * entrance is the first such rule and would have played through a reduce preference.
- *
- * !important is not a shortcut past that; it is the only thing that reaches the case
- * that matters. Addon code sets inline styles as a matter of course, so an addon can
- * put an animation in a style attribute, which outranks every selector anyone can
- * write here. A floor a stylesheet can step over is a bug; one that ADDON CODE can
- * step over is a promise the loader cannot keep. */
+/* The reduced-motion floor, over everything the loader draws. !important, because
+ * `#woc-addons *` loses on specificity to the loader's own animation rules, and nothing else
+ * beats an animation addon code puts in a style attribute. */
 @media (prefers-reduced-motion: reduce) {
   #woc-addons * {
     /* biome-ignore lint/complexity/noImportantStyles: an accessibility floor is the one thing that must outrank later rules AND the inline styles addon code writes, which is the case !important exists for. */
     transition: none !important;
-    /* biome-ignore lint/complexity/noImportantStyles: same, for the animation half. Without it the banner's entrance plays for a player who asked for no motion. */
+    /* biome-ignore lint/complexity/noImportantStyles: same, for the animation half. */
     animation: none !important;
   }
 }

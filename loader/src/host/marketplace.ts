@@ -1,8 +1,4 @@
-// Fetching each source's index, and the two dev-mode switches.
-//
-// The list itself is host/market-list.ts, the per-session index cache is
-// host/market-indexes.ts, and the switches are host/dev-settings.ts; this is
-// what turns the three of them into the bridge's MarketApi.
+// The bridge's MarketApi and DevApi, over market-list.ts, market-indexes.ts and dev-settings.ts.
 
 import {
   githubMarketplace,
@@ -62,12 +58,8 @@ function pinRef(ref: MarketplaceRef, wanted: string | undefined): NormalizeResul
 }
 
 /**
- * The three writes to the source list.
- *
- * Every one of them is refused in the host rather than hidden in the UI. Hiding
- * a control is presentation; this is what makes a hand-crafted call from the
- * runtime fail too. market-list.ts holds the storage half and the refusals; what
- * is here is what the rest of the host has to be told about a change.
+ * The three writes to the source list. Refusals live in the host (market-list.ts), not the
+ * UI, so a hand-crafted call from the runtime fails too.
  */
 function createListApi(
   deps: MarketDeps,
@@ -81,9 +73,7 @@ function createListApi(
       if (!parsed.ok) {
         throw new Error(parsed.error);
       }
-      // An explicit ref wins over whatever the URL carried, so pasting a tree
-      // URL and then typing a tag pins to the tag rather than silently to the
-      // branch that was in the URL.
+      // An explicit ref wins over a branch the pasted URL carried.
       const pinned = pinRef(parsed.ref, ref);
       if (!pinned.ok) {
         throw new Error(pinned.error);
@@ -101,10 +91,7 @@ function createListApi(
 
     setRef: async (id, ref) => {
       const moved = await repointStored(storage, id, ref);
-      // The cached rows came from the ref this source no longer points at, so
-      // they are not its contents any more. Dropping them rather than leaving
-      // them to be replaced means a failed load reports nothing rather than the
-      // previous tag's addons under the new tag's name.
+      // Drop first, or a failed load leaves the old ref's addons shown under the new ref.
       indexes.drop(id);
       emit({ k: 'market.changed', id });
       await indexes.load(moved);
@@ -144,8 +131,7 @@ function createMarketApi(
       if (wanted.length === 0) {
         throw new Error(`no such marketplace: ${id}`);
       }
-      // Sequential on purpose: three sources against one host is not worth the
-      // concurrency, and a rate-limited GitHub answers a burst worse than a queue.
+      // In series: a rate-limited GitHub answers a burst worse than a queue.
       await inSeries(wanted, indexes.load);
     },
   };
@@ -175,8 +161,7 @@ function createDevApi(deps: MarketDeps, indexes: IndexCache): DevApi {
 
     setEnabled: async (on) => {
       await set({ enabled: on });
-      // Turning it on loads the local index immediately, so the pane has rows to
-      // show rather than an empty list the player has to refresh by hand.
+      // Load immediately so the pane is not empty until a manual refresh.
       if (on) {
         await indexes.load(LOCAL);
         return;
@@ -210,8 +195,7 @@ function createMarketService(deps: MarketDeps): MarketService {
       if (market === null) {
         return null;
       }
-      // Loaded on demand so installing works straight after adding a source,
-      // without the caller having to know that a refresh has to come first.
+      // On demand, so installing works straight after adding a source.
       if (indexes.stateFor(market.id).fetchedAt === null) {
         await indexes.load(market);
       }

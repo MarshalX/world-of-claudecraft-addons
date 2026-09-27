@@ -1,17 +1,5 @@
-// `pnpm items`: regenerate the item-icon union from a deployed game's manifest.
-//
-// Run by hand after a game release commits art, not on every build. One request to
-// write a file whose answer changes a few times a year, which is the same reason
-// `pnpm cues` and `pnpm icons` are not wired into the build either.
-//
-// It reads the LIVE host by default, because the published types describe what most
-// players are running. Point it at pbe with --host to see art before it ships:
-// `pnpm items --host https://pbe.worldofclaudecraft.com`.
-//
-// One host, not all of them. The channels diverge here as they do for skill art, and
-// unioning them would autocomplete an id most players' games have no file for. That
-// costs autocomplete and nothing else: the loader reads the manifest from whichever
-// host the player is on, so a pbe-only item still resolves there at run time.
+// `pnpm items`: regenerate the item-icon union from a deployed game's manifest. Run by hand after a
+// game release. Reads LIVE by default; `--host https://pbe.worldofclaudecraft.com` reads pbe.
 
 import { writeFileSync } from 'node:fs';
 import process from 'node:process';

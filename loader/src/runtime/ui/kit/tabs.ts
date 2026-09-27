@@ -1,25 +1,10 @@
 // A tab strip, drawn the way the manager's own is.
 //
-// Not part of the `ui.field` family and deliberately so: a field is a value the
-// player is setting and hands back a value; a tab strip is navigation, and what
-// it hands back is which pane to show. Grouping them would put "which tab is
-// open" in the same bag as "what the player chose", and only one of those is
-// worth persisting.
+// The kit owns the STRIP and not the panes, which are the addon's.
 //
-// The kit owns the STRIP and not the panes. Which element a tab reveals is the
-// addon's own arrangement, and a kit that also owned the panes would have to own
-// their lifetime, their scrolling and their focus order, none of which it can do
-// better than the addon that filled them.
-//
-// Buttons in a nav marked with `aria-current`, NOT role="tablist". The tab role
-// is a promise of keyboard behaviour: one stop in the tab order and arrow keys
-// moving between the tabs, which this does not implement and cannot, since the
-// panes are the addon's and there is nothing to point `aria-controls` at. A
-// half-kept promise is worse than the plain one, because it tells a screen reader
-// user "tab 2 of 3" and then does nothing when they press an arrow. This is also
-// what the MANAGER's own strip does, and the two look identical because they are
-// styled by the same rules; having them announce differently would have been a
-// difference nobody chose.
+// Buttons in a nav marked with `aria-current`, NOT role="tablist": the tab role promises
+// arrow-key navigation and `aria-controls`, which this cannot keep since the panes are the
+// addon's. The manager's own strip does the same.
 
 import type { Teardown } from '../../disposal.ts';
 
@@ -71,7 +56,6 @@ function createTabs(doc: Document, opts: TabsOpts): Tabs {
     for (const [id, button] of buttons) {
       const on = id === active;
       button.classList.toggle(ACTIVE_CLASS, on);
-      // The state a screen reader reads, which the class alone does not carry.
       button.setAttribute('aria-current', String(on));
     }
   };

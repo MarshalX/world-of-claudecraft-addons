@@ -1,22 +1,5 @@
-// The Dev pane: the two switches that decide whether the local source exists,
-// plus the freeze.
-//
-// Pure render over dev-store.ts. This is the surface that makes an addon
-// editable without a publish step: turn the server on, install it from Browse
-// once, and from then on a save is a reload.
-//
-// The freeze is the one control here backed by neither the store nor the host.
-// It belongs on this pane rather than on its own because it is a tool for the
-// person WRITING an addon, which is what everything else here is for, and it is
-// the only tab a player has no reason to be on.
-//
-// It used to list what the server offered, with an Install on each row. That was
-// right while it was the only way to install anything, and it is duplication now
-// that Browse exists: dev mode merges the local source into the marketplace
-// list, so Browse already shows those rows, with the same install confirmation
-// and the same source badge as everything else. Two lists of one thing go out of
-// step, and the one with fewer eyes on it is the one that rots. What is left
-// here is what nothing else owns.
+// The Dev pane: the two switches that decide whether the local source exists, plus the freeze.
+// Installing from the local source goes through Browse, so this pane lists no addons.
 
 import { useState } from 'preact/hooks';
 import type { FreezeControl } from '../../freeze.ts';
@@ -46,17 +29,9 @@ function Toggle(props: ToggleProps) {
 }
 
 /**
- * The freeze switch, which is the one control here that is not a dev setting.
- *
- * It keeps its own copy of the state because the module in `runtime/freeze.ts` is
- * the authority and DELIBERATELY has nothing to repaint the manager with: the
- * switch never reaches the host, never reaches a store, and is never persisted,
- * so a reload is what unfreezes. The two copies cannot drift, since this is the
- * only thing that writes it.
- *
- * In the Dev tab rather than on a frame's own title bar because it freezes every
- * addon at once, and the button that stills the window it lives on has no honest
- * place to report that it also stilled three others.
+ * The freeze switch. It keeps its own copy of the state because `runtime/freeze.ts` has nothing to
+ * repaint the manager with; this is the only writer, so the copies cannot drift. Never persisted,
+ * so a reload unfreezes.
  */
 function FreezeToggle(props: { freeze: FreezeControl }) {
   const [frozen, setFrozen] = useState(props.freeze.frozen());
@@ -126,8 +101,7 @@ function LocalServer(props: LocalServerProps) {
     return <p className="woc-note woc-note-bad">{UI_TEXT.devUnreachable}</p>;
   }
 
-  // `dev` is non-null in this branch: the failed-with-nothing-read case returned
-  // above, and every other state carries a reading.
+  // `dev` is still null while the first read is in flight.
   const { dev } = state;
   const enabled = dev?.enabled === true;
 
@@ -165,12 +139,8 @@ interface DevPaneProps extends LocalServerProps {
 }
 
 /**
- * The freeze is OUTSIDE the local server's own branch, deliberately.
- *
- * Everything above it needs the bridge and says so when there is none; freezing
- * is pure runtime and works with no host at all. A loader whose handshake failed
- * is one of the times a still window is most worth having, so the switch is not
- * behind the note that says dev mode is unavailable.
+ * The freeze sits OUTSIDE the local server's branch: it needs no bridge, and a failed handshake is
+ * when a still window is most useful.
  */
 export function DevPane(props: DevPaneProps) {
   return (

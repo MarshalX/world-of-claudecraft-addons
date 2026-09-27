@@ -1,7 +1,5 @@
-// Driven through the REAL frame loop rather than a stand-in: the two behaviours
-// this rests on are the loop's own, that it stops when nothing is subscribed and
-// that it copies its handler set before running it, so a subscription made
-// mid-phase lands on the next frame.
+// Driven through the real frame loop: paint relies on it stopping with no subscriber and on
+// a mid-phase subscription landing on the next frame.
 
 import { describe, expect, it, vi } from 'vitest';
 import { createPaintApi, type PaintApi } from '../loader/src/runtime/api/paint.ts';
@@ -141,8 +139,7 @@ describe('a frame that is hidden', () => {
     expect(handler).toHaveBeenCalledOnce();
   });
 
-  // The documented cost. `Frame` publishes no change event, so the only way to
-  // notice the panel returning is to look once a frame.
+  // `Frame` publishes no change event, so noticing the panel return means polling each frame.
   it('holds its seat on the loop for as long as a repaint is owed', () => {
     const { clock, paint } = open();
     const frame = { visible: false };
@@ -264,8 +261,7 @@ describe('a handler that throws', () => {
     expect(report).toHaveBeenCalledOnce();
   });
 
-  // The registration is kept, so a mistake costs a warning rather than a panel
-  // that never draws again.
+  // The registration is kept, so a throw costs a warning and not a panel that never draws.
   it('reports the second throw nowhere and keeps drawing', () => {
     const { clock, report, paint } = open();
     const handler = vi.fn(() => {

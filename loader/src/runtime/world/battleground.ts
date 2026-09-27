@@ -1,29 +1,17 @@
 // Thornhollow Fields: the ranked 5v5 capture-the-flag battleground.
 //
-// A THIRD competitive key beside `duelInfo` and `arenaInfo`, which is why this is
-// a module of its own rather than another branch in `match.ts`: the game sends it
-// as `bgInfo` and nothing about its shape is shared with the arena's.
+// The game sends it as `bgInfo`, sharing nothing with the arena's shape.
 //
-// Split the way the arena is split, and for the arena's stated reason. The
-// standings and the live ladder churn whenever any rated player anywhere finishes
-// a match, so folding them into `match` would fire `world.on('match')` because a
-// stranger won a game. `readBattleground` is the standing-and-queue half and
-// answers `world.battleground`; `battlegroundOf` is the match half and answers as
-// one member of the `world.match` union.
+// Split like the arena: the standings and ladder churn whenever anyone finishes a match, so
+// folding them into `match` would fire `world.on('match')` for a stranger's game.
+// `readBattleground` answers `world.battleground`; `battlegroundOf` is one member of the
+// `world.match` union.
 //
-// THE MATCH MEMBER DOES NOT EXTEND `BoutBase`, deliberately. That base carries
-// `allies` and `enemies` as `MatchCombatant`, and a combatant carries a `level`
-// that this mode's roster does not send. Filling it with 0 would publish a field
-// nothing ever writes, which is the trap this project has paid for twice. `players`
-// is published as one `fighters` list carrying each side's team instead, which is
-// also the shape the wire sends and the shape `flags` is indexed by.
+// The match member does not extend `BoutBase`: its combatants carry a `level` this roster never
+// sends, and filling it with 0 would publish a field nothing writes.
 //
-// WHAT IS NOT HERE IS ENFORCED RATHER THAN OMITTED. An enemy fighter's position,
-// health, auras and casts never reach a client past the ordinary interest radii:
-// the mode's raised match-wide radius covers your own team plus the field's
-// non-player entities, and the roster deliberately carries no health. `dead` is
-// the one piece of enemy state that is match-wide, because the respawn wave clock
-// already tells both sides the same thing.
+// The server never sends an enemy fighter's position, health, auras or casts past the ordinary
+// interest radii. `dead` is the one match-wide piece of enemy state.
 
 import { fieldArray, fieldNumber, fieldString, fieldValue } from '../net/frames.ts';
 
@@ -39,27 +27,19 @@ interface BgLadderRow {
   rating: number;
   wins: number;
   losses: number;
-  /** Matches that ended level. Counted only since the game added draws, so an older character reads 0. */
+  /** Matches that ended level. */
   draws: number;
 }
 
 /**
- * A queue-pop offer awaiting your answer.
- *
- * Anonymous by design: counts, never names. A decline must not leak who was on
- * the other side, so the ten are not introduced until the match starts.
- *
- * IT CANNOT BE ANSWERED FROM HERE. `net` is read-only, and accepting is a send.
- * An addon may announce the offer and count the seconds down; the Accept and
- * Decline the player presses are the game's own.
+ * A queue-pop offer awaiting your answer. Anonymous by design: counts, never names. An addon
+ * cannot answer it, since accepting is a send.
  */
 interface BgProposal {
   id: number;
   /**
-   * A backfill is ONE SEAT in a match already under way: unrated for the joiner,
-   * and inheriting a scoreline they had no part in.
-   *
-   * An unrecognised kind reads as 'match', which is the ordinary offer.
+   * A backfill is ONE unrated seat in a match already under way. An unrecognised kind reads as
+   * 'match'.
    */
   kind: 'match' | 'backfill';
   /** Fighters the offer needs: both teams in full, or 1 for a backfill. */
@@ -72,15 +52,8 @@ interface BgProposal {
 }
 
 /**
- * Your record, your queue and the live ladder.
- *
- * Present for every character, queued or not, so this being non-null says
- * nothing about whether the player has ever fought one.
- *
- * Refreshed at 1 Hz, and forced fresh the moment anything transitions: queueing,
- * an offer opening or being accepted, a match being found, starting or ending,
- * and every flag play and kill. So it is a slow readout that jumps to instant on
- * exactly the events worth acting on.
+ * Your record, your queue and the live ladder. Present for every character, queued or not.
+ * Refreshed at 1 Hz, and immediately on every queue, offer, match, flag and kill transition.
  */
 interface BattlegroundStandings {
   rating: number;
@@ -112,12 +85,7 @@ interface BgFlag {
   carrierTeam: number | null;
 }
 
-/**
- * One fighter, on either side.
- *
- * `dead` is match-wide and is the only enemy state that is. There is no health
- * here and there will not be: see this module's header.
- */
+/** One fighter, on either side. No health: the server does not send enemy health. */
 interface BgFighter {
   pid: number;
   name: string;
@@ -134,10 +102,8 @@ interface BgFighter {
 }
 
 /**
- * The battleground you are fighting in, as one member of the `world.match` union.
- *
- * `state` publishes 'over' where this mode's own wire says 'ended', so one
- * vocabulary covers every format an addon might switch on.
+ * The battleground you are fighting in, as one member of the `world.match` union. `state`
+ * publishes the wire's 'ended' as 'over', matching the other formats.
  */
 interface BattlegroundMatch {
   format: 'battleground';
@@ -178,11 +144,8 @@ function pairOf(source: unknown, key: string): readonly [number, number] {
 }
 
 /**
- * An unrecognised flag state reads as 'home'.
- *
- * 'carried' and 'dropped' are both claims a display ACTS on, and guessing either
- * from a value the game has since added would put a carrier on screen that is not
- * there. Home is the state that draws nothing.
+ * An unrecognised flag state reads as 'home', the state that draws nothing; guessing 'carried'
+ * would draw a carrier that is not there.
  */
 function flagState(state: string | null): BgFlag['state'] {
   if (state === 'carried' || state === 'dropped') {
@@ -271,10 +234,7 @@ function proposalOf(proposal: unknown): BgProposal | null {
 }
 
 /**
- * The battleground in progress, or null when the player is in none.
- *
- * Read off the same key the standings come from, because the game nests the
- * match inside it. `match.ts` calls this; nothing else should.
+ * The battleground in progress, or null when the player is in none. Only `match.ts` calls this.
  */
 function battlegroundOf(world: unknown): BattlegroundMatch | null {
   const match = fieldValue(fieldValue(world, 'bgInfo'), 'match');
@@ -298,10 +258,8 @@ function battlegroundOf(world: unknown): BattlegroundMatch | null {
 }
 
 /**
- * Your record, queue and ladder, or null before the battleground key has arrived.
- *
- * Non-null for every character, so this answering something says nothing about
- * whether they have ever queued. Only `world.match` says a match is on.
+ * Your record, queue and ladder, or null before the key has arrived. Only `world.match` says a
+ * match is on.
  */
 function readBattleground(world: unknown): BattlegroundStandings | null {
   const info = fieldValue(world, 'bgInfo');

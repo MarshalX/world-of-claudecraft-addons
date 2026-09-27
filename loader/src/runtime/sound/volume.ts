@@ -1,15 +1,6 @@
-// The player's SFX volume, read from the game's own settings blob.
-//
-// Addon sound goes through the loader's own AudioContext rather than the game's
-// mixer, so nothing connects the two automatically: without this, turning the
-// SFX slider to zero would silence the game and leave addons playing. Reading
-// the setting is the whole of the coupling, and it is one-way. The loader never
-// writes to the game's settings.
-//
-// `interfaceSfx` is deliberately NOT applied. It silences one game family, the
-// repetitive click-and-hover cues, rather than meaning "no interface sound"; an
-// addon's alert is not that family, and a player who installed an addon for its
-// warnings should not have them disappear because they muted the game's clicks.
+// The player's SFX volume, read (never written) from the game's settings blob, since addon sound
+// bypasses the game's mixer. `interfaceSfx` is deliberately NOT applied: it mutes the game's
+// click-and-hover family, and muting clicks must not silence an addon's warnings.
 
 /** The game's own key, shape, default, and range. See src/game/settings.ts. */
 const SETTINGS_KEY = 'woc_settings';
@@ -22,14 +13,7 @@ function clampVolume(value: number): number {
   return Math.max(MIN_VOLUME, Math.min(MAX_VOLUME, value));
 }
 
-/**
- * Parse the SFX volume out of a raw settings blob.
- *
- * Every failure resolves to the game's own default rather than to silence or to
- * full volume: the blob is absent until the player first changes a setting, so
- * "not found" is the ordinary case for a new player and must sound the same as
- * the game does for them.
- */
+/** Every failure resolves to the game's default: the blob is absent until a setting is changed. */
 function readSfxVolume(raw: string | null): number {
   if (raw === null) {
     return DEFAULT_SFX_VOLUME;
@@ -55,7 +39,7 @@ interface VolumeSource {
   read: () => string | null;
 }
 
-/** Read fresh on every play, so moving the slider takes effect without a reload. */
+/** Read fresh on every play, so the slider is live. */
 function createVolumeReader(source: VolumeSource): () => number {
   return () => readSfxVolume(source.read());
 }

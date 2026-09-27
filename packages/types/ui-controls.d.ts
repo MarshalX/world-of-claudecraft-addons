@@ -1,20 +1,13 @@
 // The pieces of a pane you build yourself: what a row says, what a control does,
 // and which pane is open.
 //
-// Split from ui.d.ts for the reason the timers are: that file is what the loader
-// hands you already assembled, and these are the parts you put together. They
-// share one property worth stating once. Every one of them is drawn from the
-// classes the MANAGER is drawn with, so a form inside a loader frame answers to
-// that frame's density and matches the game without an addon copying a palette.
+// Every one is drawn with the classes the manager uses, so it follows its frame's
+// density and matches the game with no palette of your own.
 
 /**
- * What a tooltip line MEANS, which is not what a bar's tone means.
- *
- * Its own union rather than `BarTone`, even though three names overlap. A bar's
- * tone is urgency, which is the only thing a fill can say; a tooltip line is prose,
- * and the useful distinctions there are the ones the game's own tooltips draw:
- * flavour text is quieter than the rules, and a requirement you meet reads
- * differently from one you do not.
+ * What a tooltip line MEANS, the distinctions the game's own tooltips draw:
+ * flavour is quieter than rules, and a met requirement reads differently from an
+ * unmet one. Separate from `BarTone`, which is urgency, though names overlap.
  */
 export type TooltipTone = 'default' | 'muted' | 'good' | 'warn' | 'danger';
 
@@ -32,8 +25,7 @@ export interface TooltipContent {
   /**
    * The body, one paragraph per entry.
    *
-   * A bare string is a line at the default tone, so a list of plain strings is
-   * the ordinary case and needs no wrapping.
+   * A bare string is a line at the default tone.
    */
   lines?: readonly (string | TooltipLine)[];
 }
@@ -41,13 +33,9 @@ export interface TooltipContent {
 /**
  * A line of text, the whole tooltip, or a function returning either.
  *
- * The function form is called WHEN THE TOOLTIP IS SHOWN, which is what anything
- * live needs: a meter row has to say what its numbers are under the pointer, and
- * content fixed when the row was built says what they were when it was built.
- *
- * It is also cheaper than the static form for anything that moves, since the
- * content is built for the one row being pointed at rather than for every row on
- * screen. A throw inside it costs an empty tooltip and a line in your addon's log.
+ * The function form is called WHEN THE TOOLTIP IS SHOWN, so live content (a
+ * meter row's current numbers) is current, and it is built only for the row
+ * under the pointer. A throw inside it gives an empty tooltip and a log line.
  */
 export type TooltipInput = string | TooltipContent | (() => string | TooltipContent);
 
@@ -88,21 +76,14 @@ export interface TextOpts extends FieldOpts<string> {
 /**
  * The controls a settings pane is made of, drawn as the manager draws its own.
  *
- * Named `Builders` rather than `Api` on purpose. The suffix is what marks a
- * top-level domain on `woc`, and this one is reached at `ui.field`; `IconUrls` is
- * the same kind of thing and is named the same way.
- *
- * They answer to your frame's density for free, the same way `.woc-btn` and
- * `.woc-tab` do, so a form inside a compact frame is compact without being told.
- *
- * A checkbox puts its label beside the box; the other three put it above. That is
- * not a style choice: a checkbox reads as a sentence with a box in front of it,
- * and a label above one reads as a heading for whatever comes next.
+ * Reached at `ui.field`. They follow your frame's density, like `.woc-btn` and
+ * `.woc-tab`. A checkbox puts its label beside the box; the other three put it
+ * above.
  */
 export interface FieldBuilders {
   checkbox: (opts: FieldOpts<boolean>) => Field<boolean>;
   select: (opts: SelectOpts) => Field<string>;
-  /** Shows its number beside the label: a range input alone says nothing about where it is. */
+  /** Shows its current number beside the label. */
   slider: (opts: SliderOpts) => Field<number>;
   /** Calls back as you type, so a value abandoned by closing the window is not lost. */
   text: (opts: TextOpts) => Field<string>;

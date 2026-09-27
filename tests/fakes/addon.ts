@@ -1,26 +1,6 @@
-// Starting one addon through the real loader, which is the first thing every
-// addon's own suite does.
-//
-// It lives here rather than in an addon directory because it is shared by all of
-// them and because it reaches into the loader, which an addon directory must not
-// have an opinion about: a third-party marketplace copies `addons/<id>/` and gets
-// the addon and its suite, and the suite simply does not run without this repo
-// around it.
-//
-// Three things are deliberate about what it does.
-//
-// It parses the REAL `addon.json` rather than taking a hand-written object. The
-// manifest is validated by the same schema CI runs, so a suite that passes proves
-// the shipped manifest is loadable, and a manifest that stops validating fails the
-// addon's own suite rather than only the index build.
-//
-// It seeds settings BEFORE evaluating. The loader hydrates settings and then runs
-// the body, and an addon reads `woc.settings` while building its first frame, so a
-// value written afterwards is a value the addon never saw.
-//
-// It hands back ONE `dispose`. The shared services and the addon are separate
-// teardowns and forgetting either leaks a listener into the next case, which shows
-// up as an unrelated suite failing later.
+// Starts one addon through the real loader; every addon's own suite begins here. It parses the
+// real `addon.json` through the CI schema, seeds settings before evaluating (the body reads
+// `woc.settings` while building its first frame), and hands back one `dispose` for both teardowns.
 
 import { type LoadedAddon, loadAddon } from '../../loader/src/runtime/loader.ts';
 import type { InstalledAddon } from '../../loader/src/shared/protocol.ts';
@@ -33,66 +13,30 @@ import { createFakeStorage, type FakeStorage } from './storage.ts';
 const DEFAULT_MARKETPLACE = 'official';
 
 interface MountInput {
-  /**
-   * The addon.json text, imported with `?raw`.
-   *
-   * Text rather than a parsed object so the manifest goes through the real
-   * validator on the way in.
-   */
+  /** The addon.json text, imported with `?raw`, so it goes through the real validator. */
   manifest: string;
   /** The addon body, imported with `?raw`. It is a function BODY, not a module. */
   source: string;
-  /**
-   * The `__game` handle, resolved when the suite wants a world.
-   *
-   * Left out entirely for a suite about what an addon does BEFORE world entry,
-   * which is where every addon's first line actually runs.
-   */
+  /** The `__game` handle. Omit it to test what the addon does before world entry. */
   game?: Promise<unknown>;
   /** Stored settings, seeded before the body is evaluated. */
   settings?: Record<string, unknown>;
   /**
-   * Data files as the host's install-time cache holds them: raw TEXT keyed by
-   * the path the manifest declared, not a parsed value.
-   *
-   * Seeded before the body is evaluated, for the same reason `settings` is one
-   * line up. An addon carrying a table reads `woc.data` on its first line, and
-   * `api/data.ts` drops a REJECTED read from its memo rather than retrying, so a
-   * file seeded afterwards is not merely late: nothing ever recovers from it.
+   * Data files as raw text keyed by declared path, seeded before evaluation: `api/data.ts` never
+   * retries a rejected read, so a file seeded afterwards is never seen.
    */
   data?: Record<string, string>;
   /** Pass one in to seed other namespaces first, or to assert on it afterwards. */
   storage?: FakeStorage;
   marketplace?: string;
-  /**
-   * What the loader measures the screen as. Defaults to the fixed fake viewport.
-   *
-   * Forwarded rather than patched afterwards: `api/bind.ts` copies it by
-   * reference when the addon's surface is assembled. See SharedOptions.
-   */
+  /** What the loader measures the screen as. See SharedOptions for why it is not patchable. */
   viewport?: () => { w: number; h: number };
-  /**
-   * The camera: where a world point lands, and where a unit is.
-   *
-   * Both default to blind, which is what a suite about a decision wants. They
-   * are forwarded rather than patched for the reason `viewport` is: the anchor
-   * kit captures them when it is built. See SharedOptions.
-   */
+  /** The camera: where a world point lands, and where a unit is. See SharedOptions. */
   project?: SharedOptions['project'];
   unitPoint?: SharedOptions['unitPoint'];
-  /**
-   * How the art manifests are read. Defaults to a promise that never settles.
-   *
-   * Forwarded rather than patched for the reason the camera is: both art readers
-   * capture their fetcher when they are built. See SharedOptions.
-   */
+  /** How the art manifests are read. Defaults to a promise that never settles. */
   fetchJson?: SharedOptions['fetchJson'];
-  /**
-   * The game's own minimap label, which is what `world.zone` answers.
-   *
-   * Defaults to null, which is the reading before world entry. Forwarded rather than patched
-   * for the reason the camera is: the world hub captures it when it is built. See SharedOptions.
-   */
+  /** The game's minimap label, which `world.zone` answers. Defaults to null. */
   zoneName?: SharedOptions['zoneName'];
 }
 
@@ -154,9 +98,7 @@ async function mountAddon(input: MountInput): Promise<AddonHarness> {
     await storage.set(configNamespace(row.fqid), SETTINGS_KEY, input.settings);
   }
 
-  // Built up rather than passed as one literal: `exactOptionalPropertyTypes`
-  // refuses `{ game: undefined }` for an optional property, so every option is
-  // assigned only once it is known to be there.
+  // Assigned one at a time: `exactOptionalPropertyTypes` refuses `{ game: undefined }`.
   const options: SharedOptions = {};
   if (input.game !== undefined) {
     options.game = input.game;
@@ -185,9 +127,7 @@ async function mountAddon(input: MountInput): Promise<AddonHarness> {
   try {
     addon = await loadAddon({ shared: shared.shared, row, source: input.source });
   } catch (err) {
-    // The addon threw while loading, so its own bag is already drained. What is
-    // still standing is everything shared, and leaving that up would leak a key
-    // listener and a tooltip observer into whatever runs next.
+    // The addon's bag is already drained; tear down the shared services so nothing leaks.
     shared.dispose();
     throw err;
   }

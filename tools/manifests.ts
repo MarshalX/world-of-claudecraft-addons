@@ -1,9 +1,5 @@
-// Reading addons/<id>/addon.json, for every tool that needs to.
-//
-// TypeScript rather than .mjs so a Vitest suite can import it directly, the same
-// way it imports loader/src/shared/schema.ts. The tools themselves stay .mjs
-// entry points and run this under Node's built-in type stripping, which is also
-// why every relative import here carries an explicit .ts extension.
+// Reading addons/<id>/addon.json, for every tool that needs to. TypeScript so a Vitest suite can
+// import it; the .mjs entry points run it under Node's type stripping.
 
 import { type Dirent, readdirSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
@@ -28,8 +24,7 @@ function addonDirs(): string[] {
   try {
     entries = readdirSync(ADDONS_DIR, { withFileTypes: true });
   } catch {
-    // No addons directory at all is an ordinary state for a fresh clone of a
-    // third-party marketplace, not an error.
+    // A fresh third-party marketplace may have no addons directory yet.
     return [];
   }
   return entries
@@ -45,16 +40,7 @@ function addonDirs(): string[] {
     .sort();
 }
 
-/**
- * What a preview may weigh.
- *
- * Half a megabyte, and it is a ceiling rather than a target. The manager loads
- * this INSIDE the running game, over whatever connection the player has, so a
- * preview is the one asset here whose size a player pays for at a moment they
- * did not choose. The shipped shots sit at 100 kB and 270 kB; the cap is set
- * where a full-window capture at retina still fits and a lossless export of a
- * whole desktop does not.
- */
+/** What a preview may weigh. The manager loads it inside the running game, so it is capped. */
 const PREVIEW_MAX_BYTES = 524_288;
 
 /** The eight bytes every PNG opens with, as latin1 so it is one literal. */
@@ -63,15 +49,8 @@ const PNG_SIGNATURE = '\x89PNG\r\n\x1a\n';
 const PNG_EXTENSION = '.png';
 
 /**
- * The checks on a declared preview, which are about the FILE rather than the
- * manifest and so cannot live in the schema.
- *
- * PNG is required rather than merely conventional: the README links these
- * directly so GitHub renders them, the site builds its own AVIF and WebP from
- * them, and both of those want one lossless file of record rather than whatever
- * the author's screenshot tool produced. The signature is checked as well as the
- * extension because a renamed JPEG passes an extension test, renders in a
- * browser, and then fails the site build with an error about a decoder.
+ * The checks on a declared preview FILE, which the schema cannot express. The signature is checked
+ * as well as the extension because a renamed JPEG renders in a browser and then fails the site build.
  */
 function previewIssues(dir: string, file: string): ValidationIssue[] {
   const path = join(ADDONS_DIR, dir, file);
@@ -98,16 +77,8 @@ function previewIssues(dir: string, file: string): ValidationIssue[] {
 }
 
 /**
- * The checks on one declared data file, which are about the FILE rather than the
- * manifest and so cannot live in the schema.
- *
- * Parsed rather than merely stat'd, because the host parses at install: a file
- * that is not JSON is an addon that cannot be installed, and CI is where that
- * should surface rather than in a player's manager. The ceiling is the same
- * constant the host applies, imported rather than repeated.
- *
- * One file per call so the missing-file case can return early. A loop with a
- * `continue` is the shape this would otherwise take, and `noContinue` is on.
+ * The checks on one declared data FILE. Parsed rather than stat'd because the host parses at
+ * install, so a file that is not JSON is an addon that cannot be installed.
  */
 function dataFileIssues(dir: string, file: string): ValidationIssue[] {
   const path = join(ADDONS_DIR, dir, file);
@@ -135,13 +106,8 @@ function dataFileIssues(dir: string, file: string): ValidationIssue[] {
 }
 
 /**
- * Read, parse, and validate one addon directory.
- *
- * The checks past the schema are the ones a schema cannot express: the id has to
- * match the directory, because the directory is what the index publishes as the
- * path; the apiVersion has to be one this loader implements; and a declared
- * preview has to be a file that is actually there and actually a PNG, and a
- * declared data file has to be there and actually parse.
+ * Read, parse, and validate one addon directory. Past the schema: the id must match the directory,
+ * which the index publishes as the path, and the apiVersion must be one this loader implements.
  */
 function readAddon(dir: string): ReadResult {
   const file = join(ADDONS_DIR, dir, 'addon.json');
@@ -181,22 +147,10 @@ function readAddon(dir: string): ReadResult {
   return { dir, ok: true, manifest: result.value };
 }
 
-/**
- * The file name an addon's own suite has to use.
- *
- * Fixed rather than discovered, so the coverage check is a `statSync` on one path
- * instead of a directory walk deciding what looks like a test, and so every addon
- * directory reads the same way: `addon.json`, `main.js`, `main.test.ts`.
- */
+/** The file name an addon's own suite has to use. */
 const SUITE_FILE = 'main.test.ts';
 
-/**
- * Whether an addon directory carries its own suite.
- *
- * Here rather than in the suite that asserts it because `noNodejsModules` is not
- * exempt under `tests/**`, which is the same reason this module is TypeScript at
- * all: a Vitest file imports it and lets it do the reading.
- */
+/** Whether an addon directory carries its own suite. Here because `tests/**` cannot use `node:fs`. */
 function hasSuite(dir: string): boolean {
   try {
     return statSync(join(ADDONS_DIR, dir, SUITE_FILE)).isFile();
@@ -212,7 +166,7 @@ function newestManifestMs(dirs: readonly string[]): number {
     try {
       newest = Math.max(newest, statSync(join(ADDONS_DIR, dir, 'addon.json')).mtimeMs);
     } catch {
-      // Removed between the listing and the stat. The index simply omits it.
+      // Removed between the listing and the stat.
     }
   }
   return newest;

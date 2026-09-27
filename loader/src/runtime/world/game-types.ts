@@ -1,26 +1,10 @@
-// The game's own shapes, declared once so addons read a typed world.
+// The game's own shapes. A claim about another repository that cannot be typechecked: the
+// backend asserts them at the boundary, and `shape.ts` checks them against the running game.
 //
-// These are a CLAIM ABOUT ANOTHER REPOSITORY. Nothing here can be typechecked:
-// the game is not a dependency, must never become one, and the loader reads its
-// live objects through an untyped hook. So the declarations are asserted at the
-// backend boundary rather than derived, and `shape.ts` is what makes the claim
-// honest: the dev-harness addon checks these fields against the running game and
-// reports what does not match.
-//
-// What is declared is deliberately narrower than what the game carries, and the
-// test is the WIRE, not the game's own type. Online, the client builds every
-// entity with defaults and fills in whatever the snapshot carried, so a field
-// the server never sends still EXISTS and holds its default forever. A shape
-// check cannot see that: `inCombat` was a real boolean on every entity and was
-// permanently false, which is how it got published and how the first example
-// addon built a feature on it. Game 0.42.0 began sending it for the PLAYER only
-// (`cbt` on the self scalar cohort), which is why it is declared below with the
-// narrowest doc line in this file rather than being the counterexample it used
-// to be: on every OTHER entity it is still the default and still that trap. So a
-// field earns a place here only if it was
-// found in `wireEntity` or in the self payload, and the self-only ones are
-// marked. Everything else is reachable through `world.raw`, which stays
-// `unknown` because the game promises nothing about it.
+// A field is declared only if the server SENDS it (`wireEntity` or the self payload in the
+// game's `server/game.ts`). The online client builds every entity with defaults, so a field the
+// server never sends still exists, is correctly typed, and holds its default forever, which no
+// shape check can see. Self-only fields are marked. Everything else is `world.raw`.
 
 import type { CorpseLoot } from './corpse-types.ts';
 import type { HeldItemInstance, PublicItemInstance } from './items.ts';
@@ -40,9 +24,8 @@ export type School = 'physical' | 'fire' | 'frost' | 'arcane' | 'shadow' | 'holy
 /**
  * What an aura does, e.g. 'dot', 'stun', 'buff_haste'.
  *
- * Left as a string rather than the game's union. That union is content, it grows
- * with every ability the game ships, and a copy of it here would go stale
- * silently while looking authoritative. Compare against the ids you care about.
+ * A string, because the game's union is content that grows every release and a copy here
+ * would go stale silently. Compare against the ids you care about.
  */
 export type AuraKind = string;
 
@@ -70,53 +53,27 @@ export interface Aura {
   value3?: number;
   /** Which abilities a next-cast empowerment applies to. Absent when unscoped. */
   empowerAbilities?: string[];
-  /**
-   * Set only on control an encounter owns, which nothing a player does breaks.
-   *
-   * This is what separates a scripted mechanic's stun from an ordinary one, and
-   * it is on the wire as `ub` for exactly that reason.
-   */
+  /** Set only on control an encounter owns, which nothing a player does breaks. */
   unbreakableControl?: boolean;
   /**
-   * An aura only its own timer takes off: dispel, cleanse, steal and any player
-   * purge all skip it.
+   * An aura only its own timer takes off: dispel, cleanse, steal and any player purge all skip
+   * it. Not a synonym for a penalty: a flask's buff and the warlock Fate Threads self-aura carry
+   * it as well as the recovery sicknesses and the cheater mark.
    *
-   * NOT a synonym for a penalty, which is what this said until game 0.42.0: the
-   * game sets it at four sites and two of them are things a player WANTS. The
-   * recovery sicknesses (`src/sim/spirit.ts`) and the cheater mark are the
-   * penalties; a flask's buff carries it so no dispel can strip it, and so does
-   * the warlock Fate Threads self-aura, whose loss would zero the kit. The
-   * `flask` marker below is how the first of those two is told apart.
-   *
-   * It scopes to PLAYER-driven counters only: a mob's Spellgnaw devour reads
-   * neither this flag nor the marker, so a flagged buff can still be eaten.
-   *
-   * On the wire as `und` and decoded presence-only, so absent means "not one"
-   * rather than "unknown".
+   * Player-driven counters only: a mob's Spellgnaw devour can still eat a flagged buff. Decoded
+   * presence-only, so absent means "not one".
    */
   undispellable?: boolean;
   /**
-   * Set on a buff a FLASK minted, and on nothing else.
+   * Set on a buff a FLASK minted, and on nothing else. An elixir or a scroll can mint the same
+   * aura id, and only the flask survives death (not a logout) and sheds a second flask.
    *
-   * An elixir and a scroll can mint the very same aura id with the same effect,
-   * and only the flask survives death; the flask is also a singleton, so a
-   * second one sheds the first whatever it did. Nothing else on the aura tells
-   * these apart, which is the whole reason the game put a marker on the wire.
-   *
-   * A flask is not persisted: it survives death, not a logout or a restart.
-   *
-   * On the wire as `fl` from game 0.42.0 and decoded presence-only, so absent
-   * means "not from a flask" rather than "unknown". Dispel protection rides
-   * `undispellable` above and never this, so do not read one for the other.
+   * Decoded presence-only. Dispel protection is `undispellable`, never this.
    */
   flask?: boolean;
   /**
-   * An aura with no natural expiry, which the game refuses to dispel or steal
-   * whatever its polarity.
-   *
-   * On the wire as `perm`. Note the wire ALSO rewrites `rem` and `dur` to a
-   * sentinel for one of these, so a duration read off a permanent aura is not a
-   * countdown.
+   * An aura with no natural expiry, which the game refuses to dispel or steal. The wire rewrites
+   * its remaining and duration to a sentinel, so neither is a countdown.
    */
   permanent?: boolean;
 }
@@ -124,10 +81,8 @@ export interface Aura {
 /**
  * One charge-limited ability's pool.
  *
- * `maxCharges` is deliberately NOT here. The server keeps the maximum to itself
- * and the client zero-fills the field, so it is readable, of the right kind, and
- * permanently 0: the `inCombat` trap exactly. The game's own bar derives the max
- * from its bundled ability table, which an addon has no equivalent of.
+ * `maxCharges` is deliberately absent: the server never sends it and the client zero-fills it,
+ * so it would read a permanent 0.
  */
 export interface AbilityCharge {
   /** Uses in the pool right now. */
@@ -175,19 +130,13 @@ export interface Entity {
   level: number;
   guild: string;
   /**
-   * The guild this character has publicly pledged to JOIN, '' for none.
-   *
-   * Always '' for a guilded player: joining any guild clears the pledge
-   * server-side. Sent as `pg` on the identity record beside `guild` itself, so
-   * it is world-visible on every player in range rather than only on you.
+   * The guild this character has publicly pledged to JOIN, '' for none. Always '' for a guilded
+   * player, and world-visible on every player in range.
    */
   pledgeGuild: string;
   /**
-   * The guild colour tier, 0 for the base look and for the unguilded.
-   *
-   * Derived by the game from the guild's collective lifetime XP, and taken from
-   * the PLEDGED guild for a player who has pledged to one. Display only: it says
-   * how a name is coloured, not what the guild has done.
+   * The guild colour tier, 0 for the base look and for the unguilded. Taken from the PLEDGED
+   * guild for a player who has pledged to one. Display only.
    */
   guildTier: number;
   /** A Book of Deeds deed id, never display text. Absent for the untitled. */
@@ -208,86 +157,50 @@ export interface Entity {
   resourceType: ResourceType | null;
   dead: boolean;
   /**
-   * The sim's own in-combat bit, for the PLAYER'S OWN ENTITY AND NOTHING ELSE.
+   * The sim's in-combat bit, sent for the PLAYER'S OWN ENTITY ONLY; on every other entity it is
+   * a permanent client-default false.
    *
-   * Sent as `cbt` on the self scalar cohort from game 0.42.0
-   * (`server/self_scalar_wire.ts`) and decoded onto this field
-   * (`src/net/combat_scalar_wire.ts`). On any other entity nothing writes it and
-   * it holds the client's default false for the whole session, which is the trap
-   * the header of this file is about.
-   *
-   * Deliberately NOT published: `world.combat` reads it as its highest-confidence
-   * branch and reports `source: 'self'` when it answered, which is the same bit
-   * without the field being reachable on units where it means nothing. It is also
-   * read POSITIVE-ONLY there, since a false cannot be told from a server that
-   * never sent it. Optional because that is exactly what an older server leaves.
+   * Not published: `world.combat` reads it as its `source: 'self'` branch, positive-only, since
+   * a false cannot be told from a server that never sent it.
    */
   inCombat?: boolean;
   /**
-   * True once a player has RELEASED, which `dead` alone cannot tell you.
-   *
-   * A dead player who has not released is lying where they fell and can be
-   * resurrected in place; a ghost has given that up and is running back. `dead`
-   * stays true through both, so this is the field a healer's display keys on.
-   * Always false for the living and for every non-player entity.
+   * True once a dead player has RELEASED and can no longer be resurrected in place. `dead` stays
+   * true through both states. Always false for the living and for non-players.
    */
   ghost: boolean;
 
   hostile: boolean;
   /**
-   * The SELECTED target, and it is sent for a player or a bot ONLY.
-   *
-   * A mob never carries one: the server emits this as `tgt` from the selected
-   * target, and a mob's is always null because a mob tracks what it is fighting
-   * on `aggroTargetId` instead. So this is the `inCombat` trap for anything that
-   * is not a player, present and of the right kind and permanently null, and one
-   * recorded session confirmed it across every mob that was actively attacking.
-   * Resolve a target's target through `aggroTargetId` when the target is a mob.
+   * The SELECTED target, sent for a player or a bot ONLY. On a mob it is permanently null even
+   * mid-fight; resolve a mob's target through `aggroTargetId`.
    */
   targetId: number | null;
   /**
-   * What a MOB is attacking, which is the field that actually answers it.
-   *
-   * Null on a player, whose selection is `targetId`, and null on a mob that is
-   * not fighting anyone.
+   * What a MOB is attacking. Null on a player (read `targetId`) and on a mob fighting nobody.
    */
   aggroTargetId: number | null;
   /**
-   * The unit a taunt is FORCING this mob onto, null when nothing is.
-   *
-   * Written only on a mob, and only by a taunt: `aggroTargetId` says who a mob is
-   * hitting and this says whether that choice is being held rather than earned.
-   * On a player, an npc, an object and a controlled pet it is the `targetId` trap
-   * in a second place, present and correctly typed and permanently null, because
-   * nothing in the game ever writes one.
+   * The unit a taunt is FORCING this mob onto, null when nothing is. Written only on a mob, so
+   * on a player, npc, object or controlled pet it is permanently null.
    */
   forcedTargetId: number | null;
   /**
    * Seconds left on that force, 0 when none is held.
    *
-   * The window is short, so a display reading this has to be exact rather than
-   * polling slowly. A taunt can also raise threat and set NOTHING here: a mob
-   * whose template ignores taunts, a training dummy, and a boss taunted by a pet
-   * each take the threat and never turn. Those templates are bundled content, so
-   * an addon cannot tell that case from an expiry and must present a held taunt
-   * as a positive reading rather than presenting its absence as a failure.
+   * A taunt can raise threat and set nothing here (a taunt-immune template, a training dummy, a
+   * boss taunted by a pet), which is indistinguishable from an expiry. Treat a held taunt as a
+   * positive reading and its absence as no information.
    */
   forcedTargetTimer: number;
   /**
-   * A living mob's own hate table, entity id to threat, capped at the top eight.
-   *
-   * The server's real threat model rather than anything derived here, so the
-   * numbers are comparable across sources. Empty on a player, and empty on a mob
-   * that is not in combat, which is what makes "does this table contain me" a
-   * sound combat reading rather than a guess. The cap means that in a large group
-   * it is the top of the table and not the whole of it.
+   * A living mob's own hate table, entity id to threat, capped at the top eight. Empty on a
+   * player and on a mob out of combat, so "does this table contain me" is a sound combat reading.
    */
   threat: Map<number, number>;
   /**
-   * The owning player's entity id for a controlled pet, null for anything wild.
-   *
-   * The one way to find a pet: it is an ordinary mob entity otherwise, so
-   * nothing else distinguishes a hunter's companion from the wolf next to it.
+   * The owning player's entity id for a controlled pet, null for anything wild. The only field
+   * that tells a pet from an ordinary mob.
    */
   ownerId: number | null;
   /** An ability id, an activity sentinel, or null. Sentinels are not abilities. */
@@ -301,20 +214,13 @@ export interface Entity {
   auras: Aura[];
 
   /**
-   * Whether the interact prompt offers something here, which is NOT "is a corpse".
-   *
-   * True on every ground pickup, every dungeon exit and every rift portal,
-   * because the game sets it on the object rather than on the loot. Read `loot`
-   * for a corpse's contents; a lootable entity with a null `loot` is scenery.
+   * Whether the interact prompt offers something here, which is NOT "is a corpse": it is true on
+   * ground pickups, dungeon exits and rift portals. Read `loot` for a corpse's contents.
    */
   lootable: boolean;
   /**
-   * A mob corpse's whole contents, or null.
-   *
-   * Sent for a mob only, and sent to EVERY player in range rather than to the
-   * looter: the server builds one record per corpse and shares it. So this holds
-   * slots you can see and cannot take. `world.corpseLoot()` applies the game's
-   * own rights rule and is what a loot display should read.
+   * A mob corpse's whole contents, or null. Sent to EVERY player in range, so it holds slots you
+   * cannot take; a loot display reads `world.corpseLoot()`, which applies the rights rule.
    */
   loot: CorpseLoot | null;
   /** The first player to damage this mob, who owns its shared loot. Null on everything else. */
@@ -322,73 +228,45 @@ export interface Entity {
   /** The player who took this corpse's profession harvest. Null when unclaimed. */
   harvestClaimedBy: number | null;
 
-  // Worn gear and cosmetics, sent for a PLAYER (and therefore a bot) only. On
-  // every mob, npc and object these exist and hold an inert default, which is
-  // the `targetId` trap: check `kind === 'player'` before reading one.
-  /**
-   * The full worn set: slot to item id, empty for anything that is not a player.
-   *
-   * The server gates this on the entity being a player at the send site, so a mob
-   * is structurally incapable of carrying one however its own fields are set. An
-   * id resolves to an icon through `ui.icon.item` and to nothing else, the same
-   * limit `world.equipment` carries.
-   */
+  // Worn gear and cosmetics, sent for a PLAYER (and therefore a bot) only. On every mob, npc
+  // and object they hold an inert default: check `kind === 'player'` before reading one.
+  /** The full worn set: slot to item id, empty for anything that is not a player. */
   equippedItems: Partial<Record<EquipSlot, string>>;
   /**
-   * Per-slot instance payloads for the worn set, trimmed by the server.
-   *
-   * Sparse: a slot is a key only while its piece carries a signer, an enchant or
-   * a roll, so a plain worn set is empty rather than a map of empty objects. For
-   * YOUR OWN gear read `world.equipmentInstances`, which is the untrimmed
-   * payload; this member is the public projection even on your own record.
+   * Per-slot instance payloads for the worn set, trimmed to the public projection even on your
+   * own record (read `world.equipmentInstances` for yours). Sparse: a slot is a key only while
+   * its piece carries a signer, an enchant or a roll.
    */
   equippedInstances: Partial<Record<EquipSlot, PublicItemInstance>>;
   /**
-   * The held mainhand, which is NOT `equippedItems.mainhand`.
-   *
-   * The server fills this only when the equipped mainhand is a weapon, so a
-   * non-weapon in the hand slot leaves `equippedItems.mainhand` set and this
-   * null. Read this for what is being held, that for what is worn.
+   * The held mainhand, which is NOT `equippedItems.mainhand`: it is null when the worn mainhand
+   * is not a weapon.
    */
   mainhandItemId: string | null;
   /** The held offhand: a weapon, a held offhand item, or a shield. */
   offhandItemId: string | null;
   /**
-   * The active weapon-skin cosmetic, or null.
-   *
-   * A skin id, not an item id: `ui.icon.item` does not resolve one, and the kit
-   * hides an icon slot whose image fails, so asking costs an icon.
+   * The active weapon-skin cosmetic, or null. A skin id, which `ui.icon.item` does not resolve.
    */
   weaponSkinId: string | null;
   /**
-   * The mount being ridden, or empty when on foot.
-   *
-   * A mount key rather than an item id, so it names the mount and resolves to no
-   * art. It is also the one cosmetic here the game's own sim reads, for movement
-   * speed, so it is a reliable answer to "is that player mounted".
+   * The mount being ridden, or empty when on foot. A mount key, not an item id, so it resolves
+   * to no art. The sim reads it for speed, so it reliably answers "is that player mounted".
    */
   mountKey: string;
   /**
-   * The worn mount skin drawn over `mountKey`, or null.
-   *
-   * On the wire as `msk` in `identityFields` from game 0.42.0, one line under the
-   * `wsk` above. Render-only: the sim never reads it, so speed still comes from
-   * `mountKey` and a skin can be worn on foot.
+   * The worn mount skin drawn over `mountKey`, or null. Render-only: it can be set on foot.
    */
   mountSkinId: string | null;
   /** The paperdoll eye toggle: the composed body renders without its kit helm. */
   helmHidden: boolean;
 
-  // What a player is DOING outside combat, and what their account is. Player
-  // fields like the block above: on a mob these hold their inert default.
+  // Player-only like the block above: on a mob these hold their inert default.
   /** The /afk display bit. The game draws an `<AFK>` prefix on the nameplate. */
   afk: boolean;
   /**
-   * Sitting, EATING or DRINKING: the wire folds all three into one bit.
-   *
-   * So the name is the game's own field name and is narrower than the meaning.
-   * There is no way to tell the three apart for another player, because the
-   * server never sends them apart.
+   * Sitting, EATING or DRINKING: the wire folds all three into one bit, so they cannot be told
+   * apart.
    */
   sitting: boolean;
   /** The party emote floating over a player's head, or null. */
@@ -400,44 +278,34 @@ export interface Entity {
   /** The operator-applied Cheater tag. Cosmetic: nothing reads it for power. */
   cheaterMark: boolean;
 
-  /**
-   * Ranged attack power. Rides `dynamicFields`, so unlike the self-only block
-   * below it is real on every entity, your own player included.
-   */
+  /** Ranged attack power. Unlike the self-only block below, real on every entity. */
   rangedPower: number;
 
   /**
-   * Whether this entity is swinging, and how long until the swing lands. Both
-   * ride `dynamicFields` (game 0.41.0), so they are real on every entity; an
-   * omitted `swing` decodes as `autoAttack: false`, so false is an answer.
+   * Whether this entity is swinging. Real on every entity, and false is an answer.
    *
-   * No period rides with it and `weapon.speed` is not one: the reset multiplies
-   * by `meleeHaste`, which is on no wire. The period comes off the reset edge.
+   * No swing period is sent and `weapon.speed` is not one, since the reset is scaled by an
+   * unsent haste; measure the period off the reset edge.
    */
   autoAttack: boolean;
   /** Seconds until the next auto-attack swing lands. 0 when not swinging. */
   swingTimer: number;
 
-  // Yours alone: the server sends these on the SELF record and nowhere else, so
-  // on any other entity they hold an inert default rather than a real value.
+  // Self record only: on any other entity these hold an inert default.
   /** Ability id to seconds remaining. An entry at 0 is not on cooldown. */
   cooldowns: Map<string, number>;
   gcdRemaining: number;
   attackPower: number;
   spellPower: number;
-  /**
-   * Spell power plus the flat Healing Power affix, which heals read and damage
-   * does not. Sent as `hpw` from game 0.41.0.
-   */
+  /** Spell power plus the flat Healing Power affix, which heals read and damage does not. */
   healPower: number;
   spellHaste: number;
   critChance: number;
   dodgeChance: number;
   blockChance: number;
   /**
-   * Seconds until the offhand swing lands, sent as `swingOff` on the self payload
-   * alone. The sim decrements it BEFORE it tests `autoAttack` (auto_attack.ts),
-   * so with auto-attack off it sits at 0; read it only under that flag.
+   * Seconds until the offhand swing lands. It runs down to 0 even with auto-attack off, so read
+   * it only while `autoAttack` is true.
    */
   offhandSwingTimer: number;
   comboPoints: number;
@@ -445,31 +313,19 @@ export interface Entity {
   stats: CoreStats;
   weapon: WeaponInfo;
   /**
-   * The offhand weapon, or null when nothing is dual-wielded.
-   *
-   * Sent from game 0.41.0 and not before, which is why it was on the
-   * not-on-the-wire list until this release. Null is a REAL answer here rather
-   * than an absence, and the game says so by giving this field the one explicit
-   * presence check in its own mirror: every other self scalar falls back to the
-   * previous value, and this one must not, or an unequipped offhand would keep
-   * the last weapon forever (src/net/combat_scalar_wire.ts).
+   * The offhand weapon, or null when nothing is dual-wielded. Null is a real value (an
+   * unequipped offhand), so it must never fall back to the previous reading.
    */
   offhandWeapon: WeaponInfo | null;
   /**
-   * Ability id to its charge pool, for the few abilities that have one.
-   *
-   * Absent entirely until the first snapshot that carried any, which is why it is
-   * optional: the client creates the record on decode rather than blank-filling
-   * it. An ability with no charge model is simply not a key.
+   * Ability id to its charge pool, for the few abilities that have one. Absent until the first
+   * snapshot that carried any.
    */
   abilityCharges?: Record<string, AbilityCharge>;
 }
 
 /**
- * A slot a piece of gear is worn in.
- *
- * The game's own set, and closed rather than a string: it is the shape of a
- * paperdoll rather than content that grows with a release.
+ * A slot a piece of gear is worn in. Closed, unlike content unions: it is the paperdoll shape.
  */
 export type EquipSlot =
   | 'mainhand'
@@ -494,13 +350,8 @@ export interface InvSlot {
   /**
    * What is baked into this specific copy. Absent on an ordinary fungible stack.
    *
-   * The PUBLIC trim, which is what the shared shape can promise: a market row, a
-   * letter attachment and a guild bank row are all projected to the allowlisted
-   * fields by the server before they are sent. Read `PublicItemInstance` for what
-   * that set currently is rather than counting it here; it was three until game
-   * 0.42.0 and is six now. A stack of YOUR OWN carries more and is read as a
-   * `HeldSlot`; the rest of the payload stays reachable through `world.raw` and
-   * is promised nowhere.
+   * The PUBLIC trim the server projects market rows, letters and guild bank rows to (see
+   * `PublicItemInstance`). A stack of your own carries more and is a `HeldSlot`.
    */
   instance?: PublicItemInstance;
 }
@@ -509,19 +360,13 @@ export interface InvSlot {
  * One stack in your OWN bags or bank, which is where a lock and a bind-on-pickup
  * trade window can exist.
  *
- * The only difference from `InvSlot` is that the payload here was never put
- * through the server's public projection, so it still carries the owner-only
- * fields. Kept a separate shape rather than widening `InvSlot`: both are
- * genuinely absent from every other surface the stack shape appears on, and a
- * field that reads `undefined` on a market row would be indistinguishable there
- * from an unlocked, untradeable copy.
+ * The payload skipped the server's public projection, so it carries owner-only fields. A
+ * separate shape because on a market row an absent owner-only field would read as an unlocked,
+ * untradeable copy.
  */
 export interface HeldSlot extends InvSlot {
   instance?: HeldItemInstance;
-  /**
-   * The recipe that minted this stack. Absent on almost everything. On `HeldSlot`
-   * because the public projection (`src/sim/market.ts`) does not carry it.
-   */
+  /** The recipe that minted this stack. The public projection does not carry it. */
   craftedRecipeId?: string;
 }
 

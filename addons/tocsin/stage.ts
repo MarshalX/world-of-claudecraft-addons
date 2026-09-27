@@ -1,12 +1,9 @@
 // Tocsin on the stage: the two moments a Nythraxis raid has to be told something.
 //
-// Every id comes off the SHIPPED table rather than being typed out, so a regenerated
-// `bosses.json` moves this fixture with it. This addon draws no skill or item art, so the
-// usual live-versus-pbe hazard does not apply: there is no file for a channel to be missing.
+// Every id comes off the SHIPPED table, so a regenerated `bosses.json` moves these fixtures
+// with it. No skill or item art is drawn, so the live-versus-pbe fixture rule does not apply.
 //
-// The ward panel is deliberately NOT heroic, because a preview that never showed the
-// difficulty caveat would sell a display more certain than it is. The other panel is, and
-// drops the caveat on its own.
+// The ward panel is deliberately NOT heroic, so one preview shows the difficulty caveat.
 
 import type { Fake, Scenario, Stage, WorldDraft } from '../../stage/src/stage.ts';
 import { eventsFrame } from '../../tests/fakes/frames.ts';
@@ -242,10 +239,8 @@ function aDeathlessRage(draft: WorldDraft): void {
   // all three states at once: one done, one in progress, one nobody is on.
   channel(draft, kethra, 0.05);
   channel(draft, orveld, 1.8);
-  // Two guards from the last Raise Fallen wave are still up, which is why the raid is short a
-  // body for the third stone. Raise Fallen runs in phase one and the wave outlives it, so a
-  // Deathless Rage with adds still on the floor is the ordinary case rather than a contrived
-  // one, and it is what makes this panel a picture of a raid rather than of one mechanic.
+  // Two guards from the last Raise Fallen wave outlive it, which is why the raid is short a body
+  // for the third stone: the ordinary case, not a contrived one.
   WAVE_IDS.forEach((id, index) => {
     draft.mob(id, {
       name: WAVE_ADD.name,
@@ -350,9 +345,6 @@ const PRESS_FRAME = { raid: { box: { x: 40, y: 40, w: 320, h: 520 }, visible: tr
  * lands over the panel it is telling you to read. The `banner` scenario shows it instead.
  */
 const PANELS_ONLY = { alerts: false };
-
-// The two raid encounters. Every id comes off the shipped table, so a regenerated
-// `bosses.json` moves these fixtures with it.
 
 interface StationsBlock {
   ready: string;
@@ -524,10 +516,8 @@ async function heardTheEngage(stage: Stage, row: Encounter): Promise<void> {
 const INFERNO_ALT =
   'A raid panel during Ignivar’s last phase, in three sections and nine rows. The mechanic timers: Brand of the Pyre in three seconds, Revolving Inferno in fourteen, Falling Cinders drawn red at one, and the alternating Searing Torrent or Rain of Cinders slot in five. Under them an Enrage row reading Last Inferno, 27 seconds, nine percent left and then the raid dies. Under that the four water conduits: North East running with three seconds of water, North West spent, South East ready, and South West spent.';
 
-// 440 rather than 420 for the reason WARD_FRAME is 440: this panel is NOT heroic either, so
-// it draws the difficulty caveat as its last line, and 420 cuts that line in half against the
-// panel's bottom border. It read as correct only because a shorter-metric rasteriser pushed
-// the caveat entirely out of the box, which looks like a panel that simply does not draw one.
+// 440, not 420: this panel is not heroic, so its last line is the difficulty caveat, and 420
+// cuts it against the bottom border (or, under a shorter-metric rasteriser, hides it entirely).
 const INFERNO_FRAME = { raid: { box: { x: 40, y: 40, w: 320, h: 440 }, visible: true } };
 const PYRE_FRAME = { raid: { box: { x: 40, y: 40, w: 320, h: 560 }, visible: true } };
 

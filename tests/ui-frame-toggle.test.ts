@@ -1,10 +1,7 @@
 // @vitest-environment happy-dom
 
-// `FrameOpts.toggleKey`: the keybind that shows and hides one frame.
-//
-// Driven through the REAL keys surface, so a rebind from the manager and a disable
-// behave here as they do in a session. The lifecycle is the half worth the setup,
-// which is why the count of live registrations is asserted and not just the toggle.
+// `FrameOpts.toggleKey`, driven through the real keys surface so rebinds and disables
+// behave as in a session.
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createKeys } from '../loader/src/runtime/api/keys.ts';
@@ -183,9 +180,8 @@ describe('the bind lifecycle', () => {
     expect(first.visible).toBe(true);
   });
 
-  // A claim outliving its frame is invisible while a later frame holds the key. It
-  // shows only when the last frame goes and the registration does not.
-  it('holds one claim per live frame, so a rebuilt frame still gives the key back', () => {
+  // A claim outliving its frame shows only once the last frame goes.
+  it('holds one claim per live frame', () => {
     const { dispatcher, build } = open();
     const first = build({ id: 'bars', toggleKey: 'toggle' });
     const second = build({ id: 'bars', toggleKey: 'toggle' });

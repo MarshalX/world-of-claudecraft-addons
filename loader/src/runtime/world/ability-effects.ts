@@ -5,15 +5,11 @@
 import { fieldNumber, fieldString } from '../net/frames.ts';
 
 /**
- * The effect types that apply a timed aura, each with the field carrying it.
+ * The effect types that apply a timed aura, each with the field carrying it. A table, since the
+ * field is not uniform: an interrupt's length is its `lockout`.
  *
- * A table rather than a probe for a `duration` property, because the field name
- * is NOT uniform across the effect union: an interrupt's length is its `lockout`,
- * so probing would quietly answer nothing for the one a silence tracker wants.
- *
- * `finisherStun` and `finisherHaste` are deliberately ABSENT rather than missing:
- * both are `base + perCombo * spent`, so they have no length until the cast that
- * spends the points, and the base alone is right at one combo count only.
+ * `finisherStun` and `finisherHaste` are deliberately absent: their length depends on the combo
+ * points spent at cast time.
  */
 const AURA_DURATION_FIELDS: ReadonlyMap<string, string> = new Map([
   ['selfBuff', 'duration'],
@@ -57,16 +53,9 @@ function effectDuration(effect: unknown): number | null {
 /**
  * The one aura length this ability applies, or null when there is not exactly one.
  *
- * Read off the RANK-RESOLVED effect array, the same standard `cost` and
- * `castTime` meet: the game replaces `def.effects` with the highest learned
- * rank's before this ever sees it. Talent duration modifiers are applied at cast
- * time and are deliberately not folded in, because the use this exists for is a
- * DENOMINATOR: a diminishing-returns ladder expresses an observed duration as a
- * fraction of the undiminished base, and a base that moved is the wrong divisor.
- *
- * Several matching effects answer null rather than the longest. A stun AND a slow
- * is two right answers, this cannot know which the caller meant, and a wrong
- * denominator on a ladder is a display that is confidently off by a factor.
+ * Rank-resolved but pre-talent, deliberately: it is the undiminished base a diminishing-returns
+ * display divides an observed duration by. Several matching effects answer null, since which one
+ * the caller meant is unknowable.
  */
 function auraDurationOf(effects: unknown): number | null {
   let found: number | null = null;

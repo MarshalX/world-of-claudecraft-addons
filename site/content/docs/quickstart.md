@@ -40,10 +40,10 @@ That starts the watch build and a local marketplace on port 5180. In the game, o
 
 Turn the reload switch on as well, and a save is a reload: the loader polls each running local addon and re-evaluates only the ones whose file actually changed. There is no page refresh.
 
-Nothing about that path is special-cased. Your addon is fetched, validated, evaluated and disposed exactly the way one from a published marketplace is, so an addon that works against the dev server works once it is published.
+Nothing about that path is special-cased: your addon is fetched, validated, evaluated and disposed exactly as a published one is.
 
 ## What to read next
 
 [The manifest](/docs/manifest) is every field and which one you cannot change later. [Patterns](/docs/patterns) is the four things nobody derives from the API surface, and it is the page worth reading before you write anything substantial.
 
-Every addon in [the catalog](/addons) is a real example, and none of them is a demonstration: each one is a single file a player installs to use. `cooldown-bars` is the one to read first, because it is small enough to read in a sitting and it teaches the one thing that is not obvious. `combat-meter` is deliberately bigger. `dev-harness` is the odd one out and is worth knowing about while you work: it exercises every API surface against a live game and reports what it found, which is how a loader change gets checked in the game rather than only in a test.
+Every addon in [the catalog](/addons) is a real, single-file example. Read `cooldown-bars` first; it is small enough for one sitting. `combat-meter` is deliberately bigger. `dev-harness` exercises every API surface against a live game and reports what it found.

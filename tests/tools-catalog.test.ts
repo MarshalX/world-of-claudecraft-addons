@@ -1,10 +1,4 @@
-// The one reading of addons/ that the site and the README are both built from,
-// and the rule that decides what a player sees.
-//
-// The failure this exists to catch is silent in both directions: an author tool
-// that starts appearing in the catalog reads as an addon somebody should install,
-// and a real addon that stops appearing is simply absent, with nothing anywhere
-// saying it was dropped.
+// The catalog the site and README share, and the rule that hides author tools from players.
 
 import { describe, expect, it } from 'vitest';
 import { AUTHOR_TOOL_TAG, isAuthorTool, readAddons } from '../tools/catalog.ts';
@@ -13,9 +7,7 @@ import { addonDirs } from '../tools/manifests.ts';
 
 describe('the catalog', () => {
   it('reads every addon directory', () => {
-    // Every manifest in the repository is valid, so the catalog is the directory
-    // listing. A row missing here means a manifest CI would reject, and the
-    // message worth having is `pnpm validate`'s rather than a count mismatch.
+    // A missing row means an invalid manifest; run `pnpm validate` for the real message.
     expect(readAddons().map((one) => one.id)).toEqual(addonDirs());
   });
 
@@ -27,7 +19,7 @@ describe('the catalog', () => {
     expect(row).not.toHaveProperty('entry');
   });
 
-  it('marks an author tool by its tag rather than by its id', () => {
+  it('marks an author tool by its tag, not its id', () => {
     const tools = readAddons().filter((one) => isAuthorTool(one));
     expect(tools.map((one) => one.id)).toEqual(['dev-harness']);
     for (const tool of tools) {
@@ -42,10 +34,8 @@ describe('the catalog', () => {
 });
 
 describe('the featured four', () => {
-  // Both consumers throw on a featured id that has gone or has no picture, so
-  // this only decides WHERE the failure lands: here, naming the id, rather than
-  // in the middle of a site build or a README rewrite.
-  it('name addons that exist and declare a preview', () => {
+  // Both consumers throw on a bad featured id; this fails first and names it.
+  it('names addons that exist and declare a preview', () => {
     const byId = new Map(readAddons().map((one) => [one.id, one]));
     for (const id of FEATURED) {
       const addon = byId.get(id);

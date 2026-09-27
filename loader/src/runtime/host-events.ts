@@ -1,20 +1,10 @@
-// The one place a host event turns into a runtime action.
-//
-// Its own module rather than a closure inside boot.ts because it is the seam
-// that makes every host-side write visible in the page, and nothing about it
-// needs the boot sequence's state: it is a pure mapping from an event to calls
-// on four collaborators, which is exactly the shape a Node test can drive.
-//
-// It carries a load-bearing claim. The registry is the DESIRED set, so every
-// write to it is what tells the supervisor to start or stop something, and that
-// includes a write made in another tab. This is why the sync hangs off the event
-// rather than off the control that caused it, and it is what turns "install
-// lands enabled" into "the addon is running": install writes, the host announces
-// registry.changed, and the resync here is what starts it.
+// The one place a host event turns into a runtime action. The registry is the DESIRED set, so the
+// resync hangs off `registry.changed`, not off the control that wrote it: that is how an install
+// or another tab's write starts an addon.
 
 import type { HostEvent } from '../shared/protocol.ts';
 
-/** What one host event can reach, named by what it does rather than by module. */
+/** What one host event can reach. */
 interface EventTargets {
   /** The manager window: re-read its stores, or redraw, or open it. */
   manager: {

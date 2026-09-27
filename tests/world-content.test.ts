@@ -1,15 +1,5 @@
-// The two static content tables, copied off the client's world object.
-//
-// These reads are unlike every other one on the backend in the way that shapes this
-// suite: the source is the GAME'S OWN array by identity, held for the life of the
-// session and rendered from by the game's own crafting window. So the assertions
-// here are about ownership rather than about values. A `.sort()` in an addon must
-// not reorder what the game draws, and a `.push()` must not add a recipe it will try
-// to render, which is exactly what handing the original over would allow.
-//
-// The other half is the cache. Content cannot change during a session, so the copy
-// is paid once and keyed on the SOURCE array: a world swap has to re-read rather
-// than serve the previous world's tables.
+// The recipe and station tables. The source is the game's own array, which its crafting
+// window renders from, so an addon must get a frozen copy, cached on the source array.
 
 import { describe, expect, it } from 'vitest';
 
@@ -49,8 +39,6 @@ describe('reading the recipe table', () => {
     expect(read).toEqual(recipe('iron_buckle'));
   });
 
-  // Most recipes carry neither, and a recipe that must be crafted by hand has to
-  // read as such rather than as one bound to a station called "undefined".
   it('answers null for the two fields the game leaves off most recipes', () => {
     const source = { id: 'field_bandage', professionId: 'tailoring' };
     const [read] = readRecipes({ recipeList: [source] });
@@ -59,8 +47,8 @@ describe('reading the recipe table', () => {
     expect(read?.comboRequirement).toBeNull();
   });
 
-  // Empty means grandfathered, which is a different fact from "not learned yet".
-  it('answers an empty acquisition list rather than dropping the field', () => {
+  // Empty means grandfathered, which differs from "not learned yet".
+  it('answers an empty acquisition list', () => {
     const [read] = readRecipes({ recipeList: [{ id: 'coarse_thread' }] });
 
     expect(read?.acquisition).toEqual([]);
@@ -84,9 +72,6 @@ describe('reading the station table', () => {
   });
 });
 
-// The regression this exists for: the game's own content table being handed out
-// live. It is what `world.entities` was before it got a read-only view, one level
-// worse, because a write here lands in what the game's own window renders from.
 describe('what an addon cannot do to the game', () => {
   it('freezes the table, every entry, and the collections inside an entry', () => {
     const recipes = readRecipes({ recipeList: [recipe('iron_buckle')] });
@@ -105,8 +90,7 @@ describe('what an addon cannot do to the game', () => {
     expect(Object.isFrozen(stations[0]?.pos)).toBe(true);
   });
 
-  // Strict mode is what an addon body runs in, so a write here throws rather than
-  // failing silently. Either way the game's table is untouched, which is the point.
+  // An addon body runs in strict mode, so the write throws.
   it('leaves the game its own array when an addon writes to the copy', () => {
     const source = [recipe('iron_buckle')];
     const recipes = readRecipes({ recipeList: source });
@@ -117,16 +101,13 @@ describe('what an addon cannot do to the game', () => {
 });
 
 describe('the cache, and what invalidates it', () => {
-  // A getter on the backend, so this is read per frame by anything that draws. The
-  // walk has to be paid once.
+  // A getter read per frame by anything that draws.
   it('answers the same array instance for the same source', () => {
     const world = { recipeList: [recipe('iron_buckle')] };
 
     expect(readRecipes(world)).toBe(readRecipes(world));
   });
 
-  // Keyed on the source rather than on a boolean, so a second world does not serve
-  // the first one's tables.
   it('re-reads when the source array is replaced', () => {
     const first = readRecipes({ recipeList: [recipe('iron_buckle')] });
     const second = readRecipes({ recipeList: [recipe('iron_buckle')] });

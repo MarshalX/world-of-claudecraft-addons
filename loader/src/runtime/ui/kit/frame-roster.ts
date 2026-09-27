@@ -1,22 +1,10 @@
 // Every frame the loader is holding, so a closed one can be found again.
 //
-// It exists because a closed frame is unreachable. `hide()` puts a class on the
-// element that removes it from display, so it has no pixels, and the unlock mode
-// cannot help for the same reason hover cannot: both need something to be over.
-// That left the toggle keybind as the only way back, which means a player who
-// closes a window has to know, or go and look up, a chord they never chose. A
-// live session reported exactly that.
+// A hidden frame has no pixels, so neither the unlock mode nor hover can reach it. ONE
+// service on the root, like `stacking.ts` and `unlock.ts`.
 //
-// ONE service on the root rather than an affordance per frame, which is the
-// shape `stacking.ts` and `unlock.ts` already take and for the same reason: any
-// frame a future addon creates participates the day it is written, and a player
-// with a window they cannot find never has to work out which addon owns it.
-//
-// It holds the frame's own `show` and `hide` rather than touching the element,
-// and that is the whole reason it is a registry rather than a DOM query. A
-// `save: true` frame records its visibility per character when it changes, so a
-// class toggled from outside would put the frame on screen and leave the stored
-// answer saying it is closed: back again on this login, gone again on the next.
+// It holds each frame's own `show` and `hide` rather than toggling the element's class,
+// since a `save: true` frame persists its visibility only through those.
 
 import type { Teardown } from '../../disposal.ts';
 
@@ -44,29 +32,14 @@ interface RosterMember {
 }
 
 interface FrameRoster {
-  /**
-   * Register a frame. The teardown removes it, and a frame's own destroy calls it.
-   *
-   * A disabled addon's frames go with it, which is right: there is nothing to
-   * show, and offering to show it would be offering to start an addon from a
-   * menu that is not about starting addons.
-   */
+  /** Register a frame. The teardown removes it, and a frame's own destroy calls it. */
   add: (member: RosterMember) => Teardown;
-  /**
-   * Every frame, in registration order, with its visibility read fresh.
-   *
-   * Order is registration rather than alphabetical because it is stable and
-   * means something: an addon's frames come up together, in the order that addon
-   * built them. Sorting by title would reshuffle the list whenever an addon
-   * renamed a frame, and grouping is the caller's to do.
-   */
+  /** Every frame, in registration order, with its visibility read fresh. */
   entries: () => readonly RosterEntry[];
 }
 
 function createFrameRoster(): FrameRoster {
-  // Insertion-ordered, and keyed by the member so two frames of one addon with
-  // the same id (which the manifest cannot prevent across marketplaces) are still
-  // two rows rather than one overwriting the other.
+  // Keyed by the member, so two frames sharing an id stay two rows.
   const members = new Set<RosterMember>();
 
   return {
@@ -82,10 +55,7 @@ function createFrameRoster(): FrameRoster {
         fqid: member.fqid,
         frameId: member.frameId,
         title: member.title,
-        // Read now rather than stored: a frame's visibility changes without the
-        // roster hearing about it, through the addon's own keybind or through the
-        // restore of a saved box, and a cached answer would be wrong exactly when
-        // a player opened this list to find out.
+        // Read now: visibility changes without the roster hearing (keybind, restore).
         visible: member.visible(),
         show: member.show,
         hide: member.hide,
@@ -104,19 +74,9 @@ interface RosterableFrame {
 /**
  * Put a frame on the roster, and make its own destroy take it off again.
  *
- * The frame's `destroy` is REPLACED IN PLACE rather than wrapped in a copy, and
- * that is not a style preference. A frame's `visible` is an accessor over live
- * state, so `{ ...frame }` reads it once and freezes the answer: every addon's
- * draw loop then saw a frame that was permanently hidden, because the value
- * copied was the one it had before anything showed it. Spreading an object with
- * accessors takes their values, not the accessors.
- *
- * Wrapping destroy at all is the part that is easy to leave out and expensive to
- * leave out. Destroy is the ADDON's to call as well as the loader's, and several
- * addons do call it: a layout that cannot be repainted into is rebuilt by
- * throwing the frame away. A disposal bag only drains on disable, so a frame an
- * addon replaced mid-session would sit on the roster offering to show something
- * that no longer exists.
+ * `destroy` is REPLACED IN PLACE, never wrapped in a `{ ...frame }` copy: `visible` is an
+ * accessor, and spreading freezes it at its current value. Destroy must be wrapped at all
+ * because an addon may destroy a frame mid-session, long before its disposal bag drains.
  */
 function rostered(
   roster: FrameRoster,

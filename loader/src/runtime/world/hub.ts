@@ -12,16 +12,9 @@ import { checkEntityShape } from './shape.ts';
 import { createWorldWatcher, type WorldWatcher } from './watch.ts';
 
 /**
- * Report a live player that does not look like what addons are typed against.
- *
- * `game-types.ts` describes a repository this one cannot compile against, so
- * every read in the backend is an assertion, and this is the only thing that
- * tests it. Once per session rather than per read: the cost of being wrong is an
- * author writing against a field the game renamed, and a diagnostic is a far
- * better way to learn that than an addon that silently does nothing.
- *
- * Reported, never thrown. The world is still readable when one field moved, and
- * taking every addon down over it would be the worse failure.
+ * Report a live player, or a world object, that does not look like what addons are typed
+ * against. Once per session. Reported, never thrown: the world is still readable when one field
+ * moved.
  */
 function reportShapeDrift(backend: WorldBackend): void {
   const problems = checkEntityShape(backend.player);
@@ -30,10 +23,7 @@ function reportShapeDrift(backend: WorldBackend): void {
       problems,
     });
   }
-  // Reported apart from the entity drift above, because it is a different
-  // failure with a different symptom: a renamed world member does not make a
-  // reading wrong, it makes one permanently empty, and a gated read answering
-  // "you are not standing there" looks right from every angle.
+  // A separate report: a renamed member reads as permanently empty rather than wrong.
   const missing = checkWorldMembers(backend.raw);
   if (missing.length > 0) {
     diagError('the game no longer carries every world member the loader reads', {

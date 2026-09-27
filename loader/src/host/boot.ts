@@ -12,12 +12,7 @@ import { createGmAdapter } from './gm.ts';
 import { connectRuntime } from './handshake.ts';
 import { createHostStorage } from './storage.ts';
 
-/**
- * The userscript popup entry, and deliberately not localized.
- *
- * It renders in the manager's own chrome rather than in the game, so it is
- * outside the game's language setting either way.
- */
+/** The userscript popup entry. Not localized: it renders in the manager's chrome, not the game. */
 const MENU_COMMAND_LABEL = 'Open the Addons manager';
 
 export interface HostScope extends MessageScope {
@@ -27,10 +22,7 @@ export interface HostScope extends MessageScope {
   readonly clearTimeout: (id: number) => void;
 }
 
-/**
- * The @match list is broader than the origins the loader supports, since a match
- * pattern cannot express the distinction, so the origin is checked again here.
- */
+/** @match is broader than the supported origins, which a pattern cannot express, so recheck. */
 export function bootHost(scope: HostScope): void {
   if (!isGameHost(scope.location.origin)) {
     return;
@@ -48,10 +40,8 @@ export function bootHost(scope: HostScope): void {
   });
   const nonce = createNonce(scope.crypto);
 
-  // Registered whether or not the runtime ever connects. This entry is the one
-  // route that still works when in-game injection fails, so gating it on the
-  // handshake would take the manager away exactly when it is needed. Emitting
-  // with nothing subscribed is a harmless no-op.
+  // Registered whether or not the runtime connects: it is the one route to the manager that
+  // survives a failed injection.
   gm.registerMenuCommand(MENU_COMMAND_LABEL, () => {
     services.emit({ k: 'ui.open' });
   });

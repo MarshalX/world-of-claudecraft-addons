@@ -1,13 +1,5 @@
-// Where the loader's own records live inside GM storage.
-//
-// Its own module because two writers now share the namespace: registry.ts owns
-// the installed list and the entry body, addon-data.ts owns the sibling data
-// files, and having either import the namespace from the other would make the
-// two a cycle. The storage layout is one subject in any case.
-//
-// These strings ARE the boundary, the way shared/storage-keys.ts is for the
-// addon-facing namespaces. They cannot change without stranding what is already
-// on disk.
+// Where the loader's own records live inside GM storage. These strings cannot change without
+// stranding what is already on disk.
 
 /** The loader's own namespace, alongside the per-addon `addon:<fqid>` ones. */
 const REGISTRY_NS = 'loader';
@@ -21,11 +13,8 @@ function sourceKey(fqid: string): string {
 }
 
 /**
- * One addon's cached data files, as declared path to raw text.
- *
- * ONE key rather than one per file, so uninstalling drops them all without
- * enumerating a manifest that may since have changed: a file dropped from `data`
- * between an install and an update would otherwise leave a key nothing owns.
+ * One addon's cached data files, declared path to raw text. ONE key, so uninstalling drops
+ * them all without trusting a manifest whose `data` list may have changed since.
  */
 function dataKey(fqid: string): string {
   return `data:${fqid}`;

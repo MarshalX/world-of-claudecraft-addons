@@ -1,14 +1,10 @@
 // A read-only view over one of the game's live maps.
 //
-// The entity map is the game's own, mutated in place every tick. Handing it to
-// addons directly means one accidental clear() ends the session. The values are
-// still the live objects: this stops a slip, it is not a boundary.
+// One accidental clear() on the game's own entity map would end the session. The values are
+// still live objects: this stops a slip, it is not a boundary.
 //
-// It extends Map rather than merely implementing ReadonlyMap because addon code
-// written against a map will reach for `instanceof Map`, and a plain object that
-// answers every read but fails that check is the kind of surprise that shows up
-// only in somebody else's addon. The inherited storage stays empty; every read
-// is delegated.
+// It extends Map so `instanceof Map` holds; the inherited storage stays empty and every read is
+// delegated.
 
 const IMMUTABLE = 'woc.world.entities is a read-only view of the game state';
 

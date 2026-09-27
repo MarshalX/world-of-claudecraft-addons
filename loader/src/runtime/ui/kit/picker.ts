@@ -1,23 +1,11 @@
 // The loader's dropdown, which is a button and the kit's own menu.
 //
-// It replaces a native `<select>`, and the reason is what one LOOKS like: a select's popup is
-// drawn by the operating system, so a player who opens the slot filter in an addon panel gets
-// a white system list in the middle of a dark fantasy HUD, in the system font, with a system
-// tick beside the chosen row. Nothing about it can be styled; the list is not in the document.
+// Never a native `<select>`: its popup is drawn by the OS, outside the document and beyond
+// styling. The game's own `.ui-dd` is the same idiom: a button, a caret and a menu with the
+// chosen row in gold.
 //
-// The game reached the same conclusion for itself. `.ui-dd` in its own stylesheet is a button,
-// a label, a caret and a menu of rows with the chosen one in gold, and its comment says in as
-// many words that it replaces the native control. So this is the game's own idiom rather than
-// an invention, and an addon's filter row now looks like the game's loadout picker.
-//
-// IT IS THE MENU, not a second implementation of one. `ui.menu` already owns the four ways a
-// popup has to close (on select, on Escape, on a click anywhere else, and on its anchor being
-// taken away), and every one of those is a listener on something the caller does not own. A
-// dropdown that hand-rolled them would get three right.
-//
-// The button wears `woc-input`, the same class the text field and the old select wore, so a
-// picker beside a text field is the same height and the same colour with no second rule to
-// keep in step.
+// IT IS THE MENU (`ui.menu`), which owns every way a popup closes. The button wears
+// `woc-input`, so it matches a text field beside it.
 
 import type { Teardown } from '../../disposal.ts';
 import { caretGlyphMarkup } from './caret-glyph.ts';
@@ -32,11 +20,8 @@ interface PickerOpts {
   onChange: (next: string) => void;
   disabled?: boolean;
   /**
-   * What the control IS, for assistive technology.
-   *
-   * The button's text is the VALUE, so without this it announces "helmet, button" and never
-   * says what helmet is an answer to. A field's own label element carries `for`, which covers
-   * the labelled case; this is for a picker built on its own.
+   * What the control IS, for assistive technology, when no label element names it; its text is the
+   * VALUE.
    */
   label?: string;
 }
@@ -58,19 +43,12 @@ function buildParts(doc: Document): { value: HTMLElement; caret: HTMLElement } {
   value.className = 'woc-picker-value';
   const caret = doc.createElement('span');
   caret.className = 'woc-picker-caret';
-  // Markup the loader authored, never anything a caller supplied. See kit/caret-glyph.ts.
+  // Loader-authored markup only (kit/caret-glyph.ts).
   caret.innerHTML = caretGlyphMarkup();
   return { value, caret };
 }
 
-/**
- * Build a dropdown.
- *
- * `openMenu` is passed in rather than imported so the kit keeps one menu service and this
- * module keeps no state: the picker never knows whether its menu is open, because the menu
- * already answers that for the whole loader and a second copy of the answer is a second thing
- * to be wrong.
- */
+/** Build a dropdown. `openMenu` is passed in, so this module keeps no state about the one menu. */
 function createPicker(doc: Document, opts: PickerOpts, openMenu: OpenMenu): Picker {
   let chosen = opts.value;
   const el = doc.createElement('button');

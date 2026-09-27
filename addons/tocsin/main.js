@@ -37,24 +37,16 @@ const POSTMORTEM_MS = 12_000;
 const BANNER_MS = 4000;
 const REWARN_MS = 8000;
 /**
- * How little may be left on a channel that vanishes for it to count as COMPLETED.
- *
- * The two endings are far apart, which is what makes this safe rather than a guess. A channel
- * that finishes has its cast cleared on the same tick its remaining hits zero, so the last
- * value seen is one server tick above it. One that BREAKS has its cast cleared wherever the
- * player got to, and the server resets its own counter to the full length. So a false
- * completion needs a channel to break inside its last half second, which the raid sees resolve
- * anyway. This is still an INFERENCE, and the row it produces says DONE rather than claiming
- * the game reported it.
+ * How little may be left on a channel that vanishes for it to count as COMPLETED. A finished
+ * channel's last seen value is one server tick above zero, while a broken one vanishes wherever
+ * the player got to, so a false completion needs a break inside the last half second. Still an
+ * inference: the row says DONE rather than claiming the game reported it.
  */
 const DONE_SECONDS = 0.5;
 
 /**
- * Most severe first.
- *
- * There is one banner slot loader-wide, so severity is decided here rather than by whichever
- * handler ran last. The two soak shapes outrank everything because their failure is the whole
- * raid rather than one player.
+ * Most severe first. There is one banner slot loader-wide, so severity is decided here rather
+ * than by whichever handler ran last; the soak shapes lead because their failure is raid-wide.
  */
 const ALERT_RANK = ['channels', 'soak', 'marks', 'enrage', 'interrupt', 'tank', 'mechanic'];
 
@@ -71,11 +63,8 @@ const ENRAGE_WATCH_MULT = 2;
 const GATE_BAND = 0.15;
 
 /**
- * Drawn in this order whatever order the table declares them, so the layout never moves.
- *
- * An enrage is first because it is only ever on screen for the last stretch of a fight, and
- * for that stretch it is the line to read before any of the others. The gates block is second
- * for the same reason in reverse: it is a fight's next hard change, and it is empty otherwise.
+ * Drawn in this order whatever order the table declares them, so the layout never moves. Enrage
+ * and gates lead because each is empty until it is the next hard change in the fight.
  */
 const BLOCK_ORDER = [
   'enrage',
@@ -300,16 +289,11 @@ function engaged(entity) {
 }
 
 /**
- * Whether the encounter has RESET under a pull this addon still thinks is running.
- *
- * A wipe restores the boss to full health and clears its threat, but it does NOT clear the
- * target field, so `engaged` goes on reading true against a boss standing idle at its spawn.
- * Without this the next attempt inherits the last one's clocks, phase and difficulty latch,
- * which is a timer column that is confidently wrong rather than merely unseeded.
- *
- * Full health after being seen wounded is the only reading available for it. A boss healed
- * all the way back would read the same, and that is the right way round: the cost is
- * forgetting what this addon had learned, where the cost of not checking is inventing it.
+ * Whether the encounter has RESET under a pull this addon still thinks is running. A wipe does
+ * NOT clear the boss's target, so `engaged` stays true and the next attempt would inherit the
+ * last one's clocks, phase and difficulty latch. Full health after being seen wounded is the
+ * only reading available; a boss healed back to full reads the same, which forgets rather than
+ * invents.
  */
 function encounterReset(entity) {
   if (healthFraction(entity) < 1) {
@@ -501,13 +485,9 @@ function watchSpawn(row, entity, mechanic, templateId) {
 }
 
 /**
- * A cast STARTING is an anchor like any other, and for a mechanic that ends in one it is the
- * only edge there is: the game arms the next cadence where it opens the cast, and the damage
- * that cast would deal is not dealt at all on the cycles the raid answers, so watching for the
- * damage instead would leave the clock dead for exactly the pulls that went well.
- *
- * Joining mid-cast needs no correction for the same reason the freeze exists: the game holds
- * its own counter at full for the length of the cast, so reading the start late reads it right.
+ * Arms on the cast STARTING, never on its damage: an answered cast deals none, so a damage
+ * anchor leaves the clock dead on exactly the pulls that went well. Joining mid-cast needs no
+ * correction, since the game holds its own counter at full for the length of the cast.
  */
 function trackCasts(row, entity) {
   const ability = bossCast(entity)?.ability ?? null;
@@ -675,12 +655,9 @@ function mechanicRows(row, entity, phase) {
 }
 
 /**
- * The objects' names with the words they all share dropped from the end.
- *
- * A banner has about a second of a player's attention mid-fight, so it carries the word that
- * TELLS THEM APART and not the word they have in common: three stones called Left, Right and
- * Threshold Wardstone are Left, Right and Threshold. Derived from the set rather than from a
- * rule about names, so a set with nothing in common keeps its full names.
+ * The objects' names with their shared trailing words dropped, so a banner carries the word
+ * that tells them apart: Left, Right and Threshold Wardstone become Left, Right and Threshold.
+ * A set with nothing in common keeps its full names.
  */
 function shortLabels(names) {
   const parts = names.map((name) => name.split(' '));
@@ -770,10 +747,8 @@ function readChannels(block) {
 }
 
 /**
- * A channel that has just vanished either finished or broke, and the difference decides
- * whether the raid still has to answer this object. Without it a done object reads exactly
- * like one nobody ever touched, which sends somebody to a stone that is already held while
- * the empty one keeps the same row.
+ * A channel that has just vanished either finished or broke. Without telling them apart, a done
+ * object reads like one nobody touched and sends somebody to a stone that no longer needs them.
  */
 function noteCompleted(slots, before) {
   slots.forEach((slot, index) => {
@@ -1198,16 +1173,9 @@ function reliefRow(tankPid, block) {
 }
 
 /**
- * When to start calling a swap.
- *
- * `swapStacks` is the game's own published swap point, and where a block carries
- * one it beats the setting outright: the setting is a share of the cap, which is
- * a guess at the number, and this IS the number. Nythraxis is the first block to
- * carry one, from game 0.42.0, where the cap fell from ten stacks to three and a
- * share of the cap stopped landing anywhere useful.
- *
- * Everything else still takes the share, so the setting means the same on every
- * encounter that has not published a point of its own.
+ * When to start calling a swap. A block's `swapStacks` is the game's own swap point and beats
+ * the setting outright, since the setting is only a share of the cap; every other block takes
+ * the share.
  */
 function warnStacks(block) {
   if (typeof block.swapStacks === 'number') {
@@ -1216,7 +1184,7 @@ function warnStacks(block) {
   return (woc.settings['tank-warn'] / PERCENT) * block.maxStacks;
 }
 
-/** What one stack is worth, which heroic raises on its own from game 0.42.0. */
+/** What one stack is worth; heroic can raise it on its own. */
 function perStackFor(block) {
   if (heroic() && typeof block.perStackHeroic === 'number') {
     return block.perStackHeroic;
@@ -1367,11 +1335,9 @@ function gatesBlockRows(block, entity) {
 }
 
 /**
- * The one state on a fight nothing is DONE about, which is why it is drawn from the boss's
- * own health rather than from a clock: knowing it is close is the whole of the answer.
- *
- * The aura runs to the end of the fight once it lands, so the call is made on it ARRIVING.
- * Made on its presence it would be the same call every re-warn floor until the boss died.
+ * Drawn from the boss's health rather than a clock, since nothing is DONE about an enrage. The
+ * aura lasts the rest of the fight, so the call is made on it ARRIVING; on presence it would
+ * repeat every re-warn floor until the boss died.
  */
 function enragedRow(block, entity, aura) {
   const left = healthFraction(entity);
@@ -1443,12 +1409,9 @@ function sizeFor(lethal) {
 }
 
 /**
- * Answers whether the call was actually MADE, because a caller that has to remember it has
- * spoken must not remember a banner the slot refused.
- *
- * `floor` separates the re-warn floor from the RANK, which is what lets several mechanics
- * share one place in the order without sharing one throttle: two of them coming due inside
- * eight seconds is the ordinary case at a phase change.
+ * Answers whether the call was actually MADE, so a caller never remembers a banner the slot
+ * refused. `floor` separates the throttle from the RANK, so mechanics sharing a rank (routinely
+ * due together at a phase change) do not share one re-warn floor.
  */
 function warn(alert) {
   const { key, text, detail, lethal } = alert;
@@ -1481,9 +1444,8 @@ function warn(alert) {
 }
 
 /**
- * The big line is the ACTION or the thing to look at, and the quiet line is who and how long.
- * A banner read mid-fight is read in about a second, so a sentence there is a sentence nobody
- * finishes.
+ * The big line is the ACTION, the quiet line is who and how long: a banner mid-fight gets about
+ * a second, so a sentence there is one nobody finishes.
  */
 function channelAlert(cast) {
   if (cast.remaining > woc.settings['alert-lead']) {
@@ -1501,9 +1463,8 @@ function channelAlert(cast) {
 }
 
 /**
- * Names players who may have no addon at all, which is why it is worth a banner. Your own
- * name comes first and reads as "You", because whether it is on you is the one thing you need
- * off this banner before you read any other word of it.
+ * Names players who may have no addon at all. Your own name comes first as "You", since whether
+ * it is on you is the first thing to read off it.
  */
 function markAlert(marks, block) {
   if (marks.length === 0) {
@@ -1593,15 +1554,9 @@ function uncalled(row, lead) {
 }
 
 /**
- * One call per ARMED CYCLE per mechanic, rather than one per re-warn floor.
- *
- * A prediction that has run out stays on screen at zero, honestly: the game defers a cast
- * while another mechanic is unresolved and retries every second. Saying so again every eight
- * seconds for the rest of the pull is the same call over and over about something the raid
- * has already been told is due.
- *
- * The cycle is recorded only where the banner was actually SHOWN, so a call the slot refused
- * to a louder one is still owed and is made when that one has had its four seconds.
+ * One call per ARMED CYCLE per mechanic, not per re-warn floor: an overdue prediction sits at
+ * zero while the game defers the cast, and repeating it would nag about a known call. The cycle
+ * is recorded only when the banner was SHOWN, so a call refused to a louder one is still owed.
  */
 function mechanicAlert(rows) {
   const lead = woc.settings['alert-lead'];
@@ -1618,12 +1573,9 @@ function mechanicAlert(rows) {
 }
 
 /**
- * `ability` is a display NAME rather than an id, and matching on one is safe only because the
- * game CARRIES the label on the record rather than it being derived here. These reach this
- * client because they land on the group, which is the whole raid in a boss room.
- *
- * A raid wipe arrives here and nowhere else: ordinary damage of a hundred times a player's
- * health under the mechanic's own label, with no lifecycle event beside it.
+ * `ability` is a display NAME, safe to match only because the game carries the label rather
+ * than it being derived here. A raid wipe arrives here and nowhere else: ordinary damage under
+ * the mechanic's label, with no lifecycle event beside it.
  */
 woc.net.onEvent('damage', (event) => {
   const found = pullSubject();
@@ -1804,9 +1756,8 @@ function idleLine(reason) {
 }
 
 /**
- * Built whatever the setting says, because building a block is what notices a heroic tell and
- * what raises that block's alert. A setting that hides a panel must not also silence the
- * warnings the panel would have justified, or it does something its label does not say.
+ * Built whatever the setting says, because building a block notices heroic tells and raises its
+ * alerts; hiding a panel must not also silence its warnings.
  */
 function buildBlocks(row, entity) {
   const built = [];

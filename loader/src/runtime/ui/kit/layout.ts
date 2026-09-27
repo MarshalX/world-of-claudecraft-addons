@@ -1,10 +1,7 @@
 // A flex box down, a flex box across, a sentence, and a way to take one off screen.
 //
-// EVERYTHING HERE WRITES A CLASS. An inline style outranks every selector a
-// stylesheet can spell, so an addon laid out in style attributes opts itself out of
-// rules it never meant to have an opinion about, the coarse-pointer tap-target floor
-// among them. Even `gap` goes through a custom property, so the declaration stays in
-// ui/styles/layout.css.
+// EVERYTHING HERE WRITES A CLASS: an inline style would outrank the sheet, the touch
+// tap-target floor included. Even `gap` goes through a custom property (ui/styles/layout.css).
 
 import { HIDDEN_CLASS } from './frame-visibility.ts';
 
@@ -16,9 +13,8 @@ const WRAP_CLASS = 'woc-layout-row-wrap';
 const MUTED_CLASS = 'woc-layout-line-muted';
 
 /**
- * An input to the `gap` declaration in layout.css, never `el.style.gap`, so the sheet
- * keeps the last word. It is re-declared per element there, or it would inherit into
- * a nested row.
+ * An input to the `gap` declaration in layout.css, re-declared per element there so it does not
+ * inherit.
  */
 const GAP_PROPERTY = '--woc-gap';
 
@@ -48,12 +44,7 @@ interface RowOpts extends StackOpts {
   /** Wrap onto more lines. Default false. */
   wrap?: boolean;
   align?: RowAlign;
-  /**
-   * Pixels between WRAPPED LINES. Defaults to `gap`, and means nothing without `wrap`.
-   *
-   * Not `rowGap`, which on a `RowOpts` reads as "the gap of the row", and not a
-   * tuple, which carries CSS's row-then-column order a reader can get backwards.
-   */
+  /** Pixels between WRAPPED LINES. Defaults to `gap`, and means nothing without `wrap`. */
   wrapGap?: number;
 }
 
@@ -112,11 +103,8 @@ function createLine(doc: Document, opts: LineOpts = {}): HTMLElement {
 }
 
 /**
- * Both halves: the attribute keeps it out of the accessibility tree, the class takes
- * it off the screen. The attribute cannot do the second, being a user-agent rule at
- * the lowest priority there is, which this unlayered sheet outranks; `.woc-hidden` is
- * `!important` so it beats an addon's inline `display` too. The attribute rather than
- * the property, since this takes an `Element`.
+ * The attribute takes it out of the accessibility tree; the `!important` class takes it off
+ * screen, since the user-agent `[hidden]` rule loses to this unlayered sheet and inline styles.
  */
 function show(el: Element, shown: boolean): void {
   el.classList.toggle(HIDDEN_CLASS, !shown);

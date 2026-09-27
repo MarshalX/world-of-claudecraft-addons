@@ -1,7 +1,6 @@
 // Whether an arranged frame lands on the alignment grid, persisted per channel in the
-// loader's own namespace. The boolean is the loader's: the game's `frameSnapToGrid` sits
-// in `localStorage['woc_settings']`, a private blob nothing here may read, and its
-// `#interface-grid-overlay` only answers while the game's own mode is on.
+// loader's own namespace. The game's own setting lives in localStorage, which the loader
+// does not read.
 
 import { diagError } from '../../shared/diag.ts';
 import type { GeometryStorage } from './manager/geometry-store.ts';

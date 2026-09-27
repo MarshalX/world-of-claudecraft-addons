@@ -2,12 +2,9 @@
 
 // The Combat Meter, run through the real loader.
 //
-// The assertions are about the arithmetic a player would act on rather than about the
-// addon loading, and three of them cover fields that are documented traps: `inCombat` is
-// not on the wire, so reading it ends every fight and resets the total on every hit; the
-// outcome line counts events the damage rows deliberately skip, since a miss is the whole
-// reason it exists; and `heal2` carries `cueOnly` events a meter must ignore by the flag
-// rather than by the amount.
+// The assertions pin the arithmetic a player acts on, including three traps: entity `inCombat` is
+// not on the wire, so reading it ends every fight on every hit; the outcome line counts events the
+// damage rows skip; and `heal2` `cueOnly` events are skipped by the flag, not the amount.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { validateManifest } from '../../loader/src/shared/schema.ts';
@@ -57,8 +54,8 @@ const FIGHTS_KEY = perCharacterKey('pbe', 'Claudemoon/Marshal', 'fights');
 
 const teardown: Array<() => void> = [];
 
-// Fake timers because the meter draws on an interval rather than on every hit: a repaint per
-// damage event would be a layout write at the game's event rate.
+// Fake timers because the meter draws on an interval: a repaint per damage event would be a layout
+// write at the game's event rate.
 beforeEach(() => {
   vi.useFakeTimers();
 });
@@ -89,7 +86,7 @@ interface Hit {
   crit?: boolean;
   absorbed?: number;
   school?: string;
-  /** The owner the RECORD carries, which game 0.36.0 snapshots at emit. */
+  /** The owner the RECORD carries, snapshotted at emit. */
   owner?: number;
 }
 
@@ -137,7 +134,7 @@ interface MeterHarness extends SharedHarness {
   reset: () => void;
 }
 
-/** Any total order will do: the sort exists to make the assertion order-free. */
+/** Any total order will do: the sort makes the assertion order-free. */
 function byName(a: string, b: string): number {
   if (a === b) {
     return 0;
@@ -153,9 +150,8 @@ function rowFor(label: string): Element | null {
 }
 
 /**
- * One of the fight strip's two steps, found by the direction it moves the view rather than
- * by its glyph: the arrow is a character somebody may well retype, and the step is the thing
- * the button means.
+ * One of the strip's two steps, found by the direction it moves rather than its glyph, which
+ * someone may retype.
  */
 function stepButton(way: 'older' | 'newer'): HTMLButtonElement | null {
   const step = STEPS[way];
@@ -174,13 +170,9 @@ function fillWidthOf(label: string): string {
 }
 
 /**
- * The ability on an event, where an explicit null is the auto-attack case. Not
- * `?? 'Aimed Shot'`: that treats a deliberate null as absent, which is the case the Melee row
- * exists for.
- *
- * The values throughout this suite are display names, because that is what the wire puts in
- * this field. Ids here pass every assertion about a row just as well, so the icon is the only
- * thing that can tell the two apart, which is why it is asserted below.
+ * The ability on an event, where an explicit null is the auto-attack case (not `?? 'Aimed Shot'`,
+ * which would erase it). Values are display names, as on the wire; ids would pass every row
+ * assertion just as well, so the icon assertion is what tells them apart.
  */
 function abilityOf(hit: Hit): string | null {
   if ('ability' in hit) {
@@ -190,9 +182,8 @@ function abilityOf(hit: Hit): string | null {
 }
 
 /**
- * A spellbook in the game's own shape, carrying the divergence this addon turns on.
- * `arcane_shot` is displayed as "Fell Shot", so an event names one thing and the art is filed
- * under another. Both are here so a test can prove the join runs backwards correctly.
+ * A spellbook in the game's shape. `arcane_shot` is displayed as "Fell Shot", so an event names one
+ * thing and the art is filed under another.
  */
 const KNOWN = [
   {
@@ -205,18 +196,16 @@ const KNOWN = [
 ];
 
 /**
- * A pet, which is a mob-kind entity carrying an owner. Nothing else on the wire separates
- * one from any other mob in the zone, which is exactly why the meter has to read this field
- * rather than guessing from a name or a template.
+ * A pet: a mob-kind entity carrying an owner, which is the only thing separating it from any other
+ * mob.
  */
 function pet(id: number, name: string, ownerId: number): Record<string, unknown> {
   return liveEntity({ set: { id, name, kind: 'mob', templateId: 'wolf', ownerId } });
 }
 
 /**
- * A mob with nobody's collar on it. `ownerId` is left at the fixture's null rather than set,
- * because null is what "nobody" is on the wire and a zero there would make every mob in the
- * fixture the player's own pet.
+ * A mob with no owner. `ownerId` stays null, which is "nobody" on the wire; a zero would make every
+ * fixture mob the player's pet.
  */
 function mob(id: number, name: string, maxHp: number): Record<string, unknown> {
   return liveEntity({ set: { id, name, maxHp, kind: 'mob', templateId: 'spider' } });
@@ -230,16 +219,14 @@ interface RunOpts {
 }
 
 /**
- * Start the addon and wait for its panel to come up. A frame that saves its state starts
- * hidden and is shown once that state arrives, keyed per character, so it takes a watcher
- * sample and then a storage read. Every case here is about what the meter draws.
+ * Start the addon and wait for its panel. A saved frame starts hidden until its per-character state
+ * loads: a watcher sample, then a storage read.
  */
 async function run(opts: RunOpts = {}): Promise<MeterHarness> {
   const player = liveEntity({ set: { templateId: 'priest' } });
   const entities = new Map([[PLAYER_ID, player]]);
-  // Two pets in scope, told apart by nothing but who owns them, which is the whole of what
-  // the server checks before it decides whose meter a record belongs on. Both are here in
-  // every case so that a fixture cannot pass by having only ever seen the friendly one.
+  // Two pets in scope, told apart only by owner, which is all the server checks. Both are in every
+  // case so a fixture cannot pass having seen only the friendly one.
   entities.set(PET_ID, pet(PET_ID, PET_NAME, PLAYER_ID));
   entities.set(STRANGER_PET_ID, pet(STRANGER_PET_ID, 'Snarl', OTHER_ID));
   entities.set(MOB_ID, mob(MOB_ID, MOB_NAME, MOB_HP));
@@ -251,8 +238,8 @@ async function run(opts: RunOpts = {}): Promise<MeterHarness> {
     game: Promise.resolve({ world }),
     settings: opts.settings ?? {},
   };
-  // Assigned only when there is one: `exactOptionalPropertyTypes` refuses an explicit
-  // undefined for an optional property. See STYLE.md.
+  // Assigned only when there is one: `exactOptionalPropertyTypes` refuses an explicit undefined.
+  // See STYLE.md.
   if (opts.storage !== undefined) {
     input.storage = opts.storage;
   }
@@ -263,8 +250,8 @@ async function run(opts: RunOpts = {}): Promise<MeterHarness> {
   await Promise.resolve();
   await Promise.resolve();
   await Promise.resolve();
-  // The panel's first draw is a `woc.paint` request made while it was still hidden, so
-  // the loop is what performs it once the restore has put it on screen.
+  // The first draw is a `woc.paint` request made while hidden, so the loop performs it once the
+  // restore shows the panel.
   harness.frames.tick();
 
   return {
@@ -301,9 +288,8 @@ async function run(opts: RunOpts = {}): Promise<MeterHarness> {
     tick: (ms = REPAINT_MS) => {
       harness.advance(ms);
       vi.advanceTimersByTime(ms);
-      // The panel draws through `woc.paint`, so the interval only ASKS for a repaint
-      // and the loop is what performs it. Arrangement rather than assertion: a real
-      // browser runs a frame here without being told to.
+      // The interval only ASKS for a repaint through `woc.paint`; the loop performs it. A real
+      // browser runs this frame unprompted.
       harness.frames.tick();
     },
     fight: () => textOf('.woc-meter-total'),
@@ -314,8 +300,8 @@ async function run(opts: RunOpts = {}): Promise<MeterHarness> {
       ),
     figureOf: (label) => rowFor(label)?.querySelector('.woc-bar-value')?.textContent ?? '',
     detailOf: (label) => rowFor(label)?.querySelector('.woc-bar-detail')?.textContent ?? '',
-    // Selected inside the meter's own strip, by the kit's class rather than one of the
-    // addon's: the buttons are the loader's, and the addon marks only the strip.
+    // Selected inside the meter's strip by the kit's class: the buttons are the loader's, and the
+    // addon marks only the strip.
     openTab: (label) => {
       const button = [...document.querySelectorAll('.woc-meter-tabs .woc-tab')].find(
         (el) => el.textContent === label,
@@ -323,8 +309,7 @@ async function run(opts: RunOpts = {}): Promise<MeterHarness> {
       (button as HTMLButtonElement | undefined)?.click();
       harness.frames.tick();
     },
-    // The addon's own default bind, pressed at the dispatcher: the same path a
-    // player takes, rather than a call to the frame the addon happens to hold.
+    // The default bind pressed at the dispatcher, the path a player takes.
     togglePanel: () => {
       harness.press('Alt+KeyD');
       harness.frames.tick();
@@ -343,14 +328,13 @@ async function run(opts: RunOpts = {}): Promise<MeterHarness> {
   };
 }
 
-// The two surfaces the meter takes from the kit rather than hand-rolling: the tab strip, which
-// owns which tab is marked, and the tooltip, which is a function so a row reports the tally as
-// it is now rather than as it was when the row was built.
+// The two kit surfaces the meter uses: the tab strip, which owns which tab is marked, and the
+// tooltip, a function so a row reports the tally as it is now.
 describe('what it takes from the kit', () => {
   it('draws its tabs with the loader strip rather than its own buttons', async () => {
     await run();
 
-    // A nav of kit tabs, marked the way the manager's own strip is marked.
+    // A nav of kit tabs, marked the way the manager's own strip is.
     expect(document.querySelectorAll('.woc-meter-tabs .woc-tab')).toHaveLength(3);
     expect(document.querySelector('.woc-meter-tabs .woc-tab-active')?.textContent).toBe('Damage');
   });
@@ -363,8 +347,7 @@ describe('what it takes from the kit', () => {
     expect(document.querySelector('.woc-meter-tabs .woc-tab-active')?.textContent).toBe('Healing');
   });
 
-  // The reason the tooltip is a function: the row is hovered long after it was
-  // built, and what it has to say is the tally as it is now.
+  // The row is hovered long after it was built, so the tooltip reports the tally now.
   it('answers a hover with the numbers as they are, not as they were', async () => {
     const h = await run();
     h.hit({ ability: 'Aimed Shot', amount: 100 });
@@ -387,8 +370,7 @@ describe('what it takes from the kit', () => {
     expect(document.querySelector('.woc-tip-title')?.textContent).toBe('Aimed Shot');
   });
 
-  // A row with no art is one this character did not cast, which the row itself
-  // cannot say: it just has an empty icon slot, the same as art that failed.
+  // A row with no art is one this character did not cast; the empty slot alone cannot say that.
   it('says when a row is not from your own spellbook', async () => {
     const h = await run();
     h.hit({ ability: 'Cleave', amount: 100 });
@@ -403,17 +385,14 @@ describe('its manifest', () => {
     expect(validateManifest(MANIFEST_JSON).ok).toBe(true);
   });
 
-  // An id is the storage namespace and the keybind scope, so renaming a published one orphans
-  // every installed player's settings, keybinds and window position. Pinned in both places,
-  // since the id and the display name are separate decisions.
+  // The id is the storage namespace and keybind scope, so renaming a published one orphans every
+  // player's settings. Pinned separately from the display name.
   it('is the combat meter in both its id and its name', () => {
     expect(manifest().id).toBe('combat-meter');
     expect(manifest().name).toBe('Combat Meter');
   });
 
-  // The five surfaces it actually uses. A permission it does not need would be
-  // asked of every player installing it, on a screen built to be read. `storage` is here for
-  // the kept fights, which are this character's rather than the account's.
+  // The five surfaces it uses, and no more. `storage` holds the kept fights, per character.
   it('declares exactly the permissions it uses', () => {
     expect(manifest().permissions).toEqual(['net.read', 'world.read', 'ui', 'keys', 'storage']);
   });
@@ -429,16 +408,13 @@ describe('its manifest', () => {
     ]);
   });
 
-  // The smallest minor carrying EVERY published member this addon reads. `closable` is minor 2;
-  // `Heal2Event.overheal`, `woc.ui.list`, `woc.paint` and `FrameOpts.toggleKey` are minor 4;
-  // `DamageEvent.sourceOwnerId` is minor 5.
-  // A FIELD on an event record counts as much as a function does, whether or not the loader
-  // implements anything for it: nothing promises an event reaches an addon verbatim, and
-  // under-declaring fails silently as a zero where over-declaring fails with a message.
-  // `sourceOwnerId` is the sharpest case of that: an older loader would pass it through
-  // unread, and the addon would go on dropping the pet damage this exists to keep.
+  // The smallest minor carrying EVERY published member read: `closable` at 2;
+  // `Heal2Event.overheal`, `ui.list`, `woc.paint` and `toggleKey` at 4; `DamageEvent.sourceOwnerId`
+  // at 5. An event field counts as much as a function: under-declaring fails silently (an older
+  // loader passes `sourceOwnerId` through unread and pet damage drops), where over-declaring fails
+  // with a message.
   //
-  // `woc.fmt.duration` is offered and refused; the reason is on the function in main.js.
+  // `woc.fmt.duration` is refused; the reason is on the function in main.js.
   it('declares the API minor it actually needs', () => {
     expect(manifest().apiMinor).toBe(5);
   });
@@ -461,8 +437,8 @@ describe('loading it', () => {
     expect(shared.logs.tail(FQID).filter((entry) => entry.level === 'error')).toEqual([]);
   });
 
-  // Before anything lands there is nothing to report, and a panel that opened on
-  // NaN or on the last session's numbers would be read as broken.
+  // Before anything lands there is nothing to report; NaN or the last session's numbers would read
+  // as broken.
   it('starts at zero with no rows', async () => {
     const h = await run();
 
@@ -471,13 +447,10 @@ describe('loading it', () => {
   });
 });
 
-// It is a frame rather than a window, and the five cases are the whole of that decision.
-//
-// The close button does not separate them: `closable` works on either, and this frame asks for
-// one. Neither does density, since a window honours `compact` and refuses only `bare`. What
-// decides it is the ARIA role a screen reader announces: a window is a `dialog`, a thing the
-// player opened, and a frame is a `group`, HUD furniture. Pinned rather than left to the
-// source, because the two calls take the same options.
+// A frame, not a window, and the ARIA role decides it: a window is a `dialog` the player opened, a
+// frame is a `group` of HUD furniture. The close button and density do not separate them
+// (`closable` works on either; a window refuses only `bare`). Pinned because both calls take the
+// same options.
 describe('the kind of panel it is', () => {
   function panel(): Element | null {
     return document.querySelector('[data-woc-frame="meter"]');
@@ -490,8 +463,7 @@ describe('the kind of panel it is', () => {
     expect(panel()?.classList.contains('woc-chrome-window')).toBe(false);
   });
 
-  // The half of the distinction that is actually announced to anybody. A dialog is a
-  // thing the player opened and expects to be returned from; this is furniture.
+  // The role is the half of the distinction actually announced.
   it('announces itself as HUD furniture rather than as a dialog', async () => {
     await run();
 
@@ -499,8 +471,7 @@ describe('the kind of panel it is', () => {
   });
 
   // A frame gets a close button only when it asks, and this one does: the keybind is the fast
-  // route to dismissing a read meter and the button is the discoverable one. The rail button's
-  // window menu is what brings it back, since a hidden frame has no button left to press.
+  // route, the button the discoverable one. The rail button's window menu brings it back.
   it('carries the close button it asked for, and hiding it is what the button does', async () => {
     await run();
     const close = panel()?.querySelector('.woc-close');
@@ -512,8 +483,7 @@ describe('the kind of panel it is', () => {
     expect(panel()?.classList.contains('woc-hidden')).toBe(true);
   });
 
-  // A compact frame keeps its title bar, so the panel is still named and still has a bar to
-  // drag it by; only `bare` drops it.
+  // A compact frame keeps its title bar; only `bare` drops it.
   it('keeps the title bar it is named and dragged by', async () => {
     await run();
 
@@ -521,8 +491,8 @@ describe('the kind of panel it is', () => {
     expect(panel()?.querySelector('.woc-title')?.textContent).toBe('Combat');
   });
 
-  // A frame that said nothing would fall back to comfortable, which is a 40px tap-target
-  // floor: right for a form, and the loudest thing on screen in a dense readout.
+  // Unstated density falls back to comfortable, whose 40px floor is right for a form and too loud
+  // for a dense readout.
   it('says compact rather than falling back to the accessible default', async () => {
     await run();
 
@@ -531,8 +501,8 @@ describe('the kind of panel it is', () => {
 });
 
 describe('the running total', () => {
-  // A single rolling figure answers a question the per-ability rates already answer per
-  // ability, and it makes the panel's loudest element the least specific thing in it.
+  // A single rolling figure repeats what the per-ability rates say and becomes the loudest, least
+  // specific element.
   it('shows no single rolling figure', async () => {
     await run();
 
@@ -548,8 +518,7 @@ describe('the running total', () => {
     expect(h.fight()).toContain('600 damage');
   });
 
-  // The filter that makes it YOUR meter. Without it every other player fighting
-  // in range inflates the number, which is the classic way one of these lies.
+  // The filter that makes it YOUR meter: otherwise every other player in range inflates the number.
   it('ignores damage somebody else dealt to somebody else', async () => {
     const h = await run();
 
@@ -560,8 +529,7 @@ describe('the running total', () => {
     expect(h.labels()).toEqual([]);
   });
 
-  // The total is the fight's, so it accumulates rather than decaying: that is the
-  // whole difference from the figure it replaced.
+  // The total is the fight's, so it accumulates rather than decaying.
   it('accumulates across the fight', async () => {
     const h = await run();
 
@@ -575,7 +543,7 @@ describe('the running total', () => {
 });
 
 describe('the ability breakdown', () => {
-  it('opens a row per ability, named from the id', async () => {
+  it('opens a row per ability, named as the event names it', async () => {
     const h = await run();
 
     h.hit({ ability: 'Aimed Shot' });
@@ -585,8 +553,7 @@ describe('the ability breakdown', () => {
     expect(h.labels().sort(byName)).toEqual(['Aimed Shot', 'Multi Shot']);
   });
 
-  // An auto-attack arrives with no ability at all, and on most classes it is a
-  // real share of the total. Dropping it would silently understate everything.
+  // An auto-attack arrives with no ability and is a real share of the total.
   it('files an auto-attack under Melee', async () => {
     const h = await run();
 
@@ -614,14 +581,13 @@ describe('the ability breakdown', () => {
     h.hit({ ability: 'Multi Shot', amount: 250 });
     h.tick(SECOND);
 
-    // 750 of 1000 over the one second elapsed. The third figure carries its unit, because
-    // three bare numbers in a row leave the reader to work out which one is a rate.
+    // 750 of 1000 over one second. The rate carries its unit, or three bare numbers leave the
+    // reader guessing.
     expect(h.figureOf('Aimed Shot')).toBe('750  75%  750.0/s');
     expect(h.figureOf('Multi Shot')).toBe('250  25%  250.0/s');
   });
 
-  // The four figures the game shows nowhere. Crit rate is the one worth having:
-  // it is the only way to see what a talent or a gear change actually did.
+  // The four figures the game shows nowhere; crit rate shows what a talent or gear change did.
   it('reports hits, crit rate, average and biggest per row', async () => {
     const h = await run();
 
@@ -641,9 +607,8 @@ describe('the ability breakdown', () => {
     expect(h.detailOf('Aimed Shot')).toContain('40 absorbed');
   });
 
-  // A hit a shield ate whole is a `hit` landing at 0, and `kind` is what tells it apart from a
-  // swing that never connected. It is a thing that happened, so it reaches the table carrying
-  // the figure that says where the damage went.
+  // A hit a shield ate whole is a `hit` at 0, and `kind` tells it from a miss. It happened, so it
+  // reaches the table with the absorbed figure.
   it('records a hit a shield ate whole', async () => {
     const h = await run();
 
@@ -654,9 +619,8 @@ describe('the ability breakdown', () => {
     expect(h.detailOf('Aimed Shot')).toContain('400 absorbed');
   });
 
-  // The half of that rule the kit is responsible for: a row reading 0 of 0 has no denominator
-  // at all when everything in the table was absorbed. It has to draw as an empty bar, never as
-  // a full one and never as a dropped declaration.
+  // The kit's half: a row reading 0 of 0 has no denominator when everything was absorbed, and must
+  // draw as an empty bar.
   it('draws a fully absorbed row as an empty bar rather than a full one', async () => {
     const h = await run();
 
@@ -669,8 +633,8 @@ describe('the ability breakdown', () => {
 });
 
 describe('the outcome line', () => {
-  // The reason this exists: a miss deals nothing, so it never reaches a damage
-  // row, and the rate is invisible everywhere else in the game.
+  // A miss deals nothing, so it never reaches a damage row; this line is the only place the rate
+  // shows.
   it('counts outcomes the damage rows skip', async () => {
     const h = await run();
 
@@ -691,12 +655,9 @@ describe('the outcome line', () => {
     expect(h.outcomes()).toBe('');
   });
 
-  // `evade` is a wild mob refusing the hit while immune (walking home on a broken leash, or,
-  // since game 0.41.4, pinned in place inside an instance because it cannot reach you), and it
-  // is a real outcome of a real swing you took. What it must not be is counted and unnamed:
-  // the total this line
-  // divides by is every outcome recorded, so an outcome missing from the printed list silently
-  // shrinks every percentage beside it.
+  // `evade` is a mob refusing the hit while immune (leashing home, or pinned in an instance it
+  // cannot path through), a real outcome of your swing. It must be counted and named: the line
+  // divides by every outcome recorded, so an unlisted one shrinks every percentage.
   it('names an evade rather than only deflating the rest', async () => {
     const h = await run();
 
@@ -707,8 +668,7 @@ describe('the outcome line', () => {
     expect(h.outcomes()).toBe('hit 50%, evade 50%');
   });
 
-  // The other half: an evade always lands at 0, so it counts as an outcome and
-  // must never open a damage row or move the total, exactly as a miss does not.
+  // An evade always lands at 0, so it must never open a damage row or move the total.
   it('opens no damage row for an evade', async () => {
     const h = await run();
 
@@ -719,8 +679,8 @@ describe('the outcome line', () => {
     expect(h.fight()).toContain('0 damage');
   });
 
-  // Damage taken must not pollute YOUR attack table: it is the mob's outcome,
-  // not yours, and counting it would make a tank look like they never connect.
+  // Damage taken is the mob's outcome, not yours; counting it would make a tank look like they
+  // never connect.
   it('ignores the outcome of a hit that landed on the player', async () => {
     const h = await run();
 
@@ -744,8 +704,7 @@ describe('the taken table', () => {
     expect(h.figureOf('Cleave')).toContain('500');
   });
 
-  // The two tables are separate tallies, so a dealt row must not appear under
-  // Taken and vice versa. One shared map would double-count the mirror case.
+  // Separate tallies, or the mirror case double-counts.
   it('keeps the two directions apart', async () => {
     const h = await run();
     h.hit({ ability: 'Aimed Shot', amount: 100 });
@@ -758,9 +717,8 @@ describe('the taken table', () => {
     expect(h.labels()).toEqual(['Cleave']);
   });
 
-  // The same rule from the other side, and the reading a tank most wants: a hit
-  // your own shield ate whole landed nothing on you and is still the thing that
-  // happened. Dropping it would make an absorb look like a swing that missed.
+  // A hit your shield ate whole landed nothing and still happened; dropping it would make an absorb
+  // look like a miss.
   it('records a hit on you that a shield ate whole', async () => {
     const h = await run();
 
@@ -773,8 +731,7 @@ describe('the taken table', () => {
     expect(h.detailOf('Cleave')).toContain('400 absorbed');
   });
 
-  // One direction per tab, not both on one line. Reporting both put a "0 taken"
-  // in front of everyone who never gets hit, which is most of the time.
+  // One direction per tab, or everyone who never gets hit reads a "0 taken".
   it('summarises the open tab only', async () => {
     const h = await run();
 
@@ -792,8 +749,7 @@ describe('the taken table', () => {
 });
 
 describe('the healing table', () => {
-  // `heal2`, not `heal`: only the former carries a `sourceId`, so it is the only
-  // event a heal can be attributed from at all.
+  // `heal2`, not `heal`: only the former carries a `sourceId`.
   it('tallies what the player healed, by ability', async () => {
     const h = await run();
 
@@ -815,9 +771,8 @@ describe('the healing table', () => {
     expect(h.labels()).toEqual([]);
   });
 
-  // `cueOnly` events exist to drive a sound and carry no healing, and the game's own comment
-  // says a meter must ignore them by the flag rather than by the amount: a genuine direct heal
-  // legitimately lands at 0 on a target already at full health.
+  // `cueOnly` events drive a sound and carry no healing. The game says to ignore them by the flag:
+  // a real direct heal can land at 0 on a full target.
   it('ignores a cue-only heal', async () => {
     const h = await run();
 
@@ -829,9 +784,8 @@ describe('the healing table', () => {
     expect(h.fight()).toContain('0 healing');
   });
 
-  // A heal-absorb shield eats part of a heal before it lands, and the same field reports it on
-  // `heal2` as on `damage`. The row's total stays what landed; the absorbed figure rides the
-  // detail line, where it says why the landed number is lower than the cast was worth.
+  // A heal-absorb shield eats part of a heal, reported by the same field as on `damage`. The total
+  // stays what landed; the absorbed figure rides the detail line.
   it('adds absorbed healing to the row a shield ate part of', async () => {
     const h = await run();
 
@@ -843,10 +797,8 @@ describe('the healing table', () => {
     expect(h.detailOf('Mend Wounds')).toContain('200 absorbed');
   });
 
-  // A heal a shield devoured and a heal that overhealed both land at `amount: 0`, and
-  // `absorbed` is the only thing that parts them. They deserve opposite reactions: one is a
-  // cast wasted on somebody already full, the other a target still at low health whose healing
-  // is being eaten off them.
+  // A devoured heal and an overheal both land at `amount: 0`, and only `absorbed` parts them: one
+  // is a target at low health being eaten, the other a cast on somebody full.
   it('records a heal a shield ate whole, which lands at zero', async () => {
     const h = await run();
 
@@ -858,8 +810,7 @@ describe('the healing table', () => {
     expect(h.detailOf('Mend Wounds')).toContain('500 absorbed');
   });
 
-  // The other half of that same `amount: 0`, which has to stay out. Nothing was absorbed, so
-  // the cast landed on somebody already at full health.
+  // The other `amount: 0`, which stays out: nothing was absorbed, so the target was full.
   it('records nothing for a heal that only overhealed', async () => {
     const h = await run();
 
@@ -870,10 +821,8 @@ describe('the healing table', () => {
     expect(h.labels()).toEqual([]);
   });
 
-  // `cueOnly` and a fully absorbed heal look alike from the outside, since both are
-  // `amount: 0`, and only one is a real cast. The flag is what parts them and has to be read
-  // first. The pairing below is not something the wire sends: it is adversarial on purpose,
-  // because what is being pinned is the order of the two guards.
+  // `cueOnly` and a fully absorbed heal both read `amount: 0`, so the flag must be read first. The
+  // pairing is not something the wire sends; it pins the order of the two guards.
   it('still skips a cue-only record even though a zero heal can now count', async () => {
     const h = await run();
 
@@ -896,8 +845,7 @@ describe('the healing table', () => {
     expect(h.detailOf('Mend Wounds')).toBe('2 hits, 50% crit, avg 200, max 300');
   });
 
-  // Three separate tallies. One shared map would put a heal in the damage table
-  // and double-count anything that appeared in both.
+  // Three separate tallies, or a heal lands in the damage table.
   it('keeps the three tables apart', async () => {
     const h = await run();
     h.hit({ amount: 100, ability: 'Aimed Shot' });
@@ -912,8 +860,8 @@ describe('the healing table', () => {
     expect(h.labels()).toEqual(['Cleave']);
   });
 
-  // The attack table is yours and is about damage. On Healing it is a non
-  // sequitur, and on Taken it would read as the attacker's outcomes.
+  // The attack table is about your damage: meaningless on Healing, and on Taken it would read as
+  // the attacker's outcomes.
   it('shows no attack table on the healing or taken tabs', async () => {
     const h = await run();
     h.hit({ amount: 100 });
@@ -928,8 +876,7 @@ describe('the healing table', () => {
     expect(h.outcomes()).toBe('');
   });
 
-  // A healer may deal no damage and take none for a whole encounter, so a heal has
-  // to be able to open a fight or their meter never starts.
+  // A healer may deal and take nothing all encounter, so a heal must open a fight.
   it('opens a fight on a heal alone', async () => {
     const h = await run();
 
@@ -940,8 +887,7 @@ describe('the healing table', () => {
     expect(h.fight()).not.toContain('last fight');
   });
 
-  // And it has to keep one alive, or a healer's fight would close mid-encounter
-  // while they were still casting.
+  // And keep one alive, or a healer's fight closes mid-encounter.
   it('keeps a fight alive on healing alone', async () => {
     const h = await run();
     h.hit({ amount: 100 });
@@ -954,14 +900,10 @@ describe('the healing table', () => {
   });
 });
 
-// A pet's damage is the owner's. Since game 0.35.0 the server resolves each side to its
-// controller before deciding who a combat record reaches, so an owner receives their own pet's
-// events: matching a raw `sourceId` against your own id undercounts a hunter, warlock or mage
-// by everything their pet did, silently.
-//
-// `ownerId` is the only thing separating a pet from any other mob in the zone, so the second
-// case below is as load-bearing as the first: fold in every owned entity and the meter becomes
-// a zone-wide damage display.
+// A pet's damage is the owner's: the server delivers your pet's records to you, and matching a raw
+// `sourceId` against your id silently undercounts every pet class. `ownerId` is all that separates
+// a pet from other mobs, so the second case matters as much: folding in every owned entity makes a
+// zone-wide display.
 describe('what your pet did', () => {
   it('counts a hit your own pet dealt', async () => {
     const h = await run();
@@ -972,9 +914,8 @@ describe('what your pet did', () => {
     expect(h.fight()).toContain('400 damage');
   });
 
-  // The row says whose it was, which folding silently could not. Its own melee lands in the
-  // same bucket as your auto-attack otherwise, and a player cannot tell what the pet added.
-  // `{pet}: {ability}` is the game's own spelling for this in its breakdown.
+  // The row says whose it was; otherwise the pet's melee shares your auto-attack bucket. `{pet}:
+  // {ability}` is the game's own spelling.
   it('labels a pet row with the pet name', async () => {
     const h = await run();
 
@@ -984,9 +925,8 @@ describe('what your pet did', () => {
     expect(h.labels()).toEqual([`${PET_NAME}: Melee`]);
   });
 
-  // The half that keeps it YOUR meter. A stranger's pet is delivered by the same change that
-  // delivers yours, and it resolves to a principal who is not you.
-  it('ignores a hit somebody else pet dealt', async () => {
+  // A stranger's pet is delivered the same way and resolves to someone else.
+  it("ignores a hit somebody else's pet dealt", async () => {
     const h = await run();
 
     h.hit({ by: STRANGER_PET_ID, amount: 400, ability: null });
@@ -996,9 +936,8 @@ describe('what your pet did', () => {
     expect(h.labels()).toEqual([]);
   });
 
-  // A pet whose entity has gone from the snapshot and whose record carries no owner either
-  // has nothing left to attribute from. It degrades rather than throwing on a lookup that
-  // answered nothing, which is what every pre-0.36.0 server produces.
+  // A pet gone from the snapshot, on a record with no owner, has nothing to attribute from; it
+  // degrades rather than throwing.
   it('drops a pet event whose entity is gone and whose record says nothing', async () => {
     const h = await run();
 
@@ -1009,9 +948,8 @@ describe('what your pet did', () => {
     expect(h.labels()).toEqual([]);
   });
 
-  // The case the snapshot lookup structurally cannot answer, and the worst-placed one there
-  // is: a pet despawns when its owner dies, so the exchange that killed them is exactly the
-  // one whose source is already gone. Game 0.36.0 puts the owner on the record at emit.
+  // The case the snapshot lookup cannot answer: a pet despawns when its owner dies, so the killing
+  // exchange's source is gone. The record's owner answers it.
   it('counts a despawned pet hit from the owner the record carries', async () => {
     const h = await run();
 
@@ -1021,9 +959,8 @@ describe('what your pet did', () => {
     expect(h.fight()).toContain('400 damage');
   });
 
-  // The name is unrecoverable once the entity is gone, so the row takes the generic label.
-  // Reading it as your own cast would be worse than a vague name: it would put a pet's melee
-  // in the bucket your auto-attack lands in, which is the thing the prefix exists to prevent.
+  // The name is unrecoverable once the entity is gone, so the row takes the generic label rather
+  // than landing in your auto-attack bucket.
   it('labels a despawned pet row generically rather than as your own', async () => {
     const h = await run();
 
@@ -1033,9 +970,7 @@ describe('what your pet did', () => {
     expect(h.labels()).toEqual(['Pet: Melee']);
   });
 
-  // The record's owner is asked AGAINST you, exactly as the snapshot lookup is. A stranger's
-  // pet carries an owner id too, and folding on the field's presence alone would turn the
-  // panel into a zone-wide display the moment 0.36.0 shipped.
+  // The record's owner is asked AGAINST you: a stranger's pet carries an owner id too.
   it('ignores a despawned pet whose record names somebody else as owner', async () => {
     const h = await run();
 
@@ -1046,9 +981,8 @@ describe('what your pet did', () => {
     expect(h.labels()).toEqual([]);
   });
 
-  // The attack table is a separate decision from attribution and the record's owner must not
-  // change it: a pet's swing rolls against the PET's hit rating whether or not the snapshot
-  // still has the pet in it.
+  // Attribution does not change the attack table: a pet's swing rolls against the PET's hit rating
+  // either way.
   it('keeps a despawned pet swing out of your attack table', async () => {
     const h = await run();
 
@@ -1059,9 +993,8 @@ describe('what your pet did', () => {
     expect(h.outcomes()).toBe('hit 100%');
   });
 
-  // A pet's swing rolls against the PET'S hit rating, not yours. Counting it here would blend
-  // two attack tables into one figure and leave neither readable, which is the same reason
-  // damage taken has never entered this line.
+  // A pet's swing rolls against the PET's hit rating; blending it would make both tables
+  // unreadable, the same reason damage taken is excluded.
   it('keeps a pet swing out of your attack table', async () => {
     const h = await run();
 
@@ -1072,8 +1005,8 @@ describe('what your pet did', () => {
     expect(h.outcomes()).toBe('hit 100%');
   });
 
-  // Damage taken by your pet is damage you should see, and the server delivers it on exactly
-  // that basis. Here the prefix names who it landed ON, since the ability is the attacker's.
+  // Damage your pet takes is shown. The prefix names who it landed ON, since the ability is the
+  // attacker's.
   it('attributes damage taken by your pet', async () => {
     const h = await run();
 
@@ -1085,7 +1018,7 @@ describe('what your pet did', () => {
     expect(h.fight()).toContain('250 taken');
   });
 
-  it('ignores damage taken by somebody else pet', async () => {
+  it("ignores damage taken by somebody else's pet", async () => {
     const h = await run();
 
     h.hit({ by: MOB_ID, at: STRANGER_PET_ID, amount: 250, ability: 'Cleave' });
@@ -1095,9 +1028,8 @@ describe('what your pet did', () => {
     expect(h.labels()).toEqual([]);
   });
 
-  // Demon Heal is the inversion: it carries the OWNER as `sourceId` and targets the pet, so it
-  // was already attributed to you before any of this. The row must therefore stay unprefixed,
-  // because the caster is you and the prefix names the caster on this tab.
+  // Demon Heal carries the OWNER as `sourceId` and targets the pet, so the row stays unprefixed: on
+  // this tab the prefix names the caster.
   it('files a heal you cast on your pet under your own name', async () => {
     const h = await run();
 
@@ -1109,9 +1041,8 @@ describe('what your pet did', () => {
     expect(h.fight()).toContain('300 healing');
   });
 
-  // No art for any pet ability by any route: they are in no spellbook, so `byName` can only
-  // answer null, and a swing carries no name at all. The tooltip is where a row can say why
-  // its icon slot is empty, and for a pet the reason is not "not in your spellbook".
+  // No pet ability has art by any route: none is in a spellbook, and a swing carries no name. The
+  // tooltip gives a pet row its own reason.
   it('draws no art for a pet row and names the pet in its tooltip', async () => {
     const h = await run();
 
@@ -1123,8 +1054,8 @@ describe('what your pet did', () => {
     expect(hover(`${PET_NAME}: Bite`)).toContain(`your pet ${PET_NAME}`);
   });
 
-  // The pet's rows and yours are separate tallies against one total, which is what makes the
-  // share column answer "how much of my output was the pet".
+  // The pet's rows and yours share one total, so the share column answers how much of your output
+  // was the pet.
   it('adds the pet to your total while keeping the rows apart', async () => {
     const h = await run();
 
@@ -1138,11 +1069,9 @@ describe('what your pet did', () => {
   });
 });
 
-// The rate was already the third column of every row and nothing on screen said so, and the
-// summary line left the player to divide a total by a duration themselves. Both are display
-// changes rather than measurement changes: the two meters already agree on the denominator,
-// since ours ends a fight at `lastEventAt` and the game's at `Math.max(1, lastActivity -
-// startedAt)`, floor included.
+// The rate column and summary say "per second" now. The denominator already matches the game's: a
+// fight ends at `lastEventAt`, the game's at `Math.max(1, lastActivity - startedAt)`, floor
+// included.
 describe('stating the rate', () => {
   it('states the rate on the summary line, beside the total and the duration', async () => {
     const h = await run();
@@ -1155,8 +1084,8 @@ describe('stating the rate', () => {
     expect(h.fight()).toBe('2,000 damage (400.0/s) in 5s');
   });
 
-  // The floor the game applies to the same figure. A burst inside one second would otherwise
-  // divide by a fraction and report a rate nobody sustained for any part of it.
+  // The game's floor on the same figure: a sub-second burst would otherwise report a rate nobody
+  // sustained.
   it('floors the duration at a second rather than reporting a burst rate', async () => {
     const h = await run();
 
@@ -1166,7 +1095,7 @@ describe('stating the rate', () => {
     expect(h.fight()).toBe('900 damage (900.0/s) in 1s');
   });
 
-  // It serves all three tabs, so the noun changes and the rate has to stay right.
+  // It serves all three tabs, so the noun changes and the rate stays right.
   it('states the rate on the healing and taken tabs too', async () => {
     const h = await run();
     h.heal({ amount: 400 });
@@ -1180,8 +1109,8 @@ describe('stating the rate', () => {
     expect(h.fight()).toContain('800 taken (400.0/s)');
   });
 
-  // A closed fight's rate is frozen with everything else, or it would keep falling against a
-  // clock nobody started, which is the reading the duration freeze already exists to prevent.
+  // A closed fight's rate is frozen with everything else, or it falls against a clock nobody
+  // started.
   it('freezes the rate when the fight closes', async () => {
     const h = await run();
     h.hit({ amount: 1000 });
@@ -1195,10 +1124,9 @@ describe('stating the rate', () => {
   });
 });
 
-// `overheal` is new on `heal2` in game 0.35.0 and is PARTIAL ONLY: every emit site still fires
-// only when some healing landed, so a tick that overhealed completely sent no record at all
-// and nothing here can see it. What ships is therefore a floor, marked as one, and no
-// percentage anywhere: a percentage would divide by a total missing exactly the same ticks.
+// `overheal` on `heal2` is PARTIAL ONLY: a tick that overhealed completely sends no record. So it
+// ships as a marked floor, with no percentage, which would divide by a total missing the same
+// ticks.
 describe('overhealing', () => {
   it('reports overhealing on the row it was wasted from', async () => {
     const h = await run();
@@ -1210,7 +1138,7 @@ describe('overhealing', () => {
     expect(h.detailOf('Mend Wounds')).toContain('200+ overhealed');
   });
 
-  // The `+` is the whole of the honesty, so it is asserted rather than left to the phrasing.
+  // The `+` is the whole of the honesty, so it is asserted.
   it('marks the figure as a floor rather than a total', async () => {
     const h = await run();
 
@@ -1233,7 +1161,7 @@ describe('overhealing', () => {
     expect(hover('Mend Wounds')).toContain('a fully wasted tick sends nothing');
   });
 
-  // Absent rather than zero, so a heal that wasted none must not draw the clause at all.
+  // Absent rather than zero, so a heal that wasted none draws no clause.
   it('says nothing about overhealing on a heal that wasted none', async () => {
     const h = await run();
 
@@ -1244,7 +1172,7 @@ describe('overhealing', () => {
     expect(h.detailOf('Mend Wounds')).not.toContain('overhealed');
   });
 
-  // It rides `heal2` alone, so a damage row can never grow the clause however the field moves.
+  // It rides `heal2` alone, so a damage row never grows the clause.
   it('never reports overhealing on a damage row', async () => {
     const h = await run();
 
@@ -1256,9 +1184,8 @@ describe('overhealing', () => {
 });
 
 describe('when a fight ends', () => {
-  // `player.inCombat` is never sent to a client: it holds its constructed `false` for the
-  // whole session, so deciding a fight is over from it ends every fight and resets the total
-  // on every hit. The idle timeout is the whole of it.
+  // Entity `inCombat` is never sent and holds its constructed `false`, so reading it ends every
+  // fight on every hit. The idle timeout is the whole of it.
   it('keeps one fight going across a lull shorter than the timeout', async () => {
     const h = await run();
 
@@ -1271,8 +1198,8 @@ describe('when a fight ends', () => {
     expect(h.fight()).not.toContain('last fight');
   });
 
-  // A fight average that kept falling while you read it would be answering a
-  // question nobody asked: how long you have been standing still since.
+  // An average that kept falling while you read it would measure how long you have been standing
+  // still.
   it('freezes once nothing has landed for the timeout', async () => {
     const h = await run();
     h.hit({ amount: 1000 });
@@ -1285,8 +1212,7 @@ describe('when a fight ends', () => {
     expect(frozen).toContain('last fight');
   });
 
-  // The duration runs to the last hit, not to the moment the timeout noticed, or
-  // every fight would read the timeout longer than it was and every dps lower.
+  // The duration runs to the last hit, not to when the timeout noticed.
   it('does not count the idle timeout as fight time', async () => {
     const h = await run();
 
@@ -1296,9 +1222,8 @@ describe('when a fight ends', () => {
     expect(h.fight()).toContain('in 1s');
   });
 
-  // Minutes and seconds, the way the game's own meter reads them. Kept alive with a hit every
-  // four seconds rather than one long jump, because a long jump closes the fight and freezes
-  // the duration at the first hit.
+  // Minutes and seconds, as the game's meter reads them. Kept alive with a hit every four seconds,
+  // since one long jump closes the fight.
   it('reads a long fight in minutes', async () => {
     const h = await run();
 
@@ -1323,8 +1248,7 @@ describe('when a fight ends', () => {
     expect(h.labels()).toEqual(['Multi Shot']);
   });
 
-  // The other way a fight ends: the player says so, mid-pull, because they want
-  // the next thirty seconds measured rather than the last three minutes.
+  // The other way a fight ends: the player resets mid-pull to measure what comes next.
   it('starts a new fight on the reset keybind', async () => {
     const h = await run();
     h.hit({ amount: 9000 });
@@ -1353,9 +1277,8 @@ describe('disabling it', () => {
     expect(Object.keys(h.shared.dispatcher.bindings())).toEqual([]);
   });
 
-  // The interval is the one thing disposal has to reach that leaves no trace in
-  // the DOM: a meter that kept repainting a removed panel would throw on every
-  // tick for the rest of the session.
+  // The interval leaves no trace in the DOM; left running, it would throw on every tick against a
+  // removed panel.
   it('stops repainting', async () => {
     const h = await run();
     for (const stop of teardown.splice(0)) {
@@ -1367,11 +1290,9 @@ describe('disabling it', () => {
   });
 });
 
-// Skill art is filed under an ability's id and a combat event carries its display name, and
-// the two have diverged: `arcane_shot` is shown everywhere as "Fell Shot", so slugifying the
-// name gives `fell_shot`, which is not a file. `world.abilities` runs the join backwards, and
-// it covers the player's own kit, which is why the second case matters as much as the first: a
-// mob's ability has no id to find, and drawing nothing is correct.
+// Art is filed under the id and events carry the display name: `arcane_shot` is "Fell Shot", so
+// slugifying gives `fell_shot`, which is no file. `world.abilities` runs the join backwards for the
+// player's own kit; a mob's ability has no id to find, and drawing nothing is correct.
 describe('ability art', () => {
   it('draws art from the ID for an ability the event named differently', async () => {
     const h = await run();
@@ -1380,26 +1301,25 @@ describe('ability art', () => {
     h.tick();
 
     const icon = rowFor('Fell Shot')?.querySelector('img.woc-bar-icon');
-    // The id, never a slug of the name: `fell_shot` is not a file that exists.
+    // The id, never a slug of the name.
     expect(icon?.getAttribute('src')).toContain('arcane_shot');
     expect(icon?.hasAttribute('hidden')).toBe(false);
   });
 
-  it('draws none for an ability that is not the player own, which has no id to find', async () => {
+  it("draws none for an ability outside the player's spellbook", async () => {
     const h = await run();
 
     h.hit({ ability: 'Crushing Blow' });
     h.tick();
 
     const icon = rowFor('Crushing Blow')?.querySelector('img.woc-bar-icon');
-    // No src at all rather than an empty one. An empty src resolves against the document base,
-    // so writing one would point every art-less row at the game's own page.
+    // No src rather than an empty one, which would resolve against the document and point every
+    // art-less row at the game's page.
     expect(icon?.hasAttribute('src')).toBe(false);
     expect(icon?.hasAttribute('hidden')).toBe(true);
   });
 
-  // The names ARE right, and that is the half this addon has. It shows what the game
-  // shows rather than a title-cased id, which is what Cooldown Bars is stuck with.
+  // The names are what the game shows rather than a title-cased id.
   it('shows the name the game uses rather than one derived from an id', async () => {
     const h = await run();
 
@@ -1410,11 +1330,9 @@ describe('ability art', () => {
   });
 });
 
-// `school` is the one identifying thing a damage event carries that does not depend on the
-// ability id, so it tells apart the rows the art cannot reach, and the palette is the game's
-// own. Deliberately not rank or share: the row already encodes rank by its position and share
-// by its fill width, so colouring by either would be a third encoding of a fact already on
-// screen, and rows would swap colours whenever the ranking shifted.
+// `school` is the one identifying field that does not depend on the id, so it marks rows art cannot
+// reach, in the game's palette. Not rank or share: position and fill width already encode those,
+// and rows would swap colours as the ranking shifted.
 describe('colouring rows by school', () => {
   it('tints a row by the school the event reported', async () => {
     const h = await run();
@@ -1425,8 +1343,7 @@ describe('colouring rows by school', () => {
     expect(rowFor('Fell Shot')?.classList.contains('woc-bar-school-arcane')).toBe(true);
   });
 
-  // A row keeps its colour for the whole fight, which is the point of choosing school
-  // over rank: an ability stays recognisable as its share moves around.
+  // A row keeps its colour all fight, so an ability stays recognisable as its share moves.
   it('keeps the first school it saw rather than recolouring per hit', async () => {
     const h = await run();
     h.hit({ ability: 'Fell Shot', school: 'arcane' });
@@ -1450,8 +1367,7 @@ describe('colouring rows by school', () => {
     expect(rowFor('Venom Barb')?.classList.contains('woc-bar-school-nature')).toBe(true);
   });
 
-  // `heal2` carries no school at all, so a healing row has nothing true to pass and
-  // must not borrow one. It gets the default fill.
+  // `heal2` carries no school, so a healing row gets the default fill.
   it('leaves a healing row untinted, because heal2 carries no school', async () => {
     const h = await run();
     h.heal({ ability: 'Mend Wounds' });
@@ -1465,8 +1381,7 @@ describe('colouring rows by school', () => {
     expect(tinted).toBe(false);
   });
 
-  // On Taken the school is the ATTACKER'S, which is the more useful reading there:
-  // what kind of damage is landing on you.
+  // On Taken the school is the ATTACKER'S: what kind of damage is landing on you.
   it('tints a taken row by the school that hit you', async () => {
     const h = await run();
     h.hit({ by: OTHER_ID, at: PLAYER_ID, ability: 'Shadow Bolt', school: 'shadow' });
@@ -1478,9 +1393,8 @@ describe('colouring rows by school', () => {
   });
 });
 
-// A hidden panel is not drawn to: twice a second is a sort of every ability plus a row update
-// each, for the whole session. What must not stop is the tallying, which runs off the socket,
-// or the fight timeout, which is what decides a fight has ended.
+// A hidden panel is not drawn to. The tallying, which runs off the socket, and the fight timeout
+// keep running.
 describe('a panel nobody can see', () => {
   it('keeps tallying while hidden and shows the fight when it comes back', async () => {
     const h = await run();
@@ -1496,9 +1410,8 @@ describe('a panel nobody can see', () => {
     expect(h.labels()).toEqual(['Aimed Shot']);
   });
 
-  // The timeout has to keep running or a fight that ended while the panel was away
-  // reopens looking live, with an average still decaying against a clock nobody
-  // stopped.
+  // The timeout must keep running, or a fight that ended while the panel was away reopens looking
+  // live.
   it('still ends the fight while hidden', async () => {
     const h = await run();
 
@@ -1510,9 +1423,7 @@ describe('a panel nobody can see', () => {
     expect(h.fight()).toContain('last fight');
   });
 
-  // The whole point of the previous two together: a fight fought entirely with the
-  // panel away is still there to read afterwards, rows and figures and all, rather
-  // than only its summary line or nothing at all.
+  // A fight fought entirely with the panel away is still there to read afterwards, rows and all.
   it('shows a whole fight that happened and ended while it was away', async () => {
     const h = await run();
 
@@ -1530,9 +1441,8 @@ describe('a panel nobody can see', () => {
     expect(h.detailOf('Fell Shot')).toContain('2 hits');
   });
 
-  // The view FOLLOWS the newest fight rather than pinning to it, so a pull that starts while
-  // the panel is away is what the panel is showing when it comes back. The fight before it is
-  // not gone, which is what the strip is for; it is one page older.
+  // The view FOLLOWS the newest fight, so a pull started while the panel was away is what shows on
+  // return; the fight before it is one page older.
   it('follows the new fight when one starts while hidden', async () => {
     const h = await run();
 
@@ -1552,8 +1462,7 @@ describe('a panel nobody can see', () => {
   });
 });
 
-// The fights it keeps, which is the whole of what the strip pages through. The cases here are
-// about what a player can reach and what it is called, rather than about the array holding it.
+// The kept fights: what a player can reach through the strip and what each is called.
 describe('the fights it keeps', () => {
   /** One whole fight against the default target, closed by the idle timeout. */
   function fought(h: MeterHarness, ability: string, amount: number): void {
@@ -1562,8 +1471,8 @@ describe('the fights it keeps', () => {
   }
 
   /**
-   * Change a setting the way the manager does, by writing the whole blob the loader hydrates
-   * from. The fake hub echoes a local write as a change, so the addon's own handler runs.
+   * Change a setting as the manager does, by writing the whole blob. The fake hub echoes a local
+   * write as a change.
    */
   async function changeSettings(h: MeterHarness, values: Record<string, unknown>): Promise<void> {
     await h.hub.set(configNamespace(FQID), SETTINGS_KEY, values);
@@ -1592,8 +1501,8 @@ describe('the fights it keeps', () => {
     expect(h.fight()).toContain('300 damage');
   });
 
-  // A fight is named after what was in it, because "Fight -3" is not a question anybody has.
-  // Latched at record time: the mob is dead and gone from the snapshot by the time it is read.
+  // A fight is named after what was in it, latched at record time since the mob is gone by the time
+  // it is read.
   it('names a fight after the biggest mob in it', async () => {
     const h = await run();
     h.hit({ at: MOB_ID, amount: 100 });
@@ -1603,8 +1512,7 @@ describe('the fights it keeps', () => {
     expect(h.openFight()).toBe(BOSS_NAME);
   });
 
-  // Liveness beats the name on the page whose figures are still moving: whether what you are
-  // reading is over is the thing to know first.
+  // On the page still being fought, liveness beats the name.
   it('calls the fight in progress the current one, named or not', async () => {
     const h = await run();
     h.hit({ at: MOB_ID, amount: 100 });
@@ -1617,8 +1525,8 @@ describe('the fights it keeps', () => {
     expect(h.openFight()).toBe(MOB_NAME);
   });
 
-  // The pin is the page OBJECT rather than its index. A fight closing shifts every index
-  // along, so a pin by number would move the player onto a different fight while they read.
+  // The pin is the page OBJECT: a closing fight shifts every index, so a numeric pin would move the
+  // player onto another fight.
   it('keeps the page under the player when another fight closes', async () => {
     const h = await run();
     fought(h, 'Fell Shot', 300);
@@ -1629,13 +1537,12 @@ describe('the fights it keeps', () => {
 
     fought(h, 'Melee', 50);
 
-    // The same fight, one page further back, rather than whatever has taken page two.
+    // The same fight, one page further back, rather than whatever took page two.
     expect(h.fight()).toContain('300 damage');
     expect(h.fightPosition()).toBe('3/4');
   });
 
-  // The last page is worked out from the fights still kept rather than run as a total of its
-  // own, so it can never report more than the pages behind it can account for.
+  // The last page is derived from the kept fights, so it never reports more than they account for.
   it('adds the kept fights together on the last page', async () => {
     const h = await run();
     fought(h, 'Fell Shot', 300);
@@ -1656,7 +1563,7 @@ describe('the fights it keeps', () => {
     fought(h, 'Melee', 100);
     fought(h, 'Aimed Shot', 50);
 
-    // Two fights and the page adding them up. The first is gone rather than unreachable.
+    // The first fight is gone rather than unreachable.
     expect(h.fightPosition()).toBe('1/3');
     h.stepFight('older');
     expect(h.fight()).toContain('100 damage');
@@ -1664,8 +1571,7 @@ describe('the fights it keeps', () => {
     expect(h.fight()).toContain('150 damage');
   });
 
-  // The pin can outlive its fight, and a view pointing at nothing has to land somewhere a
-  // player recognises rather than on whichever fight has taken that index.
+  // A pin that outlives its fight lands on the newest rather than whatever took its index.
   it('takes the view back to the newest when the pinned fight ages out', async () => {
     const h = await run({ settings: { 'keep-fights': 2 } });
     fought(h, 'Fell Shot', 300);
@@ -1679,8 +1585,7 @@ describe('the fights it keeps', () => {
     expect(h.fightPosition()).toBe('1/3');
   });
 
-  // Lowering the cap is a decision about what is kept, so it takes effect on the fights that
-  // are already kept rather than at the end of the next fight.
+  // Lowering the cap applies to fights already kept, now.
   it('drops the fights a lowered cap no longer keeps', async () => {
     const h = await run();
     fought(h, 'Fell Shot', 300);
@@ -1694,18 +1599,13 @@ describe('the fights it keeps', () => {
   });
 });
 
-// Kept fights outlive the page, which is the difference between this meter and the game's own.
-// The write is per FIGHT rather than per hit, which is what the fight in progress being left
-// out of the payload buys.
+// Kept fights outlive the page, written once per FIGHT because the live one is left out.
 describe('what it keeps for the character', () => {
   function storedFights(storage: FakeStorage): unknown {
     return storage.dump()[`${characterNamespace(FQID)}/${FIGHTS_KEY}`];
   }
 
-  /**
-   * Let a per-character write settle. It awaits world entry and then the storage hub, so a
-   * suite reading the store on the next line reads it before the write has been made.
-   */
+  /** Let a per-character write settle: it awaits world entry and then the storage hub. */
   async function settled(): Promise<void> {
     await Promise.resolve();
     await Promise.resolve();
@@ -1727,8 +1627,8 @@ describe('what it keeps for the character', () => {
     });
   });
 
-  // Storing the fight in progress would be a write per hit to be worth anything, and a stale
-  // copy read back after a reload would report a fight that never ended.
+  // Storing the live fight would be a write per hit, and a stale copy read after a reload would
+  // report a fight that never ended.
   it('leaves the fight in progress out of the store', async () => {
     const storage = createFakeStorage();
     const h = await run({ storage });
@@ -1772,8 +1672,8 @@ describe('what it keeps for the character', () => {
     expect(h.detailOf('Fell Shot')).toContain('4 hits');
   });
 
-  // A stored shape this version cannot read is dropped rather than thrown on: the alternative
-  // is an addon that fails to start over a file it wrote itself.
+  // A stored shape this version cannot read is dropped, not thrown on, or the addon fails to start
+  // over its own file.
   it('ignores a stored shape it does not recognise', async () => {
     const storage = createFakeStorage();
     await storage.set(characterNamespace(FQID), FIGHTS_KEY, { version: 99, fights: 'nonsense' });
@@ -1786,8 +1686,8 @@ describe('what it keeps for the character', () => {
     expect(h.canStep('older')).toBe(false);
   });
 
-  // Everything, rather than the fight in progress alone: leaving the kept fights behind would
-  // leave the numbers the player asked to be rid of one press of the strip away.
+  // Everything, not only the live fight, or the numbers the player asked to be rid of stay one
+  // press away.
   it('wipes the kept fights and what was written for them', async () => {
     const storage = createFakeStorage();
     const h = await run({ storage });

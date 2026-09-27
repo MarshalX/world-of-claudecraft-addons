@@ -1,34 +1,19 @@
-/* The square timer, one sheet per kit module: this one is kit/tile.ts.
- *
- * Its sibling is bar.css, and the two are the same information in two shapes. What
- * differs is which part carries the variant: a bar tints its FILL, because the fill
- * is the thing a row is mostly made of, and a tile tints its BORDER, because the
- * face is the game's own art and painting over it would be painting over the one
- * part a player recognises the tile by.
- *
- * Everything is positioned against the square, so the whole widget is sized by one
- * custom property. `--woc-tile-size` defaults to 40px, which is the tap-target floor
- * the game holds its own controls to, and an addon passing `size` writes it inline.
+/* The square timer (kit/tile.ts). Where a bar tints its fill, a tile tints its BORDER, since
+ * its face is the game's own art. Sized by one custom property, `--woc-tile-size`, defaulting
+ * to 40px (a tap target) and written inline when an addon passes `size`.
  */
 #woc-addons .woc-tile {
   position: relative;
   flex: 0 0 auto;
-  /* The border is INSIDE the square, so the size an addon asks for is the size the
-     tile occupies. Under the default content-box a 40px tile measures 42px on
-     screen, which is wrong twice: the tap-target floor this default states is not
-     the floor it renders, and a strip sized to hold exactly one row of tiles clips
-     the bottom border off all of them. kit/tile.ts hands the size straight to a
-     custom property, so a caller has no way to know it should subtract two, and
-     `cooldown-bars` is the worked example: its strip frame IS the tile size, since
-     resizing the frame is how the player picks it. */
+  /* The border is INSIDE the square, so a tile occupies exactly the size asked for; a strip
+     sized to one row of tiles would otherwise clip their bottom borders. */
   box-sizing: border-box;
   width: var(--woc-tile-size, 40px);
   height: var(--woc-tile-size, 40px);
   overflow: hidden;
   border: 1px solid var(--color-border-default, rgb(90 80 66));
   border-radius: var(--radius-sm, 4px);
-  /* Its own stacking context, so a tile's sweep sits under its own figures and
-     never over a neighbouring tile that happens to come later in the DOM. */
+  /* Its own stacking context, so the sweep never lands over a neighbouring tile. */
   isolation: isolate;
 }
 
@@ -37,16 +22,12 @@
   inset: 0;
   width: 100%;
   height: 100%;
-  /* The art is square; a tile sized to something else must crop rather than squash
-     it, since a squashed ability icon is harder to recognise than a cropped one. */
+  /* Cropped, not squashed. */
   object-fit: cover;
 }
 
-/* The wedge. A conic gradient from the top: transparent as far as the timer has
-   got, dark for the rest, with the second stop at 0 so the two meet as a hard edge
-   rather than as a blur. kit/tile.ts writes the ELAPSED share, and the fallback is
-   100% so a tile whose property never arrived reads as finished rather than as
-   permanently on cooldown. */
+/* The wedge: a conic gradient from the top, transparent over the ELAPSED share (written by
+   kit/tile.ts) with a hard edge. The 100% fallback reads as finished, not stuck on cooldown. */
 #woc-addons .woc-tile-sweep {
   position: absolute;
   inset: 0;
@@ -54,8 +35,7 @@
   pointer-events: none;
 }
 
-/* Both figures sit ON the art, so they carry their own shadow: the art underneath is
-   painted and its brightness is not something the loader can know. */
+/* Both figures sit ON art of unknown brightness, so they carry their own shadow. */
 #woc-addons .woc-tile-value,
 #woc-addons .woc-tile-count {
   position: absolute;
@@ -81,25 +61,14 @@
   font-size: 11px;
 }
 
-/* Item quality, which is what a square of ITEM art is bordered by: this is the game's own
-   bag cell, down to the soft glow it gives the top two tiers.
-
-   THE GAME KEEPS TWO TABLES and this is the border one, from the `.q-*` rules in its own
-   stylesheet; the other colours a NAME and lives in quality.css with the two families that
-   read it. They differ at one tier, where common is white as a word and this dimmer grey as
-   an edge, because a pure white edge on the commonest thing in the game shouts. Neither is a
-   custom property: the game hard-codes both, so both are transcriptions rather than tokens,
-   and they move when the game's do. Written as rgb() like everything else here, against a
-   source written as hex: poor #9d9d9d, common #b8b8b8, uncommon #1eff00, rare #0070dd, epic
+/* Item quality borders, the game's own bag cell including the glow on the top two tiers.
+   Transcribed from the game's `.q-*` rules (the NAME table is in quality.css and differs at
+   common). Source hex: poor #9d9d9d, common #b8b8b8, uncommon #1eff00, rare #0070dd, epic
    #a335ee, legendary #ff8000, the glows at 40% of their own colour.
 
-   IT SITS HERE, between the base rule and the schools, and the cascade is why rather than
-   taste. `.woc-tile` above sets `border` as a SHORTHAND at this same specificity, so a tier
-   declared before it is overwritten wholesale and one declared after the schools would win a
-   border that belongs to urgency. The three groups from here down are one ordered run: a
-   tier is what the thing IS, a school is what kind of damage it is made of, and a tone is
-   that it has become urgent, and each later one wins the border from the one before. Do not
-   reorder these three groups. */
+   IT SITS HERE for the cascade: `.woc-tile` above sets `border` as a SHORTHAND at this same
+   specificity. The three groups from here down are one ordered run, tier then school then
+   tone, each winning the border from the one before. Do not reorder these three groups. */
 #woc-addons .woc-tile-quality-poor {
   border-color: rgb(157 157 157);
 }
@@ -126,16 +95,8 @@
   box-shadow: 0 0 6px rgb(255 128 0 / 40%);
 }
 
-/* School tints, from the game's OWN palette: --color-debuff-* is what it uses for the
-   school border on a debuff icon, so a tile bordered this way matches the colour the
-   player already reads for the same school elsewhere. Nothing is invented here, and
-   each var carries the token's current value as a fallback, in the sheet's own rgb()
-   notation, in case the game renames one.
-
-   These come after the tiers above and before the tone rules below, which is what makes
-   tone win where an addon sets both: tone is urgency and school is damage type, and a tile
-   that is about to matter has to say so over what kind of damage it was. Same specificity, so
-   the order is the mechanism. See the note on the quality group. */
+/* School tints, from the game's own --color-debuff-* palette, each with its current value as a
+   fallback. After the tiers and before the tones; see the note on the quality group. */
 #woc-addons .woc-tile-school-physical {
   border-color: var(--color-debuff, rgb(192 57 43));
 }
@@ -173,10 +134,7 @@
   border-color: rgb(255 143 133);
 }
 
-/* A compact frame's tiles are read at a glance rather than operated, so they give up
-   the tap-target floor the same way the frame's own chrome does. This moves the
-   DEFAULT only: a tile whose addon passed a size carries it inline, and an inline
-   custom property beats a rule. */
+/* A compact frame's tiles default smaller. The DEFAULT only: an inline `size` beats this. */
 #woc-addons .woc-density-compact .woc-tile {
   --woc-tile-size: 32px;
 }

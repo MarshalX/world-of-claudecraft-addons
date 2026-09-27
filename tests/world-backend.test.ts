@@ -37,7 +37,7 @@ const backendOf = (game: Record<string, unknown>) => {
 };
 
 describe('createGameBackend', () => {
-  it('refuses to build without a world, rather than answering nothing', () => {
+  it('refuses to build without a world', () => {
     expect(createGameBackend({ renderer: {} }, DEPS)).toBeNull();
     expect(createGameBackend(null, DEPS)).toBeNull();
   });
@@ -77,7 +77,7 @@ describe('createGameBackend', () => {
   });
 
   describe('target', () => {
-    it('resolves the player"s targetId out of the roster', () => {
+    it("resolves the player's targetId out of the roster", () => {
       const game = gameWorld({
         player: { ...PLAYER_ENTITY, targetId: 248 },
         entities: new Map<number, unknown>([[248, { id: 248, name: 'Thornpeak Ogre' }]]),
@@ -117,7 +117,7 @@ describe('createGameBackend', () => {
       expect(backend.auras).toHaveLength(1);
     });
 
-    it('answers null when the player has none rather than throwing', () => {
+    it('answers null when the player has none', () => {
       const backend = backendOf(gameWorld());
 
       expect(backend.cooldowns).toBeNull();
@@ -130,8 +130,7 @@ describe('createGameBackend', () => {
       expect(backendOf(gameWorld()).entities.size).toBe(1);
     });
 
-    // The watcher reads this every animation frame, and an addon may read it far
-    // more often, so a fresh wrapper per access would allocate for nothing.
+    // Read every frame by the watcher and more often by addons.
     it('hands back the same view across reads', () => {
       const backend = backendOf(gameWorld());
 
@@ -194,8 +193,6 @@ describe('readonlyMapView', () => {
     expect(seen).toHaveLength(2);
   });
 
-  // Addon code written against a map reaches for this, and a plain object that
-  // answers every read but fails the check is a surprise in somebody else's code.
   it('passes instanceof Map', () => {
     expect(view).toBeInstanceOf(Map);
   });
@@ -211,9 +208,7 @@ describe('readonlyMapView', () => {
   });
 });
 
-// The ONE derivation of who is playing. The loader's own frame state, the
-// per-character storage namespace and this read all go through it, so a copy of
-// the arithmetic anywhere else is two answers to one question.
+// The ONE derivation of who is playing, shared by frame state and per-character storage.
 describe('characterKey', () => {
   const withRealm = (realm: string | null, over: Record<string, unknown> = {}) =>
     createGameBackend(gameWorld(over), { ...DEPS, realm: () => realm });
@@ -222,8 +217,7 @@ describe('characterKey', () => {
     expect(withRealm('Claudemoon')?.characterKey).toBe('Claudemoon/Marshal');
   });
 
-  // Null rather than a placeholder: one shared key would collect every
-  // character's state and hand the next player whatever the last one left.
+  // A placeholder key would collect every character's state into one.
   it('is null before the player entity exists', () => {
     expect(withRealm('Claudemoon', { player: null })?.characterKey).toBeNull();
   });
@@ -232,15 +226,12 @@ describe('characterKey', () => {
     expect(withRealm('Claudemoon', { player: { id: 1 } })?.characterKey).toBeNull();
   });
 
-  // Offline play has no realm, and one browser profile can hold an offline
-  // character with the same name as one on a realm called anything.
-  it('keys offline play on the offline literal rather than on null', () => {
+  // An offline character can share a name with one on any realm.
+  it('keys offline play on the offline literal', () => {
     expect(withRealm(null)?.characterKey).toBe('offline/Marshal');
   });
 
-  // Read live, like every other backend member: a character switch inside one
-  // page load is real, because the game clones and removes its HUD rather than
-  // reloading.
+  // The game switches character without reloading the page.
   it('follows a character switch inside one session', () => {
     const game = gameWorld();
     const backend = createGameBackend(game, { ...DEPS, realm: () => 'Claudemoon' });
@@ -260,7 +251,7 @@ describe('moveSpeedMult', () => {
     expect(backend.moveSpeedMult).toBe(0.5);
   });
 
-  it('publishes an unaffected player as 1 rather than as nothing', () => {
+  it('publishes an unaffected player as 1', () => {
     const backend = backendOf(
       gameWorld({ movementWireVersion: 2, reconMoveSpeedMult: 1, spectating: null }),
     );

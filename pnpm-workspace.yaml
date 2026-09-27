@@ -6,5 +6,4 @@ packages:
 allowBuilds:
   esbuild: true
 
-# addons/ is not a workspace: addons are plain JS with no dependencies and no
-# build step.
+# addons/ is deliberately not a workspace: addons are plain JS with no build step.

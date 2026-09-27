@@ -1,7 +1,4 @@
-// Where a movable window is allowed to be.
-//
-// Every case here is a state a player can actually reach by dragging, or by
-// opening the game on a smaller screen than the one they arranged it on.
+// Where a movable window is allowed to be, after a drag or on a smaller screen.
 
 import { describe, expect, it } from 'vitest';
 import {
@@ -24,8 +21,7 @@ describe('clampBox', () => {
     expect(clampBox(BOX, VIEW)).toEqual(BOX);
   });
 
-  // The title bar is the drag handle, so a window dragged above the top edge
-  // could never be grabbed again.
+  // The title bar is the drag handle, so above the top edge it could never be grabbed.
   it('refuses to put the title bar above the top edge', () => {
     expect(clampBox({ ...BOX, y: -200 }, VIEW).y).toBe(0);
   });
@@ -37,8 +33,7 @@ describe('clampBox', () => {
     expect(VIEW.h - clamped.y).toBeGreaterThanOrEqual(40);
   });
 
-  // Sideways it may hang off, which is useful for parking it, but a grabbable
-  // strip has to stay on screen at both edges.
+  // Sideways it may hang off, but a grabbable strip stays on screen.
   it('keeps a grabbable strip on screen when dragged off the right', () => {
     const clamped = clampBox({ ...BOX, x: 5000 }, VIEW);
 
@@ -65,9 +60,7 @@ describe('clampBox', () => {
     });
   });
 
-  // Size is clamped before position because the position bounds depend on the
-  // clamped size. Done the other way a too-wide window pins itself left and
-  // then keeps its width, ending up off screen on the right.
+  // Size is clamped first because the position bounds depend on the clamped size.
   it('positions against the clamped size, not the requested one', () => {
     const clamped = clampBox({ x: 1500, y: 0, w: 4000, h: 400 }, VIEW);
 
@@ -75,12 +68,8 @@ describe('clampBox', () => {
     expect(clamped.x).toBeLessThanOrEqual(VIEW.w - 120);
   });
 
-  // A phone in portrait is narrower than the minimum width. An inverted clamp
-  // range there would produce NaN, and a NaN reaching a style property drops
-  // the declaration silently rather than raising.
-  //
-  // The minimum is capped at the viewport, so the window fits the screen rather
-  // than keeping a width that puts its right edge and its close button off it.
+  // An inverted clamp range yields NaN, which a style property drops silently. The
+  // minimum is capped at the viewport so the close button stays on screen.
   it('yields a finite box that fits a viewport smaller than the minimum', () => {
     const tiny = { w: 300, h: 200 };
     const clamped = clampBox(BOX, tiny);
@@ -122,8 +111,7 @@ describe('isFrameBox', () => {
     expect(isFrameBox(BOX)).toBe(true);
   });
 
-  // The persisted value comes back out of GM storage, which the player can edit
-  // and which an older loader may have written differently.
+  // The persisted value comes out of GM storage, which the player can edit.
   it.each([
     ['null', null],
     ['a string', '{"x":1}'],
@@ -136,9 +124,7 @@ describe('isFrameBox', () => {
   });
 });
 
-// An addon frame is often far smaller than the manager: a DPS readout is a
-// number and a label. The manager's 360x220 minimum is a default, not the law,
-// or every addon frame would be forced to the size of a settings window.
+// The manager's minimum is only a default; an addon frame is often far smaller.
 describe('a caller-supplied minimum', () => {
   it('lets a small frame keep the size it asked for', () => {
     const small = { w: 220, h: 90 };
@@ -160,9 +146,8 @@ describe('a caller-supplied minimum', () => {
     expect(box.h).toBe(MIN_HEIGHT);
   });
 
-  // The keep-visible strip is capped at the frame's own width. Without the cap a
-  // frame narrower than the strip could never touch either edge, so a small HUD
-  // readout would refuse to sit in the corner every HUD element wants.
+  // The keep-visible strip is capped at the frame's width, or a narrow frame could never
+  // touch either edge.
   it('lets a narrow frame reach both edges', () => {
     const small = { w: 90, h: 40 };
 
@@ -197,9 +182,8 @@ describe('initialBox', () => {
   });
 });
 
-// The four numbers that claim one axis: the structural floor, the viewport, the
-// caller's minimum and the caller's maximum. They contradict each other freely,
-// so what is pinned here is the ORDER they win in rather than any one of them.
+// Floor, viewport, caller minimum and caller maximum contradict freely; this pins the
+// order they win in.
 describe('a caller-supplied maximum', () => {
   it('stops a frame growing past it', () => {
     const box = clampBox({ x: 0, y: 0, w: 5000, h: 5000 }, VIEW, {
@@ -225,8 +209,6 @@ describe('a caller-supplied maximum', () => {
     expect(box).toMatchObject({ w: VIEW.w, h: VIEW.h });
   });
 
-  // A max wider than the screen is not an error and does not widen anything: the
-  // viewport was already the cap before a maximum could be stated.
   it('is still capped by the viewport itself', () => {
     const box = clampBox({ x: 0, y: 0, w: 5000, h: 5000 }, VIEW, {
       min: { w: 100, h: 50 },
@@ -236,8 +218,7 @@ describe('a caller-supplied maximum', () => {
     expect(box).toMatchObject({ w: VIEW.w, h: VIEW.h });
   });
 
-  // Someone has to break the contradiction, and only one of the two bounds is
-  // about the frame staying usable.
+  // Only the minimum is about the frame staying usable.
   it('loses to the minimum when the two cross', () => {
     const box = clampBox({ x: 0, y: 0, w: 300, h: 300 }, VIEW, {
       min: { w: 400, h: 200 },
@@ -247,8 +228,7 @@ describe('a caller-supplied maximum', () => {
     expect(box).toMatchObject({ w: 400, h: 200 });
   });
 
-  // The floor is the bound nobody argues with: a frame below it cannot be
-  // grabbed, and a frame that cannot be grabbed cannot be fixed.
+  // A frame below the floor cannot be grabbed, so it cannot be fixed.
   it('never takes a frame below the floor', () => {
     const box = clampBox({ x: 0, y: 0, w: 300, h: 300 }, VIEW, {
       min: { w: 1, h: 1 },
@@ -259,9 +239,6 @@ describe('a caller-supplied maximum', () => {
     expect(box.h).toBeGreaterThanOrEqual(28);
   });
 
-  // The regression the option exists for: before it, a frame's opening size was
-  // its permanent floor, so a resizable strip could never be dragged smaller
-  // than the size its addon happened to create it at.
   it('lets a frame shrink below the size it opened at', () => {
     const box = clampBox({ x: 0, y: 0, w: 120, h: 60 }, VIEW, { min: { w: 80, h: 40 } });
 

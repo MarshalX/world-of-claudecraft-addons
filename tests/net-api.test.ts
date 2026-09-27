@@ -29,7 +29,7 @@ describe('net.on', () => {
     expect(seen).not.toHaveBeenCalled();
   });
 
-  it('hands over a frozen frame, so one addon cannot edit another"s view', () => {
+  it("hands over a frozen frame, so one addon cannot edit another's view", () => {
     const seen = vi.fn();
     h.net.on('snap', seen);
 
@@ -92,7 +92,7 @@ describe('net.onEvent', () => {
     expect(any).toHaveBeenCalledTimes(3);
   });
 
-  it('ignores an event with no kind rather than inventing one', () => {
+  it('ignores an event with no kind', () => {
     const any = vi.fn();
     const typed = vi.fn();
     h.net.onAnyEvent(any);
@@ -115,8 +115,7 @@ describe('net.onSend', () => {
     expect(seen).toHaveBeenCalledOnce();
   });
 
-  // The whole reason this path is guarded: the auth frame carries the account
-  // bearer token, and it is the first frame on every socket.
+  // The auth frame, first on every socket, carries the bearer token.
   it('never hands an addon the session token', () => {
     const seen = vi.fn();
     h.net.onSend(seen);
@@ -139,8 +138,7 @@ describe('net.onSend', () => {
 });
 
 describe('net.state', () => {
-  // State is polled rather than pushed, so it has to track even when no addon
-  // has subscribed to anything.
+  // State is polled, not pushed.
   it('tracks with nothing subscribed', () => {
     h.inbound(HELLO_FRAME);
 
@@ -179,7 +177,7 @@ describe('net.waitFor', () => {
     await expect(pending).resolves.toBeDefined();
   });
 
-  it('unsubscribes once resolved rather than holding the topic open', async () => {
+  it('unsubscribes once resolved', async () => {
     const pending = h.net.waitFor('hello');
     h.inbound(HELLO_FRAME);
     await pending;

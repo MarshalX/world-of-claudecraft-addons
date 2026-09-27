@@ -1,20 +1,8 @@
 // @vitest-environment happy-dom
 
-// Wayfarer, run through the real loader.
-//
-// The decision this addon exists for is zone resolution, and specifically its refusal to answer
-// where the game's own resolver would guess. So most of what follows is a player standing at a
-// coordinate and one string being read off the heading, and the cases that matter most are the
-// ones where the right answer is "not a zone at all": the instanced plane past x 99400, and any
-// point no rectangle contains.
-//
-// Everything is driven from the shipped `atlas.json`. The fixtures below are read out of that
-// file rather than written by hand, so a case about Farshore Isle sharing Eastbrook Vale's z
-// band stays a case about the real table.
-//
-// `world.zone` is null throughout, because the shared world fake answers null for the game's own
-// zone label. That is the right condition for these cases: every heading below is resolved from
-// position with no label available at all.
+// Wayfarer, run through the real loader, driven from the shipped `atlas.json` so every case
+// is about the real table. `world.zone` is null unless a case states a label, so each heading
+// is resolved from position alone.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { validateManifest } from '../../loader/src/shared/schema.ts';
@@ -30,21 +18,8 @@ import SOURCE from './main.js?raw';
 const MANIFEST_JSON: unknown = JSON.parse(MANIFEST_TEXT);
 const DATA_FILE = 'atlas.json';
 /**
- * The highest minor anything this addon CALLS arrived in.
- *
- * `woc.data`, `ui.project`, `woc.onFrame` and `world.stations` are 2. Six members are 4:
- * `ui.list` holds the rows and the pins, `ui.show` is what takes a crowded pin off screen,
- * `world.distanceTo` and `world.bearingTo` measure and point every row, `fmt.titleCase`
- * names a crafting station, and `bus.publish` answers the zone ask.
- *
- * `FrameOpts.toggleKey` is deliberately NOT on that list. It would have been the seventh,
- * and this addon declined it: its toggle also forces a redraw, so the bind is written by
- * hand. See the note above `keys.bind` in `main.js`.
- *
- * 6 is `resizable: 'width'`, which hands the player the one axis this panel can give away.
- * An older loader reads that string as truthy and takes BOTH, which writes a height over a
- * list whose length is a setting: the rows below the box are then clipped with nothing on
- * screen saying so, which is the failure the declaration refuses.
+ * The highest minor anything this addon reads: 6, for `resizable: 'width'`. An older loader
+ * reads that string as truthy and owns BOTH axes, clipping the rows with nothing saying so.
  */
 const NEEDS_MINOR = 6;
 const PLAYER_ID = PLAYER_ENTITY.id;
@@ -53,7 +28,7 @@ const TICK_MS = 1000;
 /** How many microtask turns the atlas read and the frame's own restore want. */
 const SETTLE_TURNS = 12;
 
-/** What the shipped atlas has to carry, asserted so a hand edit cannot quietly thin it. */
+/** What the shipped atlas carries. Update on a regeneration that changes the content. */
 const ZONE_COUNT = 15;
 const POI_COUNT = 112;
 const GRAVEYARD_COUNT = 20;
@@ -109,12 +84,8 @@ const EASTBROOK = zoneNamed('eastbrook_vale');
 const FARSHORE = zoneNamed('farshore_isle');
 
 /**
- * Eastbrook's own hub, which every bearing case aims at.
- *
- * Resolved out of the shipped atlas rather than written down, for the reason the zones
- * above are: a case about which way an arrow points should not also be a case about where
- * a town is. It is a town rather than an ordinary point because a town is the one row a
- * reader can place on the picture without looking anything up.
+ * Eastbrook's own hub, which the distance and bearing cases aim at. Read from the atlas so a
+ * case about an arrow is not also a case about where the town is.
  */
 const EASTBROOK_HUB = EASTBROOK.pois.find((poi) => poi.town === true);
 if (EASTBROOK_HUB === undefined) {
@@ -250,12 +221,7 @@ function rowFor(id: string): HTMLElement | null {
   return document.querySelector(`.woc-wf-row[data-place="${id}"]`);
 }
 
-/**
- * One row's arrow rotation, read back off the transform the addon wrote.
- *
- * Null covers both a row that is not drawn and one whose arrow is hidden, which is the
- * same answer for the caller: nothing is being pointed at.
- */
+/** One row's arrow rotation off the written transform, or null when not drawn or hidden. */
 function readBearing(id: string): number | null {
   const arrow = rowFor(id)?.querySelector<SVGElement>('.woc-wf-arrow') ?? null;
   if (arrow === null || arrow.style.visibility === 'hidden') {
@@ -285,9 +251,8 @@ async function start(
 ): Promise<WayfarerHarness> {
   const stations = options.stations ?? STATION_PLACEMENTS;
   const counters = options.counters ?? FRESH_COUNTERS;
-  // `facing` is on the wire for every entity (`i.facing = e.f` on each snapshot apply) and
-  // is not on the shared fake, because nothing before this addon read one. Zero is +z,
-  // which makes a point due north of the player the one whose arrow points straight up.
+  // `facing` is on the wire but not on the shared fake. Zero is +z, so a point due north
+  // is the one whose arrow points straight up.
   const player = liveEntity({
     set: { templateId: 'hunter', pos: { x: 0, y: 5, z: 0 }, kind: 'player', facing: 0 },
   });
@@ -297,9 +262,8 @@ async function start(
     player,
     known: [],
     stationPlacements: stations,
-    // The counters are what says the sheet has landed. The game's own `freshDeedStats()` writes
-    // every key at 0 client-side, so a populated record is what an ordinary session holds from
-    // its first tick and an empty one is the loader's stand-in for a world carrying no sheet.
+    // The counters say the sheet has landed: the game writes every key at 0 client-side, so
+    // an empty record stands for a world carrying no sheet.
     deedStats: {
       counters,
       itemsDiscovered: new Set<string>(),
@@ -318,8 +282,7 @@ async function start(
   teardown.push(harness.dispose);
 
   const published: unknown[] = [];
-  // A second addon on the bus, because nobody receives their own messages: subscribing
-  // as somebody else is the only way to see what Wayfarer publishes at all.
+  // Subscribe as another addon, since nobody receives their own messages.
   teardown.push(
     harness.shared.bus.subscribe({
       from: harness.fqid,
@@ -404,16 +367,12 @@ describe('its manifest', () => {
     expect(validateManifest(MANIFEST_JSON).ok).toBe(true);
   });
 
-  // Every one of these is spent, and nothing else is asked for. There is no socket read at all:
-  // everything this addon draws comes off the world or out of its own file, and the frame's
-  // saved position is loader-owned rather than addon storage.
   it('asks for exactly what it uses', () => {
     expect(manifest().permissions).toEqual(['world.read', 'ui', 'keys']);
   });
 
-  // An older loader strips an unknown manifest key rather than refusing it, so without
-  // the minor this addon would install on a loader with no `woc.data`, start, and find
-  // that the only file it has is not there.
+  // An older loader strips an unknown manifest key, so only the minor keeps it off a loader
+  // with no `woc.data`.
   it('declares the atlas file and the minor that reads it', () => {
     expect(manifest().data).toEqual([DATA_FILE]);
     expect(manifest().apiMinor).toBe(NEEDS_MINOR);
@@ -424,12 +383,9 @@ describe('its manifest', () => {
   });
 });
 
-// What the shipped file carries. Asserted rather than assumed, because the table IS
-// the addon: a row quietly dropped from it is a place that stops existing.
+// The table IS the addon: a row quietly dropped from it is a place that stops existing.
 describe('the atlas it carries', () => {
-  // Fails the moment anybody pastes the table back into the source. Asserted on the ids, because
-  // the header comment names zones in prose to explain the rectangles and a display name is
-  // therefore not the tell.
+  // Asserted on ids, since the source names zones in prose.
   it('carries no zone table in the source', () => {
     expect(SOURCE).not.toContain('eastbrook_vale');
     expect(SOURCE).not.toContain('the_farshore_causeway');
@@ -444,44 +400,37 @@ describe('the atlas it carries', () => {
     expect(ATLAS.portals).toHaveLength(PORTAL_COUNT);
   });
 
-  // BY ID as well as by count, because a count says nothing about WHICH row moved: the
-  // table could lose Dawnrest and gain Last Keep and still be twenty. Game 0.43.0 is why
-  // this one is named. The keep's headstones had stood there with no graveyard record, so
-  // every death at it released at the Wyrmwatch cairns nearly 300 yards north, and this
-  // addon drew a ghost the walk it no longer has to make.
+  // By id as well as by count: a count cannot say WHICH row moved. This row is read through
+  // a same-module constant, the case `withLocalConstants` in the generator handles.
   it('carries the Last Keep churchyard, at the point the game authored it', () => {
     const yard = ATLAS.graveyards.find((one) => one.id === 'gy_last_keep');
 
     expect(yard).toEqual({ id: 'gy_last_keep', label: 'Last Keep Churchyard', x: 451, z: 2134 });
   });
 
-  // This is not fifteen plain rectangles: five zones are the original full-width strip and
-  // carry no x bounds at all, so the world-width constants have to travel with the table.
-  it('carries the world strip constants beside the nine zones that need them', () => {
+  // Some zones are the full-width strip with no x bounds, so the strip constants travel with
+  // the table.
+  it('carries the world strip constants beside the column zones', () => {
     const columns = ATLAS.zones.filter((zone) => zone.xMin !== undefined);
     expect(columns).toHaveLength(COLUMN_ZONE_COUNT);
     expect(EASTBROOK.xMin).toBeUndefined();
     expect(FARSHORE.xMin).toBe(180);
   });
 
-  // The file is generated, so it says which game it came out of. A hand-written replacement that
-  // dropped the provenance would leave nobody able to tell whether the table is a release behind:
-  // `node addons/wayfarer/generate.mjs --game=<checkout>` rebuilds it.
+  // The stamp is the only thing saying how old the table is. Rebuild with
+  // `node addons/wayfarer/generate.mjs --game=<checkout>`.
   it('says which game version it was generated from', () => {
     expect(ATLAS.source.game).toMatch(SEMVER);
   });
 
-  // The instance base is content rather than a constant this addon may hold. The refusal cases
-  // below turn on the value in the fixture, so this is what ties the two together: a release that
-  // moves it fails here, next to a regeneration instruction, rather than silently turning the
-  // refusal into a guess that names a zone for a player standing in a dungeon.
+  // The refusal cases below turn on this value, so a release that moves it fails here rather
+  // than turning the refusal into a guess.
   it('carries the instance base the refusal turns on', () => {
     expect(ATLAS.world.instanceXBase).toBe(INSTANCE_X_BASE);
     expect(ATLAS.world.stripMinX).toBe(-STRIP_HALF_WIDTH);
     expect(ATLAS.world.stripMaxX).toBe(STRIP_HALF_WIDTH);
   });
 
-  // The other correction: stations are the loader's, not the file's.
   it('embeds no crafting station, because world.stations answers for them', () => {
     expect(ATLAS_TEXT).not.toContain('station_eastbrook_forge');
     expect(SOURCE).not.toContain('station_eastbrook_forge');
@@ -504,9 +453,7 @@ describe('the atlas it carries', () => {
   });
 });
 
-// The decision the addon exists for: resolved from position against the game's own rectangles,
-// with the game's own strict resolver rather than its clamping one. `world.zone` is null in
-// every case here, so nothing below could have come from the game's label.
+// Resolved from position with the game's strict rectangle test, never its clamping `zoneAt`.
 describe('resolving the zone from position', () => {
   it('names the zone the player is standing in, with its level range', async () => {
     const h = await run();
@@ -523,9 +470,7 @@ describe('resolving the zone from position', () => {
     expect(h.heading()).toBe('Thornpeak Heights, levels 13 to 20');
   });
 
-  // The rectangle is half-open on BOTH axes. Farshore Isle shares Eastbrook Vale's z
-  // band at x 180 to 540, so a test on z alone would report a player standing on
-  // Farshore as standing in Eastbrook.
+  // Farshore Isle shares Eastbrook Vale's z band at x 180 to 540, so the x test is required.
   it('does not put a player outside the strip in the zone sharing its band', async () => {
     const h = await run();
 
@@ -547,9 +492,7 @@ describe('resolving the zone from position', () => {
     expect(h.heading()).toContain('Mirefen Marsh');
   });
 
-  // The game's own `zoneAt` clamps to the southmost band containing z and then to the
-  // northmost zone, so for a player standing in a dungeon it answers The Drakelands. This
-  // one refuses instead, which is what the exact heading below pins.
+  // The game's `zoneAt` would answer The Drakelands here.
   it('refuses to name a zone for a player inside an instance', async () => {
     const h = await run();
 
@@ -560,8 +503,7 @@ describe('resolving the zone from position', () => {
     expect(h.note()).toContain('Inside an instance');
   });
 
-  // The same refusal one step further out: the arena, the delve band and the rift
-  // instances all sit further east still, and every one of them is past the base.
+  // The arena, delve band and rift instances all sit further east, past the base.
   it('refuses across the whole instanced plane rather than at one dungeon', async () => {
     const h = await run();
 
@@ -571,9 +513,7 @@ describe('resolving the zone from position', () => {
     expect(h.heading()).toBe('Not in the open world');
   });
 
-  // A point in the open world that no rectangle contains is a different fact from an
-  // instance, and the note says which. x 600 is past the world's east edge at 540 and
-  // nowhere near the instanced plane.
+  // x 600 is past the world's east edge at 540 and nowhere near the instanced plane.
   it('says off the map rather than in an instance for a point in neither', async () => {
     const h = await run();
 
@@ -594,13 +534,11 @@ describe('resolving the zone from position', () => {
     teardown.push(harness.dispose);
     await settle();
 
-    // No world, so no anchor may be hung in one and no zone may be claimed.
     expect(document.querySelectorAll('.woc-wf-anchor')).toHaveLength(0);
   });
 });
 
-// The bus contract. A consumer degrades to drawing no zone header, so silence and null
-// both have to be safe.
+// The bus contract: a consumer degrades to no zone header, so silence and null must be safe.
 describe('publishing the zone', () => {
   it('publishes the zone it resolved, in the payload shape it documents', async () => {
     const h = await run();
@@ -626,12 +564,8 @@ describe('publishing the zone', () => {
     expect(h.published().at(-1)).toMatchObject({ id: 'thornpeak_heights' });
   });
 
-  // A subscriber that keeps showing the last zone it heard about would have the player in
-  // Thornpeak Heights while they stand in a dungeon. The refusal is published rather than
-  // withheld, and it SAYS WHICH refusal it is: this addon exists to tell an instance from
-  // an unmapped point from a world it cannot read yet, and a bare null told a consumer none
-  // of the three. Every field but `place` is null, so one set of keys is read in all four
-  // states rather than the shape changing under the consumer.
+  // Withholding a refusal leaves a subscriber showing the last zone. `place` says which
+  // refusal; every other field is null so the shape never changes under the consumer.
   it('publishes the dungeon rather than a bare nothing', async () => {
     const h = await run();
 
@@ -655,9 +589,7 @@ describe('publishing the zone', () => {
     expect(h.published().at(-1)).toMatchObject({ place: 'nowhere', id: null });
   });
 
-  // The state every session starts in, and the one a consumer must not read as a fact
-  // about where the player is standing: the atlas is a promise and nothing is resolved
-  // until it lands.
+  // Every session starts here, and a consumer must not read it as a fact about position.
   it('says it does not know yet rather than saying nowhere', async () => {
     const harness = await mountAddon({
       manifest: MANIFEST_TEXT,
@@ -684,9 +616,7 @@ describe('publishing the zone', () => {
     expect(heard.at(-1)).toMatchObject({ place: 'unknown', id: null });
   });
 
-  // Two refusals in a row are two different answers, so the change test cannot key on the
-  // id alone: with all three carrying a null id, riding out of a dungeon and off the edge
-  // of the map would move between them in silence.
+  // All three refusals carry a null id, so the change test cannot key on the id alone.
   it('publishes again when one refusal becomes another', async () => {
     const h = await run();
     h.walkTo(DUNGEON_X, DUNGEON_Z);
@@ -700,8 +630,7 @@ describe('publishing the zone', () => {
     expect(h.published().at(-1)).toMatchObject({ place: 'nowhere' });
   });
 
-  // A late subscriber missed the last border crossing, and there is no replay on this
-  // bus, so the ask is the whole of the protocol.
+  // There is no replay on the bus, so a late subscriber relies on the ask.
   it('answers an ask immediately, even with nothing having changed', async () => {
     const h = await run();
 
@@ -728,9 +657,7 @@ describe('publishing the zone', () => {
   });
 });
 
-// The game's own minimap label, which the addon DRAWS and never reads. It is a localized
-// display name, so a comparison against a string in the source would work on an English client
-// and match nothing on any other, and underground it names the delve rather than a zone.
+// The game's minimap label is localized, so the addon DRAWS it and never compares it.
 describe("the game's own label", () => {
   it('draws it under the heading, marked as the game speaking', async () => {
     const h = await run({}, undefined, undefined, { label: 'Eastbrook Vale' });
@@ -744,9 +671,7 @@ describe("the game's own label", () => {
     expect(h.minimap()).toBe('');
   });
 
-  // The case that would catch a version resolving from the label: the label says one thing and
-  // the rectangles say the player is nowhere, and the heading has to be the rectangles'. It is
-  // also the state a delve is genuinely in, where the label is the more truthful of the two.
+  // Catches resolving from the label: the heading must follow the rectangles.
   it('refuses a zone the label names but no rectangle contains', async () => {
     const h = await run({}, undefined, undefined, { label: 'Wildheart' });
 
@@ -758,14 +683,9 @@ describe("the game's own label", () => {
   });
 });
 
-// The list: what is near you, in the zone you are in, nearest first.
 describe('the list of what is around', () => {
-  // These three stand the player on Eastbrook's own hub, read out of the atlas, rather
-  // than at the world origin. They used to stand at (0, 0) because the town happened to
-  // be three yards from it; game 0.40.1's New Eastbrook program moved the town to
-  // (-14, -102) and all three failed at once, on distances rather than on anything they
-  // were about. Anchored to the hub they measure what they name, whatever the game does
-  // with the town next.
+  // Stand on the hub read from the atlas, never a fixed coordinate, so a moved town does not
+  // break these on distance.
   it('lists the nearest points first', async () => {
     const h = await run();
 
@@ -799,11 +719,7 @@ describe('the list of what is around', () => {
     expect(h.labels()).toContain('Eastbrook');
   });
 
-  // A town is the point of interest standing on its zone's own hub rather than a
-  // second row beside it, so switching towns off takes exactly that one row away.
-  //
-  // Asserted on the row ID rather than on the label, because Eastbrook's mailbox is
-  // labelled 'Eastbrook' too and is a different category standing a few yards away.
+  // Asserted on the row id, because Eastbrook's mailbox is labelled 'Eastbrook' too.
   it('files a town as its own category rather than as a second row', async () => {
     const h = await run({ 'show-towns': false, 'list-length': 20 });
 
@@ -820,8 +736,6 @@ describe('the list of what is around', () => {
     expect(h.figureOf('town:eastbrook_vale:eastbrook')).toBe(`${String(WALKED_YARDS)} yd`);
   });
 
-  // The list is the CURRENT zone's, which is what makes its heading true. A point 30
-  // yards over a border is genuinely left out.
   it('lists nothing at all inside an instance', async () => {
     const h = await run();
 
@@ -843,7 +757,6 @@ describe('the list of what is around', () => {
   });
 });
 
-// The stations, which come from the loader rather than from the file.
 describe('the crafting stations', () => {
   it('lists the station the loader publishes for this zone', async () => {
     const h = await run({ 'list-length': 20 });
@@ -865,8 +778,7 @@ describe('the crafting stations', () => {
   });
 });
 
-// Deed progress: which points this character has actually stood in. The key shape is
-// the game's own, `poi:<zoneId>:<poiId>`, and the id half of it is FROZEN content.
+// The deed key is the game's `poi:<zoneId>:<poiId>`, and the poi id is FROZEN content.
 describe('the points this character has visited', () => {
   it('marks a point the deed set carries', async () => {
     const h = await run({ 'list-length': 20 }, undefined, ['poi:eastbrook_vale:eastbrook']);
@@ -880,10 +792,8 @@ describe('the points this character has visited', () => {
     expect(h.detailOf('town:eastbrook_vale:eastbrook')).toBe('Town, not yet explored');
   });
 
-  // A visit landing is a field change on the character sheet, not a set change, so
-  // `world.on` reports nothing for it: `world.on('entities')` compares ids and the
-  // sheet's own signature is taken over the deed COUNTERS. The set is therefore read
-  // again on every draw rather than subscribed to, and this is what says so.
+  // `world.on` reports nothing for a visit (the sheet's signature covers the counters only),
+  // so the set is re-read on every draw.
   it('picks up a visit that landed with nothing to announce it', async () => {
     const h = await run({ 'list-length': 20 }, undefined, []);
     expect(h.detailOf('town:eastbrook_vale:eastbrook')).toBe('Town, not yet explored');
@@ -894,10 +804,7 @@ describe('the points this character has visited', () => {
     expect(h.detailOf('town:eastbrook_vale:eastbrook')).toBe('Town, explored');
   });
 
-  // The mark keys on the FROZEN id and never on the label, because the game re-words a
-  // label freely and the deed mark has to survive it: `the_statuary_walk` is drawn as
-  // The Parterre Walk. A version keying on the label would report both of the pois the
-  // game has re-worded as unexplored for every character who has stood on them.
+  // The game re-words labels freely: `the_statuary_walk` is drawn as The Parterre Walk.
   it('keys the mark on the frozen id rather than on the label', async () => {
     const h = await run({ 'list-length': 20 }, undefined, [`poi:${PARTERRE.zone}:${PARTERRE.id}`]);
 
@@ -917,17 +824,8 @@ describe('the points this character has visited', () => {
     expect(h.note()).toContain(`2/${String(EASTBROOK.pois.length)} explored`);
   });
 
-  // The two halves of a hidden poi, which pull opposite ways and are both the game's
-  // own behaviour. `hideOnMap` takes the label off the game's world map
-  // (src/ui/map_window_view.ts), so listing it would walk a player to a place the game
-  // has stopped calling a landmark: game 0.40.1 put the harbor-town plat over the
-  // Sowfield. The exploration sweep in src/sim/deeds.ts does NOT consult the flag, so
-  // the same poi is still walked to and still marks, and dropping the row would leave
-  // every Eastbrook character permanently one short of a total they cannot reach.
-  //
-  // The count above is the second half and is asserted against the whole poi list on
-  // purpose: it is Eastbrook Vale that carries the hidden one, so a denominator that
-  // had learned to skip it would fail there.
+  // The game drops a hidden poi from its map but its deed sweep still counts it, so it
+  // leaves the list and stays in the denominator. Eastbrook carries one.
   it('leaves a hidden point out of the list and in the exploration total', async () => {
     const hidden = EASTBROOK.pois.filter((poi) => poi.hidden === true);
     expect(hidden).toHaveLength(1);
@@ -940,12 +838,7 @@ describe('the points this character has visited', () => {
     expect(h.note()).toContain(`1/${String(EASTBROOK.pois.length)} explored`);
   });
 
-  // An empty visited set cannot say whether it is empty because the character has
-  // explored nothing or because the sheet has not arrived, and those are opposite
-  // facts. The COUNTERS settle it: the game fills every key at 0 client-side, so an
-  // empty counters record is a sheet that is not there. A world with no deed sheet at
-  // all reaches the loader as exactly that, and the panel has to say so rather than
-  // telling a player who has walked the whole zone that they have explored none of it.
+  // An empty visited set is ambiguous; an empty COUNTERS record means the sheet is missing.
   it('says the progress cannot be read rather than reporting zero', async () => {
     const h = await run({}, undefined, ['poi:eastbrook_vale:eastbrook'], { counters: {} });
 
@@ -954,8 +847,6 @@ describe('the points this character has visited', () => {
   });
 });
 
-// The world pins. A pin's height is a guess in every case, which the panel says out
-// loud and each pin's own pillar draws.
 describe('the world pins', () => {
   it('pins what is in range and drops them when the panel is hidden', async () => {
     const h = await run();
@@ -976,25 +867,15 @@ describe('the world pins', () => {
     expect(h.pinned()).toEqual([]);
   });
 
-  // There is no ground height for an x and a z, so every pin here is anchored at
-  // an estimate and the panel refuses to let that pass unsaid.
   it('says that every pin height is an estimate', async () => {
     const h = await run();
 
     expect(h.note()).toContain('heights estimated');
   });
 
-  // The shared projector answers one screen point for everything, so every pin lands
-  // on top of every other one and exactly one survives the thinning. That is a blunt
-  // fixture and it is the right one: it proves the overlap decision runs at all and
-  // that it keeps one rather than none.
-  //
-  // Read off the class rather than off an inline `display`, because `woc.ui.show` is
-  // what hides a pin now and it deliberately writes neither: an inline style outranks
-  // every selector a stylesheet can spell, so the loader hides with a class its own
-  // sheet carries and with the `hidden` attribute that keeps a pin nobody can see out
-  // of the accessibility tree. Both are asserted, since a pin that went off screen
-  // without the attribute would still be announced.
+  // The shared projector answers one point for everything, so exactly one pin survives.
+  // `woc.ui.show` hides with a class and the `hidden` attribute, never an inline style, and
+  // both are asserted since a pin without the attribute is still announced.
   it('hides a pin that has landed on top of a nearer one', async () => {
     const h = await run();
     const drawn = h.pinned().length;
@@ -1009,14 +890,8 @@ describe('the world pins', () => {
   });
 });
 
-// The direction each row points, which is the reading this panel is built around and the
-// only one that is not a distance. `facing` is radians with 0 at +z and the bearing to a
-// point reads the same way, so the whole of it is one subtraction and a sign; the sign is
-// the part that is a claim about the game, so these cases pin it at the four quarters.
-//
-// Eastbrook's own hub sits south of the origin, so the fixtures below put the player at a
-// coordinate and read the arrow rather than naming a place: what is under test is the
-// arithmetic, and a case that also depended on where a town is would fail for two reasons.
+// `facing` is radians with 0 at +z. The sign is the claim about the game, so these pin it
+// at all four quarters, standing relative to the hub.
 describe('which way each row points', () => {
   async function aimedFrom(x: number, z: number, facing: number): Promise<number | null> {
     const h = await run();
@@ -1031,11 +906,8 @@ describe('which way each row points', () => {
     expect(await aimedFrom(EASTBROOK_HUB.x, EASTBROOK_HUB.z + 40, Math.PI)).toBeCloseTo(0);
   });
 
-  // The two cases the SIGN is in, and the reason they are worth a test each rather than a
-  // shared one. A character facing +z has +z coming out of the screen toward you, so they
-  // are facing you and their right hand is on your left: their right is -x. That is the
-  // whole of `BEARING_SIGN`, and it is the one thing here a reader is likely to get
-  // backwards, because the world turns one way and the screen turns the other.
+  // A character facing +z faces the viewer, so their right is -x. The world turns one way
+  // and the screen the other, which is the part a reader gets backwards.
   it('points right at a place off the player s right shoulder', async () => {
     // Standing east of the hub, facing north. The hub is to the WEST, which for a player
     // facing +z is their right hand, so the arrow turns a quarter clockwise.
@@ -1046,15 +918,8 @@ describe('which way each row points', () => {
     expect(await aimedFrom(EASTBROOK_HUB.x - 40, EASTBROOK_HUB.z, 0)).toBeCloseTo(-90);
   });
 
-  // The fourth quarter, which the three above leave open and which is the one a
-  // half-turn can be wrong in without any of them noticing: a bearing convention with
-  // the wrong sign still reads 0 straight ahead and still reads a half turn behind,
-  // so only the two shoulders separate them and only this says which half turn it is.
-  // Straight behind is -180 rather than 180, which is the end of the range the reading
-  // is expressed in and therefore the value a normalisation has to agree on.
+  // Straight behind is -180, never 180: the end of the range a normalisation must agree on.
   it('points back at a place behind the player', async () => {
-    // The same spot the first case stands on, turned the other way: the hub is now
-    // squarely behind rather than squarely ahead.
     expect(await aimedFrom(EASTBROOK_HUB.x, EASTBROOK_HUB.z + 40, 0)).toBeCloseTo(-180);
   });
 
@@ -1065,17 +930,14 @@ describe('which way each row points', () => {
     h.tick();
     expect(h.bearingOf(HUB_ID)).toBeCloseTo(-90);
 
-    // Turned a quarter to face +x, standing still, which is straight at the hub. The frame
-    // loop is what has to notice: nothing about the world changed and the next redraw is
-    // up to a second away.
+    // Facing +x, straight at the hub. Only the frame loop can notice; the redraw is a second away.
     h.faceTo(Math.PI / 2);
     h.frame();
 
     expect(h.bearingOf(HUB_ID)).toBeCloseTo(0);
   });
 
-  // Before world entry there is no player and therefore no heading, and an arrow left
-  // pointing at whatever it last knew is worse than one that says nothing.
+  // An arrow left pointing at whatever it last knew is worse than a hidden one.
   it('points nowhere at all with no heading to read', async () => {
     const h = await run();
     expect(h.bearingOf(HUB_ID)).not.toBeNull();
@@ -1087,8 +949,7 @@ describe('which way each row points', () => {
   });
 });
 
-// The strip, which narrows what is listed without touching what the player switched off in
-// settings. The two filters answer different questions and the footer counts after both.
+// The strip narrows the list without overriding settings; the footer counts after both.
 describe('the strip of views', () => {
   it('opens on the view that shows every category', async () => {
     const h = await run();
@@ -1121,8 +982,6 @@ describe('the strip of views', () => {
     }
   });
 
-  // A category the player switched off stays off inside the view that would show it.
-  // The strip is a view over what the settings allow, never a way round them.
   it('cannot show a category the settings turned off', async () => {
     const h = await run({ 'show-mailboxes': false });
 
@@ -1134,10 +993,7 @@ describe('the strip of views', () => {
   });
 });
 
-// The tab glyphs, which are the game's own icons cloned out of the running HUD rather than
-// copied into this repository. The game hydrates every `[data-icon]` into an `<svg>` as the
-// HUD mounts, and that drawn node is the only reachable form: the icon set is markup inside
-// a module that is not on `__game`, and the game serves no file for any of them.
+// The glyphs are the game's own icons, cloned from the `[data-icon]` nodes the HUD hydrates.
 describe('the icons on the strip', () => {
   /** One hydrated game icon, as the HUD holds it once the game has drawn it. */
   function hydrate(name: string): void {

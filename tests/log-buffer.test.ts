@@ -1,10 +1,5 @@
-// The per-addon log tail.
-//
-// Two properties matter and both are about what the buffer does NOT do. It is
-// bounded per addon, so a chatty addon cannot push the quiet one that failed
-// out of view. And it stores formatted text rather than the arguments, so
-// logging a game entity does not pin the game's live object in memory for the
-// rest of the session.
+// The per-addon log tail. It is bounded per addon so a chatty addon cannot evict a quiet one,
+// and stores formatted text so a logged game entity is not pinned in memory.
 
 import { describe, expect, it } from 'vitest';
 import {
@@ -31,8 +26,6 @@ describe('the log buffer', () => {
     expect(createLogBuffer().tail(A)).toEqual([]);
   });
 
-  // The whole reason the bound is per addon: a 20 Hz handler in one addon must
-  // not cost the log of the addon a player is actually trying to debug.
   it('does not let one addon evict another', () => {
     const buffer = createLogBuffer();
     buffer.append(B, 'error', 1, 'the line that matters');
@@ -86,8 +79,7 @@ describe('formatArgs', () => {
     expect(formatArgs([new TypeError('bad entity')])).toBe('TypeError: bad entity');
   });
 
-  // A game entity is circular, which is the ordinary case for anything an addon
-  // would want to log, and JSON.stringify throws on it.
+  // A game entity is circular, and JSON.stringify throws on it.
   it('survives a circular object', () => {
     const entity: Record<string, unknown> = { id: 7 };
     Object.assign(entity, { self: entity });
@@ -108,9 +100,7 @@ describe('formatArgs', () => {
   });
 });
 
-// The manager renders the tail as a list, and a key built from the timestamp or
-// the array index shifts under it: two identical lines a millisecond apart are
-// ordinary, and dropping the oldest entry renumbers every index below it.
+// The manager keys rows on this: a timestamp repeats and an index shifts when the oldest drops.
 describe('entry identity', () => {
   it('gives every entry a sequence number, unique across addons', () => {
     const buffer = createLogBuffer();

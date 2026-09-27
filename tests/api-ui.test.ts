@@ -1,12 +1,7 @@
 // @vitest-environment happy-dom
 
-// The woc.ui surface.
-//
-// A thin per-addon binding over one shared kit, so what this suite is about is
-// the binding rather than the widgets: every surface an addon creates has to be
-// released when the addon is disabled, and every id it puts into the game's own
-// document has to be namespaced, because that document is one id space shared
-// with the game and with every other addon.
+// The per-addon binding of woc.ui over the shared kit: every surface is released on disable, and
+// every id put into the game's document is namespaced, since that is one id space for everybody.
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createUi } from '../loader/src/runtime/api/ui.ts';
@@ -74,8 +69,7 @@ function open() {
   const root = document.createElement('div');
   root.id = 'woc-addons';
   document.body.appendChild(root);
-  // Real bands rather than the root aliased twice, so a surface mounted into the
-  // wrong one is something a case here could see. See loader ui/root.ts.
+  // Real bands, so a surface mounted into the wrong one is visible to a case.
   const hud = document.createElement('div');
   hud.className = HUD_BAND_CLASS;
   const overlay = document.createElement('div');
@@ -124,9 +118,7 @@ function open() {
     arrangeHint: createArrangeHint({
       toaster: createToaster({ doc: document, root: overlay, ...timers }),
     }),
-    // Manifest readers whose fetch never settles, which is the state a first row is
-    // drawn in: `has` answers "not known yet", so the builder hands back the URL and
-    // the image decides. A suite that wanted the authoritative answer would resolve it.
+    // Manifest readers whose fetch never settles, so `has` answers "not known yet".
     icons: createIconUrls(
       createSkillArt({ fetchJson: PENDING_MANIFEST }),
       createItemArt({ fetchJson: PENDING_MANIFEST }),
@@ -137,9 +129,7 @@ function open() {
   const bag = new DisposalBag();
   const onError = vi.fn();
   const onWarn = vi.fn();
-  // A keybind surface that declares nothing, which is this suite's subject: it is
-  // about the per-addon binding rather than about the keys. What `toggleKey` does
-  // with a real one is tests/ui-frame-toggle.test.ts.
+  // A keybind surface that declares nothing; `toggleKey` is tested in ui-frame-toggle.test.ts.
   const toggles = createFrameToggles({
     bind: (id) => {
       throw new Error(`no keybind declared with id '${id}'`);
@@ -162,8 +152,6 @@ function open() {
 }
 
 describe('creating surfaces', () => {
-  // ui-kit-frame.test.ts checks the chip against a name handed straight in; this is
-  // the link from the manifest name to it.
   it('writes the addon name into the arrange-mode chip on a frame', () => {
     const { ui } = open();
 
@@ -180,10 +168,7 @@ describe('creating surfaces', () => {
     expect(frame.el.closest('#woc-addons')).not.toBeNull();
   });
 
-  // Which band, not merely which root. A frame is HUD furniture and belongs under
-  // the game's own windows, which is what stopped the ESC menu opening behind one;
-  // everything the player opened or the loader raised belongs over all of it. See
-  // loader ui/root.ts.
+  // A frame sits under the game's windows; everything the player opened sits over them.
   it('puts a frame in the hud band and everything raised in the overlay band', async () => {
     const { ui, kit } = open();
 
@@ -202,9 +187,7 @@ describe('creating surfaces', () => {
     await answer;
   });
 
-  // The tooltip is drawn in the overlay band while its WATCHER covers the whole
-  // root, because the element it is describing is an addon's own row down in the
-  // hud band. A tooltip in the hud band would be behind the game's own windows.
+  // The tooltip is in the overlay band while its watcher covers the whole root.
   it('draws the tooltip over every frame', () => {
     const { ui, kit } = open();
     const frame = ui.frame({ id: 'meter' });
@@ -250,8 +233,6 @@ describe('creating surfaces', () => {
     expect(document.getElementById('woc-banner')?.textContent).toContain('Deathless Rage');
   });
 
-  // The bar is handed back rather than placed: the kit does not know where in an
-  // addon's own frame the row belongs.
   it('hands back a bar for the addon to place itself', () => {
     const { ui } = open();
 
@@ -288,10 +269,8 @@ describe('creating surfaces', () => {
   });
 });
 
-// A frame's onMove runs inside the loader's own pointer handling, which is the
-// same position a socket tap runs in: a throw there must not break the gesture the
-// player is in the middle of, and it must not be swallowed either. Reported through
-// the addon's own log, which is what the manager's log tail shows a player.
+// onMove runs inside the loader's pointer handling: a throw must neither break the gesture nor be
+// swallowed, so it goes to the addon's own log.
 describe('a frame callback that throws', () => {
   it('reports it and leaves the frame working', () => {
     const { ui, onError } = open();
@@ -309,9 +288,7 @@ describe('a frame callback that throws', () => {
   });
 });
 
-// The three surfaces commit 8 added, checked here for the one thing their own
-// suites cannot see: that they reached the object an addon is handed, and that
-// what they create is released with the addon.
+// Their own suites cannot see that these reach the addon's object and are released with it.
 describe('the settings-pane surfaces', () => {
   it('hands back a field for the addon to place itself', () => {
     const { ui } = open();
@@ -344,8 +321,6 @@ describe('the settings-pane surfaces', () => {
     expect(kit.root.querySelector('.woc-menu')).not.toBeNull();
   });
 
-  // Disable is hot, with no page reload. A menu is the loudest of these to leave
-  // behind: it sits in the overlay band above every window.
   it('takes an open menu, its fields and its tabs away on dispose', () => {
     const { bag, ui, kit } = open();
     kit.root.append(
@@ -361,8 +336,7 @@ describe('the settings-pane surfaces', () => {
     expect(document.querySelector('.woc-tabs')).toBeNull();
   });
 
-  // A tooltip took a string and still does: the structured form is an addition,
-  // because a published surface changing shape is what moves the API major.
+  // The string form stays, since changing a published shape moves the API major.
   it('takes both a string and structured content', () => {
     const { ui } = open();
     const el = document.createElement('button');
@@ -376,9 +350,6 @@ describe('the settings-pane surfaces', () => {
 });
 
 describe("ids in the game's document", () => {
-  // Two addons may both call a button 'toggle', and the game's document is one
-  // id space. Without prefixing, the second addon's button silently replaces
-  // the first's.
   it('namespaces a rail button by addon and kind', async () => {
     mountStartScreen(document);
     const { ui } = open();
@@ -405,8 +376,7 @@ describe("ids in the game's document", () => {
     const { ui } = open();
     enterWorld(document);
     await settle();
-    // World entry clones an EMPTY #options-menu; the button list only exists
-    // once the player opens the menu and the game renders its root view.
+    // World entry clones an empty #options-menu; the list exists once the menu is opened.
     const menu = document.getElementById('options-menu');
     if (menu !== null) {
       menu.innerHTML = '<div class="opt-list"></div><div class="opt-version">v0.31</div>';
@@ -450,8 +420,6 @@ describe('disposal', () => {
     expect(document.querySelectorAll('.woc-banner-card')).toHaveLength(0);
   });
 
-  // Disable is hot, with no page reload, so a row left in a frame the loader has
-  // already removed would outlive whatever was updating it.
   it('removes every bar the addon put on screen', () => {
     const { bag, ui, kit } = open();
     kit.root.append(ui.bar({ label: 'Fireball' }).el, ui.bar({ label: 'Frostbolt' }).el);
@@ -461,8 +429,6 @@ describe('disposal', () => {
     expect(document.querySelectorAll('.woc-bar')).toHaveLength(0);
   });
 
-  // A strip of tiles is the same kind of leak, and there are usually more of them:
-  // an aura display rebuilds its whole row every time an effect lands.
   it('removes every tile the addon put on screen', () => {
     const { bag, ui, kit } = open();
     kit.root.append(ui.tile({ label: 'Renew' }).el, ui.tile({ label: 'Rejuvenation' }).el);
@@ -472,8 +438,6 @@ describe('disposal', () => {
     expect(document.querySelectorAll('.woc-tile')).toHaveLength(0);
   });
 
-  // The addon's await is mid-way through something, so being disabled has to
-  // release it rather than leave it hanging forever.
   it('closes an open alert and resolves its promise', async () => {
     const { bag, ui } = open();
 
@@ -510,8 +474,7 @@ describe('disposal', () => {
     }
     ui.microButton({ id: 'toggle', label: 'DPS', onClick: vi.fn() });
     ui.menuEntry({ id: 'open', label: 'DPS', onClick: vi.fn() });
-    // Asserted present first: without this the disposal check below passes for
-    // an entry that was never injected at all.
+    // Asserted present first, or the disposal check passes for an entry never injected.
     expect(document.getElementById(elementId(FQID, 'micro', 'toggle'))).not.toBeNull();
     expect(document.getElementById(elementId(FQID, 'menu', 'open'))).not.toBeNull();
 
@@ -521,8 +484,6 @@ describe('disposal', () => {
     expect(document.getElementById(elementId(FQID, 'menu', 'open'))).toBeNull();
   });
 
-  // The shared kit outlives every addon: disabling one must not take the toast
-  // stack or the tooltip element away from the others.
   it('leaves the shared kit intact for other addons', () => {
     const { bag, kit } = open();
 
@@ -543,12 +504,8 @@ describe('disposal', () => {
   });
 });
 
-// `ui.project` is the same read `ui.anchor3d` places by, with no element.
-//
-// What is worth pinning is what it REFUSES, because the refusal is the whole
-// safety of the call: there is deliberately no `onScreen` flag, since a flag is a
-// thing an addon can forget to read, and the point it would be forgotten on is the
-// one whose coordinates are finite and wrong.
+// `ui.project` is the read `ui.anchor3d` places by. There is no `onScreen` flag, because an addon
+// can forget to read one, so what it refuses is what is pinned here.
 describe('projecting a point', () => {
   const Point = { x: 1, y: 2, z: 3 };
 
@@ -568,9 +525,7 @@ describe('projecting a point', () => {
     expect(ui.project(Point)).toBeNull();
   });
 
-  // An off-screen point in front of the camera is what an arrow pointing at an
-  // off-screen unit is built from, so turning it into a null would remove a
-  // feature to save an addon one comparison.
+  // An arrow pointing at an off-screen unit is built from this.
   it('answers a point that is off screen but in front', () => {
     const { ui } = open();
     project.mockReturnValue({ x: -900, y: 200, depth: 12, behind: false });

@@ -1,31 +1,15 @@
-// The per-addon log tail the manager shows.
-//
-// Bounded on purpose, and bounded per addon rather than globally: an addon
-// logging from a 20 Hz handler would otherwise push every other addon's lines
-// out of a shared buffer, and the addon a player is trying to debug is usually
-// the quiet one that failed.
-//
-// Entries hold pre-formatted text rather than the original arguments. Keeping
-// the arguments would mean holding a reference to whatever an addon logged,
-// which for a logged entity is the game's live object and for a logged closure
-// is its entire scope.
+// The per-addon log tail the manager shows. Bounded PER ADDON, or a chatty 20 Hz handler would push
+// out the quiet addon that failed. Entries hold formatted text, never a reference to the arguments.
 
 const MAX_ENTRIES_PER_ADDON = 100;
 
-/** How much of one formatted argument is kept. A logged snapshot is enormous. */
+/** How much formatted text is kept. A logged snapshot is enormous. */
 const MAX_TEXT_LENGTH = 2000;
 
 type LogLevel = 'info' | 'warn' | 'error';
 
 interface LogEntry {
-  /**
-   * Monotonic within one loader session, and unique across every addon.
-   *
-   * Timestamps do not identify a line: two identical lines a millisecond apart
-   * are ordinary, and so is the same text logged twice from a 20 Hz handler.
-   * The manager renders these as a list and needs a key that does not shift when
-   * the buffer drops its oldest entry.
-   */
+  /** A stable render key, unique per session: timestamps and text both repeat. */
   seq: number;
   level: LogLevel;
   /** Milliseconds since the epoch, for the manager to render. */
@@ -70,9 +54,7 @@ function createLogBuffer(): LogBuffer {
       const entries = byAddon.get(fqid) ?? [];
       seq += 1;
       entries.push({ seq, level, at, text });
-      // shift() rather than a ring index: the tail is read far less often than
-      // it is written, but it is read in order, and an array the manager can
-      // hand straight to a render is worth more than the constant factor.
+      // shift(), not a ring index, so the manager can render the array as it is.
       while (entries.length > MAX_ENTRIES_PER_ADDON) {
         entries.shift();
       }

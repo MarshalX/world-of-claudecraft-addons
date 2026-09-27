@@ -1,10 +1,7 @@
 // @vitest-environment happy-dom
 
-// Which addons are actually running.
-//
-// The registry says what the player wants; this says what happened. They are not
-// the same set, and the whole value of the module is that the difference is a
-// state with a reason rather than an addon that is silently absent.
+// Which addons are actually running: the registry says what the player wants, and every
+// difference from it is a state with a reason.
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createSupervisor, incompatibility } from '../loader/src/runtime/supervisor.ts';
@@ -126,8 +123,7 @@ describe('reconciling', () => {
     expect(document.querySelectorAll('.woc-frame, .woc-window')).toHaveLength(0);
   });
 
-  // Otherwise the second sync would evaluate the file again and the addon would
-  // have two windows, two keybinds, and two of every subscription.
+  // A second evaluation would give the addon two of every window, keybind and subscription.
   it('leaves a running addon alone on a repeat sync', async () => {
     const { supervisor, sources } = open();
     await supervisor.sync();
@@ -138,8 +134,6 @@ describe('reconciling', () => {
     expect(supervisor.running()).toEqual([FQID]);
   });
 
-  // An update while the addon is running has to restart it, or the player is
-  // still running the version they just replaced.
   it('restarts one whose version changed underneath it', async () => {
     const { supervisor, state, sources, harness } = open();
     await supervisor.sync();
@@ -149,20 +143,13 @@ describe('reconciling', () => {
     await supervisor.sync();
 
     expect(supervisor.running()).toEqual([FQID]);
-    // Both halves: the new body ran, and the old copy's window went with it
-    // rather than being left on screen by a closure nothing holds any more.
+    // The new body ran, and the old copy's window went with it.
     expect(harness.shared.logs.tail(FQID).map((entry) => entry.text)).toContain('v2');
     expect(document.querySelectorAll('.woc-frame, .woc-window')).toHaveLength(0);
   });
 
-  // And a version bump is not what makes a manifest new. A marketplace serves one
-  // manifest per REF, so the dev server hands back whatever is on disk and a moved
-  // tag hands back another author's edit, both under the version already installed.
-  //
-  // It matters because the declarations are what `woc.settings` and `woc.keys` are
-  // built from, and a value hydrates only for a declared id: an addon left running
-  // across this change can never see the setting the change added, which reads to
-  // the player as a control that does nothing.
+  // A ref serves whatever manifest it points at, so declarations can change under one version,
+  // and `woc.settings` hydrates only declared ids.
   it('restarts one whose declarations changed under the same version', async () => {
     const { supervisor, state, sources, harness } = open();
     await supervisor.sync();
@@ -214,9 +201,8 @@ describe('an addon that will not load', () => {
     expect(status()?.error).toContain('boom');
   });
 
-  // Auto-disabling would throw away what the player asked for to record
-  // something the loader already knows, and a failure caused by the game not
-  // being ready yet would then need a manual re-enable to recover from.
+  // Auto-disabling would make a failure caused by the game not being ready need a manual
+  // re-enable to recover from.
   it('leaves it enabled in the registry', async () => {
     const { supervisor, state } = open({ sources: { [FQID]: 'throw new Error("boom");' } });
 
@@ -249,7 +235,7 @@ describe('an addon that will not load', () => {
     expect(supervisor.running()).toEqual([OTHER]);
   });
 
-  it('reports a missing cached source as a failure rather than silence', async () => {
+  it('reports a missing cached source as a failure', async () => {
     const { supervisor, status } = open({ sources: {} });
 
     await supervisor.sync();
@@ -292,7 +278,7 @@ describe('an addon that cannot run here', () => {
     expect(supervisor.running()).toEqual([FQID]);
   });
 
-  // Absent means every channel, which is what most manifests will say.
+  // Absent means every channel.
   it('runs one that declares no channels', async () => {
     const { supervisor } = open({ channel: 'live' });
 
@@ -301,24 +287,15 @@ describe('an addon that cannot run here', () => {
     expect(supervisor.running()).toEqual([FQID]);
   });
 
-  // Equality rather than "at most": a major is exactly the thing bumped when
-  // something an addon relies on changes shape.
+  // Equality, because a major moves when something an addon relies on changes shape.
   it.each([0, 2, 99])('refuses apiVersion %i', (apiVersion) => {
     expect(incompatibility(row({ manifest: manifest({ apiVersion }) }), 'pbe')).toContain(
       'loader API version',
     );
   });
 
-  /**
-   * The minor is the OPPOSITE comparison to the major, and the asymmetry is the
-   * whole design: the surface only grows within a major, so a loader further
-   * ahead is fine and one behind is not.
-   *
-   * What this refusal replaces is the silent case. An addon needing a member this
-   * loader lacks used to be accepted, started, and reported running, and then
-   * threw against an undefined member on whatever frame first reached it, with
-   * nothing badging it because only the LOAD is wrapped.
-   */
+  // The minor compares at-least, unlike the major: the surface only grows within a major.
+  // Accepting it would throw later on an undefined member, outside the wrapped load.
   it('refuses an addon needing a minor beyond what this loader implements', () => {
     const reason = incompatibility(row({ manifest: manifest({ apiMinor: 99 }) }), 'pbe');
 
@@ -330,8 +307,7 @@ describe('an addon that cannot run here', () => {
     expect(incompatibility(row({ manifest: manifest({ apiMinor: 0 }) }), 'pbe')).toBeNull();
   });
 
-  // Absent reads as 0. An addon published before the minor existed was written
-  // against 1.0, and must not be refused by a field its author never saw.
+  // Absent reads as 0, so an addon predating the field is not refused by it.
   it('accepts an addon that declares no minor at all', () => {
     const { apiMinor: _dropped, ...noMinor } = manifest();
 
@@ -352,8 +328,6 @@ describe('reload', () => {
     expect(text).toContain('v2');
   });
 
-  // The reason a hot reload is a reload rather than a second evaluation: the old
-  // closure's window has to go before the new one puts its own up.
   it('disposes the old copy before the new one runs', async () => {
     const { supervisor } = open();
     await supervisor.sync();
@@ -396,8 +370,7 @@ describe('reload', () => {
   });
 });
 
-// Reconciling, reloading, and a hot-reload event arriving mid-reconcile would
-// otherwise interleave two disposals of one bag or two evaluations of one file.
+// Unserialized, a reload mid-reconcile would dispose one bag twice or evaluate one file twice.
 describe('serialization', () => {
   it('does not start the same addon twice when two syncs overlap', async () => {
     const { supervisor } = open();
@@ -420,9 +393,7 @@ describe('serialization', () => {
 });
 
 describe('without a bridge', () => {
-  // Every addon's source lives behind the registry, so a failed handshake means
-  // nothing can load. The manager still comes up, which is how a player finds
-  // out.
+  // Every source lives behind the registry, so a failed handshake means nothing can load.
   it('starts nothing and reports no status', async () => {
     const { supervisor } = open({ bridged: false });
 
@@ -444,8 +415,6 @@ describe('dispose', () => {
     expect(document.querySelectorAll('.woc-frame, .woc-window')).toHaveLength(0);
   });
 
-  // A page navigating away mid-fetch must not leave a closure running against
-  // DOM the loader has already torn down.
   it('drops an addon whose source landed after disposal', async () => {
     let release = (_body: string): void => undefined;
     const harness = createSharedServices(document);

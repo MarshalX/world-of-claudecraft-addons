@@ -16,8 +16,7 @@ afterEach(() => {
 });
 
 describe('the rail button', () => {
-  // Placed after the game-menu button rather than appended, so the two menu
-  // routes stay together however many buttons the game adds above them.
+  // Keeps the two menu routes together however many buttons the game adds.
   it('sits immediately after the game-menu button', () => {
     mountGameRail(document);
 
@@ -27,11 +26,8 @@ describe('the rail button', () => {
     expect(document.getElementById('mm-options')?.nextElementSibling).toBe(button);
   });
 
-  // Against the GAME's own buttons rather than against a literal, because a
-  // literal here only restates the loader's constant and both would be edited
-  // together. Game 0.43.0 moved the whole plate out of `.micro-btn` into the
-  // interface library's `.ui-icon-btn`, so a button wearing the old class alone
-  // became a bare glyph with nothing under it, and nothing failed.
+  // Compared against the game's own buttons, since a literal would only restate the loader's
+  // constant; a missing plate class renders a bare glyph and fails nothing else.
   it('wears exactly what the game puts on its own rail buttons', () => {
     const rail = mountGameRail(document);
     const theirs = rail.querySelector('#mm-options')?.className;
@@ -50,10 +46,8 @@ describe('the rail button', () => {
     expect(el?.getAttribute('aria-label')).toBe(LABEL);
   });
 
-  // The game hydrates [data-icon] from a closed registry of its own names, so
-  // borrowing that attribute would render nothing, or silently pick up whatever
-  // the game later assigns to a name we guessed.
-  it('draws its own glyph rather than borrowing the game icon mechanism', () => {
+  // The game hydrates [data-icon] from a closed registry of its own names.
+  it('draws its own glyph without the game icon mechanism', () => {
     mountGameRail(document);
 
     const { el } = mount();
@@ -71,8 +65,6 @@ describe('the rail button', () => {
     expect(onOpen).toHaveBeenCalledTimes(1);
   });
 
-  // A rail whose last button the game renames still gets the entry, at the end,
-  // rather than losing it.
   it('falls back to the end of the rail when the menu button is gone', () => {
     mountGameRail(document);
     document.getElementById('mm-options')?.remove();

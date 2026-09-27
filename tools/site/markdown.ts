@@ -1,13 +1,6 @@
-// Markdown to HTML, with the two references that keep prose from repeating the
-// repository: `![](shot:id)` for a screenshot and an include comment for code.
-//
-// `html: false` is deliberate. Prose is prose; the two things a page legitimately
-// needs beyond Markdown have their own syntax above, so raw HTML in a content file
-// is a mistake rather than an escape hatch, and escaping it makes that visible.
-//
-// Neither resolver touches the filesystem. The caller passes `shot` and `include`
-// functions, which keeps this module pure and testable and leaves the one place
-// that does I/O in the CLI where the rest of it already lives.
+// Markdown to HTML, with `![](shot:id)` for a screenshot and an include comment for code. Keep
+// `html: false`: raw HTML in a content file is a mistake, and escaping it makes that visible.
+// The caller supplies `shot` and `include`, so this module does no I/O.
 
 import MarkdownIt from 'markdown-it';
 import type Token from 'markdown-it/lib/token.mjs';
@@ -56,9 +49,7 @@ function fenceFor(code: string): string {
 /**
  * Replace every include comment with a fenced block holding the real code.
  *
- * Done before parsing rather than as a token rule, so an included example goes
- * through exactly the same fence path a hand-written one does and cannot pick up
- * different highlighting or a different wrapper.
+ * Done before parsing so an included example takes the same fence path as a hand-written one.
  */
 function expandIncludes(source: string, context: Context): string {
   return source.replaceAll(INCLUDE, (_match, path: string, region?: string) => {
@@ -115,22 +106,16 @@ function collapseShots(md: MarkdownIt, current: () => Context): void {
 /**
  * Replace a renderer rule with a constant string.
  *
- * A helper rather than `md.renderer.rules.table_open = ...` at the call site,
- * because `rules` is an index signature: TypeScript's
- * noPropertyAccessFromIndexSignature forbids the dot and Biome's useLiteralKeys
- * forbids the bracket. The computed access here has no literal key, which is the
- * idiom STYLE.md documents for exactly this pair.
+ * `rules` is an index signature, so TypeScript forbids the dot and Biome's useLiteralKeys forbids a
+ * literal bracket; a computed key satisfies both (see STYLE.md).
  */
 function setRule(md: MarkdownIt, name: string, output: string): void {
   md.renderer.rules[name] = () => output;
 }
 
 /**
- * Build the renderer.
- *
- * `highlight` is injected rather than imported so the suite can pin the pipeline
- * without pinning a shiki theme, and so this module stays synchronous: loading
- * grammars is the caller's problem, and it only happens once.
+ * Build the renderer. `highlight` is injected so the suite needs no shiki theme and this module
+ * stays synchronous.
  */
 export function createRenderer(highlight: Highlight): Renderer {
   const headings: Heading[] = [];
@@ -143,8 +128,7 @@ export function createRenderer(highlight: Highlight): Renderer {
     }
     return context;
   });
-  // Every table gets the designed shell, so a wide manifest table scrolls inside
-  // its own box rather than making the whole page scroll sideways on a phone.
+  // A wide table scrolls inside its own box instead of scrolling the page sideways on a phone.
   setRule(md, 'table_open', '<div class="table-wrap"><div class="table-scroll"><table>');
   setRule(md, 'table_close', '</table></div></div>');
   md.renderer.rules.fence = (tokens, index) => {
@@ -174,12 +158,8 @@ export interface Context {
   /** Throws when the id is unknown, so a renamed shot fails the build. */
   readonly shot: (id: string) => Measured;
   /**
-   * One addon's preview, by addon id. Throws when that addon declares none.
-   *
-   * Separate from `shot` rather than a fallback inside it, so that a page asking
-   * for an addon's screenshot fails saying the addon has no preview rather than
-   * saying there is no shot by that name, which would send whoever reads it to
-   * the wrong file.
+   * One addon's preview, by addon id. Throws when that addon declares none, naming the addon's
+   * manifest as the file to fix.
    */
   readonly preview: (id: string) => Measured;
   /** Throws when the file or region is gone. See regions.ts. */

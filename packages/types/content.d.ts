@@ -1,20 +1,11 @@
 // The authored content tables the client carries: recipes, crafting stations and
 // civic service points.
 //
-// These are COPIES. The game holds one recipe table and one station table for
-// the life of the session and its own crafting window renders from them, so the
-// loader copies and freezes rather than handing the originals over: a `.sort()`
-// on the real array would reorder what the game draws, and a `.push()` would add
-// a recipe it tries to render.
+// These are frozen COPIES of tables the game renders from, and none is a watch key:
+// content cannot change during a session. What does change (your skills and which
+// recipes you have learned) is on `world.professions`.
 //
-// Neither is a watch key, deliberately. Content cannot change during a session,
-// so a subscription would compute a signature over the whole recipe table on
-// every snapshot to report that nothing moved. What changes is on
-// `world.professions`, which is a key already: your skills, your identity, and
-// which recipes you have actually learned.
-//
-// Ids throughout. Nothing here resolves to a display name, the same limit
-// `world.equipment` carries.
+// Ids throughout. Nothing here resolves to a display name.
 
 /** One authored recipe. */
 export interface Recipe {
@@ -34,9 +25,8 @@ export interface Recipe {
   /**
    * Where the recipe can be learned.
    *
-   * Empty means grandfathered: known to everyone, and absent from
-   * `world.professions.identity.knownRecipes` for that reason rather than
-   * because it has not been learned.
+   * Empty means grandfathered: known to everyone, and for that reason absent from
+   * `world.professions.identity.knownRecipes`.
    */
   acquisition: readonly string[];
   /** The adjacent-pair requirement, on the few combo recipes that carry one. */
@@ -56,16 +46,12 @@ export interface Station {
 /**
  * One authored civic service point: a mailbox or a noticeboard.
  *
- * Flatter than a `Station` because the game's own list is: no id, no zone, and
- * the position is not nested. That is enough to draw a marker and not enough to
- * name one, so a display has to say what it is from the `kind` alone.
+ * No id and no zone: enough to draw a marker, not to name one, so a display
+ * labels it from `kind` alone.
  *
- * `'mailbox'` and `'noticeboard'` are what the game ships. The type is a plain
- * string rather than that pair, because the set is content and a release adds to
- * it before these types catch up, exactly as with a cue name. Match the kinds you
- * draw and let an unknown one fall through rather than assuming there are two.
- *
- * Added in game 0.38.0.
+ * The game ships `'mailbox'` and `'noticeboard'`. The type is an open string
+ * because a release can add kinds before these types catch up, so match the
+ * kinds you draw and let an unknown one fall through.
  */
 export interface CivicService {
   kind: string;

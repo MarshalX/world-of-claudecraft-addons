@@ -1,10 +1,5 @@
-// The group, encounter and threat readings.
-//
-// The case that carries this file is the CLOCK. A loot roll's deadline is on the
-// sim's clock, which nothing hands an addon, so publishing the raw number would
-// give out a value whose only correct use is a subtraction nobody can perform.
-// It is converted to seconds remaining, and the conversion has to answer null
-// rather than a plausible wrong number when there is no clock yet.
+// The group, encounter and threat readings. A roll deadline is on the sim clock, which
+// no addon has, so it is published as seconds remaining, or null with no clock yet.
 
 import { describe, expect, it } from 'vitest';
 import { readEncounter } from '../loader/src/runtime/world/encounter.ts';
@@ -44,22 +39,19 @@ describe('readGroup', () => {
     selfLockouts: { thornpeak: 1_785_600_000_000 },
   };
 
-  // The whole reason the sim clock exists.
   it('turns a sim deadline into seconds remaining', () => {
     expect(readGroup(World, 100)?.rolls[0]?.remaining).toBe(30);
   });
 
-  it('answers null for a deadline it has no clock to measure against', () => {
+  it('answers null for a deadline with no clock', () => {
     expect(readGroup(World, null)?.rolls[0]?.remaining).toBeNull();
   });
 
-  // A roll whose deadline has passed is still on the list for a moment. A
-  // negative countdown is not something a display can draw.
-  it('clamps a lapsed deadline at zero rather than going negative', () => {
+  // A lapsed roll stays on the list for a moment.
+  it('clamps a lapsed deadline at zero', () => {
     expect(readGroup(World, 999)?.rolls[0]?.remaining).toBe(0);
   });
 
-  // The one place an item id comes with something readable beside it.
   it('carries the item name a roll arrives with', () => {
     expect(readGroup(World, 100)?.rolls[0]?.itemName).toBe('Redbrook Blade');
   });
@@ -68,9 +60,7 @@ describe('readGroup', () => {
     expect(readGroup(World, 100)?.lockouts.get('thornpeak')).toBe(1_785_600_000_000);
   });
 
-  // Every consumer asks "is master loot on" first, so a disabled record would be
-  // a second way to answer a question the null already answers.
-  it('answers null for master loot rather than a disabled record', () => {
+  it('answers null for master loot that is off', () => {
     const off = { partyInfo: { master: { enabled: false, looter: 4, threshold: 'rare' } } };
 
     expect(readGroup(off, 100)?.masterLoot).toBeNull();
@@ -87,7 +77,7 @@ describe('readGroup', () => {
 });
 
 describe('remainingFrom', () => {
-  it('is null when either half is missing, which are different absences', () => {
+  it('is null when either half is missing', () => {
     expect(remainingFrom(null, 10)).toBeNull();
     expect(remainingFrom(10, null)).toBeNull();
   });
@@ -106,9 +96,7 @@ describe('readEncounter', () => {
         bountiful: true,
         rite: { some: 'shape we do not publish' },
       },
-      // Built rather than written as a literal: a delve id is the game's own
-      // snake_case content id, and a literal key would have to be named the way
-      // this repo names things.
+      // Built, since a literal snake_case key trips useNamingConvention.
       delveClears: Object.fromEntries([[DELVE, 3]]),
     });
 
@@ -118,7 +106,7 @@ describe('readEncounter', () => {
     expect(run?.clears.get(DELVE)).toBe(3);
   });
 
-  it('answers a null run out in the world, rather than an empty one', () => {
+  it('answers a null run out in the world', () => {
     expect(readEncounter({ delveClears: {} })?.run).toBeNull();
   });
 });
@@ -143,8 +131,7 @@ describe('readThreat', () => {
     expect(readThreat(mobWith([[ME, 900]]), ME).share).toBe(1);
   });
 
-  // Being off the table is not being at zero on it: one means the mob has never
-  // noticed you, the other that it has and you are last.
+  // Off the table differs from last on it.
   it('answers null for a player who is not on the table at all', () => {
     const table = readThreat(mobWith([[TANK, 1000]]), ME);
 
@@ -158,8 +145,7 @@ describe('readThreat', () => {
     expect(readThreat(null, ME).rows).toEqual([]);
   });
 
-  // The table is a fact about the mob; only the comparison needs to know who is
-  // asking, so the rows still come back before world entry.
+  // Only the comparison needs the player, so rows come back before world entry.
   it('reports the rows with no player id, and no comparison', () => {
     const table = readThreat(mobWith([[TANK, 1000]]), null);
 

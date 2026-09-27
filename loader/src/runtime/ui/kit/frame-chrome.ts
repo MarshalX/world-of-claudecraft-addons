@@ -1,11 +1,5 @@
-// One frame's own chrome: the element, the title bar, the close button, and how
-// tightly all three are drawn.
-//
-// Split out of frame.ts because it shares nothing with what is left there. That
-// file owns placement and lifecycle (the drag and clamp rules, the saved box, the
-// teardown); this one builds DOM from options and then never touches it again.
-// The density variant landed here and pushed the pair over the file limit, which
-// was the prompt rather than the reason: the seam was always in this place.
+// One frame's own chrome: the element, the title bar, the close button, and how tightly all
+// three are drawn. Built once from options; kit/frame.ts owns placement and lifecycle.
 
 import type { FrameBox } from '../frame/geometry.ts';
 import { closeGlyphMarkup } from './close-glyph.ts';
@@ -13,62 +7,33 @@ import { closeGlyphMarkup } from './close-glyph.ts';
 type FrameChrome = 'frame' | 'window';
 
 /**
- * How tightly a frame's own chrome is drawn.
+ * How tightly a frame's own chrome is drawn. An enum, not a flag, because the axis has three
+ * positions.
  *
- * An enum rather than a `compact: true` flag because the axis has more than two
- * useful positions in it and a boolean cannot grow one. `bare` is the third
- * position that was predicted here when the second was added, and it arrived
- * without the matrix a flag set would have made of it.
- *
- * `comfortable` is the default and is what the manager is drawn at: the scale the
- * GAME draws its own windows at on a desktop, 13px tabs and buttons under a 15px
- * panel title. The mobile tap floor is not in it, and not because it was dropped:
- * the game applies that floor under `@media (pointer: coarse)` and the loader now
- * does too, in ui/styles/touch.css. `compact` is tighter than the game's own
- * panels, for a dense readout an addon glances at rather than operates, and the
- * touch floor reaches it as well. `bare` removes
- * the chrome entirely, for an overlay that is only its own content: no panel
- * behind it, no padding, no title bar.
+ * `comfortable` (default) is the game's own desktop window scale, 13px tabs and buttons under
+ * a 15px title. `compact` is tighter, for a dense readout. `bare` removes the panel, padding
+ * and title bar. The touch tap floor (ui/styles/touch.css) applies to all of them.
  */
 type FrameDensity = 'comfortable' | 'compact' | 'bare';
 
 const DENSITIES: readonly FrameDensity[] = ['comfortable', 'compact', 'bare'];
 
 /**
- * Which parts of a frame take the pointer, and therefore which parts of the world
- * behind it the player cannot click.
+ * Which parts of a frame take the pointer, and therefore which parts of the world behind it
+ * the player cannot click. The game binds `mousedown` and `wheel` to the canvas, so a covering
+ * element consumes targeting, camera look and zoom, and nothing can forward them on.
  *
- * The game binds `mousedown` and `wheel` to the CANVAS, so an element covering it
- * does not merely sit in front of a click, it consumes the whole gesture:
- * targeting, right-drag camera look and zoom together. Nothing can be forwarded
- * on afterwards, since the loader's root is not an ancestor of the canvas and a
- * synthesised event is both untrusted and forbidden here. `pointer-events` is the
- * only lever there is, which is why this is an option rather than a fix.
- *
- * It is also the game's own idiom: every read-only overlay it draws is
- * `pointer-events: none` (`#nameplates`, `#perf-overlay`, `#aura-overlays`) and
- * the aura overlay takes the pointer only under its `.placement` class, which is
- * its arrange mode. This kit's arrange mode is the unlock switch, and it forces
- * every frame back to `auto` for the same reason.
- *
- * `auto` is the whole box, chrome and empty space included. `content` makes the
- * box transparent and leaves what the addon DREW taking the pointer, so padding,
- * gaps and dead width fall through while rows keep their hover and their tooltip.
- * `none` is inert: no hover, no tooltip, no click.
+ * `auto` is the whole box. `content` makes the box transparent and leaves what the addon DREW
+ * live, so gaps fall through while rows keep hover and tooltips. `none` is inert. The unlock
+ * mode forces every frame back to `auto`.
  */
 type FramePointer = 'auto' | 'content' | 'none';
 
 const POINTERS: readonly FramePointer[] = ['auto', 'content', 'none'];
 
 /**
- * A bare frame is `content` unless it says otherwise, and every other one is `auto`.
- *
- * The default is per density because the densities mean different things. A panel
- * is a surface the player operates, and a surface with holes in it is a surface
- * that sometimes ignores them. `bare` exists for an overlay that IS its content,
- * drawn over a world the player is still playing, and the empty half of one is
- * invisible: solid by default it is a rectangle that swallows clicks while showing
- * nothing, which is what a resizable bare frame with nothing to draw already was.
+ * A bare frame is `content` unless it says otherwise, and every other one is `auto`: a panel
+ * with holes ignores the player, while a bare frame's empty space is invisible.
  */
 function pointerOf(opts: FrameOpts, density: FrameDensity): FramePointer {
   if (opts.pointer !== undefined && POINTERS.includes(opts.pointer)) {
@@ -81,13 +46,8 @@ function pointerOf(opts: FrameOpts, density: FrameDensity): FramePointer {
 }
 
 /**
- * A window is never bare, and that is a refusal rather than an omission.
- *
- * A window is a panel the player opens and CLOSES, and its close button lives in
- * the title bar that `bare` removes. Honouring it here would hand back a panel
- * with no way to dismiss it, which is worse than ignoring the option. An
- * unrecognised value falls back the same way, because the failure to avoid is a
- * typo silently drawing a panel tighter than its author asked for.
+ * A window is never bare, since its close button lives in the title bar `bare` removes. An
+ * unrecognised value also falls back to comfortable, so a typo cannot drop the floor.
  */
 function densityOf(opts: FrameOpts, chrome: FrameChrome): FrameDensity {
   if (opts.density === 'bare' && chrome === 'window') {
@@ -103,28 +63,18 @@ interface FrameOpts {
   /** Unique within the addon. It is the persistence key, so it must be stable. */
   id: string;
   title?: string;
-  /**
-   * Draw a close button in the title bar. A window always has one regardless.
-   *
-   * Ignored on a `bare` frame, which has no title bar to put it in.
-   */
+  /** Draw a close button in the title bar. A window always has one; a `bare` frame never does. */
   closable?: boolean;
   /**
-   * How wide it opens, and for a frame that is not resizable, how wide it may ever be.
-   *
-   * A content-sized frame is held to it as a CEILING rather than given it as a width. See
-   * kit/frame.ts applyWidth for why the two axes part company here.
+   * How wide it opens, and for a frame not resizable across, its fixed width (see kit/frame-size.ts
+   * applyWidth).
    */
   width?: number;
   /** How tall it opens. A frame that is not resizable ignores it and follows its content. */
   height?: number;
   /**
-   * How far the player may shrink it. Defaults to the opening size.
-   *
-   * That default is what every frame did before the option existed, and it is
-   * why the option exists: a resizable frame could not be dragged narrower than
-   * the width it was created at. See kit/frame.ts sizeBounds for why the default
-   * was left alone rather than lowered to the structural floor.
+   * How far the player may shrink it. Defaults to the opening size (see kit/frame-size.ts
+   * sizeBounds).
    */
   minWidth?: number;
   minHeight?: number;
@@ -133,20 +83,13 @@ interface FrameOpts {
   maxHeight?: number;
   /** Persist position and visibility for this character. */
   save?: boolean;
-  /**
-   * Which axes the player may resize. Defaults to true for a window, false for a frame.
-   *
-   * `'width'` and `'height'` are the same option answering per axis; see
-   * kit/frame-size.ts `resizeAxes` for what the unrecognised case falls back to.
-   */
+  /** Which axes the player may resize. Defaults to true for a window, false for a frame. */
   resizable?: boolean | 'width' | 'height';
   /** Whether it starts on screen. Ignored when a saved visibility is restored. */
   visible?: boolean;
   /**
-   * A keybind id from the addon's own manifest that shows and hides this frame.
-   *
-   * Warns and binds nothing for an id the manifest does not declare, rather than
-   * refusing to build the frame. See kit/frame-toggle.ts.
+   * A keybind id from the addon's manifest that toggles this frame. An undeclared id warns and
+   * binds nothing.
    */
   toggleKey?: string;
   /** Added to the frame element, so an addon can style its own. */
@@ -156,17 +99,9 @@ interface FrameOpts {
   /** Which parts take the pointer. Defaults to 'content' when bare, else 'auto'. */
   pointer?: FramePointer;
   /**
-   * Where the frame ended up, after every move the loader made.
-   *
-   * The loader owns the box: it writes the position and, for a resizable frame,
-   * the size, and it re-clamps both on a viewport change and on a restore. So an
-   * addon laying its own content out against that box has no way to know what it
-   * is except by measuring the element, which costs a synchronous layout on every
-   * frame of a display that is already writing styles every frame.
-   *
-   * Fires on a drag, on a resize, on the async restore of a saved box, and on a
-   * refit. NOT for the initial placement, which is the size the addon asked for
-   * and therefore already holds.
+   * Where the frame ended up, after every move the loader made, so an addon need not measure.
+   * Fires on a drag, a resize, the restore of a saved box and a refit; NOT for the initial
+   * placement (see `box()`).
    */
   onMove?: (box: FrameBox) => void;
 }
@@ -178,10 +113,8 @@ interface Chrome {
   body: HTMLElement;
   close: HTMLButtonElement | null;
   /**
-   * The density this frame ended up at, which is not always the one it asked for:
-   * a window refuses `bare` and an unrecognised value falls back. Handed back
-   * rather than re-derived by the caller, because `densityOf` resolves those two
-   * cases and a second reading of `opts.density` would miss both.
+   * The density this frame ended up at, after `densityOf`'s fallbacks. Read this, not
+   * `opts.density`.
    */
   density: FrameDensity;
 }
@@ -199,9 +132,8 @@ interface ChromeDeps {
 }
 
 /**
- * What the arrange-mode chip says: whose frame this is, and which of theirs. Composed
- * here and written to one attribute rather than assembled in the sheet from `attr()`,
- * because the sheet can reach only the fqid and CSS text is unreadable from a Vitest suite.
+ * What the arrange-mode chip says: whose frame this is, and which of theirs. Composed here
+ * into one attribute, since the sheet's `attr()` can reach only the fqid.
  */
 function frameLabel(addon: string, frame: string): string {
   return `${addon} · ${frame}`;
@@ -216,14 +148,8 @@ function labelFor(deps: ChromeDeps): string {
 const LABEL_ATTR = 'data-woc-label';
 
 /**
- * The class list, and the one place `panel` is decided.
- *
- * `panel` is the GAME's class, worn so a frame inherits the game's border,
- * background and tokens rather than shipping a copy that a restyle would leave
- * behind. A bare frame must not wear it: it is not a panel, and the border it
- * brings is the whole of what a bare frame looks like once the background is
- * gone. An empty one then collapses to that border and reads as a stray dot on
- * the HUD, which is what this was found doing.
+ * The class list, and the one place the game's `panel` class is decided. A bare frame must
+ * not wear it: an empty one collapses to the panel border and reads as a stray dot.
  */
 function frameClasses(chrome: FrameChrome, density: FrameDensity, pointer: FramePointer): string {
   const variants = `woc-chrome-${chrome} woc-density-${density} woc-pointer-${pointer}`;
@@ -242,17 +168,8 @@ function roleFor(chrome: FrameChrome): string {
 }
 
 /**
- * Whether this frame gets a close button.
- *
- * A window always does: it is a panel the player opens and closes, and that is
- * what makes it a window. A frame does so only when it ASKS, because a frame is
- * ordinarily a HUD readout that lives on screen and is toggled by a keybind.
- *
- * The option is refused on a bare frame, and that refusal is the same one
- * `densityOf` makes about a bare window: the button lives in a title bar that
- * `bare` removes, so honouring it would be a promise with nowhere to keep it. A
- * bare frame is dismissed by its keybind or by the unlock mode, which is what
- * those exist for.
+ * Whether this frame gets a close button: a window always, a frame only when it asks, and a
+ * bare frame never, having no title bar.
  */
 function wantsClose(opts: FrameOpts, chrome: FrameChrome, density: FrameDensity): boolean {
   if (chrome === 'window') {
@@ -269,8 +186,7 @@ function buildClose(doc: Document, wanted: boolean): HTMLButtonElement | null {
   const close = doc.createElement('button');
   close.type = 'button';
   close.className = 'woc-close x-btn';
-  // Markup the loader authored, never anything an addon supplied. One geometry,
-  // shared with the manager's own close button: see kit/close-glyph.ts.
+  // Loader-authored markup only (kit/close-glyph.ts).
   close.innerHTML = closeGlyphMarkup();
   close.setAttribute('aria-label', 'Close');
   return close;
@@ -285,8 +201,7 @@ function buildChrome(deps: ChromeDeps): Chrome {
   if (opts.className !== undefined) {
     el.classList.add(opts.className);
   }
-  // Attributes rather than ids: two addons may legitimately both call a frame
-  // 'main', and a duplicate id would make document.getElementById a coin flip.
+  // Attributes rather than ids: two addons may both call a frame 'main'.
   el.setAttribute('data-woc-addon', deps.fqid);
   el.setAttribute('data-woc-frame', opts.id);
   el.setAttribute(LABEL_ATTR, labelFor(deps));
@@ -309,11 +224,8 @@ function buildChrome(deps: ChromeDeps): Chrome {
   const body = doc.createElement('div');
   body.className = 'woc-frame-body';
 
-  // A bare frame has no title bar in the document at all, rather than one hidden
-  // by a rule: a hidden bar is still a hit area and still a row in the
-  // accessibility tree. The title node is still built and still written by
-  // `setTitle`, because the frame's accessible name comes off `aria-label` and
-  // an overlay with no name at all is worse than an unseen one.
+  // A bare frame has no title bar in the document, since a hidden one is still a hit area and
+  // an accessibility-tree row. The title node is still built, for `setTitle` and `aria-label`.
   if (density === 'bare') {
     el.append(body);
     return { el, handle: el, title, body, close, density };

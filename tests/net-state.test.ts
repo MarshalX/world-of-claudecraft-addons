@@ -23,8 +23,7 @@ describe('createNetStateTracker', () => {
     });
   });
 
-  // An open socket is not a session: the server can still reject it. The game
-  // draws the same distinction, and `connected` has to mean the same thing.
+  // An open socket is not a session: the server can still reject it.
   it('stays disconnected on socket open until a hello arrives', () => {
     const tracker = createNetStateTracker();
 
@@ -106,11 +105,8 @@ describe('createNetStateTracker', () => {
     });
   });
 
-  // The sim's own clock, which deadlines the game sends are measured against. It is
-  // tracked HERE, off the snapshot head beside the tick and the ack, rather than by
-  // something subscribed to the hub. A loader-owned subscription is indistinguishable
-  // from an addon's, so the one this replaced kept every snapshot of every session on
-  // the hub's freezing path whether or not any addon had asked for snapshots.
+  // The sim clock is tracked here rather than by a hub subscription, which would put every
+  // snapshot on the hub's freezing path whether or not an addon asked for them.
   describe('the sim clock', () => {
     it('follows the snapshot head', () => {
       const tracker = createNetStateTracker();
@@ -120,14 +116,12 @@ describe('createNetStateTracker', () => {
       expect(tracker.simNow()).toBe(12_127.7);
     });
 
-    // A deadline the game never set is not a deadline of zero, and before the first
-    // snapshot there is no clock to measure one against. Those have to stay apart.
+    // Before the first snapshot there is no clock, which is not a clock of zero.
     it('answers null before any snapshot has carried one', () => {
       expect(createNetStateTracker().simNow()).toBeNull();
     });
 
-    // Written out rather than taken from `snapFrame`, whose default fixture carries
-    // a time: the whole subject here is a snapshot that does not.
+    // Written out, because `snapFrame`'s default fixture carries a time.
     it('holds the last one across a frame that carries no time', () => {
       const tracker = createNetStateTracker();
 
@@ -137,9 +131,8 @@ describe('createNetStateTracker', () => {
       expect(tracker.simNow()).toBe(900);
     });
 
-    // It is not on `net.state()`, which is what an addon reads. A raw sim time is a
-    // number whose only correct use is a subtraction against a deadline the addon
-    // would also have to be handed; `world.group` does that and publishes seconds.
+    // A raw sim time is only useful against a deadline, so `world.group` publishes seconds
+    // instead.
     it('stays off the addon-facing reading', () => {
       const tracker = createNetStateTracker();
 
@@ -161,9 +154,7 @@ describe('createNetStateTracker', () => {
       expect(tracker.snapshot().latencyMs).toBe(150);
     });
 
-    // The regression this exists for: the ack rides `self`, not the head. Read
-    // at the head it is simply never found, and latency stays null forever with
-    // no error to notice.
+    // The ack rides `self`, not the head; read at the head, latency stays null silently.
     it('finds the ack on the self record and not on the head', () => {
       const onSelf = createNetStateTracker();
       onSelf.noteSend(frame(inputFrame(1)), 0);

@@ -1,7 +1,5 @@
-// Namespaced GM value store, keyed `addon:<fqid>:<key>`.
-//
-// GM values live in the extension's storage area, so addon data is not reachable
-// from the page's localStorage.
+// Namespaced GM value store, keyed `<ns>:<key>`. GM values live in the extension's storage
+// area, out of reach of the page's localStorage.
 
 import type { StorageApi } from '../shared/protocol.ts';
 import type { GmAdapter } from './gm.ts';
@@ -45,11 +43,8 @@ function createChangeBus(): ChangeBus {
 }
 
 /**
- * Forwards writes made in other tabs.
- *
- * Local writes are emitted by the mutators instead. Without that split, a
- * manager that reports its own writes would fire twice and one that does not
- * would be silent locally.
+ * Forwards writes made in other tabs. Local writes are emitted by the mutators, since managers
+ * disagree on whether they report a tab's own writes.
  */
 function createRemoteWatcher(gm: GmAdapter, emit: ChangeHandler): RemoteWatcher {
   const watchers = new Map<string, () => void>();
@@ -83,11 +78,7 @@ export interface HostStorage extends StorageApi {
   dispose: () => void;
 }
 
-/**
- * Values must survive the manager's own serialization, so they are limited to
- * what JSON can carry. That is stricter than the structured clone the bridge
- * itself allows.
- */
+/** Values are limited to what JSON carries, stricter than the bridge's structured clone. */
 export function createHostStorage(gm: GmAdapter): HostStorage {
   const bus = createChangeBus();
   const watcher = createRemoteWatcher(gm, bus.emit);
@@ -110,8 +101,7 @@ export function createHostStorage(gm: GmAdapter): HostStorage {
       bus.emit(ns, key, undefined);
     },
 
-    // A namespace is a prefix rather than a container, so listing means scanning
-    // every stored key. Namespaces hold an addon's settings, not bulk data.
+    // A namespace is a prefix, so listing scans every stored key.
     keys: async (ns) => {
       const prefix = gmKey(ns, '');
       const stored = await gm.listValues();

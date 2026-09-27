@@ -1,12 +1,5 @@
-// The woc.world surface handed to addons. Mirrors packages/types/world.d.ts.
-//
-// A facade over a pluggable backend, never over __game directly. Backend A reads
-// the live IWorld and is the only one built; if the game ever drops that hook, a
-// backend rebuilt from snap frames slots in here and addon code does not change.
-//
-// Every read is typed against `world/game-types.ts`, which is a claim about the
-// game rather than a compiled fact. `world/shape.ts` is what keeps the claim
-// honest, and the hub runs it once when the world goes live.
+// The woc.world surface, mirroring packages/types/world.d.ts. A facade over a pluggable backend,
+// never over __game directly, so a backend rebuilt from snap frames could replace the live one.
 
 import type { DisposalBag } from '../disposal.ts';
 import { unlessFrozen } from '../freeze.ts';
@@ -58,7 +51,7 @@ import {
   socialReads,
 } from './world-reads.ts';
 
-/** Subscribing, plus the two escape hatches. Everything that is not a state read. */
+/** Subscribing plus the two escape hatches. */
 function controls(hub: WorldHub, bag: DisposalBag) {
   return {
     ready: hub.ready,
@@ -67,13 +60,8 @@ function controls(hub: WorldHub, bag: DisposalBag) {
       if (!isWorldKey(key)) {
         throw new Error(`world.on: unknown key '${key}'. Known keys: ${WORLD_KEYS.join(', ')}`);
       }
-      // The watcher samples the one key it was given and dispatches what the
-      // backend read answered, which is this key's value by construction.
-      //
-      // Gated on the freeze switch here rather than by stopping the sampler,
-      // which matters on resume: the watcher keeps taking its baseline while
-      // frozen, so unfreezing reports the state as it is NOW instead of firing
-      // every listener at once for changes the addon can no longer act on.
+      // Gate the handler, not the sampler: the baseline keeps moving while frozen, so a resume
+      // does not fire every listener at once for stale changes.
       const off = hub.watcher.on(key, unlessFrozen(handler as (value: unknown) => void));
       const drop = bag.add(off);
       return () => {
@@ -99,109 +87,46 @@ export interface WorldApi {
   readonly entities: ReadonlyMap<number, Entity>;
   readonly party: PartyInfo | null;
   readonly inventory: readonly HeldSlot[] | null;
-  /** Worn gear by slot, item ids only. A slot with nothing in it is absent. */
+  /** Worn gear by slot, item ids only. An empty slot is absent. */
   readonly equipment: Partial<Record<EquipSlot, string>> | null;
   /**
-   * What is ON your worn gear: enchants, masterwork and rift rolls, signers.
-   *
-   * Keyed like `equipment` and sparse: a plain piece has no key, so an absent
-   * slot means nothing is on it rather than nothing is worn. This is the
-   * untrimmed payload, unlike `world.player.equippedInstances`, which is the
-   * public projection the server sends about you to everybody else.
+   * What is on your worn gear, sparse: an absent slot means nothing is on it. Untrimmed, unlike
+   * `player.equippedInstances`, which is the projection everybody else receives.
    */
   readonly equipmentInstances: Partial<Record<EquipSlot, ItemInstance>> | null;
-  /** The bag sockets: an item id per equipped bag, null for an empty socket. */
+  /** An item id per equipped bag, null for an empty socket. */
   readonly bags: readonly (string | null)[] | null;
-  /** Total slots across the backpack and every equipped bag. Derived from `bags`. */
+  /** Total slots across the backpack and every equipped bag. */
   readonly bagCapacity: number | null;
   /** Money, in copper. */
   readonly copper: number | null;
-  /** The zone name the game is displaying. Localized text, never an id. */
+  /** Localized zone name, never an id. */
   readonly zone: string | null;
-  /**
-   * Who is playing, as the key per-character state is filed under.
-   *
-   * The value `woc.storage.character` derives its keys from, published so two
-   * addons keeping their own per-character records cannot disagree about whose
-   * they are. OPAQUE: do not parse it. Null before world entry.
-   */
+  /** The key `woc.storage.character` files under. Opaque; null before world entry. */
   readonly characterKey: string | null;
-  /**
-   * The character this session is watching, or null when it is watching itself.
-   *
-   * Non-null means `player` is somebody else, so anything filed under the
-   * person at the keyboard has to stop while it is.
-   */
+  /** Who this session is spectating, or null. Non-null means `player` is somebody else. */
   readonly spectating: string | null;
-  /**
-   * The server's own movement-speed multiplier for the player, or null. Null is
-   * "nobody said" and 1 is a real reading; see `world/movement.ts`.
-   */
+  /** Null is "nobody said" and 1 is a real reading; see `world/movement.ts`. */
   readonly moveSpeedMult: number | null;
-  /** Progression, deeds and titles. Null before world entry. */
   readonly character: CharacterInfo | null;
   readonly talents: TalentInfo | null;
-  /** The two profession counter maps. See `world/character.ts` for what is left out. */
   readonly professions: ProfessionInfo | null;
-  /** Loot rolls, master loot and raid lockouts. */
   readonly group: GroupInfo | null;
-  /** The instanced run in progress, thin by design. */
   readonly encounter: EncounterInfo | null;
-
   /**
-   * The competitive bout you are in, or null.
-   *
-   * One union over all seven formats, discriminated on `format`, so a display
-   * asks what kind of bout this is rather than reading three unrelated members.
-   * A duel is a member of it, and so is a battleground.
-   *
-   * THE CADENCE IS PER FORMAT. A duel rides every tick. A battleground rides at
-   * 1 Hz and is forced fresh on every transition worth acting on. The four arena
-   * formats are UP TO TEN SECONDS OLD, because that self key is gated to 0.1 Hz
-   * on the server. That is the game's own cadence, so a Fiesta ring drawn from
-   * this agrees with the ring the game draws; a Yumi health bar does not, and
-   * the type says which events carry the live figures.
+   * The bout you are in, discriminated on `format`. Cadence is per format: the four arena formats
+   * are up to ten seconds old, gated at 0.1 Hz on the server.
    */
   readonly match: MatchInfo | null;
-
-  /**
-   * Your competitive standings, your queue and the live ladders.
-   *
-   * Present for every character, so this being non-null says nothing about
-   * whether you have ever played. Only the two ranked brackets mean anything:
-   * the unranked three carry a copy of the 2v2 record and an empty ladder.
-   */
+  /** Present for every character; only the two ranked brackets mean anything. */
   readonly arena: ArenaStandings | null;
-
-  /**
-   * Your battleground record, your queue and the live ladder.
-   *
-   * Present for every character, so this being non-null says nothing about
-   * whether you have ever fought one. The match itself is the
-   * `format: 'battleground'` member of `match` above; this is the standing that
-   * outlives it.
-   */
+  /** Present for every character; the match itself is `match` with `format: 'battleground'`. */
   readonly battleground: BattlegroundStandings | null;
-
-  /** Your dungeon finder state. Present whether or not you are queued. */
   readonly finder: FinderInfo | null;
-
-  /**
-   * The realm's open premade listings, or null before the first sync.
-   *
-   * Realm-shared and capped by the server, so it is what is offered rather than
-   * everything that exists.
-   */
+  /** Realm-shared and capped by the server, or null before the first sync. */
   readonly finderBoard: readonly FinderListingRow[] | null;
-
-  /** One entity's hate table, sorted and measured against you. */
   threat: (entityId: number) => ThreatTable;
-  /**
-   * Which side one unit is on, from the bout rather than from `entity.hostile`.
-   *
-   * The flag is a mob's and is false on every player alive, so this is the only
-   * honest answer for a player. See `world/reaction.ts`.
-   */
+  /** Side from the bout: `entity.hostile` is false on every player. See `world/reaction.ts`. */
   reaction: (entityId: number) => Reaction | null;
   readonly quests: WorldQuests | null;
   readonly cooldowns: ReadonlyMap<string, number> | null;
@@ -210,201 +135,62 @@ export interface WorldApi {
   readonly targetAuras: readonly Aura[] | null;
   readonly hazards: readonly Hazard[] | null;
   readonly markers: ReadonlyMap<number, number> | null;
-
   /**
-   * Lethal rings on a rift boss floor, or null outside one.
-   *
-   * NOT `hazards`, and the difference is worth knowing before you draw either. A
-   * hazard's geometry rides the snapshot and is complete for everything near
-   * you. A death zone is mirrored from a spawn event and counted down on your
-   * own client, so a zone placed before you came into range is missing and stays
-   * missing. The game's own rings have the same hole.
+   * Rift boss-floor rings, mirrored from spawn events, so a zone placed before you came into range
+   * is missing. Unlike `hazards`, which ride the snapshot.
    */
   readonly deathZones: readonly DeathZone[] | null;
-
-  /**
-   * Every lootable corpse in scope, with what you could take off each.
-   *
-   * Never null, like `casts`: it is a reading the loader assembles rather than a
-   * value the game hands over. Watch this rather than `entities` for a corpse
-   * becoming lootable, which is a field change on an entity that already existed
-   * and so is invisible to the entity set.
-   */
+  /** Never null. Watch this, not `entities`, for a corpse becoming lootable. */
   readonly corpses: ReadonlyMap<number, CorpseView>;
-
-  /**
-   * Gathering node id to seconds until YOU can harvest it again.
-   *
-   * Per player, so a node another player just took is still yours. A node with
-   * no entry is ready.
-   */
+  /** Per player; a node with no entry is ready. */
   readonly nodeCooldowns: ReadonlyMap<string, number> | null;
-
-  /**
-   * Where your own body lies while your spirit is a ghost, or null.
-   *
-   * Yours alone: the server sends it to you and to nobody else, so there is no
-   * way to ask where another player's corpse is.
-   */
+  /** Your own body while a ghost. The server sends nobody else's. */
   readonly corpse: Vec3 | null;
-
-  /**
-   * One corpse's contents, filtered to what YOU could take.
-   *
-   * The wire carries a corpse's whole contents to every player in range,
-   * personal slots included, and the game's own loot window filters on read.
-   * This applies the same filter, so it is what a loot display should use;
-   * `Entity.loot` is the unfiltered list and shows people things they cannot
-   * have.
-   */
+  /** Filtered to what you could take; `Entity.loot` is the unfiltered list. */
   corpseLoot: (entityId: number) => CorpseView | null;
-
-  /**
-   * The Merchant's book, one browsed page at a time, or why there is not one.
-   *
-   * Never null: read `status` first. `'near'` carries `info`; `'away'` and
-   * `'unknown'` carry null and no page to reach for. The distinction is the
-   * point of the shape, because "the filter matched nothing" and "you are not at
-   * the Merchant" are opposite facts that a nullable value collapses into one.
-   */
+  /** Never null: read `status` first, since "matched nothing" and "not there" differ. */
   readonly market: MarketState;
-
-  /**
-   * Whether gold or goods wait at the Merchant.
-   *
-   * Ungated, so it is readable anywhere in the world. This is the badge; the
-   * page above is the pane.
-   */
+  /** Ungated badge, readable anywhere. */
   readonly marketCollectPending: boolean | null;
-
-  /** The mailbox, or why there is not one. Read `status` first, like `market`. */
   readonly mail: MailState;
-
-  /**
-   * Delivered letters you have not read.
-   *
-   * Ungated, so it is readable anywhere in the world. `world.mail` carries its
-   * own `unread` over the same letters; that one is the mailbox pane's figure
-   * and this one is the badge. Do not derive either from the other.
-   */
+  /** Ungated badge. Do not derive it from `mail.unread` or the reverse. */
   readonly mailUnread: number | null;
-
-  /** The deposit box, or why there is not one. Read `status` first, like `market`. */
   readonly bank: BankState;
-
-  /** The Materials Vault, or why there is not one. Banker-gated, like `bank`. */
   readonly vault: VaultState;
-
-  /**
-   * What crafting may draw from the vault where the player stands, or null.
-   * Not a `ProximityState`: null means an instance refuses the draw, which
-   * walking does not fix, and an EMPTY record is a real answer.
-   */
+  /** Null means an instance refuses the draw; an empty record is a real answer. */
   readonly craftVaultStock: Readonly<Record<string, number>> | null;
-
-  /**
-   * The buyback ring: what you have sold to a vendor and can still take back.
-   *
-   * MOST RECENT FIRST. Ungated, unlike the three above: standing at a vendor is
-   * what lets a player USE the ring, not what lets them see it.
-   */
+  /** Most recent first. Ungated. */
   readonly buyback: readonly InvSlot[] | null;
-
-  /**
-   * The player's own spellbook, with lookups by id and by display name.
-   *
-   * The bridge between an ability's id and the name combat events carry, which
-   * nothing else on the surface provides. Covers the player's OWN kit, so a mob's
-   * ability name is not in here.
-   */
+  /** The player's own spellbook, by id and display name. A mob's ability is not in it. */
   readonly abilities: AbilityIndex;
-
-  /**
-   * Whether the player is fighting, and which signal answered.
-   *
-   * Derived: the game sends no combat flag on the self record, and the one that
-   * exists on the client entity is never written. `world/combat.ts` holds the
-   * order the signals are consulted in.
-   */
+  /** Derived; `world/combat.ts` holds the order the signals are consulted in. */
   readonly combat: CombatState;
-
-  /**
-   * The entity a unit token names, or null.
-   *
-   * `targettarget` reads whichever field the target's kind actually fills, which
-   * is the reason to use this rather than open-coding the lookup: a mob never
-   * carries `targetId`.
-   */
+  /** `targettarget` reads the field the target's kind fills: a mob never carries `targetId`. */
   unit: (token: UnitToken) => Entity | null;
-
-  /** The matching effects on a unit, empty when it resolves to nothing. */
   aurasOn: (token: UnitToken, query?: AuraQuery) => readonly Aura[];
-
-  /** The same over a party row's compact strip, which carries no source. */
+  /** A party row's strip carries no source. */
   partyAuras: (pid: number, query?: PartyAuraQuery) => readonly PartyMemberAura[];
-
-  /**
-   * Whether an effect works against the unit carrying it. Either aura shape.
-   *
-   * A function rather than a field on the aura, because the loader hands over the
-   * game's own aura objects rather than copies. See `world/auras.ts`.
-   */
+  /** A function because the auras handed over are the game's own objects, not copies. */
   harmful: (aura: Aura | PartyMemberAura) => boolean;
-
-  /** Whether an effect can be removed. Full auras only; a party row cannot answer. */
+  /** Full auras only; a party row cannot answer. */
   dispellable: (aura: Aura, offensive?: boolean) => boolean;
-
-  /**
-   * Whether an effect is a MODE, so its `remaining` and `duration` mean nothing.
-   *
-   * Either aura shape, since the rule needs only an id and a kind. See
-   * `world/auras.ts`; this is the game's whole rule rather than most of it.
-   */
+  /** Whether an effect is a mode, so its `remaining` and `duration` mean nothing. */
   toggle: (aura: Pick<Aura, 'id' | 'kind'>) => boolean;
-
-  /** Flat yards from the player to a point, ignoring height. Null before world entry. */
+  /** Flat yards, ignoring height. */
   distanceTo: (at: { x: number; z: number }) => number | null;
-
-  /**
-   * Degrees CLOCKWISE from where the player is looking, -180 <= turn < 180.
-   *
-   * Null before world entry, and null for a facing that is not finite. Composes
-   * with `fmt.compass`, which takes this convention.
-   */
+  /** Degrees clockwise from facing, -180 <= turn < 180, the convention `fmt.compass` takes. */
   bearingTo: (at: { x: number; z: number }) => number | null;
-
   /**
-   * The game's own recipe table, copied and frozen.
-   *
-   * Static content, so there is no watch key and there must never be one: a
-   * signature over it would walk every recipe per snapshot to report that
-   * nothing moved. What actually changes is on `world.professions`.
+   * Static, so it must never get a watch key: a signature would walk every recipe per snapshot.
+   * What changes is on `professions`.
    */
   readonly recipes: readonly Recipe[];
-
-  /** The authored crafting stations, copied and frozen. Static, like `recipes`. */
   readonly stations: readonly Station[];
-
-  /**
-   * The authored mailboxes and noticeboards, copied and frozen. Static too.
-   *
-   * Where a counter IS, from the game's own list. Whether the player is standing
-   * at one is `world.mail`, which is proximity-gated.
-   */
+  /** Where a counter is. Whether the player stands at one is `mail`. */
   readonly civicServices: readonly CivicService[];
-
-  /**
-   * Watch one key for change, sampled once per animation frame.
-   *
-   * The handler's argument is typed from the key, so `world.on('cooldowns', ...)`
-   * receives the cooldown map rather than a value the addon narrows itself.
-   */
+  /** Sampled once per animation frame. */
   on: <K extends WorldKey>(key: K, handler: (value: WorldValues[K]) => void) => Unsubscribe;
-
-  /**
-   * The game's own objects. Unstable by definition: the game promises nothing
-   * about them, and the manager flags an addon that reaches for one.
-   */
+  /** The game's own objects, unstable by definition. The manager flags an addon that reads one. */
   readonly raw: unknown;
   readonly game: unknown;
 }

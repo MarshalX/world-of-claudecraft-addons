@@ -1,27 +1,19 @@
-// The Materials Vault, and the crafting draw over it. Game 0.41.0.
-//
-// The two reads are gated differently, which is why they are not one type.
-// `vaultInfo` rides banker proximity like `bankInfo` and is a `ProximityState`.
-// `craftVaultStock` answers what crafting may draw from the vault HERE, which is
-// everywhere in the open world and nowhere inside an instance; a proximity state
-// would say "walk to a banker" about a state a banker cannot fix.
-//
-// Passed through rather than projected, for the reason `market.ts` gives.
+// The Materials Vault, and the crafting draw over it. `vaultInfo` is banker-gated like the bank.
+// `craftVaultStock` is not a proximity state: the draw is refused inside an instance, which no
+// banker fixes. Passed through rather than projected, as in `market.ts`.
 
 import type { HeldSlot } from './game-types.ts';
 import type { ProximityState } from './proximity.ts';
 
 interface VaultInfo {
   /**
-   * Item id to how many are held. Key order means nothing: the record round-trips
-   * through Postgres jsonb online, so sort before rendering. An absent material
-   * is held at zero rather than unavailable.
+   * Item id to how many are held. Key order means nothing, so sort before rendering. An absent
+   * material is held at zero.
    */
   stock: Readonly<Record<string, number>>;
   /**
-   * Identity-bearing material stacks (crafted or signed), which cannot collapse
-   * into a count. The game selects a row by array index. No row carries the
-   * advisory bag cell: the emitter drops it.
+   * Identity-bearing material stacks (crafted or signed), selected by array index. No row carries
+   * a bag cell.
    */
   special: readonly HeldSlot[];
   /** Rungs bought, 0 through 5. 0 means the vault is still locked. */

@@ -1,15 +1,6 @@
-// The install page, which is the page that matters most: every visitor who does
-// not finish it never sees the product.
-//
-// Built as a funnel with a sticky position indicator rather than as an article
-// with three headings, because a reader has to know which step they are on and
-// which branch they are in. Step 2 gets the most room on the page for one reason:
-// it is where an install silently does nothing, with no error anywhere.
-//
-// One correction to the copy this page was drafted from: it named the artifact
-// `woc-addons.user.js`. The release workflow produces `woc-loader.user.js`, and a
-// download button naming a file that does not exist is the worst possible typo on
-// this particular page.
+// The install page, a three-step funnel with a sticky step indicator. Step 2 gets the most room
+// because it is where an install silently does nothing. The artifact is `woc-loader.user.js`, the
+// name the release workflow produces.
 
 import type { Build } from '../build.ts';
 import { type Html, html, raw } from '../html.ts';
@@ -28,15 +19,8 @@ const RELEASE_LATEST =
   'https://github.com/MarshalX/world-of-claudecraft-addons/releases/latest/download/woc-loader.user.js';
 
 /**
- * Anchors only, no JavaScript.
- *
- * There is deliberately NO `aria-current` here. All three steps live on one page,
- * so which one you are "on" is a scroll position, and marking one in the markup
- * meant step 1 was announced as the current step even when you were reading step
- * 3. An attribute that says "you are here" and is wrong two thirds of the time is
- * worse for a screen reader than no attribute at all. The visible highlight
- * follows `:target` instead, which costs no script and is at least true after a
- * click. See steps.css.
+ * Anchors only, no JavaScript. No `aria-current`: the current step is a scroll position, so any
+ * static marking is usually wrong. The highlight follows `:target` in steps.css.
  */
 function steps(): Html {
   return html`<nav class="steps-wrap" aria-label="Install steps">

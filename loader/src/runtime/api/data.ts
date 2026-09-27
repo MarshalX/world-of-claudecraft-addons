@@ -1,18 +1,8 @@
-// The woc.data surface: a JSON file from the addon's own directory.
-//
-// The file is fetched by the HOST, at install, into the same cache the entry body
-// lives in. What is left for the page realm is a membership check against the
-// manifest, one parse, and a memo. Nothing here touches the network, which is the
-// whole reason the gap was answered this way rather than by handing an addon a
-// base URL: a base URL is a second network path in the page realm, with no cache
-// and no bound on where it points.
-//
-// The argument is CHECKED, not joined. `woc.data('../../secrets.json')` is
-// refused because it is not in the declared list, and no code path anywhere
-// concatenates the argument onto a URL.
+// The woc.data surface. The HOST fetches the file at install; here is only a membership check, a
+// parse and a memo, with no network path. The argument is CHECKED against the declared list and
+// never joined onto a URL.
 
-// Type-only. A value import of anything in shared/schema.ts drags zod into the
-// page bundle, which loader/build-runtime.mjs fails the build over.
+// Type-only: a value import from shared/schema.ts drags zod into the page bundle.
 import type { AddonManifest } from '../../shared/schema.ts';
 
 interface DataDeps {
@@ -31,13 +21,7 @@ function declaredList(declared: readonly string[]): string {
   return declared.join(', ');
 }
 
-/**
- * Why a name was refused, naming what IS declared.
- *
- * The list goes in the message because the failure is almost always a typo or a
- * file added to the directory and not to the manifest, and both of those read as
- * "it works on my machine" without it.
- */
+/** Names what IS declared: the cause is usually a typo or a file missing from the manifest. */
 function undeclared(fqid: string, declared: readonly string[], name: string): Error {
   return new Error(
     `${fqid}: woc.data(${JSON.stringify(name)}) is not declared. Add it to "data" in ` +
@@ -46,14 +30,8 @@ function undeclared(fqid: string, declared: readonly string[], name: string): Er
 }
 
 /**
- * One addon's reader.
- *
- * The memo holds the PROMISE, so two calls in one addon share one bridge round
- * trip and one parse. A rejection is dropped from the memo rather than kept: the
- * reasons this rejects that are worth retrying (a bridge that never connected)
- * are not the addon's doing, and a memoised rejection would outlive the
- * condition. A resolved value is shared, so the object handed back is the same
- * object every time and an addon must treat it as read-only.
+ * The memo holds the promise, so concurrent calls share one round trip; a rejection is dropped so
+ * it can be retried. The resolved object is shared and must be treated as read-only.
  */
 function createData(deps: DataDeps): (name: string) => Promise<unknown> {
   const declared = deps.declared ?? [];
@@ -81,9 +59,7 @@ function createData(deps: DataDeps): (name: string) => Promise<unknown> {
     return run;
   };
 
-  // Async, so every refusal is a rejection. A surface that threw synchronously
-  // here and rejected over the bridge would be two different APIs depending on
-  // where it was called from.
+  // Async, so every refusal is a rejection, as it would be over the bridge.
   return async (name) => {
     if (!declared.includes(name)) {
       throw undeclared(deps.fqid, declared, name);

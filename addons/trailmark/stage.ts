@@ -1,37 +1,25 @@
 // Trailmark on the stage: a log half worked through, from a hillside in Eastbrook Vale.
 //
 // The table is the shipped file, imported rather than restated, and every quest, count, camp and
-// NPC below was read out of it. The whole claim this addon makes is that it runs the game's own
-// derivation over the game's own tables, and a fixture that invented a quest would photograph
-// the one thing that cannot be wrong.
+// NPC below is read out of it, because the addon's claim is that it runs the game's derivation over
+// the game's tables.
 //
-// The world holds nobody but the player, which is the picture rather than a saving. Every zone,
-// distance and pin here is resolved from the table, so the two Mirefen rows point 180 yards into
-// a zone with no entity of any kind in scope: an addon that resolved from `world.entities` would
-// draw nothing for them and would look perfectly correct standing where this one is standing.
+// The world holds nobody but the player: every zone, distance and pin is resolved from the table,
+// so the two Mirefen rows point into a zone with no entity in scope, which an addon reading
+// `world.entities` would leave blank.
 //
-// Where the player stands is arithmetic. `pnpm shots` crops around the world anchors as well as
-// the frame, and the picture is served into a 350 CSS pixel card, so every pixel of crop width
-// costs legibility in the rows. The camera looks down world -z from over the player's shoulder,
-// so a pinned point's screen offset is its x distance from the player over its depth: standing
-// level with the boar camps in x and 100 yards north of them puts both tiles inside the panel's
-// own 300px column.
+// The standpoint is arithmetic. `pnpm shots` crops around the anchors as well as the frame, and the
+// camera looks down world -z, so a pin's screen offset is its x distance over its depth: standing
+// level with the boar camps in x and north of them keeps both pins inside the panel's 300px column.
+// The reach decides which quest has pins: the boar camps are inside it, the Mirefen rows and the
+// turn-in outside.
 //
-// The pin reach is 160 yards for the same reason, and it is what decides which of the four
-// quests is the one with pins. Both boar camps are inside it at 105 and 147; the Mirefen rows at
-// 180 and the turn-in at 213 are outside, so they are listed with a zone and a distance and
-// nothing is drawn over the world for them.
+// Silk and Venom shows both denominator markings at once: its kill has ticked, so the server's
+// figure is known (4/10); its collect has not, so the definition count is drawn as a lower bound
+// (2/6+).
 //
-// Both denominator markings are on screen at once, on the same quest, which is why Silk and
-// Venom is here rather than a second one-objective quest. Its kill has ticked while the addon
-// was watching, so the server's own figure is known and the row reads 4/10; its collect has not,
-// so the shipped definition count is drawn as the lower bound it is, 2/6+ and warm.
-//
-// The Codfather is the row that admits defeat. It is a fish, and fishing has no world node
-// anywhere in the game, so no mob drops it, no crate holds it and no gathering node yields it:
-// the game's own map draws nothing for it either. A scenario demonstrating honest refusal has to
-// name something the game cannot answer either, and a fishing catch is that for a structural
-// reason rather than a temporary one.
+// The Codfather is a fish, and fishing has no world node, so neither the game's map nor this addon
+// can place it: the row that honestly refuses.
 
 import type { Scenario, Stage, WorldDraft } from '../../stage/src/stage.ts';
 import { eventsFrame } from '../../tests/fakes/frames.ts';
@@ -46,58 +34,44 @@ const WIDOWS = 'q_widows';
 const CODFATHER = 'q_the_codfather';
 
 /**
- * Where this is photographed from: level with the boar camps, north of both. North because the
- * camera looks down -z, so anything pinned has to be in front of it, and level in x because that
- * is what keeps the two tiles in one column.
- *
- * Both halves are RE-DERIVED against game 0.40.1 rather than nudged. The New Eastbrook program
- * moved the two wild boar camps from (63, 16) and (84, -27) to (58, -72) and (97, -43), which is
- * not a translation: they spread in x and moved south together. So the x is the new pair's own
- * midpoint and the z is what puts the far camp back inside the reach below. Left at (73.5, 120)
- * the nearer camp sat at 165 yards against a 160 yard reach, and the picture came out with NO
- * PINS AT ALL while its alt text went on promising them. Nothing failed; only the capture shows
- * it.
+ * Where this is photographed from: level in x with the boar camps (their midpoint) and north of
+ * both, since the camera looks down -z. The z is what keeps the far camp inside `REACH`; if a
+ * release moves the camps, re-derive both from the table, because a standpoint that leaves every
+ * camp out of reach captures with NO PINS while the alt text still promises them, and nothing
+ * fails.
  */
 const STANDPOINT = { x: 77.5, y: 5, z: 74 };
 
 /**
- * Which way the character is looking, and it is not a detail. The arrow on a row is measured
- * against the character rather than the camera, and `facing` is 0 at +z, so a character nobody
- * has turned is looking away from everything in the picture and every arrow reads backwards.
+ * Which way the character faces. Row arrows are measured against the character, and `facing` 0 is
+ * +z, so an unturned character looks away from everything and every arrow reads backwards.
  */
 const FACING = Math.PI;
 
 /**
- * How far a camp may be and still be pinned. The two boar camps, and nothing else.
- *
- * Still 160 after the camps moved, and it is a tighter fit than it was: from the standpoint the
- * far boar camp is at 147 yards and the nearest camp belonging to any other row (a mire prowler)
- * is at 157, so the window is ten yards wide. The prowler quest is a turn-in and pins its NPC
- * rather than its camp, which is what keeps it out of the picture even so.
+ * How far a camp may be and still be pinned: both boar camps and nothing else. The window is narrow
+ * (the far boar camp at 147 yards, the nearest other camp at 157); the prowler quest is a turn-in
+ * and pins its NPC, so its camp stays out of the picture.
  */
 const REACH = { 'pin-distance': 160 };
 
 /**
- * The panel, parked directly over its own pins in the same 300px column. The height is the
- * addon's own arithmetic run backwards: its chrome figure plus the five rows the log comes to,
- * which is 243. Trailmark computes its row budget from the box it is given, so a pixel less holds
- * the fifth row back and more than this is empty space it will not fill.
+ * The panel, parked over its own pins in the same 300px column. The height is the addon's chrome
+ * figure plus the log's five rows: a pixel less holds the fifth row back, and more is empty space.
  */
 const PANEL = { box: { x: 440, y: 160, w: 300, h: 243 }, visible: true };
 
 /**
- * One quest's live progress, in the shape the game's own log carries. `counts` is what has been
- * banked; the required figure is deliberately absent, as it is on the wire's published shape,
- * which is the gap the progress events below exist to close.
+ * One quest's live progress as the game's log carries it. The required figure is absent, as on the
+ * published shape, which is the gap the progress events close.
  */
 function progress(questId: string, counts: number[], state = 'active'): [string, unknown] {
   return [questId, { questId, counts, state }];
 }
 
 /**
- * The log as this character woke up with it: three quests worked through, one done. Stated in
- * `world` rather than driven in `run` because an addon reads the log on its first line, and a
- * quest accepted after the body has run is one the addon reacted to.
+ * The log as this character woke up with it: three quests worked through, one done. In `world`
+ * because the addon reads the log on its first line.
  */
 function aWorkedLog(draft: WorldDraft): void {
   draft.set(draft.player, 'templateId', 'hunter');
@@ -118,19 +92,16 @@ function aWorkedLog(draft: WorldDraft): void {
 }
 
 /**
- * What the server has said out loud about an objective's true requirement. `required` rides this
- * event and nothing else, which is why an objective that has not ticked since the addon started
- * is drawn with a plus on it.
+ * What the server said about an objective's true requirement. `required` rides only this event, so
+ * an objective that has not ticked since the addon started is drawn with a plus.
  */
 function learn(stage: Stage, questId: string, objectiveIndex: number, required: number): void {
   stage.inbound(eventsFrame([{ type: 'questProgress', questId, objectiveIndex, required }]));
 }
 
 /**
- * Let the table land, then say what the server has said, then draw. The settles are the data file
- * and the frame's own stored box, both of which are promises the addon is a no-op until: a
- * progress event delivered before the table is read names a quest the addon has never heard of
- * and is dropped on the floor.
+ * Let the table and the stored box land, then send progress, then draw. A progress event delivered
+ * before the table is read names an unknown quest and is dropped.
  */
 async function halfWorkedThrough(stage: Stage): Promise<void> {
   await stage.settle();
@@ -160,9 +131,8 @@ const SCENARIOS: readonly Scenario[] = [
     run: halfWorkedThrough,
   },
   {
-    // The same standpoint at the manifest's own default reach, which is what a player installs
-    // with. Seven areas are inside four hundred yards and two of them are in front of the camera:
-    // an anchor whose point is behind the view or past its edge hides itself.
+    // The same standpoint at the manifest's default reach. Seven areas are within reach and two are
+    // in front of the camera; an anchor behind the view or past its edge hides itself.
     id: 'pinned',
     label: 'The default four hundred yard reach',
     data: { [TABLE_FILE]: JSON.stringify(TABLE) },
@@ -171,8 +141,7 @@ const SCENARIOS: readonly Scenario[] = [
     run: halfWorkedThrough,
   },
   {
-    // Nothing accepted, which is what the panel looks like on a fresh character. An empty list is
-    // not a measurement of zero, so it says in words why it is holding nothing.
+    // Nothing accepted: a fresh character. An empty list says in words why it is empty.
     id: 'empty',
     label: 'Nothing in the log',
     data: { [TABLE_FILE]: JSON.stringify(TABLE) },

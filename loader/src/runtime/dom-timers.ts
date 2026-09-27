@@ -1,14 +1,6 @@
-// The page realm's timers, typed as the page realm sees them.
-//
-// `setTimeout` returns a number in a browser and a Timeout object in Node, and
-// this project has @types/node ambient because tools/*.ts needs it. That widens
-// the global signature everywhere, including here, where it is simply wrong: the
-// runtime is injected into a page and never runs under Node.
-//
-// One module rather than a cast at each call site, so the reason is written once
-// and the assertion is in a place a reader can check rather than scattered
-// through the bootstrap. loader/build-runtime.mjs is what actually enforces that
-// no node module reaches this bundle; ambient types cannot.
+// The page realm's timers, typed as a browser returns them. Ambient @types/node (for tools/*.ts)
+// types `setTimeout` as returning a Timeout, which is wrong for a runtime that only runs in a page.
+// One module, so the cast lives in one place.
 
 /** A page-realm timer handle. */
 type TimerId = number;

@@ -3,56 +3,32 @@
 // Emberwatch: say which effect on which unit is worth knowing about, and get a tile, a
 // cue and a banner when it happens.
 //
-// The model is the aura LIST, never the aura event. An event carries an id, a source and a
-// stack count only on the application path, so a fade usually says nothing where its gain
-// said plenty; `world.aurasOn` and `world.partyAuras` carry all four on every row. Nothing
-// here subscribes to an aura event. The one thing only an event carries is `refresh`, so a
-// tracker counting gains against fades cannot be built on a list; this one reads the
-// remaining instead, where a re-application shows as a figure that went back up.
+// The model is the aura LIST, never the aura event: an event carries an id, a source and a stack
+// count only on the application path, while `world.aurasOn` and `world.partyAuras` carry them on
+// every row. A re-application shows as a remaining that went back up.
 //
-// The clock is `woc.onFrame` and the two aura watch keys are deliberately not subscribed:
-// `world.on('auras')` signs by id and caster rather than stack count, neither key fires as
-// a remaining ticks down, and a party row has no watch key at all. `characterKey` IS
-// subscribed, since the rule set and the stored rows belong to one character and the game
-// swaps characters inside one page load.
+// The clock is `woc.onFrame`. The aura watch keys are not subscribed: neither fires as a remaining
+// ticks down, and a party row has no watch key. `characterKey` is, since the game swaps
+// characters inside one page load and the rules and stored rows belong to one character.
 //
-// A party row carries an id, a kind and a whole-second remaining, and nothing else: no
-// source, so a rule's `mine` clause is DROPPED rather than ignored; no duration, so no
-// sweep; no stacks; no school, so `world.dispellable` refuses it. Rows are read anyway,
-// because one exists for a member on the far side of the map where an entity does not.
+// A party row carries an id, a kind and a whole-second remaining, nothing else: no source, so a
+// `mine` clause is DROPPED; no duration, so no sweep; no stacks; no school, so
+// `world.dispellable` refuses it. Rows are read anyway, since they reach members across the map.
 //
-// Polarity goes through `world.harmful` rather than arithmetic here: a party row's `neg`
-// flag is a sign test on magnitude alone, so a dot, a root, a stun and a silence all
-// arrive without it.
+// Polarity goes through `world.harmful`: a party row's `neg` flag tests magnitude alone, so a dot,
+// a root, a stun and a silence all arrive without it.
 //
-// What cannot be built, and the pane says so in words: how much damage a control will take
-// before it breaks. The soak and the per-hit chance never leave the server, and the wire
-// carries a bare presence marker in a field the published `Aura` does not declare.
+// How much damage a control takes before it breaks cannot be built, and the pane says so: the soak
+// never leaves the server.
 //
-// An effect has its OWN painting where the game ships one, which it did not before game
-// 0.39.0: that release added an aura art manifest covering the effects no ability names, the
-// mob families among them, and `woc.ui.icon.aura` reads it. What is still true is that the
-// family is closed and small, so most of what lands on a unit resolves through nothing: the
-// game composites the rest at run time, and the only ability file to point at is filed per
-// player class. What a mob does have is a PORTRAIT, so a square with no painting of its own
-// carries the face of whatever applied the effect, said out loud in the tooltip and in the
-// accessible name rather than left to be read off the picture.
+// `world.abilities` is not consulted for a name: it answers for your own kit only, so a label
+// would be authoritative on one row and a guess on the next.
 //
-// `world.abilities` is deliberately not consulted for a name. An entity's aura carries one
-// on the wire; a party row carries none, and a spellbook would answer for your own kit and
-// guess the rest, which is a label authoritative on one row and a guess on the next.
+// A stack count is read as APPLICATIONS unless `counts: 'soakers'` says it is the players who
+// must stand in a soak (Varkhul's Shared Pyre), whose `value2` is the whole hit they divide.
 //
-// A rule reads a stack count as APPLICATIONS unless `counts: 'soakers'` says otherwise, which
-// only Varkhul's Shared Pyre does: its `stacks` is the players who have to stand in it and its
-// `value2` is the whole hit they divide. A soak's count is NOT defaulted to one where the wire
-// omitted it, because "how many" is the only thing that row is asked.
-//
-// The raid rules draw no art of their own: neither encounter's auras are in the served aura
-// art manifest at game 0.41.0, so those squares fall through to the boss PORTRAIT.
-//
-// The starter table is game content in `rules.json`, generated by `generate.mjs` beside
-// this file. `woc.data` hands back `unknown`, so every row goes through `readRule` before
-// it can fire anything.
+// The starter table is `rules.json`, written by `generate.mjs`. `woc.data` hands back `unknown`,
+// so every row goes through `readRule` before it can fire anything.
 
 const RULES_FILE = 'rules.json';
 const STORE_ROWS = 'rows';
@@ -74,7 +50,7 @@ const PANE_HEIGHT = 380;
 const PANE_MIN_WIDTH = 280;
 const PANE_MIN_HEIGHT = 190;
 
-/** Drawn in the pane: an engine that alerts on control and stays quiet about this reads as denying it. */
+/** Drawn in the pane, so silence on these limits is not read as the engine having no gaps. */
 const PANE_NOTES = [
   'A party row carries an id, a kind and whole seconds. No source, so "only mine" is dropped; no duration, so there is no sweep; no stacks; and removability cannot be answered at all.',
   'Nothing here can tell you how much damage a control will take before it breaks. The soak and the per-hit chance stay on the server, and the wire carries only a marker that a soak exists rather than what it is.',
@@ -85,9 +61,8 @@ const CONDITIONS = ['gained', 'faded', 'stacks', 'expiring'];
 const UNITS = ['player', 'target', 'party'];
 
 /**
- * What a rule reads the aura's stack count AS. A clause on the rule rather than a fifth `on`:
- * the firing question is unchanged (`gained`), only what the badge MEANS changes, and an `on`
- * would admit `on: 'stacks', counts: 'soakers'`, threshold arithmetic over a body count.
+ * What a rule reads the aura's stack count AS. Not a fifth `on`, which would admit
+ * `on: 'stacks', counts: 'soakers'`, threshold arithmetic over a body count.
  */
 const COUNT_APPLICATIONS = 'applications';
 const COUNT_SOAKERS = 'soakers';
@@ -112,9 +87,8 @@ const alerts = new Map();
 let primed = false;
 
 /**
- * One rule, or null. The loader only checks that `woc.data` parses, so the shape is a claim
- * checked here, and a stored row the player captured is the same kind of claim. A row naming
- * neither an aura id nor a kind nor a polarity is refused: it would fire on everything.
+ * One rule, or null. The loader only checks that `woc.data` parses, so shipped and stored rows are
+ * checked here. A row naming no aura id, kind or polarity is refused: it would fire on everything.
  */
 function readRule(value) {
   if (typeof value !== 'object' || value === null) {
@@ -238,27 +212,14 @@ function reassemble() {
 /**
  * The picture for an alert, and whose face it is when it is not the effect's own.
  *
- * Three routes, tried in the order the game's own resolver uses them. The effect's OWN painting
- * comes first, from the aura art manifest game 0.39.0 added: that family is exactly the effects no
- * ability id names, so a mob's aura, an encounter mechanic and a battleground rune are in it, and
- * a square filled from it needs no disclosure because it IS the effect's icon.
- *
- * The family is closed and covers a fraction of what a fight applies, so the two older routes
- * still carry most rows. Ability art is filed per player class, so an effect a mob applied
- * resolves through nothing there: the game composites those icons on a canvas from a module no
- * addon can reach, and a lockout id 404s. A mob's PORTRAIT is a file, and every catalogued
- * template ships one, so the square is filled by the thing that applied the effect rather than
- * left blank. `castBy` is what makes that honest: the tooltip and the accessible name both say
- * whose face it is, because a portrait answers a different question from an ability icon and a
- * square that does not say which is a guess.
- *
- * An npc is deliberately not portrayed. The game draws a crest for one rather than a portrait, so
- * `/ui/mobs/` would 404 and the slot would go back to being empty by a longer route.
+ * Tried in the game's own resolver order: the effect's painting from the aura art manifest, then
+ * a player caster's ability art, then a mob caster's PORTRAIT. The manifest is small and ability
+ * art is filed per player class, so a mob's effect usually falls through to the portrait, and
+ * `castBy` makes the tooltip and accessible name say whose face it is. An npc has a crest rather
+ * than a portrait, so `/ui/mobs/` would 404 for one.
  */
 function artOf(auraId, sourceId) {
-  // The effect's own painting answers for whoever applied it, so this is asked before the
-  // caster is even looked up: an aura in that family is the same picture on a mob, on a
-  // stranger and on you.
+  // Asked before the caster is looked up: the effect's own painting is the same whoever cast it.
   const own = woc.ui.icon.aura(auraId);
   if (own !== null) {
     return { art: own, castBy: null };
@@ -319,9 +280,8 @@ function candidateKey(rule, unitKey, auraId, sourceId) {
 }
 
 /**
- * The soak count as the WIRE carried it, and null where it did not. Deliberately not
- * `aura.stacks ?? SINGLE_STACK`: the wire omits a stack count below two, so a default would
- * fabricate the one figure this row exists to answer.
+ * The soak count as the wire carried it, or null. Not `aura.stacks ?? SINGLE_STACK`: the wire
+ * omits a count below two, so a default would fabricate the one figure this row answers.
  */
 function soakersOf(rule, aura) {
   if (rule.counts !== COUNT_SOAKERS) {
@@ -372,7 +332,7 @@ function fromRow(rule, member, row) {
     entityId: null,
     row: true,
     auraId: row.id,
-    // `shadow_word_pain` to "Shadow Word Pain", which is a GUESS and is labelled as one.
+    // Derived from the id, so it is a guess and is labelled as one.
     name: woc.fmt.titleCase(row.id),
     derivedName: true,
     kind: row.kind,
@@ -612,7 +572,7 @@ list.style.display = 'flex';
 list.style.alignItems = 'flex-start';
 list.style.gap = '6px';
 
-/** A budget nobody can see is a budget that lies. */
+/** Counts the alerts past the budget, so the strip never implies it shows them all. */
 const overflow = document.createElement('span');
 overflow.className = 'woc-ew-overflow';
 overflow.style.fontSize = `${String(CAPTION_FONT)}px`;
@@ -885,8 +845,8 @@ function onStrip(entry) {
 }
 
 /**
- * Two lists, because with a `parent` an unshown row's element is removed from the document:
- * a row that anchors itself needs a list with no parent.
+ * Two lists: with a `parent`, an unshown row's element is removed from the document, so a row
+ * that anchors itself needs a list with no parent.
  */
 const strip = woc.ui.list({
   parent: list,
@@ -1228,13 +1188,11 @@ boot().catch((err) => {
   woc.error('could not read the starter rules, so only your own rows will fire', err);
 });
 
-// `icon.aura` answers null until the manifest lands, unlike the ability and item builders, so
-// this is read at start rather than on the first row. An alert is drawn at the moment the
-// effect appears, so a row that raced the read would keep the caster's face for as long as it
-// was up; starting the read here is what keeps that to the first moments of a session.
+// `icon.aura` answers null until the manifest lands, and a row drawn before then keeps the
+// caster's face while it is up, so the read starts here rather than on the first row.
 woc.ui.icon.preloadAuras().catch(() => {
-  // Documented never to reject. Caught anyway, because a broken promise here would be an
-  // unhandled rejection in the page the game is running in.
+  // Documented never to reject; caught so a broken promise cannot be an unhandled rejection in
+  // the game's page.
 });
 
 load();

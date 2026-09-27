@@ -1,12 +1,5 @@
-// The woc.storage surface handed to addons. Mirrors packages/types/storage.d.ts.
-//
-// An addon sees plain keys and never a namespace: the fqid is bound here, so one
-// addon cannot read or overwrite another's data by naming its key, and an addon
-// that moves between marketplaces does not carry a namespace it chose itself.
-//
-// Values go to GM storage, which lives in the extension's own storage area
-// rather than the page's localStorage, so an addon's data is not readable by the
-// game or by anything else running on the page.
+// The woc.storage surface, mirroring packages/types/storage.d.ts. The fqid is bound here, so an
+// addon sees plain keys and cannot name another's. Values live in GM storage, not localStorage.
 
 import { addonNamespace } from '../../shared/storage-keys.ts';
 import type { CharacterStorageDeps, CharacterStore } from './storage-character.ts';
@@ -19,13 +12,7 @@ interface AddonStorageApi {
   delete: (key: string) => Promise<void>;
   /** This addon's own keys only. Loader-owned config lives in another namespace. */
   keys: () => Promise<string[]>;
-  /**
-   * The same four calls, for the character in play rather than for the account.
-   *
-   * A separate namespace rather than a prefix, so `keys()` on either one answers
-   * about itself. See api/storage-character.ts for why a read waits for the
-   * character and a write refuses to.
-   */
+  /** The same calls per character, in a separate namespace so each `keys()` answers for itself. */
   character: CharacterStore;
 }
 
@@ -37,8 +24,7 @@ function createStorage(deps: CharacterStorageDeps): AddonStorageApi {
 
     get: async (key, fallback) => {
       const value = await hub.get(ns, key);
-      // A stored `null` is a value the addon chose and is returned as one. Only
-      // an absent key falls back, which is what GM storage answers with.
+      // A stored `null` is a value; only an absent key falls back.
       if (value === undefined) {
         return fallback;
       }

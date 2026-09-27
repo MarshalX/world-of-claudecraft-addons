@@ -1,15 +1,5 @@
-// The check that keeps the published world types honest.
-//
-// `game-types.ts` describes a repository this one does not depend on and cannot
-// compile against, so `tests/types-parity.test.ts` proves only that the loader
-// and the published package agree with EACH OTHER. Both could be wrong about the
-// game together, and nothing at compile time would notice. `shape.ts` is what
-// notices, at runtime, against a live player.
-//
-// So these tests are about the detector, not the game: that it reports a renamed
-// field, a field whose kind changed, and every problem at once rather than the
-// first. A detector that quietly passed would be worse than having none, because
-// the diagnostic it does not print reads as confirmation.
+// The runtime detector for drift between the declared world types and the live game. A detector
+// that quietly passes reads as confirmation, so these pin that it reports.
 
 import { describe, expect, it } from 'vitest';
 import type { Entity } from '../loader/src/runtime/world/game-types.ts';
@@ -26,16 +16,13 @@ describe('the live player against the published shape', () => {
     expect(checkEntityShape(livePlayer())).toEqual([]);
   });
 
-  // The failure this whole module exists for: the game renames something and
-  // every addon reading it gets undefined, forever, with no error anywhere.
   it('reports a field the game renamed', () => {
     const player = livePlayer({ omit: ['maxHp'] });
 
     expect(checkEntityShape(player)).toEqual(['maxHp is missing, expected number']);
   });
 
-  // Subtler than a rename and just as silent: `dead` becoming the 0/1 the party
-  // rows already use would leave `if (e.dead)` reading true for a living player.
+  // `dead` becoming 0/1 would leave `if (e.dead)` true for a living player.
   it('reports a field whose kind changed', () => {
     const player = livePlayer({ set: { dead: 0 } });
 
@@ -43,17 +30,15 @@ describe('the live player against the published shape', () => {
   });
 
   it('reports a Map that became a plain object', () => {
-    // The game's ability ids are snake_case, so the map-turned-object is built
-    // rather than written out: the naming rule does not bend for test data.
+    // Built rather than written out, so snake_case keys pass the naming rule.
     const asObject = Object.fromEntries([['aimed_shot', 4]]);
     const player = livePlayer({ set: { cooldowns: asObject } });
 
     expect(checkEntityShape(player)).toEqual(['cooldowns is object, expected map']);
   });
 
-  // Drift arrives as a batch when the game reworks something, and one field per
-  // session would take as many sessions as there are fields to find the rest.
-  it('reports every problem rather than the first', () => {
+  // Drift arrives in batches.
+  it('reports every problem, not only the first', () => {
     const player = livePlayer({ omit: ['level'], set: { name: 42, pos: { x: 1, z: 3 } } });
 
     expect(checkEntityShape(player)).toEqual([
@@ -82,8 +67,7 @@ describe('what is allowed to be absent', () => {
     expect(checkEntityShape(player)).toEqual([]);
   });
 
-  // Nullable is per field, not a blanket allowance. `hp` is a number on every
-  // entity the game has ever built, so a null there is drift and not an absence.
+  // Nullable is per field.
   it('rejects null on a field the shape does not allow it on', () => {
     const player = livePlayer({ set: { hp: null } });
 
@@ -92,10 +76,7 @@ describe('what is allowed to be absent', () => {
 });
 
 describe('the shape table', () => {
-  // The table is Record<keyof Entity, FieldSpec>, so this cannot drift without a
-  // compile error. It is asserted anyway because the compile-time guarantee is
-  // invisible in a test run, and a future edit that loosened the type would take
-  // the guarantee with it silently.
+  // The table's type already guarantees this; the assertion survives a loosened type.
   it('covers every field the published entity declares', () => {
     const declared: Record<keyof Entity, true> = {
       id: true,
@@ -175,14 +156,11 @@ describe('the shape table', () => {
   });
 });
 
-// A rename inside `stats` or `weapon` is the drift a top-level 'object' check
-// cannot see, and it is the likelier kind: the client builds both with a full set
-// of defaults before the server sends anything, so the field is there, is an
-// object, and every member an addon reads off it is quietly gone.
+// The client builds `stats` and `weapon` with defaults, so a rename inside them passes a
+// top-level 'object' check.
 describe('the objects the checker walks into', () => {
   it('reports a renamed member under the field it was found in', () => {
-    // Written without `armor` rather than with it undefined: an absent KEY is what
-    // a rename produces, and the checker draws that distinction on purpose.
+    // An absent key, not an undefined value, is what a rename produces.
     const renamed = { str: 12, agi: 8, sta: 20, int: 5, spi: 5, pvpOffense: 0, pvpDefense: 0 };
     const player = livePlayer({ set: { stats: renamed } });
 
@@ -201,9 +179,7 @@ describe('the objects the checker walks into', () => {
     expect(checkEntityShape(player)).toEqual([]);
   });
 
-  // A top-level problem hides the nested pass entirely. Walking into a field the
-  // game has replaced wholesale would report every member of it as missing, which
-  // buries the one line that says what actually happened.
+  // A top-level problem skips the nested pass, so one line says what happened.
   it('says nothing about members when the field itself is the wrong kind', () => {
     const player = livePlayer({ set: { stats: [] } });
 

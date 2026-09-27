@@ -1,13 +1,7 @@
 // What counts as a change on the four ground keys.
 //
-// `nodeCooldowns` reuses `cooldownSignature` unchanged, which is the whole point
-// of that function existing: a node's remaining seconds move on every snapshot,
-// so which nodes are cooling is the change worth waking anyone for. Same
-// reasoning, same function, as the ability cooldowns it was written for.
-//
-// The other three leave their countdowns out for the same reason: a death zone's
-// fuse and a corpse's remaining lock both move every sample, and a subscription
-// that fired on either would be reporting that time is passing.
+// Every countdown is left out (node cooldowns, a death zone's fuse, a corpse's lock), since each
+// moves every sample. `nodeCooldowns` reuses `cooldownSignature`: which nodes are cooling.
 
 import { fieldNumber, fieldValue, isRecord } from '../net/frames.ts';
 import { cooldownSignature } from './signature-world.ts';
@@ -37,23 +31,14 @@ function countOf(value: unknown): number {
   return 0;
 }
 
-/**
- * Takes a plain string rather than a `WorldKey`.
- *
- * `signature.ts` imports this module, so naming its key union here would be a
- * cycle for no gain.
- */
+/** Takes a plain string: naming `WorldKey` would be an import cycle with `signature.ts`. */
 function isGroundKey(key: string): key is GroundKey {
   return GROUND_SET.has(key);
 }
 
 /**
- * Which zones are down and where, never how long is left on one.
- *
- * The count leads because a zone carries no id and two can share a position: the
- * S-rank barrage places one under every living member, so two members standing
- * together produce two identical entries, and a reading that collapsed them
- * would report the second ring as no change at all.
+ * Which zones are down and where, never how long is left on one. The count leads because zones
+ * have no id and two can be identical (one under each of two members standing together).
  */
 function deathZoneSignature(zones: unknown): string {
   if (!Array.isArray(zones)) {
@@ -70,18 +55,11 @@ function deathZoneSignature(zones: unknown): string {
 }
 
 /**
- * Which corpses are lootable, what each holds, whether the lock has lapsed, and
- * whether the loot window has.
+ * Which corpses are lootable, what each holds, whether the lock has lapsed, and whether the loot
+ * window has.
  *
- * `mine` is deliberately left out. It is derived from what is already here plus
- * the party roster, so including it would fire this key on every party change,
- * and an addon watching corpses is watching the ground rather than the group.
- *
- * `decayed` has to be in, and it is the one field here that cannot be inferred
- * from the rest. Decay empties `mine` and zeroes `copper`, and `mine` is out for
- * the reason above while `copper` was already 0 for anybody without shared
- * rights, so on a corpse somebody else tapped this reading was byte-identical
- * either side of the moment the game stopped letting anyone open it.
+ * `mine` is left out: it follows the party roster and would fire on every party change.
+ * `decayed` must be in, since on a corpse someone else tapped nothing else here moves at decay.
  */
 function corpseSignature(corpses: unknown): string {
   if (!(corpses instanceof Map)) {
@@ -100,12 +78,8 @@ function corpseSignature(corpses: unknown): string {
 }
 
 /**
- * Where your own body is, or nothing.
- *
- * The whole coordinate, unlike every other signature here: a corpse does not
- * move, so this changes at most twice per death and there is no countdown in it
- * to fire at the sample rate. Empty for no corpse, which is what keeps "released
- * with a body at the world origin" from reading as "no body at all".
+ * Where your own body is: the whole coordinate, since a corpse does not move. Empty for no
+ * corpse, so a body at the world origin still differs from none.
  */
 function corpsePositionSignature(corpse: unknown): string {
   if (!isRecord(corpse)) {

@@ -1,12 +1,7 @@
 // @vitest-environment happy-dom
 
-// The keyed list.
-//
-// Two claims carry the rest. A row that survives a sync must be the SAME row, since an
-// addon holds measured state on it and a re-created row silently restarts all of it.
-// And a sync that changes nothing must touch the document not at all, because a list
-// called from a frame loop that re-inserted its rows would drop hover sixty times a
-// second, and with it the tooltip the player is reading.
+// The keyed list. A row that survives a sync must be the same row, since an addon holds state
+// on it, and a sync that changes nothing must not touch the document, or hover drops per frame.
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { ListOpts } from '../loader/src/runtime/ui/kit/list.ts';
@@ -86,9 +81,8 @@ function panel(): HTMLElement {
 }
 
 /**
- * happy-dom reports NO mutation record for `insertBefore(el, el)`, where a real browser
- * removes the node and puts it back, dropping hover. So idempotence is pinned on the
- * CALL as well as on what the document can be observed to have done.
+ * happy-dom reports no mutation record for `insertBefore(el, el)`, where a real browser
+ * re-inserts the node and drops hover, so idempotence is pinned on the call too.
  */
 function inserts(parent: HTMLElement, run: () => void): number {
   const spy = vi.spyOn(parent, 'insertBefore');
@@ -159,10 +153,8 @@ describe('a keyed list reconciling', () => {
   });
 });
 
-// Two items with one key are a claim that cannot be true, so the reading is refused
-// rather than tolerated: tolerating it draws every row after the duplicate one slot
-// late, on every sync, silently. The refusal lands BEFORE anything is destroyed or
-// created, which is the half worth testing: a bad sync must not half-reconcile.
+// Tolerating a duplicate key draws every later row one slot late, so it is refused, and
+// before anything is destroyed or created: a bad sync must not half-reconcile.
 describe('two items sharing one key', () => {
   const clashing = [...items('a', 'b'), { id: 'a', text: 'AGAIN' }, ...items('c')];
 
@@ -255,9 +247,7 @@ describe('a list with a parent', () => {
   });
 });
 
-// The COST of a needless insert is invisible to a suite, so what is pinned is the only
-// visible thing: a sync that moves nothing touches nothing. The second case keeps the
-// first from passing vacuously, since an unwired observer reports nothing either.
+// The second case keeps the first from passing on an observer that was never wired.
 describe('a list told what it already holds', () => {
   it('writes nothing at all when nothing moved', () => {
     const parent = panel();
@@ -315,10 +305,8 @@ describe('a list with no parent', () => {
   });
 });
 
-// Hold every cooldown running, draw the soonest ready. Under test is the difference
-// between a row that is missing and one that is WRONG: a cut row carries a length the
-// addon learned by watching, and destroying it means the row that comes back baselines
-// from mid-cooldown and draws a fill nothing on screen says is a guess.
+// An unshown row is kept, not destroyed: it carries state the addon learned by watching, and a
+// rebuilt row would baseline from mid-cooldown.
 describe('a list holding more than it shows', () => {
   const topTwo: Shown = (_item, index) => index < 2;
 
@@ -385,9 +373,8 @@ describe('a list holding more than it shows', () => {
     ).toBe(0);
   });
 
-  // A row is either in the parent or nowhere: `remove()` is not scoped, so a row that
-  // re-homed its own element into a world anchor is taken back off it every sync. The
-  // symptom is a cell that flickers rather than an error, which is why it is pinned.
+  // `remove()` is not scoped to the parent, so a row re-homed into a world anchor is taken off
+  // it too; without that it flickers rather than erroring.
   it('takes an unshown row out of wherever it is, not only out of the parent', () => {
     const parent = panel();
     const elsewhere = panel();
@@ -416,11 +403,8 @@ describe('a list holding more than it shows', () => {
   });
 });
 
-// The per-frame pass, which is the half of a list that is not a sync.
-//
-// The row that is HELD AND NOT DRAWN is the case to get right and the easy one to miss:
-// an implementation walking the parent's children, or the drawn slice, passes every
-// other case here and quietly skips exactly the row a fade wants.
+// The per-frame pass. A walk over the parent's children or the drawn slice skips the held but
+// undrawn row, which is the one a fade wants.
 describe('walking what a list holds', () => {
   it('hands back every row, including one it is not drawing', () => {
     const parent = panel();
@@ -441,8 +425,7 @@ describe('walking what a list holds', () => {
     expect(list.values()[0]).toBe(list.get('a'));
   });
 
-  // Creation order, not the order of the last sync, which a caller wanting display
-  // order must not rely on.
+  // Creation order, not display order.
   it('keeps the order the rows were created in', () => {
     const parent = panel();
     const { list } = open(parent);
@@ -522,8 +505,7 @@ describe('clearing and destroying', () => {
   });
 });
 
-// The list goes in the addon's disposal bag, so disable takes down every row it holds.
-// Nothing else here can see that, since `createList` knows nothing about a bag.
+// `createList` knows nothing about the disposal bag, so only this case sees disable reach it.
 const MANIFEST = JSON.stringify({
   id: 'probe',
   name: 'Probe',

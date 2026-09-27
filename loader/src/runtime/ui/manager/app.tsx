@@ -1,13 +1,8 @@
 // The manager window: chrome, tab strip, and the pane for the selected tab.
 //
-// The window carries the game's own `panel` and `panel-title` classes alongside
-// ours, so it inherits the game's border, background, and :root tokens rather
-// than shipping a copy that a game restyle would leave behind.
-//
-// It deliberately does NOT carry the game's `window` class. That class is
-// `display: none` by default and is positioned for life inside #ui, where the
-// HUD's zoom applies; the manager lives at body level, so it takes the look from
-// `panel` and supplies its own layout.
+// It wears the game's `panel` and `panel-title` classes to inherit the game's look. It must NOT
+// wear the game's `window` class, which is `display: none` by default and positioned for life
+// inside #ui, while the manager lives at body level.
 
 import { useEffect, useState } from 'preact/hooks';
 import type { InstalledAddon } from '../../../shared/protocol.ts';
@@ -46,25 +41,12 @@ interface ManagerAppProps {
   devStore: DevStore;
   /** The Dev tab's freeze. Runtime-only: it reaches neither a store nor the host. */
   freeze: FreezeControl;
-  /**
-   * Passed whole rather than as a state prop plus a store prop.
-   *
-   * Three panes read it and each reads a different part, so splitting it would
-   * mean three pairs of props threaded through a component that renders one tab
-   * at a time. The store is a plain object with no reactivity of its own; a
-   * repaint is what makes a read of it current.
-   */
+  /** Passed whole, since three panes read different parts. A repaint makes a read current. */
   catalogStore: CatalogStore;
   formatTime: (at: number) => string;
   readDiagnostics: () => DiagnosticsReading;
   onClose: () => void;
-  /**
-   * Whether the arrange-your-UI mode is on, and the switch for it.
-   *
-   * Threaded through rather than read from the kit, so the manager stays a pure
-   * render over props: the mode can also be toggled by the loader's keybind, and
-   * the repaint that follows is what keeps this control honest.
-   */
+  /** Whether the arrange mode is on. A prop so the render stays pure; the keybind toggles it too. */
   unlocked: boolean;
   onUnlock: (on: boolean) => void;
   /** Null until the player has moved or resized the window. */
@@ -89,11 +71,8 @@ function tabClass(active: boolean): string {
 }
 
 /**
- * The Installed tab is two views: the list, and one addon's own page.
- *
- * Which one is showing lives in the manager rather than in component state, so
- * the stores an open page reads can be loaded before it renders and a repaint
- * driven from outside the tree does not reset it to the list.
+ * The Installed tab: the list, or one addon's page. Which one lives in the manager rather than in
+ * component state, so its stores load before it renders and an outside repaint does not reset it.
  */
 function InstalledTab(props: { app: ManagerAppProps; onFind: (name: string) => void }) {
   const { app } = props;
@@ -115,8 +94,7 @@ function InstalledTab(props: { app: ManagerAppProps; onFind: (name: string) => v
           app.onReload(open.fqid);
         }}
         onUninstall={() => {
-          // Back to the list first: the page about to be shown belongs to an
-          // addon that is on its way out of the registry.
+          // Back to the list first: this page's addon is leaving the registry.
           app.onCloseAddon();
           app.onUninstall(open.fqid);
         }}
@@ -128,12 +106,9 @@ function InstalledTab(props: { app: ManagerAppProps; onFind: (name: string) => v
     <InstalledPane
       state={app.installed}
       statuses={app.statuses}
-      // Off the catalog rather than off the installed rows: "is this companion
-      // available at all" is a question only the source list can answer, and so
-      // is what it would be called if the player took it.
+      // Off the catalog: only the source list knows whether a companion is on offer.
       offered={offeredAddons(catalog.markets)}
-      // Off the catalog for a different reason: the registry keeps an addon's
-      // manifest and not its directory, so it cannot say where the picture is.
+      // The registry keeps no addon directory, so it cannot say where the picture is.
       shots={catalogShots(catalog.markets)}
       onToggle={app.onToggle}
       onOpen={app.onOpenAddon}
@@ -220,12 +195,7 @@ function TabStrip(props: { active: TabId; onPick: (id: TabId) => void }) {
   );
 }
 
-/**
- * Escape closes the manager and stops there.
- *
- * Captured, so the game's own bubble-phase handler does not also close whatever
- * it has open behind the manager. One key press should close one thing.
- */
+/** Escape closes the manager, captured so the game does not also close what is behind it. */
 function useEscapeToClose(onClose: () => void): void {
   useEffect(() => {
     const onKey = (event: KeyboardEvent): void => {
@@ -242,14 +212,8 @@ function useEscapeToClose(onClose: () => void): void {
 }
 
 /**
- * The close mark, as JSX.
- *
- * The second of two renderers over one geometry: the frame builder needs the same
- * mark as a markup string and this one needs elements, and handing preact raw
- * markup would mean `dangerouslySetInnerHTML` for something that does not need
- * it. Everything visible comes from kit/close-glyph.ts, so the two cannot drift.
- *
- * `aria-hidden` because the button already carries the accessible name.
+ * The close mark as JSX, the preact renderer over kit/close-glyph.ts. Hidden from assistive tech
+ * because the button carries the accessible name.
  */
 function CloseGlyph() {
   return (
@@ -267,10 +231,8 @@ function CloseGlyph() {
 
 function ManagerApp(props: ManagerAppProps) {
   const [tab, setTab] = useState<TabId>(DEFAULT_TAB);
-  // Browse's search, held here rather than inside that pane, so a companion's
-  // "Find it" on the Installed tab can switch tab AND say what to look for. A
-  // pane that owned its own filter would be rebuilt empty by the switch, which
-  // is the one thing that jump exists not to do.
+  // Browse's search lives here, so a companion's "Find it" can switch tab and fill it. A pane
+  // owning its filter would be rebuilt empty by the switch.
   const [filter, setFilter] = useState<BrowseFilter>(NO_FILTER);
   useEscapeToClose(props.onClose);
   const refs = useInteractiveFrame({ box: props.box, onGeometry: props.onGeometry });
@@ -283,8 +245,8 @@ function ManagerApp(props: ManagerAppProps) {
     <section
       ref={refs.frame}
       className="woc-window panel"
-      // The one hook that says which window is the manager's: `.woc-window` is
-      // every addon frame as well. ui/mount.ts raises it on open.
+      // Marks the manager's window, since `.woc-window` is every addon frame too. frame.tsx
+      // raises it by this on open.
       data-woc-manager=""
       role="dialog"
       aria-label={UI_TEXT.title}

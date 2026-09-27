@@ -1,9 +1,5 @@
-// The woc.storage surface.
-//
-// An addon sees plain keys and never a namespace. That is not tidiness: the
-// namespace is what stops one addon reading or overwriting another's data by
-// naming its key, and it is bound here rather than passed in so an addon cannot
-// choose it.
+// The woc.storage surface. An addon sees plain keys; the namespace is bound by the loader so
+// an addon cannot choose it and reach another addon's data.
 
 import { describe, expect, it } from 'vitest';
 import { createStorage } from '../loader/src/runtime/api/storage.ts';
@@ -86,9 +82,6 @@ describe('the addon key-value store', () => {
     expect([...(await storage.keys())].sort((a, b) => a.localeCompare(b))).toEqual(['a', 'b']);
   });
 
-  // The reason settings and keybinds live in their own namespace: an addon
-  // calling storage.set('values', ...) would otherwise become the addon whose
-  // settings never persist, and keys() would report loader data as its own.
   it('does not see loader-owned config, and cannot overwrite it', async () => {
     const hub = createFakeStorage();
     await hub.set(configNamespace(FQID), 'values', { window: 5 });

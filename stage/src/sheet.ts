@@ -1,26 +1,13 @@
-// Several scenarios of one addon, side by side, as one picture.
+// Several scenarios of one addon, side by side, as one picture, for an addon whose
+// layout is a setting.
 //
-// An addon that can be configured two ways has two pictures worth taking, and a
-// Browse row has space for one. `cooldown-bars` is the case: bars or a strip of
-// swept icons is a SETTING, and a preview showing one of them is a preview of
-// half the addon.
+// EACH PANEL IS ITS OWN IFRAME. Mounting one addon twice in one document gives two
+// `#woc-addons` elements, two registrations of one keybind, and one fqid shared by
+// two storage namespaces and bus identities. Same-origin panes can be measured
+// directly, and each reaches its own `data-stage="ready"`.
 //
-// EACH PANEL IS ITS OWN IFRAME, and that is the whole design rather than a
-// detail. Mounting one addon twice in one document breaks three ways at once:
-// two elements carrying `#woc-addons`, two registrations of the same keybind
-// fighting over it, and one fqid meaning one storage namespace and one bus
-// identity. An iframe is a genuinely separate loader instance with none of that,
-// and it costs nothing here because the panes are same-origin, so this page can
-// measure straight into `contentDocument` and needs no cooperation from them.
-//
-// It also composes the readiness contract for free: each pane reaches its own
-// `data-stage="ready"`, which already means its fonts are loaded and its icons
-// decoded, so the sheet is ready when its panes are.
-//
-// The captions are drawn HERE rather than composited into the PNG afterwards,
-// because this page already has the game's own faces linked. Drawing them later
-// would mean rendering text through librsvg against whatever fonts happen to be
-// installed, and Cinzel is not one of them.
+// Captions are drawn in this page, which links the game's faces; compositing them
+// later would render through librsvg without Cinzel.
 
 import type { Scenario } from './stage.ts';
 
@@ -29,22 +16,12 @@ const SHEET_ID = 'stage-sheet';
 /** The dataset key `main.ts` writes a pane's readiness to. */
 const STAGE_KEY = 'stage';
 
-/**
- * The viewport each pane's iframe lays out in.
- *
- * Generous on purpose, and unrelated to the size the pane ends up: an addon frame
- * clamped to fit a small viewport is a picture of the viewport. The pane is then
- * cropped down to what was actually drawn, so nothing of this reaches the shot.
- */
+/** Generous so no frame is clamped to the viewport; the pane is cropped afterwards. */
 const PANE_VIEWPORT = { w: 1200, h: 900 };
 
 /**
- * Room around a pane's frame, in CSS pixels.
- *
- * The same 24 `tools/shots-core.ts` leaves around a single-panel capture, for the
- * same reason: the panel's shadow is `0 2px 16px` and paints past its own box.
- * Stated in both places because they are two programs; a sheet pane is cropped
- * here, in the browser, and a whole sheet is cropped there.
+ * Room for the panel's `0 2px 16px` shadow, in CSS pixels. Keep in step with
+ * `tools/shots-core.ts` and the caption rule in stage/stage.css.
  */
 const PANE_MARGIN = 24;
 
@@ -67,32 +44,16 @@ interface Rect {
 }
 
 /**
- * What a pane is cropped around.
- *
- * WORLD ANCHORS COUNT AS DRAWING, which is the whole picture for an addon that
- * puts nothing in a frame at all. Facemark is one: its plates are anchors over
- * units, so a crop that looked only for frames would report that a working addon
- * had drawn nothing. A hidden anchor is excluded for free, since the loader hides
- * one by `display: none` and a rect of no size is filtered out below.
- *
- * SO DOES A BANNER, and it is the one of the three that is not the addon's own
- * element: `ui.banner` is a single loader-owned slot at a fixed place on screen,
- * and an addon that puts a warning in it is drawing exactly as much as one that
- * draws a row. Longwatch is the case that wanted it, and the alert is half of what
- * that addon does.
+ * What a pane is cropped around: frames, world anchors (all some addons draw) and the
+ * loader-owned banner slot. A hidden anchor has an empty rect and is filtered out.
  */
 const DRAWN = '#woc-addons .woc-addon-frame, #woc-addons .woc-anchor3d';
 const BANNER = '#woc-addons .woc-banner-card';
 
 /**
- * How far a banner's scrim reaches past its card, as a fraction of the card's box.
- *
- * `ui/styles/banner.css` paints it as a pseudo-element at `inset: -70% -20%`, and a
- * pseudo-element is in no rect the DOM will hand back. Cropping to the card alone
- * cuts that fade part way down, which photographs as a hard dark band across the
- * picture rather than as a scrim, so the card's box is grown by what is behind it.
- * There is nothing to read the number off at run time: if that inset moves, this
- * moves with it.
+ * How far a banner's scrim reaches past its card. A pseudo-element has no DOM rect, so this
+ * transcribes `inset: -70% -20%` from `ui/styles/banner.css`: keep the two in step, or the
+ * crop cuts the fade into a hard band.
  */
 const SCRIM_REACH = { x: 0.2, y: 0.7 };
 
@@ -117,12 +78,7 @@ function boxesIn(doc: Document, selector: string, grow: (rect: DOMRect) => Rect)
     .map(grow);
 }
 
-/**
- * Where everything one pane drew sits, together.
- *
- * The union rather than the first frame: an addon may put up more than one frame,
- * and a pane around the first would cut the others out of their own preview.
- */
+/** The union of everything one pane drew, since an addon may show several frames. */
 function drawnIn(doc: Document): Rect {
   const rects = [...boxesIn(doc, DRAWN, boxOf), ...boxesIn(doc, BANNER, withScrim)];
   if (rects.length === 0) {
@@ -141,20 +97,11 @@ function drawnIn(doc: Document): Rect {
 }
 
 /**
- * What one pane's root element says about itself.
+ * One pane's readiness. A computed key, because Biome wants `dataset.stage` and TypeScript
+ * forbids dotting into an index signature.
  *
- * A helper doing the computed read, which is STYLE.md's resolution for the pair
- * of rules that disagree here: Biome wants `dataset.stage` and TypeScript forbids
- * dotting into an index signature.
- *
- * `documentElement` IS OPTIONAL HERE and the `?.` on it is load-bearing. An
- * iframe mid-navigation answers `contentDocument` with a document that has no
- * root element yet, for a window this poll lands inside often enough to matter:
- * three runs in four of `pnpm shots satchel` died on it. The throw happened in a
- * `setTimeout` callback, so it escaped as an uncaught page error, `look` was
- * never rescheduled, and the whole sheet waited for a pane that had gone quiet
- * rather than failed. What that reads as is a 15 second `waitForSelector`
- * timeout naming no cause, on a scenario that is working.
+ * The `?.` on `documentElement` is load-bearing: an iframe mid-navigation has a document
+ * with no root yet, and a throw here stops the poll and hangs the sheet with no cause.
  */
 function stageState(doc: Document | null): string | undefined {
   return doc?.documentElement?.dataset[STAGE_KEY];
@@ -164,9 +111,7 @@ function stageState(doc: Document | null): string | undefined {
 function paneReady(frame: HTMLIFrameElement): Promise<Document> {
   return new Promise((resolve, reject) => {
     const look = (): void => {
-      // Every read inside the poll is guarded rather than only the ones that have
-      // been seen to fail, because the failure mode is a hang rather than an
-      // error: a throw here stops the loop and nothing is left to report it.
+      // Every read is guarded: a throw here stops the loop and hangs with no report.
       try {
         const doc = frame.contentDocument;
         const state = stageState(doc);
@@ -179,8 +124,7 @@ function paneReady(frame: HTMLIFrameElement): Promise<Document> {
           return;
         }
       } catch {
-        // Look again. A read that threw is a document mid-navigation, which is a
-        // state to wait through rather than one to report.
+        // A document mid-navigation; look again.
       }
       globalThis.setTimeout(look, READY_POLL_MS);
     };
@@ -189,12 +133,8 @@ function paneReady(frame: HTMLIFrameElement): Promise<Document> {
 }
 
 /**
- * Crop one pane to what it drew.
- *
- * The iframe keeps its full layout viewport and is pushed up and left inside a
- * window sized to the frame, which is the one way to crop an iframe from outside
- * it: the inner page is `position: fixed`, so it cannot be scrolled to the right
- * place instead.
+ * Crop one pane to what it drew by offsetting the iframe inside a window of that size;
+ * the inner page is `position: fixed` and cannot be scrolled into place.
  */
 function cropPane(view: HTMLElement, frame: HTMLIFrameElement, rect: Rect): void {
   view.style.width = `${String(Math.round(rect.w))}px`;
@@ -218,9 +158,6 @@ function buildPane(deps: SheetDeps, scenario: Scenario): [HTMLElement, HTMLIFram
   view.append(frame);
   figure.append(view);
 
-  // Only when there is one to draw. A single-panel preview has nothing to
-  // distinguish itself from, so a title there would be a label on a picture of
-  // the only thing it could be.
   if (scenario.caption !== undefined) {
     const caption = doc.createElement('figcaption');
     caption.textContent = scenario.caption;
@@ -229,13 +166,7 @@ function buildPane(deps: SheetDeps, scenario: Scenario): [HTMLElement, HTMLIFram
   return [figure, frame];
 }
 
-/**
- * Draw every panel and resolve once all of them have.
- *
- * The panes load together rather than one after another: they are independent
- * documents and the slow part is each one's own fetches, so waiting for the
- * first before starting the second would add up for nothing.
- */
+/** Draw every panel, loading in parallel, and resolve once all have painted. */
 async function buildSheet(deps: SheetDeps): Promise<HTMLElement> {
   const { doc } = deps;
   const sheet = doc.createElement('div');

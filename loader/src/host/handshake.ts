@@ -19,10 +19,8 @@ interface ConnectRuntimeOpts {
 }
 
 /**
- * The script executes synchronously on insertion, so it is already done by the
- * time the element is removed and nothing observable is left in the DOM.
- *
- * At document-start `documentElement` can still be null, hence the fallbacks.
+ * The script runs synchronously on insertion, so removing it right after leaves nothing in the
+ * DOM. At document-start `documentElement` can still be null, hence the fallbacks.
  */
 function injectRuntime(doc: Document, payload: BootPayload, source: string): void {
   const script = doc.createElement('script');
@@ -33,10 +31,8 @@ function injectRuntime(doc: Document, payload: BootPayload, source: string): voi
 }
 
 /**
- * Inject the runtime and resolve with the host end of the bridge.
- *
- * The listener goes on before the injection because the runtime posts its hello
- * from the top of the very script being injected.
+ * Inject the runtime and resolve with the host end of the bridge. The listener goes on first,
+ * because the runtime posts its hello from the top of the injected script.
  */
 export function connectRuntime(opts: ConnectRuntimeOpts): Promise<MessagePort> {
   const { win, doc, source, payload } = opts;

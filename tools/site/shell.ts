@@ -1,11 +1,6 @@
-// The document every page is wrapped in: head, header, footer.
-//
-// Two scripts, and the order matters. The theme snippet is INLINE and BLOCKING in
-// the head, before any paint, because a visitor whose stored theme differs from
-// their system preference would otherwise see a flash of the wrong one. The other
-// is a module (deferred by definition, and scoped, so nothing leaks to the page's
-// globals) and it INJECTS its own controls, so there is no dead button with
-// JavaScript off.
+// The document every page is wrapped in: head, header, footer. The theme snippet must stay
+// inline and blocking in the head, or a stored theme flashes the wrong one first; the module
+// script injects its own controls, so there is no dead button with JavaScript off.
 
 import { type Html, html, raw } from './html.ts';
 
@@ -16,34 +11,20 @@ const NAV = [
 ] as const;
 
 /**
- * The copyright line, matching LICENSE exactly.
- *
- * The year is the year of first publication and is deliberately a CONSTANT rather
- * than the current one. Generating it would put a clock in the build, which makes
- * two builds of the same commit differ, and the site build is meant to be
- * reproducible for the same reason `pnpm index` takes its timestamp from the
- * commit. It is also what the convention actually asks for: the year the work was
- * published, extended to a range only when the work materially changes.
+ * The copyright line, matching LICENSE exactly. The year is first publication and stays a
+ * constant: a clock would make two builds of one commit differ.
  */
 const COPYRIGHT = { year: '2026', holder: 'Ilya Siamionau', handle: 'MarshalX' } as const;
 
 /**
- * Read the stored theme before the first paint.
- *
- * Deliberately tiny, deliberately inline, and deliberately not in a file: an
- * external script cannot run before paint whatever its attributes say, and this
- * one exists only to prevent a flash. It writes the attribute tokens.css reads.
+ * Read the stored theme before the first paint, writing the attribute tokens.css reads. Keep it
+ * inline: an external script cannot run before paint.
  */
 const THEME_SNIPPET = `try{var t=localStorage.getItem('woc-theme');if(t)document.documentElement.dataset.theme=t}catch(e){}`;
 
 /**
- * Only the two faces that are certain to be used above the fold.
- *
- * Cinzel 700 is every heading including the h1, and Alegreya Sans 400 is the lead
- * paragraph. The other three (Cinzel 400 for nav and labels, Alegreya 500 and 700)
- * are discovered from the inlined stylesheet a moment later, which is soon enough
- * for type that is not the first thing read. Preloading all five would put 101 kB
- * on the critical path to save a reflow on 50 kB of it.
+ * Only the two faces used above the fold: Cinzel 700 for headings and Alegreya Sans 400 for the
+ * lead. The other three are found from the inlined stylesheet soon enough.
  */
 const PRELOADS = ['cinzel-700', 'alegreya-sans-400']
   .map(
@@ -103,13 +84,7 @@ function footer(site: Site): Html {
 </footer>`;
 }
 
-/**
- * Wrap a page body in the document.
- *
- * `styles` is the concatenated stylesheet, inlined rather than linked: it is
- * small enough that a request on the critical path costs more than the bytes,
- * and it means a page has no render-blocking fetch at all.
- */
+/** Wrap a page body in the document. `styles` is inlined so a page has no render-blocking fetch. */
 export function shell(page: Page, site: Site, styles: string): Html {
   return html`<!doctype html>
 <html lang="en">

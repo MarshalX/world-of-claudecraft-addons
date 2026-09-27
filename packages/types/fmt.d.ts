@@ -13,12 +13,11 @@ export interface FmtApi {
    * Always rounds UP, so it is right for time REMAINING and overstates time
    * ELAPSED. Keep your own arithmetic for an elapsed figure.
    *
-   * `'coarse'` picks its tier from the value and carries four of them, so before
-   * you replace a hand-written formatter, work out the largest value your input
-   * can reach: a shorter one agrees below its own ceiling and nowhere above it.
+   * `'coarse'` picks one of four tiers from the value, so it can disagree with a
+   * hand-written formatter above that formatter's own largest tier.
    *
-   * `duration(59.5)` is `"60"` in `'timer'`, since the minute branch tests the
-   * value you passed and the ceiling is applied after it.
+   * `duration(59.5)` is `"60"` in `'timer'`: the minute branch tests the value
+   * you passed, and the ceiling is applied after it.
    *
    * Null and any non-finite number give `""`, so a figure you do not have yet
    * draws nothing and `LootRoll.remaining` can be passed straight through. Zero
@@ -31,10 +30,10 @@ export interface FmtApi {
   /**
    * An id as words: `aimed_shot` becomes `Aimed Shot`.
    *
-   * A LAST RESORT and worth saying so on screen. Ids and display names have
-   * diverged across abilities, items and mob templates alike, so this answers
-   * `Arcane Shot` for an ability the game calls Fell Shot. Reach for it only
-   * after every route to a carried name has come back empty.
+   * A LAST RESORT, worth disclosing on screen. Ids and display names diverge
+   * across abilities, items and mob templates, so this answers `Arcane Shot` for
+   * an ability the game calls Fell Shot. Use it only after every route to a
+   * carried name has come back empty.
    *
    * Added in API minor 4.
    */
@@ -51,7 +50,7 @@ export interface FmtApi {
    * one of `↑ ↗ → ↘ ↓ ↙ ← ↖`, in 45-degree sectors with `↑` straight ahead.
    *
    * Pairs with `woc.world.bearingTo`, which answers in this convention. A value
-   * outside [-180, 180) is normalised rather than refused.
+   * outside [-180, 180) is normalised.
    *
    * Null and any non-finite number give `""`, so a bearing you do not have draws
    * no arrow rather than one pointing confidently forward. `0` is a real reading.

@@ -17,8 +17,6 @@ describe('createWorldWatcher', () => {
     expect(seen).toHaveBeenCalledExactlyOnceWith(h.live.player);
   });
 
-  // Firing once on subscribe just because nothing had been recorded yet would
-  // make every addon's first frame a lie.
   it('does not fire on the first sample when nothing moved', () => {
     const h = harness();
     const seen = vi.fn();
@@ -29,7 +27,7 @@ describe('createWorldWatcher', () => {
     expect(seen).not.toHaveBeenCalled();
   });
 
-  it('fires once per change rather than once per sample', () => {
+  it('fires once per change', () => {
     const h = harness();
     const seen = vi.fn();
     h.watcher.on('player', seen);
@@ -109,8 +107,6 @@ describe('createWorldWatcher', () => {
       expect(stays).toHaveBeenCalledOnce();
     });
 
-    // Re-subscribing must not replay a change that happened while nobody was
-    // watching, or an addon toggled off and on sees stale history.
     it('reseeds the baseline on a fresh subscribe', () => {
       const h = harness();
       h.watcher.on('player', vi.fn())();
@@ -161,8 +157,7 @@ describe('createWorldWatcher', () => {
     });
   });
 
-  // The watcher is built at boot, before the game exists, so every read has to
-  // answer null until it does.
+  // The watcher is built at boot, before the game exists.
   describe('before the game exists', () => {
     it('samples a detached backend without throwing, and stays quiet', () => {
       const h = harness();
@@ -174,8 +169,6 @@ describe('createWorldWatcher', () => {
       expect(seen).not.toHaveBeenCalled();
     });
 
-    // An addon can hold woc.world and subscribe from its first line, before the
-    // player has even entered the world. World entry is the change it waits for.
     it('reports world entry to a listener that subscribed before it', () => {
       const h = harness();
       h.setAttached(false);
@@ -206,10 +199,7 @@ describe('createWorldWatcher', () => {
   });
 });
 
-// The end of the path a boss mod actually takes, kept as its own block because it
-// is a different claim from the sampler's: a mob's cast emits no event at all, so
-// the sampler noticing a cast field move on an entity ALREADY in the roster is the
-// only thing in the loader that can wake an addon for one.
+// A mob's cast emits no event, so the sampler is the only thing that can wake an addon for it.
 describe('watching casts', () => {
   it('wakes a subscriber when a mob starts casting, with no roster change', () => {
     const h = harness();

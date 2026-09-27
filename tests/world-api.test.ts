@@ -95,8 +95,6 @@ describe('before the game exists', () => {
     expect([...world.entities]).toEqual([]);
   });
 
-  // Same reasoning as the roster: an addon that loops over the casts it can see
-  // must not have to guard the read before world entry.
   it('answers an empty cast map rather than null', () => {
     const { world } = harness();
 
@@ -104,11 +102,8 @@ describe('before the game exists', () => {
     expect([...world.casts]).toEqual([]);
   });
 
-  // Found by running the dev-harness addon through the real loader. The empty
-  // roster used to be a bare Map, so before world entry the published contract
-  // ("set, delete, and clear throw") did not hold, and the surface changed shape
-  // under an addon the moment the game arrived.
-  it('refuses a write to the empty roster, exactly as the live one does', () => {
+  // The published contract says set, delete and clear throw, before world entry too.
+  it('refuses a write to the empty roster, as the live one does', () => {
     const { world } = harness();
     const entities = world.entities as Map<number, unknown>;
 
@@ -117,9 +112,7 @@ describe('before the game exists', () => {
     expect(() => entities.clear()).toThrow(TypeError);
   });
 
-  // The worse half of the same defect: the fallback was one module-level Map
-  // shared by every addon, so a write from one before world entry would have
-  // been visible to all of them.
+  // A shared fallback would let one addon's write reach every other.
   it('does not hand every addon the same roster object', () => {
     const first = harness().world.entities;
     const second = harness().world.entities;
@@ -181,8 +174,7 @@ describe('once the game exists', () => {
     });
   });
 
-  // The reason this surface exists: no event announces a mob's cast, so a boss
-  // mod can only see one by reading it off the roster.
+  // No event announces a mob's cast, so the roster is the only source.
   it('derives casts from the live roster', async () => {
     const h = harness();
     h.enterWorld();
@@ -193,8 +185,7 @@ describe('once the game exists', () => {
     expect(h.world.casts.get(248)).toMatchObject({ ability: 'soul_rend', total: 3 });
   });
 
-  // `world.on('target')` reports the SELECTION changing and nothing else, so
-  // without this read a debuff on a boss is unreachable.
+  // `world.on('target')` reports only the selection changing.
   it('reads the auras off whatever is targeted', async () => {
     const h = harness();
     h.enterWorld();
@@ -236,8 +227,7 @@ describe('world.ready', () => {
     await expect(h.world.ready).resolves.toBeUndefined();
   });
 
-  // A hook with no world member cannot back the API, and saying so is better
-  // than answering null forever and looking like an empty world.
+  // Answering null forever would look like an empty world.
   it('rejects when __game carries no world', async () => {
     const h = harness({ renderer: {} });
     h.enterWorld();
@@ -253,11 +243,8 @@ describe('world.ready', () => {
 });
 
 describe('world.on', () => {
-  // The key is typed now, so an author compiling against @woc-addons/types is
-  // told at their desk. The runtime check is still the one that matters:
-  // addons are plain JavaScript evaluated as a function body, with no build
-  // step, so nothing else stands between a typo and a subscription that would
-  // silently never fire. The cast is how the test reaches that path.
+  // Addons are plain JavaScript with no build step, so the runtime check is what catches a typo.
+  // The cast reaches that path past the typed key.
   const unknownKey = 'healthbar' as 'player';
 
   it('rejects a key it does not know, naming the ones it does', () => {

@@ -1,16 +1,9 @@
-// The two-realm bootstrap contract, shared by both halves.
+// The two-realm bootstrap contract. The host injects the boot payload and the runtime in one
+// <script>, so the runtime takes the payload before other page code runs; the two then trade a
+// MessagePort by nonce over window.postMessage and use only the port afterwards.
 //
-// The host writes a boot payload onto the page's global scope and injects the
-// runtime bundle in the same <script>, so the runtime reads and removes the
-// payload before any other page code can run. The two then negotiate a
-// MessagePort by nonce over window.postMessage, and all further traffic is on
-// the port.
-//
-// The nonce is the only authenticator. An origin check on receipt would add
-// nothing: a same-window postMessage is not delivered to frames, and a 128-bit
-// CSPRNG value is not guessable by anything that could receive it. It would also
-// be unreliable, because a userscript sandbox may hand out a proxied window
-// whose identity does not compare equal to the event's source.
+// The nonce is the only authenticator. An origin or source check adds nothing and is unreliable,
+// since a userscript sandbox may hand out a proxied window that does not compare equal.
 
 const NONCE_BYTES = 16;
 const HEX_RADIX = 16;
@@ -30,12 +23,7 @@ function ownString(data: unknown, key: string): string | null {
   return value;
 }
 
-/**
- * The global surface the handshake uses.
- *
- * Narrower than Window on purpose. A userscript sandbox may hand out a proxied
- * global that is not the page's Window, and neither half needs more than this.
- */
+/** The global surface the handshake uses, narrower than Window because a sandbox may proxy it. */
 export interface MessageScope {
   readonly addEventListener: (type: 'message', listener: (event: MessageEvent) => void) => void;
   readonly removeEventListener: (type: 'message', listener: (event: MessageEvent) => void) => void;
@@ -53,13 +41,7 @@ export const BOOT_GLOBAL = '__wocBoot';
 
 export interface BootPayload {
   nonce: string;
-  /**
-   * The installed userscript's version, read from GM_info by the host.
-   *
-   * Carried here rather than compiled into the runtime so the manager reports
-   * the version the player actually has installed, which is the one that
-   * matters when the answer is "your loader is out of date".
-   */
+  /** The installed userscript's version from GM_info, which a compiled-in constant cannot know. */
   version: string;
 }
 
@@ -79,28 +61,16 @@ export function createNonce(entropy: Pick<Crypto, 'getRandomValues'>): string {
 }
 
 /**
- * The full text of the injected script: payload, runtime, cleanup.
- *
- * The runtime claims the payload as its first act, so the `finally` is a
- * backstop for a runtime that throws before reaching it. Without it a dead
- * runtime would leave the nonce readable on the page global, and page code could
- * then replay the hello and be handed the host's port. The host cannot clear it
- * from its own side, because a sandbox global is not the page's.
- *
- * A bundle that fails to parse needs no backstop: the assignment never runs
- * either, since the whole script is one parse unit.
+ * The full text of the injected script: payload, runtime, cleanup. The `finally` removes the
+ * payload if the runtime throws before claiming it, or page code could replay the hello and take
+ * the host's port. The host cannot clear it itself, since a sandbox global is not the page's.
  */
 export function bootScript(payload: BootPayload, source: string): string {
   const global = `globalThis[${JSON.stringify(BOOT_GLOBAL)}]`;
   return `${global}=${JSON.stringify(payload)};\ntry{\n${source}\n}finally{delete ${global};}`;
 }
 
-/**
- * Read the boot payload and remove it from the global scope.
- *
- * Removing rather than blanking it matters: a leftover enumerable key is both a
- * fingerprint and a handle for page code.
- */
+/** Read the boot payload and delete it: a blanked key would still fingerprint the loader. */
 export function takeBootPayload(scope: Record<string, unknown>): BootPayload | null {
   const raw = scope[BOOT_GLOBAL];
   Reflect.deleteProperty(scope, BOOT_GLOBAL);
@@ -108,8 +78,7 @@ export function takeBootPayload(scope: Record<string, unknown>): BootPayload | n
   if (nonce === null || nonce.length === 0) {
     return null;
   }
-  // The nonce is what the handshake rests on, so its absence is fatal. A missing
-  // version only costs one line of the Diagnostics pane.
+  // A missing nonce is fatal; a missing version only costs a Diagnostics line.
   return { nonce, version: ownString(raw, 'version') ?? UNKNOWN_VERSION };
 }
 

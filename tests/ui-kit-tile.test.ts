@@ -1,20 +1,7 @@
 // @vitest-environment happy-dom
 
-// The square timer.
-//
-// Most of what a tile is lives in its sheet, and a suite cannot read a sheet under
-// vitest, so this pins the two things the module actually decides.
-//
-// The first is the INVERSION. Every public fraction in this kit means "how much is
-// left", and the wedge takes the opposite number: the sheet's gradient is
-// transparent as far as the timer has got. Getting that backwards produces a tile
-// that is dark when the ability is ready and clear when it is not, which is a
-// perfectly plausible-looking overlay that says the opposite of the truth.
-//
-// The second is the accessible NAME. A tile has no text of its own that names it,
-// so the name is composed from parts that move independently, which means it is
-// held state and can go stale: a countdown that stops updating the name would
-// announce the ability's first second for the whole cooldown.
+// The sheet is unreadable under vitest, so this pins what the module decides: the wedge inverts
+// the public "how much is left" fraction, and the accessible name is held state that can go stale.
 
 import { describe, expect, it } from 'vitest';
 import { createTile } from '../loader/src/runtime/ui/kit/tile.ts';
@@ -32,9 +19,7 @@ function sweep(tile: { el: HTMLElement }): string {
 }
 
 describe('the sweep', () => {
-  // Stated as the pair, because either one alone reads as correct under the
-  // opposite convention: a full timer covers the art and an expired one gives it
-  // all back.
+  // Either half alone reads as correct under the opposite convention.
   it('covers the art when the timer is full and clears when it is done', () => {
     const tile = createTile(document, { fraction: 1 });
 
@@ -51,9 +36,7 @@ describe('the sweep', () => {
     expect(sweep(tile)).toBe('50.00%');
   });
 
-  // The same failure a bar's fill has: a NaN assigned to a style property drops the
-  // declaration in silence, so the wedge would hold its last angle and read as a
-  // timer that has stopped moving.
+  // A NaN style value is dropped silently, so the wedge would freeze at its last angle.
   it.each([
     ['NaN', Number.NaN],
     ['Infinity', Number.POSITIVE_INFINITY],
@@ -79,8 +62,6 @@ describe('the accessible name', () => {
     expect(tile.el.getAttribute('aria-label')).toBe('Fell Shot, 4.2s, 2');
   });
 
-  // The one that goes stale. The name is composed from held state, so a countdown
-  // that only moves `value` has to bring the name with it.
   it('follows a figure that moved without the label', () => {
     const tile = createTile(document, { label: 'Fell Shot', value: '4.2s' });
 
@@ -89,9 +70,7 @@ describe('the accessible name', () => {
     expect(tile.el.getAttribute('aria-label')).toBe('Fell Shot, 1.1s');
   });
 
-  // Art with a wedge over it and no name is not something anyone can act on, and
-  // announcing a bare countdown is worse than announcing nothing.
-  it('hides an unlabelled tile rather than announcing a bare number', () => {
+  it('hides an unlabelled tile instead of announcing a bare number', () => {
     const tile = createTile(document, { value: '4.2s' });
 
     expect(tile.el.getAttribute('aria-hidden')).toBe('true');
@@ -107,10 +86,7 @@ describe('the accessible name', () => {
     expect(tile.el.getAttribute('aria-label')).toBe('Fell Shot, 4.2s');
   });
 
-  // A strip reuses its tiles rather than rebuilding them, so a name that could be
-  // set and never unset is a tile that goes on announcing what it used to hold. A
-  // bag grid found it: a square vacated by a stack kept the stack's name, which a
-  // sighted player could see was empty and a screen reader could not.
+  // Strips reuse tiles, so a name that is never unset announces what the tile used to hold.
   it('goes back to unnamed when the label is nulled', () => {
     const tile = createTile(document, { label: 'Bone Fragments', value: '' });
 
@@ -120,8 +96,7 @@ describe('the accessible name', () => {
     expect(tile.el.getAttribute('aria-label')).toBeNull();
   });
 
-  // Undefined is "leave it alone", which is what every other member of an update
-  // means and is what lets a caller move one figure without restating the rest.
+  // Undefined means "leave it alone", as for every other member of an update.
   it('leaves the name alone when the label is simply absent', () => {
     const tile = createTile(document, { label: 'Fell Shot' });
 
@@ -138,7 +113,7 @@ describe('the figures', () => {
     expect(part(tile, '.woc-tile-count').hidden).toBe(true);
   });
 
-  it('takes a count away again rather than leaving the last one up', () => {
+  it('clears a count set to null', () => {
     const tile = createTile(document, { count: 3 });
 
     tile.update({ count: null });
@@ -157,10 +132,8 @@ describe('the figures', () => {
 });
 
 describe('a tile reused for something else', () => {
-  // A strip of tiles is rebuilt constantly as auras come and go. One that
-  // accumulated its variants would end up bordered by two schools at once, and
-  // which one showed would depend on the order the sheet happened to be in.
-  it('swaps its school rather than collecting them', () => {
+  // An accumulated variant would leave two schools on one tile, decided by sheet order.
+  it('swaps its school instead of collecting them', () => {
     const tile = createTile(document, { school: 'fire' });
 
     tile.update({ school: 'frost' });
@@ -175,10 +148,7 @@ describe('a tile reused for something else', () => {
     expect([...tile.el.classList].some((name) => name.startsWith('woc-tile-school-'))).toBe(false);
   });
 
-  // The third axis, and the one a grid of items is read by. Swapped like a school rather
-  // than accumulated, for the same reason: a square reused for another item would otherwise
-  // carry two tiers at once and the sheet's order would decide which showed.
-  it('swaps its quality rather than collecting them', () => {
+  it('swaps its quality instead of collecting them', () => {
     const tile = createTile(document, { quality: 'rare' });
 
     tile.update({ quality: 'epic' });
@@ -187,10 +157,8 @@ describe('a tile reused for something else', () => {
     expect(tile.el.classList.contains('woc-tile-quality-epic')).toBe(true);
   });
 
-  // Null is what an addon passes for the 96 items the game ranks at no tier AND for an id it
-  // has not looked up, and both mean the same thing on screen: the square keeps the panel's
-  // own edge rather than being given a tier nobody claimed.
-  it('colours nothing for no tier at all, and takes the tier back off', () => {
+  // Null means both an unranked item and an unlooked-up id; either keeps the panel's own edge.
+  it('drops the tier for a null quality', () => {
     const tile = createTile(document, { quality: 'legendary' });
 
     tile.update({ quality: null });
@@ -204,9 +172,8 @@ describe('a tile reused for something else', () => {
     expect([...tile.el.classList].some((name) => name.startsWith('woc-tile-quality-'))).toBe(false);
   });
 
-  // The art slot hides itself when an image fails, so it has to come back when the
-  // tile is pointed at a file that does exist.
-  it('gets its art slot back when pointed at something else', () => {
+  // The art slot hides itself on a failed image.
+  it('shows its art slot again for a new icon', () => {
     const tile = createTile(document, { icon: '/ui/skills/hunter/aimed_shot.webp' });
     const art = part(tile, '.woc-tile-art');
     art.dispatchEvent(new Event('error'));
@@ -226,28 +193,25 @@ describe('a tile reused for something else', () => {
 });
 
 describe('the size', () => {
-  it('is the addon"s when it asked for one', () => {
+  it("is the addon's when it asked for one", () => {
     const tile = createTile(document, { size: 28 });
 
     expect(tile.el.style.getPropertyValue('--woc-tile-size')).toBe('28px');
   });
 
-  // A zero-sized tile is invisible and unhittable, and a NaN drops the declaration,
-  // so both have to fall through to the sheet's floor rather than being written.
+  // A zero size is invisible and a NaN drops the declaration, so both fall back to the sheet.
   it.each([
     ['zero', 0],
     ['NaN', Number.NaN],
     ['a string', '40'],
-  ])('leaves the sheet"s default in place for %s', (_label, bad) => {
+  ])("leaves the sheet's default in place for %s", (_label, bad) => {
     const tile = createTile(document, { size: bad as number });
 
     expect(tile.el.style.getPropertyValue('--woc-tile-size')).toBe('');
   });
 
-  // A strip that scales with its frame moves tiles that already exist. Rebuilding
-  // them instead would throw away art the browser has already decoded, on every
-  // pointer move of a resize.
-  it('moves on an update, so a strip can scale without being rebuilt', () => {
+  // Rebuilding tiles on every resize move would discard decoded art.
+  it('changes size on an update', () => {
     const tile = createTile(document, { size: 28 });
 
     tile.update({ size: 64 });
@@ -275,15 +239,8 @@ it('removes itself on destroy', () => {
   expect(host.querySelector('.woc-tile')).toBeNull();
 });
 
-// A strip of tiles is animated from an addon's frame loop, so `update` runs per tile
-// per frame and nearly always says what the tile already says. The accessible name is
-// the expensive half of that: it is composed from three parts that move on their own
-// schedules, so it was recomposed and rewritten on every call whether or not the
-// answer had changed, which put an attribute mutation on the accessibility tree per
-// tile per frame.
-//
-// The second case is what keeps the first from passing vacuously, and the third is
-// the one that would break if the guard were written as "write the name once".
+// `update` runs per tile per frame, so a repeat must not mutate the DOM or the accessibility tree.
+// The second case keeps the first from passing vacuously; the third breaks a "write once" guard.
 describe('a tile told what it already says', () => {
   function touches(el: HTMLElement, run: () => void): number {
     const observer = new MutationObserver(() => undefined);

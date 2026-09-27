@@ -1,16 +1,5 @@
-// `pnpm site:dev`: build the site, serve it, rebuild when an input changes.
-//
-// The build this runs is the REAL build, not a variant of it: same generator,
-// same inputs, same output tree. The site is not deployed until it is finished,
-// so this server is the only way anyone looks at it until then, and a dev-only
-// branch anywhere in the generator would move the first honest render of a page
-// to the deploy. The only thing this adds is `--offline`, which skips the release
-// lookup, and that is a flag the real build takes too.
-//
-// Routes are resolved directory-style, exactly as GitHub Pages resolves them, so
-// `/docs/patterns` works here and there or fails in both. Checking a URL shape
-// locally that does not ship is the failure deferring the deploy is meant to
-// prevent.
+// `pnpm site:dev`: build the site, serve it, rebuild when an input changes. It runs the real
+// build with `--offline`, and resolves routes directory-style exactly as GitHub Pages does.
 
 import { spawn } from 'node:child_process';
 import { createReadStream, existsSync, statSync, watch } from 'node:fs';
@@ -30,9 +19,7 @@ const WATCHED = [
   'site/content',
   'site/static',
   'tools/site',
-  // The generator's own entry point, the catalog every page is built from, and
-  // which addons get a picture. All three change what a page renders, and none
-  // of them is under tools/site.
+  // Outside tools/site, but each changes what a page renders.
   'tools/site.mjs',
   'tools/catalog.ts',
   'tools/featured.ts',
@@ -86,10 +73,8 @@ function build() {
 }
 
 /**
- * The file a request path maps to, or null if it escapes the output directory.
- *
- * Directory-style: a path with no extension gets `/index.html`, which is how
- * Pages serves the same tree.
+ * The file a request path maps to, or null if it escapes the output directory. A path with no
+ * extension gets `/index.html`, as on Pages.
  */
 function resolveFile(urlPath) {
   const decoded = decodeURIComponent(urlPath.split('?')[0] ?? '/');

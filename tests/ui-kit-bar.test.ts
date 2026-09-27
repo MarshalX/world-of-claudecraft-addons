@@ -1,21 +1,6 @@
 // @vitest-environment happy-dom
 
 // The timer bar and the centre-screen banner.
-//
-// Both exist because addons had already written them. The bar is the row Cooldown
-// Bars and Combat Meter each hand-rolled, and the two had drifted in the ways that
-// are easy to get wrong: which part shrinks, whether the figure reserves its width,
-// whether a bad fraction is clamped. Those are what this suite pins.
-//
-// The fraction cases are the ones that come from a real failure mode rather than
-// from tidiness. A NaN assigned to a style property drops the declaration SILENTLY,
-// so a bar that divides by a total it does not have yet does not throw and does not
-// blank: it holds its last width, which reads as a timer that has stopped.
-//
-// For the banner the claim under test is the replacement rule. There is one slot
-// for the whole loader, so the interesting case is the timer of a banner that has
-// already been replaced: if it still fired against the slot it would take the NEWER
-// warning down, which is the one the player has not read yet.
 
 import { afterEach, describe, expect, it } from 'vitest';
 
@@ -97,7 +82,7 @@ describe('a bar', () => {
     expect(part(bar, '.woc-bar-value').textContent).toBe('2.0s');
   });
 
-  it('carries an addon"s own class alongside the kit"s', () => {
+  it("carries an addon's own class alongside the kit's", () => {
     const bar = createBar(document, { className: 'my-cd-row' });
 
     expect(bar.el.classList.contains('woc-bar')).toBe(true);
@@ -119,8 +104,6 @@ describe('a bar', () => {
     expect(bar.el.classList.contains('woc-bar-default')).toBe(true);
   });
 
-  // The second line is what makes this a shared row rather than a timer-only one:
-  // Cooldown Bars uses the head alone, Combat Meter puts its hit count underneath.
   it('hides the second line until there is one', () => {
     const bar = createBar(document, { label: 'Fireball' });
 
@@ -145,8 +128,7 @@ describe('a bar', () => {
     expect((part(bar, '.woc-bar-detail') as HTMLElement).hidden).toBe(true);
   });
 
-  // The fill is a sibling of both lines rather than of the head, which is what makes
-  // a share read as the whole row's rather than as a bar on the top line of it.
+  // The fill spans both lines, so a share reads as the whole row's.
   it('puts the fill behind both lines rather than inside the head', () => {
     const bar = createBar(document, { detail: '12 hits', fraction: 0.5 });
 
@@ -154,9 +136,8 @@ describe('a bar', () => {
     expect(part(bar, '.woc-bar-label').closest('.woc-bar-head')).not.toBeNull();
   });
 
-  // School is a SEPARATE axis from tone, not more values on it: tone is urgency and a
-  // school is what kind of damage a row is made of. Which wins where both are set is
-  // settled in the sheet by source order, so the module's job is only to record both.
+  // Which of school and tone wins is settled in the sheet by source order, so the module only
+  // records both.
   it('tints by school without disturbing the tone', () => {
     const bar = createBar(document, { tone: 'warn', school: 'frost' });
 
@@ -173,8 +154,7 @@ describe('a bar', () => {
     expect(bar.el.classList.contains('woc-bar-school-shadow')).toBe(true);
   });
 
-  // A heal carries no school, so a caller reading one off an event legitimately has
-  // null. It must tint nothing rather than fall back to a school the event never named.
+  // A heal carries no school, so null is a legitimate value and must tint nothing.
   it.each([
     ['null, which a healing row passes', null],
     ['a school the game does not have', 'chaos' as 'fire'],
@@ -184,8 +164,6 @@ describe('a bar', () => {
     expect([...bar.el.classList].some((name) => name.startsWith('woc-bar-school-'))).toBe(false);
   });
 
-  // The third axis, for a row that is an ITEM. It takes none of the other two's properties,
-  // so a market row can be an epic, made of shadow damage and about to expire at once.
   it('carries a quality beside a tone and a school rather than instead of one', () => {
     const bar = createBar(document, { tone: 'warn', school: 'shadow', quality: 'epic' });
 
@@ -203,8 +181,6 @@ describe('a bar', () => {
     expect(bar.el.classList.contains('woc-bar-quality-rare')).toBe(true);
   });
 
-  // The fourth axis, for a row that is a PERSON. It takes none of the others' properties
-  // either, so a party row can be a priest, about to expire, and made of shadow at once.
   it('carries a class beside the other three', () => {
     const bar = createBar(document, {
       tone: 'warn',
@@ -226,8 +202,7 @@ describe('a bar', () => {
     expect(bar.el.classList.contains('woc-bar-class-druid')).toBe(true);
   });
 
-  // A `templateId` is a class on a player and a mob template everywhere else, so the id an
-  // addon holds reaches this field as `boss_wolf` about as often as it does as `mage`.
+  // A `templateId` is a mob template on anything but a player, so `boss_wolf` reaches this field.
   it.each([
     ['null, which a caller who checked the kind passes', null],
     ['a mob template, which is what a templateId is off a player', 'boss_wolf' as 'mage'],
@@ -237,8 +212,7 @@ describe('a bar', () => {
     expect([...bar.el.classList].some((name) => name.startsWith('woc-bar-class-'))).toBe(false);
   });
 
-  // Null is an addon saying it does not know the tier, which is the ordinary state of an
-  // item id anywhere on this API, and it must colour nothing rather than guess at one.
+  // Null means the tier is unknown, which is ordinary for an item id, so nothing is guessed.
   it.each([
     ['null, which an id nobody has looked up passes', null],
     ['a tier the game does not rank', 'mythic' as 'epic'],
@@ -266,10 +240,9 @@ describe('a bar', () => {
   });
 });
 
-describe('a bar"s fill fraction', () => {
-  // The reason this is clamped rather than passed through. A timer fraction is a
-  // division by a total, and an addon reading a cooldown it has not seen start
-  // divides by zero: Infinity and NaN both drop the style declaration in silence.
+describe("a bar's fill fraction", () => {
+  // A cooldown the addon has not seen start divides by zero, and Infinity and NaN both drop
+  // the style declaration silently, freezing the bar at its last width.
   it.each([
     ['NaN', Number.NaN],
     ['Infinity', Number.POSITIVE_INFINITY],
@@ -293,15 +266,8 @@ describe('a bar"s fill fraction', () => {
   });
 });
 
-// An addon animates a readout from its own frame loop, so `update` runs per row per
-// frame and nearly always says what the row already says. Every one of those used to
-// write anyway: three textContent assignments, ten classList calls to swap one tone,
-// and a style property, each of which dirties style recalc for the loader's subtree.
-//
-// The COST is invisible to a suite, so what is pinned is the only thing that is
-// visible: a repeat must touch nothing at all. The second case is what keeps the
-// first from passing vacuously, since an observer that was never wired up correctly
-// would report no records for a real change too.
+// `update` runs per row per frame and nearly always repeats itself, and every write dirties
+// style recalc. The second case keeps the first from passing on a mis-wired observer.
 describe('a readout told what it already says', () => {
   function touches(el: HTMLElement, run: () => void): number {
     const observer = new MutationObserver(() => undefined);
@@ -340,10 +306,7 @@ describe('a readout told what it already says', () => {
   });
 });
 
-// Money is drawn rather than spelled out, which is the one value that is not a
-// string, so what these pin is the two things a coin row can get wrong: an empty
-// unit drawn anyway, and the discs leaving a screen reader with bare numbers.
-describe('a bar"s figure as money', () => {
+describe("a bar's figure as money", () => {
   function coins(bar: { el: HTMLElement }): string[] {
     return [...bar.el.querySelectorAll('.woc-coin-part')].map(
       (el) => `${el.querySelector('.woc-coin')?.className ?? ''}=${el.textContent ?? ''}`,
@@ -362,16 +325,14 @@ describe('a bar"s figure as money', () => {
     expect(coins(bar)).toEqual(['woc-coin woc-coin-copper=0']);
   });
 
-  // A price divided by a count the caller does not have yet is how a NaN reaches a
-  // readout, and `NaNg NaNs NaNc` is worse than a zero.
+  // A price divided by a missing count is NaN, and `NaNg NaNs NaNc` is worse than a zero.
   it('reads an amount that is not a number as nothing', () => {
     const bar = createBar(document, { value: { copper: Number.NaN } });
 
     expect(coins(bar)).toEqual(['woc-coin woc-coin-copper=0']);
   });
 
-  // The discs carry the units and a disc reads as nothing at all, so a figure left
-  // to be read child by child announces "low 7 80".
+  // A disc reads as nothing, so a figure read child by child announces "low 7 80".
   it('is announced as one figure with its units in words', () => {
     const bar = createBar(document, { value: { copper: 10_780, prefix: 'low' } });
     const value = part(bar, '.woc-bar-value');
@@ -407,7 +368,7 @@ describe('a bar"s figure as money', () => {
   });
 });
 
-describe('a bar"s icon', () => {
+describe("a bar's icon", () => {
   it('is hidden until there is a URL for it', () => {
     const bar = createBar(document, { label: 'Melee' });
 
@@ -422,8 +383,7 @@ describe('a bar"s icon', () => {
     expect(icon.getAttribute('src')).toBe('/ui/skills/hunter/aimed_shot.webp');
   });
 
-  // Not every ability ships painted art, so a URL that does not resolve is an
-  // ordinary outcome. Collapsing the slot is better than a broken-image glyph.
+  // Not every ability ships painted art, so a 404 is ordinary and collapses the slot.
   it('hides itself when the art does not exist', () => {
     const bar = createBar(document, { icon: '/ui/skills/mage/no_such_art.webp' });
     const icon = part(bar, '.woc-bar-icon') as HTMLImageElement;
@@ -433,8 +393,6 @@ describe('a bar"s icon', () => {
     expect(icon.hidden).toBe(true);
   });
 
-  // A list of rows is reused as its contents change, so a row whose icon failed
-  // once has to get its slot back when it is pointed at art that does exist.
   it('comes back when the row is reused for something that has art', () => {
     const bar = createBar(document, { icon: '/ui/skills/mage/no_such_art.webp' });
     const icon = part(bar, '.woc-bar-icon') as HTMLImageElement;
@@ -453,8 +411,7 @@ describe('a bar"s icon', () => {
     expect((part(bar, '.woc-bar-icon') as HTMLImageElement).hidden).toBe(true);
   });
 
-  // The label beside it already names the ability. An alt repeating that would
-  // have a screen reader read every row in the frame twice.
+  // An alt repeating the label would have a screen reader read every row twice.
   it('is marked decorative, because the label is the accessible name', () => {
     const bar = createBar(document, { label: 'Fireball', icon: '/x.webp' });
     const icon = part(bar, '.woc-bar-icon');
@@ -481,8 +438,7 @@ describe('the banner', () => {
     expect(document.querySelector('.woc-banner-detail')?.textContent).toBe('on Marshal');
   });
 
-  // Assertive, unlike the toast stack, and the difference is the point: a warning
-  // whose whole value expires in two seconds has to interrupt.
+  // Assertive, unlike the toast stack: a warning that expires in two seconds has to interrupt.
   it('announces itself assertively', () => {
     const b = banner();
     b.instance.show('Move');
@@ -498,9 +454,8 @@ describe('the banner', () => {
     expect(document.querySelector('.woc-banner-card')?.classList).toContain('woc-banner-warn');
   });
 
-  // Size is an enum carrying the weight and both lines with it, because the game's
-  // display face has no lowercase and only loads 400 to 700: a huge light setting of
-  // it reads worse than a medium heavy one, so the axes are not independent.
+  // Size is an enum that carries the weight too: the game's display face has no lowercase and
+  // loads only 400 to 700, so size and weight are not independent axes.
   it('defaults to the normal size, which is already sized to be read in a fight', () => {
     const b = banner();
 
@@ -517,8 +472,6 @@ describe('the banner', () => {
     expect(document.querySelector('.woc-banner-card')?.classList).toContain('woc-banner-large');
   });
 
-  // Unlike frame density, where the fallback exists to stop a typo dropping the
-  // tap-target floor, both banner sizes are loud, so landing on either is safe.
   it.each([
     ['size', { size: 'huge' as 'large' }, 'woc-banner-normal'],
     ['kind', { kind: 'critical' as 'danger' }, 'woc-banner-warn'],
@@ -530,8 +483,7 @@ describe('the banner', () => {
     expect(document.querySelector('.woc-banner-card')?.classList).toContain(expected);
   });
 
-  // One slot for the whole loader. Stacking these would cover the fight the
-  // warning is about, and two at once is the moment that matters most.
+  // One slot for the whole loader: stacking would cover the fight the warning is about.
   it('replaces rather than stacks', () => {
     const b = banner();
 
@@ -542,7 +494,7 @@ describe('the banner', () => {
     expect(b.slot()?.textContent).toContain('Second');
   });
 
-  it('drops the replaced banner"s timer with it', () => {
+  it("drops the replaced banner's timer with it", () => {
     const b = banner();
 
     b.instance.show('First', { timeout: 2000 });
@@ -551,9 +503,7 @@ describe('the banner', () => {
     expect(b.armed()).toBe(1);
   });
 
-  // The case a naive implementation gets wrong. The first banner's dismiss must
-  // not reach the slot once a second one is up, or the newer warning is taken
-  // down by a timer belonging to a message nobody is looking at any more.
+  // A replaced banner's timer must not take down the newer warning.
   it('does not let a stale dismiss take the current banner down', () => {
     const b = banner();
     const dismissFirst = b.instance.show('First', { timeout: 0 });
@@ -609,8 +559,7 @@ describe('the banner', () => {
     expect(b.slot()?.textContent).toContain('Again');
   });
 
-  // A banner arrives unasked for, over the middle of the world. Text, never
-  // markup: a mechanic name reaches this straight off the wire.
+  // A mechanic name reaches this straight off the wire.
   it('never treats its text as markup', () => {
     const b = banner();
 
@@ -621,9 +570,7 @@ describe('the banner', () => {
 });
 
 describe('the banner and toasts together', () => {
-  // Both are transient overlays and neither is a window, so they share a z-index
-  // band. They cannot collide, because the toast stack is pinned to the top edge
-  // and the banner sits in the middle of the view.
+  // They share a z-index band and cannot collide: toasts pin to the top edge, the banner centres.
   it('keeps its own element rather than sharing the toast stack', () => {
     const b = banner();
     b.instance.show('Move');
@@ -634,30 +581,23 @@ describe('the banner and toasts together', () => {
 });
 
 // The height a caller decided, which the sheet turns into a row, its text and its art.
-//
-// The same shape `ui.tile` has had, and it arrived because every timer addon in the
-// catalogue had written it out by hand: six declarations per row, plus the kit's own
-// icon box transcribed into the addon to scale it.
 describe('the size', () => {
-  it('is the addon"s when it asked for one', () => {
+  it("is the addon's when it asked for one", () => {
     const bar = createBar(document, { size: 28 });
 
     expect(bar.el.style.getPropertyValue('--woc-bar-size')).toBe('28');
     expect(bar.el.classList.contains('woc-bar-sized')).toBe(true);
   });
 
-  // Unitless, because the sheet derives the TEXT from it as an em: a row at its
-  // natural height then reads at the size the player's game is set to, whatever that
-  // is, and calc cannot divide a length by a length to reach that ratio.
+  // Unitless, because the sheet derives the text from it as an em and calc cannot divide a
+  // length by a length.
   it('is written as a plain number rather than a length', () => {
     expect(createBar(document, { size: 40 }).el.style.getPropertyValue('--woc-bar-size')).toBe(
       '40',
     );
   });
 
-  // A row of no height is one that was never drawn, and a NaN drops the declaration
-  // silently. Both leave the bar sized by its own line box, which is what it has
-  // always been, rather than writing something that reads as a bar that failed.
+  // A NaN drops the declaration silently, so a bad size leaves the row sized by its line box.
   it.each([
     ['zero', 0],
     ['NaN', Number.NaN],
@@ -669,8 +609,7 @@ describe('the size', () => {
     expect(bar.el.classList.contains('woc-bar-sized')).toBe(false);
   });
 
-  // A column that scales with its frame moves rows that already exist, on every
-  // pointer move of a drag. Rebuilding them would throw away decoded art each time.
+  // A scaling column resizes on every drag move, and rebuilding would discard decoded art.
   it('moves on an update, so a column can scale without being rebuilt', () => {
     const bar = createBar(document, { size: 23 });
 

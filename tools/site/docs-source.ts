@@ -1,9 +1,5 @@
-// Reading site/content/docs/, and the one block on those pages that is generated
-// rather than written.
-//
-// Order comes from frontmatter, never from the filename, so renaming a file does
-// not silently reorder the sidebar and inserting a page between two others does
-// not mean renumbering the ones after it.
+// Reading site/content/docs/, and the one generated block on those pages. Order comes from
+// frontmatter, never the filename.
 
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -32,12 +28,8 @@ function escapeCell(text: string): string {
 }
 
 /**
- * The manifest field table, built from the live schema.
- *
- * The ORDER and the field SET come from `AddonManifest.shape`, and the prose from
- * manifest-docs.ts; a test asserts the two agree. So a field added to the schema
- * appears on this page in the right place without anyone editing the page, and a
- * field added without prose fails the build rather than rendering a blank cell.
+ * The manifest field table: order and field set from `AddonManifest.shape`, prose from
+ * manifest-docs.ts. A field without prose fails the build.
  */
 function manifestTable(): string {
   const rows = fieldDocs(Object.keys(AddonManifest.shape)).map(
@@ -58,12 +50,7 @@ function hrefFor(slug: string, order: number): string {
   return `/docs/${slug}`;
 }
 
-/**
- * Every docs page, in sidebar order.
- *
- * Throws on a duplicate order, because two pages claiming the same position sort
- * unpredictably and the failure looks like a page that moves on its own.
- */
+/** Every docs page, in sidebar order. Throws on a duplicate order, which sorts unpredictably. */
 export function loadDocs(root: string = ROOT): DocPage[] {
   const dir = join(root, 'site', 'content', 'docs');
   const pages = readdirSync(dir)

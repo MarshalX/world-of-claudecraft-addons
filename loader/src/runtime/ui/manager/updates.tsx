@@ -1,15 +1,6 @@
-// Updates: what the marketplaces now offer that is newer than what is installed.
-//
-// Pure render over catalog-store.ts. Nothing on this pane happens on its own:
-// auto-update is off for every marketplace including the official one, because
-// an addon update is a code change and a silent code change on a page that holds
-// a live session is not something to do quietly. The pane says so rather than
-// leaving the absence to be inferred.
-//
-// The rows are compared against the indexes as they were last read, so the pane
-// also says that, and Refresh is the control that re-reads them. Making the
-// badge itself go to the network would put a request per source in front of
-// every open of the manager.
+// Updates: what the marketplaces offer that is newer than what is installed. Pure render over
+// catalog-store.ts. There is no auto-update, for any source; the pane says so. Rows compare
+// against the indexes as last read, and only Refresh goes to the network.
 
 import type { UpdateRow } from '../../../shared/protocol.ts';
 import { pendingUpdates } from './catalog.ts';

@@ -1,18 +1,10 @@
-// Turning a manifest's settings schema plus whatever is in storage into the
-// object an addon reads synchronously as `woc.settings`.
-//
-// Pure, and deliberately total: every declared setting gets a value of the
-// declared type no matter what came back from storage. Addon code reads
-// `woc.settings.window` on its first line and does arithmetic with it, so a
-// stored null, a string where a number belongs, or a select whose option was
-// removed in an update all have to resolve to something usable rather than
-// reaching the addon. Storage is the player's to edit and an older version of
-// the addon may have written a different shape, so what comes out is untrusted
-// input like anything else.
+// Manifest settings schema plus storage, into the `woc.settings` object. Pure and TOTAL: every
+// declared setting gets a value of its declared type whatever storage held, since storage is
+// untrusted and an addon does arithmetic with these on its first line.
 
 import type { SettingDecl } from '../../shared/schema.ts';
 
-/** What a declared setting can hold. The schema has no other types. */
+/** What a declared setting can hold. */
 type SettingValue = boolean | number | string;
 
 type SettingValues = Readonly<Record<string, SettingValue>>;
@@ -39,8 +31,7 @@ function coerceNumber(
   stored: unknown,
   decl: Extract<SettingDecl, { type: 'number' }>,
 ): number | null {
-  // Number.isFinite rather than a typeof check: NaN and Infinity are numbers
-  // and both poison any arithmetic the addon does with them.
+  // Number.isFinite, since NaN and Infinity are numbers too.
   if (typeof stored !== 'number' || !Number.isFinite(stored)) {
     return null;
   }
@@ -63,13 +54,8 @@ function coerceString(stored: unknown): string | null {
 }
 
 /**
- * Coerce one stored value, or null if it cannot be one.
- *
- * Null means "fall back to the default" rather than "the value is absent", so a
- * caller never has to tell a rejected value from a missing one. A number outside
- * its declared range is clamped rather than rejected: the range moving in an
- * addon update is ordinary, and clamping keeps the player's intent where
- * discarding it would silently reset their choice.
+ * One stored value coerced, or null for "use the default". An out-of-range number is clamped, not
+ * rejected, so a range moving in an update keeps the player's intent.
  */
 function coerceSetting(decl: SettingDecl, stored: unknown): SettingValue | null {
   if (decl.type === 'boolean') {
@@ -84,13 +70,7 @@ function coerceSetting(decl: SettingDecl, stored: unknown): SettingValue | null 
   return coerceString(stored);
 }
 
-/**
- * The value a setting takes when storage holds nothing usable for it.
- *
- * Clamping a number default looks redundant against the schema's own refine and
- * is not: this module is total over whatever declaration it is handed, including
- * ones from a marketplace running an older validator.
- */
+/** The default is clamped too, for a manifest an older validator let through. */
 function defaultValue(decl: SettingDecl): SettingValue {
   if (decl.type === 'number') {
     return clampNumber(decl.default, decl);
@@ -98,14 +78,7 @@ function defaultValue(decl: SettingDecl): SettingValue {
   return decl.default;
 }
 
-/**
- * Build the full values object.
- *
- * Keyed only by declared ids, so a setting an addon dropped in an update stops
- * being read even though its stored value is still there. Leaving the value
- * behind is deliberate: a downgrade, or an update that restores the setting,
- * finds the player's choice intact.
- */
+/** Keyed by declared ids only. An undeclared stored value is left in place for a downgrade. */
 function hydrateSettings(
   decls: readonly SettingDecl[],
   stored: Readonly<Record<string, unknown>>,

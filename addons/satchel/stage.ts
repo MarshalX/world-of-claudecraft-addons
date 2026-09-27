@@ -1,18 +1,12 @@
 // Satchel on the stage: an account somebody has been playing for three days.
 //
-// Every pane is drawn from a record this addon wrote while its player was logged in, and the
-// panes that matter are about a character who is NOT logged in now, so a scenario is a sequence
-// of logins with `stage.elapse` putting the first two in the past. The switch is the real one:
-// writing a fixture straight into storage would photograph a record shape rather than the
-// recorder, which is the half that can actually be wrong.
+// A scenario is a sequence of real logins with `stage.elapse` putting the first two in the past.
+// Writing records straight into storage would photograph a record shape and skip the recorder,
+// which is the half that can be wrong. Only a reading taken at a counter is recorded, so an alt's
+// bank appears only if that alt stood at one.
 //
-// Only a reading taken AT the counter is recorded, so a scenario wanting an alt's bank has to
-// stand that alt at one. Bruk never does, which is the ordinary case and what the roster's
-// per-store ages are there to say.
-//
-// Every id ships painted art, from the deployed `/ui/items/mapping.json`, so a blank square in a
-// shot is a real defect rather than a fixture naming a file that never existed.
-// `silverleaf_herb` is in on purpose: its art is filed under "Sheenleaf Herb".
+// Every id ships painted art in the deployed item manifest. `silverleaf_herb` is in on purpose:
+// its art is filed under "Sheenleaf Herb".
 
 import { inSeries } from '../../loader/src/shared/sequence.ts';
 import type { FrameState, Scenario, Stage, WorldDraft } from '../../stage/src/stage.ts';
@@ -23,9 +17,8 @@ import ITEMS from '../lorebind/items.json' with { type: 'json' };
 import BAGS from './bags.json' with { type: 'json' };
 
 /**
- * The shipped bag table, on EVERY scenario: without it the panel falls back to the pooled free
- * figure, the `Materials` chip goes, and a preview photographs the fallback with nothing on
- * screen looking wrong.
+ * The shipped bag table, on every scenario: without it the panel falls back to the pooled free
+ * figure and drops the `Materials` chip, with nothing on screen looking wrong.
  */
 const BAG_DATA = { 'bags.json': JSON.stringify(BAGS) };
 
@@ -34,18 +27,12 @@ const GOLD = 100 * SILVER;
 const HOUR_MS = 60 * 60 * 1000;
 const DAY_MS = 24 * HOUR_MS;
 
-/**
- * A vault's stock from entry pairs, since an object literal keyed by item ids fails
- * `useNamingConvention`. See STYLE.md.
- */
+/** A vault's stock from entry pairs, since item-id object keys fail `useNamingConvention`. */
 function stockOf(rows: [string, number][]): Record<string, number> {
   return Object.fromEntries(rows);
 }
 
-/**
- * One reading behind both `vault.stock` and `craftVaultStock`, so the pane and the line under
- * it cannot drift apart.
- */
+/** One reading behind both `vault.stock` and `craftVaultStock`, so they cannot drift. */
 const MARSHAL_STOCK = stockOf([
   ['copper_ore', 400],
   ['iron_ore', 265],
@@ -63,11 +50,7 @@ interface Stack {
   count: number;
   /** The cell the player dragged it into. Absent for anything never moved by hand. */
   slot?: number;
-  /**
-   * The per-copy payload, which only your OWN bags and bank carry untrimmed. The lock inside it
-   * is the one thing in a bag the player set by hand, so a picture of a bag is honest only if
-   * some cell in it can be locked.
-   */
+  /** The per-copy payload, carrying the lock: the one thing in a bag set by hand. */
   instance?: { locked?: boolean };
 }
 
@@ -112,10 +95,7 @@ interface Session {
     deliverySeconds: number;
   };
   mailUnread: number;
-  /**
-   * The Materials Vault, read at the same bursar the bank is. Its own field rather than derived
-   * from `bank`: the gates are separate and a scenario can put one without the other.
-   */
+  /** The Materials Vault at the same bursar. Separate from `bank`: the gates are separate. */
   vault?: {
     stock: Record<string, number>;
     special: Stack[];
@@ -123,17 +103,13 @@ interface Session {
     perMaterialCap: number;
     nextUpgradeCost: number | null;
   };
-  /**
-   * What crafting may draw from the vault where this character is STANDING, which is not gated
-   * on a bursar at all: a record anywhere in the open world, null inside an instance.
-   */
+  /** What crafting may draw from the vault here: any open-world spot, null inside an instance. */
   craftVaultStock?: Record<string, number> | null;
 }
 
 /**
- * Bruk, three days ago: a bank mule with no bank. The ordinary case, and the one the roster's
- * per-store ages exist to report. A character's bags are recorded every time they are played and
- * a counter is recorded only if they walked up to one.
+ * Bruk, three days ago: a bank mule with no bank recorded. Bags are recorded every login, a
+ * counter only when the character walks up to one.
  */
 const BRUK: Session = {
   name: 'Bruk',
@@ -157,10 +133,7 @@ const BRUK: Session = {
   mailUnread: 0,
 };
 
-/**
- * The alt who banks. Her bank is the pane the game cannot draw once she is logged out, and it is
- * recorded only because this session stands her at one.
- */
+/** The alt who banks, stood at one so her bank is recorded for when she is logged out. */
 const SENA: Session = {
   name: 'Sena',
   templateId: 'mage',
@@ -211,10 +184,7 @@ const SENA: Session = {
   mailUnread: 0,
 };
 
-/**
- * Two unread, which is what the title badge counts, and two parcels: an attachment is an item the
- * character owns and cannot see, so the index counts it like a bag cell.
- */
+/** Two unread (the title badge) and two parcels, which the index counts like bag cells. */
 const LETTERS: Letter[] = [
   {
     id: 41,
@@ -262,9 +232,9 @@ const LETTERS: Letter[] = [
 ];
 
 /**
- * The character in play, at a banker and a mailbox at once, which puts a live reading behind all
- * three detail panes. The vest is worn and carried (spare), the ores are split across cells
- * (split), and the bank holds ore the bags hold too (carried). All three come from ids alone.
+ * The character in play, at a banker and a mailbox at once, so all three detail panes are live.
+ * The vest is worn and carried (spare), the ores are split across cells (split), and the bank
+ * holds ore the bags hold too (carried).
  */
 const MARSHAL: Session = {
   name: 'Marshal',
@@ -339,10 +309,7 @@ const MARSHAL: Session = {
     deliverySeconds: 45,
   },
   mailUnread: 2,
-  /**
-   * One material AT the cap, since the full row is what the pane is for, and `resonant_steel`
-   * in `special` because a crafted stack keeps an identity and cannot collapse into a count.
-   */
+  /** One material at the cap, and `resonant_steel` in `special`: a crafted stack keeps identity. */
   vault: {
     stock: MARSHAL_STOCK,
     special: [{ itemId: 'resonant_steel', count: 4 }],
@@ -355,15 +322,13 @@ const MARSHAL: Session = {
 };
 
 /**
- * A general pool with nothing left in it and a reagent satchel seven cells open beside it. 16
- * backpack plus a 6 cell Linen Pouch is 22 general, a 20 cell Necromancer's Reagent Satchel is
- * 20 materials, 42 pooled; of the 35 cells in use, 13 are materials and pack into the satchel,
- * and the other 22 fill the general pool exactly, so the strip reads 35 of 42 with nothing free
- * and a `Materials` chip of seven.
+ * A full general pool beside a reagent satchel with seven cells open. 16 backpack plus a 6-cell
+ * Linen Pouch is 22 general; the 20-cell Necromancer's Reagent Satchel is 20 materials. Of the 35
+ * cells in use, 13 are materials, so the strip reads 35 of 42 with nothing free and a
+ * `Materials` chip of seven.
  *
- * NOT a preview: the satchel is a game 0.41.0 id the stage's default channel can lack. Nothing
- * here draws its art, so the picture is right on either channel, but a committed artifact must
- * not depend on the id.
+ * Not a preview: the satchel id can be missing on the stage's default channel, and a committed
+ * artifact must not depend on it.
  */
 const HAULING: Session = {
   name: 'Marshal',
@@ -372,7 +337,7 @@ const HAULING: Session = {
   bags: ['linen_pouch', 'necromancers_reagent_satchel', null, null],
   bagCapacity: 42,
   inventory: [
-    // 13 cells the game counts as materials, which is what the satchel will take.
+    // 13 cells the game counts as materials.
     { itemId: 'copper_ore', count: 20, slot: 0 },
     { itemId: 'copper_ore', count: 20, slot: 1 },
     { itemId: 'copper_ore', count: 7, slot: 2 },
@@ -386,7 +351,7 @@ const HAULING: Session = {
     { itemId: 'spider_silk', count: 11, slot: 10 },
     { itemId: 'homespun_cloth', count: 20, slot: 11 },
     { itemId: 'arcane_dust', count: 4, slot: 12 },
-    // 22 cells nothing but the general pool will take, which is exactly what it has.
+    // 22 cells only the general pool will take, which is exactly what it has.
     { itemId: 'healing_potion', count: 5 },
     { itemId: 'healing_potion', count: 5 },
     { itemId: 'healing_potion', count: 5 },
@@ -436,18 +401,12 @@ function beThem(draft: WorldDraft, who: Session): void {
   draft.set(world, 'craftVaultStock', who.craftVaultStock ?? null);
 }
 
-/**
- * Point the character selector at somebody through the real control: the picker is the kit's
- * button and menu rather than a `<select>`, and a selector that matches nothing fails silently.
- */
+/** Pick a character through the real kit picker; a selector matching nothing fails silently. */
 function choosePicked(name: string): void {
   choosePicker(document.querySelector('[data-role="picker"]') ?? document, name);
 }
 
-/**
- * Walk away from a counter, which is a null payload and NOT an empty store. The vault is its
- * own `set`, so a scenario can leave one without the other.
- */
+/** Walk away from a counter: a null payload, not an empty store. The vault is its own `set`. */
 function leaveCounters(draft: WorldDraft): void {
   draft.set(draft.world, 'bankInfo', null);
   draft.set(draft.world, 'vaultInfo', null);
@@ -463,17 +422,13 @@ function pause(ms: number): Promise<void> {
 }
 
 /**
- * Let the addon's storage round trip and its queued repaint land.
- *
- * A real timer rather than a turn count: the records are read with one `storage.keys()` and a
- * `get` per character, so start-up is several promise hops deep.
+ * Let the storage round trip and the queued repaint land. A real timer, since start-up is one
+ * `storage.keys()` plus a `get` per character, several promise hops deep.
  */
 async function drawn(stage: Stage): Promise<void> {
   stage.poll();
   await pause(SETTLE_MS);
-  // The repaint rides `woc.paint`, which runs on the loader's own frame loop, and on the stage
-  // that loop is driven by hand rather than by the browser. Without this the panel holds
-  // everything it read and draws none of it.
+  // `woc.paint` runs on the loader's frame loop, which the stage drives by hand.
   stage.frame();
 }
 
@@ -482,10 +437,8 @@ const IMAGES_MS = 8000;
 const IMAGES_POLL_MS = 60;
 
 /**
- * Hold a switch until this character's art has loaded. A bag cell is REUSED, so logging in as
- * somebody else reassigns `src` and the cancelled request lands as `net::ERR_ABORTED`, which
- * `pnpm shots` is right to refuse to photograph: a transport failure and an item with no art
- * produce the same collapsed slot. A player switching characters leaves a beat too.
+ * Hold a switch until this character's art has loaded. Bag cells are reused, so a switch cancels
+ * the pending request as `net::ERR_ABORTED`, which `pnpm shots` refuses to photograph.
  */
 function imagesSettled(): Promise<void> {
   return new Promise((resolve) => {
@@ -514,10 +467,8 @@ const HISTORY: readonly (readonly [Session, number])[] = [
 ];
 
 /**
- * Play the account forward: three characters, three days. Bruk is already in the world when the
- * addon starts, so the loop below picks up at Sena. The clock is moved between logins, which is
- * what puts the readings at different ages: every stamp this addon keeps is a `woc.wallClock()`
- * reading.
+ * Play the account forward: three characters over three days. Bruk is already in the world, so
+ * the loop starts at Sena. The clock moves between logins so the readings differ in age.
  */
 async function playedForDays(stage: Stage): Promise<void> {
   await drawn(stage);
@@ -536,23 +487,15 @@ async function playedForDays(stage: Stage): Promise<void> {
 const ART_MS = 5000;
 const ART_POLL_MS = 50;
 
-/**
- * The one label that PROVES the manifest landed: `silverleaf_herb` files its art under "Sheenleaf
- * Herb", so it reads differently either way where every other row reads the same.
- */
+/** Proves the manifest landed: `silverleaf_herb` reads "Sheenleaf Herb" only once it has. */
 const ART_PROOF = 'Sheenleaf Herb';
 
-/**
- * Hold the shot until the art manifest has landed. `ui.icon.item` is optimistic and
- * `ui.icon.itemArtName` answers null until the manifest is read, so a picture taken before it
- * lands is a panel of ids read back as words.
- */
+/** Hold the shot until the art manifest lands: before then every label is a raw id. */
 function artLanded(stage: Stage): Promise<void> {
   return new Promise((resolve) => {
     let waited = 0;
     const look = (): void => {
-      // A frame per look, for the reason `drawn` runs one: the manifest landing asks for a
-      // repaint and nothing on the stage performs one unless a scenario says so.
+      // A frame per look: the manifest landing asks for a repaint the stage only runs on demand.
       stage.frame();
       const labels = [...document.querySelectorAll('[data-list="items"] .woc-bar-label')];
       if (labels.some((el) => el.textContent === ART_PROOF) || waited >= ART_MS) {
@@ -566,11 +509,7 @@ function artLanded(stage: Stage): Promise<void> {
   });
 }
 
-/**
- * Open one of the panel's tabs, the way a player does. Clicked at the DOM rather than reached for
- * through the stage: the strip is the loader's `ui.tabs`, so a click is the same path a player
- * takes and a stage helper would be a second way in that only scenarios use.
- */
+/** Open one of the panel's tabs by clicking it, the same path a player takes. */
 function openTab(label: string): void {
   const button = [...document.querySelectorAll('#woc-addons .woc-tab')].find(
     (el) => el.textContent === label,
@@ -589,11 +528,8 @@ async function onTab(stage: Stage, label: string): Promise<void> {
 const WIDENED = { x: 80, y: 120, w: 420, h: 560 };
 
 /**
- * ONE height for both preview panels: a sheet centres its panes against each other, so two of
- * different heights read as one that has slipped. Matched on the GRID's, since a list pane is
- * full at any height and a bag grid is only as tall as its cell ceiling. The height is the
- * frame's own, which lands the grid on exactly five whole rows: a bag ending on a half row of
- * empty sockets is the one thing in this shot that reads as the panel having been cut off.
+ * One height for both preview panels, since a sheet centres panes against each other. Set by the
+ * grid, landing it on exactly five whole rows: a half row of empty sockets reads as cut off.
  */
 const SHEET_BOX = { x: 80, y: 120, w: 420, h: 460 };
 
@@ -607,12 +543,8 @@ function asBruk(draft: WorldDraft): void {
 }
 
 /**
- * The hello frame, which is where the REALM comes from.
- *
- * Without it `world.characterKey` reads `offline/<name>` and this addon records no realm for
- * anybody, so a published market price matches nothing and the panel silently falls back to the
- * vendor floor. That is a real state, a player who has not entered the world, and it is not the
- * state any of these scenarios are of.
+ * The hello frame, which carries the realm. Without it `world.characterKey` reads
+ * `offline/<name>`, no published price matches, and the panel falls back to the vendor floor.
  */
 function joined(stage: Stage): void {
   stage.inbound(HELLO_FRAME);
@@ -622,17 +554,15 @@ function joined(stage: Stage): void {
 const LOREBIND_FQID = 'official/lorebind';
 const ITEMS_TOPIC = 'items';
 
-/** The other companion, which is the only thing that knows what anything GOES FOR. */
+/** The other companion, the only source of what anything goes for. */
 const LEDGERLINE_FQID = 'official/ledgerline';
 const PRICES_TOPIC = 'prices';
-/** The realm the shared world fixture is on, which every price has to name to be spent. */
+/** The shared world fixture's realm, which every price must name to be used. */
 const REALM = 'Claudemoon';
 
 /**
- * A handful of prices, at what a ledger three days old would carry: a multiple of the vendor
- * floor rather than a figure invented here, since the point of the pair is the GAP between the
- * two. `visits` is what says how much is behind each, and the herb at one is deliberate: a
- * single reading is one seller's asking price and the panel discloses that it counted one.
+ * Prices as a three-day ledger would carry them, as multiples of the vendor floor. The herb's one
+ * visit is deliberate: the panel discloses a single reading.
  */
 const ASKING: readonly (readonly [string, number, number])[] = [
   ['copper_ore', 420, 6],
@@ -648,23 +578,9 @@ const ASKING: readonly (readonly [string, number, number])[] = [
 ];
 
 /**
- * The companions, standing in.
- *
- * This addon names two and neither was ever in a picture. Until this existed every shot was the
- * unpaired panel: no worth figure, no tier on a square, no price under the pointer, and the
- * label on half the rows an id read back as words. So the state the manifest RECOMMENDS was
- * invisible in every artifact this repository ships, the committed preview a player reads in
- * Browse included. Ledgerline's stage has stood lorebind in for the same reason since it was
- * written.
- *
- * BOTH PREVIEW PANELS use it, rather than a scenario of its own beside them, for the reason
- * ledgerline's does: a thumbnail should picture what a player gets when they take the addon's
- * own advice. The six scenarios below it stay unpaired, which is where the other honest state
- * is still there to look at.
- *
- * lorebind's whole table rather than the ids this fixture names: the panel pools three
- * characters' bags, banks and mailboxes, and narrowing it to a list would be a list to keep in
- * step.
+ * The companions, standing in, so both preview panels picture the recommended pairing. The other
+ * scenarios stay unpaired. lorebind's whole table is used: the panel pools three characters'
+ * stores, and a narrowed list would need keeping in step.
  */
 function lorebindSpeaks(stage: Stage): void {
   stage.publish(LOREBIND_FQID, ITEMS_TOPIC, ITEMS.items);
@@ -678,9 +594,7 @@ function ledgerlineSpeaks(stage: Stage): void {
     unit,
     low: Math.round(unit * 0.9),
     latest: unit,
-    // Four hours ago, on the clock the three logins left behind: `playedForDays` elapses the
-    // whole of `HISTORY`, so a stamp taken from the raw start would read as three days old and
-    // the panel would say so, which is a different picture from the one this scenario is of.
+    // Four hours before the shot, measured after `playedForDays` has elapsed all of `HISTORY`.
     at: WALL_CLOCK_MS + PLAYED_MS - 4 * HOUR_MS,
     visits,
   }));
@@ -745,8 +659,7 @@ const SCENARIOS: readonly Scenario[] = [
     run: (stage) => onTab(stage, 'Roster'),
   },
   {
-    // The pair on the pane that pools every character, which is where a price crosses realms
-    // and has to say what it left out. Not a preview: the two above already picture the pair.
+    // The pair on the pooled pane, where a price crosses realms and says what it left out.
     id: 'priced-roster',
     label: 'The roster, with both companions',
     data: BAG_DATA,
@@ -755,8 +668,7 @@ const SCENARIOS: readonly Scenario[] = [
     run: (stage) => paired(stage, 'Roster'),
   },
   {
-    // An alt's bank, read while logged in as somebody else. The pane the client cannot
-    // draw at all, and the whole reason this addon keeps a record.
+    // An alt's bank, read while logged in as somebody else: the pane the client cannot draw.
     id: 'alt-bank',
     label: "An alt's bank, from another character",
     data: BAG_DATA,
@@ -770,8 +682,7 @@ const SCENARIOS: readonly Scenario[] = [
     },
   },
   {
-    // Walked away from both counters, holding the last reading of each. The state most
-    // of a session is spent in, and the one the three-state read exists for.
+    // Walked away from both counters, holding the last reading of each.
     id: 'away',
     label: 'Walked away from the counters',
     data: BAG_DATA,
@@ -820,8 +731,7 @@ const SCENARIOS: readonly Scenario[] = [
     run: drawn,
   },
   {
-    // The day the addon is installed: one character recorded, nothing else played yet, and
-    // nowhere near a counter. The state nobody thinks to photograph.
+    // Install day: one character recorded, nowhere near a counter.
     id: 'fresh',
     label: 'The day you install it',
     data: BAG_DATA,

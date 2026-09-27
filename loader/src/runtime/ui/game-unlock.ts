@@ -1,9 +1,6 @@
-// Follow the game's own HUD edit mode ("Edit Frames", game 0.41.0) onto the loader's
-// arrange mode, ONE WAY: the game's mode early-returns from `onMouseDown`
-// (`src/input.ts`) and takes camera drag and click-to-target with it, so the loader's
-// switch must never write it back. The signal is the class the game writes on
-// `document.body` (`INTERFACE_UNLOCKED_BODY_CLASS`, `src/ui/interface_unlock.ts`),
-// which outlives every HUD mount; a missing class reads as locked.
+// Follow the game's own HUD edit mode ("Edit Frames") onto the loader's arrange mode, ONE
+// WAY: the game's mode disables camera drag and click-to-target, so the loader must never
+// write it back. The signal is a class on `document.body`; a missing class reads as locked.
 
 import type { Teardown } from '../disposal.ts';
 import { GAME_UNLOCKED_CLASS } from './anchors.ts';
@@ -16,12 +13,9 @@ interface GameUnlockDeps {
 }
 
 /**
- * Mirror the game's edit mode onto the loader's, and hand back the teardown.
- *
- * Edge triggered, and the idempotence of `unlock.set` is not what makes that safe:
- * body's class flips for unrelated game modes (`pad-active`, `src/game/input_hint_mode.ts`,
- * on every controller input), and writing the reading on each would drop a player who
- * turned the loader's mode on from its own switch out of arrange mode mid-drag.
+ * Mirror the game's edit mode onto the loader's. Edge triggered: body's class also flips for
+ * unrelated game modes (`pad-active` on controller input), and writing the level on each
+ * would drop a player out of the loader's own arrange mode mid-drag.
  */
 function followGameUnlock(deps: GameUnlockDeps): Teardown {
   const { body } = deps.doc;

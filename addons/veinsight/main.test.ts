@@ -1,20 +1,8 @@
 // @vitest-environment happy-dom
 
-// Veinsight, run through the real loader.
-//
-// The addon is a join: the table is the addon's, the respawn timers are the game's, and the two
-// meet on a node id string. The fixtures are built from the shipped `nodes.json` and never from
-// a stub, so every coordinate below was read out of that file.
-//
-// Three things this suite deliberately cannot see, and does not pretend to:
-//
-//  - Where an anchor ended up. The projector is a stand-in and nothing is painted onto a real
-//    screen. Everything here asserts what a pin is, never where it went.
-//  - Whether the bearing arrow points the way a player would say it does. The sign is derived
-//    from the game's own turn handling and asserted against that derivation.
-//  - What a real terrain height is. There is no terrain in a suite, so the three height
-//    provenances are driven by their inputs: an entity standing near the point, a harvest
-//    landing, and neither.
+// Veinsight, run through the real loader. Fixtures come from the shipped `nodes.json`, never a
+// stub. The suite cannot see where an anchor lands on screen or a real terrain height, so pins
+// are asserted by what they are and the three height provenances by their inputs.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { validateManifest } from '../../loader/src/shared/schema.ts';
@@ -37,19 +25,8 @@ const CHANNEL = 'pbe';
 const STORE_KEY = 'heights';
 const DATA_FILE = 'nodes.json';
 /**
- * The highest minor anything this addon calls arrived in. `woc.data`,
- * `world.nodeCooldowns` and `ui.project` are 2; `ui.list`, `fmt.duration`,
- * `fmt.compass`, `world.distanceTo`, `world.bearingTo` and `bus.follow` are 4;
- * `world.professions.toolEffectSlots` is 5.
- *
- * A frame's own `toggleKey` is 4 as well and is deliberately NOT on that list: the toggle
- * is bound by hand, for the reason written above the bind in `main.js`.
- *
- * Declared at 5 for `world.holdings` even though an older loader answers an empty list
- * rather than throwing, because that is the failure worth refusing: a silently empty list
- * makes the fine-grade answer short by a tier for anyone carrying a charm, with nothing on
- * screen saying so. At 6 for `resizable: 'width'`, where an older loader reads the string
- * as truthy and hands the player a height this panel cannot honour.
+ * The highest minor anything this addon reads: `world.professions.toolEffectSlots` is 5 and
+ * `resizable: 'width'` is 6, which an older loader reads as truthy and resizes both axes.
  */
 const NEEDS_MINOR = 6;
 
@@ -59,31 +36,19 @@ const TICK_MS = 1000;
 /** How many microtask turns the table read, the frame restore and the reads want. */
 const SETTLE_TURNS = 14;
 /**
- * Seconds a node takes to come back, which is the denominator of every fill. Read out of the
- * shipped table rather than written here, because a number written here would be the addon's own
- * constant spelled a second time: every fill assertion would then agree with the addon whatever
- * the game does. The table's figure comes off `NODE_HARVEST_TABLE`.
+ * Every fill's denominator, read from the shipped table: a literal here would restate the
+ * addon's own number and agree with it whatever the game does.
  */
 const RESPAWN_SECONDS = (JSON.parse(TABLE_TEXT) as { respawnSeconds: { ore: number } })
   .respawnSeconds.ore;
 
-/**
- * Rows out of the shipped table, by hand, so a case names a coordinate a reader can
- * go and check. Everything here was read out of `nodes.json`.
- */
+/** Rows copied out of `nodes.json`, so a case names a coordinate a reader can check. */
 const ORE_1 = { id: 'ore_eastbrook_1', x: -20, z: 153 };
 const ORE_2 = { id: 'ore_eastbrook_2', x: -23, z: 157 };
 const ORE_3 = { id: 'ore_eastbrook_3', x: -17, z: 149 };
 const ORE_6 = { id: 'ore_eastbrook_6', x: -15, z: 137 };
 const WOOD_2 = { id: 'wood_eastbrook_2', x: -57, z: -6 };
-/**
- * The wood node nearest the dig, which is not WOOD_2 any more.
- *
- * The two cases that stand at ORE_1 and want a logging row beside a mining one used to reach
- * for WOOD_2, because the old Copper Dig was 60 yards from it. Game 0.40.1 moved the dig 200
- * yards north and left the tree where it was, putting it 163 yards off and out of the default
- * draw distance. WOOD_2 is still what the bearing cases use, since those stand next to it.
- */
+/** The wood node nearest ORE_1. WOOD_2 is outside the default draw distance from there. */
 const WOOD_5 = { id: 'wood_eastbrook_5', x: 7, z: 140 };
 const HERB_1 = { id: 'herb_eastbrook_1', x: -58, z: 91 };
 /** Somebody else in the world, for the records the game broadcasts rather than sends. */
@@ -97,15 +62,8 @@ const ORE_T2 = { id: 'ore_mirefen_t2', x: 36, z: 350 };
 const ORE_MIREFEN_T1 = { id: 'ore_mirefen_3', x: 35, z: 345 };
 
 /**
- * Every node within the default 150 yard draw distance, nearest first from ORE_1, which is the
- * default standpoint. Thirteen of Eastbrook Vale's eighteen, and TWO MIREFEN ONES.
- *
- * Game 0.40.1 rewrote this list without touching a line of the addon, and the second half of
- * that sentence is why it is worth a note. The New Eastbrook program moved the Copper Dig from
- * (-84, -64) to (-34, 142), "northeast past Mirror Lake onto the Mirefen road", so the
- * standpoint moved 200 yards north with its veins, a different set of wood and herb nodes
- * became the nearest, and the dig now stands close enough to the border that two of the marsh's
- * nodes are in range of it. That last part is what a list of eastbrook ids could not have said.
+ * Every node within the default 150 yard draw distance of ORE_1, nearest first. It includes two
+ * Mirefen nodes, which is what makes the zone filter cases below real.
  */
 const NEAR_ORE_1 = [
   'ore_eastbrook_1',
@@ -132,28 +90,19 @@ const MITHRIL_PICK = 'mithril_mining_pick';
 const SICKLE = 'gathering_sickle';
 const HANDAXE = 'handaxe';
 
-/**
- * The wield ladder, out of the shipped table rather than written here.
- *
- * These five numbers are pinned by the GAME's own suite against its live gain curve, so a
- * curve retune moves them, and a case asserting on 40 by hand would then be asserting that
- * the addon still applies a rung the game has retired.
- */
+/** The wield ladder, read from the shipped table because a game retune moves it. */
 const WIELD_BY_TIER = (JSON.parse(TABLE_TEXT) as { wieldByTier: { 2: number; 3: number } })
   .wieldByTier;
 
 /** How much counter is one gain tier, out of the table for the reason the ladder is. */
 const GAIN_STEP = (JSON.parse(TABLE_TEXT) as { gain: { step: number } }).gain.step;
 /**
- * How many gain tiers above a node's own you have to be before it pays nothing at all.
- *
- * Three, from the game's four-state curve: at, one below, two below, then zero. Written here
- * rather than read, because it is the SHAPE of the curve rather than a tuning figure, and the
- * table carries the two multipliers rather than the count of them.
+ * Gain tiers above a node's own before it pays nothing. Written here because it is the SHAPE of
+ * the game's curve (full, reduced, minimal, zero); the table carries only the multipliers.
  */
 const GRAY_STEPS = 3;
 
-/** A full gathering kit at tier 1, which is what opens 138 of the game's 156 nodes. */
+/** A full gathering kit at tier 1. */
 const TIER_1_KIT = [
   { itemId: COPPER_PICK, count: 1 },
   { itemId: HANDAXE, count: 1 },
@@ -280,19 +229,11 @@ interface StartOpts {
   /** What is in the bags. Null is bags the loader cannot read, which is not empty. */
   bags?: readonly Bag[] | null;
   /**
-   * Your gathering counters, by profession id.
-   *
-   * Absent is a character who has gathered nothing, which is a real zero and locks every
-   * tool above the first. Null is the sheet not having arrived at all, which is before
-   * world entry and is a different answer.
+   * Your gathering counters, by profession id. Absent is a real zero, which locks every tool
+   * above the first; null is a counter map that cannot be read.
    */
   proficiency?: Record<string, number> | null;
-  /**
-   * The tool effects slotted onto your gathering tools.
-   *
-   * Absent is the ordinary case: the game elides the wire key for anyone who has never
-   * slotted one, which is most players, so the loader answers an empty array.
-   */
+  /** The tool effects slotted onto your gathering tools. Absent is none, as for most players. */
   slots?: readonly { professionId: string; effectId: string; charges: number }[];
   /** Node id to seconds left on YOUR timer. A node with no entry is ready. */
   cooling?: Record<string, number>;
@@ -343,11 +284,8 @@ interface VeinsightHarness extends SharedHarness {
   /** One row's right-hand figure. */
   figureOf: (id: string) => string;
   /**
-   * What the tooltip says over one row, or '' when nothing is described.
-   *
-   * The hidden check matters: there is one tooltip element for the whole loader and it
-   * stays in the document holding its last text, so reading `textContent` alone would
-   * report the previous row's answer for a row that has none.
+   * What the tooltip says over one row, or ''. Checks `hidden`: the loader's one tooltip
+   * element keeps its last text, so `textContent` alone reports the previous row.
    */
   tipOf: (id: string) => string;
   /** The art on one row, which is what the harvest would actually hand you. */
@@ -407,9 +345,8 @@ async function start(
   const entities = new Map<number, Fake>([[PLAYER_ID, player]]);
   const cooldowns = new Map<string, number>(Object.entries(opts.cooling ?? {}));
   const bags = bagsFrom(opts.bags);
-  // A plain record, and a fresh one on every change rather than a mutated one: the loader's
-  // own watch signature counts the entries it holds, so a counter raised in place would be
-  // read back correctly and would notify nobody.
+  // Replaced on every change, never mutated: the watch signature counts entries, so a counter
+  // raised in place notifies nobody.
   const gathering: { value: Record<string, number> | null } = { value: opts.proficiency ?? {} };
   if (opts.proficiency === null) {
     gathering.value = null;
@@ -499,10 +436,7 @@ async function start(
       setField(player, 'name', name);
     },
     publishZone: (id) => {
-      // The shape a real publisher sends, which is one set of keys in every state: `place`
-      // says whether there is a zone at all and the other three are null when there is not.
-      // Written out rather than trimmed to the `id` this addon reads, so a fixture cannot
-      // go on describing a payload nobody emits.
+      // The full payload a real publisher sends, not just the `id` this addon reads.
       harness.shared.bus.emit('official/wayfarer', 'zone', {
         place: 'zone',
         id,
@@ -523,8 +457,7 @@ async function start(
       vi.advanceTimersByTime(TICK_MS);
     },
     wait: (seconds) => {
-      // Both, because they are separate: `advance` moves what `woc.now()` answers
-      // and the fake timers move the interval that redraws against it.
+      // Both: `advance` moves `woc.now()` and the fake timers move the redraw interval.
       harness.advance(seconds * TICK_MS);
       vi.advanceTimersByTime(seconds * TICK_MS);
     },
@@ -585,36 +518,25 @@ describe('its manifest', () => {
     expect(validateManifest(MANIFEST_JSON).ok).toBe(true);
   });
 
-  // Every one of these is spent. The socket for the harvest result and the gather
-  // cast, the world for the timers, the position and the bags, storage for the
-  // measured heights, ui for the panel and the pins, keys for the toggle. There is
-  // no sound: this addon never interrupts anybody.
   it('asks for exactly what it uses', () => {
     expect(manifest().permissions).toEqual(['net.read', 'world.read', 'ui', 'storage', 'keys']);
   });
 
-  // An older loader strips an unknown manifest key rather than refusing it, so
-  // without the minor this addon would install on a loader with no `woc.data`,
-  // start, and find that the only content file it has does not exist.
+  // An older loader strips an unknown `data` key rather than refusing it; the minor gates it.
   it('declares the table file and the minor that reads it', () => {
     expect(manifest().data).toEqual([DATA_FILE]);
     expect(manifest().apiMinor).toBe(NEEDS_MINOR);
   });
 
-  // A note rather than a dependency: the zone filter degrades to every zone when
-  // nothing is publishing, and the panel says so.
   it('names the zone publisher as a companion rather than requiring one', () => {
     expect(manifest().companions).toEqual(['wayfarer']);
   });
 
-  it('binds the toggle where the roadmap says', () => {
+  it('binds the toggle to Alt+V', () => {
     expect(manifest().keybinds?.[0]?.default).toBe('Alt+KeyV');
   });
 });
 
-// The join, and the reason the addon has a data file at all. Nothing on the wire says a node
-// exists; the only thing that can put a marker on one is the table agreeing with the player's
-// own position.
 describe('the join between the table and the world', () => {
   it('pins the node the player is standing on', async () => {
     const h = await run({}, undefined, { at: ORE_1 });
@@ -625,9 +547,7 @@ describe('the join between the table and the world', () => {
     expect(h.reachOf(ORE_1.id)).toBe('true');
   });
 
-  // Offset on x rather than on z, deliberately: a distance taken on one axis reads
-  // as standing on the node from the other, and the pin would then be placed on a
-  // point the player is nowhere near.
+  // Offset on x: a distance taken on z alone would read as standing on the node.
   it('says a node ten yards off is not in reach', async () => {
     const h = await run({}, undefined, { at: { x: ORE_1.x + 10, z: ORE_1.z } });
 
@@ -654,8 +574,6 @@ describe('the join between the table and the world', () => {
   });
 });
 
-// The half the wire does answer, and it answers it completely: per player, off the
-// snapshot, keyed by the same ids the table carries.
 describe('the respawn timers', () => {
   it('reads a node with no entry as yours', async () => {
     const h = await run({}, undefined, { at: ORE_1, bags: TIER_1_KIT });
@@ -675,11 +593,8 @@ describe('the respawn timers', () => {
     expect(h.fillOf(ORE_1.id)).toBeCloseTo((90 / RESPAWN_SECONDS) * 100, 1);
   });
 
-  // The respawn length is the game's number rather than this addon's, and taking it off the
-  // shipped table is what stops a tune leaving a constant behind. With the addon holding 120
-  // while the game counts down from 240, every node with more than two minutes left draws a full
-  // bar that does not move for the whole first half of the wait, which reads as "nothing is
-  // happening yet".
+  // A stale respawn constant shorter than the game's draws a full, unmoving bar for part of the
+  // wait, and the clamp hides it.
   it('takes the respawn length from the table rather than a constant of its own', async () => {
     expect(RESPAWN_SECONDS).toBe(240);
 
@@ -693,9 +608,7 @@ describe('the respawn timers', () => {
     expect(h.fillOf(ORE_1.id)).toBeCloseTo(75, 1);
   });
 
-  // A tune the other way is the case a clamp hides: with the addon reading a longer respawn than
-  // the game uses, every bar would start part-full and nothing would look broken. So the fill is
-  // pinned at the top of the range too.
+  // Pins the top of the range: a respawn read too long would start every bar part-full.
   it('draws a freshly harvested node as a full bar', async () => {
     const h = await run({}, undefined, {
       at: ORE_1,
@@ -730,8 +643,7 @@ describe('the respawn timers', () => {
     expect(h.figureOf(ORE_1.id)).toBe('Yours');
   });
 
-  // The set changing is the signal. Nothing subscribes to the seconds, because
-  // `world.on` reports the key set and the countdown is read off the clock.
+  // `world.on` reports the key set; the countdown itself is read off the clock.
   it('redraws when a node starts cooling without anything else moving', async () => {
     const h = await run({}, undefined, { at: ORE_1, bags: TIER_1_KIT });
 
@@ -741,10 +653,8 @@ describe('the respawn timers', () => {
     expect(h.figureOf(ORE_1.id)).toBe('2m 0s');
   });
 
-  // A pin is a 40px square and a row is 300px wide, so the same answer is written twice in two
-  // units. Text that does not fit a tile is not clipped by it: the browser wraps it and paints
-  // the second line over the world. Seconds rather than a rounded minute, because a respawn is
-  // 120 of them and `2m` would stand for a quarter of the whole range.
+  // Text that overflows a 40px tile wraps and paints over the world, and a rounded minute would
+  // cover a large share of the respawn, so the pin writes bare seconds.
   it('writes the pin countdown in seconds where the row spells out the minutes', async () => {
     const h = await run({}, undefined, {
       at: ORE_1,
@@ -777,11 +687,8 @@ describe('the respawn timers', () => {
   });
 });
 
-// The gate the game actually applies, which is the tools in your bags rather than your skill at
-// the profession. A tier-2 node is unopenable with a tier-1 pick however good a miner you are.
 describe('the tool gate', () => {
-  // Bare hands harvest nothing at all in this game, so an empty bag is not a
-  // partial answer: every node in the world is shut, including a tier-1 one.
+  // Bare hands harvest nothing, so an empty bag shuts even a tier-1 node.
   it('shuts every node when you carry no tool at all', async () => {
     const h = await run({ 'list-length': 20 }, undefined, { at: ORE_1 });
 
@@ -789,8 +696,7 @@ describe('the tool gate', () => {
     expect(h.figureOf(WOOD_5.id)).toBe('Tool');
   });
 
-  // Bags nobody can read look exactly like bags with nothing in them, and only one of those is a
-  // claim this addon is entitled to make.
+  // Unreadable bags look like empty ones, and only empty is a claim the addon may make.
   it('applies no gate at all while the bags cannot be read', async () => {
     const h = await run({ 'list-length': 20 }, undefined, { at: ORE_1, bags: null });
 
@@ -817,9 +723,7 @@ describe('the tool gate', () => {
     expect(h.figureOf(ORE_T2.id)).toBe('Yours');
   });
 
-  // The join is per node type, and the case has to be a node the tool's own tier would otherwise
-  // cover: a sickle is tier 1 and so is this ore vein, so the only thing that can refuse it is
-  // the type. A single "best tool tier" number would open it.
+  // Same tier, different type: a single "best tool tier" number would open it.
   it('does not let a herb tool open an ore vein of the same tier', async () => {
     const h = await run({ 'list-length': 20 }, undefined, {
       at: ORE_1,
@@ -854,14 +758,7 @@ describe('the tool gate', () => {
   });
 });
 
-/**
- * The second half of the gate, and the half this addon spent three versions getting wrong.
- *
- * Owning a tool and being able to swing it are different facts: every tier above the first
- * demands a gathering counter before the game's own harvest command will accept it. A panel
- * reading ownership alone offers a mithril pick's owner every vein in the world and the
- * server refuses them at all of them, while the game's own minimap draws the lock.
- */
+/** Every tier above the first needs a gathering counter before the game will swing it. */
 describe('the wield gate', () => {
   it('refuses a covering tool the counter cannot swing yet', async () => {
     const h = await run({ 'draw-distance': 400, 'list-length': 20 }, undefined, {
@@ -873,8 +770,7 @@ describe('the wield gate', () => {
     expect(h.figureOf(ORE_T2.id)).toBe('Skill');
   });
 
-  // The case that motivated the whole rewrite: a tool three tiers up, bought or traded ahead,
-  // opens NOTHING at all. Under the old ownership scan every node in the game read as open.
+  // A tool three tiers up with no counter opens nothing, not even tier 1.
   it('leaves a tier-1 node shut to an unearned tier-3 pick', async () => {
     const h = await run({ 'list-length': 20 }, undefined, {
       at: ORE_1,
@@ -884,9 +780,6 @@ describe('the wield gate', () => {
     expect(h.figureOf(ORE_1.id)).toBe('Skill');
   });
 
-  // Two different situations and two different words. `Tool` is a trip to a vendor and
-  // `Skill` is a stretch of gathering with what is already in the bags, and only the second
-  // is something a player can act on where they are standing.
   it('says Tool rather than Skill when nothing carried covers the tier', async () => {
     const h = await run({ 'draw-distance': 400, 'list-length': 20 }, undefined, {
       at: { x: ORE_T2.x, z: ORE_T2.z },
@@ -897,9 +790,7 @@ describe('the wield gate', () => {
     expect(h.figureOf(ORE_T2.id)).toBe('Tool');
   });
 
-  // The rung named is the cheapest one that would put something ALREADY CARRIED to work.
-  // Naming the node's own tier instead would tell a player who carries only the tier-3 pick
-  // that 40 opens this, which unlocks nothing they own.
+  // Names the rung of a tool ALREADY CARRIED, never the node's own tier.
   it('names the rung a tool in the bags would actually wield at', async () => {
     const h = await run({ 'draw-distance': 400, 'list-length': 20 }, undefined, {
       at: { x: ORE_T2.x, z: ORE_T2.z },
@@ -911,8 +802,6 @@ describe('the wield gate', () => {
     expect(h.tipOf(ORE_T2.id)).toContain(`wields at ${String(WIELD_BY_TIER[3])} mining`);
   });
 
-  // A harvest moves the counter, and crossing a rung opens every node of a tier at once with
-  // nothing else on screen moving to explain it.
   it('redraws when the counter crosses a rung', async () => {
     const h = await run({ 'draw-distance': 400, 'list-length': 20 }, undefined, {
       at: { x: ORE_T2.x, z: ORE_T2.z },
@@ -927,11 +816,7 @@ describe('the wield gate', () => {
     expect(h.figureOf(ORE_T2.id)).toBe('Yours');
   });
 
-  // FAIL CLOSED, which is the game's own direction: `coerceProficiency` reads an absent or
-  // malformed counter as zero, and zero locks every tool above the first. Guessing the other
-  // way would offer nodes the server refuses, which is the failure this whole gate is about.
-  // The sheet itself arrives with the player, so a drawn row always has a counter to read:
-  // this is the map inside it being unreadable, not the sheet being absent.
+  // Fails closed, as the game's `coerceProficiency` does: an unreadable counter map is zero.
   it('locks rather than opens when the counter map cannot be read', async () => {
     const h = await run({ 'draw-distance': 400, 'list-length': 20 }, undefined, {
       at: { x: ORE_T2.x, z: ORE_T2.z },
@@ -942,8 +827,6 @@ describe('the wield gate', () => {
     expect(h.figureOf(ORE_T2.id)).toBe('Skill');
   });
 
-  // A sheet that HAS arrived carrying nothing for the profession is a real zero, which is what
-  // the game's own read coerces an absent counter to.
   it('reads a sheet with no counter for the profession as zero', async () => {
     const h = await run({ 'draw-distance': 400, 'list-length': 20 }, undefined, {
       at: { x: ORE_T2.x, z: ORE_T2.z },
@@ -965,8 +848,6 @@ describe('the wield gate', () => {
   });
 });
 
-// The one thing here that is never a fact. Every pin stands at a height the addon
-// worked out, and which of the three ways it did that is on the pin itself.
 describe('the height under a node', () => {
   it('guesses from the player when nothing is standing near the point', async () => {
     const h = await run({}, undefined, { at: ORE_1 });
@@ -1022,8 +903,7 @@ describe('the height under a node', () => {
     expect(storedHeights(storage)).toBeUndefined();
   });
 
-  // The measurement is what makes the pin exact, so it has to outlive the session that made it.
-  // A second addon over the same storage is the only honest way to test that.
+  // A second addon over the same storage stands in for the next session.
   it('takes a measured height back on the next session', async () => {
     const storage = createFakeStorage();
     const first = await run({}, storage, { at: ORE_1 });
@@ -1037,9 +917,7 @@ describe('the height under a node', () => {
     expect(second.heightOf(ORE_1.id)).toBe('harvested');
   });
 
-  // A sample belongs to the session that took it, so a character switch inside one
-  // page load has to drop it: nothing else forces this addon to start again, and a
-  // height captured for whoever was playing a moment ago would otherwise stand.
+  // A character switch inside one page load does not restart the addon, so it must drop samples.
   it('drops a sampled height when the player becomes somebody else', async () => {
     const h = await start({}, undefined, { at: ORE_1 });
     h.stand(500, HERB_1.x, HERB_1.z);
@@ -1057,8 +935,6 @@ describe('the height under a node', () => {
     expect(h.heightOf(HERB_1.id)).toBe('guessed');
   });
 
-  // The mirror of it: with nothing switching, a sample is captured ONCE and is not
-  // re-taken when the thing that supplied it walks off.
   it('keeps a sampled height after the entity that supplied it leaves', async () => {
     const h = await start({}, undefined, { at: ORE_1 });
     h.stand(500, HERB_1.x, HERB_1.z);
@@ -1074,8 +950,6 @@ describe('the height under a node', () => {
   });
 });
 
-// An empty list is never a measurement of zero, and a capped one is never the whole
-// answer. Both have to say which they are.
 describe('what it says about itself', () => {
   it('says why the list is empty rather than drawing an empty box', async () => {
     const h = await run({ 'draw-distance': 20 }, undefined, { at: { x: 0, z: 0 } });
@@ -1114,8 +988,7 @@ describe('what it says about itself', () => {
     expect(h.note()).toContain('Harvesting ore vein');
   });
 
-  // `castStart` is a broadcast rather than a personal record, so the miner standing
-  // next to you emits one too, and the note would otherwise be about them.
+  // `castStart` is a broadcast, so a miner beside you emits one too.
   it("does not report somebody else's harvest as the player's own", async () => {
     const h = await run({ 'list-length': 20 }, undefined, { at: ORE_1 });
 
@@ -1124,9 +997,7 @@ describe('what it says about itself', () => {
     expect(h.note()).not.toContain('arvesting ore');
   });
 
-  // An interrupted cast emits no result at all, so nothing else would ever take the
-  // note down: a display that says a harvest is running forever is worse than one
-  // that never mentioned it.
+  // An interrupted cast emits no result, so the note has to expire on its own.
   it('stops saying so once the cast can no longer be running', async () => {
     const h = await run({ 'list-length': 20 }, undefined, { at: ORE_1 });
     h.castOn('ore');
@@ -1147,8 +1018,6 @@ describe('the type filters', () => {
   });
 });
 
-// Nothing in the loader can say which zone the player is in. Every node row carries its own, so
-// the filter is one bus message away and says so in words when nobody is sending one.
 describe('the zone filter', () => {
   it('lists every zone and says why when nothing is publishing', async () => {
     const h = await run({ 'list-length': 20, 'this-zone-only': true }, undefined, { at: ORE_1 });
@@ -1157,9 +1026,7 @@ describe('the zone filter', () => {
     expect(h.note()).toContain('No zone publisher is installed');
   });
 
-  // Standing in Mirefen with Eastbrook published, and the two zones overlap inside
-  // 400 yards, so this proves the filter is on the node's own `zoneId` rather than
-  // on how far away it is.
+  // The zones overlap inside 400 yards, so this proves the filter reads the node's `zoneId`.
   it('filters to the zone a publisher named', async () => {
     const h = await run(
       { 'draw-distance': 400, 'list-length': 20, 'this-zone-only': true },
@@ -1175,11 +1042,8 @@ describe('the zone filter', () => {
     expect(h.note()).not.toContain('zone publisher');
   });
 
-  // The refusal half of the same contract, and the case that says this addon survived the
-  // publisher's payload changing shape. A publisher outside the open world sends the same
-  // keys with a null id rather than a bare null, so the guard here has to turn on the ID
-  // being a string and not on the payload being an object: an `instance` record is an
-  // object, and read as one it would name a zone called nothing.
+  // Outside the open world a publisher sends the same keys with a null id, so the guard has to
+  // test the ID being a string, not the payload being an object.
   it('ignores a publisher saying there is no zone to name', async () => {
     const h = await run(
       { 'draw-distance': 400, 'list-length': 20, 'this-zone-only': true },
@@ -1189,16 +1053,11 @@ describe('the zone filter', () => {
 
     h.publishNoZone('instance');
 
-    // Still the unfiltered list, and still saying nobody has named a zone, which is the
-    // same thing the bare null this replaced produced.
     expect(h.drawn()).toContain(ORE_T2.id);
     expect(h.note()).toContain('No zone publisher is installed');
   });
 
-  // The two marsh nodes are what makes this a real case rather than a restatement of the list
-  // above. Since game 0.40.1 put the Copper Dig on the Mirefen road, standing at it has two of
-  // the marsh's nodes in range, so a zone filter that did nothing would be indistinguishable
-  // from one that worked until this release.
+  // The two Mirefen nodes in range are what a filter that did nothing would leave in.
   it('keeps the nodes of a zone a publisher named', async () => {
     const h = await run({ 'list-length': 20, 'this-zone-only': true }, undefined, { at: ORE_1 });
 
@@ -1209,8 +1068,6 @@ describe('the zone filter', () => {
   });
 });
 
-// The only thing here on the frame loop, and the only thing that has to be: a leg's
-// length is an answer about the camera rather than about the world.
 describe('the route line', () => {
   it('draws none unless it was asked for', async () => {
     const h = await run({ 'list-length': 20 }, undefined, { at: ORE_1 });
@@ -1237,8 +1094,6 @@ describe('the route line', () => {
     expect(h.route()).not.toContain(ORE_2.id);
   });
 
-  // Nothing is takeable bare-handed, so there is nowhere to route to and no line is
-  // drawn rather than one joining nodes the player cannot open.
   it('draws no line at all when nothing in range can be opened', async () => {
     const h = await run({ 'list-length': 20, route: true }, undefined, { at: ORE_1 });
 
@@ -1279,8 +1134,7 @@ describe('the bearing arrow', () => {
     expect(h.detailOf(WOOD_2.id)).toContain('↓');
   });
 
-  // `facing` grows as the player turns LEFT, so +x is on the left of +z. That is the
-  // half of this that is a claim about the game rather than about arithmetic.
+  // `facing` grows as the player turns LEFT, so +x is on the left of +z.
   it('puts a node on +x to the left of a player facing +z', async () => {
     const h = await run({ 'list-length': 20 }, undefined, {
       at: { x: WOOD_2.x - 40, z: WOOD_2.z },
@@ -1290,13 +1144,8 @@ describe('the bearing arrow', () => {
     expect(h.detailOf(WOOD_2.id)).toContain('←');
   });
 
-  // All EIGHT, because four of them is a table nobody has read the other half of, and the
-  // failure this section exists for is a table written the other way round: that one agrees
-  // at ahead and behind and disagrees at every sector in between.
-  //
-  // The player stands 40 yards due south of the node, which puts it at a bearing of exactly
-  // 0, and then turns left through a full circle 45 degrees at a time. Turning your body
-  // left moves the world right, so the arrow steps clockwise through the table.
+  // All eight: a mirrored table agrees at ahead and behind and nowhere else. Turning left moves
+  // the world right, so the arrow steps clockwise.
   it('steps through all eight sectors as the player turns', async () => {
     const h = await run({ 'list-length': 20 }, undefined, {
       at: { x: WOOD_2.x, z: WOOD_2.z - 40 },
@@ -1323,12 +1172,10 @@ describe('the bearing arrow', () => {
   });
 });
 
-// The table is a claim `woc.data` hands over as `unknown`, so this is where the
-// claim is checked. A hand edit costs the row it broke and nothing else.
+// A hand edit costs the row it broke and nothing else.
 describe('the table it was given', () => {
-  // The warning as well as the drop, because a row with a coordinate that is not a number falls
-  // out of a distance test on its own: without the check it is absent for the wrong reason, and
-  // the log line is the only thing that tells them apart.
+  // A non-numeric coordinate also falls out of the distance test, so only the warning proves
+  // the row was refused for the right reason.
   it('leaves out a node with no coordinate, says so, and keeps the rest', async () => {
     const h = await run({ 'list-length': 20 }, undefined, {
       at: ORE_1,
@@ -1399,14 +1246,7 @@ describe('the panel itself', () => {
   });
 });
 
-/**
- * The second thing the counter buys once it is being read.
- *
- * A node pays proficiency against its own tier: every step of the counter is one gain tier,
- * and a node three tiers below yours pays nothing at all. On a table of 138 tier-1 nodes out
- * of 156 that means most of a circuit quietly stops teaching a gatherer past the third step,
- * with nothing in the game saying so and nothing on screen changing when it happens.
- */
+/** A node three gain tiers below your counter pays nothing, and the game never says so. */
 describe('what a node still teaches you', () => {
   it('pays in full at a fresh counter', async () => {
     const h = await run({ 'list-length': 20 }, undefined, { at: ORE_1, bags: TIER_1_KIT });
@@ -1434,7 +1274,6 @@ describe('what a node still teaches you', () => {
     expect(h.tipOf(ORE_1.id)).toContain('No longer raises your mining');
   });
 
-  // Per profession, off the node's own type: a logger's counter says nothing about a vein.
   it('scores each type against its own profession', async () => {
     const h = await run({ 'list-length': 20 }, undefined, {
       at: ORE_1,
@@ -1447,12 +1286,8 @@ describe('what a node still teaches you', () => {
 });
 
 /**
- * What one harvest actually hands you, which is a fact about the zone and your tool rather
- * than about the node: the material is the zone's, and a tool STRICTLY above that material's
- * own rung, at a vein of at least that rung, mints the fine grade instead.
- *
- * The names come out of the table because an id is not a name here: this zone's ore is
- * `thorium_ore` two zones over and the game shows it as "Osmium Ore".
+ * The material is the zone's, and a tool STRICTLY above its rung, at a vein of at least that
+ * rung, mints the fine grade. Names come from the table because an id is not a display name.
  */
 describe('what a node yields you', () => {
   it('names the zone material', async () => {
@@ -1471,9 +1306,7 @@ describe('what a node yields you', () => {
     expect(h.tipOf(ORE_1.id)).toContain('Yields Fine Copper Ore');
   });
 
-  // BOTH arms of the rule, and this is the one a "better tool, better yield" reading misses:
-  // the vein has to carry the material's own rung. A tier-1 vein in a rung-2 zone stays plain
-  // however good the pick is, which is what keeps the base material gatherable at all.
+  // The arm a "better tool, better yield" reading misses: the vein must carry the rung too.
   it('keeps the plain grade at a vein below the material rung', async () => {
     const h = await run({ 'draw-distance': 400, 'list-length': 20 }, undefined, {
       at: ORE_MIREFEN_T1,
@@ -1484,10 +1317,7 @@ describe('what a node yields you', () => {
     expect(h.tipOf(ORE_MIREFEN_T1.id)).toContain('Yields Iron Ore');
   });
 
-  // The case this addon used to DISCLOSE it could not answer, and now answers. A tool
-  // sitting exactly on the material's rung mints the plain grade alone and the fine one
-  // with a quality charm, which is the whole of what `world.professions.toolEffectSlots`
-  // added at apiMinor 5. Nothing is disclosed any more, because nothing is unknown.
+  // A tool exactly on the rung mints fine only with a quality charm.
   it('names the fine grade when a quality charm carries the tool past the rung', async () => {
     const h = await run({ 'list-length': 20 }, undefined, {
       at: ORE_1,
@@ -1499,9 +1329,7 @@ describe('what a node yields you', () => {
     expect(h.tipOf(ORE_1.id)).not.toContain('slotted quality effect');
   });
 
-  // A spent slot stays on the wire at 0 and contributes nothing, which is exactly what the
-  // game's own bonus rule does with it. Reading the slot's presence rather than its charges
-  // would promise a grade the harvest does not hand over.
+  // A spent slot stays on the wire at 0 charges and adds nothing.
   it('keeps the plain grade when the charm has no charges left', async () => {
     const h = await run({ 'list-length': 20 }, undefined, {
       at: ORE_1,
@@ -1512,9 +1340,7 @@ describe('what a node yields you', () => {
     expect(h.tipOf(ORE_1.id)).toContain('Yields Copper Ore');
   });
 
-  // Only the QUALITY kind touches this comparison. A quantity charm is a real slot on the
-  // same tool and adds units rather than grade, so folding it in would name a grade the
-  // harvest never mints.
+  // A quantity charm adds units, not grade.
   it('keeps the plain grade for a charm of another kind', async () => {
     const h = await run({ 'list-length': 20 }, undefined, {
       at: ORE_1,
@@ -1525,8 +1351,7 @@ describe('what a node yields you', () => {
     expect(h.tipOf(ORE_1.id)).toContain('Yields Copper Ore');
   });
 
-  // A charm on a different tool. The slot list is one row per profession, so matching on
-  // anything less than the profession id would let a herbalist's charm upgrade ore.
+  // Slots are one row per profession, so the match must be on the profession id.
   it('ignores a charm slotted on another profession tool', async () => {
     const h = await run({ 'list-length': 20 }, undefined, {
       at: ORE_1,
@@ -1537,8 +1362,6 @@ describe('what a node yields you', () => {
     expect(h.tipOf(ORE_1.id)).toContain('Yields Copper Ore');
   });
 
-  // The game suppresses a quality charm outright where the fine grade is out of reach at
-  // this node's tier, so the charm must not carry a vein below the material rung either.
   it('keeps the plain grade at a vein below the rung even with a charm', async () => {
     const h = await run({ 'draw-distance': 400, 'list-length': 20 }, undefined, {
       at: ORE_MIREFEN_T1,
@@ -1560,8 +1383,6 @@ describe('what a node yields you', () => {
     expect(h.tipOf(ORE_1.id)).not.toContain('slotted quality effect');
   });
 
-  // The art moves with the grade, so a tool good enough to mint the fine one changes the
-  // picture as well as the sentence.
   it('draws the yield art on the row, at the grade it would actually hand you', async () => {
     const h = await run({ 'list-length': 20 }, undefined, {
       at: ORE_1,

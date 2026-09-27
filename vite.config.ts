@@ -9,13 +9,9 @@ const HOSTS = [
   'https://pbe2.worldofclaudecraft.com/*',
 ];
 
-// The release asset is the one canonical copy of the loader, and `latest` is a
-// redirect GitHub maintains. Nothing else may host it: two locations for one
-// file is two things that can drift, and the one nobody watches goes stale.
-//
-// The previous scheme pointed both URLs at raw.githubusercontent.com on `HEAD`,
-// which .gitignore excludes, so it was a 404 that no manager reports: a player
-// whose update URL 404s gets no error, no badge, and no updates ever.
+// The release asset is the one canonical copy of the loader; nothing else may host
+// it. loader/dist/ is never committed, so a raw.githubusercontent.com URL would be
+// a 404, and a manager whose update URL 404s silently never updates.
 const RELEASE_BASE =
   'https://github.com/MarshalX/world-of-claudecraft-addons/releases/latest/download';
 
@@ -30,28 +26,21 @@ export default defineConfig({
     monkey({
       entry: 'loader/src/host/main.ts',
       userscript: {
-        // FROZEN AT FIRST RELEASE. A userscript manager keys a script's
-        // identity, and therefore its whole GM value store, on the name and
-        // namespace pair. Changing either is not a rename: it is a new script
-        // with an empty registry, so every player loses their installed addons,
-        // settings, keybinds and saved window positions while the old script
-        // sits alongside it still running. Same rule AGENTS.md states for an
-        // addon id, one level up. The release workflow greps the built block
-        // for both. Everything else here is free to change.
+        // FROZEN: `name` and `namespace`. A manager keys a script's identity and
+        // its whole GM store on this pair, so changing either installs a new script
+        // with an empty registry beside the old one, and every player loses their
+        // addons, settings, keybinds and window positions. release.yml greps the
+        // built block for both. Everything else here is free to change.
         name: 'World of ClaudeCraft Addon Loader',
         namespace: 'woc-addons',
         description: 'Addon platform for World of ClaudeCraft',
         author: 'MarshalX',
         license: 'MIT',
-        // Inlined from site/static/favicon.svg at build time, never pasted. A
-        // manager with no icon draws its own placeholder, which is what every
-        // script with no icon gets, and the script list is where a player looks
-        // to confirm the loader is what is running. See tools/brand.ts.
+        // Inlined from site/static/favicon.svg at build time; see tools/brand.ts.
         icon: loaderIcon(),
         match: HOSTS,
         'run-at': 'document-start',
-        // Violentmonkey-only key, ignored by other managers. The page realm is
-        // reached by injecting a <script>, not by running the userscript there,
+        // Violentmonkey-only. The page realm is reached by injecting a <script>,
         // so the sandbox keeps its GM references private.
         'inject-into': 'auto',
         // Enforced by Tampermonkey, advisory elsewhere.
@@ -74,14 +63,11 @@ export default defineConfig({
           'GM_xmlhttpRequest',
           'GM_registerMenuCommand',
         ],
-        // `@version` is not set here. vite-plugin-monkey falls back to the root
-        // package.json, which stays at 0.0.0 in git on purpose: the git tag is
-        // the only source of a release version, and the release workflow stamps
-        // it in with `pnpm pkg set` before building. A local build therefore
-        // reports 0.0.0, which is exactly what an unreleased build is.
+        // No `@version` here: it falls back to package.json, which stays 0.0.0 in
+        // git. The git tag is the only source of a release version, and
+        // release.yml stamps it with `pnpm pkg set` before building.
         downloadURL: `${RELEASE_BASE}/${LOADER_FILENAME}`,
-        // The metadata block alone, so an update check is a few hundred bytes
-        // rather than the whole bundle.
+        // The metadata block alone, so an update check skips the whole bundle.
         updateURL: `${RELEASE_BASE}/${LOADER_META_FILENAME}`,
         supportURL: 'https://github.com/MarshalX/world-of-claudecraft-addons/issues',
         homepageURL: 'https://github.com/MarshalX/world-of-claudecraft-addons',

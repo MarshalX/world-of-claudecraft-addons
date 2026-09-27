@@ -1,54 +1,15 @@
-// Whether the player is in combat, and how confidently the loader knows it.
+// Whether the player is in combat, answered in falling order of confidence. `source` says which
+// branch replied, since four are server state and one is a timer.
 //
-// Until game 0.42.0 the self record carried no combat flag at all. `inCombat`
-// existed on the client entity and the server never wrote it, so it read false
-// for a whole session, which is the trap this project already paid for once: an
-// addon read it and concluded every fight had ended on every hit. That release
-// added `cbt` to the self scalar cohort (server/self_scalar_wire.ts, decoded at
-// src/net/combat_scalar_wire.ts onto `Entity.inCombat`), so the field is now the
-// sim's own answer for the PLAYER and the ladder below gained a branch above all
-// the others.
-//
-// The rest is answered from things the server DOES send, in falling order of
-// confidence, and the answer says which one replied. That is the whole reason
-// `source` is not optional: three of these branches are the server's own opinion
-// and one is a timer, and an addon that wants to trust the reading has to be
-// able to tell them apart. `ConflictReport` carries its source for the same
-// reason, and this is the same kind of honesty about a partial answer.
-//
-//  self   the sim's authoritative flag on the player's own entity, which is the
-//         same bit the game's own player frame lights its crossed swords from.
-//         It is read POSITIVE-ONLY, and that asymmetry is the whole of the
-//         branch's correctness: a server that does not send `cbt` leaves the
-//         client at blankEntity's false forever, and false is therefore
-//         "nobody said" rather than "not fighting". Treating it as an answer
-//         either way would reinstate the exact bug above against any server
-//         predating 0.42.0; treating a true as an answer cannot, because
-//         nothing but the server can ever set it.
-//  party  the party row for the player. The server sets inCombat per member, so
-//         when the player is grouped this is simply the answer. Game 0.41.4 is
-//         what made that sentence true rather than optimistic: the server's flag
-//         used to be set only for a mob's CURRENT target (plus a pet's owner and
-//         a 5s linger), so a grouped healer who never drew aggro read as out of
-//         combat for the whole fight, and this branch preferred that wrong answer
-//         over the threat table that would have been right. The game now derives
-//         it from the hate tables themselves, so the two branches agree.
-//  threat a nearby mob's hate table contains the player. Server state again: the
-//         table rides the wire only for a living mob in combat, and the player is
-//         in it only because the server put them there. Since game 0.41.4 the
-//         server prunes those tables as a fight is left: past 100 yards from an
-//         open-world mob, or on leaving the instance slot a mob fights in. So an
-//         entry vanishing is "they left" as often as "they lost threat".
-//  pvp    a PLAYER the bout puts on the other side has the player selected. A
-//         player carries a real targetId, unlike a mob, so this reads the field
-//         that is actually set, and the bout answers the half no field does.
-//  recent damage involving the player landed inside the idle window. The only
-//         branch that can be wrong, and the last one consulted.
-//
-// The idle window exists because the three above can all miss the same fight: a
-// solo player fighting a mob whose hate table has not reached them yet, or a dot
-// ticking on a mob that has run out of interest scope. It is deliberately the
-// fallback rather than the mechanism.
+//  self   the sim's flag on the player's own entity. POSITIVE-ONLY: a server that never sends
+//         it leaves the client default false, so false means "nobody said".
+//  party  the player's party row, which the server derives from the hate tables.
+//  threat a nearby living mob's hate table contains the player. The server prunes an entry when
+//         the player leaves the fight, so one vanishing does not mean threat was lost.
+//  pvp    a PLAYER the bout puts on the other side has the player selected.
+//  recent damage involving the player landed inside the idle window. The only branch that can
+//         be wrong, and the fallback for a mob whose table has not reached the player yet or a
+//         dot ticking out of interest scope.
 
 import type { Entity } from './game-types.ts';
 import type { MatchInfo } from './match.ts';
@@ -84,16 +45,9 @@ function threatensPlayer(entity: Entity, playerId: number): boolean {
 }
 
 /**
- * A hostile player with the player selected.
- *
- * Restricted to `kind === 'player'` deliberately: a mob's `targetId` is never
- * written, so including mobs here would be a branch that can only ever answer no
- * while looking like it covers them.
- *
- * Hostility comes from the BOUT and never from `entity.hostile`, which the game
- * writes when it builds a mob and nowhere else. Asking the flag made this branch
- * unreachable, so `source` could never answer 'pvp' for anybody: it read as a
- * restriction and was a permanent no. See `world/reaction.ts`.
+ * A hostile player with the player selected. Players only, since a mob's `targetId` is never
+ * written. Hostility comes from the BOUT, never `entity.hostile`, which is never true on a
+ * player: see `world/reaction.ts`.
  */
 function attacksPlayer(entity: Entity, playerId: number, match: MatchInfo | null): boolean {
   return (
@@ -105,11 +59,8 @@ function attacksPlayer(entity: Entity, playerId: number, match: MatchInfo | null
 }
 
 /**
- * The best entity-backed answer, or 'none'.
- *
- * `threat` wins outright wherever it appears, so the loop cannot stop at the
- * first attacker it finds: a hostile player and an angry mob can both be in
- * scope, and the mob's hate table is the better answer of the two.
+ * The best entity-backed answer, or 'none'. `threat` outranks `pvp`, so the loop cannot stop at
+ * the first hostile player.
  */
 function fromEntities(
   entities: ReadonlyMap<number, Entity>,
@@ -143,10 +94,8 @@ interface CombatInputs {
 }
 
 /**
- * The reading, from the most trustworthy branch that answers.
- *
- * A dead player is out of combat whatever the rest says: a corpse is not
- * fighting, and a hate table can outlive the player who was on it.
+ * The reading, from the most trustworthy branch that answers. A dead player is out of combat
+ * whatever the rest says, since a hate table can outlive the player on it.
  */
 function readCombat(inputs: CombatInputs): CombatState {
   const { player, party, entities, match, lastDamageAt, now } = inputs;
@@ -154,9 +103,7 @@ function readCombat(inputs: CombatInputs): CombatState {
     return OUT_OF_COMBAT;
   }
 
-  // Positive-only, for the reason in the header: a false here is indistinguishable
-  // from a server that never sent the bit, so it falls through to the ladder that
-  // answered before this branch existed rather than being reported as an answer.
+  // Positive-only: a false falls through, since it cannot be told from a server that never sent it.
   if (player.inCombat === true) {
     return { active: true, source: 'self' };
   }

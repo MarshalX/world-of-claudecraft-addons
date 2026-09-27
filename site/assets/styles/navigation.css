@@ -1,9 +1,5 @@
-/* The docs sidebar, the on-this-page aside, and the prev/next pagination.
- *
- * All three generate from one place: the `order` in each docs page's frontmatter
- * gives the sidebar and the pagination, and the h2s give the aside. There is no
- * hand-maintained list anywhere, which is what stops a docs section from rotting
- * the first time somebody adds a page and forgets the index.
+/* The docs sidebar, the on-this-page aside, and the prev/next pagination. The
+ * frontmatter `order` gives the sidebar and pagination, and the h2s give the aside.
  */
 
 .doc-nav p {
@@ -46,10 +42,8 @@
   border-left-color: var(--gold-dim);
 }
 
-/* `.doc-nav p` is a class plus an element, so it outranks a bare class and the
-   note rendered as uppercase prose. Scoped here to win. This is the second time
-   the same shape has bitten (see .steps-wrap .steps in pages.css): a broad
-   element-scoped rule beats a specific single-class one. */
+/* Scoped because `.doc-nav p` (class plus element) outranks a bare class and
+   would render the note as uppercase prose. */
 .doc-nav .doc-nav-note {
   font-family: var(--ui);
   font-size: 14.5px;

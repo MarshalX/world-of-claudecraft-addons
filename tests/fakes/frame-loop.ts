@@ -1,14 +1,5 @@
-// The loader's one animation-frame loop, driven by hand.
-//
-// Two shapes, because suites want opposite things from it. `createFrameClock`
-// wraps the REAL loop around a clock a test steps, which is what a suite about
-// anchors or about `onFrame` needs: the phase order, the delta clamp and the
-// stop-when-idle behaviour are the loop's own rather than a stand-in's. An inert
-// loop registers nothing and runs nothing, which is what every OTHER suite needs,
-// so building the shared services does not start a loop a test would have to stop.
-//
-// Shared rather than written twice: a fake that drifts from the thing it stands in
-// for is how a suite goes green against a loader that throws.
+// The loader's animation-frame loop, driven by hand. `createFrameClock` wraps the real loop around
+// a stepped clock; `inertFrameLoop` runs nothing, for suites that are not about frames.
 
 import { createFrameLoop, type FrameLoop } from '../../loader/src/runtime/frame-loop.ts';
 

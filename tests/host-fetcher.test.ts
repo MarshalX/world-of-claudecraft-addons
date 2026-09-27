@@ -1,9 +1,4 @@
-// The conditional GET and its ETag cache.
-//
-// `changed` is the load-bearing part. Hot reload polls on it, and an index
-// refresh skips its work on it, so a version that always said true would turn a
-// two-second poll into a two-second reload loop and a version that always said
-// false would pin every addon to the body it was installed with.
+// The conditional GET and its ETag cache. Hot reload and index refresh both act on `changed`.
 
 import { describe, expect, it } from 'vitest';
 import { CACHE_PREFIX, createFetcher } from '../loader/src/host/fetcher.ts';
@@ -53,10 +48,7 @@ describe('a repeat request', () => {
     await expect(fetcher.get(URL_A)).resolves.toEqual({ body: 'second', changed: true });
   });
 
-  // `changed` is relative to the body the caller last received, NOT to the
-  // server's history. An author who edits and then reverts has moved the running
-  // addon twice and has to be reloaded twice, because after the first poll the
-  // loader is running the edited copy.
+  // An edit then a revert moves the running addon twice, so both are reported.
   it('measures change against what was last read, not against the original', async () => {
     const { fetcher, http } = harness({ [URL_B]: 'v1' });
     await fetcher.get(URL_B);
@@ -68,8 +60,6 @@ describe('a repeat request', () => {
     await expect(fetcher.get(URL_B)).resolves.toEqual({ body: 'v1', changed: true });
   });
 
-  // The other direction, and the one the steady state depends on: a file nobody
-  // touched between polls is not reported as a change however many polls run.
   it('stays unchanged across repeated polls of a file nobody touched', async () => {
     const { fetcher } = harness({ [URL_B]: 'v1' });
     await fetcher.get(URL_B);
@@ -102,8 +92,7 @@ describe('forget', () => {
 });
 
 describe('failures', () => {
-  // 404 on a raw.githubusercontent.com URL is the private-or-renamed-repository
-  // case, so the status is carried verbatim rather than flattened to "failed".
+  // A raw 404 means a private or renamed repository, so the status is kept verbatim.
   it('rejects with the status and the URL', async () => {
     const { fetcher } = harness({});
 
@@ -144,9 +133,7 @@ describe('getJson', () => {
   });
 });
 
-// A body with no validator cannot be told apart from one that moved, so it is
-// reported as changed. Over-reporting costs a redundant reload; the other
-// direction would silently pin an addon to a stale body forever.
+// With no validator, over-reporting costs a reload; under-reporting pins a stale body forever.
 describe('a server that issues no etag', () => {
   it('reports every response as changed', async () => {
     const fetcher = createFetcher({
@@ -158,8 +145,6 @@ describe('a server that issues no etag', () => {
     await expect(fetcher.get(URL_A)).resolves.toMatchObject({ changed: true });
   });
 
-  // Keeping the old validator would make the next request conditional against
-  // something nothing will ever match, and 304s would stop arriving silently.
   it('drops a cached etag when the server stops issuing them', async () => {
     // Annotated rather than inferred: from the initializer alone the type is the
     // literal `true`, and the second branch reads as unreachable.

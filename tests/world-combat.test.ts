@@ -1,11 +1,4 @@
-// The combat reading, branch by branch.
-//
-// Every case here is a fight the loader has to describe correctly with no combat
-// flag to read, so what is being tested is the ORDER the signals are consulted in
-// and the honesty of the source that travels with the answer. The cases that
-// matter most are the ones where a branch could look right and be wrong: a mob
-// that is attacking but carries no targetId, and a hate table that outlives the
-// player who was on it.
+// The order `readCombat` consults its signals in, and the source reported with each answer.
 
 import { describe, expect, it } from 'vitest';
 import {
@@ -45,12 +38,7 @@ function mob(over: Partial<Entity> = {}): Entity {
   };
 }
 
-/**
- * Another PLAYER, as the wire actually delivers one: `hostile` false, always.
- *
- * The flag is written where the game builds a mob, so an opponent carries the
- * same false your own party does and only the bout tells them apart.
- */
+/** Another PLAYER as the wire delivers one: `hostile` is false; only the bout gives the side. */
 function rival(over: Partial<Entity> = {}): Entity {
   return mob({ id: RIVAL_ID, kind: 'player', hostile: false, ...over });
 }
@@ -143,9 +131,7 @@ function inputs(over: Partial<CombatInputs> = {}): CombatInputs {
 }
 
 describe('readCombat', () => {
-  // Game 0.42.0 began sending the sim's own flag for the player alone, as `cbt`
-  // on the self scalar cohort. These four cases are the whole of what makes the
-  // branch safe to put ABOVE the four that predate it.
+  // The sim flag (`cbt`, self record only) is positive-only; these cases make it safe on top.
   it('answers from the sim flag on the player, above every other branch', () => {
     expect(readCombat(inputs({ player: player({ inCombat: true }) }))).toEqual({
       active: true,
@@ -160,12 +146,8 @@ describe('readCombat', () => {
     });
   });
 
-  // The asymmetry is the correctness of the branch rather than a shortcut. A
-  // server predating 0.42.0 never sends the bit and the client leaves it false,
-  // so a false here is "nobody said" and must fall through to the ladder that
-  // answered before. Reading it as an answer would reinstate the original trap:
-  // every fight reported over, on every server that has not been upgraded.
-  it('falls through to the older ladder when the flag is false rather than trusting it', () => {
+  // A false flag cannot be told from one never sent, so it must not end a fight.
+  it('falls through to the ladder when the flag is false', () => {
     expect(readCombat(inputs({ player: player({ inCombat: false }), party: party(1) }))).toEqual({
       active: true,
       source: 'party',
@@ -180,8 +162,6 @@ describe('readCombat', () => {
     ).toEqual({ active: true, source: 'threat' });
   });
 
-  // A corpse is not fighting, and the sim flag does not get to overrule that: the
-  // death branch is above every reading including this one.
   it('is out of combat while dead even with the sim flag set', () => {
     expect(readCombat(inputs({ player: player({ inCombat: true, dead: true }) }))).toEqual({
       active: false,
@@ -194,10 +174,8 @@ describe('readCombat', () => {
     expect(readCombat(inputs({ party: party(0) }))).toEqual({ active: false, source: 'party' });
   });
 
-  // The branch the whole feature turns on. A mob beating on the player carries no
-  // targetId at all, so anything reading that field sees an idle world; the hate
-  // table is what the server actually fills in.
-  it('reads a mob hate table that names the player, which is the only mob signal there is', () => {
+  // A mob attacking the player carries no targetId; only its hate table says so.
+  it('reads a mob hate table that names the player', () => {
     const attacker = mob({ threat: new Map([[PLAYER_ID, 840]]), aggroTargetId: PLAYER_ID });
 
     expect(readCombat(inputs({ entities: new Map([[MOB_ID, attacker]]) }))).toEqual({
@@ -215,8 +193,7 @@ describe('readCombat', () => {
     });
   });
 
-  // A corpse holds its table for a while. Reading it would keep the player in
-  // combat after the fight they just won.
+  // A corpse keeps its table for a while after the fight ends.
   it('ignores a dead mob still carrying the player on its table', () => {
     const corpse = mob({ dead: true, threat: new Map([[PLAYER_ID, 840]]) });
 
@@ -226,7 +203,7 @@ describe('readCombat', () => {
     });
   });
 
-  it('reads a duel opponent targeting you, which is the one place targetId is set', () => {
+  it('reads a duel opponent targeting you', () => {
     const enemy = rival({ targetId: PLAYER_ID });
 
     expect(
@@ -237,10 +214,7 @@ describe('readCombat', () => {
     });
   });
 
-  // The fixture this replaced set `hostile: true` on a player, which the game
-  // never does: it is written when a MOB is built and nowhere else. So the branch
-  // it was proving read as a restriction and was a permanent no, and this is the
-  // case that fails if hostility ever goes back to being read off the entity.
+  // The game sets `hostile` only on mobs; this fails if hostility is read off the entity.
   it('does not treat a stranger with you selected as a pvp attacker', () => {
     const stranger = rival({ targetId: PLAYER_ID });
 
@@ -271,8 +245,7 @@ describe('readCombat', () => {
     });
   });
 
-  // The same fields on a MOB must not answer, or the pvp branch would silently
-  // stand in for the mob branch and hide a broken hate table read.
+  // Otherwise the pvp branch would hide a broken hate table read.
   it('does not treat a mob with a targetId as a pvp attacker', () => {
     const impossible = mob({ targetId: PLAYER_ID });
 
@@ -290,9 +263,7 @@ describe('readCombat', () => {
     expect(readCombat(lapsed)).toEqual({ active: false, source: 'none' });
   });
 
-  // Confidence order, not first-match order: a grouped player fighting a mob has
-  // two branches that would both answer, and the server's per-member flag is the
-  // one that knows about a fight happening out of interest scope.
+  // The party row also knows about a fight outside interest scope.
   it('prefers the party row over a hate table that would also answer', () => {
     const attacker = mob({ threat: new Map([[PLAYER_ID, 840]]) });
 
@@ -316,7 +287,7 @@ describe('readCombat', () => {
     ).toEqual({ active: false, source: 'none' });
   });
 
-  it('answers before the world exists rather than throwing at an addon', () => {
+  it('answers without throwing before the world exists', () => {
     expect(readCombat(inputs({ player: null }))).toEqual({ active: false, source: 'none' });
   });
 });

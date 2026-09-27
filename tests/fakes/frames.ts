@@ -1,11 +1,6 @@
-// Frame and entity fixtures, shaped from traffic observed on a live pbe client
-// rather than from the game's type declarations.
-//
-// The two disagree in ways that decide whether this code works at all. The ack
-// the latency pairing needs rides the `self` record and not the snapshot head,
-// and an Entity carries `maxHp`/`resource` where the wire record that delivered
-// it used `mhp`/`res`. Both of those were wrong here until a real session said
-// so, so these fixtures are the record of what the game actually sends.
+// Frame and entity fixtures captured from a live pbe client, not from the game's type
+// declarations, which disagree: the ack rides `self`, not the snapshot head, and an Entity says
+// `maxHp`/`resource` where the wire said `mhp`/`res`.
 
 /** The client's first frame on every socket. `token` is the account bearer token. */
 export const AUTH_FRAME = {
@@ -59,13 +54,7 @@ export function text(frame: unknown): string {
   return JSON.stringify(frame);
 }
 
-/**
- * Read a fixture field by name.
- *
- * Tests index these objects constantly, and a literal key on a record type is
- * caught between two rules that disagree: the linter wants dot access and the
- * compiler forbids it on an index signature. A named key settles both.
- */
+/** Read a fixture field by name, which satisfies both the linter and the index-signature rule. */
 export function at(source: unknown, key: string): unknown {
   return (source as Record<string, unknown>)[key];
 }

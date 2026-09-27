@@ -79,8 +79,7 @@ describe('snapPosition', () => {
 });
 
 describe('snapResize', () => {
-  // Rounding the width alone would jitter the right edge, which interactjs holds
-  // still on a left-edge drag.
+  // Rounding the width alone would jitter the right edge, which interactjs holds still.
   it('lands the dragged left edge on a line and holds the right edge exactly', () => {
     const next = snapResize({ x: 103, y: 200, w: 317, h: 240 }, { left: true }, SNAP_GRID);
 
@@ -143,8 +142,7 @@ describe('the drag listener', () => {
     expect(keeper.current()).toEqual({ ...BOX, x: 103, y: 205 });
   });
 
-  // Without the carried remainder, every delta under half a cell rounds straight
-  // back and a slow drag never moves the frame.
+  // Without the carried remainder a slow drag rounds every delta back and never moves.
   it('reaches the next line under a run of deltas smaller than half a cell', () => {
     const keeper = writer(LINED);
     const move = dragMover(keeper, () => SNAP_GRID);
@@ -165,8 +163,7 @@ describe('the drag listener', () => {
     expect(keeper.current().x).toBe(LINED.x);
   });
 
-  // A frame clamped at the viewport edge while the pointer runs on must owe
-  // nothing on the way back.
+  // A frame clamped at the viewport edge must owe nothing on the way back.
   it('does not build up a debt from a run that goes one way and comes back', () => {
     const keeper = writer(LINED);
     const move = dragMover(keeper, () => SNAP_GRID);

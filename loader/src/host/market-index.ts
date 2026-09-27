@@ -1,9 +1,4 @@
-// Reading one source's addon rows, by whichever route that source supports.
-//
-// Split from host/marketplace.ts, which owns the per-session cache and the
-// MarketApi over it, because this is the part with a decision in it: an index if
-// the source publishes one, the repository itself if it does not, and neither if
-// what came back says something else went wrong.
+// Reading one source's addon rows: its index, or the repository itself if it has none.
 
 import { indexUrl, type MarketplaceRef } from '../shared/marketplace.ts';
 import type { MarketplaceEntry, ValidationIssue } from '../shared/schema.ts';
@@ -39,14 +34,8 @@ function indexIssues(issues: readonly ValidationIssue[]): string {
 }
 
 /**
- * Enumerate the repository, restoring the index's own failure if it is missing.
- *
- * A repository that answers 404 for its addons/ listing too is not a marketplace
- * with no index, it is a repository the loader cannot see: private, renamed, or
- * never there. Reporting the contents API's URL for that would point a player at
- * an endpoint they never asked for, so the message they get back is the one
- * about the index they were actually looking for. Anything else the fallback
- * raises is its own answer and is reported as such.
+ * Enumerate the repository. If its listing 404s too, the repository is invisible (private,
+ * renamed, or absent), so the index's own 404 is rethrown rather than the contents API URL.
  */
 async function enumerate(
   fetcher: IndexFetcher,
@@ -66,12 +55,8 @@ async function enumerate(
 /**
  * One source's addons: its index, or the repository itself if it has none.
  *
- * The fallback is reached only on a 404, which is what "this repository has not
- * wired the Action yet" looks like. Every other failure is rethrown: a 403 is
- * the unauthenticated rate limit, and answering it by issuing one request per
- * addon would spend what is left of the hour finding out there is none. An index
- * that is present but invalid is also not a fallback case, since the source did
- * publish one and what it published is the thing to report.
+ * The fallback runs only on a 404. A 403 is the rate limit and would only be deepened, and an
+ * index that is present but invalid is what to report.
  */
 async function readRows(fetcher: IndexFetcher, ref: MarketplaceRef): Promise<Rows> {
   try {
@@ -82,9 +67,7 @@ async function readRows(fetcher: IndexFetcher, ref: MarketplaceRef): Promise<Row
     }
     return { addons: parsed.value.addons, degraded: false };
   } catch (err) {
-    // The dev server generates its index from the directory on every request,
-    // so a 404 there means the server is not running rather than that it has no
-    // index, and there is nothing on the other side to enumerate.
+    // The dev server always generates an index, so a 404 there has nothing to enumerate.
     if (!isHttpStatus(err, NOT_FOUND) || ref.source.kind !== 'github') {
       throw err;
     }

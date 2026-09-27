@@ -2,7 +2,7 @@
 
 Read this when an idea depends on something you cannot find in `packages/types/`, before concluding it is a gap in the loader. Almost everything here is a limit of the WIRE or of the client's own bundling: the server does not send it, or the client holds it somewhere no addon can reach. No amount of API reading finds a way round those, and an addon that appears to have one is guessing.
 
-Each entry says what is missing and what to do instead, because "you cannot have this" without "do this instead" is how a limit turns into a bug report.
+Each entry says what is missing and what to do instead.
 
 ## Contents
 
@@ -26,7 +26,7 @@ Each entry says what is missing and what to do instead, because "you cannot have
 
 **Combat events are scoped to you and your group, within a radius.** The server delivers a damage or heal record only if you are the source, the target, or grouped with one of them, and there is a distance limit on top of that. A meter measures the group it is in, which is what a meter is for. It must not present a total as realm-wide, and must not silently drop to zero when the player leaves the group.
 
-**A pet's damage is never delivered at all.** The participant test matches player ids, and a pet is a mob-kind entity with its own entity id, so its swing at a mob matches nothing and is filtered server-side. The pet is not invisible: it is in the entity list, its owner is readable, and it hitting YOU is delivered because you are the target. So an addon can see the pet, name it, watch it fight, and never say what it did. Do not infer pet damage from the target's health delta; a pet's swing and a second player's land identically.
+**A pet's records carry the pet's entity id, not its owner's.** The owner receives their own pet's events, and matching `sourceId` against your own id silently drops them. Attribute through `damage.sourceOwnerId`, which is snapshotted at emit and so survives the pet despawning when its owner dies, and fall back to the pet entity's `ownerId`. Ask the question against your own id either way, so a stranger's pet answers no. Keep pet swings out of your own miss, dodge, parry and block line: they roll against the pet's table. A pet ability carries no `abilityId`, is not in `world.abilities`, and has no icon by any route, so name the pet in the tooltip instead.
 
 **Overhealing is never reported.** The heal is clamped to the target's missing health before the record is emitted, and the clamped amount is discarded. Report EFFECTIVE healing and say so. Reconstructing overheal from a health delta does not work: a heal landing in the same tick as damage is indistinguishable from an overheal.
 
@@ -36,11 +36,11 @@ Each entry says what is missing and what to do instead, because "you cannot have
 
 ## Abilities, auras and control
 
-**An ability's id and its display name have diverged and nothing bridges them.** Skill art is filed under the id; combat records carry the name. `world.abilities` closes the join in both directions for YOUR OWN spellbook, and that exception is the whole of what is recoverable. For anything a mob casts, a name derived from an id is a guess. Slugify and let the failure be cosmetic: a bar hides its icon slot when the art 404s.
+**An ability's id and its display name have diverged.** Skill art is filed under the id; combat records carry the name. Three things bridge them: `world.abilities` in both directions for YOUR OWN spellbook; `damage.abilityId` on a player's primary direct hit only (null on swings, ticks and echoes, where you fall back to `school`); and `AuraEvent.abilityId` on some aura applications, the only route to a mob's ability. Everywhere else, a name derived from an id is a guess. Slugify and let the failure be cosmetic: a bar hides its icon slot when the art 404s.
 
 **A lockout aura's id is not an ability id.** An interrupt applies an aura whose id has a suffix, so it can never resolve art through the ability icon builder.
 
-**An aura event cannot identify what it names.** It carries a display name, a gained flag and a target, and no id, and often no kind. Build an aura model from the entity's own aura list and use the event only as a cheap "something changed on that unit" nudge. An addon that builds its model from the event looks correct and silently confuses two abilities that share a display name.
+**An aura event cannot reliably identify what it names.** It always carries a display name, a gained flag and a target; `sourceId`, `abilityId`, `stacks` and `refresh` are present only on some records (typically applications, rarely fades), and `auraKind` on none observed. Build an aura model from the entity's own aura list and use the event as a "something changed on that unit" nudge, treating an id on it as a bonus. An addon that builds its model from the event looks correct and silently confuses two abilities that share a display name.
 
 **A party row's aura strip is capped, filtered and rounded.** At most eight, filtered by the game's own relevance rule, whole-second remaining, no stacks, no value, no school, no source. This cannot be widened. Build a healer display on rows anyway, because a row exists for a member nowhere near you and an entity does not, and reach for the entity only to enrich the members close enough to have one.
 
@@ -48,7 +48,7 @@ Each entry says what is missing and what to do instead, because "you cannot have
 
 **Combo points have no published maximum.** Size a pip strip to the most seen this session and say so.
 
-**A mob's aura often has an icon now, and this entry used to say it never could.** Game 0.39.0 began serving `/ui/auras/mapping.json`, and `ui.icon.aura(id)` reads it. That family is exactly the auras no ability id names, mob-applied ones among them, so ask it FIRST and fall back to `ui.icon.ability` for an aura a player applied, which is the order the game's own resolver uses. Two things to carry from the old entry, because they still hold. The family is closed and small, so plenty of effects are in neither route and are still composited on a canvas from a bundled table with nothing to point at: keep the null branch. And `ui.icon.aura` answers null until its manifest lands, unlike the other builders, so `await woc.ui.icon.preloadAuras()` once at start or your first rows keep their fallback.
+**Aura icons come from two routes and many auras are in neither.** `ui.icon.aura(id)` reads the game's served aura manifest, which covers auras no ability id names, mob-applied ones among them; ask it FIRST and fall back to `ui.icon.ability` for an aura a player applied, the order the game's own resolver uses. The family is closed and small, so plenty of effects are composited on a canvas from a bundled table with nothing to point at: keep the null branch. `ui.icon.aura` answers null until its manifest lands, unlike the other builders, so `await woc.ui.icon.preloadAuras()` once at start or your first rows keep their fallback.
 
 ## Items and the economy
 
@@ -92,7 +92,7 @@ Each entry says what is missing and what to do instead, because "you cannot have
 
 If the data is on an object the loader can reach and simply is not published, that is a LOADER gap and it can be fixed. If the server never sends it, or the client holds it in a bundled table, no loader change helps.
 
-Two things make this harder than it sounds, and both have cost real bugs:
+Two things make this harder than it sounds:
 
 **A field being present proves nothing.** The client builds every entity with defaults and fills in what the snapshot carried, so a field the server never sends is present, of the right type, and holds that default for the whole session. It passes every shape check. The way to tell is to read the server's SEND SITE, not the client's type declaration.
 

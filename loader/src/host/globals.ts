@@ -1,19 +1,13 @@
-// Maps the userscript manager's real globals onto GmSource.
+// Maps the userscript manager's real globals onto GmSource. The ONLY module that names a GM
+// function; gm.ts feature-detects on what this returns.
 //
-// Every name is guarded with typeof because a manager only defines the APIs the
-// metadata block granted, and it may expose them as sandbox scope bindings
-// rather than properties, which rules out a dynamic lookup. The ambient
-// tampermonkey types declare the full surface, so they say nothing about what a
-// given manager actually ships; the guards here are what decides. This is the
-// only module that names a GM function, and gm.ts feature-detects on the shape
-// it returns.
+// Every name is guarded with typeof: a manager defines only what the metadata block granted,
+// possibly as sandbox scope bindings (so no dynamic lookup), and the ambient tampermonkey types
+// declare the full surface whatever a given manager actually ships.
 
 import type { GmObject, GmSource } from './gm.ts';
 
-/**
- * Each member is called through GM rather than detached from it, so a manager
- * that implements these as real methods keeps its receiver.
- */
+/** Each member is called through GM, not detached, so a real method keeps its receiver. */
 function readGmObject(): GmObject | undefined {
   if (typeof GM === 'undefined') {
     return;
@@ -40,9 +34,8 @@ function readGmObject(): GmObject | undefined {
   if (typeof GM.registerMenuCommand === 'function') {
     object.registerMenuCommand = (label, run) => GM.registerMenuCommand(label, run);
   }
-  // Note the casing: the promise-based surface spells it xmlHttpRequest while
-  // the legacy global is GM_xmlhttpRequest. Reaching for the wrong one finds
-  // undefined and degrades silently to "no marketplace is reachable".
+  // The casing differs: GM.xmlHttpRequest but GM_xmlhttpRequest. The wrong one is undefined
+  // and silently leaves no marketplace reachable.
   if (typeof GM.xmlHttpRequest === 'function') {
     object.xmlHttpRequest = (details) =>
       GM.xmlHttpRequest(details as Parameters<typeof GM.xmlHttpRequest>[0]);
@@ -69,8 +62,7 @@ export function readGmSource(): GmSource {
     source.legacyAddValueChangeListener = GM_addValueChangeListener;
   }
   if (typeof GM_removeValueChangeListener === 'function') {
-    // Wrapped rather than passed through: the manager types the id as a number
-    // while the adapter carries back whatever the add call returned.
+    // Wrapped: the manager types the id as a number, the adapter carries whatever add returned.
     source.legacyRemoveValueChangeListener = (id) => {
       GM_removeValueChangeListener(id as number);
     };
@@ -85,9 +77,7 @@ export function readGmSource(): GmSource {
   if (typeof BroadcastChannel === 'function') {
     source.broadcastChannel = BroadcastChannel;
   }
-  // GM_info needs no grant and every manager defines it, but it is read through
-  // the same guard as the rest: a manager that omits it costs one diagnostic
-  // line rather than a boot failure.
+  // Guarded like the rest although no grant is needed, so a manager omitting it cannot fail boot.
   if (typeof GM_info === 'object') {
     source.scriptVersion = GM_info.script.version;
   }

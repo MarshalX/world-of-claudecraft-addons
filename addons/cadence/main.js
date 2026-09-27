@@ -2,23 +2,19 @@
 
 // Cadence: the timings a rotation is played against, on one strip.
 //
-// `gcdRemaining`, `comboPoints`, `offhandSwingTimer` and `offhandWeapon` ride the SELF
-// record and nowhere else. `swingTimer` rides every auto-attacking entity in interest range
-// since game 0.41.0, omitted entirely on one that is not swinging, and the client derives
-// `autoAttack` from its presence; on an older server a target reads `autoAttack: false`
-// forever and the row stands at 'off'.
+// `gcdRemaining`, `comboPoints`, `offhandSwingTimer` and `offhandWeapon` ride the SELF record only.
+// `swingTimer` rides every auto-attacking entity in range and is omitted on one that is not
+// swinging; the client derives `autoAttack` from its presence, so a server that never sends it
+// leaves the target row at 'off'.
 //
-// No swing publishes its length. The global cooldown's is arithmetic (`gcdLength`); every
-// swing's is learned from its reset (`relearn`), off the record rather than the `damage`
-// event, which lands a round trip later. The mainhand seeds from `weapon.speed` and the
-// offhand from `offhandWeapon.speed`, both unhasted bases the game multiplies by
-// `swingIntervalMult(p)`; a target seeds from nothing, since no weapon speed rides a
-// non-self record.
+// No swing publishes its length. The global cooldown's is arithmetic (`gcdLength`); a swing's is
+// learned from its reset on the record (`relearn`), since the `damage` event lands a round trip
+// later. The hands seed from `weapon.speed` and `offhandWeapon.speed`, unhasted bases; a target
+// seeds from nothing, since no weapon speed rides a non-self record.
 //
-// Rows are built once and hidden rather than removed, so nothing moves under the eye at
-// the moment a cast starts; `LATE_ROWS` are the two whose subject may not exist. Combo
-// pips run over as many slots as the most points seen this session: nothing on the wire
-// carries a maximum.
+// Rows are built once and hidden rather than removed, so nothing moves under the eye when a cast
+// starts. Combo pips run over the most points seen this session: nothing on the wire carries a
+// maximum.
 
 const FRAME_WIDTH = 190;
 const DECIMALS = 1;
@@ -27,7 +23,7 @@ const WIDTH_DECIMALS = 2;
 const MS_PER_SECOND = 1000;
 /** The unhasted global cooldown, for every class but the one below. */
 const GCD_SECONDS = 1.5;
-/** A rogue's is a third shorter, and it is the only class the game singles out. */
+/** A rogue's is a third shorter; the only class the game singles out. */
 const ROGUE_GCD_SECONDS = 1;
 const ROGUE = 'rogue';
 /** The floor, which no amount of haste takes the global cooldown under. */
@@ -59,8 +55,8 @@ const PIP_OFF = '0.25';
 /** The band, in the kit's own danger colour. */
 const BAND_COLOR = 'rgb(255 143 133 / 30%)';
 
-// The row key, the setting that switches it on, and the label it carries. Triples
-// rather than an object, because the setting ids are the manifest's names.
+// The row key, its enabling setting and its label. Triples rather than an object, because the
+// setting ids are the manifest's names.
 const ROW_SPECS = [
   ['swing', 'show-swing', 'Swing'],
   ['oswing', 'show-offhand-swing', 'Offhand'],
@@ -72,19 +68,12 @@ const ROW_SPECS = [
 ];
 
 /**
- * Rows that open HIDDEN: whether an offhand is held or movement is affected is unknowable
- * before world entry, so the box is stated without them and `showRow` redivides it when one
- * has something to say.
+ * Rows that open HIDDEN: an offhand or a movement effect is unknowable before world entry, so the
+ * box is stated without them and `showRow` redivides it when one appears.
  */
 const LATE_ROWS = ['oswing', 'speed'];
 
-/**
- * `ResourceType` is exactly these four. The fallback covers a kind a release adds.
- *
- * `focus` arrived with the 0.36.0 class rebuild and is the case the fallback was written
- * for: a hunter read 'Power' for a release rather than reading nothing, which is why the
- * fallback stays even now that the list is complete again.
- */
+/** `ResourceType` is exactly these four. The fallback covers a kind a later release adds. */
 const RESOURCE_LABELS = [
   ['mana', 'Mana'],
   ['rage', 'Rage'],
@@ -122,7 +111,7 @@ function numberOf(value) {
   return 0;
 }
 
-/** Overrides the row-height setting while set. In-session: the loader saves the box. */
+/** Overrides the row-height setting while set. In-session only: the loader saves the box. */
 let linePx = null;
 
 function rowHeight() {
@@ -146,8 +135,8 @@ function stackHeight(height, lines) {
 }
 
 /**
- * The lines the strip OPENS with, without `LATE_ROWS`: a height stated for a hidden row is a
- * dead line at the bottom of every strip that never shows it.
+ * The lines the strip OPENS with, without `LATE_ROWS`: a height stated for a hidden row is a dead
+ * line under every strip that never shows it.
  */
 function openLines() {
   let count = 0;
@@ -164,8 +153,8 @@ function stripHeight(height) {
 }
 
 /**
- * What the height floor is stated from. The pips are a line that appears mid-session, and
- * bounds are read once, so a floor counting rows alone is one the pips vanish under.
+ * What the height floor is stated from. The pips appear mid-session and bounds are read once, so a
+ * floor counting rows alone lets the pips vanish.
  */
 function floorLines() {
   if (woc.settings['show-power']) {
@@ -190,8 +179,8 @@ function shownRows() {
 /** Re-size without rebuilding: a drag cannot change which rows exist and fires at pointer rate. */
 function applySize() {
   for (const row of rows.values()) {
-    // The kit sizes the row, its text and its art from one number, and drops an update
-    // repeating a height it already holds, so a strip nobody is dragging pays nothing.
+    // The kit sizes the row, its text and its art from one number and drops a repeated height, so a
+    // strip nobody is dragging pays nothing.
     row.bar.update({ size: rowHeight() });
   }
   const size = Math.max(MIN_PIP_PX, rowHeight() - PIP_INSET);
@@ -202,15 +191,10 @@ function applySize() {
 }
 
 /**
- * Divide the box between the lines on the strip, on a box change and on a line count
- * change: the pips appear mid-session and the frame's height was stated without them.
- * Gaps are paid before the division and the share floored, since a pixel over the box is
- * a pixel of the bottom row quietly missing.
- *
- * The box is read from the frame rather than held. `onMove` never fires for the opening
- * placement, so a copy of the box had to be seeded with the height this file had just
- * asked for, in two places that could disagree; `frame.box()` is the loader's own answer
- * and is right from the first paint.
+ * Divide the box between the lines on the strip, on a box change and on a line count change. Gaps
+ * come out before the division and the share is floored, since a pixel over the box clips the
+ * bottom row. The box comes from `frame.box()`, because `onMove` never fires for the opening
+ * placement.
  */
 function fitLines() {
   const next = woc.ui.units(frame.box().h, {
@@ -247,10 +231,9 @@ function toneFor(fraction) {
 }
 
 /**
- * What a countdown counts down from, learned from its own reset.
- *
- * `seen` is null before the first sample and whenever the strip stops drawing, so the
- * frame that resumes only records: otherwise a row returning mid-swing reads as a re-arm.
+ * What a countdown counts down from, learned from its own reset. `seen` is null before the first
+ * sample and whenever the strip stops drawing, so the frame that resumes only records rather than
+ * reading a mid-swing return as a re-arm.
  */
 function relearn(cell, remaining, seed) {
   const rearmed = cell.seen !== null && remaining > cell.seen;
@@ -279,38 +262,30 @@ const frame = woc.ui.frame({
   id: 'strip',
   title: 'Cadence',
   width: FRAME_WIDTH,
-  // The rows and their gaps, and nothing else. Without a height the kit opens at its own
-  // fallback, which for four 14px rows leaves an invisible drag area over the game.
+  // Stated, or the kit opens at its fallback and leaves an invisible drag area over the game.
   height: stripHeight(rowHeight()),
   density: 'bare',
   save: true,
   // A bare strip has no chrome to dismiss it with, so this is the only way off screen.
   toggleKey: 'toggle',
-  // A frame is content-sized and therefore not resizable by default, which is wrong
-  // here: these bars have a width the player reads numbers off.
+  // Resizable, because the player reads numbers off these bars' width.
   resizable: true,
-  // Both bounds are stated, because a frame that states neither takes the size it opened
-  // at as its floor and can never be dragged smaller than its first paint.
-  //
-  // The height's floor is the row height setting's own minimum spread over every line the
-  // strip can be asked for, so that setting decides how small the strip goes. See
-  // `floorLines` for the line the row count alone does not know about.
-  //
-  // Both are read once, here. Switching a row off later rebuilds the strip but cannot
-  // restate the bounds, so the floor holds until the next reload.
+  // Both bounds are stated, or the frame takes its first paint as its floor. The height floor is
+  // the row-height setting's minimum over every line the strip can show (see `floorLines`). Bounds
+  // are read once, so switching a row off keeps the floor until reload.
   minWidth: MIN_FRAME_WIDTH,
   minHeight: stackHeight(MIN_HEIGHT, floorLines()),
   /**
-   * The lines follow the box. Measuring the element would force a synchronous layout on
-   * every pointer move. Split between SHOWN lines, so hiding a row makes the rest taller.
+   * The lines follow the box; measuring the element would force a layout per pointer move. Split
+   * between SHOWN lines, so hiding a row makes the rest taller.
    */
   onMove: fitLines,
 });
 frame.body.appendChild(list);
 
 /**
- * The latency band, inside the cast row and behind its text. A negative z-index like the
- * kit's own fill, appended after it, so the band sits over the fill and under the label.
+ * The latency band, inside the cast row behind its text. A negative z-index like the kit's fill,
+ * appended after it, so it sits over the fill and under the label.
  */
 function createBand(el) {
   const band = document.createElement('div');
@@ -366,18 +341,13 @@ function buildRows() {
 }
 
 /**
- * The cast's label and school, looked up only when the ability changed.
- * `world.abilities` rebuilds a signature over the whole spellbook on every read, which is
- * wasteful sixty times a second for an answer that moves only when a cast starts.
+ * The cast's label and school, looked up only when the ability changes, since `world.abilities`
+ * rebuilds a signature over the whole spellbook on every read.
  *
- * `woc.fmt.titleCase` is the FALLBACK, reached only outside your own spellbook, and wrong
- * wherever the game's display name has diverged from the id. Wrong-but-readable beats a
- * blank row on a live cast.
- *
- * `castingAbility` carries an ability id OR an activity sentinel, from a set that grows
- * with the game. A sentinel resolves in no spellbook, so the lane reads "Crafting" while
- * you craft. Left alone: the game's own cast bar draws the same thing, and an exclusion
- * list would need editing every release.
+ * `woc.fmt.titleCase` is the fallback outside your spellbook, wrong where the display name diverges
+ * from the id but better than a blank row. An activity sentinel in `castingAbility` resolves in no
+ * spellbook, so the lane reads "Crafting"; the game's cast bar does the same, and an exclusion list
+ * would need editing every release.
  */
 function castOf(me) {
   const abilityId = me.castingAbility;
@@ -440,11 +410,9 @@ function hastened(total, value) {
 }
 
 /**
- * What the first swing of a session is measured against, from a hand's own base speed.
- *
- * Melee haste and a warrior's stance mastery are NOT on the wire, and the game applies both
- * to either hand (`offhand.speed * swingIntervalMult(p)`), so an offhand `speed` is a seed
- * like the mainhand's rather than a period, and both run long until the first observed reset.
+ * What the first swing is measured against, from a hand's base speed. Melee haste and stance
+ * mastery are NOT on the wire and the game applies both to either hand, so both seeds run long
+ * until the first observed reset.
  */
 function swingSeed(me, speed) {
   const period = foldAuras(me, SWING_SLOW_KINDS, numberOf(speed), stretched);
@@ -452,10 +420,7 @@ function swingSeed(me, speed) {
   return period / (1 + Math.max(0, haste));
 }
 
-/**
- * The swing row. `autoAttack` decides whether there is anything to say at all: a swing
- * timer on a character who is not attacking counts to nothing.
- */
+/** The swing row. Without `autoAttack` there is nothing to count to. */
 function paintSwing(row, me) {
   const remaining = numberOf(me.swingTimer);
   const total = relearn(swing, remaining, swingSeed(me, me.weapon?.speed));
@@ -468,9 +433,8 @@ function paintSwing(row, me) {
 }
 
 /**
- * Hold an offhand, throwing away anything learned from the last one. Keyed on the held ITEM
- * rather than the weapon's speed, so a swap between two weapons of one speed still relearns;
- * null covers an unequip.
+ * Hold an offhand, discarding the last one's learned period. Keyed on the ITEM, so a swap between
+ * two weapons of one speed still relearns; null covers an unequip.
  */
 function hold(itemId) {
   if (offhandSwing.item === itemId) {
@@ -491,11 +455,9 @@ function showRow(row, on) {
 }
 
 /**
- * The offhand swing, drawn only while one is held.
- *
- * `offhandWeapon !== null` is the dual-wield question and `offhandItemId` is not: a shield
- * fills the id and leaves the weapon null. `offhandSwingTimer` drains to zero and stays
- * there with the swing off, so read straight it would sit at 0.0s, hence 'off'.
+ * The offhand swing, drawn only while one is held. `offhandWeapon !== null` answers dual-wield and
+ * `offhandItemId` does not, since a shield fills the id. `offhandSwingTimer` sits at zero with the
+ * swing off, hence 'off'.
  */
 function paintOffhandSwing(row, me) {
   const offhand = me.offhandWeapon ?? null;
@@ -516,8 +478,8 @@ function paintOffhandSwing(row, me) {
 }
 
 /**
- * Point the row at an entity, throwing away anything learned from the last one. Null for
- * "nothing to count", so a target that dies or leaves range discards the period as a switch does.
+ * Point the row at an entity, discarding the last one's learned period. Null means nothing to
+ * count, so a target dying or leaving range discards it too.
  */
 function aimAt(id) {
   if (targetSwing.id === id) {
@@ -551,9 +513,9 @@ function targetName(target) {
 }
 
 /**
- * The target's swing, read live since a target may have been replaced since the last frame.
- * `NO_SEED` because no weapon speed rides a non-self record; do not guess from the mob
- * template, since a mob's swing is its weapon times a haste multiplier under three clamps.
+ * The target's swing, read live since the target may have been replaced. `NO_SEED` because no
+ * weapon speed rides a non-self record; do not guess from the mob template, whose swing is a weapon
+ * times a haste multiplier under three clamps.
  */
 function paintTargetSwing(row) {
   const target = woc.world.unit('target');
@@ -586,12 +548,10 @@ function hasKind(me, kind) {
 /**
  * The movement multiplier when it is worth saying, or null when it is not.
  *
- * `world.moveSpeedMult` carries no breakdown, so the row names no cause. Null is "no answer"
- * (before world entry, offline, spectating, or on the older movement wire) and is tested by
- * kind, since 0 is a real reading. Exactly 1 is also what a slow-immune player carrying a
- * snare computes. A ghost is a flat 1.25 with no aura behind it, a mount adds 60% to 80%,
- * and stealth is folded into the same `Math.min` as a snare (a rogue's is 0.5), so none of
- * the three can be told from a snare or a rush by the number.
+ * `world.moveSpeedMult` carries no breakdown, so the row names no cause. Null means no answer
+ * (before world entry, offline, spectating) and is tested by kind, since 0 is a real reading. A
+ * slow-immune player with a snare reads exactly 1; a ghost is a flat 1.25, a mount adds 60% to 80%,
+ * and stealth is folded into the same `Math.min` as a snare, so the number cannot tell those apart.
  */
 function speedToShow(me) {
   const mult = woc.world.moveSpeedMult;
@@ -616,8 +576,8 @@ function speedTone(mult) {
 }
 
 /**
- * The fill is the share of your NORMAL speed; above 1 the kit clamps it to a full bar and
- * the figure beside it carries the excess.
+ * The fill is the share of your NORMAL speed; above 1 the kit clamps it and the figure carries the
+ * excess.
  */
 function paintSpeed(row, me) {
   const mult = speedToShow(me);
@@ -632,7 +592,7 @@ function paintSpeed(row, me) {
   });
 }
 
-/** The unhasted base, which the game gives one class alone a shorter one of. */
+/** The unhasted base; one class alone has a shorter one. */
 function gcdBase(me) {
   if (me.templateId === ROGUE) {
     return ROGUE_GCD_SECONDS;
@@ -641,9 +601,9 @@ function gcdBase(me) {
 }
 
 /**
- * The game's own arithmetic, which is what makes this row exact on the first press. Three
- * terms the obvious version gets wrong: a rogue's base is 1.0, no haste takes it under
- * the 0.75 floor, and haste auras ADD to `spellHaste` rather than folding in.
+ * The game's own arithmetic, so the row is exact on the first press. Three terms the obvious
+ * version gets wrong: a rogue's base is 1.0, no haste goes under the 0.75 floor, and haste auras
+ * ADD to `spellHaste`.
  */
 function gcdLength(me) {
   const haste = foldAuras(me, HASTE_AURA_KINDS, numberOf(me.spellHaste), added);
@@ -651,9 +611,9 @@ function gcdLength(me) {
 }
 
 /**
- * Empty rather than zero when not running, since that is ready. The length is recomputed
- * each frame, so an aura falling off mid-cooldown leaves a remaining longer than the
- * length says; the kit clamps the fill.
+ * Empty rather than zero when not running, since that is ready. The length is recomputed each
+ * frame, so an aura falling off mid-cooldown can leave remaining above length; the kit clamps the
+ * fill.
  */
 function paintGcd(row, me) {
   const remaining = numberOf(me.gcdRemaining);
@@ -665,8 +625,8 @@ function paintGcd(row, me) {
 }
 
 /**
- * The last stretch of the cast that your round trip covers. Drawn from the left edge
- * because the fill drains toward it, so the band is the end of the cast.
+ * The last stretch of the cast your round trip covers, drawn from the left edge because the fill
+ * drains toward it.
  */
 function paintBand(row, total) {
   const { band } = row;
@@ -720,9 +680,8 @@ function resourceLabel(me) {
 }
 
 /**
- * One pip per point, over as many slots as the most ever seen. Repainted only when the
- * count moved, since this runs at frame rate. The first point adds a line, so the box is
- * divided again on the frame that reveals it.
+ * One pip per point, over as many slots as the most seen. Repainted only when the count moved. The
+ * first point adds a line, so the box is redivided on that frame.
  */
 function paintPips(points) {
   if (points > pipSlots) {
@@ -869,8 +828,8 @@ function draw(me) {
 }
 
 /**
- * The frame's own visibility is left alone: it is the player's and the loader persists it,
- * so writing it too would argue with the restore of a frame they had closed.
+ * The frame's visibility is the player's and the loader persists it; writing it here would fight
+ * the restore.
  */
 function drawing() {
   if (!woc.settings['hide-out-of-combat']) {
@@ -893,12 +852,11 @@ function stand() {
 buildRows();
 applyVisibility();
 
-// The one subscription in the file. Combat is a state that changes, which is what
-// `world.on` reports; everything else here is a number counting down.
+// The one subscription: combat is a state change, which is what `world.on` reports; everything else
+// counts down.
 woc.world.on('combat', applyVisibility);
 
-// On the loop the loader already runs. Four bars whose numbers move every frame is what
-// that tick is for, and a strip standing down is one `if` on a shared callback.
+// On the loader's frame loop, which is what bars moving every frame need.
 woc.onFrame(() => {
   const me = woc.world.player;
   if (frame.visible && !list.hidden && me !== null) {
@@ -909,8 +867,8 @@ woc.onFrame(() => {
 });
 
 /**
- * Throw the rows away and build them again. Which rows exist and how tall they are are
- * both decided when a row is built, so neither can be repainted into.
+ * Throw the rows away and rebuild: which rows exist and how tall they are are both fixed when a row
+ * is built.
  */
 function rebuild() {
   for (const off of tips.splice(0)) {
@@ -925,15 +883,13 @@ function rebuild() {
   pipsPainted = -1;
   buildRows();
   applyVisibility();
-  // The rows the settings now ask for, divided into the box the frame already has. A new
-  // row height cannot land here: the frame's height was stated when it was built and an
-  // addon cannot restate it, so honouring the setting now would draw rows the bare frame
-  // clips. It opens at the new height next reload.
+  // The rows the settings now ask for, divided into the existing box. A new row height cannot land
+  // here: the bare frame's height cannot be restated, so the rows would be clipped. It applies next
+  // reload.
   fitLines();
 }
 
 woc.onSettingsChange(rebuild);
 
-// Nothing is registered with `woc.onDispose`: everything this file creates lives inside
-// a kit widget or inside the frame body, both of which the loader drains on disable, and
-// the frame handler is `woc.onFrame`, which is unsubscribed with them.
+// Nothing is registered with `woc.onDispose`: everything lives in kit widgets or the frame body,
+// which the loader drains on disable, and `woc.onFrame` is unsubscribed with them.

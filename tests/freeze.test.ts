@@ -1,17 +1,8 @@
 // @vitest-environment happy-dom
 
-// The Dev tab's freeze.
-//
-// One subject across four modules, which is why it is its own suite: the switch
-// is in runtime/freeze.ts and the four places it has to be OBEYED are the API
-// surfaces, so a suite that only drove the module would pass while an addon kept
-// repainting. Each gate is exercised through the real surface an addon is handed.
-//
-// The cases that matter most are the ones that pin what freezing must NOT do:
-// a held handler stays subscribed, a held timer keeps its id and its bag entry,
-// `waitFor` still settles, and resuming does not fire a burst of everything that
-// was missed. Those are the ways a freeze turns from a dev switch into a bug an
-// addon author would report as their own.
+// The Dev tab's freeze. The switch is in runtime/freeze.ts and the API surfaces obey it, so each
+// gate is driven through the real surface an addon is handed. Freezing must NOT unsubscribe a held
+// handler, drop a held timer's id or bag entry, hang `waitFor`, or fire a burst on resume.
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createTimers, type TimerHost } from '../loader/src/runtime/api/timers.ts';
@@ -78,11 +69,8 @@ function fakeHost() {
       handler?.(undefined as never);
     },
     /**
-     * Fire everything due now, and nothing scheduled BY it.
-     *
-     * Snapshotted first, so a handler that re-arms itself does not fire again in
-     * the same pass. That is what the browser does, and it is the whole point
-     * when the loop under test is the one doing the re-arming.
+     * Fire everything due now and nothing scheduled by it, as a browser does, so a handler that
+     * re-arms itself does not fire twice in one pass.
      */
     fireAll: () => {
       for (const [id, handler] of [...pending]) {
@@ -94,13 +82,8 @@ function fakeHost() {
 }
 
 /**
- * A live world with a hand-driven frame clock, so the sampler is not a race.
- *
- * The clock moves with the frames because the sampler holds a floor between
- * samples: a frame clock stuck at one instant would model a browser firing every
- * animation frame at the same timestamp, and the watcher would sample once and
- * never again. 25 ms a frame is over that floor, so each frame here is a sample,
- * which is what these cases are about.
+ * A live world with a hand-driven frame clock. The clock advances 25 ms a frame, over the
+ * sampler's floor between samples, so each frame is a sample; a stuck clock samples only once.
  */
 async function worldHarness() {
   const live = { player: { ...PLAYER_ENTITY } as Record<string, unknown> };
@@ -141,7 +124,7 @@ async function worldHarness() {
 }
 
 describe('the switch', () => {
-  it('starts thawed, which is what makes a page reload the way out', () => {
+  it('starts thawed', () => {
     expect(isFrozen()).toBe(false);
   });
 
@@ -155,8 +138,7 @@ describe('the switch', () => {
     expect(root.classList.contains(FROZEN_CLASS)).toBe(false);
   });
 
-  // The manager has a host-side route in that works before the UI mounts, so the
-  // pane holding this switch can be on screen while there is no root to mark.
+  // The manager can be open before the UI mounts, so there may be no root to mark.
   it('freezes with no root in the document', () => {
     setFrozen(document, true);
 
@@ -216,10 +198,7 @@ describe('woc.timers', () => {
     expect(paint).toHaveBeenCalledTimes(2);
   });
 
-  // The freeze holds the CALL, never the registration: suspending the timers
-  // themselves would mean re-arming every one of them on resume, and an addon
-  // that cleared a frozen timer would be clearing something that no longer
-  // existed.
+  // The freeze holds the call, never the registration, so a frozen timer can still be cleared.
   it('leaves a frozen interval clearable and in the disposal bag', () => {
     const bag = new DisposalBag();
     const clock = fakeHost();
@@ -244,11 +223,8 @@ describe('woc.timers', () => {
     expect(draw).not.toHaveBeenCalled();
   });
 
-  // THE REGRESSION, from a live session: cooldown-bars sat still after an
-  // unfreeze while its events kept flowing. A one-shot that came due while
-  // frozen used to be dropped, and an addon animates by re-arming INSIDE the
-  // handler, so the held handler took the whole chain with it: nothing was left
-  // pending, and no unfreeze could revive it.
+  // An addon animates by re-arming inside the handler, so dropping a held one-shot would end the
+  // chain for good.
   it('keeps a self-rescheduling frame loop alive across a freeze', () => {
     const clock = fakeHost();
     const timers = createTimers(clock.host, new DisposalBag());
@@ -265,14 +241,11 @@ describe('woc.timers', () => {
     setFrozen(document, false);
     clock.fireAll();
 
-    // Three draws: one before the freeze, one released by the resume, one from
-    // the frame after it. The middle one is what proves the chain survived.
+    // Before the freeze, released by the resume, and the frame after: the middle one proves it.
     expect(drawn).toHaveBeenCalledTimes(3);
   });
 
-  // Held, not dropped. A one-shot is at most one entry per live timer, so the
-  // queue is bounded by construction and there is no backlog to spike on, which
-  // is what makes this a different decision from socket traffic.
+  // Held, unlike socket traffic: at most one entry per live timer, so there is no backlog.
   it('runs a one-shot that came due while frozen when the freeze lifts', () => {
     const bag = new DisposalBag();
     const clock = fakeHost();
@@ -290,8 +263,6 @@ describe('woc.timers', () => {
     expect(bag.size).toBe(0);
   });
 
-  // A disabled addon must not draw, and disable is hot. The held call is
-  // discarded with everything else the addon owned.
   it('discards a held one-shot when the addon is disabled while frozen', () => {
     const bag = new DisposalBag();
     const clock = fakeHost();
@@ -326,10 +297,7 @@ describe('woc.world.on', () => {
     expect(moved).toHaveBeenCalledTimes(2);
   });
 
-  // Gated at the listener rather than by stopping the sampler, so the watcher
-  // keeps taking its baseline while frozen. Stopping it instead would make the
-  // first frame after a resume dispatch every key that moved during the freeze,
-  // which is a burst at exactly the moment an addon is least ready for one.
+  // Gated at the listener, not the sampler, so the baseline keeps moving and resume fires no burst.
   it('does not fire for what changed while frozen once resumed', async () => {
     const h = await worldHarness();
     const moved = vi.fn();
@@ -359,9 +327,7 @@ describe('woc.net', () => {
     expect(damage).toHaveBeenCalledOnce();
   });
 
-  // Traffic during a freeze is dropped rather than queued, so a meter
-  // under-counts across one. Asserted rather than left implicit: it is the cost
-  // of not replaying a backlog of 20 Hz frames into the resume.
+  // A meter under-counts across a freeze; that is the cost of not replaying a backlog.
   it('drops what arrived while frozen rather than replaying it', () => {
     const h = netHarness();
     const damage = vi.fn();
@@ -374,9 +340,7 @@ describe('woc.net', () => {
     expect(damage).not.toHaveBeenCalled();
   });
 
-  // A gated `waitFor` would never settle: the subscription is `once`, so the bus
-  // drops it on the frame the handler was held for and the addon's await would
-  // hang past the resume with nothing left to wake it.
+  // The subscription is `once`, so a gated `waitFor` would be dropped and hang forever.
   it('settles waitFor while frozen', async () => {
     const h = netHarness();
     setFrozen(document, true);

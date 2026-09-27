@@ -1,12 +1,5 @@
-// Everything Browse, Marketplaces, and Updates can do, over the bridge.
-//
-// Split from catalog-store.ts, which owns the reading, because the two halves
-// have nothing to say to each other beyond `act`: an action runs, and then the
-// store re-reads. Nothing here inspects state or decides what it should become.
-//
-// Every action is a no-op without a bridge. Doing nothing rather than throwing:
-// the pane already reports the unreachable state, and a rejection out of a click
-// handler would be a second report of the same fact with nowhere to go.
+// Everything Browse, Marketplaces, and Updates can do, over the bridge. An action runs and then the
+// store re-reads. Without a bridge every action is a no-op, since the pane already reports that.
 
 import type { InstalledAddon, MarketApi, UpdateRow } from '../../../shared/protocol.ts';
 import { inSeries } from '../../../shared/sequence.ts';
@@ -14,12 +7,8 @@ import { inSeries } from '../../../shared/sequence.ts';
 /** The registry members the three catalog panes call. */
 interface CatalogRegistry {
   /**
-   * The whole installed row, though only the fqid is read.
-   *
-   * Declared as what the registry actually answers rather than as the narrow
-   * shape used here, because this interface is intersected with the Installed
-   * pane's in ManagerRegistry: two `list` members disagreeing about their return
-   * type would intersect into something nothing can satisfy.
+   * The whole installed row, though only the fqid is read. Kept wide because ManagerRegistry
+   * intersects this with the Installed pane's, and two different `list` returns cannot intersect.
    */
   list: () => Promise<InstalledAddon[]>;
   install: (fqid: string) => Promise<void>;
@@ -104,10 +93,8 @@ function registryActions(
       withRegistry(fqid, (registry) => registry.setPin(fqid, version));
     },
 
-    // One at a time, and a failure stops the run rather than pressing on. Each
-    // update re-fetches a body from a marketplace, so a burst is the request
-    // pattern a rate limit answers worst, and if the source has started refusing
-    // then every addon after this one would fail the same way.
+    // One at a time, stopping at the first failure: a burst is what a rate limit answers worst, and
+    // a source that has started refusing would fail every remaining addon the same way.
     updateAll: (fqids) => {
       withRegistry(null, (found) => inSeries(fqids, (fqid) => found.update(fqid)));
     },

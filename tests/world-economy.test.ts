@@ -146,9 +146,7 @@ const NO_GAME = {
 } as unknown as WorldHub;
 
 describe('the proximity-gated economy reads', () => {
-  // The whole reason these three are a status rather than `T | null`. On a
-  // nullable value `world.market?.listings ?? []` answers the empty array for
-  // both of these, so an addon reports an empty market to a player in a town.
+  // A nullable value would read both as `[]` through `?.listings ?? []`, hence the status.
   it('tells an empty market page from no Merchant', () => {
     const empty = backendOf(gameWorld({ marketInfo: { ...A_PAGE, listings: [], totalCount: 0 } }));
     const nowhere = backendOf(gameWorld());
@@ -158,7 +156,7 @@ describe('the proximity-gated economy reads', () => {
     expect(nowhere.market).toEqual({ status: 'away', info: null });
   });
 
-  it('answers unknown before a snapshot has decoded, rather than away', () => {
+  it('answers unknown before a snapshot has decoded', () => {
     const backend = backendOf(gameWorld({ entities: new Map<number, unknown>() }));
 
     expect(backend.market.status).toBe('unknown');
@@ -177,8 +175,7 @@ describe('the proximity-gated economy reads', () => {
     expect(reads.buyback).toBeNull();
   });
 
-  // A browsing player reads this up to forty times a second. Rebuilding the
-  // wrapper per access would allocate for a page that did not move.
+  // A browsing player reads this up to forty times a second.
   it('keeps one wrapper while the game holds the same page object', () => {
     const game = gameWorld({ marketInfo: A_PAGE });
     const backend = backendOf(game);
@@ -213,7 +210,7 @@ describe('the Materials Vault', () => {
     expect(near.vault.info?.perMaterialCap).toBe(80);
   });
 
-  it('answers unknown before a snapshot has decoded, rather than away', () => {
+  it('answers unknown before a snapshot has decoded', () => {
     const backend = backendOf(gameWorld({ entities: new Map<number, unknown>() }));
 
     expect(backend.vault.status).toBe('unknown');
@@ -236,8 +233,7 @@ describe('the Materials Vault', () => {
 });
 
 describe('the badge reads beside them', () => {
-  // The failure that folding these into their parents would cause: a badge
-  // exists for the moment the player is NOT at the counter.
+  // A badge exists for when the player is not at the counter.
   it('keeps the unread count while the mailbox is out of reach', () => {
     const backend = backendOf(gameWorld({ mailUnread: 12 }));
 
@@ -252,20 +248,18 @@ describe('the badge reads beside them', () => {
     expect(backend.marketCollectPending).toBe(true);
   });
 
-  // Both guard a reader written around truthiness: zero unread letters and
-  // nothing waiting to collect are the ORDINARY answers, not missing ones.
-  it('publishes an unread count of zero as zero rather than as absent', () => {
+  // Zero and false are the ordinary answers, not missing ones.
+  it('publishes an unread count of zero as zero', () => {
     expect(backendOf(gameWorld({ mailUnread: 0 })).mailUnread).toBe(0);
   });
 
-  it('publishes a collect flag of false as false rather than as absent', () => {
+  it('publishes a collect flag of false as false', () => {
     expect(backendOf(gameWorld({ marketCollectPending: false })).marketCollectPending).toBe(false);
   });
 });
 
 describe('the buyback ring', () => {
-  // Standing at a vendor is what lets a player USE the ring, not what lets them
-  // see it, so wrapping it in a ProximityState by analogy would be wrong.
+  // A vendor gates using the ring, not seeing it, so it is not a ProximityState.
   it('is readable with no vendor, no Merchant and no banker anywhere', () => {
     const backend = backendOf(gameWorld({ vendorBuyback: A_RING }));
 
@@ -273,7 +267,7 @@ describe('the buyback ring', () => {
     expect(backend.buyback).toEqual(A_RING);
   });
 
-  it('keeps the game"s order, most recent first', () => {
+  it("keeps the game's order, most recent first", () => {
     const backend = backendOf(gameWorld({ vendorBuyback: A_RING }));
 
     expect(backend.buyback?.[0]).toEqual({ itemId: 'silk', count: 1 });
@@ -283,8 +277,6 @@ describe('the buyback ring', () => {
 describe('the economy signatures', () => {
   const near = (info: unknown) => ({ status: 'near', info });
 
-  // The cost of the wrong version: a walk over a 62 row page forty times a
-  // second for a player who is nowhere near a Merchant.
   it('does not walk a page the player is away from', () => {
     const trap = {
       status: 'away',
@@ -311,24 +303,21 @@ describe('the economy signatures', () => {
     expect(capture('market', near(A_PAGE))).not.toBe(capture('market', near(gone)));
   });
 
-  // A fresh join silently resets the server's own query while the window's
-  // controls survive, and the echo is the only thing that can show it.
-  it('fires when the server"s own query echo drifts', () => {
+  // A fresh join resets the server's query while the window's controls survive.
+  it("fires when the server's own query echo drifts", () => {
     const filtered = { ...A_PAGE, rarity: 'epic' };
 
     expect(capture('market', near(A_PAGE))).not.toBe(capture('market', near(filtered)));
   });
 
-  // The order is not one of the filters and cannot be read off the id list: a
-  // book of one row, or a page whose ids happen to come back in the same order,
-  // reorders into an identical listing array under a different reading.
+  // The order cannot be read off the id list, which can come back identical.
   it('fires when the browse order changes under an identical page', () => {
     const byPrice = { ...A_PAGE, sort: 'price' };
 
     expect(capture('market', near(A_PAGE))).not.toBe(capture('market', near(byPrice)));
   });
 
-  it('ignores a letter"s body, which is unbounded free text', () => {
+  it("ignores a letter's body, which is unbounded free text", () => {
     const wordy = { ...A_BOX, messages: [{ ...A_LETTER, body: 'x'.repeat(4000) }] };
 
     expect(capture('mail', near(A_BOX))).toBe(capture('mail', near(wordy)));
@@ -345,10 +334,8 @@ describe('the economy signatures', () => {
     expect(capture('mail', near(A_BOX))).not.toBe(capture('mail', near(fuller)));
   });
 
-  // Marking read and taking a parcel both mutate a letter IN PLACE, so an id
-  // list alone would report that nothing moved. The box's own `unread` is held
-  // still here on purpose: the counts are covered by the case above, and moving
-  // both would let a signature that dropped the ROW field still pass.
+  // Both mutate a letter in place. The box's `unread` is held still on purpose, so only the row
+  // field can move the signature.
   it('fires when a letter is marked read', () => {
     const seen = { ...A_BOX, messages: [{ ...A_LETTER, read: true }] };
 

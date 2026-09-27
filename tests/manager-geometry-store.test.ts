@@ -34,9 +34,6 @@ afterEach(() => {
 });
 
 describe('the key', () => {
-  // Window position is a preference about the player's screen rather than about
-  // a character, but the channels are separate deployments a player may want
-  // arranged differently.
   it('is scoped by channel', () => {
     expect(geometryKey('pbe')).not.toBe(geometryKey('live'));
   });
@@ -58,8 +55,7 @@ describe('loading', () => {
     expect(store.box()).toEqual(BOX);
   });
 
-  // A box that no longer parses would put NaN into a style property, which drops
-  // the declaration silently and strands the window wherever it happened to be.
+  // A NaN in a style property drops the declaration silently and strands the window.
   it('ignores a persisted value that is not a box', async () => {
     const { storage } = memoryStorage({ x: 1, y: 2 });
     const store = createGeometryStore({ storage, channel: 'pbe' });
@@ -117,8 +113,7 @@ describe('saving', () => {
     expect(set).toHaveBeenCalledWith(NS, geometryKey('pbe'), BOX);
   });
 
-  // Blocking a drag on a bridge round trip would be worse than losing the
-  // position, so the write is fire and forget and its failure is reported.
+  // The write is fire and forget so a drag never waits on a bridge round trip.
   it('keeps the position in memory when the write fails', async () => {
     const storage: GeometryStorage = {
       get: () => Promise.resolve(undefined),

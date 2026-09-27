@@ -1,17 +1,7 @@
 // @vitest-environment happy-dom
 
-// Elements kept over world points, and the projection behind them.
-//
-// Two things are worth pinning and they are in different files. The PROJECTION is
-// a read of the game's renderer, which this repository cannot compile against, so
-// what matters there is that a missing method, a throwing one and a nonsense
-// answer are each a null rather than an exception or a NaN written to a style.
-//
-// The LOOP is the kit's, and what matters is that it is one loop rather than one
-// per anchor, that it stops when the last anchor goes, and that a frame in which
-// nothing moved writes nothing. A strip of nameplates repainting sixty times a
-// second for a camera nobody is turning is the same churn Cooldown Bars was found
-// paying for its rows.
+// World anchors: a bad renderer answer is a null, never a throw or a NaN in a style, and
+// one shared loop writes nothing on a frame where nothing moved.
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
@@ -74,8 +64,7 @@ describe('the projection', () => {
     expect(createProjector(() => game)(1, 2, 3)).toBeNull();
   });
 
-  // A future update can leave something callable in place that throws when
-  // called. The cost has to be a hidden anchor, not a dead frame loop.
+  // A hidden anchor, never a dead frame loop.
   it('answers null when the renderer throws', () => {
     const project = createProjector(() => ({
       renderer: {
@@ -114,10 +103,8 @@ describe('the projection', () => {
 });
 
 describe('the near-plane guard', () => {
-  // The live defect this guard fixes: `worldToScreen` reports only the FAR half of
-  // the depth test, so a point between the camera and the near plane comes back
-  // finite, wrong by any amount, and flagged as not behind. The game's own
-  // nameplates, chat bubbles and click picking all guard against exactly it.
+  // `worldToScreen` reports only the FAR half of the depth test, so a point inside the
+  // near plane comes back finite, wrong by any amount, and flagged as not behind.
   function renderer(near: unknown, elements: unknown = IDENTITY) {
     return {
       renderer: {
@@ -147,8 +134,7 @@ describe('the near-plane guard', () => {
     expect(project(0, 0, -12)?.depth).toBe(12);
   });
 
-  // A guard that turned every anchor off because a game update moved the camera
-  // would be worse than the over-trusting projection this file shipped with.
+  // A guard that hid every anchor when the camera moved would be worse than no guard.
   it.each([
     ['no camera at all', undefined],
     ['a matrix that is not an array', 'nonsense'],
@@ -198,8 +184,7 @@ describe('anchoring to a unit', () => {
     expect(anchor.visible).toBe(true);
   });
 
-  // The honest answer for a unit the game is not drawing: the same one the game
-  // gives, which is no nameplate at all.
+  // The game draws no nameplate for such a unit either.
   it('hides when the unit has no point', () => {
     const { anchors, frames } = open(undefined, () => null);
     const anchor = anchors.add({ unit: 'target', over: 'head' });
@@ -211,7 +196,7 @@ describe('anchoring to a unit', () => {
 });
 
 describe('placing an anchor', () => {
-  it('starts hidden, because it has nowhere to be until a frame runs', () => {
+  it('starts hidden until a frame runs', () => {
     const { anchors } = open();
 
     const anchor = anchors.add({ x: 0, y: 0, z: 0 });
@@ -252,8 +237,6 @@ describe('placing an anchor', () => {
     expect(anchor.visible).toBe(true);
   });
 
-  // The honest answer for a unit that has gone: an addon following an entity
-  // reads null the frame it despawns.
   it('hides when the function says there is no point any more', () => {
     const { anchors, frames } = open();
     let where: { x: number; y: number; z: number } | null = { x: 0, y: 0, z: 0 };
@@ -318,7 +301,6 @@ describe('what is hidden', () => {
   });
 });
 
-// One loop for every anchor, and none at all when there are none.
 describe('the frame loop', () => {
   it('runs one callback however many anchors there are', () => {
     const { anchors, frames } = open();
@@ -372,8 +354,6 @@ describe('the frame loop', () => {
     expect(frames.pending()).toBe(0);
   });
 
-  // A camera nobody is turning must cost nothing. Style writes are the whole
-  // output of this loop, so a frame that changes no pixels must write none.
   it('writes nothing for a frame in which nothing moved', () => {
     const { anchors, frames } = open();
     const anchor = anchors.add({ x: 0, y: 0, z: 0 });
@@ -387,7 +367,6 @@ describe('the frame loop', () => {
     expect(writes).not.toHaveBeenCalled();
   });
 
-  // Sub-pixel movement is a style write that changes nothing on screen.
   it('ignores a move smaller than a pixel', () => {
     let x = 100;
     const { anchors, frames } = open(() => ({ ...SOMEWHERE, x }));

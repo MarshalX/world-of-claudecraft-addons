@@ -19,8 +19,7 @@ describe('createLatencyTracker', () => {
     expect(tracker.value).toBe(120);
   });
 
-  // The server acks the highest sequence it has processed, so one ack settles
-  // every send at or below it rather than only the exact match.
+  // The server acks the highest sequence processed, so one ack settles every send below it.
   it('resolves every sequence at or below the ack', () => {
     const tracker = createLatencyTracker();
     tracker.noteSent(1, 0);
@@ -53,8 +52,7 @@ describe('createLatencyTracker', () => {
     expect(tracker.value).toBe(50);
   });
 
-  // A backgrounded tab or one GC pause produces a single enormous sample. A mean
-  // would carry it for the whole window; the median does not notice it.
+  // A backgrounded tab or a GC pause produces one enormous sample, which the median ignores.
   it('is not moved by one outlier', () => {
     const tracker = createLatencyTracker();
     for (let seq = 1; seq <= 5; seq += 1) {
@@ -98,7 +96,7 @@ describe('createLatencyTracker', () => {
     expect(tracker.value).toBe(300);
   });
 
-  it('forgets everything on reset, which is what a fresh transport needs', () => {
+  it('forgets everything on reset', () => {
     const tracker = createLatencyTracker();
     tracker.noteSent(1, 0);
     tracker.noteAck(1, 100);
@@ -118,8 +116,7 @@ describe('createLatencyTracker', () => {
     expect(tracker.value).toBeNull();
   });
 
-  // The client sends input at 20 Hz. An unacked run must not grow without bound,
-  // which is why it caps the same way the client's own map does.
+  // Input goes out at 20 Hz, so the unacked set caps the way the client's own map does.
   it('bounds the unacked set, dropping the oldest first', () => {
     const tracker = createLatencyTracker();
     for (let seq = 1; seq <= 130; seq += 1) {

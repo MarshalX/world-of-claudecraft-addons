@@ -1,21 +1,9 @@
 // Resolving a unit the way an addon thinks about one.
 //
-// Every one of these is a lookup an addon would otherwise write itself, and two
-// of them are lookups an addon would write WRONG, which is the reason this
-// exists rather than being left as a convenience.
+// `targettarget` must read a mob's `aggroTargetId`: its `targetId` is permanently null.
 //
-// The target's target is the worked example. A mob does not carry `targetId`:
-// the server fills that from a SELECTION and a mob does not select, so on every
-// mob it is present, correctly typed, and permanently null. What a mob is
-// fighting rides `aggroTargetId`. An addon reading the obvious field gets a
-// target-of-target display that works on players and is blank on every mob it is
-// ever pointed at, with nothing to indicate why.
-//
-// The party tokens resolve to an ENTITY, which means they answer null for a
-// member who is out of interest scope even though the party row for them exists.
-// That is not a gap to paper over: a raid display should read `world.party`,
-// which is complete and comes straight off the wire, and reach for an entity
-// only when it needs something a row does not carry.
+// The party tokens resolve to an ENTITY, so they answer null for a member out of interest scope.
+// A raid display should read `world.party`, which is complete.
 
 import type { Entity } from './game-types.ts';
 import type { PartyInfo } from './party-types.ts';
@@ -41,7 +29,7 @@ interface UnitContext {
   party: PartyInfo | null;
 }
 
-/** Whichever field this kind of entity actually fills. See the note above. */
+/** Whichever field this kind of entity actually fills. */
 function fightingId(entity: Entity): number | null {
   if (entity.kind === 'mob') {
     return entity.aggroTargetId;
@@ -49,11 +37,7 @@ function fightingId(entity: Entity): number | null {
   return entity.targetId;
 }
 
-/**
- * What the target is fighting, from whichever field its kind actually fills.
- *
- * The whole reason a resolver exists. See the note at the top of this file.
- */
+/** What the target is fighting, from whichever field its kind actually fills. */
 function targetOfTarget(
   target: Entity | null,
   entities: ReadonlyMap<number, Entity>,
@@ -100,12 +84,7 @@ function indexOf(token: string, prefix: string): number | null {
   return Number(rest);
 }
 
-/**
- * The roster the token counts through.
- *
- * `others` drops the player for the `party` form and keeps them for `raid`,
- * which is the only difference between the two forms.
- */
+/** The roster the token counts through: `others` drops the player, for the `party` form. */
 function rosterFor(party: PartyInfo, player: Entity | null, others: boolean): PartyInfo['members'] {
   if (!others || player === null) {
     return party.members;

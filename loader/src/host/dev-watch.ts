@@ -1,19 +1,8 @@
-// Poll the dev server for entry sources that changed, and say which.
+// Poll the dev server for addon files that changed, and say which.
 //
-// This is what makes editing an addon a save rather than a reinstall. It watches
-// only addons installed from the local source and only while hot reload is on,
-// so a player who never turns dev mode on never issues one of these requests.
-//
-// It watches BODIES, not the index. A new addon directory or an edited manifest
-// still needs an explicit refresh, because index polling would emit a
-// market.changed on every tick and repaint the manager continuously to report
-// that nothing moved. An edit to running code is the case worth a timer; an edit
-// to the set of addons that exist is a thing the author just did on purpose and
-// can ask for.
-//
-// Each tick is scheduled after the previous one finished rather than on an
-// interval, so a dev server that has stopped answering cannot accumulate
-// overlapping polls behind a timeout.
+// Only local-source addons, and only while hot reload is on. It watches BODIES and data files,
+// never the index: index polling would emit market.changed every tick and repaint the manager
+// continuously. A new addon or edited manifest needs an explicit refresh.
 
 import { describeError, diagError } from '../shared/diag.ts';
 import { fileUrl, LOCAL_ID, splitFqid } from '../shared/marketplace.ts';
@@ -47,18 +36,7 @@ function isLocal(fqid: string): boolean {
   return splitFqid(fqid)?.marketplace === LOCAL_ID;
 }
 
-/**
- * One addon: has anything it loads moved since the last read?
- *
- * The entry body and every declared data file. A regenerated table is precisely
- * the edit this watcher exists for, and an addon that reads it once at load has
- * no other way to pick it up. Still not the INDEX: a new addon directory or an
- * edited manifest is a thing the author just did on purpose and can refresh.
- *
- * The conditional GET is the whole mechanism. An unchanged file answers 304 with
- * no body, so the steady state is a handful of empty responses a second against
- * localhost, capped by the schema at eight data files per addon.
- */
+/** One addon: has its entry body or any declared data file moved since the last read? */
 async function checkOne(deps: DevWatchDeps, fqid: string): Promise<void> {
   const found = await deps.market.entry(fqid);
   if (found === null) {
@@ -69,12 +47,9 @@ async function checkOne(deps: DevWatchDeps, fqid: string): Promise<void> {
     fileUrl(market, `${row.path}/${row.entry}`),
     ...(row.data ?? []).map((file) => fileUrl(market, `${row.path}/${file}`)),
   ];
-  // A cell, ANNOTATED: noUnnecessaryConditions reads both a `let` and an
-  // inferred `{ moved: false }` as the literal type and calls the test below
-  // always-falsy, so the annotation is what makes the check mean anything.
+  // Annotated: noUnnecessaryConditions narrows a `let` or an inferred `{ moved: false }` to
+  // the literal and calls the test below always-falsy.
   const seen: { moved: boolean } = { moved: false };
-  // One request at a time, like the addons above it: the dev server is a single
-  // process on loopback and the point of the poll is to be cheap, not fast.
   await inSeries(urls, async (url) => {
     const { changed } = await deps.fetcher.get(url);
     seen.moved = seen.moved || changed;
@@ -91,10 +66,8 @@ async function watched(deps: DevWatchDeps): Promise<string[]> {
 }
 
 /**
- * A repeating task that reschedules itself after each run finishes.
- *
- * Not `setInterval`: a dev server that has stopped answering would otherwise
- * accumulate overlapping polls behind a timeout.
+ * A repeating task that reschedules itself after each run finishes. Not `setInterval`: a
+ * server that stopped answering would pile up overlapping polls behind a timeout.
  */
 function createTicker(deps: DevWatchDeps, run: () => Promise<void>) {
   const intervalMs = deps.intervalMs ?? DEFAULT_INTERVAL_MS;
@@ -135,8 +108,7 @@ function createTicker(deps: DevWatchDeps, run: () => Promise<void>) {
 
 function createDevWatch(deps: DevWatchDeps): DevWatch {
   let disposed = false;
-  // A poll in flight when the interval elapses would otherwise start a second
-  // one against the same URLs.
+  // Guards a manual `poll` overlapping a timed one.
   let polling = false;
 
   const poll = async (): Promise<void> => {
@@ -145,12 +117,10 @@ function createDevWatch(deps: DevWatchDeps): DevWatch {
     }
     polling = true;
     try {
-      // One request at a time: the dev server is a single process on loopback
-      // and the point of the poll is to be cheap, not fast.
+      // In series: the dev server is one process on loopback, and the poll is meant to be cheap.
       await inSeries(await watched(deps), (fqid) => checkOne(deps, fqid));
     } catch (err) {
-      // One failed tick is the ordinary state of a dev server that is not
-      // running yet. It costs a line, never the timer.
+      // A dev server that is not running yet fails every tick; that must not stop the timer.
       diagError('the dev-server poll failed', describeError(err));
     } finally {
       polling = false;

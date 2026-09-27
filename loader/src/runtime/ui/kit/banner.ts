@@ -1,26 +1,12 @@
 // The centre-screen warning: the one thing a player must read within a second.
 //
-// Deliberately NOT a toast, and the difference is not decoration. A toast is
-// informational, sits in a column at the top of the screen, and is announced
-// politely so it waits its turn in a screen reader. This is for a mechanic about
-// to kill someone. It lands in the middle of the view where the eye already is,
-// and it carries `role="alert"`, which IS assertive: interrupting is the correct
-// behaviour for a message whose whole value expires in about two seconds.
+// Unlike a toast, it lands mid-screen and carries the assertive `role="alert"`, for a message
+// whose value expires in seconds. ONE slot for the whole loader: a new banner replaces
+// whatever is up, since a centre stack would cover the fight. It takes no pointer events,
+// so it never makes a dead patch over the world.
 //
-// There is ONE slot for the whole loader and a new banner replaces whatever is up.
-// A stack in the centre of the screen would cover the fight the warning is about,
-// and two warnings at once is the moment that matters most. The cost is real and
-// belongs in the open: one addon's warning can displace another's, so an addon
-// that wants a persistent readout wants a frame, not this.
-//
-// It takes no pointer events at all. A banner appears without being asked for, in
-// the middle of where the player is clicking, and a dead patch over the world
-// during a mechanic would be worse than the warning is good.
-//
-// SIZE IS AN ENUM, and it moves the weight and both lines with it. A caller cannot
-// set a size and a weight separately on purpose: a huge thin display serif is less
-// readable than a medium heavy one, so the two axes are not independent and offering
-// them as if they were is offering a combination nobody wants.
+// SIZE IS AN ENUM that moves weight and both lines together; a separate weight would allow
+// a huge thin serif, which reads worse than a medium heavy one.
 
 import type { Teardown } from '../../disposal.ts';
 
@@ -41,12 +27,7 @@ interface BannerOpts {
   timeout?: number;
   /** Defaults to 'warn', which is what a banner is nearly always for. */
   kind?: BannerKind;
-  /**
-   * Defaults to 'normal', which is already sized to be read across a fight.
-   *
-   * One step up rather than a scale, because the honest number of positions is two:
-   * the mechanic you must react to, and the one that kills the raid if you do not.
-   */
+  /** Defaults to 'normal', which is already sized to be read across a fight. */
   size?: BannerSize;
   /** A quieter second line, e.g. who the mechanic is on. */
   detail?: string;
@@ -67,13 +48,8 @@ interface BannerDeps {
 }
 
 /**
- * A variant class, for a value the caller gave or did not.
- *
- * Both fallbacks are safe to land on, which is why an absent value and an
- * unrecognised one can share a path here. That is NOT true of frame density, where
- * the fallback exists to stop a typo dropping the tap-target floor: here both sizes
- * are sized to be read across a fight, so the worst a typo costs is a step of
- * emphasis rather than a warning nobody sees.
+ * A variant class, for a value the caller gave or did not. An absent and an unrecognised
+ * value share the fallback, since every variant here is safe to land on.
  */
 function variantClass(fallback: string, value: unknown, allowed: readonly string[]): string {
   if (typeof value === 'string' && allowed.includes(value)) {
@@ -132,8 +108,7 @@ function createBanner(deps: BannerDeps): Banner {
 
   return {
     show: (text, opts) => {
-      // Replacing, not stacking. The previous card's timer goes with it, or a
-      // banner shown for two seconds would take the next one down with it.
+      // The previous card's timer goes too, or it would take the new banner down.
       clear();
       const slot = ensureSlot(deps);
       const card = buildContent(deps, text, opts);
@@ -142,8 +117,7 @@ function createBanner(deps: BannerDeps): Banner {
       const shown = { card, timer: null as number | null };
       live = shown;
       const dismiss = (): void => {
-        // Only if this card is still the one up: a later banner has already
-        // replaced it, and dismissing then would take the newer one down.
+        // Only if this card is still the one up, or it would dismiss a newer banner.
         if (live === shown) {
           clear();
         }

@@ -21,8 +21,7 @@ describe('probeGame', () => {
     expect(probe.ok).toBe(true);
   });
 
-  // This is the whole point of the probe: pbe runs ahead of live, so a member
-  // vanishing there is the first warning that a game update breaks addons.
+  // A vanished member is the first warning that a game update breaks addons.
   it('names the member that went missing', () => {
     const game = liveGame();
     Reflect.deleteProperty(game, 'gamepad');
@@ -39,8 +38,7 @@ describe('probeGame', () => {
     expect(probe.added).toEqual(['somethingNew']);
   });
 
-  // Losing a cosmetic member degrades one surface. Losing `world` means the
-  // world API has nothing behind it, which is a different answer.
+  // Losing a cosmetic member degrades one surface; losing `world` empties the world API.
   it('stays ok when a member the loader does not depend on is gone', () => {
     const game = liveGame();
     Reflect.deleteProperty(game, 'music');
@@ -55,9 +53,9 @@ describe('probeGame', () => {
     expect(probeGame(game).ok).toBe(false);
   });
 
-  // drainEvents is destructive and main.ts owns the per-frame drain, so the
-  // loader reads the socket instead and must not claim to need `online`.
-  it('stays ok when online is gone, which the loader deliberately does not use', () => {
+  // drainEvents is destructive and the game owns the per-frame drain, so the loader reads
+  // the socket instead.
+  it('stays ok when online is gone', () => {
     const game = liveGame();
     Reflect.deleteProperty(game, 'online');
 

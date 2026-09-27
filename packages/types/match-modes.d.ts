@@ -1,8 +1,4 @@
-// The two unranked bout formats, split from `match.d.ts` by subject.
-//
-// Fiesta and Protect Yumi each carry a scoreboard, a clock and their own
-// objectives. The split is the one `ui.d.ts` already established: by subject,
-// with the split visible in the import rather than hidden behind a barrel.
+// The two unranked bout formats: Fiesta and Protect Yumi.
 
 import type { BoutBase } from './match.js';
 
@@ -33,11 +29,9 @@ export interface FiestaPowerup {
   z: number;
   state: 'spawning' | 'ready';
   /**
-   * TWO quantities behind one name, and the game's own type says so.
-   *
-   * While `state` is 'spawning' it RISES from 0 to 1 as the telegraph fills.
-   * While `state` is 'ready' it FALLS from 1 to 0 as the power-up expires. A
-   * display that treats it as one direction draws the telegraph backwards.
+   * TWO quantities behind one name. While `state` is 'spawning' it RISES from 0
+   * to 1 as the telegraph fills; while 'ready' it FALLS from 1 to 0 as the
+   * power-up expires.
    */
   frac: number;
   /** The game's own orb colour, as a 24-bit RGB integer. */
@@ -84,17 +78,13 @@ export interface YumiScore {
 /**
  * One objective cat.
  *
- * Sent for BOTH cats whether or not either is near you, on the game's stated
- * fairness rule: enemy objective health is actionable and is never hidden. So an
- * objective display is complete rather than approximate.
+ * Sent for BOTH cats whether or not either is near you.
  *
- * `hp`, `x` and `z` are AS OF THE LAST ARENA SEND, up to ten seconds ago. The
- * live paths are `net.onEvent('yumiStatus')`, a once-a-second heartbeat carrying
- * both cats' health, and `net.onEvent('yumiTeleport')`, which carries the new
- * position. The game's own renderer overrides this reading from those events, so
- * a health bar drawn from this alone reads stale beside the game's. A dead or
- * missing cat reports `alive: false` with `hp` 0 at the origin, which is "no
- * cat" and not a cat standing at 0, 0.
+ * `hp`, `x` and `z` can be up to ten seconds old. The live paths are
+ * `net.onEvent('yumiStatus')`, a 1 Hz heartbeat with both cats' health, and
+ * `net.onEvent('yumiTeleport')` with the new position; the game's own display
+ * reads those. A dead or missing cat reports `alive: false` with `hp` 0 at the
+ * origin, meaning "no cat", not a cat at 0, 0.
  */
 export interface YumiCat {
   entityId: number;

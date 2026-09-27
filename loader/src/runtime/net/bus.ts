@@ -1,8 +1,5 @@
-// Topic subscription for socket traffic.
-//
-// One bus serves every addon, so a handler that throws must not stop the frame
-// reaching the next one, and a handler that keeps throwing must not keep costing
-// 20 dispatches a second forever.
+// Topic subscription for socket traffic. A throwing handler must not stop the next, and one that
+// keeps throwing is quarantined.
 
 /** Consecutive throws before a handler is dropped. A success resets the count. */
 const QUARANTINE_AFTER = 5;
@@ -12,12 +9,7 @@ type Handler = (value: unknown) => void;
 type Unsubscribe = () => void;
 
 interface SubscribeOpts {
-  /**
-   * Leading edge: the first call in each window runs and the rest are dropped.
-   *
-   * Dropping rather than deferring keeps this timer-free, and on a 20 Hz topic
-   * the next frame is 50 ms away, so a deferred one would be stale on arrival.
-   */
+  /** Leading edge; the rest are dropped, not deferred, since a deferred frame arrives stale. */
   throttle?: number;
   once?: boolean;
 }
@@ -89,15 +81,10 @@ function publishTo(bus: BusState, topic: string, value: unknown): void {
   if (subs === undefined) {
     return;
   }
-  // ONE timestamp for the whole publish, read before any handler runs. Every
-  // subscriber on a topic is being told about the same frame, and `deliver` calls
-  // ADDON code, so reading the clock per subscription measured a later handler's
-  // throttle window from the moment an earlier one finished rather than from when
-  // the frame arrived: a slow handler ahead of a throttled one silently ate part of
-  // its window, and the amount depended on what some other addon was doing.
+  // ONE timestamp per publish, before any handler: per-subscription reads would let a slow
+  // handler eat into a later one's throttle window.
   const at = bus.deps.now();
-  // Iterate a copy: a once handler, a quarantine, or a handler that unsubscribes
-  // a sibling all mutate the set mid-dispatch.
+  // A copy: once, quarantine and sibling unsubscribes all mutate the set mid-dispatch.
   for (const sub of [...subs]) {
     if (subs.has(sub) && due(sub, at)) {
       if (sub.once) {

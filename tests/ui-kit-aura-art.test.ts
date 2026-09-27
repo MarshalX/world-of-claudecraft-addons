@@ -1,15 +1,5 @@
-// The aura art manifest reader.
-//
-// The third served art manifest and the one shaped least like the other two, so
-// what is under test here is mostly the ways it differs. It resolves to a whole
-// URL rather than a file id, because five of its entries point into ANOTHER art
-// family and carry the finished path; and it answers null until it has been read
-// rather than guessing, because the family is closed and most ids asked about are
-// legitimately not in it.
-//
-// The manifest is the game's, so the shape assertions here are a claim about a
-// document this repository cannot compile against. They were taken from the live
-// manifest at game 0.39.0.
+// The aura art manifest reader. Its shape assertions are a claim about the game's served
+// manifest, captured from live at game 0.39.0.
 
 import { describe, expect, it } from 'vitest';
 
@@ -54,9 +44,7 @@ describe('reading the manifest', () => {
     expect(urls?.get('nythraxis_soul_rend')).toBe('/ui/auras/nythraxis_soul_rend.webp');
   });
 
-  // The five borrowed paintings are the reason this module answers a URL rather
-  // than a file id: composing a path under /ui/auras for one would name a file
-  // that is not there.
+  // A borrowed painting lives outside /ui/auras, which is why this module answers a URL.
   it('resolves a borrowed entry to the family that owns the painting', () => {
     const urls = urlsFrom(manifest([], [['bad_air', '/ui/delve-affixes/bad_air.webp']]));
 
@@ -69,8 +57,7 @@ describe('reading the manifest', () => {
     expect(urls?.get('sated')).toBe('/ui/auras/sated.webp');
   });
 
-  // Lenient about one entry, strict about the shape: one malformed row costs one
-  // icon, where rejecting the document costs the certainty for every aura.
+  // Lenient per entry, strict about the shape: one malformed row costs one icon.
   it('drops an unreadable entry and keeps the rest', () => {
     const urls = urlsFrom({
       family: 'auras',
@@ -81,9 +68,7 @@ describe('reading the manifest', () => {
     expect(urls?.get('sated')).toBe('/ui/auras/sated.webp');
   });
 
-  // `family` stands in for the `class` field the per-class skill manifests carry.
-  // Without it a payload that is not this manifest reads as one naming nothing,
-  // which is indistinguishable from a game that paints no auras at all.
+  // `family` is the shape check; without it a foreign payload reads as a manifest naming nothing.
   it('refuses a payload that is not this manifest', () => {
     expect(urlsFrom({ family: 'items', assets: [] })).toBeNull();
     expect(urlsFrom({ assets: [] })).toBeNull();
@@ -92,8 +77,6 @@ describe('reading the manifest', () => {
     expect(urlsFrom('auras')).toBeNull();
   });
 
-  // The value is a URL taken from a document on the game's origin, so anything
-  // that could leave that origin is dropped rather than handed to an addon.
   it('refuses a borrowed URL that could leave the origin', () => {
     const urls = urlsFrom(
       manifest(
@@ -123,11 +106,8 @@ describe('answering for an aura', () => {
     expect(art.urlFor('rejuvenation')).toBeNull();
   });
 
-  // The one place this departs from `skill-art` and `item-art`, and the reason is
-  // the ratio rather than taste: this family is closed and covers the complement
-  // of what `icon.ability` answers, so a guess would 404 for most ids and reach
-  // the same empty slot having spent a request to get there.
-  it('answers null before the manifest lands rather than guessing a URL', () => {
+  // Unlike skill and item art: the family is closed and small, so a guess would 404 for most ids.
+  it('answers null before the manifest lands', () => {
     const art = createAuraArt({ fetchJson: NEVER });
 
     expect(art.urlFor('moontide')).toBeNull();
@@ -146,8 +126,6 @@ describe('answering for an aura', () => {
     expect(art.urlFor('')).toBeNull();
   });
 
-  // One manifest and one URL, so a frameful of aura rows costs one request rather
-  // than one per row.
   it('reads the manifest once however many rows ask', async () => {
     let reads = 0;
     const art = createAuraArt({
@@ -166,8 +144,7 @@ describe('answering for an aura', () => {
     expect(reads).toBe(1);
   });
 
-  // A failed read is recorded rather than retried, or every row for the rest of
-  // the session would spend a request re-learning the same answer.
+  // A retry would cost a request per row for the rest of the session.
   it('does not retry a manifest that could not be read', async () => {
     let reads = 0;
     const art = createAuraArt({

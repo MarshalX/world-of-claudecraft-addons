@@ -1,12 +1,5 @@
-// The two woc.ui surfaces that land INSIDE the game's own DOM.
-//
-// Everything else an addon builds goes under #woc-addons, a sibling of the game's
-// #ui, so a HUD re-render cannot take it away. These two are the exception by
-// definition: a button on the game's rail and an entry in the game's menu are
-// only those things if they are in the game's markup. They are re-attached by the
-// shared watcher rather than by the addon, and they are the pair that has to
-// namespace an id, because that document is one id space shared with the game and
-// with every other addon.
+// The two woc.ui surfaces that land INSIDE the game's DOM: a rail button and a menu entry. The
+// shared watcher re-attaches them after a HUD re-render.
 
 import type { Teardown } from '../disposal.ts';
 import type { InjectionSpec } from '../ui/kit/injections.ts';
@@ -26,22 +19,12 @@ interface MenuEntryOpts {
   onClick: () => void;
 }
 
-/**
- * Namespace an id the addon chose before it goes into the game's own DOM.
- *
- * Two addons may both call a button 'toggle', and the game's document is one id
- * space shared with the game itself. Prefixing is what stops the second addon's
- * button silently replacing the first's.
- */
+/** Namespaced, since the document is one id space shared with the game and every addon. */
 function elementId(fqid: string, kind: string, id: string): string {
   return `woc-addon-${kind}-${fqid.replace(/[^a-zA-Z0-9-]/g, '-')}-${id}`;
 }
 
-/**
- * Assigned rather than spread, so an absent glyph never reaches the property at
- * all: exactOptionalPropertyTypes rejects an explicit undefined there, and the
- * button falls back to the loader's own glyph.
- */
+/** Assigned, not spread: exactOptionalPropertyTypes rejects an explicit undefined glyph. */
 function microSpec(fqid: string, opts: MicroButtonOpts): InjectionSpec {
   const spec: InjectionSpec = {
     kind: 'micro',
@@ -55,13 +38,7 @@ function microSpec(fqid: string, opts: MicroButtonOpts): InjectionSpec {
   return spec;
 }
 
-/**
- * Both, tracked: an explicit removal also drops the bag's hold on it.
- *
- * The tracking matters more here than anywhere else in the kit, because these are
- * the only two elements an addon leaves in someone else's subtree. One left
- * behind is a button in the game's rail that opens nothing.
- */
+/** Tracked: a leftover is a button in the game's own rail that opens nothing. */
 function injectionSurface(
   deps: UiDeps,
   tracked: (off: Teardown) => Teardown,

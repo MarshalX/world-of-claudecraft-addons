@@ -27,9 +27,8 @@ jobs:
 
       - run: pnpm build
 
-      # Builds the site too, so a generator break fails a pull request rather than
-      # a deploy. Offline: CI has no reason to ask GitHub for the release here, and
-      # the version is not what a pull request is checking.
+      # A site generator break fails the pull request here instead of the deploy.
+      # Offline, because a pull request is not checking the release version.
       - name: Build the site
         run: pnpm site -- --offline
 

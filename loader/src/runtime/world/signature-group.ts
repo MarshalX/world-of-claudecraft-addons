@@ -1,11 +1,6 @@
 // What counts as a change to the group's shared state and to an instanced run.
 //
-// Both leave their timers out, for the reason every signature here does. A loot
-// roll's countdown moves every frame, so including it would fire a subscription
-// at the frame rate to report that time is passing; what an addon acts on is a
-// roll opening or closing. A lockout's countdown is measured in hours, so the
-// same rule applies from the other end: what matters is which dungeons are
-// locked, not that the deadline crept a second closer.
+// Timers are left out: a roll opening or closing and which dungeons are locked are the changes.
 
 import { fieldArray, fieldNumber, fieldString, fieldValue } from '../net/frames.ts';
 
@@ -39,13 +34,7 @@ function looterOf(master: unknown): string {
   return String(fieldNumber(master, 'looter') ?? 0);
 }
 
-/**
- * Who has answered which roll.
- *
- * A vote landing IS the change, which is the whole point of the group status:
- * `rolls` reports only that a roll opened. The deadline stays out, as it already
- * does for `rolls`, so a timer ticking down is not mistaken for an answer.
- */
+/** Who has answered which roll: a vote landing is a change `rolls` alone cannot show. */
 function votesOf(group: unknown): string {
   return fieldArray(group, 'rollStatus')
     .map((row) => {

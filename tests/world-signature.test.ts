@@ -79,9 +79,8 @@ describe('player', () => {
     expect(changed('player', entity(), entity())).toBe(false);
   });
 
-  // These are the Entity's own names, not the terse wire names the snapshot used
-  // to deliver it. Reading `mhp` or `res` here finds nothing and the field drops
-  // out of the signature without failing.
+  // These are the Entity's names; the wire's `mhp` or `res` finds nothing and the field
+  // silently drops out of the signature.
   it.each([
     ['hp', 1300],
     ['maxHp', 1400],
@@ -90,23 +89,15 @@ describe('player', () => {
     ['maxResource', 120],
     ['targetId', 250],
     ['id', 999],
-    // A druid's bar and its parked pool. Both move without any other watched
-    // field moving: a cat-form druid at 0 energy who cross-shifts to bear pays
-    // the shift out of the parked mana and lands on a rage bar still reading 0,
-    // so `resource` and `maxResource` are both unchanged across the transition.
+    // A druid shifting from 0 energy to a 0 rage bar moves only these two, with
+    // `resource` and `maxResource` unchanged.
     ['resourceType', 'rage'],
     ['savedMana', 2400],
   ])('notices %s changing', (field, value) => {
     expect(changed('player', entity(), entity({ [field]: value }))).toBe(true);
   });
 
-  // `dead` is a boolean. Read with a number-only reader it resolves to nothing,
-  // and the signature silently stops watching it.
-  //
-  // `inCombat` was in this list and has been dropped from the watched fields:
-  // it is not on the wire, so on a client it holds its constructed `false` for
-  // the whole session. Watching it was worse than useless, because it told an
-  // addon author the loader would report a transition it can never see.
+  // A number-only reader resolves the boolean `dead` to nothing and stops watching it.
   it('notices the boolean dead flipping', () => {
     expect(changed('player', entity({ dead: false }), entity({ dead: true }))).toBe(true);
   });
@@ -119,8 +110,7 @@ describe('player', () => {
     expect(changed('player', withFlag, withoutFlag)).toBe(true);
   });
 
-  // Position moves every tick. Including it would make world.on('player') fire
-  // at the frame rate and mean nothing.
+  // Position moves every tick, so watching it would fire world.on('player') per frame.
   it('ignores position', () => {
     expect(changed('player', entity({ pos: { x: 1 } }), entity({ pos: { x: 900 } }))).toBe(false);
   });
@@ -200,8 +190,6 @@ describe('party', () => {
     expect(changed('party', party([{ pid: 1 }], 1), party([{ pid: 1 }], 2))).toBe(true);
   });
 
-  // A tank losing threat is the raid-frame alert, and before this field was
-  // watched the row's own hp was the only thing that could wake a subscriber.
   it('notices a member gaining aggro', () => {
     const before = party([{ pid: 1, hasAggro: 0 }]);
     const after = party([{ pid: 1, hasAggro: 1 }]);
@@ -223,8 +211,6 @@ describe('party', () => {
     expect(changed('party', before, after)).toBe(true);
   });
 
-  // A dispel alert is the reason to watch a party at all, and the strip a row
-  // carries is the only place a member's debuffs are readable.
   it('notices a debuff landing on a member', () => {
     const before = party([{ pid: 1, auras: [] }]);
     const after = party([{ pid: 1, auras: [{ id: 'curse_of_agony', neg: 1 }] }]);
@@ -239,8 +225,7 @@ describe('party', () => {
     expect(changed('party', before, after)).toBe(true);
   });
 
-  // A row's strip is redrawn as its auras tick. Watching the remaining time would
-  // make every party in combat a per-frame wake-up.
+  // Watching remaining time would wake every party in combat once per frame.
   it('is quiet while a member aura ticks down', () => {
     const before = party([{ pid: 1, auras: [{ id: 'renew', remaining: 12 }] }]);
     const after = party([{ pid: 1, auras: [{ id: 'renew', remaining: 2 }] }]);
@@ -248,8 +233,7 @@ describe('party', () => {
     expect(changed('party', before, after)).toBe(false);
   });
 
-  // The separator matters: without it a member whose strip ran into the next
-  // member's scalars could read the same either way.
+  // Without the separator, one member's strip could run into the next member's scalars.
   it('does not let one member absorb the next one', () => {
     const before = party([{ pid: 1, auras: [{ id: 'a' }] }, { pid: 2 }]);
     const after = party([{ pid: 1 }, { pid: 2, auras: [{ id: 'a' }] }]);
@@ -292,9 +276,7 @@ describe('inventory', () => {
     expect(changed('inventory', bag, [...bag])).toBe(false);
   });
 
-  // A lock is toggled by hand, many times in a session, and it moves neither the
-  // id nor the count, so an id-and-count signature is silent on the one bag
-  // change a player performs deliberately.
+  // A lock moves neither the id nor the count, so an id-and-count signature misses it.
   it('notices a copy being locked', () => {
     const before = [{ itemId: 'ore', count: 3, instance: {} }];
     const after = [{ itemId: 'ore', count: 3, instance: { locked: true } }];
@@ -309,9 +291,7 @@ describe('inventory', () => {
     expect(changed('inventory', before, after)).toBe(true);
   });
 
-  // The flag is what is read, not the payload: a slot that gained an unrelated
-  // instance field is not a lock change, and treating every payload edit as one
-  // would fire the subscription on the enchant the player just applied as well.
+  // Only the lock flag is read; any other instance field changing is not a lock change.
   it('is quiet on an unlocked copy whose payload moved elsewhere', () => {
     const before = [{ itemId: 'blade', count: 1, instance: { signer: 'Ilya' } }];
     const after = [{ itemId: 'blade', count: 1, instance: { signer: 'Mara' } }];
@@ -338,7 +318,6 @@ describe('quests', () => {
     expect(changed('quests', quests([]), quests([['q1', { state: 'active' }]]))).toBe(true);
   });
 
-  // Objective counters are what a quest tracker addon exists to render.
   it('notices objective progress', () => {
     const before = quests([['q1', { state: 'active', counts: [0, 0] }]]);
     const after = quests([['q1', { state: 'active', counts: [1, 0] }]]);
@@ -357,8 +336,7 @@ describe('quests', () => {
     expect(changed('quests', quests([], []), quests([], ['q1']))).toBe(true);
   });
 
-  // The client replaces the map rather than mutating it, so equal content across
-  // two different objects has to read as unchanged.
+  // The client replaces the map on update, so equal content in a new object is unchanged.
   it('is quiet when a replaced map carries the same content', () => {
     const before = quests([['q1', { state: 'active', counts: [1] }]], ['q0']);
     const after = quests([['q1', { state: 'active', counts: [1] }]], ['q0']);
@@ -378,8 +356,6 @@ describe('cooldowns', () => {
     expect(changed('cooldowns', cds([['fireball', 1]]), cds([['fireball', 0]]))).toBe(true);
   });
 
-  // Remaining time ticks down every frame. Watching the value would make this
-  // fire constantly and tell an addon nothing it did not already know.
   it('is quiet while a cooldown counts down', () => {
     expect(changed('cooldowns', cds([['fireball', 8]]), cds([['fireball', 2]]))).toBe(false);
   });
@@ -407,7 +383,6 @@ describe('auras', () => {
     expect(changed('auras', [{ id: 'blessing', sourceId: 1 }], [])).toBe(true);
   });
 
-  // Two casters can apply the same aura, and a tracker has to see both.
   it('separates the same aura from two sources', () => {
     const before = [{ id: 'renew', sourceId: 1 }];
     const after = [
@@ -418,8 +393,6 @@ describe('auras', () => {
     expect(changed('auras', before, after)).toBe(true);
   });
 
-  // Remaining seconds move every frame; a refresh that keeps the same auras is
-  // not a change worth waking anyone for.
   it('is quiet while an aura ticks down', () => {
     const before = [{ id: 'renew', sourceId: 1, remaining: 12 }];
     const after = [{ id: 'renew', sourceId: 1, remaining: 3 }];
@@ -443,9 +416,7 @@ describe('casts', () => {
     expect(changed('casts', before, casting([]))).toBe(true);
   });
 
-  // The mechanic a boss chains into is the thing a mod warns on. Keying on the
-  // entity alone would report the switch as no change and the warning would never
-  // fire for the second cast.
+  // Keying on the entity alone would miss a boss chaining into its next cast.
   it('notices one cast being replaced by another on the same entity', () => {
     const before = casting([[248, { ability: 'soul_rend' }]]);
     const after = casting([[248, { ability: 'gravebreaker' }]]);
@@ -453,8 +424,6 @@ describe('casts', () => {
     expect(changed('casts', before, after)).toBe(true);
   });
 
-  // A cast bar moves every frame. This is the whole reason the remaining time is
-  // not in the signature.
   it('is quiet while a cast bar fills', () => {
     const before = casting([[248, { ability: 'soul_rend', remaining: 9.5, total: 10 }]]);
     const after = casting([[248, { ability: 'soul_rend', remaining: 0.2, total: 10 }]]);
@@ -491,9 +460,7 @@ describe('targetAuras', () => {
     expect(changed('targetAuras', [], [{ id: 'sunder', sourceId: 661 }])).toBe(true);
   });
 
-  // A ramping debuff is the case this key exists for. Dread Curse stacks to ten,
-  // and every stack is a refresh of the aura already there, so on the id and the
-  // caster alone the whole ramp is invisible.
+  // Each stack refreshes the existing aura, so id and caster alone miss the whole ramp.
   it('notices a stack being added', () => {
     const before = [{ id: 'dread_curse', sourceId: 248, stacks: 4 }];
     const after = [{ id: 'dread_curse', sourceId: 248, stacks: 5 }];
@@ -540,11 +507,8 @@ describe('hazards', () => {
     expect(changed('hazards', null, [])).toBe(false);
   });
 
-  // The Nythraxis families joined `world.hazards` without touching this
-  // signature, which is the claim worth an assertion rather than an assumption:
-  // `hazardSignature` reads `id` alone, and every family namespaces its own ids
-  // (`<bossId>:ge:<castKey>:<index>`, `:gf:<seq>`, `:sig:<castKey>`), so they can
-  // neither collide with each other nor with an Ignivar meteor's `<bossId>:<castKey>:<index>`.
+  // The signature reads `id` alone, so it relies on each hazard family namespacing its ids
+  // (`<bossId>:ge:<castKey>:<index>`, `:gf:<seq>`, `:sig:<castKey>`, `<bossId>:<castKey>:<index>`).
   const sigil = (id: string): Record<string, unknown> => ({
     id,
     kind: 'nythraxisBindingSigil',
@@ -556,10 +520,8 @@ describe('hazards', () => {
     expect(changed('hazards', [], [sigil('248:sig:3')])).toBe(true);
   });
 
-  // The 0.42.2 behaviour a boss mod actually watches for. A sigil now alternates
-  // between the two flanking platforms, so the next cast is a DIFFERENT place with
-  // a different cast key: the side switch has to wake a subscriber, and it does
-  // because the id moved, not because the position did.
+  // A sigil alternates platforms per cast; the switch is seen through the new cast key in
+  // the id, never through position.
   it('notices the side switching on the next cast', () => {
     expect(changed('hazards', [sigil('248:sig:3')], [sigil('248:sig:4')])).toBe(true);
   });
@@ -576,8 +538,6 @@ describe('markers', () => {
     expect(changed('markers', marked([]), marked([[248, 1]]))).toBe(true);
   });
 
-  // Both halves are the change: a raid leader moving the skull from one add to
-  // another is the event, and the count is the same on either side of it.
   it('notices a marker moving to a different entity', () => {
     expect(changed('markers', marked([[248, 1]]), marked([[250, 1]]))).toBe(true);
   });

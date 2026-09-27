@@ -1,14 +1,12 @@
 // Lorebind on the stage: the codex asked about the den the group is standing in.
 //
-// The table is the shipped `items.json`, imported rather than restated, so no fixture can invent
-// an item. `webwood_silk` PROVES the ranking rather than illustrating it: the art manifest files
-// its picture under "Webwood Silk Gland" and the row reads Sableweb Silk Gland, so an addon
-// ranking the two the other way would draw a visibly different word in the same place.
+// The table is the shipped `items.json`, imported so no fixture can invent an item.
+// `webwood_silk` proves the ranking: its art file names it "Webwood Silk Gland" and the table
+// "Sableweb Silk Gland", so a reversed ranking draws a different word.
 //
-// Two ids here are deliberately NOT in the table, which is the only way the roll-sourced and
-// unnamed rows can be photographed: every id the art manifest carries is in the table too, so
-// both are structurally content the file has not caught up with. For the same reason there is no
-// art-sourced row in this picture and there cannot be one.
+// Two ids are deliberately NOT in the table, the only way to photograph the roll-sourced and
+// unnamed rows. Every id the art manifest carries is in the table, so no art-sourced row can be
+// shown.
 
 import type { Scenario, Stage } from '../../stage/src/stage.ts';
 import TABLE from './items.json' with { type: 'json' };
@@ -44,11 +42,7 @@ const INVENTORY = [
 
 const EQUIPMENT = { feet: 'sableweb_slippers', chest: 'mosshide_vest' };
 
-/**
- * Seeded because the box is also the POSITION, and a frame the loader placed lands wherever the
- * viewport centred it. Nothing here tries to land the grid on a whole row: the grid takes what
- * the record leaves, so a fuller record is fewer squares at the same height.
- */
+/** Seeded because the box is also the position; unseeded, the loader centres it in the viewport. */
 const PANEL = { box: { x: 120, y: 100, w: 460, h: 652 }, visible: true };
 
 /** How long to wait on something the browser has to do, and how often to look. */
@@ -62,9 +56,8 @@ function pause(ms: number): Promise<void> {
 }
 
 /**
- * Wait for a fact rather than a delay, but never forever: a stuck fixture must still draw. A
- * frame of the loader's loop runs on every look, since `woc.paint` rides that loop and the stage
- * drives it by hand: a fixture that only slept would sit six seconds over an empty grid.
+ * Wait for a fact, but never forever: a stuck fixture must still draw. Each look runs a frame of
+ * the loader's loop, which `woc.paint` rides and the stage drives by hand.
  */
 function until(stage: Stage, said: () => boolean): Promise<void> {
   return new Promise((resolve) => {
@@ -86,17 +79,14 @@ function lineFor(role: string): HTMLElement | null {
   return document.querySelector<HTMLElement>(`[data-role="${role}"]`);
 }
 
-/**
- * Hold the shot until the art manifest lands: `ui.icon.item` is optimistic until it does, and the
- * addon holds its own count back rather than reporting a figure nobody measured.
- */
+/** Hold the shot until the art manifest lands: `ui.icon.item` is optimistic until it does. */
 function artCounted(stage: Stage): Promise<void> {
   return until(stage, () => lineFor('art')?.textContent?.startsWith('Reading') === false);
 }
 
 /**
- * `input` rather than `change`, which is the path a keystroke takes. A throw rather than a shrug:
- * a silent no-op photographs the whole table under a caption about a search.
+ * `input`, the path a keystroke takes. Throws rather than no-ops, which would photograph the
+ * whole table under a caption about a search.
  */
 function typeSearch(text: string): void {
   const input = document.querySelector<HTMLInputElement>('[data-role="search"] input');
@@ -149,9 +139,9 @@ async function drawn(stage: Stage): Promise<void> {
 }
 
 /**
- * Pressed BEFORE the table lands, so the first grid drawn is the narrow one. A window opening on
- * the whole table starts 120 optimistic image loads and cancels the ones the manifest denies,
- * and `pnpm shots` refuses to photograph a failed request. The controls exist from line one.
+ * Pressed BEFORE the table lands, so the first grid drawn is the narrow one. The whole table
+ * starts a burst of optimistic image loads that get cancelled, and `pnpm shots` refuses to
+ * photograph a failed request.
  */
 async function narrowed(stage: Stage, press: () => void, want: number): Promise<void> {
   press();
@@ -218,9 +208,8 @@ const SCENARIOS: readonly Scenario[] = [
       draft.set(draft.player, 'templateId', 'hunter');
       draft.set(draft.world, 'inventory', INVENTORY);
       draft.set(draft.world, 'equipment', EQUIPMENT);
-      // The prompt YOU were asked, which is one of the two places a roll is carried. The other
-      // is `lootRollGroupStatus`, and the addon reads both because they overlap rather than
-      // nest: a roll you were never a candidate for is only in the second.
+      // The prompt YOU were asked. A roll you are not a candidate for is only in
+      // `lootRollGroupStatus`, which the addon also reads.
       draft.set(draft.world, 'lootRollPrompts', [ROLL]);
     },
     run: async (stage) => {
@@ -249,8 +238,7 @@ const SCENARIOS: readonly Scenario[] = [
     },
   },
   {
-    // What the window opens holding. 120 squares is the setting's default rather than the
-    // answer, and the line under the grid says so.
+    // What the window opens holding, capped by the setting's default.
     id: 'codex',
     label: 'The whole table, unfiltered',
     data: DATA,

@@ -1,15 +1,6 @@
-// The harmful-kind set: how it is parsed out of the game's source, and that the
-// two checked-in files are what the generator would write.
-//
-// What this does NOT check is the one thing nobody can check from here: whether
-// the set still matches the deployed game. That answer lives in a checkout this
-// suite has no path to, and unlike the cue and icon generators there is no
-// endpoint that would 404 to say so. Staleness is a release-time question and is
-// answered by running `pnpm aura-kinds` against a fresh checkout.
-//
-// So the guard is the narrower, honest one, the same one the cue suite puts on
-// its artifact: what is on disk is exactly what its generator produces, and a
-// hand-edit is a failure rather than a surprise the next regeneration reverts.
+// The aura classifier sets: how they are parsed out of the game's source, and that the
+// checked-in files are exactly what the generator writes. Staleness against the game is
+// answered only by running `pnpm aura-kinds` against a fresh checkout.
 
 import { describe, expect, it } from 'vitest';
 import {
@@ -61,11 +52,8 @@ function readFromIn(text: string): string {
 }
 
 /**
- * The names of ONE set in the values file, bounded at both ends.
- *
- * Every set there shares one layout, so an unbounded pass would read the five of
- * them as one. Bounding at the next declaration rather than at a line count is
- * what keeps this honest when a set changes size.
+ * The names of ONE set in the values file, bounded by the next declaration, since every
+ * set shares one layout and an unbounded pass would read them all as one.
  */
 function sectionIn(text: string, from: string, to: string | null): string[] {
   const start = Math.max(text.indexOf(from), 0);
@@ -102,8 +90,6 @@ describe('parsing the declaration', () => {
     expect(debuffKinds(declaration(body))).toEqual(['dot', 'slow', 'root']);
   });
 
-  // The real block ends with two entries carrying a trailing comment, which is
-  // the shape that would break a naive line parse.
   it('takes the name off a line that also carries a comment', () => {
     const body = [
       "  'sated', // shared exhaustion lockout",
@@ -119,17 +105,16 @@ describe('parsing the declaration', () => {
     expect(debuffKinds(declaration(body))).toEqual(['sunder']);
   });
 
-  // Each of these is a refactor of the game's source, and each would otherwise
-  // generate a file that compiles, publishes, and misclassifies effects.
+  // Each is a game refactor that would otherwise generate a file that misclassifies effects.
   it('throws when the declaration has moved or been renamed', () => {
     expect(() => debuffKinds('export const HARMFUL = new Set([]);')).toThrow(/no longer declares/);
   });
 
-  it('throws on an unterminated set rather than reading to the end of the file', () => {
+  it('throws on an unterminated set', () => {
     expect(() => debuffKinds(`${OPEN}\n  'dot',\n`)).toThrow(/unterminated/);
   });
 
-  it('throws on a set body it does not understand, rather than answering short', () => {
+  it('throws on a set body it does not understand', () => {
     expect(() => debuffKinds(declaration('  ...LEGACY_KINDS,'))).toThrow(/does not understand/);
   });
 
@@ -137,7 +122,7 @@ describe('parsing the declaration', () => {
     expect(() => debuffKinds(declaration(''))).toThrow(/names no harmful aura kinds/);
   });
 
-  it('reads one line at a time, so a spread inside the block is caught wherever it sits', () => {
+  it('catches a spread on any line of the block', () => {
     expect(() => kindOnLine('  ...OTHER,')).toThrow();
     expect(kindOnLine("  'dot',")).toEqual(['dot']);
     expect(kindOnLine('')).toEqual([]);
@@ -145,10 +130,8 @@ describe('parsing the declaration', () => {
 });
 
 /**
- * The game's classifier as the id parse expects it: the display set, then the
- * predicate that consults it. The signature is verbatim because it is the trap:
- * five quoted names inside a `Pick<>` that a parse anchored on the function name
- * would collect as refused ids.
+ * The game's classifier: the display set, then the predicate that consults it. The
+ * signature is verbatim because its quoted `Pick<>` names must not be read as refused ids.
  */
 const PREDICATE_HEAD = [
   'export function isDispellableAura(',
@@ -170,7 +153,7 @@ function classifier(display: string, body: readonly string[]): string {
 }
 
 describe('parsing the ids no dispel takes', () => {
-  it('reads both clauses, the named set and the inline literal', () => {
+  it('reads both the named set and the inline literal', () => {
     const source = classifier("'shaman_stormsurge_ready'", [REFUSES_ASCENSION, CONSULTS_SET]);
 
     // Order is not part of the contract; the renderer sorts.
@@ -180,28 +163,27 @@ describe('parsing the ids no dispel takes', () => {
     ]);
   });
 
-  it('reads the body only, never the quoted names in the signature', () => {
+  it('reads the body only, never the signature', () => {
     const source = classifier("'x'", [REFUSES_ASCENSION, CONSULTS_SET]);
 
     expect(inlineRefusedIds(source)).toEqual(['divine_ascension']);
   });
 
-  it('reads the set whether it is written on one line or wrapped', () => {
+  it('reads the set on one line or wrapped', () => {
     const wrapped = classifier("\n  'a_mark',\n  'b_mark',\n", [REFUSES_ASCENSION, CONSULTS_SET]);
 
     expect(displayOverrideIds(wrapped)).toEqual(['a_mark', 'b_mark']);
   });
 
-  // Softer than the kind parse on purpose: the game can empty this set without
-  // the feature going away.
-  it('accepts an empty display set, which is a state the game can be in', () => {
+  // Softer than the kind parse on purpose: the game can empty this set.
+  it('accepts an empty display set', () => {
     const source = classifier('', [REFUSES_ASCENSION, CONSULTS_SET]);
 
     expect(displayOverrideIds(source)).toEqual([]);
     expect(undispellableIds(source)).toEqual(['divine_ascension']);
   });
 
-  it('throws when the display set is renamed, which cannot be told from a removal', () => {
+  it('throws when the display set is renamed', () => {
     const renamed = `const OTHER: ReadonlySet<string> = new Set(['x']);\n\n${PREDICATE_HEAD}\n}\n`;
 
     expect(() => undispellableIds(renamed)).toThrow(/no longer declares DEBUFF_DISPLAY_AURA_IDS/);
@@ -215,14 +197,14 @@ describe('parsing the ids no dispel takes', () => {
     );
   });
 
-  // The set would still parse, and we would go on refusing ids the game allows.
+  // The set would still parse, and the loader would refuse ids the game allows.
   it('throws when the set is declared but the predicate stops consulting it', () => {
     const source = classifier("'x'", [REFUSES_ASCENSION]);
 
     expect(() => undispellableIds(source)).toThrow(/no longer consults/);
   });
 
-  it('throws on an id comparison that is not a refusal, rather than collecting it', () => {
+  it('throws on an id comparison that is not a refusal', () => {
     const accepts = classifier("'x'", [
       "  if (aura.id === 'always_ok') return true;",
       CONSULTS_SET,
@@ -235,7 +217,7 @@ describe('parsing the ids no dispel takes', () => {
     expect(() => undispellableIds(classifier('', [CONSULTS_SET]))).toThrow(/refuses no aura by id/);
   });
 
-  it('reads one line at a time, so a reworked statement is caught wherever it sits', () => {
+  it('catches a reworked statement on any line', () => {
     expect(refusalsOnLine(REFUSES_ASCENSION)).toEqual(['divine_ascension']);
     expect(refusalsOnLine("  if (aura.school === 'physical') return false;")).toEqual([]);
     expect(() => refusalsOnLine("  const x = aura.id === 'y';")).toThrow();
@@ -243,7 +225,7 @@ describe('parsing the ids no dispel takes', () => {
 });
 
 describe('rendering the two outputs', () => {
-  it('sorts both, so a regenerate diff is one line per kind that moved', () => {
+  it('sorts both outputs', () => {
     expect(renderKindValues(['slow', 'dot'], ['x'], '0.0.0', A_RULE)).toContain(
       "  'dot',\n  'slow',\n",
     );
@@ -258,19 +240,17 @@ describe('rendering the two outputs', () => {
     expect(renderKindTypes(['dot'], '0.0.0')).not.toContain('alpha_mark');
   });
 
-  it('keeps the union open, so a kind these types predate cannot break an addon', () => {
+  it('keeps the union open', () => {
     expect(renderKindTypes(['dot'], '0.0.0')).toContain('| (string & Record<never, never>)');
   });
 
-  it('records which release it read, since nothing else can say the set is stale', () => {
+  it('records which release it read', () => {
     expect(renderKindValues(['dot'], ['x'], '0.33.0', A_RULE)).toContain(
       'world-of-claudecraft 0.33.0',
     );
     expect(renderKindTypes(['dot'], '0.33.0')).toContain('world-of-claudecraft 0.33.0');
   });
 
-  // The two files are written from one parse and are useless if they disagree:
-  // an author would autocomplete a name the runtime does not classify.
   it('names the same kinds in both', () => {
     expect(kindsIn(renderKindValues(['dot', 'slow'], ['x'], '0.0.0', A_RULE))).toEqual(
       namesIn(renderKindTypes(['dot', 'slow'], '0.0.0'), UNION_MEMBER),
@@ -295,8 +275,7 @@ const ENGINE_SOURCE =
   "const PERSISTENT_ENGINE_AURA_IDS: ReadonlySet<string> = new Set([\n  'moontide',\n  'ghost_wolf',\n]);";
 
 describe('parsing the toggle rule', () => {
-  // Merged because the game's predicate ORs them, and the dedupe is what makes
-  // that safe: an id in both sets must not be written twice.
+  // Merged because the game's predicate ORs them.
   it('merges the authored toggles with the engine banks, deduped', () => {
     const rule = toggleRule(TOGGLE_SOURCE, ENGINE_SOURCE);
 
@@ -305,9 +284,7 @@ describe('parsing the toggle rule', () => {
     expect(rule.timed).toEqual(['greater_invisibility']);
   });
 
-  // The whole point of the guard: four declarations can survive a release that
-  // rewrites the predicate to consult something else, and generating from them
-  // then mirrors a rule the game has stopped applying, with nothing failing.
+  // Declarations can survive a rewrite of the predicate that stops applying them.
   it('throws when the predicate stops consulting a set it still declares', () => {
     const rewritten = TOGGLE_SOURCE.replace('TOGGLE_AURA_IDS.has(id) || ', '');
 
@@ -319,9 +296,8 @@ describe('parsing the toggle rule', () => {
       .toThrow(/no longer declares/);
   });
 
-  // A set that quietly answers short generates a file that compiles and then
-  // prints a countdown under every stance in the game.
-  it('throws rather than answering short on a set it cannot read', () => {
+  // A short set would put a countdown under every stance in the game.
+  it('throws on a set it cannot read', () => {
     expect(() =>
       setMembers(
         'x.ts',
@@ -342,9 +318,7 @@ describe('the checked-in files', () => {
     expect(DEBUFF_AURA_KINDS.has('dot')).toBe(true);
   });
 
-  // Formatting and header only, deliberately: the names are read back OUT of
-  // each file, so a name typed in by hand would be rendered straight back in and
-  // this would pass. What it catches is an edited header and drifted layout.
+  // Header and layout only: names are read back out of the file, so a hand-typed one passes.
   it('are laid out exactly the way the generator writes them', () => {
     const version = readFromIn(VALUES_TEXT).split(' ').at(-1) ?? '';
 
@@ -354,9 +328,7 @@ describe('the checked-in files', () => {
     expect(TYPES_TEXT).toBe(renderKindTypes(namesIn(TYPES_TEXT, UNION_MEMBER), version));
   });
 
-  // This is the arm that catches a name someone typed in, since a hand-added
-  // kind lands wherever looked right rather than in code-point order. It is also
-  // what proves the two files did not drift apart on disk.
+  // A hand-added kind lands out of code-point order, which this catches.
   it('agree with each other, sorted and free of duplicates', () => {
     const names = kindsIn(VALUES_TEXT);
 
@@ -365,8 +337,6 @@ describe('the checked-in files', () => {
     expect(names).toEqual([...DEBUFF_AURA_KINDS]);
   });
 
-  // The ids are deliberately absent from the published types, so the kinds
-  // check above cannot stand in for this.
   it('carry the refused ids, sorted, and publish no union of them', () => {
     const ids = idsIn(VALUES_TEXT);
 

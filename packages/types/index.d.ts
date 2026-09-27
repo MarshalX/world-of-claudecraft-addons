@@ -4,8 +4,7 @@
 //   /// <reference types="@woc-addons/types" />
 //
 // The surface is a single `woc` global inside your addon file. Everything it
-// creates is torn down when the addon is disabled, so addons need no cleanup
-// code of their own.
+// creates is torn down when the addon is disabled.
 
 import type { AddonInfo, GameInfo, Unsubscribe } from './addon.js';
 import type { BusApi } from './bus.js';
@@ -221,10 +220,8 @@ export interface WocApi {
    * How much surface that major has grown, bumped by every additive change.
    *
    * Declare the minor you need as `apiMinor` in your addon.json and the loader
-   * refuses to start you on an older one, with a message naming both. Read this
-   * only when you want to degrade rather than be refused: an addon that declares
-   * a lower minor and feature-detects can keep working on an older loader with
-   * one feature switched off.
+   * refuses to start you on an older one. Read this only to degrade instead: declare
+   * a lower minor and feature-detect.
    */
   readonly apiMinor: number;
 
@@ -246,14 +243,10 @@ export interface WocApi {
   /**
    * A JSON file shipped in your own addon directory.
    *
-   * Declare it as `data` in `addon.json` and the loader fetches it at install,
-   * caches it beside your code, and hands you the parsed value here. That is what
-   * lets a table live in its own file instead of being pasted into your source,
-   * and it is why there is no base URL: nothing in your addon performs the
-   * request, so there is no URL for it to point anywhere else.
+   * Declare it as `data` in `addon.json`; the loader fetches it at install, caches
+   * it beside your code, and hands you the parsed value here.
    *
-   * `unknown` for the reason `storage.get` is: nothing validates the shape. The
-   * loader checks it parses as JSON at install and nothing more.
+   * `unknown` because only JSON parsing is checked, never the shape.
    *
    * The same object every call, so treat it as read-only. Rejects for a name you
    * did not declare, naming the ones you did.
@@ -268,12 +261,11 @@ export interface WocApi {
    * Settings declared in addon.json, hydrated before your first line runs.
    *
    * TOTAL over what your manifest declares: every declared setting is present, of
-   * its declared type, finite if it is a number, clamped into its declared range,
-   * and one of the options a `select` still offers, falling back to your declared
-   * default otherwise. So a `typeof` guard with a fallback beside it is dead code.
+   * its declared type, finite if a number, clamped into its range, and one of the
+   * options a `select` offers, else your declared default. A `typeof` guard with a
+   * fallback is dead code.
    *
-   * An id you did NOT declare reads as `undefined`, which is a bug in your
-   * manifest rather than a value to defend against.
+   * An id you did NOT declare reads `undefined`: fix the manifest.
    */
   readonly settings: Readonly<Record<string, unknown>>;
   onSettingsChange: (handler: (settings: Readonly<Record<string, unknown>>) => void) => Unsubscribe;
@@ -288,10 +280,8 @@ export interface WocApi {
   /**
    * Epoch milliseconds, as `Date.now` reads them.
    *
-   * The clock for the two things that have to survive a page load: a timestamp
-   * you store, and a comparison against a stamp the server sent absolute, such as
-   * `GroupInfo.lockouts`. Storing a `now()` reading instead gives you a value that
-   * reads as being in the future on the next load, with nothing to indicate it.
+   * For a timestamp you store and for comparing absolute server stamps such as
+   * `GroupInfo.lockouts`. A stored `now()` reading is meaningless after a reload.
    *
    * Added in API minor 2.
    */
@@ -311,19 +301,15 @@ export interface WocApi {
   /**
    * Run something on every animation frame, on the loop the loader already runs.
    *
-   * Reach for this rather than `requestAnimationFrame` re-armed from inside its
-   * own handler. It is one browser callback for the whole loader instead of one
-   * per addon, it is dropped rather than queued while the loader is frozen, and
-   * it is unsubscribed when your addon is disabled without you writing that.
+   * Prefer this over a self-re-arming `requestAnimationFrame`: it is dropped, not
+   * queued, while the loader is frozen, and unsubscribed on disable.
    *
-   * `dt` is milliseconds since the previous frame, 0 on the first one, and
-   * clamped at 250 so a tab returning from the background does not hand you half
-   * a minute to multiply by. The loader positions every `ui.anchor3d` AFTER your
-   * handler has run, so a point you move here is followed in the same frame.
+   * `dt` is milliseconds since the previous frame, 0 on the first, clamped at
+   * 250. Every `ui.anchor3d` is positioned AFTER your handler, so a point you move
+   * here is followed in the same frame.
    *
-   * Not the answer for everything: a panel whose figures move once a second
-   * wants `woc.setInterval`, not sixty rewrites a second of the same six
-   * strings. Added in API minor 2.
+   * Figures that change once a second want `woc.setInterval` instead. Added in
+   * API minor 2.
    */
   onFrame: (handler: (dt: number) => void) => Unsubscribe;
 
@@ -333,16 +319,11 @@ export interface WocApi {
    * Returns the function you call to ask.
    *
    *     const repaint = woc.paint(draw, { frame });
-   *     woc.world.on('bagChanged', repaint);
+   *     woc.world.on('inventory', repaint);
    *
-   * With `frame`, a request made while it is hidden is HELD rather than dropped:
-   * one repaint runs when the panel comes back, so it returns current, not stale.
-   *
-   * That costs one boolean read per frame for as long as a repaint is owed, so a
-   * panel closed and never reopened holds a seat on the loop.
-   *
-   * Only pass `frame` when the handler ONLY paints. Bookkeeping inside one stops
-   * while the panel is closed, and nothing reports that.
+   * With `frame`, a request made while it is hidden is HELD, not dropped: one
+   * repaint runs when the panel comes back. Only pass `frame` when the handler
+   * ONLY paints, since anything else in it stops while the panel is closed.
    *
    * A figure that moves on its own wants `woc.setInterval`; a bar animating every
    * frame wants `woc.onFrame`. Added in API minor 4.

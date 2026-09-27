@@ -1,27 +1,12 @@
 // An element the loader keeps over a point in the world.
 //
-// Nameplates, ground markers, a target arrow, a pin on a gathering node: all of
-// them are the same thing, an element whose screen position is a world position
-// projected every frame, hidden when that point is behind the camera or off the
-// edge. Every one of them is impossible for an addon to write, because the
-// projection is on the renderer and nothing else the loader publishes needs it.
+// Nameplates, ground markers, a pin on a gathering node: an element whose screen position is
+// a world position projected every frame, hidden when the point is behind the camera or off
+// the edge. The projection itself is runtime/world/project.ts.
 //
-// ONE frame loop for every anchor, and it is the loader's own rather than this
-// file's: `runtime/frame-loop.ts` runs it and every addon's `woc.onFrame` is on
-// it too. Anchors register as its PAINT phase, which is what makes a point an
-// addon moved inside its own handler land in the same frame rather than the next
-// one. Per-anchor loops would be the failure the world watcher already avoids:
-// ten anchors would be ten callbacks the browser schedules separately to do the
-// same arithmetic against the same camera.
-//
-// Nothing is written unless it moved. A position is two style writes, and a strip
-// of nameplates that rewrote them every frame for a camera nobody is turning would
-// be sixty pointless layout invalidations a second, which is exactly the churn
-// Cooldown Bars was found paying for its rows.
-//
-// The projection itself is runtime/world/project.ts, which is where the assertion
-// about the game lives. This file only knows that a point may or may not have a
-// place on screen.
+// All anchors share the loader's one frame loop (`runtime/frame-loop.ts`) as its PAINT phase,
+// so a point an addon moved in its own `woc.onFrame` handler lands in the same frame. Nothing
+// is written unless it moved.
 
 import type { Teardown } from '../../disposal.ts';
 import type { FrameLoop } from '../../frame-loop.ts';
@@ -32,20 +17,14 @@ const ANCHOR_CLASS = 'woc-anchor3d';
 const HIDDEN_CLASS = 'woc-anchor3d-off';
 
 /**
- * How far off screen a point may be before its anchor is hidden.
- *
- * Not zero, because the element is CENTRED on the point: one whose point has just
- * left the edge is still half on screen, and hiding it there makes a nameplate
- * blink out while its owner is still visible.
+ * How far off screen a point may be before its anchor is hidden. Not zero: the element is
+ * centred on the point, so it is still half on screen when the point leaves the edge.
  */
 const DEFAULT_MARGIN_PX = 64;
 
 /**
- * A fixed point, a unit, or one asked for every frame. A null hides the anchor.
- *
- * The unit form is resolved by world/anchor-point.ts rather than here, so the kit
- * keeps no claim about the game: `over: 'head'` is a read of the renderer's own
- * view of that unit and belongs beside every other read of it.
+ * A fixed point, a unit, or one asked for every frame. A null hides the anchor. The unit
+ * form is resolved by world/anchor-point.ts, so the kit makes no claim about the game.
  */
 type PointSource = WorldPoint | UnitPoint | (() => WorldPoint | null);
 
@@ -151,8 +130,7 @@ function paint(anchor: Live, deps: AnchorsDeps): void {
   const x = Math.round(point.x + anchor.offset.x);
   const y = Math.round(point.y + anchor.offset.y);
   setVisible(anchor, true);
-  // Rounded and compared before writing: a camera nobody is turning must cost
-  // nothing, and a sub-pixel jitter is a style write that changes no pixels.
+  // Rounded and compared first, so a still camera and sub-pixel jitter cost no style writes.
   if (anchor.last?.x === x && anchor.last.y === y) {
     return;
   }
@@ -162,11 +140,8 @@ function paint(anchor: Live, deps: AnchorsDeps): void {
 }
 
 /**
- * The element and the state the loop reads, built together.
- *
- * It starts hidden and stays hidden until the first paint places it: an anchor
- * drawn at the top left for one frame is a marker that flashes across the screen
- * every time an addon creates one.
+ * The element and the state the loop reads. It starts hidden until the first paint places
+ * it, or it would flash at the top left for a frame.
  */
 function build(deps: AnchorsDeps, at: PointSource, opts: Anchor3dOpts): Live {
   const el = deps.doc.createElement('div');
@@ -188,9 +163,7 @@ function build(deps: AnchorsDeps, at: PointSource, opts: Anchor3dOpts): Live {
 
 function createAnchors(deps: AnchorsDeps): Anchors {
   const live = new Set<Live>();
-  // ONE registration on the shared loop however many anchors there are, taken
-  // with the first and dropped with the last, so a session with no anchor leaves
-  // the loop with nothing to run.
+  // One registration on the shared loop, taken with the first anchor and dropped with the last.
   let stop: Teardown | null = null;
 
   const start = (): void => {

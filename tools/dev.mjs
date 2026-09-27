@@ -1,13 +1,5 @@
-// `pnpm dev`: the watch build and the addon dev server, together.
-//
-// Two processes rather than a task runner dependency. They are independent, they
-// both log, and neither is useful without the other during addon work: the watch
-// build is what reinstalls the userscript, the server is what serves the addon
-// the userscript then loads.
-//
-// Either one exiting takes the other down. A half-running dev environment is the
-// state that wastes the most time, because the symptom is an edit that appears
-// to do nothing.
+// `pnpm dev`: the watch build and the addon dev server, together. Either one exiting takes the
+// other down, since a half-running environment shows up as an edit that appears to do nothing.
 
 import { spawn } from 'node:child_process';
 import { createRequire } from 'node:module';
@@ -19,16 +11,8 @@ const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const require = createRequire(import.meta.url);
 
 /**
- * Vite's CLI entry, resolved rather than looked up on PATH.
- *
- * `spawn('vite', ...)` with no shell relies on `node_modules/.bin` being on
- * PATH, which is true under `pnpm dev` and false when this file is run
- * directly: it worked in the one case nobody debugs in. Resolving through the
- * package's own `package.json` is exact, needs no shell, and survives pnpm's
- * symlinked store, where the real files are nowhere near `node_modules/vite`.
- *
- * `require.resolve('vite/bin/vite.js')` would be more direct and does not work:
- * Vite 8's `exports` map does not publish that subpath.
+ * Vite's CLI entry, resolved rather than looked up on PATH, which only holds under `pnpm dev`.
+ * `require.resolve('vite/bin/vite.js')` fails: Vite's `exports` map does not publish that subpath.
  */
 const VITE_CLI = join(dirname(require.resolve('vite/package.json')), 'bin', 'vite.js');
 
@@ -44,7 +28,7 @@ const children = TASKS.map((task) =>
   spawn(process.execPath, task.args, { cwd: ROOT, stdio: 'inherit', shell: false }),
 );
 
-/** Stop both, once, whichever of the many ways to get here fired first. */
+/** Stop both, once. */
 function stopAll(code) {
   if (stopping) {
     return;

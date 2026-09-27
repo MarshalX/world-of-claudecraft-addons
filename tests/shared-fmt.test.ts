@@ -1,5 +1,4 @@
-// The four formatters. The ceiling cases are the point rather than incidental
-// coverage, since rounding up is the whole reason `duration` exists.
+// The shared formatters. `duration` rounds up, so the ceiling cases are its contract.
 
 import { describe, expect, it } from 'vitest';
 import { compass, count, duration, titleCase } from '../loader/src/shared/fmt.ts';
@@ -52,11 +51,7 @@ describe('duration in the timer style', () => {
   });
 });
 
-/**
- * Null coerces to 0 through the arithmetic, so without a guard it takes the
- * ordinary path and reads as a real zero or a real dead ahead. Both are
- * reachable from a published field: `world.bearingTo` and `LootRoll.remaining`.
- */
+/** Null coerces to 0 in arithmetic, and `world.bearingTo` and `LootRoll.remaining` can be null. */
 describe('a reading that is not there', () => {
   it('draws nothing rather than a figure, in both duration styles', () => {
     expect(duration(null)).toBe('');
@@ -68,8 +63,7 @@ describe('a reading that is not there', () => {
     expect(compass(null)).toBe('');
   });
 
-  // One rule rather than two: a caller cannot tell a null it was handed from a
-  // NaN its own arithmetic produced, and neither is a reading.
+  // A caller cannot tell a null it was handed from a NaN its own arithmetic produced.
   it('treats a non-finite number the same way, in both members', () => {
     expect(compass(Number.NaN)).toBe('');
     expect(compass(Number.POSITIVE_INFINITY)).toBe('');
@@ -79,7 +73,7 @@ describe('a reading that is not there', () => {
   });
 
   // The case a falsy check would take down with the nulls.
-  it('keeps zero, which is a reading and not an absence', () => {
+  it('keeps zero as a reading', () => {
     expect(duration(0)).toBe('0');
     expect(duration(0, 'coarse')).toBe('0s');
     expect(compass(0)).toBe('↑');
@@ -102,7 +96,7 @@ describe('duration in the coarse style', () => {
     expect(duration(183_600, 'coarse')).toBe('2d 3h');
   });
 
-  it('rounds up before it splits, so the seconds place never reads a stale figure', () => {
+  it('rounds up before it splits', () => {
     expect(duration(0.1, 'coarse')).toBe('1s');
     expect(duration(59.5, 'coarse')).toBe('1m 0s');
     expect(duration(3599.5, 'coarse')).toBe('1h 0m');
@@ -194,8 +188,7 @@ describe('compass', () => {
     expect(compass(3600)).toBe('↑');
   });
 
-  // A full turn rather than eight samples: a clockwise table agrees at every
-  // sector centre and disagrees on every boundary.
+  // A full turn: a mirrored table agrees at every sector centre and disagrees on every boundary.
   it('agrees with the counter-clockwise radian table at every bearing', () => {
     const disagreed: number[] = [];
     for (let degrees = -180; degrees < 180; degrees += 0.5) {

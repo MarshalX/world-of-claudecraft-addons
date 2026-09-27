@@ -1,19 +1,9 @@
 // An entry in the game menu.
 //
-// The game rebuilds #options-menu with innerHTML on every view change, so the
-// entry is re-added by a MutationObserver rather than inserted once. Nothing
-// about that rebuild is announced, and the menu container is static markup that
-// outlives every render, which is why the observer watches the container rather
-// than waiting for a panel to appear.
-//
-// The entry goes inside .opt-list, as the last game-menu button. That puts it
-// above .opt-version without referencing it: the version line is a SIBLING of
-// the list rather than a child, so appending to the list already places the
-// entry ahead of it in document order.
-//
-// The id is a parameter rather than a constant because `woc.ui.menuEntry` hands
-// the same mechanism to addons, and every entry present has to be distinguished
-// from every other for the already-there check to mean anything.
+// The game rebuilds #options-menu with innerHTML on every view change, so a MutationObserver
+// on the (static) container re-adds the entry. Appending to .opt-list places it above
+// .opt-version, which is a sibling of the list. The id is a parameter because
+// `woc.ui.menuEntry` hands the same mechanism to addons.
 
 import { ANCHORS, GAME_MENU_BUTTON_CLASS } from './anchors.ts';
 
@@ -24,8 +14,6 @@ function buildEntry(deps: MenuEntryDeps): HTMLButtonElement {
   const button = deps.doc.createElement('button');
   button.type = 'button';
   button.id = deps.id;
-  // The game's own classes, so the entry inherits the menu's look rather than
-  // carrying a copy of it that a restyle would leave behind.
   button.className = GAME_MENU_BUTTON_CLASS;
   button.textContent = deps.label;
   button.addEventListener('click', deps.onOpen);
@@ -47,10 +35,8 @@ export interface MenuEntry {
 }
 
 /**
- * Where the entry belongs in the menu as currently rendered, or null.
- *
- * Three distinct reasons to decline: the menu is showing a sub-view, the menu is
- * not showing its button list at all, or this entry is already there.
+ * Where the entry belongs in the menu as currently rendered, or null when the menu shows a
+ * sub-view, shows no button list, or already holds this entry.
  */
 export function menuInsertionPoint(menu: ParentNode, entryId: string): Element | null {
   if (menu.querySelector(ANCHORS.optionsBack) !== null) {
@@ -69,9 +55,7 @@ export function mountMenuEntry(deps: MenuEntryDeps): MenuEntry {
     return { inject: () => false, dispose: () => undefined };
   }
 
-  // Our own append mutates the tree the observer watches. The already-present
-  // check in menuInsertionPoint is what settles that; this flag keeps the
-  // callback from re-entering the append itself.
+  // Our own append mutates the observed tree; this flag keeps the callback from re-entering.
   let injecting = false;
   const inject = (): boolean => {
     if (injecting) {

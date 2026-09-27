@@ -1,25 +1,11 @@
-// The game's keybind profile, as a CLASS whose methods read `this`.
-//
-// The shape is load-bearing, not incidental. The real profile is a `Keybinds`
-// instance and both matchers are methods over `this.map`, so a caller that pulls
-// one off the instance and invokes it on anything else throws on an undefined
-// `this`.
-//
-// An earlier version of this fake used arrow functions closing over local Maps,
-// which have no `this` to lose. The suite passed while the loader threw on the
-// first real conflict lookup, and because the manager reads conflicts during
-// render, the throw unmounted the settings pane and left a blank window. A live
-// session is what found it. Every fake standing in for a game object should be
-// the same KIND of thing the game hands over, not merely the same shape.
-//
-// `heldActionForCode` ignores modifiers, because held actions are polled per
-// frame against the physical code; `edgeActionForCombo` matches the whole chord.
+// The game's keybind profile as a CLASS whose methods read `this`, as the real `Keybinds` does: a
+// fake closing over local Maps hides a loader that calls a matcher detached from its instance.
+// `heldActionForCode` ignores modifiers; `edgeActionForCombo` matches the whole chord.
 
 type Bindings = ReadonlyArray<readonly [string, string]>;
 
 class FakeKeybinds {
-  // Entry pairs rather than object literals: the keys are the game's own
-  // KeyboardEvent codes, which are not ours to rename into camelCase.
+  // Entry pairs, because the keys are the game's KeyboardEvent codes, not ours to camelCase.
   private readonly held: Map<string, string>;
   private readonly edge: Map<string, string>;
 

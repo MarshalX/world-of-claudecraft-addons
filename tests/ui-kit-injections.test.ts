@@ -1,12 +1,7 @@
 // @vitest-environment happy-dom
 
-// Everything the loader puts inside the game's own HUD, behind one watcher.
-//
-// The case this exists for is an addon ENABLED WHILE THE PLAYER IS ALREADY IN
-// THE WORLD. The HUD mount event has already happened and will not happen
-// again, so an injection that only ever attached on that event would be
-// permanently missing, silently, exactly as the game-menu entry and the rail
-// button both were before the HUD template was understood.
+// Everything the loader puts inside the game's HUD, behind one watcher. An addon enabled
+// in the world gets no second HUD mount event, so registering must attach at once.
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { InjectorDeps } from '../loader/src/runtime/ui/kit/injections.ts';
@@ -29,8 +24,7 @@ afterEach(() => {
 });
 
 function open(onHud?: () => void) {
-  // exactOptionalPropertyTypes rejects an explicit undefined, so the key is
-  // omitted rather than passed when the caller did not supply a callback.
+  // exactOptionalPropertyTypes rejects an explicit undefined.
   const deps: InjectorDeps = { doc: document };
   if (onHud !== undefined) {
     deps.onHud = onHud;
@@ -68,8 +62,6 @@ describe('waiting for the HUD', () => {
     expect(document.getElementById('woc-b')).not.toBeNull();
   });
 
-  // An addon enabled mid-session has no HUD mount coming, so registering has to
-  // attach immediately or the addon's button never appears.
   it('attaches immediately when the HUD is already up', async () => {
     mountStartScreen(document);
     const injector = open();
@@ -94,8 +86,7 @@ describe('waiting for the HUD', () => {
 });
 
 describe('ordering', () => {
-  // The loader's own routes are registered first and must keep their place, so
-  // an addon button never wedges between the game's menu button and ours.
+  // The loader's own routes register first, so no addon button wedges in before ours.
   it('attaches in registration order', async () => {
     mountStartScreen(document);
     const injector = open();
@@ -160,8 +151,7 @@ describe('removing', () => {
     expect(document.getElementById('woc-menu-a')).toBeNull();
   });
 
-  // Two addons could otherwise both claim one element id, and the second would
-  // silently replace the first's button.
+  // A second claim on one id would silently replace the first button.
   it('refuses a duplicate id', () => {
     const injector = open();
     injector.add(micro('woc-a'));

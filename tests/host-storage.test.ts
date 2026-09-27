@@ -56,9 +56,7 @@ function fakeGm(): FakeGm {
       return () => set.delete(handler);
     },
     registerMenuCommand: () => undefined,
-    // No marketplace fetching in either of these suites: they are about the
-    // value store and the bridge, and a request here would be a request the
-    // code under test never makes.
+    // The code under these suites never makes a request.
     request: () => Promise.reject(new Error('no http in this fake')),
     capabilities: { valueStore: 'gm4', valueChange: 'native', menuCommand: true, http: false },
   };
@@ -74,8 +72,6 @@ describe('createHostStorage', () => {
     expect(await storage.get(NS, 'scale')).toBe(1.5);
   });
 
-  // The namespace is what keeps two addons from reading each other's settings,
-  // so it has to be in the key the manager actually stores.
   it('prefixes the namespace onto the stored key', async () => {
     const gm = fakeGm();
     const storage = createHostStorage(gm);
@@ -125,8 +121,7 @@ describe('createHostStorage', () => {
       expect((await storage.keys(NS)).sort(byName)).toEqual(['anchor', 'scale']);
     });
 
-    // 'addon:foo' must not sweep up 'addon:foobar', which shares the prefix but
-    // not the separator.
+    // 'addon:foo' must not sweep up 'addon:foobar'.
     it('does not match a namespace that merely starts the same', async () => {
       const gm = fakeGm();
       const storage = createHostStorage(gm);
@@ -168,8 +163,7 @@ describe('createHostStorage', () => {
       expect(seen).toHaveBeenCalledExactlyOnceWith(NS, 'scale', undefined);
     });
 
-    // A write in another tab arrives through the manager's listener, which is
-    // the whole reason a key is watched on read rather than only on write.
+    // Why a key is watched on read and not only on write.
     it('reports a remote write against a key that was only read', async () => {
       const gm = fakeGm();
       const storage = createHostStorage(gm);
@@ -182,9 +176,8 @@ describe('createHostStorage', () => {
       expect(seen).toHaveBeenCalledExactlyOnceWith(NS, 'scale', 7);
     });
 
-    // Managers differ on whether their listener fires for the calling tab. The
-    // local emit is unconditional, so the listener has to drop non-remote
-    // changes or every write would be reported twice.
+    // Managers differ on echoing the calling tab's writes; the local emit is unconditional, so the
+    // listener drops non-remote changes.
     it('does not double-report a write the manager echoes back', async () => {
       const gm = fakeGm();
       const storage = createHostStorage(gm);
@@ -220,11 +213,8 @@ describe('createHostStorage', () => {
       expect(seen).not.toHaveBeenCalled();
     });
 
-    // Against the real Tampermonkey shape rather than a hand-driven echo:
-    // Tampermonkey 5.5 was observed reporting the calling tab's own writes back
-    // with remote false. Whether other managers echo is not something the loader
-    // gets to assume, which is exactly why the filter is on the flag rather than
-    // on the manager.
+    // Tampermonkey 5.5 echoes the calling tab's own writes with remote false, so the filter is on
+    // the flag and never on the manager.
     it('reports one event per write on a manager that echoes its own writes', async () => {
       const storage = createHostStorage(createGmAdapter(tampermonkeySource()));
       const seen = vi.fn();

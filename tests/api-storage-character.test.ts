@@ -1,13 +1,5 @@
-// The woc.storage.character surface.
-//
-// Most of what is asserted here is about ONE MOMENT: an addon's first line runs
-// at document-start, on the landing page, where there is no character and
-// therefore no key. A read and a write have to answer for that moment
-// differently, and the difference is the whole design, so it is what this file
-// spends its cases on.
-//
-// The rest is separation: this store and the account-wide one share an addon and
-// nothing else, and two characters on one account share nothing at all.
+// woc.storage.character. An addon's first line runs on the landing page, where there is
+// no character and so no key; reads wait for one and writes refuse.
 
 import { describe, expect, it } from 'vitest';
 import { createStorage } from '../loader/src/runtime/api/storage.ts';
@@ -30,12 +22,7 @@ function inWorld(hub: FakeStorage, who: string = ME) {
   });
 }
 
-/**
- * The landing page: no character yet, and one that arrives when told to.
- *
- * `enter` is what a test calls to make world entry happen, so a pending read can
- * be shown to settle rather than merely be assumed to.
- */
+/** The landing page: no character until the test calls `enter`. */
 function beforeWorld(hub: FakeStorage) {
   let who: string | null = null;
   let arrive = (): void => undefined;
@@ -88,8 +75,7 @@ describe('the per-character store', () => {
     expect(await storage.get('layout', 'gone')).toBe('gone');
   });
 
-  // The key is derived, so the derivation is what a later loader has to keep:
-  // changing it strands every value already written under the old one.
+  // Changing the derivation strands every value already written under the old one.
   it('writes under the channel and character, in its own namespace', async () => {
     const hub = createFakeStorage();
 
@@ -101,7 +87,6 @@ describe('the per-character store', () => {
   });
 });
 
-// The reason this is a namespace rather than a prefixed key inside `addon:`.
 describe('what it is separate from', () => {
   it('keeps two characters on one account apart', async () => {
     const hub = createFakeStorage();
@@ -130,9 +115,8 @@ describe('what it is separate from', () => {
     expect(await storage.character.get('layout')).toBe('character');
   });
 
-  // A raw listing would answer with the derivation still on it, and would also
-  // hand this character the NAMES of every other character on the account.
-  it('lists this character keys only, with the derivation taken back off', async () => {
+  // A raw listing would also leak the names of the account's other characters.
+  it("lists this character's keys only, without the derivation", async () => {
     const hub = createFakeStorage();
     await inWorld(hub, ALT).set('theirs', 1);
     const mine = inWorld(hub, ME);
@@ -143,10 +127,7 @@ describe('what it is separate from', () => {
   });
 });
 
-// The moment this file exists for.
 describe('before world entry', () => {
-  // A read's answer is determined when it RESOLVES, so waiting is correct: it
-  // comes back with the data of whoever actually logged in.
   it('holds a read until there is a character, then answers for them', async () => {
     const hub = createFakeStorage();
     await inWorld(hub, ALT).set('layout', 'the alt');
@@ -169,9 +150,7 @@ describe('before world entry', () => {
     expect(await pending).toEqual(['layout']);
   });
 
-  // A write's payload was determined when it was CALLED. Holding it would store
-  // a value computed before anyone knew whose it was against whichever character
-  // the player then picked, which is one character's data landing on another.
+  // A held write would land a value computed for nobody on whoever logs in next.
   it('refuses a write rather than holding it', async () => {
     const { storage } = beforeWorld(createFakeStorage());
 
@@ -184,16 +163,12 @@ describe('before world entry', () => {
     await expect(storage.delete('layout')).rejects.toThrow(/before world entry/);
   });
 
-  // The refusal has to be actionable: an addon hitting it at document-start has
-  // done nothing unreasonable, and the fix is one await.
   it('names the gate to await in the message', async () => {
     const { storage } = beforeWorld(createFakeStorage());
 
     await expect(storage.set('layout', 1)).rejects.toThrow(/world\.ready/);
   });
 
-  // Rejecting rather than throwing: a synchronous throw and a rejection are the
-  // same thing over the bridge and different things to a direct caller.
   it('rejects rather than throwing where the addon called it', () => {
     const { storage } = beforeWorld(createFakeStorage());
 
@@ -202,8 +177,6 @@ describe('before world entry', () => {
     }).not.toThrow();
   });
 
-  // Nothing may be written on the way to the refusal, or a queued value would
-  // still be sitting under some key when the player did log in.
   it('writes nothing at all when it refuses', async () => {
     const hub = createFakeStorage();
     const { storage } = beforeWorld(hub);

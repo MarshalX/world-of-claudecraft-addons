@@ -3,11 +3,10 @@ import type { KnownCue } from './cues.generated.js';
 /**
  * A sound cue.
  *
- * The known names come from the deployed game's own pack, so they autocomplete;
- * the union stays open because the set is CONTENT and a game release adds to it
- * before these types catch up. Playing a name this list does not have is legal
- * and works, and playing one that no longer exists is a silent miss, which is
- * the trade for not making a published type able to break a working addon.
+ * The known names come from the deployed game's own pack, so they autocomplete.
+ * The union stays open because a game release adds cues before these types catch
+ * up: a name this list lacks is legal and plays, and a name the game has retired
+ * is a silent miss.
  */
 export type Cue = KnownCue | (string & Record<never, never>);
 
@@ -28,8 +27,8 @@ export interface SoundApi {
    * plays at the gain the game normalized that clip to, times the player's SFX
    * slider, times your `volume`.
    *
-   * A cue requested before the player has interacted with the page is dropped
-   * rather than queued, because a browser will not start audio until then.
+   * A cue requested before the player has interacted with the page is dropped,
+   * not queued: a browser will not start audio until then.
    */
   play: (cue: Cue, opts?: PlayOpts) => void;
   /** The loader's standard attention chime. */

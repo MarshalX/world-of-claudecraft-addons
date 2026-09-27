@@ -1,12 +1,7 @@
 // @vitest-environment happy-dom
 
-// Evaluating one addon.
-//
-// Addon source is a function BODY, not a module: no export to call, no
-// registration step, `woc` in scope. What this suite pins is the three things
-// that make that safe. Settings are hydrated before the first line, everything
-// the addon created is in a bag one call drains, and a throw leaves nothing
-// behind.
+// Evaluating an addon body: settings hydrate before the first line, one call drains everything it
+// created, and a throw leaves nothing behind.
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { loadAddon } from '../loader/src/runtime/loader.ts';
@@ -79,30 +74,24 @@ describe('evaluating the source', () => {
     });
   });
 
-  // An undeclared assignment in a sloppy-mode function body becomes a property
-  // of the page's global object, which is one addon's typo becoming another
-  // addon's mystery variable, on a page shared with the game.
+  // In sloppy mode an undeclared assignment lands on the page's global object.
   it('evaluates in strict mode', async () => {
     const { loaded } = load('undeclared = 1;');
 
     await expect(loaded).rejects.toThrow(/failed to load/);
   });
 
-  // Otherwise every stack trace an addon author is sent says <anonymous>.
+  // Otherwise stack traces say <anonymous>.
   it('names the addon in the compiled source', async () => {
     const { loaded } = load('woc.log(new Error("here").stack);');
     const addon = await loaded;
     teardown.push(addon.dispose);
 
-    // The sourceURL only shows up in a trace taken inside the addon, so the
-    // check is on the compiled text reaching the engine at all: a syntax error
-    // after the appended comment would fail the load above.
+    // A syntax error after the appended comment would fail the load above.
     expect(addon.fqid).toBe(FQID);
   });
 });
 
-// The reason the API is worth having: an addon reads woc.settings.window on its
-// first line and does arithmetic with it.
 describe('hydration', () => {
   it('has the stored setting in place before the first line runs', async () => {
     const hub = createFakeStorage();
@@ -172,15 +161,13 @@ describe('an addon that throws', () => {
     await expect(loaded).rejects.toHaveProperty('cause');
   });
 
-  it('rejects on a syntax error rather than running a partial file', async () => {
+  it('rejects on a syntax error without running a partial file', async () => {
     const { loaded } = load('this is not javascript');
 
     await expect(loaded).rejects.toThrow(/failed to load/);
   });
 
-  // The half of the addon that ran before the throw has already created things.
-  // Leaving them would be a keybind and a window belonging to an addon that is
-  // not running and cannot be disabled, because it was never enabled.
+  // A failed addon was never enabled, so leftovers could never be disabled.
   it('drains what the half that ran had already created', async () => {
     const { loaded } = load(
       'woc.ui.window({ id: "meter" }); woc.keys.bind("toggle", () => {}); throw new Error("late");',
@@ -198,7 +185,7 @@ describe('an addon that throws', () => {
   });
 });
 
-// The guardrail. Not a boundary, and the message says which API to use.
+// A guardrail, not a boundary.
 describe('shadowed globals', () => {
   it.each([
     ['localStorage', 'localStorage.getItem("anything");'],
@@ -215,9 +202,8 @@ describe('shadowed globals', () => {
     await expect(load('localStorage.getItem("x");').loaded).rejects.toThrow(/use woc.storage/);
   });
 
-  // The honest limit, pinned so nobody later mistakes the guardrail for a
-  // sandbox: the closure runs in the page realm and one line reaches around it.
-  it('does not stop a deliberate escape, which is the documented limit', async () => {
+  // The closure runs in the page realm, so one line reaches around it.
+  it('does not stop a deliberate escape', async () => {
     const { loaded } = load('woc.log(typeof Function("return this")().localStorage);');
 
     await expect(loaded).resolves.toBeDefined();

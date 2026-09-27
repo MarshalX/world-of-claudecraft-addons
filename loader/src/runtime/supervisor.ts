@@ -1,21 +1,8 @@
-// Which addons are running, and keeping that in step with the registry.
+// Which addons are running, kept in step with the registry. An enabled addon that is not running
+// carries a state and a reason, so the manager can say why.
 //
-// The registry says what a player wants. This says what is actually evaluated,
-// and the two are not the same set: an addon can be enabled and still not
-// running because it declares an apiVersion this loader does not implement,
-// because it is restricted to another channel, or because it threw on its first
-// line. Those cases are states with a reason attached rather than a silently
-// missing addon, so the manager can say which one happened.
-//
-// A failure does NOT flip the persisted enable flag. Auto-disabling would throw
-// away what the player asked for to record something the loader already knows,
-// and a failure that came from the game not being ready yet would then need a
-// manual re-enable to recover from. The addon stays enabled and stays stopped,
-// and Reload is what tries again.
-//
-// Every operation runs on one queue. Reconciling, reloading, and a hot-reload
-// event arriving mid-reconcile would otherwise interleave two disposals of the
-// same bag or two evaluations of the same source.
+// A failure does NOT flip the persisted enable flag: a failure caused by the game not being ready
+// would then need a manual re-enable. Reload is what tries again.
 
 import { API_MINOR, API_VERSION } from '../shared/api-version.ts';
 import { describeError } from '../shared/diag.ts';
@@ -54,27 +41,14 @@ interface Supervisor {
   dispose: () => void;
 }
 
-/**
- * Whether this loader implements the addon's API major.
- *
- * Equality rather than "at most", because a major is exactly the thing that gets
- * bumped when something an addon relies on changes shape. When this loader grows
- * a second major it will accept a set, and that set will be a decision, not an
- * inequality that silently included a version nobody tested.
- */
+/** Equality, not "at most": a major is what moves when a surface changes shape. */
 function implementsApi(apiVersion: number): boolean {
   return apiVersion === API_VERSION;
 }
 
 /**
- * Whether this loader has grown far enough for what the addon uses.
- *
- * The minor is the opposite comparison to the major, and deliberately so: a
- * bigger one is FINE, because the surface only ever grew. What must be refused is
- * an addon needing more than is here, which before this existed was accepted and
- * run, then threw against an undefined member on whatever frame first reached it.
- * That is the case worth catching, since it never surfaced as a load failure: the
- * addon reported running and broke silently.
+ * A newer loader minor is fine; an addon needing more than is here is refused, or it would report
+ * running and then throw on an undefined member.
  */
 function withinMinor(apiMinor: number | undefined): boolean {
   return (apiMinor ?? 0) <= API_MINOR;
@@ -100,24 +74,10 @@ function incompatibility(row: InstalledAddon, channel: Channel): string | null {
 }
 
 /**
- * What has to be identical for a running addon to be left alone.
- *
- * The whole manifest, not just its version, and the version alone was wrong. A
- * marketplace serves one manifest per ref rather than per version, so the same
- * version string can carry different declarations: the dev server reads the file
- * from disk on every request, and `MarketApi.setRef` moves a source to another tag
- * whose manifest an author edited without bumping anything.
- *
- * That matters because the manifest is not decoration. The settings and keybind
- * declarations are what the addon's own `woc.settings` and `woc.keys` are BUILT
- * from, and a value is hydrated only for a declared id, so an addon left running
- * across a manifest change can never see a setting that manifest added. It reads
- * as a control that does nothing, which is what was reported.
- *
- * Serialised whole rather than field by field for the reason `declarationsOf` in
- * the manager is: a hand-listed comparison has to be extended every time the schema
- * grows a field, and forgetting is silent. An unchanged manifest serialises
- * identically, so nothing restarts for a reconcile that found no news.
+ * What has to be identical for a running addon to be left alone: the whole manifest, not its
+ * version. One version can carry different declarations (the dev server, `MarketApi.setRef`), and
+ * `woc.settings` and `woc.keys` are built from them, so a stale addon never sees a new setting.
+ * Serialised whole so a new schema field cannot be forgotten.
  */
 function signature(row: InstalledAddon): string {
   return `${row.marketplace}@${JSON.stringify(row.manifest)}`;
@@ -138,13 +98,7 @@ function createStatusBoard(onChange: () => void) {
 /** The live addon map, keyed by fqid. */
 type LiveAddons = Map<string, { addon: LoadedAddon; signature: string }>;
 
-/**
- * Drain one addon's bag and take it off the live map.
- *
- * A bag drains its own throwing teardowns, so reaching the catch means disposal
- * itself broke. The addon is off the map before that point either way, which is
- * what stops it being disposed twice.
- */
+/** Off the map before disposing, so a throwing disposal cannot be disposed twice. */
 function stopOne(live: LiveAddons, fqid: string, note: (id: string, text: string) => void): void {
   const entry = live.get(fqid);
   if (entry === undefined) {
@@ -158,25 +112,13 @@ function stopOne(live: LiveAddons, fqid: string, note: (id: string, text: string
   }
 }
 
-/**
- * What is evaluated right now, and the status the manager reads.
- *
- * Held together because they change together: an addon stops and gains a reason
- * in the same step, and nothing outside should be able to move one without the
- * other.
- */
+/** What is evaluated and its status, held together because they change in one step. */
 function createRunningSet(deps: SupervisorDeps) {
   const live: LiveAddons = new Map();
   const { states, setStatus } = createStatusBoard(deps.onChange);
   let disposed = false;
 
-  /**
-   * A loader-originated line in the addon's own tail.
-   *
-   * It goes there rather than to the console because the addon's page in the
-   * manager is where someone looks when it did not start, and a failure to load
-   * is the one message that addon will never write itself.
-   */
+  /** A loader line in the addon's own log, where someone looks when it did not start. */
   const note = (fqid: string, text: string): void => {
     deps.shared.logs.append(fqid, 'error', deps.shared.wallClock(), text);
   };
@@ -185,13 +127,7 @@ function createRunningSet(deps: SupervisorDeps) {
     stopOne(live, fqid, note);
   };
 
-  /**
-   * Fetch and evaluate one addon.
-   *
-   * The disposed check is repeated after each await: a page navigating away
-   * mid-fetch must not leave a closure running against DOM the loader has
-   * already torn down.
-   */
+  /** The disposed check repeats after each await, for a page navigating away mid-fetch. */
   const start = async (row: InstalledAddon): Promise<void> => {
     const { registry } = deps;
     if (registry === null) {
@@ -236,12 +172,8 @@ function createRunningSet(deps: SupervisorDeps) {
 }
 
 /**
- * One queue for every mutation.
- *
- * Reconciling, reloading, and a hot-reload event arriving mid-reconcile would
- * otherwise interleave two disposals of one bag or two evaluations of one file.
- * Rejections are absorbed at the tail so a failed operation cannot poison the
- * chain for the next one.
+ * One queue for every mutation, or a hot reload mid-reconcile interleaves two disposals of one
+ * bag. Rejections are absorbed so one failure cannot poison the chain.
  */
 function createQueue(onFailure: (err: unknown) => void) {
   let queue: Promise<void> = Promise.resolve();
@@ -253,12 +185,7 @@ function createQueue(onFailure: (err: unknown) => void) {
 
 type RunningSet = ReturnType<typeof createRunningSet>;
 
-/**
- * Stop everything the registry no longer wants running.
- *
- * Before anything is started, so an addon that was updated releases its keybinds
- * and frames before the new copy claims the same ids.
- */
+/** Runs before any start, so an updated addon releases its keybinds and frames first. */
 function stopStale(set: RunningSet, byFqid: ReadonlyMap<string, InstalledAddon>): void {
   for (const [fqid, entry] of [...set.live]) {
     const row = byFqid.get(fqid);
@@ -305,9 +232,7 @@ function createSupervisor(deps: SupervisorDeps): Supervisor {
     }
     const rows = await registry.list();
     stopStale(set, new Map(rows.map((row) => [row.fqid, row])));
-    // In registry order rather than concurrently: the first addon to claim a
-    // keybind should be the first one listed, not the first one whose source
-    // happened to resolve.
+    // In series, so the first addon to claim a keybind is the first listed, not the first fetched.
     await inSeries(rows, (row) => settle(deps, set, row));
     deps.onChange();
   };
@@ -327,8 +252,7 @@ function createSupervisor(deps: SupervisorDeps): Supervisor {
       return;
     }
     if (incompatibility(row, deps.channel) !== null) {
-      // reconcile is what turns this into a status; reloading an addon that
-      // cannot run here should not report it as running.
+      // reconcile turns this into a status rather than reporting it running.
       await reconcile();
       return;
     }

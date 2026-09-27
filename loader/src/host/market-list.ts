@@ -1,17 +1,9 @@
-// The source list itself: what is built in, and what the player added.
+// The source list: official (from the build), then the dev server while dev mode is on (never
+// persisted), then user-added repositories, the only ones stored.
 //
-// Three kinds, merged in a fixed order on every read. The official marketplace
-// is first and comes from the loader build, so it cannot be removed or repointed
-// without shipping a new loader. The local dev server is second and only while
-// dev mode is on; it is never persisted, which is what makes turning dev mode
-// off the way to remove it. User-added GitHub repositories follow, and they are
-// the only ones that touch storage.
-//
-// Only the three fields a user actually chose are persisted, and reading the
-// list back re-runs the same validation that accepting it did. The marketplace
-// id is the storage namespace of every addon installed from it, so re-deriving
-// it from owner and repo rather than trusting a stored id is what stops a
-// hand-edited GM value from claiming another source's addon data.
+// Only owner, repo and ref are persisted, and every read re-validates them. The id is the
+// storage namespace of every addon from that source, so it is re-derived rather than trusted,
+// or a hand-edited GM value could claim another source's addon data.
 
 import {
   fromStored,
@@ -31,11 +23,8 @@ const MARKETS_KEY = 'marketplaces';
 type ListStorage = Pick<StorageApi, 'get' | 'set'>;
 
 /**
- * The user-added sources, dropping any record that no longer validates.
- *
- * Dropping rather than surfacing: a record that fails validation cannot be
- * fetched from and cannot be repaired here, so keeping it would put a row in the
- * manager with no working control on it.
+ * The user-added sources, dropping any record that no longer validates: it could neither be
+ * fetched nor repaired, so it would be a manager row with no working control.
  */
 async function readStored(storage: ListStorage): Promise<MarketplaceRef[]> {
   const raw = await storage.get(NS, MARKETS_KEY);
@@ -79,12 +68,7 @@ async function addStored(storage: ListStorage, ref: MarketplaceRef): Promise<voi
   await writeStored(storage, [...stored, ref]);
 }
 
-/**
- * Drop one source, or throw.
- *
- * Built-ins are refused here as well as at the API, since this is the function
- * that would otherwise be able to write a list that no longer holds one.
- */
+/** Drop one source, or throw. Built-ins are refused here too, since this is the writer. */
 async function removeStored(storage: ListStorage, id: string): Promise<void> {
   if (isBuiltinMarketplace(id)) {
     throw new Error(`${id} ships with the loader and cannot be removed`);
@@ -98,11 +82,8 @@ async function removeStored(storage: ListStorage, id: string): Promise<void> {
 }
 
 /**
- * Point one source at another branch, tag, or commit, and answer what it became.
- *
- * The id is derived from owner and repo, so it does not move: everything already
- * installed from this source keeps its fqid, and therefore its settings, its
- * keybinds, and its data. Only where the next fetch reads from changes.
+ * Point one source at another branch, tag, or commit, and answer what it became. The id comes
+ * from owner and repo, so installed addons keep their fqid, settings, keybinds and data.
  */
 async function repointStored(
   storage: ListStorage,

@@ -1,16 +1,7 @@
 // @vitest-environment happy-dom
 
-// One derivation of who is playing, proved by two readers agreeing.
-//
-// This is the regression that would have failed if `world.characterKey` had been
-// COPIED out of services.ts rather than moved into the backend. The loader's own
-// per-character storage and the published world read are two entirely separate
-// call paths, and a player whose frame positions and whose addon data disagreed
-// about whose they are would see it as data that silently stopped loading.
-//
-// Driven through the real runtime services over a real world hub, rather than
-// through the shared-services fake, because the fake supplies `character`
-// directly and so could not tell a moved derivation from a duplicated one.
+// The loader's per-character storage and `world.characterKey` must share one derivation. Driven
+// through the real services, since the shared fake supplies `character` directly.
 
 import { afterEach, describe, expect, it } from 'vitest';
 import { createStorage } from '../loader/src/runtime/api/storage.ts';
@@ -35,13 +26,7 @@ afterEach(() => {
   }
 });
 
-/**
- * The two surfaces the character key is derived from, and nothing else.
- *
- * The net hub is real but never fed a frame: the realm comes off `hello` and
- * this suite states it directly, which is the same thing the tracker would end
- * up holding.
- */
+/** The two surfaces the character key is derived from; the realm is stated, never fed a frame. */
 function surfaces(realm: string | null, name: string): GameSurfaces {
   const net = createNetHub({ now: () => 0, install: () => () => undefined });
   const world = createWorldHub({
@@ -87,16 +72,13 @@ describe('who the loader thinks is playing', () => {
     });
 
     const world = createWorld(game.world, bag);
-    // The UI kit is a service and is attached later, and `character` does not
-    // read it: a stand-in is enough to reach the reader this case is about.
+    // `character` does not read the UI kit, so a stand-in is enough.
     const shared = services.withKit({} as never);
 
     expect(world.characterKey).toBe('Claudemoon/Marshal');
     expect(shared.character()).toBe(world.characterKey);
   });
 
-  // The assertion that matters: the key an addon's per-character data lands
-  // under has to be built from the same string the world publishes.
   it('is the character woc.storage.character files its keys under', async () => {
     const { game } = await open();
     const hub = createFakeStorage();

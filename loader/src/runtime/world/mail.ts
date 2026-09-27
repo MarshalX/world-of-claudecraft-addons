@@ -1,15 +1,9 @@
 // The Ravenpost mailbox.
 //
-// Proximity-gated: the reading exists only while the player stands at a raven
-// pillar.
+// Proximity-gated: the reading exists only while the player stands at a raven pillar. Passed
+// through rather than projected, as in `market.ts`.
 //
-// The unread COUNT is not in here and must not be. It streams everywhere, with
-// no proximity gate at all, because a badge exists for the moment you are NOT at
-// a mailbox. It is `world.mailUnread`. `MailInfo` carries its own `unread` over
-// the same letters, which is the mailbox pane's figure; neither should be
-// derived from the other.
-//
-// Passed through rather than projected, for the reason `market.ts` gives.
+// The ungated unread count is `world.mailUnread`, for badges; do not derive it from `MailInfo`.
 
 import type { InvSlot } from './game-types.ts';
 import type { ProximityState } from './proximity.ts';
@@ -28,10 +22,8 @@ interface MailMessage {
   /** Coin still waiting in the letter. */
   copper: number;
   /**
-   * Parcels still waiting in the letter.
-   *
-   * An instance here is the DISPLAY trim, your own letters included: the full
-   * payload only arrives when the letter is taken, which no addon can do.
+   * Parcels still waiting in the letter. An instance here is the public trim, even on your own
+   * letters.
    */
   items: readonly InvSlot[];
   read: boolean;

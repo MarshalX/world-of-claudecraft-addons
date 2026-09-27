@@ -19,7 +19,6 @@ import type { AddonStatus } from './supervisor.ts';
 import { createSupervisor, type Supervisor } from './supervisor.ts';
 import { createGameSurfaces, type GameSurfaces } from './surfaces.ts';
 import { type MountedUi, mountUi } from './ui/mount.ts';
-// The three sheets bundled as text and joined into the one injected <style>.
 import { LOADER_CSS } from './ui/styles/index.ts';
 import { createUnitPoints } from './world/anchor-point.ts';
 import { createProjector } from './world/project.ts';
@@ -30,12 +29,7 @@ interface ProbeSlot {
   value: GameProbe | null;
 }
 
-/**
- * Report the __game shape once the game reaches world entry.
- *
- * Recorded per host on purpose: PBE runs ahead of live, so a member that goes
- * missing there is the earliest warning that a game update will break addons.
- */
+/** Recorded per host: channels diverge, so a member missing on one is an early warning. */
 function reportProbe(surfaces: GameSurfaces, channel: string, slot: ProbeSlot): void {
   surfaces.world.ready
     .then(() => {
@@ -76,13 +70,8 @@ interface SupervisorView {
 }
 
 /**
- * The supervisor, held before it exists.
- *
- * One indirection breaks a real cycle: the manager renders each addon's run
- * status and drives Reload, so it needs the supervisor; the supervisor evaluates
- * addons against the shared services, and the UI kit is one of those services.
- * Every member below is called from a click, a repaint, or a host event, all of
- * which happen after the slot is filled.
+ * The supervisor, held before it exists, to break a cycle: the manager needs the supervisor, which
+ * needs the shared services, which include the UI kit. Every member is called after the fill.
  */
 function supervisorSlot() {
   let supervisor: Supervisor | null = null;
@@ -95,9 +84,7 @@ function supervisorSlot() {
       reload: (fqid: string) => supervisor?.reload(fqid) ?? Promise.resolve(),
       reloadAll: () => supervisor?.reloadAll() ?? Promise.resolve(),
     } satisfies SupervisorView,
-    // Both absorb their own failures and record them as addon status, so there
-    // is nothing to await or to catch: these exist so an event handler stays a
-    // statement rather than an expression nobody reads the result of.
+    // Failures are recorded as addon status, so there is nothing to await.
     resync: (): void => {
       supervisor?.sync().catch(() => undefined);
     },
@@ -120,13 +107,7 @@ function diagnosticsFor(deps: UiStartDeps): DiagnosticsReading {
   });
 }
 
-/**
- * The loader's own keybinds, registered after the UI because what they switch is
- * part of the UI kit.
- *
- * The first binds that belong to the loader rather than to an addon; see
- * keys/loader-binds.ts for why they reuse the addon keybind store.
- */
+/** Registered after the UI, because what they switch is part of the kit. */
 function bindLoaderKeys(services: RuntimeServices, ui: MountedUi): LoaderBinds {
   const binds = createLoaderBinds({
     hub: services.storage,
@@ -135,9 +116,7 @@ function bindLoaderKeys(services: RuntimeServices, ui: MountedUi): LoaderBinds {
       ui.kit.unlock.toggle();
     },
   });
-  // Wired here rather than at mount, because the binds are built after the UI and
-  // the store is the only honest source: the message names the combo the player is
-  // actually on, which is not the declared default the moment they rebind it.
+  // Read from the store, so the hint names the combo the player rebound it to.
   ui.kit.arrangeHint.setCombo(() => binds.store.combo(UNLOCK_BIND));
   return binds;
 }
@@ -153,8 +132,7 @@ function uiDeps(
     doc: globalThis.document,
     css: LOADER_CSS,
     channel: deps.channel,
-    // All four are null together: a failed handshake costs the registry, not
-    // the UI, and the manager reports that in its own panes.
+    // All four are null together when the handshake failed; the UI comes up anyway.
     registry: host?.registry ?? null,
     market: host?.market ?? null,
     dev: host?.dev ?? null,
@@ -163,8 +141,7 @@ function uiDeps(
     ...pageServices(),
     frames: services.frames,
     project: createProjector(() => deps.surfaces.world.game()),
-    // The same context `world.unit` resolves through, so an anchor pinned to
-    // 'target' and a readout describing 'target' cannot mean different units.
+    // The context `world.unit` uses, so 'target' means one unit everywhere.
     unitPoint: createUnitPoints({
       game: () => deps.surfaces.world.game(),
       context: () => contextOf(deps.surfaces.world),
@@ -177,38 +154,25 @@ function uiDeps(
   };
 }
 
-/** The half of the UI's dependencies that is just the page it renders into. */
+/** The UI dependencies that are just the page. */
 function pageServices() {
   return {
     setTimer,
     clearTimer,
     viewport: () => ({ w: globalThis.innerWidth, h: globalThis.innerHeight }),
-    // The same reader the sound engine uses for its pack. Both are same-origin game
-    // content, and the kit's per-class art manifests are the second consumer.
     fetchJson,
-    // The browser's own locale, which is the game's page locale. The loader has
-    // no translation layer yet, and a hardcoded format would be the one part of
-    // the manager that ignores the player's regional settings.
+    // The browser locale, so the manager follows the player's regional settings.
     formatTime: (at: number) => new Date(at).toLocaleTimeString(),
   };
 }
 
-/**
- * Bring up the loader's own UI and the services every addon shares.
- *
- * Gated on the document rather than on the game, so the manager is reachable
- * from the login screen and from a session that never gets that far. The
- * services follow the UI because the UI kit is one of them.
- */
+/** Gated on the document, not the game, so the manager is reachable from the login screen. */
 async function startUi(deps: UiStartDeps): Promise<StartedRuntime> {
   const { host } = deps;
   await waitForDocument({ doc: globalThis.document });
 
   const win = globalThis as unknown as Window;
-  // Before the UI, because the manager edits addon settings and keybinds through
-  // the same storage hub and the same dispatcher an addon uses. The UI kit is
-  // itself a service, which is why it is attached afterwards rather than passed
-  // in: see services.ts.
+  // Before the UI, which edits settings and keybinds through these same services.
   const services = createRuntimeServices({
     scope: win,
     surfaces: deps.surfaces,
@@ -233,9 +197,7 @@ async function startUi(deps: UiStartDeps): Promise<StartedRuntime> {
   });
   slot.fill(supervisor);
 
-  // proxy() is what lets the sandbox call back into this realm. Storage changes
-  // are the reason it exists for anything but the manager: an addon's settings
-  // written in one tab have to reach its running copy in every other.
+  // proxy() lets the sandbox call back, which is how a write in one tab reaches the others.
   await host?.subscribe(
     proxy(
       createHostEventHandler({
@@ -249,8 +211,7 @@ async function startUi(deps: UiStartDeps): Promise<StartedRuntime> {
     ),
   );
 
-  // The first reconcile. Everything an enabled addon needs is in place by now:
-  // the socket hook, the keydown listener, the UI kit, and the storage hub.
+  // The first reconcile, once everything an addon needs is in place.
   await supervisor.sync();
 
   return { ui, shared, services, supervisor, loaderBinds };
@@ -283,14 +244,12 @@ export async function bootRuntime(scope: MessageScope): Promise<RuntimeBoot | nu
     return null;
   }
 
-  // Before the bridge, not after: the socket hook has to be in place ahead of
-  // the game's first connection, and the handshake has no bearing on that.
+  // Before the bridge: the socket hook must precede the game's first connection.
   const surfaces = createGameSurfaces();
   const slot: ProbeSlot = { value: null };
   reportProbe(surfaces, channel, slot);
 
-  // A failed handshake costs the registry, not the UI. The manager is how a
-  // player finds out the loader is broken, so it comes up either way.
+  // A failed handshake costs the registry, not the UI: the manager is how a player learns of it.
   let connection: HostConnection | null = null;
   let host: RemoteHostApi | null = null;
   try {

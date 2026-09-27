@@ -1,13 +1,5 @@
-// One addon's keybinds: the declared defaults, the player's overrides, and the
-// change fan-out that moves a live binding when the manager rebinds it.
-//
-// Overrides go to GM storage and NEVER into the game's own keybind blob. The
-// loader reads the game's bindings to warn about conflicts and writes nothing
-// back, so uninstalling every addon leaves the player's game controls exactly as
-// they were.
-//
-// Like settings, this is shared across hosts: a key bound once works the same on
-// live, pbe, and pbe2.
+// One addon's keybinds: declared defaults, the player's overrides, and the change fan-out.
+// Overrides go to GM storage and NEVER into the game's keybind blob. Shared across hosts.
 
 import { normalizeCombo } from '../../shared/combo.ts';
 import { diagError } from '../../shared/diag.ts';
@@ -92,13 +84,7 @@ function requireCombo(fqid: string, combo: string): string {
   return normalized;
 }
 
-/**
- * The override record and the only place it is read from or written to storage.
- *
- * Held apart from the store because the rollback and the "keep the declared
- * defaults when storage fails" rule are about persistence rather than about
- * keybinds, which leaves the store itself to validation and fan-out.
- */
+/** The override record and its persistence, including rollback on a refused write. */
 interface OverridesCell {
   read: () => Record<string, string>;
   /** Take a record storage reported, without writing it back. */
@@ -146,14 +132,7 @@ function createOverridesCell(
   };
 }
 
-/**
- * Follow the record another tab may have changed.
- *
- * `republish` covers every declared id rather than only the changed ones: an
- * override that was REMOVED elsewhere has to move its binding back to the
- * manifest default, and a diff of the two records would have to spot that
- * deletion as carefully as it spots a change.
- */
+/** Republishes every declared id, so an override removed in another tab reverts to its default. */
 function watchOverrides(
   hub: StorageHub,
   ns: string,

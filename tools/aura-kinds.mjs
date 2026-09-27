@@ -1,20 +1,11 @@
-// `pnpm aura-kinds`: regenerate the harmful-aura kind set from a game checkout.
-//
-// Run by hand after a game release changes the set, not on every build, for the
-// same reason `pnpm cues` and `pnpm icons` are not wired in: the answer changes a
-// few times a year and the file it writes is the same one every other time.
-//
-// The third generator here and the FIRST that reads a local checkout rather than
-// an endpoint. The classifier is bundled into the play chunk and nothing serves
-// it, so there is no URL to point at. That costs the one thing the other two get
-// for free: a 404 when the source moves. `--game` is therefore REQUIRED and is
-// deliberately never defaulted, a missing file is a failure rather than a
-// warning, and the checkout's version is written into both generated headers so
-// a reviewer can see which release the set claims to describe.
+// `pnpm aura-kinds`: regenerate the aura classifier sets from a game CHECKOUT. By hand, after a
+// game release changes them.
 //
 //   pnpm aura-kinds --game /path/to/world-of-claudecraft
 //
-// Reading is not modifying. The never-modify-the-game rule is untouched.
+// Nothing serves the classifier, so nothing 404s when the checkout is stale: `--game` is required
+// and never defaulted, a missing file fails, and the checkout's version is stamped into both
+// headers.
 
 import { readFileSync, writeFileSync } from 'node:fs';
 import process from 'node:process';
@@ -65,13 +56,7 @@ function read(path) {
   }
 }
 
-/**
- * The checkout's own version, which both headers record.
- *
- * A failure rather than an unstamped file: a generator pointed at the wrong
- * directory is exactly the silent failure the parse throws exist to prevent, and
- * a header saying nothing about which release it read is how that goes unnoticed.
- */
+/** The checkout's own version, stamped into both headers. Missing is a failure. */
 function gameVersion(checkout) {
   const parsed = JSON.parse(read(`${checkout}/package.json`));
   const version = parsed?.version;
@@ -87,9 +72,7 @@ function main() {
   const source = read(`${checkout}/${SOURCE}`);
   const kinds = debuffKinds(source);
   const ids = undispellableIds(source);
-  // The toggle rule's third term lives in another module, so this generator reads
-  // TWO files. Both are read before anything is written, for the same reason the
-  // two parses above share one read: the outputs must describe one state.
+  // The toggle rule's third term lives in a second file; read both before writing anything.
   const rule = toggleRule(source, read(`${checkout}/${PERSISTENT}`));
   const version = gameVersion(checkout);
 

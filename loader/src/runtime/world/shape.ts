@@ -1,25 +1,10 @@
-// Whether the running game still looks like what `game-types.ts` declares.
+// Whether the running game still looks like what `game-types.ts` declares: one pass over the
+// live player when the world goes live, reporting every field missing or of the wrong kind.
 //
-// `game-types.ts` describes a repository this one does not depend on and cannot
-// compile against, so its declarations are asserted at the backend boundary
-// rather than proven. That assertion is only honest if something checks it, and
-// this is that check: one pass over the live player when the world goes live,
-// reporting every field that is missing or of the wrong kind.
+// It cannot catch a field the server never sends: the client default-fills it, so it passes.
+// That is checked upstream, by publishing only fields found on the wire.
 //
-// It runs ONCE per session, not per read. The cost of being wrong here is an
-// addon written against a field the game renamed, which is a slow, confusing
-// failure at the author's end; the cost of the check is one walk over the
-// published fields, once, at a moment nothing is rendering yet.
-//
-// What it CANNOT catch, stated because it has already cost a bug: a field the
-// server never sends. The client builds every entity with defaults, so such a
-// field is present and of the right kind and holds that default forever. This
-// check passes it. `inCombat` is the worked example, and the answer is upstream
-// of here: a field is published only if it was found on the wire.
-//
-// The table is exhaustive BY TYPE: it is a `Record<keyof Entity, ...>`, so
-// adding a field to the published entity without saying how to recognise it is
-// a compile error rather than an untested promise.
+// `SHAPE` is a `Record<keyof Entity, ...>`, so a published field without a spec fails to compile.
 
 import { fieldValue } from '../net/frames.ts';
 import type { Entity, Vec3 } from './game-types.ts';
@@ -63,8 +48,7 @@ const SHAPE: Record<keyof Entity, FieldSpec> = {
   hostile: { kind: 'boolean' },
   targetId: { kind: 'number', nullable: true },
   aggroTargetId: { kind: 'number', nullable: true },
-  // Neither is optional: the client entity factory initialises both on every
-  // entity, so an absence here is real drift rather than the ordinary case.
+  // Not optional: the client initialises both on every entity, so absence is drift.
   forcedTargetId: { kind: 'number', nullable: true },
   forcedTargetTimer: { kind: 'number' },
   threat: { kind: 'map' },
@@ -81,14 +65,8 @@ const SHAPE: Record<keyof Entity, FieldSpec> = {
   tappedById: { kind: 'number', nullable: true },
   harvestClaimedBy: { kind: 'number', nullable: true },
 
-  // Worn gear and cosmetics. Objects here, because the slot set is sparse: a
-  // slot is a key only while something is in it, so there is no fixed member
-  // list to walk and NESTED_SHAPES cannot help. `matches` rejects an array for
-  // 'object', so a rework that turned the worn set into a slot ARRAY is caught;
-  // a rename of a SLOT KEY is not and cannot be, since every slot is optional
-  // and `checkField` returns null for a missing optional. A nested entry
-  // listing all twelve as optional would assert exactly nothing while looking
-  // like coverage, so do not add one.
+  // The worn set is sparse, so a slot-key rename cannot be caught. Do not add a NESTED_SHAPES
+  // entry of twelve optional slots: it would assert nothing while looking like coverage.
   equippedItems: { kind: 'object' },
   equippedInstances: { kind: 'object' },
   mainhandItemId: { kind: 'string', nullable: true },
@@ -96,10 +74,7 @@ const SHAPE: Record<keyof Entity, FieldSpec> = {
   weaponSkinId: { kind: 'string', nullable: true },
   mountSkinId: { kind: 'string', nullable: true },
   mountKey: { kind: 'string' },
-  // Optional because a server predating game 0.42.0 never sends `cbt` and the
-  // client's own entity factory does not manufacture one, so absence is the
-  // honest reading rather than drift. This walks the live PLAYER, which is the
-  // only entity the field is ever written on.
+  // Optional: the client never default-fills it, so it is absent when the server does not send it.
   inCombat: { kind: 'boolean', optional: true },
   helmHidden: { kind: 'boolean' },
   afk: { kind: 'boolean' },
@@ -126,22 +101,14 @@ const SHAPE: Record<keyof Entity, FieldSpec> = {
   savedMana: { kind: 'number' },
   stats: { kind: 'object' },
   weapon: { kind: 'object' },
-  // Null on anything not dual-wielding, which is most entities most of the
-  // time, so the nullable mark is the ordinary case here rather than drift.
   offhandWeapon: { kind: 'object', nullable: true },
-  // Created on the first snapshot that carried a charge pool, rather than
-  // blank-filled, so its absence is the ordinary case and not drift.
+  // Created on the first snapshot carrying a charge pool, so absence is ordinary.
   abilityCharges: { kind: 'object', optional: true },
 };
 
 /**
- * The two published fields that are objects rather than scalars.
- *
- * Checked because 'object' on its own would pass a renamed member: the client
- * builds both with a full set of defaults before the server sends anything, so a
- * rename inside one is invisible at the top level and would read to an addon as a
- * stat that is permanently zero. The pools in `abilityCharges` are deliberately
- * not here, since there is nothing to walk until an ability with charges is used.
+ * The two object fields with a fixed member list, walked because 'object' alone would pass a
+ * renamed member that reads as a permanently zero stat.
  */
 const NESTED_SHAPES: Record<string, Record<string, FieldSpec>> = {
   stats: {
@@ -226,11 +193,8 @@ function checkField(
 }
 
 /**
- * Every way the value disagrees with the shape, or an empty list.
- *
- * Reports all of them rather than the first. Drift arrives as a batch when the
- * game renames or reworks something, and one field at a time would need one
- * session each to find the rest.
+ * Every way the value disagrees with the shape, or an empty list. All of them, since drift
+ * arrives in batches.
  */
 function checkShape(shape: Record<string, FieldSpec>, value: unknown): readonly string[] {
   if (typeof value !== 'object' || value === null) {
@@ -247,12 +211,7 @@ function checkShape(shape: Record<string, FieldSpec>, value: unknown): readonly 
   return problems;
 }
 
-/**
- * Every nested problem, each prefixed with the field it was found under.
- *
- * Reported as `stats.armor is missing` rather than as a bare `armor`, because the
- * whole value of the report is that someone can go and look at the right thing.
- */
+/** Every nested problem, prefixed with its parent field (`stats.armor is missing`). */
 function checkNested(value: unknown): readonly string[] {
   const problems: string[] = [];
   for (const [field, shape] of Object.entries(NESTED_SHAPES)) {

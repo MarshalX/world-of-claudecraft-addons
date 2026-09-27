@@ -1,15 +1,8 @@
 // The stage page: pick one addon, mount it over its scenario, screenshot it.
 //
-// `start()` is called by an entry module `loader/build-stage.mjs` generates,
-// which is what carries the scenario registry. Generated rather than committed
-// because the registry is one import per `addons/*/stage.ts` and esbuild has no
-// glob: a committed list would be a file every new addon has to remember to edit,
-// and forgetting would look exactly like a scenario that does not work.
-//
-// The addon SOURCE is fetched over http rather than bundled, over the same
-// marketplace path `tools/serve-core.ts` already serves. So editing `main.js` and
-// reloading is the whole loop, with no rebuild, which is what makes this usable
-// for working on an addon rather than only for photographing a finished one.
+// `start()` is called by an entry `loader/build-stage.mjs` generates, carrying one
+// import per `addons/*/stage.ts` (esbuild has no glob). The addon SOURCE is fetched
+// over the dev server's marketplace path, so editing `main.js` needs only a reload.
 
 import { LOADER_CSS } from '../../loader/src/runtime/ui/styles/index.ts';
 import { type AddonChoice, BARE_CLASS, createPicker, type Selection, STATUS_ID } from './picker.ts';
@@ -21,18 +14,9 @@ const INDEX_PATH = '/index.json';
 const STYLE_ID = 'woc-addons-style';
 
 /**
- * The attribute `pnpm shots` waits on, written on the root element.
- *
- * A capture has to wait for a FACT rather than for a timeout. Scenarios are
- * async and take genuinely different amounts of time: `combat-meter` waits out a
- * real 500ms repaint interval, `cooldown-bars` is done in a microtask. A capture
- * tool sleeping long enough for the slowest would still be guessing, and the way
- * guessing fails here is a photograph of a half-drawn panel that looks plausible.
- *
- * `failed` is written as well as `ready`, and that half matters more: without it
- * a scenario that threw would leave the attribute at `loading` forever and the
- * tool would report a timeout, which sends someone looking at the browser rather
- * than at the stack the page already has.
+ * The attribute `pnpm shots` waits on, written on the root element, so a capture waits
+ * for a fact instead of a timeout. Always write `failed` on an error too, or the tool
+ * reports a timeout instead of the reason the page already has.
  */
 const STAGE_STATE = 'stage';
 
@@ -44,13 +28,9 @@ interface IndexRow {
 }
 
 /**
- * Inject the loader's own stylesheet.
- *
- * The real `ui/root.ts` does this in the game and is not used here: it also
- * builds the root, which `createSharedServices` builds for itself, and two
- * elements carrying `#woc-addons` would leave the addon drawing into whichever
- * one it happened to be handed. The sheet is the same string either way, so what
- * is on screen is what a player sees.
+ * Inject the loader's own stylesheet. Not through `ui/root.ts`, which also builds a root
+ * that `createSharedServices` already builds, and two `#woc-addons` elements would split
+ * the addon's drawing between them.
  */
 function injectLoaderCss(doc: Document): void {
   const style = doc.createElement('style');
@@ -59,7 +39,6 @@ function injectLoaderCss(doc: Document): void {
   doc.head.append(style);
 }
 
-/** The addon list the local marketplace is serving right now. */
 async function readIndex(): Promise<IndexRow[]> {
   const response = await fetch(INDEX_PATH);
   if (!response.ok) {
@@ -77,7 +56,7 @@ async function text(url: string): Promise<string> {
   return await response.text();
 }
 
-/** What the URL asks for, which is what a bookmarked shot comes back to. */
+/** The selection the URL asks for, so a bookmarked shot comes back to it. */
 function readSelection(choices: readonly AddonChoice[]): Selection {
   const params = new URLSearchParams(globalThis.location.search);
   const [first] = choices;
@@ -87,12 +66,7 @@ function readSelection(choices: readonly AddonChoice[]): Selection {
   return { addon, scenario };
 }
 
-/**
- * Put the selection in the URL without adding a history entry.
- *
- * Replace rather than push: flipping through scenarios to find the one worth a
- * picture would otherwise leave a back button that walks the whole session.
- */
+/** Replace, not push, so flipping through scenarios does not fill the history. */
 function writeSelection(selection: Selection): void {
   const params = new URLSearchParams(globalThis.location.search);
   params.set('addon', selection.addon);
@@ -100,7 +74,6 @@ function writeSelection(selection: Selection): void {
   globalThis.history.replaceState(null, '', `?${params.toString()}`);
 }
 
-/** Turn the served index and the bundled scenarios into one list. */
 function choicesFrom(rows: readonly IndexRow[], registry: ScenarioRegistry): AddonChoice[] {
   return rows.map((row) => ({
     id: row.id,
@@ -117,11 +90,8 @@ function reason(err: unknown): string {
 }
 
 /**
- * Mount one selection, replacing whatever was up.
- *
- * The previous stage is disposed FIRST and unconditionally. An addon's disposal
- * bag is what takes its frames off screen, so skipping it on the way to an addon
- * that then fails to load would leave the last one's panels in the shot.
+ * Mount one selection. The previous stage is disposed FIRST and unconditionally, or a
+ * failed load would leave the last addon's panels in the shot.
  */
 async function swap(
   current: MountedStage | null,
@@ -141,28 +111,12 @@ async function swap(
 }
 
 /**
- * Wait for what the addon has asked for but not yet been given.
+ * Wait for fonts and images already in the document. `run` resolving means the addon was
+ * TOLD everything, not that it has painted: icons are usually still loading then, and a
+ * capture shows their slots collapsed, which does not look early.
  *
- * `run` resolving means the addon has been TOLD everything the scenario had to
- * say. It does not mean the panel is painted: an ability icon is an `<img>` whose
- * load starts when the row is built and finishes whenever the network gets round
- * to it, and a web font is fetched by the browser on first use.
- *
- * Measured rather than assumed. At the moment `run` resolved, `cooldown-bars` had
- * five icon elements and not one of them had loaded: every response arrived
- * afterwards. A capture taken there wrote a preview with four of its five icons
- * missing, and the slots had COLLAPSED, so it did not even read as a picture
- * taken too early. Earlier runs that looked right were the same race landing the
- * other way.
- *
- * `decode` rather than the `load` event, because it resolves when the image is
- * ready to PAINT rather than merely received. A rejection is swallowed: an
- * ability the game ships no art for legitimately 404s, and `kit/readout.ts` hides
- * that slot on error, which is the picture we want.
- *
- * Only what is in the document NOW. An addon that adds an image later, off its
- * own timer, is not waited for, and there is nothing sensible to wait for there:
- * the alternative is a settling loop with no end condition.
+ * `decode`, not `load`, because it resolves when the image can PAINT. An image an addon
+ * adds later off its own timer is not waited for.
  */
 async function painted(doc: Document): Promise<void> {
   await doc.fonts.ready;
@@ -177,29 +131,16 @@ async function painted(doc: Document): Promise<void> {
 interface PageState {
   mounted: MountedStage | null;
   pending: Promise<unknown>;
-  /**
-   * Whether the player asked for the arrange mode, which every later mount inherits.
-   *
-   * On the page rather than in the mount, because a mount is thrown away on every
-   * scenario change and the answer is about the person at the keyboard: somebody who
-   * unlocked a panel to move it has not asked to be locked out by picking another
-   * scenario to look at.
-   */
+  /** The arrange mode, held on the page so every later mount inherits it. */
   arranging: boolean;
 }
 
 /**
- * Show one selection, after whatever is already in flight.
+ * Show one selection after whatever is in flight. Chained onto `pending` so two quick
+ * picks cannot race and let the older one win.
  *
- * Chained onto `pending` rather than awaited from the handler, because a picker
- * is faster than a fetch: choosing two addons quickly would otherwise have two
- * mounts in flight, and whichever finished last would win, which is not always
- * the one that was asked for last.
- *
- * `catch` clears `mounted` rather than leaving the failed stage in it. `swap`
- * disposes the previous one before it can throw, so on this path there is
- * genuinely nothing on screen, and remembering a stage that is gone would mean
- * disposing it twice on the next change.
+ * `catch` clears `mounted`: `swap` already disposed the previous stage, and keeping it
+ * would dispose it twice on the next change.
  */
 function applySelection(state: PageState, choice: AddonChoice, selection: Selection): void {
   const doc = globalThis.document;
@@ -208,9 +149,6 @@ function applySelection(state: PageState, choice: AddonChoice, selection: Select
     .then(async () => {
       state.mounted = await swap(state.mounted, choice, selection.scenario);
       state.mounted.stage.arrange(state.arranging);
-      // The scenario's own `run` is awaited inside `mountScenario`, so the panel
-      // now holds what it describes. `painted` is the second half of that claim:
-      // holding it and having drawn it are not the same moment.
       await painted(doc);
       doc.documentElement.dataset[STAGE_STATE] = 'ready';
       return '';
@@ -223,24 +161,9 @@ function applySelection(state: PageState, choice: AddonChoice, selection: Select
 }
 
 /**
- * Bring the page up.
- *
- * The first mount is driven by calling the same handler the picker calls, rather
- * than by dispatching a synthetic change at a `<select>`. Faking the event would
- * run the addon-select handler, which resets the scenario list to its first entry
- * and would quietly ignore the `scenario` the URL asked for.
- */
-/**
- * Draw one addon's preview sheet and nothing else.
- *
- * A separate route rather than a mode of the picker, because it is a separate
- * page: no chrome, no selection, no addon mounted in THIS document at all. Every
- * panel is an iframe running the ordinary picker-less stage, so the loader code
- * under the picture is the same code either way.
- *
- * The loader stylesheet is deliberately not injected here. Nothing in this
- * document is a loader surface, and the captions take the game's faces from the
- * theme the page already links.
+ * Draw one addon's preview sheet: no chrome and no addon in THIS document, each panel
+ * an iframe running the ordinary stage. The loader stylesheet is deliberately not
+ * injected, since nothing here is a loader surface.
  */
 async function startSheet(doc: Document, registry: ScenarioRegistry, addon: string): Promise<void> {
   const panels = (registry.get(addon) ?? []).filter((scenario) => scenario.preview === true);
@@ -251,13 +174,8 @@ async function startSheet(doc: Document, registry: ScenarioRegistry, addon: stri
 }
 
 /**
- * Put a failure where a reader can find it, on either route.
- *
- * The picker builds a status line as part of its chrome and the sheet has no
- * chrome at all, so before this the sheet had nowhere to say what went wrong.
- * `pnpm shots` reads one selector whichever page it opened, and it used to wait
- * on an element the sheet never creates: a failed sheet therefore reported a
- * locator timeout rather than its own reason, and the reason was already known.
+ * Put a failure in the status element on either route, creating it on the sheet, which
+ * has no chrome. `pnpm shots` reads this one selector whichever page it opened.
  */
 function reportFailure(doc: Document, message: string): void {
   const status = doc.getElementById(STATUS_ID) ?? doc.createElement('div');
@@ -272,8 +190,6 @@ async function run(registry: ScenarioRegistry): Promise<void> {
   const doc = globalThis.document;
   const params = new URLSearchParams(globalThis.location.search);
   if (params.get('sheet') === '1') {
-    // The same two states the picker route writes, so a capture waits on one
-    // contract whichever page it opened.
     await startSheet(doc, registry, params.get('addon') ?? '');
     doc.documentElement.dataset[STAGE_STATE] = 'ready';
     return;
@@ -311,29 +227,20 @@ async function run(registry: ScenarioRegistry): Promise<void> {
     },
   });
   doc.body.prepend(picker.el);
-  // `?bare=1` is what a capture opens with. The key and the button are for a
-  // person at the page; a headless run has neither, and navigating to a URL that
-  // is already in the right state beats scripting a keystroke to get there.
+  // `?bare=1` is what a headless capture opens with, instead of scripting the key.
   if (params.get('bare') === '1') {
     doc.documentElement.classList.add(BARE_CLASS);
   }
   const initial = readSelection(choices);
   picker.show(initial);
+  // Called directly: a synthetic change on the addon select would reset the scenario
+  // to the first one and ignore the URL's.
   showSelection(initial);
 }
 
 /**
- * Bring the page up, and report a failure rather than throwing one away.
- *
- * The wrapper exists because the two halves of reporting used to fight. The
- * generated entry caught what `start` threw and wrote it into `document.body`,
- * which REPLACED the body's children and so deleted the status line the page had
- * just written: a failed sheet said `no reason given` while holding the reason.
- * Nothing outside this file needs a catch now, and there is one place that knows
- * how to say what went wrong.
- *
- * It covers the whole of startup, not only the routes: `readIndex` throwing on
- * the picker route is a failure before there is any chrome to report it in.
+ * Bring the page up. Every startup failure is reported here, the one place that knows
+ * how; a caller must not catch and rewrite `document.body`, which deletes the status.
  */
 async function start(registry: ScenarioRegistry): Promise<void> {
   const doc = globalThis.document;

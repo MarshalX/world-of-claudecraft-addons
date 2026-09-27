@@ -1,17 +1,8 @@
-/* The dropdown, which is kit/picker.ts: a button that opens the loader's own menu.
- *
- * Its own sheet rather than a block in panes.css, for the reason the bar and the tile and the
- * menu have theirs: it is a widget somebody assembles a screenful of, and panes.css is the
- * manager's own furniture. The rules are few because most of the control is already a field:
- * the button wears `woc-input`, so its height, its border and its colours are the text field's
- * and there is no second set of them to keep in step.
- *
- * The menu half of it is menu.css, including the mark on the chosen row.
+/* The dropdown (kit/picker.ts). The button wears `woc-input`, so it takes the text field's
+ * height, border and colours. The menu half is menu.css.
  */
 
-/* The dropdown's trigger: a field that opens a menu, so it wears the field class and adds
-   what a button needs on top of it. `justify-content: space-between` is what puts the caret at
-   the far edge however wide the control is, which is the game's own `.ui-dd-btn` layout. */
+/* The trigger, with the caret at the far edge as in the game's own `.ui-dd-btn`. */
 #woc-addons .woc-picker {
   display: inline-flex;
   align-items: center;
@@ -21,8 +12,7 @@
   cursor: pointer;
 }
 
-/* The value takes the room and gives it up first: a long option ellipsises rather than
-   pushing the caret out of the control or widening the row it sits in. */
+/* A long value ellipsises rather than pushing the caret out or widening the row. */
 #woc-addons .woc-picker-value {
   overflow: hidden;
   text-overflow: ellipsis;

@@ -1,34 +1,14 @@
-/* The touch floor: 16px type on a 40px target, for a coarse pointer only.
+/* The touch floor: 16px type on a 40px target, for a coarse pointer ONLY, as the game does
+ * it. Do not apply it unconditionally: the game's desktop panels run 11px to 13px.
  *
- * Last of the sheets runtime/ui/styles/index.ts concatenates, and it has to be
- * last. Several of the rules it overrides are density variants at (1,2,0), so
- * matching that weight and winning on source order is what makes the floor reach
- * a compact frame as well as a comfortable one. A phone does not care which
- * density an addon author picked.
+ * It must be the LAST sheet in runtime/ui/styles/index.ts: it matches the (1,2,0) density
+ * variants and wins on source order, so it reaches compact frames too.
  *
- * This is the game's own arrangement rather than an invention, and copying it is
- * the whole point of the file. `base.css` in the game floors every focusable
- * control at 16px inside `@media (pointer: coarse)`, with a comment recording why
- * the number is 16 and not something rounder: iOS Safari auto-zooms the page
- * whenever a focused text-entry control renders below 16px, it ignores the
- * viewport scale-lock in the meta tag, and 16px is the documented threshold.
- * `components.css` gives its custom dropdown rows their 40px in the same query,
- * with its own note that the global coarse floor covers input/textarea/select and
- * therefore misses a trigger that replaces a native select. This kit has exactly
- * that trigger, in kit/picker.ts, so it is named here for the same reason.
+ * 16px is iOS Safari's auto-zoom threshold for a focused text control (it ignores the viewport
+ * scale-lock); 40px is the tap target. They are separate constraints, so both are set.
  *
- * The 40px is the tap target and the 16px is the zoom threshold; they are two
- * different constraints that happen to arrive together, which is why a rule here
- * sets both rather than one being derived from the other.
- *
- * The rules the loader drew before this existed applied these numbers
- * UNCONDITIONALLY, which is what made every loader panel about a third larger
- * than the game window beside it. See the note above the compact block in
- * chrome.css for how that read on screen and how it was found.
- *
- * Selector lists are written out per element rather than collapsed with :is(),
- * because the build's scoping guard splits a list on commas and reads each half
- * on its own: every one of them has to carry #woc-addons itself.
+ * Selector lists are written out per element, not collapsed with :is(): the build's scoping
+ * guard splits a list on commas, so every part has to carry #woc-addons itself.
  */
 
 @media (pointer: coarse) {
@@ -47,9 +27,7 @@
     padding: 4px 8px;
   }
 
-  /* The picker is the custom trigger the game's own note is about: it replaces a
-     native select, so the global coarse floor for form controls never reaches it
-     and it has to be named. */
+  /* The picker replaces a native select, so a form-control floor would miss it. */
   #woc-addons .woc-picker,
   #woc-addons .woc-menu-item {
     font-size: 16px;

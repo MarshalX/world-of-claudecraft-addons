@@ -1,9 +1,5 @@
-/* Tables, code blocks and the addon card.
- *
- * Split out of components.css, which crossed 300 lines while the controls and
- * callouts alone were in it. The line is drawn where the design draws it: these
- * three are boxes that hold content, everything left in components.css is
- * something a person operates or reads as a single mark.
+/* Tables, code blocks and the addon card: boxes that hold content. Controls and
+ * single marks are in components.css.
  */
 
 .table-wrap {
@@ -14,8 +10,7 @@
   margin-bottom: 24px;
 }
 
-/* Horizontal scroll is on the wrapper, so a wide manifest table scrolls inside
-   its own box rather than making the whole page scroll sideways on a phone. */
+/* Scroll on the wrapper, so a wide table never scrolls the page sideways. */
 .table-scroll {
   overflow-x: auto;
 }
@@ -34,8 +29,7 @@
   letter-spacing: 0.05em;
   padding: 12px 14px;
   background: var(--panel-2);
-  /* The gold rule under the head. Hairlines between rows, and no zebra striping:
-     the panel fill is already a tint and a second one reads as noise. */
+  /* No zebra striping: the panel fill is already a tint. */
   border-bottom: 1px solid var(--border);
 }
 
@@ -104,8 +98,7 @@
   color: var(--text);
 }
 
-/* Shiki emits both themes as custom properties on one set of spans, so the theme
-   switch costs no client JavaScript and no second copy of the markup. The three
+/* Shiki emits both themes as custom properties on one set of spans. The three
    selectors mirror tokens.css: default dark, explicit choice, system preference. */
 .code pre span {
   color: var(--shiki-dark);
@@ -137,9 +130,8 @@
   padding: 18px;
 }
 
-/* The tag filter hides a card with the `hidden` attribute, whose user-agent rule
- * is `display: none` at zero specificity: the grid above it wins, and without
- * this the filter would set an attribute that changes nothing on screen. */
+/* The user-agent `[hidden]` rule has zero specificity and loses to the grid
+ * above, so without this the tag filter changes nothing on screen. */
 .addon-card[hidden] {
   display: none;
 }
@@ -164,10 +156,8 @@
   color: var(--muted);
 }
 
-/* Declared permissions are literal identifiers a reader may type into a manifest,
- * so they are NOT uppercased the way the eyebrow above them is. Same reason the
- * install button's filename lives in the mono line rather than in the Cinzel
- * label: a case treatment applied to a literal makes it stop being the literal. */
+/* Permissions are literals a reader types into a manifest, so they are NOT
+ * uppercased like the eyebrow above them. */
 .addon-declares {
   font-family: var(--mono);
   font-size: 12.5px;
@@ -197,11 +187,9 @@
   padding: 3px 8px;
 }
 
-/* Real addon code is formatted to Biome's 100-column width, which is wider than
- * the docs prose column. Horizontal scroll is the correct behaviour for code
- * (wrapping it would break the alignment that makes it readable), so the job is
- * to make the scroll VISIBLE rather than to look clipped: a styled scrollbar the
- * reader can see, and one step down in size to reduce how often it is needed. */
+/* Addon code is 100 columns wide, wider than the prose column. Code scrolls
+ * instead of wrapping, so the scrollbar is styled to be visible and the size steps
+ * down one to need it less. */
 .docs-prose .code pre {
   font-size: 12.5px;
   scrollbar-width: thin;
@@ -221,10 +209,8 @@
   background: transparent;
 }
 
-/* A card's heading is now a link to that addon's own page. It carries no
- * underline because the whole heading is the target and a Cinzel line under a
- * display face reads as a rule rather than as a link; the hover colour is what
- * says it is one. */
+/* A card's heading links to the addon's page. No underline, which under Cinzel
+ * reads as a rule; the hover colour marks it as a link. */
 .addon-card h2 a {
   text-decoration: none;
   color: inherit;
@@ -234,8 +220,7 @@
   color: var(--accent-ink);
 }
 
-/* What the card says about configuration: a count, with the settings themselves
- * on the addon's page. See tools/site/pages/addons.ts. */
+/* A settings count; the settings themselves are on the addon's page. */
 .addon-config {
   font-family: var(--mono);
   font-size: 12.5px;

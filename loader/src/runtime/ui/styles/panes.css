@@ -1,8 +1,5 @@
-/* The manager's own content: headings, notes, rows, controls, and the log tail.
- *
- * Second of the three sheets runtime/ui/styles/index.ts concatenates. The shared
- * .woc-btn lives here rather than with the chrome because it is a labelled
- * control the panes are made of, not part of a window's frame.
+/* The manager's own content: headings, notes, rows, controls, and the log tail. Also the
+ * shared .woc-btn, .woc-input and .woc-field that addons reuse.
  */
 
 #woc-addons .woc-subhead {
@@ -55,8 +52,7 @@
   color: var(--gold, rgb(255 209 0));
 }
 
-/* The run state, which is not the enable state, so it reads as an annotation on
-   the name rather than as another control next to the toggle. */
+/* The run state, not the enable state, so it reads as an annotation on the name. */
 #woc-addons .woc-badge {
   border: 1px solid var(--color-border-default, rgb(78 61 29));
   border-radius: var(--radius-sm, 4px);
@@ -156,9 +152,7 @@
   flex-shrink: 0;
 }
 
-/* The shared button. .woc-close in chrome.css stays separate: it is a glyph in
-   a square, not a labelled control, and sharing padding with this would stretch
-   it. */
+/* The shared button. .woc-close in chrome.css stays separate: it is a glyph in a square. */
 #woc-addons .woc-btn {
   background: rgb(255 255 255 / 6%);
   border: 1px solid var(--color-border-default, rgb(78 61 29));
@@ -166,10 +160,8 @@
   color: var(--color-text-light, rgb(240 235 216));
   cursor: pointer;
   font-family: inherit;
-  /* The game's own `.btn`: 12.5px on six pixels of vertical padding, no minimum
-     height. Rounded up to 13px because this one also carries a monospaced variant
-     (`.woc-combo`), where the half pixel lands differently. The touch floor these
-     used to carry unconditionally is in touch.css. */
+  /* The game's own desktop `.btn` is 12.5px on 6px of padding; 13px here, since the monospaced
+     `.woc-combo` variant renders the half pixel differently. The touch floor is in touch.css. */
   font-size: 13px;
   padding: 6px 14px;
   white-space: nowrap;
@@ -190,8 +182,7 @@
   border-color: var(--color-border-focus, rgb(200 168 56));
 }
 
-/* The combo button is a value the player reads as much as a control they press,
-   so it is monospaced to keep 'Alt+D' and 'Ctrl+Shift+F' the same shape. */
+/* The combo button is a value as much as a control, so it is monospaced. */
 #woc-addons .woc-combo {
   font-family: var(--font-mono, ui-monospace, monospace);
   min-width: 120px;
@@ -221,9 +212,7 @@
   min-height: 24px;
 }
 
-/* 12px, which is what the game labels its own fields at (`.delve-companion-label`,
-   `.mt-label`): a label names the control under it and should not compete with the
-   value in it. */
+/* 12px, as the game labels its own fields (`.delve-companion-label`, `.mt-label`). */
 #woc-addons .woc-field-label {
   color: var(--color-text-muted, rgb(153 141 106));
   font-size: 12px;
@@ -239,32 +228,15 @@
   font-size: 13px;
   min-height: 28px;
   padding: 5px 8px;
-  /* Without this an <input> in a flex column stretches to the widest sibling
-     and then refuses to shrink when the window is narrowed. */
+  /* Or an <input> in a flex column refuses to shrink when the window narrows. */
   min-width: 0;
 }
 
-/* A field JOINS its focus ring rather than sitting inside a second one.
-   The kit's general :focus-visible rule holds the ring 2px clear of the
-   element, which is right for a button and wrong for a control that already
-   has a border: the dim border then reads as a second, competing line just
-   inside the bright one. The game draws exactly this distinction and tightens
-   the ring on its own text fields (.mail-field and .cal-form in components.css),
-   to 1px there because those fields sit in a padded panel.
-
-   Ours do not. A field fills the width of a frame body, which scrolls and
-   therefore clips at its padding box, so at any positive offset the ring loses
-   its left and right strokes entirely and the field reads as having grown a
-   broken second border. See the note beside the scroll-container rule in
-   chrome.css, which this has to restate: that rule is the same weight and an
-   earlier sheet, so a positive offset here would beat it and this is the one
-   control the whole thing was reported against.
-
-   -2px puts the ring flush with the border box, over the border rather than
-   outside it, so the two are one 2px line instead of two thin ones with a gap
-   between them. The border is still recoloured, because an outline's corner
-   radius shrinks with its offset and a dim arc would otherwise show at each
-   corner of the ring. */
+/* A field JOINS its focus ring rather than sitting inside a second one, as the game's own text
+   fields do. -2px lays the ring over the border as one line; a positive offset would also be
+   clipped by the scrolling frame body (see the scroll-container rule in chrome.css, which
+   this restates at the same weight). The border is recoloured too, since the outline's corner
+   radius shrinks with its offset. */
 #woc-addons .woc-input:focus-visible {
   outline-offset: -2px;
   border-color: var(--color-border-focus, rgb(200 168 56));
@@ -289,8 +261,7 @@
 }
 
 #woc-addons .woc-log-line {
-  /* A logged object is one long line; wrapping beats a horizontal scrollbar
-     inside a pane that already scrolls vertically. */
+  /* Wrap rather than add a horizontal scrollbar inside a vertically scrolling pane. */
   overflow-wrap: anywhere;
   white-space: pre-wrap;
 }
@@ -303,8 +274,7 @@
   color: var(--color-text-error, rgb(255 143 133));
 }
 
-/* The arrange-your-UI switch at the top of the Installed pane.
-   Its own class rather than `.woc-row`, which means an installed addon. */
+/* The arrange-mode switch atop the Installed pane; not `.woc-row`, which is an installed addon. */
 #woc-addons .woc-unlock-row {
   display: flex;
   align-items: center;

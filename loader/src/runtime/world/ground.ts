@@ -1,27 +1,9 @@
-// The ground around the player: what is lethal on it, and what died on it.
+// The ground around the player: what is lethal on it, and what died on it. The loot rights rule
+// here is a REIMPLEMENTATION of a game rule; the death zones are a client-side event mirror.
 //
-// Split from `derived.ts`, which holds the three readings that existed at
-// v1.1.0. These mix two subjects with those: the loot rights rule is a
-// REIMPLEMENTATION of a game rule rather than a reading of a game field, and the
-// death zone list is a client-side event mirror rather than snapshot state.
-//
-// Two claims this module rests on.
-//
-// The game's own `riftBossDeathZones()` is SAFE to call: on the online client it
-// is a read over its own array pushing into a fresh local, with no splice, no
-// delete and no assignment to the field, and the game's renderer calls it on the
-// same frames. That is categorically unlike `drainEvents()`, which returns the
-// queue and empties it. The OFFLINE sim's implementation returns its live array
-// BY REFERENCE, which is why `toDeathZone` copies rather than narrows.
-//
-// What publishing the zones buys is smaller than it looks, and the honest
-// version is worth stating because the overstated one is easy to repeat. The
-// client does NOT hold a zone it never saw spawn: its mirror starts empty and is
-// only ever appended to from the spawn event, and the game's own comment accepts
-// that late joiners miss an in-flight zone. So this read does not let a player
-// who arrives mid-fuse see the ring. It lets an addon enabled or restarted
-// mid-fight inherit every zone the CLIENT has collected this session, which is a
-// real gain over an addon keeping its own list from the events and nothing more.
+// The game's `riftBossDeathZones()` is safe to call: online it only reads, unlike
+// `drainEvents()`, which empties its queue. The offline sim returns its live array by reference,
+// which is why `toDeathZone` copies.
 
 import { fieldArray, fieldNumber, fieldValue, isRecord } from '../net/frames.ts';
 import type { LootSlot } from './corpse-types.ts';
@@ -30,14 +12,9 @@ import type { Entity } from './game-types.ts';
 /**
  * One lethal ring on a rift boss floor, counting down to its detonation.
  *
- * Deliberately NOT a `Hazard`. A hazard's geometry rides the snapshot and the
- * server keeps it; a death zone is mirrored on the client from a spawn event and
- * counted down on the client's own clock, and the mirror carries no id, no inner
- * radius and no original duration. It is also INCOMPLETE in a way a hazard is
- * not: the client only ever learns about a zone from an event it was in range
- * for, so a zone placed before you entered range is not in this list and never
- * will be. The game accepts that for its own ring rendering; a display built on
- * this has to accept it too.
+ * Not a `Hazard`: it is mirrored on the client from a spawn event, with no id, inner radius or
+ * original duration. It is also incomplete: a zone that spawned before you were in range is
+ * never in this list.
  */
 interface DeathZone {
   x: number;
@@ -64,35 +41,20 @@ interface CorpseView {
   /** The owner lock has lapsed, so anyone may take the shared pool. */
   ffa: boolean;
   /**
-   * The loot window has elapsed, so NOBODY can open this corpse any more.
-   *
-   * New at game 0.40.1, and it is the one arm of the game's own rule that has no
-   * rights in it: `corpseLootAvailability` returns before it looks at the tap
-   * lock at all. The corpse is still in `world.entities` and still carries its
-   * whole `loot` record, so this is the only thing that distinguishes it from a
-   * corpse you could walk up to and open, and the game's own renderer has
-   * already dropped it from the pickable view by the time this is true. `mine`
-   * is empty and `copper` is 0 whenever it is set; `all` still reports what the
-   * wire carried, because that is what `all` is for.
+   * The loot window has elapsed, so NOBODY can open this corpse, whatever the rights. The corpse
+   * stays in `world.entities` with its whole `loot` record, so this is the only signal. `mine`
+   * is empty and `copper` 0 when set; `all` still reports what the wire carried.
    */
   decayed: boolean;
   /**
-   * The player who already took the profession harvest, null when nobody has.
-   *
-   * Whether the corpse is harvestable AT ALL is bundled content with no served
-   * manifest, so this says who claimed it and never whether there was anything
-   * to claim.
+   * The player who already took the profession harvest, null when nobody has. Says nothing about
+   * whether the corpse was harvestable at all.
    */
   harvestClaimedBy: number | null;
 }
 
 /**
- * Who is looking, for the rights rule.
- *
- * Not published: it is an argument the backend threads from the world object to
- * the projection. The party roster is the LOCAL player's, used only when it
- * contains the tapper, on the game's own grounds that party membership is
- * symmetric.
+ * Who is looking, for the rights rule. Internal: the backend threads it to the projection.
  */
 interface LootViewer {
   pid: number | null;
@@ -107,27 +69,15 @@ interface DeathZoneSource {
 const NO_VIEWER: LootViewer = Object.freeze({ pid: null, partyPids: Object.freeze([]) });
 
 /**
- * An absent countdown is a lock still HELD, which is the game's own default.
- *
- * `lootFfaTimer` is not published, because online it only ever holds 0 or this:
- * the server owns the real countdown and sends a flag, and the client expands it
- * back out. So it is read here rather than exposed, and its absence has to read
- * as "locked" or an unread corpse would offer its shared pool to anybody.
+ * An absent `lootFfaTimer` is a lock still HELD, or an unread corpse would offer its shared
+ * pool to anybody. Online the field is a flag expanded to a number, so it is read, not published.
  */
 const LOCK_HELD = Number.POSITIVE_INFINITY;
 
 /**
- * An unreadable corpse timer is a corpse still INSIDE its window, which is the
- * safe direction rather than the game's own default.
- *
- * `corpseTimer` is not published, for the reason `lootFfaTimer` above is not:
- * online it is a synthetic sentinel rather than a countdown, 0 once the server's
- * one-shot `cd` flag has fired and 1 while the window is open, and a published
- * field named for seconds that only ever holds 0 or 1 is a field whose name
- * lies. The client initialises it to 0, which reads as DECAYED, so an absent
- * reading is deliberately not treated as the game treats it: guessing decayed
- * would blank a live corpse's loot, and guessing open leaves the display exactly
- * as it was before this rule existed.
+ * An unreadable `corpseTimer` is a corpse still INSIDE its window. This deliberately differs
+ * from the client's default of 0, which reads as decayed and would blank a live corpse's loot.
+ * Online the field is a 0-or-1 sentinel despite its name, so it is read, not published.
  */
 const WINDOW_OPEN = 1;
 
@@ -143,13 +93,8 @@ function deathZoneSource(world: unknown): DeathZoneSource | null {
 }
 
 /**
- * One ring, copied field by field, or null for an entry that is not one.
- *
- * The COPY is the point rather than the validation: the offline sim hands back
- * its own live array, so passing an entry through would hand an addon the sim's
- * internal state to mutate. All four fields are required because a zone's
- * position is its only identity, and defaulting a missing coordinate to 0 would
- * put a ring at the world origin rather than admitting the entry is unreadable.
+ * One ring, copied field by field so no addon can mutate the offline sim's live array, or null.
+ * Every field is required: defaulting a coordinate to 0 would put a ring at the world origin.
  */
 function toDeathZone(entry: unknown): DeathZone | null {
   const x = fieldNumber(entry, 'x');
@@ -175,13 +120,8 @@ function partyPidsOf(world: unknown): readonly number[] {
 }
 
 /**
- * The game's own `hasSharedLootRights`, reimplemented rather than imported.
- *
- * The roster is the LOCAL player's and is consulted only when it CONTAINS the
- * tapper, which is the game's own shortcut and its own justification: party
- * membership is symmetric, so a roster holding the tapper is the tapper's roster
- * too. A roster the tapper is not in grants nothing, which is what stops one
- * party's kill from opening to a bystander who happens to be grouped.
+ * The game's `hasSharedLootRights`, reimplemented. The LOCAL roster grants rights only when it
+ * contains the tapper, since party membership is symmetric.
  */
 function hasSharedRights(viewer: LootViewer, tappedById: number | null, ffa: boolean): boolean {
   if (ffa || tappedById === null) {
@@ -197,12 +137,8 @@ function hasSharedRights(viewer: LootViewer, tappedById: number | null, ffa: boo
 }
 
 /**
- * The three arms of the game's own loot loop, in the game's own order.
- *
- * A personal slot answers for itself and ignores the tap lock entirely, an
- * open-to-all slot is free to anyone, and everything else is the shared pool the
- * lock governs. An EMPTY `personalFor` takes the first arm and yields nothing,
- * which is the game's behaviour too: an array is truthy there whatever is in it.
+ * The three arms of the game's loot loop, in its order: personal, open-to-all, shared pool. An
+ * EMPTY `personalFor` still takes the first arm and yields nothing, as in the game.
  */
 function isTakeable(slot: unknown, pid: number | null, sharedRights: boolean): boolean {
   const personalFor = fieldValue(slot, 'personalFor');
@@ -217,11 +153,7 @@ function isTakeable(slot: unknown, pid: number | null, sharedRights: boolean): b
 }
 
 /**
- * The game's own `corpseHasDecayed`, over the same pair it reads.
- *
- * Both halves are required. `dead` alone is every corpse, and the timer alone is
- * 0 on a living mob too, since the client builds every entity with it at 0 and
- * only the dynamic decode ever writes it.
+ * The game's `corpseHasDecayed`. Both halves are required: the timer is also 0 on a living mob.
  */
 function hasDecayed(entity: unknown): boolean {
   if (fieldValue(entity, 'dead') !== true) {
@@ -264,12 +196,8 @@ function viewerOf(world: unknown): LootViewer {
 }
 
 /**
- * Every lethal ring down on this floor, or null when the game cannot be asked.
- *
- * Null and an empty array are different answers, and neither is "not in a rift":
- * the reader answers an empty list outside one, so empty means nothing is down
- * and null means the member the loader reads has gone, which is the drift a
- * diagnostics pane should show rather than a display quietly staying blank.
+ * Every lethal ring down on this floor. Empty means nothing is down (including outside a rift);
+ * null means the game member is gone or threw, which is drift.
  */
 function deathZonesOf(world: unknown): readonly DeathZone[] | null {
   const source = deathZoneSource(world);
@@ -280,8 +208,7 @@ function deathZonesOf(world: unknown): readonly DeathZone[] | null {
   try {
     answer = source.riftBossDeathZones();
   } catch {
-    // A future update can leave something callable in place that throws when
-    // called. The cost of that has to be a missing reading, not a dead frame.
+    // A game member can stay callable and throw; that must cost a reading, not a frame.
     return null;
   }
   if (!Array.isArray(answer)) {
@@ -298,12 +225,8 @@ function deathZonesOf(world: unknown): readonly DeathZone[] | null {
 }
 
 /**
- * One corpse's contents filtered to what the viewer could take, or null.
- *
- * Null for anything carrying no `loot` record, which is the whole test for "is
- * this a corpse": the wire ships a loot list for a lootable MOB only, while
- * `lootable` itself is set on every ground pickup, dungeon exit and rift portal,
- * so filtering on that flag would report every door in the instance.
+ * One corpse's contents filtered to what the viewer could take, or null for anything with no
+ * `loot` record. That record is the corpse test: `lootable` is also set on pickups and doors.
  */
 function corpseViewOf(
   entity: Entity | null,
@@ -333,12 +256,8 @@ function corpseViewOf(
 }
 
 /**
- * Every lootable corpse in scope, keyed by entity id.
- *
- * Built fresh per call rather than sharing one map, for the reason `emptyCasts`
- * gives: a shared map is a write from one addon landing in what every other
- * addon reads. The per-entity cost of the walk is one null check, which is what
- * `castsOf` already pays; only an entity that passes it has its slots filtered.
+ * Every lootable corpse in scope, keyed by entity id. Built fresh per call: a shared map would
+ * let one addon's write land in what every other addon reads.
  */
 function corpsesOf(
   entities: ReadonlyMap<number, Entity>,

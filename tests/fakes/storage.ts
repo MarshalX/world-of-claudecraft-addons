@@ -1,10 +1,5 @@
-// An in-memory stand-in for the storage hub.
-//
-// Behaves the way the real one does in the detail that matters to every store
-// built on it: a write is echoed back as a change, because the host emits
-// storage.changed for local writes as well as remote ones. A fake that did not
-// echo would let a store pass while relying on its own optimistic update, and
-// the cross-tab path would be untested.
+// An in-memory storage hub. Like the real one it echoes a local write back as a change, so a
+// store cannot pass by relying on its own optimistic update.
 
 import type { StorageChangeHandler, StorageHub } from '../../loader/src/runtime/storage/hub.ts';
 
@@ -31,13 +26,7 @@ function createFakeStorage(options?: { connected?: boolean }): FakeStorage {
     }
   };
 
-  /**
-   * Reject the way the real hub does, rather than throwing.
-   *
-   * Written as a promise-returning function rather than an async one on purpose:
-   * a synchronous throw here would be caught by a caller that a real bridge
-   * rejection would not reach, which is the exact difference AGENTS.md calls out.
-   */
+  /** Rejects rather than throws, as a real bridge call does. */
   const guard = (): Promise<void> => {
     if (!connected) {
       return Promise.reject(

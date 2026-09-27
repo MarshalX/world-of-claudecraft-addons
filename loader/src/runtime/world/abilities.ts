@@ -1,22 +1,10 @@
-// The player's own spellbook, projected out of the game's resolved ability list.
+// The player's own spellbook, projected out of `world.known` (the game's resolved abilities,
+// each a content-table `def` plus the values talents resolved to). The shape is the loader's.
 //
-// Like `derived.ts` and unlike `game-types.ts`, the shape here is the LOADER'S
-// own: the claim is only about the fields it is computed from. Those live on
-// `world.known`, an array of the game's ResolvedAbility, each carrying the
-// content-table `def` plus the values talents actually resolved to.
-//
-// This exists because an ability's id and its DISPLAY NAME have diverged and
-// nothing else bridges them. `arcane_shot` is shown everywhere in the game as
-// "Fell Shot". Skill art is filed under the id; combat events carry the name. So
-// an addon holding one could not get the other, which left the two shipped
-// addons with half each: a meter could not draw ability art, and a cooldown
-// display could only title-case an id and hope. `known` carries both, verified
-// against a live client, and the join is exact in both directions.
-//
-// Two limits that belong in every consumer's head. It covers the player's OWN
-// known kit, so a mob's ability name resolves to nothing. And `def.name` is the
-// sim's string rather than a localized one, which is exactly why the join works:
-// combat events carry that same string whatever locale the client renders in.
+// It is the only exact join between an ability id (what skill art is filed under) and its
+// display name (what combat events carry): `arcane_shot` is shown as "Fell Shot". It covers the
+// player's OWN kit only, so a mob's ability name resolves to nothing. `def.name` is the sim's
+// unlocalized string, which is why it matches combat events in any locale.
 
 import { titleCase } from '../../shared/fmt.ts';
 import { fieldNumber, fieldString, fieldValue } from '../net/frames.ts';
@@ -88,12 +76,8 @@ function toAbility(entry: unknown): AbilityInfo | null {
   if (fieldValue(def, 'passive') === true) {
     info.passive = true;
   }
-  // `charges` is the RESOLVED total and `bonusCharges` is deliberately NOT added to
-  // it. The game keeps the talent-added figure as a separate field, which reads like
-  // something to sum, and it is not: a live hunter carrying the charge talent showed
-  // `charges: 2` with `bonusCharges: 1` and no `def.maxCharges`, which the game
-  // documents as a base of one. So the base and the bonus are already folded in, and
-  // adding the bonus again would publish three uses for a two-use pool.
+  // `charges` is the RESOLVED total: `bonusCharges` is already folded in, so adding it again
+  // would publish three uses for a two-use pool.
   const charges = fieldNumber(entry, 'charges') ?? fieldNumber(def, 'maxCharges');
   if (charges !== null) {
     info.charges = charges;
@@ -102,10 +86,7 @@ function toAbility(entry: unknown): AbilityInfo | null {
   if (auraDuration !== null) {
     info.auraDuration = auraDuration;
   }
-  // Both optional and both absent rather than 0 when the ability has no modifier,
-  // for the reason `auraDuration` is: absent and zero are different answers, and a
-  // published 0 would read as "this ability generates no bonus threat" where the
-  // truth is that nobody said.
+  // Absent rather than 0 when the ability has no modifier: a 0 would claim something nobody said.
   const threatFlat = fieldNumber(entry, 'threatFlat');
   if (threatFlat !== null) {
     info.threatFlat = threatFlat;
@@ -150,18 +131,12 @@ function buildIndex(entries: readonly unknown[]): AbilityIndex {
 /**
  * One ability the player knows.
  *
- * `cost`, `castTime` and `cooldown` are the RESOLVED values, not the content
- * table's: talents modify them, and a live hunter's `arcane_shot` reported a 5.4
- * second cooldown against the def's 6. Publishing the def's numbers would be
- * quietly wrong for anyone who has spent a talent point.
+ * `cost`, `castTime` and `cooldown` are the RESOLVED values after talents, not the content
+ * table's.
  *
- * There is no `icon`. Art needs a per-class manifest and is therefore async, and
- * resolving it here would couple the world surface to the ui one. Join the two
- * yourself: `ui.icon.ability(info.id, world.player.templateId)`.
- *
- * There is no `description` either. The authored text carries `$d` style
- * placeholders the game substitutes at render time, so it would arrive as a
- * template rather than as a sentence.
+ * No `icon`: art is async per-class, so join it yourself with
+ * `ui.icon.ability(info.id, world.player.templateId)`. No `description`: the authored text is a
+ * template with `$d` placeholders the game fills at render time.
  */
 export interface AbilityInfo {
   id: string;
@@ -183,10 +158,8 @@ export interface AbilityInfo {
   /** Stored uses, for the few abilities that pool them. Absent when it is one. */
   charges?: number;
   /**
-   * Seconds the aura it applies lasts, rank-resolved and pre-talent.
-   *
-   * Absent when it applies none, when it applies several of different lengths,
-   * and for a combo finisher, whose length has no value until the cast.
+   * Seconds the aura it applies lasts, rank-resolved and pre-talent. Absent when it applies
+   * none, several of different lengths, or is a combo finisher.
    */
   auraDuration?: number;
   /** Bonus threat added on a successful use, flat. Absent when the ability adds none. */
@@ -196,9 +169,8 @@ export interface AbilityInfo {
   /**
    * How many charge stages a hold-to-charge ability has. Absent when it has none.
    *
-   * The count, not the live stage: the stage is on no wire, and the game derives
-   * it as `min(stages, floor(progress * stages) + 1)` over
-   * `(castTotal - castRemaining) / castTotal`, which ride every entity record.
+   * The live stage is not sent; the game derives it from the cast progress
+   * `p = (castTotal - castRemaining) / castTotal` as `min(stages, floor(p * stages) + 1)`.
    */
   empowerStages?: number;
   /** The channel's authored length and tick count. Absent when it is not a channel. */
@@ -217,10 +189,8 @@ export interface AbilityChannel {
 }
 
 /**
- * A label for an ability id, and whether it was looked up or guessed.
- *
- * The guess mark stays the caller's: the same string reaches an `aria-label` and
- * a tooltip title, where a glued-on `?` reads as part of the name.
+ * A label for an ability id, and whether it was looked up or guessed. Marking a guess is the
+ * caller's job, since the name also reaches an `aria-label`.
  */
 export interface AbilityDescription {
   name: string;
@@ -238,11 +208,8 @@ export interface AbilityIndex {
 }
 
 /**
- * What counts as a different spellbook: which abilities, at which ranks.
- *
- * Deliberately not the resolved numbers. A talent change moves cost and cooldown
- * and also moves the rank set, so the ranks are enough to catch it, while a
- * signature over every figure would be longer to build for no extra sensitivity.
+ * What counts as a different spellbook: which abilities, at which ranks. A talent change moves
+ * the rank set too, so the resolved numbers add nothing.
  */
 export function abilitySignature(known: unknown): string {
   const rows: string[] = [];
@@ -256,17 +223,8 @@ export function abilitySignature(known: unknown): string {
 }
 
 /**
- * The same reading, taken from a built index rather than from the raw list.
- *
- * The watch layer samples the PUBLISHED value, which is the index, while the
- * reader below signs the game's own array on the way in. Two entry points rather
- * than one because the id sits at a different depth on each side (`def.id` on a
- * resolved entry, `id` on a projected one), and collapsing them would mean a
- * path-walking helper that is longer than both.
- *
- * Recomputed per sample rather than cached on the index, which would mean
- * publishing a `signature` field addons have no use for. It is a join over about
- * twenty entries, the same order of work every other capture here does.
+ * The same reading, taken from a built index (which the watch layer samples) rather than the
+ * raw list; the id sits at `id` here and at `def.id` there.
  */
 export function abilityIndexSignature(index: unknown): string {
   const rows: string[] = [];
@@ -280,15 +238,8 @@ export function abilityIndexSignature(index: unknown): string {
 }
 
 /**
- * A reader that rebuilds only when the spellbook actually changes.
- *
- * The memo is keyed on the SIGNATURE and not on the array, which is the whole
- * reason this is not a plain function. Measured against a live client, the game
- * hands back a fresh array AND fresh entry objects on every snapshot, twenty
- * times a second, so an identity check would rebuild constantly and an addon
- * that held what it was given would be holding something already replaced. The
- * objects published here are the loader's own and frozen, so a cached
- * `AbilityInfo` stays valid until the set genuinely moves.
+ * A reader that rebuilds only when the spellbook actually changes. Keyed on the SIGNATURE, not
+ * the array: the game hands back fresh arrays and entries on every snapshot.
  */
 export function createAbilityReader(): (world: unknown) => AbilityIndex {
   let signature: string | null = null;
@@ -308,12 +259,8 @@ export function createAbilityReader(): (world: unknown) => AbilityIndex {
 }
 
 /**
- * The spellbook before the game exists.
- *
- * A shared frozen singleton, which is safe here and would not be for `entities`:
- * everything it holds is immutable, so one addon cannot reach another through
- * it. Reading it answers an empty list and null lookups rather than null itself,
- * so `world.abilities.byName(...)` needs no guard on the landing page.
+ * The spellbook before the game exists: empty, with null lookups, so callers need no guard. A
+ * shared singleton is safe only because everything in it is frozen.
  */
 export function emptyAbilities(): AbilityIndex {
   return EMPTY;

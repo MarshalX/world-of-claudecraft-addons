@@ -1,14 +1,8 @@
 // Normalizes the userscript manager's GM surface into one promise-based API.
 //
-// Tampermonkey and Violentmonkey expose both the legacy `GM_*` functions and the
-// promise-based `GM.*` object. Greasemonkey 4 removed the legacy names and has no
-// value-change listener at all, so cross-tab notification falls back to a
-// BroadcastChannel that `setValue` posts to.
-//
-// The manager is never named in the logic: everything is feature detection, so a
-// manager that gains or loses an API is handled without a version check. The
-// caller maps the real globals onto GmSource, which keeps this module free of
-// ambient declarations and makes every path testable.
+// Greasemonkey 4 has no legacy `GM_*` names and no value-change listener, so cross-tab
+// notification falls back to a BroadcastChannel that `setValue` posts to. Everything is feature
+// detection on the GmSource the caller maps, never a manager name or version check.
 
 import { diagError } from '../shared/diag.ts';
 import { detectCapabilities } from './capabilities.ts';
@@ -111,9 +105,7 @@ function createValueApi(store: ResolvedStore, bus: BroadcastBus, capabilities: G
   };
 
   const setValue = async (key: string, value: unknown): Promise<void> => {
-    // Read the previous value only when something is listening through the
-    // fallback, since the native listener supplies it and an extra read per
-    // write is pure cost otherwise.
+    // Only the broadcast fallback needs the previous value; the native listener supplies it.
     const needsPrevious = capabilities.valueChange === 'broadcast' && bus.handlers.has(key);
     let oldValue: unknown;
     if (needsPrevious) {
@@ -131,12 +123,9 @@ function createValueApi(store: ResolvedStore, bus: BroadcastBus, capabilities: G
 }
 
 /**
- * Watch one key, over the manager's native listener where there is one and over
- * the broadcast fallback otherwise.
- *
- * Gated on the detected capability rather than on the function merely being
- * present, so subscribing and setValue's broadcast cannot disagree about which
- * path is live and deliver a change twice.
+ * Watch one key, over the native listener or the broadcast fallback. Gated on the detected
+ * capability, not on the function existing, so this and setValue's broadcast agree on which
+ * path is live and never deliver a change twice.
  */
 function createValueWatcher(
   src: GmSource,
@@ -146,9 +135,8 @@ function createValueWatcher(
   const native = src.gm?.addValueChangeListener ?? src.legacyAddValueChangeListener;
   const remove = src.gm?.removeValueChangeListener ?? src.legacyRemoveValueChangeListener;
 
-  // The legacy API returns the listener id while the promise-based one resolves
-  // it. The synchronous path stays synchronous: deferring it would leave a
-  // window in which an unsubscribed handler still receives a change.
+  // The legacy API returns the id and the promise API resolves it. The sync path stays sync, or
+  // an unsubscribed handler could still receive a change.
   const stopNative = (handle: ListenerHandle) => (): void => {
     if (typeof handle === 'number' || typeof handle === 'string') {
       remove?.(handle);
@@ -193,11 +181,8 @@ export interface GmAdapter {
   onValueChange: (key: string, handler: (change: ValueChange) => void) => () => void;
   registerMenuCommand: (label: string, run: () => void) => void;
   /**
-   * A cross-origin GET, bounded by the userscript's @connect list.
-   *
-   * The loader's one way out of the sandbox. It exists rather than a `fetch`
-   * because the page is https and the dev server is http localhost, and because
-   * raw.githubusercontent.com sends no CORS headers a page could use.
+   * A cross-origin GET, bounded by the userscript's @connect list. Not `fetch`: the page is
+   * https, the dev server is http localhost, and raw.githubusercontent.com sends no usable CORS.
    */
   request: (req: HttpRequest) => Promise<HttpResponse>;
   /** The installed userscript's version, or 'unknown' if the manager withholds it. */
@@ -231,8 +216,7 @@ export function createGmAdapter(src: GmSource): GmAdapter {
       register?.(label, run);
     },
 
-    // A missing grant costs marketplaces, not the loader: it rejects at the call
-    // rather than throwing at boot.
+    // A missing grant rejects at the call rather than throwing at boot.
     request: resolveRequester(send),
 
     scriptVersion: src.scriptVersion ?? UNKNOWN_VERSION,

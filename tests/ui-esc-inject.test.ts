@@ -1,11 +1,7 @@
 // @vitest-environment happy-dom
 
-// The game-menu entry, driven through a real MutationObserver against a fake
-// that rebuilds the menu the way the game does.
-//
-// The observer is not stubbed on purpose. What has to be proved is that the entry
-// survives the game's re-render, and a stubbed observer would only prove that
-// the callback does what the callback does.
+// The game-menu entry, driven through a real MutationObserver against a fake that rebuilds the
+// menu the way the game does. A stubbed observer could not prove the entry survives a re-render.
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
@@ -45,8 +41,7 @@ describe('menuInsertionPoint', () => {
     expect(menuInsertionPoint(game.menu, ENTRY_ID)?.className).toBe('opt-list');
   });
 
-  // A sub-view is told from the root by its back control, not by the absence of
-  // a list, so the check has to survive a sub-view that grows one.
+  // A sub-view is told from the root by its back control, not by lacking a list.
   it('declines a sub-view even when it has a button list', () => {
     const game = mountGameMenu(document);
     game.renderSubView();
@@ -73,11 +68,8 @@ describe('menuInsertionPoint', () => {
 });
 
 describe('the game menu entry', () => {
-  // Against the GAME's own rows rather than a literal, for the reason the rail
-  // button's twin assertion gives: game 0.43.0 added the `ui-btn` primitive to
-  // every menu row, and the game's rule for a row is `#options-menu
-  // .opt-btn.ui-btn`, so an entry without it silently falls back to the legacy
-  // `.btn:where(:not(.ui-btn))` arm and renders in the previous style.
+  // Compared against the game's own rows, not a literal: an entry missing a class the game's row
+  // rule keys on silently renders in a legacy style.
   it('wears exactly what the game puts on its own menu rows', () => {
     const game = mountGameMenu(document);
     game.renderMainView();
@@ -96,8 +88,7 @@ describe('the game menu entry', () => {
     expect(game.entryLabels().at(-1)).toBe(LABEL);
   });
 
-  // The whole point of the observer: the game wipes #options-menu with innerHTML
-  // on every view change, so an entry inserted once is gone by the second render.
+  // The game wipes #options-menu with innerHTML on every view change.
   it('comes back after the game rebuilds the menu', async () => {
     const game = mountGameMenu(document);
     teardown.push(mount(game).dispose);
@@ -116,9 +107,7 @@ describe('the game menu entry', () => {
     expect(game.entryLabels().at(-1)).toBe(LABEL);
   });
 
-  // The version line is a sibling of the list, so appending to the list is what
-  // puts the entry above it. If that ever inverts, the entry lands under the
-  // build string, which looks like a bug to a player.
+  // The version line is a sibling of the list, so appending to the list keeps the entry above it.
   it('places the entry above the version line', async () => {
     const game = mountGameMenu(document);
     teardown.push(mount(game).dispose);
@@ -128,8 +117,7 @@ describe('the game menu entry', () => {
     expect(game.entryPrecedesVersion()).toBe(true);
   });
 
-  // Our own append is a mutation of the tree the observer watches, so a missing
-  // guard shows up as an unbounded run of entries rather than as an exception.
+  // Our own append mutates the watched tree, so a missing guard adds entries without end.
   it('adds exactly one entry however many mutations the render raises', async () => {
     const game = mountGameMenu(document);
     teardown.push(mount(game).dispose);
@@ -164,8 +152,7 @@ describe('the game menu entry', () => {
     expect(document.querySelector(ENTRY)).toBeNull();
   });
 
-  // A game update that renames or moves #options-menu must cost the entry, not
-  // the loader: mountUi calls this before the manager exists.
+  // A moved #options-menu must cost the entry, not the loader.
   it('is inert when the menu anchor is gone', () => {
     document.body.innerHTML = '<div id="ui"></div>';
 

@@ -1,15 +1,6 @@
-// A live entity carrying every field the published world types promise.
-//
-// Shared rather than rebuilt per suite because the loader now CHECKS this shape:
-// `world/shape.ts` walks the live player when the world goes live and reports
-// anything missing. A suite that brought the world up on a half-built player
-// would fill its own output with a drift report about its own fixture, and the
-// next real drift report would read as more of the same noise.
-//
-// It is built from the shape table rather than written out, so a field added to
-// the published entity is carried here the day it lands. `PLAYER_ENTITY` is
-// spread over the top: that fixture is what a real client holds, so where the
-// two overlap the observed value wins over a generated default.
+// A live entity carrying every field the published world types promise, since `world/shape.ts`
+// reports anything missing. Generated from the shape table, with the observed `PLAYER_ENTITY`
+// spread over it so a real value wins over a generated default.
 
 import {
   ENTITY_NESTED_SHAPES,
@@ -19,15 +10,8 @@ import {
 import { PLAYER_ENTITY } from './frames.ts';
 
 /**
- * An inert value of the right kind, for a field no fixture has an opinion about.
- *
- * A NULLABLE field defaults to null rather than to its kind's zero, and the
- * distinction is not pedantry: every nullable number here means "nobody", so a
- * generated 0 is the id of a real entity and reads as an answer. `ownerId: 0`
- * makes the player their own pet's owner-of-record for anything resolving a
- * principal, and `tappedById: 0` makes every mob in every fixture somebody
- * else's kill. Both are valid for the type and wrong for the domain, which is
- * the shape of fixture bug that stays green while the code under it rots.
+ * An inert value of the right kind. A nullable field defaults to null, never 0: a nullable number
+ * means "nobody", and 0 would read as a real entity id (`ownerId`, `tappedById`).
  */
 function defaultFor(spec: FieldSpec): unknown {
   if (spec.nullable === true) {
@@ -54,12 +38,7 @@ function defaultFor(spec: FieldSpec): unknown {
   return {};
 }
 
-/**
- * An inert value for a field the shape checker walks INTO.
- *
- * `stats` and `weapon` are checked member by member, so the bare `{}` an object
- * field otherwise gets would fail the very check this fixture exists to pass.
- */
+/** An inert value for a field the shape checker walks into member by member, where `{}` fails. */
 function nestedFor(field: string): Record<string, unknown> | null {
   const shape = ENTITY_NESTED_SHAPES[field];
   if (shape === undefined) {
@@ -81,13 +60,7 @@ interface Drift {
   set?: Record<string, unknown>;
 }
 
-/**
- * A complete live entity, optionally drifted.
- *
- * Both kinds of drift are built into the object rather than applied to it
- * afterwards, because an omission has to be an absent KEY and not a key holding
- * undefined, which is a distinction the checker makes.
- */
+/** A complete live entity, optionally drifted. An omission is an absent key, never `undefined`. */
 function liveEntity(drift: Drift = {}): Record<string, unknown> {
   const omit = drift.omit ?? [];
   const built: Record<string, unknown> = {

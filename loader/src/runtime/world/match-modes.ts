@@ -1,13 +1,5 @@
-// The two unranked bout formats, split from `match.ts` by subject.
-//
-// Fiesta and Protect Yumi each carry a scoreboard, a clock and their own
-// objectives, and `match.ts` with all four union members in it lands past the
-// file limit. The split is the one `ui.d.ts` already established: by subject,
-// with the split visible in the import rather than hidden behind a barrel.
-//
-// The two bases come back from `match.ts` as TYPES only, which
-// `verbatimModuleSyntax` erases, so the cycle exists in the declarations and
-// not in the bundle.
+// The two unranked bout formats, Fiesta and Protect Yumi, split from `match.ts` by subject. The
+// import back from `match.ts` is type-only, so the cycle is erased from the bundle.
 
 import { fieldArray, fieldNumber, fieldString, fieldValue } from '../net/frames.ts';
 import type { BoutBase } from './match.ts';
@@ -46,11 +38,8 @@ interface FiestaPowerup {
   z: number;
   state: 'spawning' | 'ready';
   /**
-   * TWO quantities behind one name, and the game's own type says so.
-   *
-   * While `state` is 'spawning' it RISES from 0 to 1 as the telegraph fills.
-   * While `state` is 'ready' it FALLS from 1 to 0 as the power-up expires. A
-   * display that treats it as one direction draws the telegraph backwards.
+   * TWO quantities behind one name: while 'spawning' it RISES 0 to 1 as the telegraph fills;
+   * while 'ready' it FALLS 1 to 0 as the power-up expires.
    */
   frac: number;
   /** The game's own orb colour, as a 24-bit RGB integer. */
@@ -95,19 +84,11 @@ interface YumiScore {
 }
 
 /**
- * One objective cat.
+ * One objective cat, sent for BOTH cats whatever your interest scope.
  *
- * Sent for BOTH cats whether or not either is in your interest scope, on the
- * game's stated fairness rule: enemy objective health is actionable and is never
- * hidden. So an objective display is complete rather than approximate.
- *
- * `hp`, `x` and `z` are AS OF THE LAST ARENA SEND, up to ten seconds ago. The
- * live paths are `net.onEvent('yumiStatus')`, a once-a-second heartbeat carrying
- * both cats' health, and `net.onEvent('yumiTeleport')`, which carries the new
- * position. The game's own renderer overrides this reading from those events and
- * an addon that draws a health bar from it alone will read stale beside the
- * game's. A dead or missing cat reports `alive: false` with `hp` 0 at the origin,
- * which is "no cat" and not a cat standing at 0, 0.
+ * `hp`, `x` and `z` can be ten seconds stale; the live paths are `net.onEvent('yumiStatus')`
+ * (health, once a second) and `net.onEvent('yumiTeleport')` (position). A dead or missing cat
+ * reports `alive: false` with `hp` 0 at the origin.
  */
 interface YumiCat {
   entityId: number;
@@ -142,13 +123,8 @@ interface YumiMatch extends BoutBase {
 }
 
 /**
- * Which of the two sides is yours.
- *
- * THE ONE PLACE A TEAM LETTER IS COMPARED. Both bout formats hand over their
- * halves as A and B and a letter saying which one the reader is on, and every
- * consumer of that would otherwise write the same comparison, in both the
- * scoreboard and the objective. An unrecognised letter takes A, which is the
- * side the wire's own `myScore` was computed for when the letter is neither.
+ * Which of the two sides is yours: the one place a team letter is compared. An unrecognised
+ * letter takes A, the side the wire's `myScore` is computed for in that case.
  */
 function sided<T>(team: string | null, teamA: T, teamB: T): { mine: T; theirs: T } {
   if (team === 'B') {
@@ -260,11 +236,8 @@ function yumiScores(rows: readonly unknown[]): readonly YumiScore[] {
 }
 
 /**
- * One cat.
- *
- * `alive` is read from the flag the server sets rather than inferred from `hp`
- * or from a position: a missing cat is sent as 0 health at the world origin, so
- * a marker drawn on a truthiness check lands in the middle of the map.
+ * One cat. `alive` is the server's flag, never inferred: a missing cat is sent as 0 health at
+ * the world origin.
  */
 function catOf(cat: unknown): YumiCat {
   return {
@@ -285,10 +258,8 @@ function sizeOf(size: number | null): YumiMatch['size'] {
 }
 
 /**
- * A Protect Yumi bout, or null when the record is absent.
- *
- * `suddenDeath` is the one bit of the wire's `phase` that the bout state does
- * not already carry: the other three phases are `state` under another name.
+ * A Protect Yumi bout, or null when the record is absent. `suddenDeath` is the one bit of the
+ * wire's `phase` that `state` does not already carry.
  */
 function yumiOf(yumi: unknown, base: BoutBase, format: YumiMatch['format']): YumiMatch | null {
   if (yumi === null) {

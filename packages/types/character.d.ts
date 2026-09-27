@@ -1,12 +1,7 @@
 // Your character sheet: progression, deeds, talents and profession skills.
 //
-// Split from `world.d.ts`, which describes the world around you. These are all
-// reads about YOU: they ride the self payload, so they exist for your character
-// and for nobody else's. There is no way to read another player's sheet.
-//
-// Every field here was confirmed arriving in a recorded session before it was
-// published, which is the standing rule: a field earns a place because it was
-// found on the wire, never because it is readable on some object.
+// All reads about YOU, from the self payload. There is no way to read another
+// player's sheet.
 
 /** The levels a talent build has rows on. */
 export type TalentRowLevel = 5 | 8 | 11 | 14 | 17 | 20;
@@ -23,18 +18,14 @@ export interface SavedLoadout {
   bar: readonly (string | null)[];
 }
 
-/**
- * Your build.
- */
+/** Your build. */
 export interface TalentInfo {
   spec: string | null;
   role: TalentRole | null;
   /** Row level to the option chosen on it. A row not yet picked is absent. */
   rows: Readonly<Partial<Record<TalentRowLevel, string>>>;
   loadouts: readonly SavedLoadout[];
-  /**
-   * Index into `loadouts`, or -1 when none is active.
-   */
+  /** Index into `loadouts`, or -1 when none is active. */
   activeLoadout: number;
 }
 
@@ -42,10 +33,8 @@ export interface DeedStats {
   /**
    * Lifetime counters, e.g. `kills`, `deaths`, `craftsPerformed`.
    *
-   * A counter at 0 genuinely means it never happened, unlike most zero-valued
-   * fields on this API: the client fills the whole set from defaults and the
-   * server sends every counter it keeps, so nothing here is a field that is
-   * merely never written.
+   * A counter at 0 genuinely means it never happened: the server sends every
+   * counter it keeps.
    */
   counters: Readonly<Record<string, number>>;
   itemsDiscovered: ReadonlySet<string>;
@@ -58,22 +47,15 @@ export interface CharacterInfo {
   /**
    * Progress within the CURRENT level, and FROZEN AT 0 once you hit the cap.
    *
-   * Not a running total, and not a post-cap counter: the game returns before
-   * touching this bar for a capped character, and zeroes the remainder on the
-   * award that dings you to the cap. So a capped character reads 0 here forever
-   * and it is not a field that failed to arrive.
-   *
-   * A post-cap progression display therefore reads `lifetimeXp`, which is the one
-   * that keeps moving. This is the obvious field to reach for and it is the wrong
-   * one, which is why it says so here.
+   * A capped character reads 0 here forever. A post-cap progression display reads
+   * `lifetimeXp`, which keeps moving.
    */
   xp: number;
   /**
    * Total ever earned, which keeps rising past the level cap.
    *
-   * Monotonic across the whole life of the character: it is credited on every
-   * award including at the cap, which is what makes post-cap progression work and
-   * what makes it the only field a virtual-level display can be built on.
+   * Monotonic for the life of the character, credited on every award including
+   * at the cap, so it is the field a virtual-level display is built on.
    */
   lifetimeXp: number;
   /** The rested pool, 0 when not rested. */
@@ -85,9 +67,7 @@ export interface CharacterInfo {
   /**
    * Your displayed title as a DEED ID, never display text.
    *
-   * Null when untitled. Turning it into something readable needs the game's own
-   * deed table, which an addon cannot reach, so this identifies the title rather
-   * than spelling it.
+   * Null when untitled. Nothing on this API resolves it to readable text.
    */
   activeTitle: string | null;
   milestones: readonly string[];
@@ -99,14 +79,11 @@ export interface CharacterInfo {
 /**
  * Your crafting archetype, your pairs, and what you have learned.
  *
- * The server sends this as ONE value on purpose, so a client never evaluates a
- * recipe against a pair from one tick and skills from another. Ids throughout:
- * nothing here is display text.
+ * Sent as ONE value, so the fields are always consistent with each other. Ids
+ * throughout, never display text.
  *
- * READ `synced` FIRST. Every other field, and `craftSkills` beside it, is a
- * client-side default until the server's first crafting delta lands, and a
- * default is indistinguishable from a real answer without this flag. An addon
- * that draws a crafting panel before it flips is drawing zeroes it made up.
+ * READ `synced` FIRST. Until it flips, every other field, and `craftSkills`
+ * beside it, is a client-side default that looks like a real answer.
  */
 export interface CraftingIdentity {
   /** False until the game has received its first crafting value this session. */
@@ -123,9 +100,8 @@ export interface CraftingIdentity {
   /**
    * Recipe ids you LEARNED from a source, sorted.
    *
-   * Not the set you can craft. A recipe whose `acquisition` list is empty is
-   * grandfathered: known to everyone, and absent from here for that reason rather
-   * than because it has not been learned. Cross-reference `world.recipes`.
+   * Not the set you can craft: a recipe with an empty `acquisition` list is known
+   * to everyone and absent from here. Cross-reference `world.recipes`.
    */
   knownRecipes: readonly string[];
   /** Work orders inside their cooldown window, sorted. Empty on an older server. */
@@ -135,9 +111,8 @@ export interface CraftingIdentity {
 /**
  * One gathering tool's slotted effect.
  *
- * A charm crafted onto a tool, which is the difference between owning a tool and
- * what that tool actually does when it swings. Read it to say why a yield came
- * out better than the tool alone explains.
+ * A charm crafted onto a tool, which explains a yield better than the tool alone
+ * gives.
  */
 export interface ToolEffectSlot {
   /** The gathering profession whose tool carries it. Never localized text. */
@@ -147,17 +122,12 @@ export interface ToolEffectSlot {
   /**
    * Charges left.
    *
-   * 0 means slotted but SPENT, which is different from unslotted: the bonus
-   * stops, the base tool is untouched, and a recharge can restore it. A row at 0
-   * is still a row.
+   * 0 means slotted but SPENT, not unslotted: the bonus stops until a recharge.
+   * A row at 0 is still a row.
    */
   charges: number;
   /**
-   * The slot's ceiling, and a real server value rather than a client default.
-   *
-   * Worth stating because `AbilityCharges.maxCharges` is the opposite case and is
-   * deliberately unpublished: the server keeps that one to itself and the client
-   * zero-fills it. This one rides the wire.
+   * The slot's ceiling. A real server value, not a client default.
    */
   maxCharges: number;
   /** `'prompt'` spends a charge only on an explicit per-use confirmation. */
@@ -165,9 +135,8 @@ export interface ToolEffectSlot {
   /**
    * Whether YOU crafted the charm sitting in this slot.
    *
-   * A boolean and never a name: another player's identity does not leave the
-   * server, so there is no crafter to display and this is the whole of what can
-   * be known about provenance.
+   * A boolean, never a name: another player's identity does not leave the
+   * server.
    */
   selfCrafted: boolean;
 }
@@ -176,18 +145,15 @@ export interface ToolEffectSlot {
  * Your profession standing: two skill counter maps, your crafting identity, and
  * the mobile station you have placed.
  *
- * One member of the game's own professions facet is still left out. Its state
- * view is marked as a stub in the game's own source with a trail of in-flight
- * work behind it, so its shape is the least settled thing an addon could depend
- * on. Everything here is settled.
+ * One member of the game's professions state is deliberately left out until its
+ * shape settles.
  */
 export interface ProfessionInfo {
   /**
    * Craft id to skill. Independent and additive: gaining one never moves another.
    *
-   * All zeroes until `identity.synced`, and that is a client-side default rather
-   * than a character with no craft skill. The two look identical; the flag is the
-   * only thing that tells them apart.
+   * All zeroes until `identity.synced`, a client-side default that looks exactly
+   * like a character with no craft skill.
    */
   craftSkills: Readonly<Record<string, number>>;
   /** Gathering profession id to proficiency, the same kind of counter. */
@@ -205,14 +171,10 @@ export interface ProfessionInfo {
    * Your slotted tool effects, one row per gathering profession that has one,
    * sorted by `professionId`.
    *
-   * EMPTY is the ordinary case and means "nothing slotted", not "not known yet":
-   * the game elides the key entirely for a player who has never slotted an
-   * effect, which is most of them. So an addon must not start disclosing a
-   * limitation to everybody on the strength of an empty list.
+   * EMPTY is the ordinary case and means "nothing slotted", not "not known yet".
    *
-   * Published from `apiMinor` 5. An older loader answers an empty array here for
-   * the same reason a fresh character does, which is why an addon that READS it
-   * has to declare 5 rather than infer support from the value.
+   * Published from `apiMinor` 5. An older loader answers an empty array too, so an
+   * addon that READS it declares 5 rather than inferring support from the value.
    */
   toolEffectSlots: readonly ToolEffectSlot[];
 }

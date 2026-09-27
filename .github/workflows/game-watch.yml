@@ -1,8 +1,8 @@
 name: Game release watch
 
 # Dispatches the catch-up when the game ships a tag this tree has not audited.
-# The FROM end is the stamp every generator writes into its output, so there is
-# no state file. AGENTS.md, "The game catch-up run", has the rest.
+# The FROM end is the game version stamped into the generated files, so there is
+# no state file.
 
 on:
   schedule:

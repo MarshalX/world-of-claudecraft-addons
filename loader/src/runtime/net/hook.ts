@@ -1,8 +1,5 @@
-// The WebSocket constructor wrap.
-//
-// Installed at document-start, before ClientWorld.openSocket runs, so every
-// socket the game opens over the session is seen including the ones a reconnect
-// creates. Purely observational: nothing here originates a frame.
+// The WebSocket constructor wrap, installed at document-start so every socket the game opens,
+// reconnects included, is seen. Purely observational.
 
 import { diagError } from '../../shared/diag.ts';
 
@@ -38,13 +35,7 @@ export function isWorldSocket(url: string, base: string): boolean {
   }
 }
 
-/**
- * Install the wrap, returning an uninstall that restores what was there.
- *
- * Every tap runs inside the game's own stack (`send` synchronously, the rest
- * from its event dispatch), so a throw in loader code is caught here rather than
- * being allowed to break the frame the game was sending.
- */
+/** Every tap runs inside the game's own stack, so a loader throw is caught before it breaks one. */
 export function installSocketHook(opts: SocketHookOpts): () => void {
   const original = opts.read();
 

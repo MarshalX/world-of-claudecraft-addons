@@ -3,8 +3,7 @@
 //   node addons/satchel/generate.mjs --game=/path/to/world-of-claudecraft
 //   node addons/satchel/generate.mjs --game /path/to/world-of-claudecraft
 //
-// The checkout is REQUIRED and never defaulted, and both argument forms are accepted because
-// the generators in this tree disagree about which one they take.
+// The checkout is required and never defaulted. Both argument forms are accepted.
 //
 // A carried inventory is TWO pools: a general one (the backpack plus every unrestricted bag) and
 // a materials one (every `materialsOnly` bag) that only the game's own material taxonomy may
@@ -48,11 +47,7 @@ const NONE = 0;
 const ONE = 1;
 const INDENT = 2;
 
-/**
- * Floors, not counts: what these catch is a read that has quietly gone empty, which is what a
- * renamed content export looks like. The materials-only floor is about the feature rather than
- * the read: at zero, the pool split has left the game.
- */
+/** Floors, not counts: they catch a read gone empty, which is what a renamed export looks like. */
 const MIN_BAGS = ONE;
 const MIN_MATERIALS_ONLY_BAGS = ONE;
 const MIN_MATERIALS = ONE;
@@ -191,7 +186,6 @@ function materialIds(module) {
   return ids.sort((a, b) => a.localeCompare(b));
 }
 
-/** A read that has quietly gone empty is the failure this table exists to prevent. */
 function checkFloors(bags, materials) {
   if (bags.length < MIN_BAGS) {
     fail(`ITEMS holds no kind 'bag' items at all: the bag table has moved`);
@@ -205,7 +199,7 @@ function checkFloors(bags, materials) {
   }
 }
 
-/** Two-space, which is what Biome formats this tree's JSON to. See the header. */
+/** Two-space, as Biome formats JSON. Stable only because every list holds objects. */
 function render(table) {
   return `${JSON.stringify(table, null, INDENT)}\n`;
 }

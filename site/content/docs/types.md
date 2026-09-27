@@ -22,22 +22,18 @@ That is all. There is nothing to import, because `woc` is a global in your addon
 
 ## What version to use
 
-The package is versioned against the loader's `apiVersion` rather than against the loader, so its major is the number your manifest declares. It only gets a release when the addon API surface changes, which is why its version does not track the loader's.
+The package is versioned against the loader's `apiVersion`, so its major is the number your manifest declares. It is released only when the addon API surface changes.
 
 ## What the types are not
 
-They are a **claim about another repository**, and it is worth holding them that loosely.
-
-The game is not a dependency of this project, cannot be one, and the loader cannot compile against it. So every read of the game's own state is an assertion rather than a derivation, and the type describing it is this project's best understanding of a shape it does not own.
-
-Two things follow.
+They are a **claim about another repository**. The loader cannot compile against the game, so every type describing the game's state is this project's best understanding of a shape it does not own. Two things follow.
 
 **A field can be typed, readable, and never sent.** The types mark which fields ride the self record and omit ones known never to appear, but a field the server stops sending would go on type-checking exactly as before. [Patterns](/docs/patterns) has the worked example.
 
-**The runtime checks what the types cannot.** At world entry the loader walks the live player once and reports every field that is missing or of the wrong kind, which is how drift surfaces as a warning rather than as an addon quietly reading a default forever. The manager's **Diagnostics** pane shows what it found.
+**The runtime checks what the types cannot.** At world entry the loader walks the live player once and reports every field that is missing or of the wrong kind in the manager's **Diagnostics** pane.
 
 ## Cues and icons
 
 Two of the unions are generated from what the game actually serves: sound cues from its runtime pack, and skill-art ids from its per-class manifests.
 
-Both stay **open** unions. The set is content, a game release adds to it before the published types catch up, and a published type must never be able to break a working addon. So an unknown cue name still type-checks and still plays.
+Both stay **open** unions, because a game release adds to them before the published types catch up. An unknown cue name still type-checks and still plays.

@@ -1,10 +1,7 @@
 // @vitest-environment happy-dom
 
-// The frame addons build their UI in.
-//
-// `ui.frame` and `ui.window` are one object with different chrome, so most of
-// what is asserted here is the difference between them and the persistence,
-// which is the part a player notices across a login.
+// `ui.frame` and `ui.window` are one object with different chrome; this pins the
+// difference between them and the persistence.
 
 import interact from 'interactjs';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -50,11 +47,8 @@ function stateStore(hub: FakeStorage | null) {
 }
 
 /**
- * A completed drag on a frame's handle.
- *
- * interactjs does not move the box under happy-dom, which has no layout, so what
- * this drives is the GESTURE ending rather than the arithmetic (that is pure and
- * lives in frame-geometry.test.ts). Ending is the half that writes.
+ * A completed drag on a frame's handle. interactjs moves no box under happy-dom, so
+ * this drives the gesture ending, which is the half that writes.
  */
 function drag(handle: HTMLElement): void {
   const at = (clientX: number, clientY: number) => ({
@@ -97,8 +91,7 @@ function open(
     store,
     viewport: () => VIEW,
     window: globalThis,
-    // Assigned rather than spread with an undefined, which exactOptionalPropertyTypes
-    // refuses: a frame given no arrange source is one with no rule over its gestures.
+    // exactOptionalPropertyTypes refuses a spread undefined.
     ...arrangeDep(arrange),
   });
 }
@@ -120,8 +113,7 @@ describe('chrome', () => {
     expect(open({ id: 'a' }).el.classList.contains('panel')).toBe(true);
   });
 
-  // Two addons may both call a frame 'main', and the game's document is one id
-  // space shared with the game, so identity is on data attributes rather than id.
+  // Two addons may both call a frame 'main' in a document shared with the game.
   it('identifies the frame by addon and frame id without taking an element id', () => {
     const frame = open({ id: 'main' });
 
@@ -155,15 +147,14 @@ describe('chrome', () => {
 });
 
 describe('the bare density', () => {
-  it('draws no title bar at all, rather than one hidden by a rule', () => {
+  it('draws no title bar', () => {
     const bare = open({ id: 'overlay', title: 'Cooldowns', density: 'bare' });
 
     expect(bare.el.querySelector('.woc-titlebar')).toBeNull();
     expect(bare.el.classList.contains('woc-density-bare')).toBe(true);
   });
 
-  // A hidden bar would still be a row in the accessibility tree; no bar means the
-  // frame's only name is its label, so the label has to be there.
+  // With no title bar the label is the frame's only name.
   it('still names itself for assistive technology', () => {
     const bare = open({ id: 'overlay', title: 'Cooldowns', density: 'bare' });
 
@@ -172,10 +163,8 @@ describe('the bare density', () => {
     expect(bare.el.getAttribute('aria-label')).toBe('Timers');
   });
 
-  // The residue this was found leaving: with the game's panel class on, an empty
-  // bare frame still drew that class's border, so it read as a stray dot on the
-  // HUD rather than as nothing at all.
-  it('does not wear the game panel class, which is what draws the border', () => {
+  // The panel class draws a border, so an empty bare frame would show as a stray dot.
+  it('does not wear the game panel class', () => {
     const bare = open({ id: 'overlay', density: 'bare' });
     const normal = open({ id: 'panel' });
 
@@ -183,16 +172,15 @@ describe('the bare density', () => {
     expect(normal.el.classList.contains('panel')).toBe(true);
   });
 
-  it('keeps the body, which is the whole point of it', () => {
+  it('keeps the body', () => {
     const bare = open({ id: 'overlay', density: 'bare' });
 
     expect(bare.body.classList.contains('woc-frame-body')).toBe(true);
     expect(bare.el.contains(bare.body)).toBe(true);
   });
 
-  // The refusal. A window's close button lives in the title bar bare removes, so
-  // honouring it would hand back a panel the player cannot dismiss.
-  it('is refused on a window, which would otherwise lose its close button', () => {
+  // A window's close button lives in the title bar bare removes.
+  it('is refused on a window', () => {
     const win = open({ id: 'panel', density: 'bare' }, 'window');
 
     expect(win.el.classList.contains('woc-density-bare')).toBe(false);
@@ -200,10 +188,8 @@ describe('the bare density', () => {
     expect(win.el.querySelector('.woc-close')).not.toBeNull();
   });
 
-  // Load-bearing: the frame is handed to the gesture layer as its own drag
-  // handle, and without it a bare frame has nothing to grab and cannot be moved
-  // at all. The title bar is the handle for every other density.
-  it('is its own drag handle, since there is no title bar to grab', () => {
+  // Without this a bare frame has nothing to grab and cannot be moved at all.
+  it('is its own drag handle', () => {
     const bare = buildChrome({
       doc: document,
       fqid: FQID,
@@ -229,22 +215,17 @@ describe('the bare density', () => {
   });
 });
 
-// Only the class, because a Vitest suite cannot read the sheet: every .css import
-// resolves to '' under vitest, so what the rule DOES is checked by running the
-// loader. The class is still worth pinning, since it is the whole of the contract
-// between frame-chrome.ts and styles/chrome.css and a rename breaks it silently.
+// Only the class: every .css import resolves to '' under vitest. The class is the
+// whole contract between frame-chrome.ts and styles/chrome.css.
 describe('the pointer policy', () => {
-  // The default that matters. The game binds world mousedown and wheel to its
-  // canvas, so a solid overlay takes targeting, camera look and zoom together, and
-  // a bare frame is over the world by definition.
+  // The game binds world mousedown and wheel to its canvas, so a solid overlay takes
+  // targeting, camera look and zoom.
   it('makes a bare frame click-through where it drew nothing', () => {
     expect(
       open({ id: 'overlay', density: 'bare' }).el.classList.contains('woc-pointer-content'),
     ).toBe(true);
   });
 
-  // A panel is a surface the player operates, and one with holes in it is a
-  // surface that sometimes ignores them.
   it('leaves every other density solid', () => {
     expect(open({ id: 'a' }).el.classList.contains('woc-pointer-auto')).toBe(true);
     expect(open({ id: 'b', density: 'compact' }).el.classList.contains('woc-pointer-auto')).toBe(
@@ -260,8 +241,7 @@ describe('the pointer policy', () => {
     expect(solid.el.classList.contains('woc-pointer-auto')).toBe(true);
   });
 
-  // The same shape as the density fallback, and for a stronger reason: a typo
-  // here would silently punch a hole in a panel the player has to click.
+  // A typo must not punch a hole in a panel the player has to click.
   it('falls back to the density default for a value nobody offers', () => {
     const odd = open({ id: 'a', pointer: 'ghost' as 'none' });
     const oddBare = open({ id: 'b', density: 'bare', pointer: 'ghost' as 'none' });
@@ -272,9 +252,7 @@ describe('the pointer policy', () => {
 });
 
 describe('sizing', () => {
-  // A frame is sized by its content on the HEIGHT and only there. Writing a
-  // height would leave it padded out or, worse, clipped as its text changes,
-  // with nothing on screen to say a row is below the fold.
+  // A written height clips rows with nothing on screen to say so.
   it('does not write a height onto a non-resizable frame', () => {
     const frame = open({ id: 'a' }, 'frame');
 
@@ -282,11 +260,8 @@ describe('sizing', () => {
     expect(frame.el.style.left).not.toBe('');
   });
 
-  // A width, not a ceiling, and the difference is whether the panel MOVES. It was
-  // a ceiling first, which fixed wayfarer asking for 300 and drawing at 693 the
-  // first time one of its lines was a sentence, and left the other half: under a
-  // ceiling the width still follows the content, so veinsight's header gaining a
-  // clause mid-harvest stepped the whole panel out and back with rows reflowing.
+  // A width, not a max-width: under a ceiling the panel still steps in and out as
+  // its content reflows.
   it('holds a non-resizable frame to the width it declared', () => {
     const frame = open({ id: 'a', width: 300 }, 'frame');
 
@@ -294,15 +269,11 @@ describe('sizing', () => {
     expect(frame.el.style.height).toBe('');
   });
 
-  // The frame default, for an addon that named no width at all. Written like any
-  // other, because an addon that never thought about its width is precisely the
-  // one whose panel would otherwise move.
   it('falls back to the default frame width when the addon named none', () => {
     expect(open({ id: 'a' }, 'frame').el.style.width).toBe('240px');
   });
 
-  // A resizable frame is given its box outright by frame/interactive.ts, so this
-  // would be a second statement of a number that surface already has.
+  // frame/interactive.ts owns a resizable frame's box.
   it('leaves a resizable frame to the layer that owns its box', () => {
     expect(open({ id: 'a', width: 300, resizable: true }, 'frame').el.style.maxWidth).toBe('');
   });
@@ -314,10 +285,8 @@ describe('sizing', () => {
     expect(win.el.style.height).not.toBe('');
   });
 
-  // Asserted on the HEIGHT rather than the width, because the width is no longer
-  // evidence either way: applyWidth writes one for a non-resizable surface too, so
-  // both arms would carry one and the case would pass while proving nothing. The
-  // height is the axis only the gesture layer writes.
+  // Asserted on the height: applyWidth writes a width either way, and only the
+  // gesture layer writes a height.
   it('honours an explicit resizable flag over the chrome default', () => {
     expect(open({ id: 'a', resizable: true }, 'frame').el.style.height).not.toBe('');
     expect(open({ id: 'b', resizable: false }, 'window').el.style.height).toBe('');
@@ -328,11 +297,8 @@ describe('sizing', () => {
   });
 });
 
-// The bounds are arithmetic and the arithmetic is proved in frame-geometry.test.ts.
-// What is proved HERE is the wiring: that an addon's four numbers reach the clamp
-// at all, on the paths a player actually reaches them by. The restore path is the
-// one worth pinning, because it is the only one that puts a box the loader did not
-// just compute back into the frame.
+// The arithmetic is in frame-geometry.test.ts; this pins that the four numbers reach
+// the clamp on the restore path, the only one that applies a box the loader did not compute.
 describe('the size bounds', () => {
   const saved = async (hub: FakeStorage, box: { w: number; h: number }): Promise<void> => {
     await hub.set(uiNamespace(FQID), perCharacterKey('pbe', CHARACTER, 'strip'), {
@@ -341,9 +307,7 @@ describe('the size bounds', () => {
     });
   };
 
-  // The regression the option exists for. Before it, the size a frame was created
-  // at was its permanent floor, so a resizable strip could never be made smaller
-  // than whatever width its addon happened to open it at.
+  // Without minWidth the opening size is the floor.
   it('lets a saved box come back smaller than the opening size', async () => {
     const hub = createFakeStorage();
     await saved(hub, { w: 140, h: 80 });
@@ -386,8 +350,6 @@ describe('the size bounds', () => {
     expect(frame.el.style.height).toBe('300px');
   });
 
-  // An addon that states one axis has said nothing about the other, and the other
-  // must not become bounded by whatever the first one was.
   it('leaves the axis an addon did not bound alone', async () => {
     const hub = createFakeStorage();
     await saved(hub, { w: 900, h: 700 });
@@ -403,13 +365,8 @@ describe('the size bounds', () => {
   });
 });
 
-// Telling an addon where its frame ended up.
-//
-// The loader owns the box: it writes the position, the size of a resizable frame,
-// and re-clamps both on a restore and on a viewport change. An addon laying its own
-// content out against that box (a strip of icons sized by its frame's height) can
-// otherwise only measure the element, which forces a synchronous layout on every
-// frame of a display that already writes styles every frame.
+// The loader owns the box, so without onMove an addon laying out against it would
+// have to measure the element and force a layout every frame.
 describe('onMove', () => {
   it('reports the box a saved state restored', async () => {
     const hub = createFakeStorage();
@@ -428,8 +385,6 @@ describe('onMove', () => {
     await vi.waitFor(() => expect(seen).toContain(120));
   });
 
-  // The viewport shrinking re-clamps every frame, which can change the box without
-  // the player touching anything.
   it('reports a refit driven by the window resizing', () => {
     const seen: number[] = [];
     open({
@@ -445,8 +400,7 @@ describe('onMove', () => {
     expect(seen).toHaveLength(1);
   });
 
-  // The size an addon asked for is the size it already holds, so reporting it back
-  // during construction would fire the handler before the addon has the frame.
+  // Firing during construction would reach the handler before the addon has the frame.
   it('says nothing about the initial placement', () => {
     const seen: number[] = [];
 
@@ -457,7 +411,7 @@ describe('onMove', () => {
 });
 
 describe('visibility', () => {
-  it('is visible by default and hidden by a class rather than an attribute', () => {
+  it('is visible by default and hidden by a class', () => {
     const frame = open({ id: 'a' });
 
     expect(frame.visible).toBe(true);
@@ -489,20 +443,10 @@ describe('visibility', () => {
   });
 });
 
-// What every addon's windows did on every reload, reported from a live session:
-// they opened stacked in the middle of the screen, over the game's loading bar,
-// including the ones the player had closed.
-//
-// One cause under all three. A per-character key cannot be built before there is a
-// character, an addon builds its frames at document-start, so the one read of the
-// saved state happened on the landing page and answered null. The frame then drew
-// at its default box with its default visibility, and nothing tried again.
-//
-// So a frame that SAVES its visibility does not guess it. It starts hidden and the
-// stored answer decides, which is free: a frame is hidden with the HUD until world
-// entry anyway, which is the same moment the answer becomes readable.
+// Frames are built at document-start, before there is a character to key the saved
+// state on, so a saved frame starts hidden and the stored answer decides at world entry.
 describe('a frame whose state is saved', () => {
-  it('starts hidden rather than guessing, whatever it asked for', () => {
+  it('starts hidden whatever it asked for', () => {
     const hub = createFakeStorage();
 
     const frame = open({ id: 'meter', save: true, visible: true }, 'frame', hub);
@@ -518,7 +462,6 @@ describe('a frame whose state is saved', () => {
     await vi.waitFor(() => expect(frame.visible).toBe(true));
   });
 
-  // The one the player notices: a window they closed came back on every reload.
   it('stays hidden when that is what was stored', async () => {
     const hub = createFakeStorage();
     await hub.set(uiNamespace(FQID), perCharacterKey('pbe', CHARACTER, 'meter'), {
@@ -532,8 +475,7 @@ describe('a frame whose state is saved', () => {
     expect(frame.visible).toBe(false);
   });
 
-  // The answer lands at world entry, which is late enough for a player to have
-  // pressed the addon's own toggle key on the loading screen. Their press wins.
+  // The player may press the toggle key before the answer lands; the press wins.
   it('does not overrule a toggle pressed before the answer arrived', async () => {
     const hub = createFakeStorage();
     await hub.set(uiNamespace(FQID), perCharacterKey('pbe', CHARACTER, 'meter'), {
@@ -548,9 +490,7 @@ describe('a frame whose state is saved', () => {
     expect(frame.visible).toBe(true);
   });
 
-  // And that press is written down, against the box the restore put under it
-  // rather than against the default one it was sitting at when pressed.
-  it('records a press made before the answer, without losing the saved box', async () => {
+  it('records an early press against the restored box', async () => {
     const hub = createFakeStorage();
     const key = `${uiNamespace(FQID)}/${perCharacterKey('pbe', CHARACTER, 'meter')}`;
     await hub.set(uiNamespace(FQID), perCharacterKey('pbe', CHARACTER, 'meter'), {
@@ -566,8 +506,7 @@ describe('a frame whose state is saved', () => {
     });
   });
 
-  // A frame that does not persist has nothing to wait for, so it must not wait.
-  it('is unaffected when the addon never asked to save', () => {
+  it('is visible at once when the addon never asked to save', () => {
     const frame = open({ id: 'meter' }, 'frame', null);
 
     expect(frame.visible).toBe(true);
@@ -595,15 +534,11 @@ describe('persistence', () => {
     expect(hub.dump()[key]).toMatchObject({ visible: false });
   });
 
-  // The half no test covered, and it broke twice: once because nothing restored a
-  // position, and once because a refactor routed the end of a gesture through a
-  // call that compares first, so a drag that changed only the position saved
-  // nothing at all. Both times the symptom was identical from the outside.
+  // A write that compares first would save nothing for a drag that moved only the position.
   it('writes the state down when a drag ends', async () => {
     const hub = createFakeStorage();
     const frame = open({ id: 'meter', save: true, title: 'Meter' }, 'window', hub);
-    // The answer has to have landed first: before it does, this frame is sitting
-    // at its default box rather than the stored one, and a write would lose it.
+    // Before the answer lands the frame sits at its default box.
     await vi.waitFor(() => expect(frame.visible).toBe(true));
 
     drag(frame.el.querySelector<HTMLElement>('.woc-titlebar') as HTMLElement);
@@ -614,8 +549,7 @@ describe('persistence', () => {
     });
   });
 
-  // The other side of that gate: a gesture before the answer lands must not write
-  // the default box over the position the player set last session.
+  // A write here would put the default box over last session's position.
   it('writes nothing from a drag made before the saved state arrived', () => {
     const hub = createFakeStorage();
     const frame = open({ id: 'meter', save: true, title: 'Meter' }, 'window', hub);
@@ -634,15 +568,13 @@ describe('persistence', () => {
 
     const frame = open({ id: 'meter', save: true }, 'frame', hub);
 
-    // Waited on the POSITION, not on the visibility: a saved frame starts hidden
-    // whatever it stored, so hidden says nothing about the read having landed.
+    // Waited on position: a saved frame starts hidden whatever it stored.
     await vi.waitFor(() => expect(frame.el.style.left).toBe('40px'));
     expect(frame.visible).toBe(false);
   });
 
-  // A NaN reaching a style property drops the declaration silently, which would
-  // strand the frame off screen with nothing to say why.
-  it('ignores a stored state that is not one', async () => {
+  // A NaN style declaration is dropped silently and strands the frame off screen.
+  it('ignores an invalid stored state', async () => {
     const hub = createFakeStorage();
     await hub.set(uiNamespace(FQID), perCharacterKey('pbe', CHARACTER, 'meter'), {
       box: { x: Number.NaN, y: 0, w: 1, h: 1 },
@@ -664,8 +596,7 @@ describe('persistence', () => {
       hub,
       channel: 'pbe',
       character: () => null,
-      // Already resolved, so this is the case where the answer arrived and there
-      // is STILL no character: an offline session with no player entity.
+      // Resolved with no character: an offline session with no player entity.
       known: () => Promise.resolve(),
     });
 
@@ -675,9 +606,7 @@ describe('persistence', () => {
     expect(hub.dump()).toEqual({});
   });
 
-  // The read that used to happen on the landing page, find nothing, and never be
-  // tried again: every addon frame opened at its default spot on every reload.
-  it('waits for the character before reading, rather than answering null', async () => {
+  it('waits for the character before reading', async () => {
     const hub = createFakeStorage();
     let character: string | null = null;
     let arrive = (): void => undefined;
@@ -738,8 +667,7 @@ describe('destroy', () => {
     }).not.toThrow();
   });
 
-  // The saved state lands whenever storage answers, which may be after the addon
-  // has already been disabled.
+  // Storage may answer after the addon was disabled.
   it('does not resurrect a destroyed frame when its saved state arrives', async () => {
     const hub = createFakeStorage();
     await hub.set(uiNamespace(FQID), perCharacterKey('pbe', CHARACTER, 'meter'), {
@@ -758,31 +686,22 @@ describe('destroy', () => {
   });
 });
 
-// The density variant, which is the one thing about a frame's chrome an addon
-// chooses rather than inherits.
-//
-// An enum rather than a `compact: true` flag: the axis has more than two useful
-// positions and a boolean cannot grow one. What the test pins is that the choice
-// reaches the element as a class, since everything the variant does is CSS, and
-// that an unrecognised value falls back to the ACCESSIBLE default rather than to
-// the compact one. Getting that backwards would let a typo silently take the
-// tap-target floor away.
+// An unrecognised density falls back to comfortable, so a typo cannot drop the
+// tap-target floor.
 describe('density', () => {
-  it('defaults to comfortable, which is the accessible sizing', () => {
+  it('defaults to comfortable', () => {
     const frame = open({ id: 'meter' });
 
     expect(frame.el.classList.contains('woc-density-comfortable')).toBe(true);
     expect(frame.el.classList.contains('woc-density-compact')).toBe(false);
   });
 
-  it('marks a compact frame so the stylesheet can find it', () => {
+  it('marks a compact frame', () => {
     const frame = open({ id: 'meter', density: 'compact' });
 
     expect(frame.el.classList.contains('woc-density-compact')).toBe(true);
   });
 
-  // A value from a manifest-driven addon is untrusted input like anything else,
-  // and the failure mode to avoid is silently dropping the tap-target floor.
   it('falls back to comfortable for a value it does not know', () => {
     const frame = open({ id: 'meter', density: 'tiny' as 'compact' });
 
@@ -790,17 +709,10 @@ describe('density', () => {
   });
 });
 
-// The close button's mark.
-//
-// It was the `×` character, which inherits the title bar's serif font and so
-// renders at whatever weight and optical size that font gives it: thin,
-// off-centre, and visibly not the mark the game's own close buttons use. A
-// stroked path is the same shape at every size.
+// A text `×` inherits the serif title font and renders thin and off-centre.
 describe('the close button', () => {
-  // Named against the shared constant, not against a copy of the path: the
-  // manager renders the same mark from the same place, and the failure this
-  // guards is one of the two renderers quietly going its own way.
-  it('draws the shared glyph rather than a text character', () => {
+  // Asserted against the shared constant so the manager's renderer cannot drift.
+  it('draws the shared glyph', () => {
     const frame = open({ id: 'meter' }, 'window');
     const close = frame.el.querySelector('.woc-close');
 
@@ -808,16 +720,14 @@ describe('the close button', () => {
     expect(close?.textContent).toBe('');
   });
 
-  // currentColor is what makes it take the gold on hover from the same rule the
-  // text version did. A hard-coded fill would go dead against the theme.
-  it('strokes with currentColor so the hover state still reaches it', () => {
+  it('strokes with currentColor so the hover rule reaches it', () => {
     const frame = open({ id: 'meter' }, 'window');
     const path = frame.el.querySelector('.woc-close path');
 
     expect(path?.getAttribute('stroke')).toBe('currentColor');
   });
 
-  it('is still named for a screen reader, which the glyph cannot be', () => {
+  it('is named for a screen reader', () => {
     const frame = open({ id: 'meter' }, 'window');
     const close = frame.el.querySelector('.woc-close');
 
@@ -825,33 +735,24 @@ describe('the close button', () => {
     expect(close?.querySelector('svg')?.getAttribute('aria-hidden')).toBe('true');
   });
 
-  // A frame is HUD furniture: ordinarily a readout that lives on screen and is
-  // toggled by a keybind, where a button would be chrome nobody asked for.
   it('is absent on a frame that did not ask', () => {
     const frame = open({ id: 'meter' }, 'frame');
 
     expect(frame.el.querySelector('.woc-close')).toBeNull();
   });
 
-  // Added after a live session found the middle case is the bad one: a compact
-  // frame draws a title bar and had no button on it, so a player met a titled
-  // panel and had to go and find its keybind to be rid of it.
   it('is drawn on a frame that asks for one', () => {
     const frame = open({ id: 'meter', closable: true }, 'frame');
 
     expect(frame.el.querySelector('.woc-close')).not.toBeNull();
   });
 
-  // The same refusal a bare WINDOW gets about its density, for the same reason:
-  // bare removes the title bar the button would live in, so honouring the option
-  // would be a promise with nowhere to keep it.
-  it('is refused on a bare frame, which has no title bar to hold it', () => {
+  it('is refused on a bare frame, which has no title bar', () => {
     const frame = open({ id: 'meter', closable: true, density: 'bare' }, 'frame');
 
     expect(frame.el.querySelector('.woc-close')).toBeNull();
   });
 
-  // A window is a panel the player opens and closes; that is what makes it one.
   it('is drawn on a window that did not ask', () => {
     const frame = open({ id: 'meter' }, 'window');
 
@@ -859,12 +760,7 @@ describe('the close button', () => {
   });
 });
 
-// A new window opens in front.
-//
-// A click raises a window, but a window nobody has clicked yet holds no z-index
-// at all, so without this a brand-new frame would open UNDER every window that
-// had been clicked since the session began. Showing a hidden one is the same
-// case: it has been out of the stack and has to come back to the top of it.
+// An unclicked window holds no z-index, so building or showing one must raise it.
 describe('stacking', () => {
   function raising() {
     const raised: HTMLElement[] = [];
@@ -901,9 +797,6 @@ describe('stacking', () => {
     expect(raised).toEqual([frame.el]);
   });
 
-  // Hiding is not a stacking event: nothing about the order of what is left
-  // changes, and raising on the way out would put a window players just dismissed
-  // at the top of the order for the next time it opens.
   it('does not raise on hide', () => {
     const { raised, make } = raising();
     const frame = make({ id: 'meter' });
@@ -914,35 +807,19 @@ describe('stacking', () => {
     expect(raised).toEqual([]);
   });
 
-  // Optional, because the frame kit is also driven by suites that have no
-  // stacking service and by any future caller that does not want one.
   it('works with no raise at all', () => {
     expect(() => open({ id: 'meter' }, 'window')).not.toThrow();
   });
 });
 
-// Who may move a frameless overlay.
-//
-// A bare frame is its own drag handle and its pointer policy hands the gesture
-// back over exactly the rows a player clicks, so before the rule any press that
-// travelled a few pixels moved the panel. Both gestures now belong to arrange
-// mode. A chromed frame is untouched, because a title bar is a deliberate target.
-//
-// What is driven here is the GESTURE, which is all a Node suite can reach:
-// interactjs does not move a box under happy-dom, which has no layout, so the
-// arithmetic is proved in frame-geometry.test.ts and the wiring here.
+// A bare frame is dragged by the rows a player clicks, so its gestures belong to
+// arrange mode. A title bar is a deliberate target, so chromed frames are untouched.
 describe('the gestures of a frameless overlay', () => {
   function arranged(): { mode: UnlockMode; hint: () => void } {
     return { mode: createUnlockMode(root()), hint: vi.fn(() => undefined) };
   }
 
-  /**
-   * Whether interactjs is currently willing to start a drag on this element.
-   *
-   * Compared against true rather than returned: the option is optional in
-   * interactjs's own types, and an undefined would read as "not draggable" here
-   * while meaning "never asked" there.
-   */
+  /** Compared against true: interactjs types `enabled` as optional. */
   function draggable(el: HTMLElement): boolean {
     return interact(el).draggable().enabled === true;
   }
@@ -964,8 +841,6 @@ describe('the gestures of a frameless overlay', () => {
     expect(draggable(frame.el)).toBe(true);
   });
 
-  // A frame built while the mode is already on has to be movable from its first
-  // frame rather than from the next time somebody flips the switch.
   it('starts live for a frame built while the mode is on', () => {
     const { mode, hint } = arranged();
     mode.set(true);
@@ -975,7 +850,6 @@ describe('the gestures of a frameless overlay', () => {
     expect(draggable(frame.el)).toBe(true);
   });
 
-  // The rule is about the frames with no deliberate handle. A title bar is one.
   it('leaves a chromed frame alone', () => {
     const { mode, hint } = arranged();
 
@@ -984,9 +858,7 @@ describe('the gestures of a frameless overlay', () => {
     expect(draggable(frame.el)).toBe(true);
   });
 
-  // The loader's own writes are not gestures: a locked frame is still restored to
-  // where the player left it, and still pulled back on screen when the viewport
-  // shrinks under it. This is why the gate is on the gestures and not on the box.
+  // The gate is on the gestures, not the box, so restore and refit still place it.
   it('still lets the loader place a locked frame', () => {
     const { mode, hint } = arranged();
     const frame = open({ id: 'strip', density: 'bare' }, 'frame', null, { unlock: mode, hint });
@@ -996,9 +868,6 @@ describe('the gestures of a frameless overlay', () => {
     expect(frame.el.style.left).not.toBe('');
   });
 
-  // The subscription outlives nothing: an addon destroys a frame by hand when a
-  // layout setting changes, and a stale subscriber would be switched on and off
-  // for the rest of the session.
   it('stops following the mode once the frame is destroyed', () => {
     const { mode, hint } = arranged();
     const frame = open({ id: 'strip', density: 'bare' }, 'frame', null, { unlock: mode, hint });
@@ -1010,11 +879,7 @@ describe('the gestures of a frameless overlay', () => {
   });
 });
 
-// What the player is told when nothing happens.
-//
-// The refusal has no event of its own: interactjs with the gestures off simply
-// never starts, so the press is watched here instead. A press that does not travel
-// is a click on whatever the addon drew and says nothing.
+// interactjs with gestures off raises no event, so the press itself is watched.
 describe('the arrange hint', () => {
   function press(el: HTMLElement, to: { x: number; y: number }): void {
     const at = (x: number, y: number) => ({ clientX: x, clientY: y, pointerId: 1, bubbles: true });
@@ -1059,11 +924,7 @@ describe('the arrange hint', () => {
   });
 });
 
-// The box, as the loader is holding it.
-//
-// It answers at moments `onMove` deliberately says nothing about, the first being right
-// after the frame was built, which is what every addon that scales with its own frame had
-// been seeding a variable to work around.
+// Answers where `onMove` is silent, including right after the frame was built.
 describe('reading the box', () => {
   it('answers the opening placement before any gesture', () => {
     const frame = open({ id: 'strip', width: 300, height: 200, resizable: true }, 'frame');
@@ -1072,16 +933,14 @@ describe('reading the box', () => {
     expect(frame.box().h).toBe(200);
   });
 
-  it('follows a restored box, which is what a saved frame comes back at', async () => {
+  it('follows a restored box', async () => {
     const hub = createFakeStorage();
     await hub.set(uiNamespace(FQID), perCharacterKey('pbe', CHARACTER, 'strip'), {
       box: { x: 40, y: 60, w: 240, h: 150 },
       visible: true,
     });
 
-    // Both bounds stated, or the opening size is the floor and the restored height
-    // comes back clamped up to it. That is the surprise `minWidth` and `minHeight`
-    // exist for, and it is the frame's own rule rather than anything about the read.
+    // Without both minimums the opening size is the floor and clamps the restore.
     const frame = open(
       {
         id: 'strip',
@@ -1100,9 +959,7 @@ describe('reading the box', () => {
     expect(frame.box()).toMatchObject({ x: 40, y: 60, w: 240, h: 150 });
   });
 
-  // No measurement, so a display that lays itself out against its frame can read this on
-  // every frame it draws. `getBoundingClientRect` on the element would force a layout
-  // each time, which is the whole reason this exists rather than being left to the addon.
+  // Read every frame, so it must not force a layout.
   it('does not touch the element to answer', () => {
     const frame = open({ id: 'strip', width: 300, resizable: true }, 'frame');
     const rect = vi.spyOn(frame.el, 'getBoundingClientRect');
@@ -1113,11 +970,7 @@ describe('reading the box', () => {
   });
 });
 
-// One axis rather than both, which is the shape a HUD list actually has.
-//
-// `veinsight` and `wayfarer` had each written the same comment refusing to be resizable
-// at all: their row count is a setting, so an owned height could only clip the rows or
-// leave a gap under them. Both wanted the width and gave it up with the height.
+// A list whose row count is a setting owns its width and leaves the height to content.
 describe('resizing one axis', () => {
   it('writes the width and leaves the height to the content', () => {
     const frame = open({ id: 'list', width: 300, height: 200, resizable: 'width' }, 'frame');
@@ -1133,8 +986,6 @@ describe('resizing one axis', () => {
     expect(frame.el.style.width).toBe('300px');
   });
 
-  // The edge a player would drag for an axis nobody owns is an edge that promises a
-  // gesture the frame will not honour, so it is not offered at all.
   it('offers edges only on the axis it owns', () => {
     const frame = open({ id: 'list', width: 300, resizable: 'width' }, 'frame');
     const { edges } = interact(frame.el).resizable();
@@ -1142,9 +993,7 @@ describe('resizing one axis', () => {
     expect(edges).toMatchObject({ top: false, left: true, right: true, bottom: false });
   });
 
-  // The same direction the density and pointer fallbacks take. A frame that owned an
-  // axis it should not would clip its own content, where one that owns neither is
-  // exactly the frame every addon had before it asked for anything.
+  // Owning an axis it should not would clip the frame's content.
   it('reads an unrecognised value as not resizable', () => {
     const frame = open({ id: 'list', width: 300, resizable: 'both' as 'width' }, 'frame');
 
@@ -1154,8 +1003,7 @@ describe('resizing one axis', () => {
   });
 });
 
-// The arrange-mode name chip, composed in TypeScript and written to one attribute
-// because CSS text is unreadable from a Vitest suite and the sheet could reach only the fqid.
+// Composed in TypeScript into one attribute, since the sheet could reach only the fqid.
 describe('the arrange-mode name chip', () => {
   function label(el: HTMLElement): string | null {
     return el.getAttribute(LABEL_ATTR);
@@ -1175,20 +1023,20 @@ describe('the arrange-mode name chip', () => {
     });
   }
 
-  it('names the addon and the frame, so a screen of outlined boxes can be read', () => {
+  it('names the addon and the frame', () => {
     const frame = named({ id: 'main', title: 'Damage' }, 'Combat Meter');
 
     expect(label(frame.el)).toBe('Combat Meter · Damage');
   });
 
-  it('falls back to the frame id when the addon gave it no title', () => {
+  it('falls back to the frame id without a title', () => {
     const frame = named({ id: 'main' }, 'Combat Meter');
 
     expect(label(frame.el)).toBe('Combat Meter · main');
   });
 
-  // A poor label but a true one; title-casing the id would invent a name.
-  it('falls back to the fqid when nothing passed the addon a name', () => {
+  // Title-casing the id would invent a name.
+  it('falls back to the fqid without an addon name', () => {
     const frame = named({ id: 'main', title: 'Damage' });
 
     expect(label(frame.el)).toBe(`${FQID} · Damage`);
@@ -1202,15 +1050,12 @@ describe('the arrange-mode name chip', () => {
     expect(label(frame.el)).toBe('Combat Meter · Healing');
   });
 
-  // Above by default, where the chip covers nothing the frame drew.
   it('stays above a frame with room for it', () => {
     const frame = named({ id: 'main' }, 'Combat Meter');
 
     expect(frame.el.classList.contains(LABEL_BELOW_CLASS)).toBe(false);
   });
 
-  // Through the opening placement rather than by writing the class, since every
-  // box reaches the element through paint.
   it('marks a frame whose top leaves no room for the chip', () => {
     const frame = named({ id: 'main' }, 'Combat Meter', { w: 1280, h: 300 });
 
@@ -1218,9 +1063,8 @@ describe('the arrange-mode name chip', () => {
   });
 });
 
-// The grid reaches a frame through the mode alone. Driven directly because interactjs
-// moves nothing under happy-dom, and the one line handing the mode's grid to the
-// gesture layer fails silently without this.
+// Driven directly: interactjs moves nothing under happy-dom, and a missing grid
+// hand-off fails silently.
 describe('the arrange grid reaching a frame', () => {
   function gestures(arrange?: FrameArrange) {
     const opts: FrameOpts = { id: 'main', width: 320, height: 200 };

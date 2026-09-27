@@ -69,7 +69,7 @@ describe('DisposalBag', () => {
   });
 
   // A stray async callback landing after disable must not leak its resource.
-  it('runs an teardown added after disposal immediately', () => {
+  it('runs a teardown added after disposal immediately', () => {
     const fn = vi.fn();
     const bag = new DisposalBag();
     bag.dispose();

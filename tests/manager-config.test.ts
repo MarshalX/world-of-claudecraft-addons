@@ -1,9 +1,5 @@
-// The manager's per-addon config service.
-//
-// The design claim it exists to prove: the manager writes to the SAME stores a
-// running addon reads, over the same storage hub, so editing an addon that is
-// enabled and one that is disabled are one code path. Nothing here knows
-// whether the addon is running, and that is the point.
+// The manager's per-addon config service. It writes through the same storage hub a running addon
+// reads, so editing an enabled and a disabled addon is one code path.
 
 import { describe, expect, it, vi } from 'vitest';
 import { createGameBindings } from '../loader/src/runtime/keys/game-bindings.ts';
@@ -98,14 +94,8 @@ describe('opening an addon', () => {
   });
 });
 
-// What the cache must NOT do, reported from a live session.
-//
-// A store is a function of its declarations: it hydrates from them and refuses a
-// write to anything they do not name. The form beside it renders from the row's
-// manifest read fresh. So a cache keyed on the fqid alone put a new control on
-// screen backed by a store that had never heard of it, and choosing a value
-// answered "no setting declared with id 'layout'". Reinstalling did not clear it,
-// because what was stale was the map rather than storage.
+// A store refuses writes to ids its declarations do not name, while the form renders from the
+// fresh manifest. A cache keyed on the fqid alone would back a new control with a stale store.
 describe('an addon whose manifest changed', () => {
   const withLayout: InstalledAddon['manifest']['settings'] = [
     { id: 'window', type: 'number', label: 'Window', default: 5, min: 1, max: 60 },
@@ -138,8 +128,7 @@ describe('an addon whose manifest changed', () => {
     expect(config.keybinds.ids()).toEqual(['toggle', 'reset']);
   });
 
-  // The rebuild has to release the old pair, or a manager left open across a few
-  // updates keeps a storage subscription per version of every addon it has shown.
+  // Otherwise a long-open manager keeps a storage subscription per version of every addon shown.
   it('releases the stores it replaced', async () => {
     const { hub, service } = open();
     const stale = await service.open(addon());
@@ -150,8 +139,6 @@ describe('an addon whose manifest changed', () => {
     expect(stale.settings.values()).toMatchObject({ window: 5 });
   });
 
-  // The cache still has to be a cache: a row that did not change must not pay for
-  // a round trip, which is what made this worth keeping rather than dropping.
   it('keeps the pair when nothing about the declarations moved', async () => {
     const { service } = open();
 
@@ -161,9 +148,7 @@ describe('an addon whose manifest changed', () => {
     expect(second).toBe(first);
   });
 
-  // Hydration is a bridge round trip, so an update can land inside one. The load
-  // that started for the new row owns the cache: the older one resolving late must
-  // not put its declarations back.
+  // An update can land inside a hydrate; the newer load owns the cache.
   it('does not let a load overtaken mid-hydrate write itself back', async () => {
     const { service } = open();
 
@@ -202,9 +187,7 @@ describe('repainting', () => {
 });
 
 describe('reaching a running addon', () => {
-  // The whole design in one assertion: a store the addon built and a store the
-  // manager built are two objects over one hub, and a write to either reaches
-  // the other.
+  // The addon's store and the manager's are two objects over one hub.
   it('moves a value into a store an addon already holds', async () => {
     const hub = createFakeStorage();
     const running = createSettingsStore({

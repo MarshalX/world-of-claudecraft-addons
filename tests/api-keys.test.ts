@@ -1,12 +1,7 @@
 // @vitest-environment happy-dom
 
-// The woc.keys surface.
-//
-// The behaviour that justifies the whole design is that an addon binds by
-// DECLARED ID and never by combo, so a rebind made in the manager moves the live
-// registration underneath a running addon with nothing for the addon to do. The
-// other half is disposal: every bind has to be released when the addon is
-// disabled, or a disabled addon keeps eating key presses.
+// The woc.keys surface. An addon binds by declared id, so a rebind in the manager moves the
+// live registration under a running addon, and every bind is released on disable.
 
 import { describe, expect, it, vi } from 'vitest';
 import { createKeys } from '../loader/src/runtime/api/keys.ts';
@@ -62,8 +57,6 @@ describe('binding', () => {
     expect(handler).toHaveBeenCalledOnce();
   });
 
-  // This is what lets the manager render an addon's full keybind editor for an
-  // addon it has never run.
   it('throws for an id the manifest does not declare', () => {
     const { keys } = open();
 
@@ -87,7 +80,6 @@ describe('binding', () => {
 });
 
 describe('rebinding underneath a running addon', () => {
-  // The point of binding by id. The addon's handler is untouched.
   it('moves the live registration when the store changes', async () => {
     const { target, keys, store } = open();
     const handler = vi.fn();
@@ -111,8 +103,7 @@ describe('rebinding underneath a running addon', () => {
     expect(handler).toHaveBeenCalledOnce();
   });
 
-  // The store announces every declared id on a change, so an id this addon
-  // never bound must not be handed to the dispatcher as a rebind.
+  // The store announces every declared id on a change, bound or not.
   it('ignores a change for an id this addon has not bound', async () => {
     const { keys, store } = open();
     keys.bind('toggle', vi.fn());
@@ -189,8 +180,7 @@ describe('conflicts', () => {
     expect(keys.conflicts('Alt+KeyJ')).toEqual({ game: [], addons: [], source: 'live' });
   });
 
-  // A 'stored' or 'none' reading with no conflicts does not mean the key is
-  // free, so the source travels with the answer rather than being dropped.
+  // A 'stored' or 'none' reading with no conflicts does not mean the key is free.
   it('says when it had no source to read', () => {
     const { keys } = open();
 

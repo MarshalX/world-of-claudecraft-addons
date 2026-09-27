@@ -1,9 +1,5 @@
-// The rail button's menu: what it lists, and what selecting a row does.
-//
-// Two subjects, split the way the modules are. `frameMenuItems` is pure and takes
-// a roster reading, so most of this needs no DOM at all; the roster itself owns
-// the one thing that is not pure, which is that a frame's visibility is read at
-// the moment the menu is built rather than when the frame registered.
+// The rail button's menu. `frameMenuItems` is pure; the roster reads each frame's
+// visibility when the menu is built.
 
 import { describe, expect, it } from 'vitest';
 import {
@@ -57,8 +53,6 @@ function actions(over: Partial<MenuActions> = {}): MenuActions {
 }
 
 describe('the menu the rail button opens', () => {
-  // The button's oldest job is still its most important one. A player with no
-  // addons installed must not press it and get a note about there being nothing.
   it('offers the manager first, even with nothing to list', () => {
     const items = frameMenuItems([], actions());
 
@@ -66,17 +60,14 @@ describe('the menu the rail button opens', () => {
     expect(labels(items)).toContain(EMPTY_LABEL);
   });
 
-  // Second, above the frames, because it is the one control that helps when a
-  // frame IS on screen and cannot be found: a bare overlay drawing nothing has no
-  // pixels to grab, which is the other half of the problem this menu is for.
+  // Above the frames: a bare overlay drawing nothing has no pixels to grab without it.
   it('offers the unlock switch just under the manager', () => {
     const items = frameMenuItems([], actions());
 
     expect(items[1]?.label).toBe(UNLOCK_LABEL);
   });
 
-  // The row says what pressing it will DO, since a menu row has no tick to carry
-  // the state the manager's checkbox carries.
+  // The label says what pressing it will do, since this row carries no tick.
   it('offers to lock again once frames are unlocked', () => {
     const items = frameMenuItems([], actions({ unlocked: () => true }));
 
@@ -115,9 +106,7 @@ describe('the menu the rail button opens', () => {
     expect(opened).toBe(1);
   });
 
-  // Flat, one row per frame. Grouping under a heading per addon was the first
-  // shape and doubled the menu for nothing: every addon owns exactly one frame,
-  // so twelve addons came to twenty-five rows and ran off the screen.
+  // Flat: a heading per addon doubles the rows, since each addon owns one frame.
   it('lists one row per frame with no heading', () => {
     const entry = (fqid: string, title: string) => ({
       fqid,
@@ -146,8 +135,7 @@ describe('the menu the rail button opens', () => {
     ]);
   });
 
-  // The addon half of the fqid, not the marketplace: every row a player normally
-  // sees comes from the same source, so naming it spends width on nothing.
+  // The addon half of the fqid only: the marketplace is almost always the same one.
   it('names the addon when the title does not already', () => {
     const items = frameMenuItems(
       [
@@ -166,7 +154,6 @@ describe('the menu the rail button opens', () => {
     expect(labels(items)).toContain('foretell: Casts');
   });
 
-  // And does not, when it would read as `longwatch: Longwatch`.
   it('leaves a title that already carries the addon name alone', () => {
     const items = frameMenuItems(
       [
@@ -203,9 +190,6 @@ describe('the menu the rail button opens', () => {
     expect(labels(items)).toContain(`longwatch: Rares${SHOWN_SUFFIX}`);
   });
 
-  // One rule, between the two loader actions and the frames, and none between the
-  // frames themselves: a separator on every row is a rule per row, which is the
-  // noise a heading per addon was.
   it('rules the loader actions off from the frames and nothing else', () => {
     const entry = (title: string) => ({
       fqid: 'official/longwatch',
@@ -237,9 +221,8 @@ describe('the roster behind it', () => {
     expect(roster.entries().map((one) => one.title)).toEqual(['Rares']);
   });
 
-  // The whole reason the roster holds the frame's own calls rather than its
-  // element: a saved frame records its visibility when it changes, so a class
-  // toggled from outside would show it and leave the stored answer saying closed.
+  // Through the frame's own calls, never its element: a saved frame records its
+  // visibility on change, and a class toggled from outside would leave it saying closed.
   it('shows a closed frame through the frame itself', () => {
     const roster = createFrameRoster();
     const { state, frame } = fakeFrame(false);
@@ -252,11 +235,8 @@ describe('the roster behind it', () => {
     expect(state.shown).toBe(true);
   });
 
-  // Read when the menu is built, never cached: a frame's visibility changes
-  // without the roster hearing about it, through the addon's own keybind or the
-  // restore of a saved box, and a stale answer would be wrong exactly when a
-  // player opened the list to find out.
-  it('reads visibility fresh rather than remembering it', () => {
+  // A keybind or a restored box changes visibility without the roster hearing of it.
+  it('reads visibility fresh every time', () => {
     const roster = createFrameRoster();
     const { state, frame } = fakeFrame(false);
     rostered(roster, { fqid: 'official/longwatch', frameId: 'rares', title: 'Rares' }, frame);
@@ -266,9 +246,8 @@ describe('the roster behind it', () => {
     expect(roster.entries()[0]?.visible).toBe(true);
   });
 
-  // Destroy is the addon's to call as well as the loader's, and a bag only drains
-  // on disable, so a frame replaced mid-session would otherwise sit in the menu
-  // offering to show something that no longer exists.
+  // A bag drains only on disable, so a frame the addon destroys mid-session must leave
+  // the menu at destroy.
   it('drops a frame the addon destroyed', () => {
     const roster = createFrameRoster();
     const { frame } = fakeFrame();
@@ -279,7 +258,7 @@ describe('the roster behind it', () => {
     expect(roster.entries()).toEqual([]);
   });
 
-  it('still runs the frame own teardown when it does', () => {
+  it('still runs the frame teardown', () => {
     const roster = createFrameRoster();
     const { state, frame } = fakeFrame();
     rostered(roster, { fqid: 'official/longwatch', frameId: 'rares', title: 'Rares' }, frame);
@@ -290,16 +269,16 @@ describe('the roster behind it', () => {
   });
 });
 
-// A tick rather than the flipping label the unlock row carries: snapping does
-// nothing until the next drag, so "Turn on snapping" would look like it had failed.
+// A tick, never a flipping label: snapping does nothing until the next drag, so a
+// "Turn on snapping" label would look like it had failed.
 describe('the snap row', () => {
-  it('sits directly under the arrange switch, which is the only time it matters', () => {
+  it('sits directly under the arrange switch', () => {
     const items = frameMenuItems([], actions());
 
     expect(labels(items).slice(0, 3)).toEqual([OPEN_LABEL, UNLOCK_LABEL, SNAP_LABEL]);
   });
 
-  it('carries the setting as a tick rather than in its wording', () => {
+  it('carries the setting as a tick', () => {
     const off = frameMenuItems([], actions({ snapping: () => false }));
     const on = frameMenuItems([], actions({ snapping: () => true }));
 

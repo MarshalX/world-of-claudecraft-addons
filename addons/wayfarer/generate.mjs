@@ -2,10 +2,8 @@
 //
 //   node addons/wayfarer/generate.mjs --game=/path/to/world-of-claudecraft
 //
-// `--game` is REQUIRED and is never defaulted. A checkout is not an endpoint: a
-// stale one answers every read happily and produces a table that is quietly a
-// release behind, where a moved endpoint would 404. Naming the path every time is
-// what makes the reader say which checkout they meant.
+// `--game` is REQUIRED and never defaulted: a stale checkout answers every read happily
+// and produces a table that is quietly a release behind.
 //
 // It reads, and nothing else:
 //
@@ -16,60 +14,31 @@
 //   src/sim/content/graveyards.ts   OVERWORLD_GRAVEYARDS
 //   src/sim/content/mailboxes.ts    MAILBOXES
 //   src/sim/*_layout.ts             the points, ids and names a town layout owns,
-//                                   which the two tables above and one zone's hub
-//                                   read through it. FOLLOWED FROM EACH READING
-//                                   MODULE'S OWN IMPORT rather than from a list here
+//                                   FOLLOWED FROM EACH READING MODULE'S OWN IMPORT
+//                                   rather than from a list here
 //   package.json                    the game VERSION stamped into the output
 //
-// It writes `atlas.json` beside itself and nothing else, anywhere.
+// It writes `atlas.json` beside itself. Every array is emitted in the game's own order and
+// every object in a fixed key order, so two runs against one checkout are byte-identical.
 //
-// DETERMINISTIC. Every array is emitted in the game's own order (zones follow the
-// ZONES array, portals follow the PORTALS spread, everything else follows its own
-// table), every object is built in a fixed key order, and the output is
-// `JSON.stringify(_, null, 2)` with a trailing newline. Two runs against an
-// unchanged checkout are byte-identical.
+// Two constants must come from the checkout. Some zones carry no x bounds and are the
+// full-width strip, so the strip's width (from WORLD_SIZE) has to travel with the table.
+// INSTANCE_X_BASE is what the addon's instance refusal turns on; a stale copy turns the
+// refusal into a guess.
 //
-// THE TWO CONSTANTS THAT MUST COME FROM THE CHECKOUT, and the reason this script
-// exists rather than a paste:
+// Content assumptions a release could invalidate. Each throws rather than degrading,
+// because a table quietly missing a part is worse than none:
 //
-//  - The zone table is NOT a set of plain rectangles. Five zones carry no x bounds
-//    at all and are the original full-width strip; ten carry them and are grid
-//    columns beside it. So the strip's own width has to travel with the table, and
-//    it is derived here exactly as `src/sim/data.ts` derives it, from
-//    WORLD_SIZE. A release that widens the world moves it.
-//  - INSTANCE_X_BASE is what the addon's instance-plane refusal turns on. It has
-//    already moved once (it was 600 before the world grid), and a release that
-//    moves it again would silently turn the refusal into a guess.
-//
-// CONTENT ASSUMPTIONS A GAME RELEASE COULD INVALIDATE. Each of these throws rather
-// than degrading, because a table that is quietly missing a part is worse than no
-// table at all:
-//
-//  - A zone's `pois` array is pure literals. An entry built from an identifier or a
-//    call would fail to evaluate here, loudly.
-//  - A zone's own `{...}` may SPREAD a constant declared beside it in the same
-//    module, which game 0.40.1 is the first release to do: the Proving Shore keeps
-//    its four bounds in one `PROVING_SHORE_RECT` shared with the island's own
-//    containment predicate. Only OBJECT constants are expanded, and only for the
-//    zone block, because the array spreads (`...MOAT,` inside Willowfen's lakes)
-//    sit under properties this script does not read.
-//  - Every zone has exactly one `hub`, and a hub's `name` is also one of that
-//    zone's poi labels. That pairing is what marks a poi as a TOWN, and it holds
-//    for all fifteen zones today. A zone whose hub name matches no poi simply gets
-//    no town, which is the safe direction.
-//  - Every mailbox lies inside exactly one zone rectangle, and its label is taken
-//    from that zone's hub. Most mailboxes have no id and no name in the game at all,
-//    so the ids emitted here are this addon's own, derived from the hub name. Where
-//    a town layout DOES name its own (`mailbox_eastbrook`, `mailbox_fenbridge`) the
-//    derivation happens to agree, and it is the derivation that is emitted, because
-//    it is the one rule that covers all fifteen.
-//  - A table row, or a zone's hub, may read a town layout as `<NAME>_LAYOUT.a.b.c`,
-//    either spread for a point or read for a scalar. The module holding that layout
-//    is followed from the READING module's own import, so a town rebuilt into a new
-//    layout file is picked up without a name being added here. That generality is
-//    not speculative: Fenbridge became the second town to move this way, and a
-//    script that had hard-coded the first one simply stopped. A path that no longer
-//    resolves, and a spread that no longer reads a point, both throw.
+//  - A zone's `pois` array is pure literals.
+//  - A zone's `{...}` may spread an OBJECT constant declared in the same module. Array
+//    spreads (`...MOAT,`) sit under properties this script does not read and are left alone.
+//  - Every zone has exactly one `hub`, and a hub's `name` is also one of that zone's poi
+//    labels; that pairing marks a poi as a TOWN. A hub matching no poi gets no town.
+//  - Every mailbox lies inside exactly one zone rectangle and takes its id and label from
+//    that zone's hub, because most mailboxes have no id or name in the game.
+//  - A table row or a hub may read a town layout as `<NAME>_LAYOUT.a.b.c`, spread for a point
+//    or read for a scalar. The layout module is followed from the reading module's import, so
+//    a town moved into a new layout file needs no change here.
 
 import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -127,29 +96,19 @@ const LAYOUT_SPREAD = /\.\.\.(\w+_LAYOUT)((?:\.\w+)+)/g;
 /** `FENBRIDGE_LAYOUT.services.graveyard.id`, read for a scalar rather than spread. */
 const LAYOUT_READ = /(\w+_LAYOUT)((?:\.\w+)+)/g;
 /**
- * `...PROVING_SHORE_RECT,`: a spread of a constant declared in the SAME module.
- *
- * The trailing comma is part of the match on purpose. It is what tells this apart
- * from `...FENBRIDGE_LAYOUT.services.mailbox.position,`, which LAYOUT_SPREAD owns
- * and which carries a dot where this wants the comma.
+ * `...PROVING_SHORE_RECT,`: a spread of a constant declared in the SAME module. The trailing
+ * comma tells it apart from a `...X_LAYOUT.a.b,` spread, which LAYOUT_SPREAD owns.
  */
 const LOCAL_SPREAD = /\.\.\.([A-Z][A-Z0-9_]*),/g;
 /**
- * A bare identifier standing in for a block, e.g. `services: SERVICES,`.
- *
- * Deliberately only SCREAMING_SNAKE, which is what the game writes its layout tables
- * in. A looser rule matches a bare `34` as readily as a name, and would then hunt for
- * a `const 34` and report a missing declaration where the value was sitting in hand.
+ * A bare identifier standing in for a block, e.g. `services: SERVICES,`. SCREAMING_SNAKE only:
+ * a looser rule matches a bare `34` and then hunts for a `const 34` that does not exist.
  */
 const IDENT_VALUE = /^[A-Z][A-Z0-9_]*$/;
 /**
- * A same-module constant read as a VALUE, e.g. `id: LAST_KEEP_GRAVEYARD_ID,`.
- *
- * The two lookarounds are the whole of what keeps this from matching things it must
- * not. Behind: no dot and no word character, so a layout read (`X_LAYOUT.services`)
- * and the tail of a longer name are both out, and so is a spread, which
- * LOCAL_SPREAD owns. Ahead: not a colon, so an upper-case property KEY is never
- * mistaken for a reference to itself.
+ * A same-module constant read as a VALUE, e.g. `id: LAST_KEEP_GRAVEYARD_ID,`. The lookbehind
+ * excludes a layout read, a spread and the tail of a longer name; the lookahead excludes an
+ * upper-case property KEY.
  */
 const LOCAL_CONST = /(?<![.\w])([A-Z][A-Z0-9_]{2,})\b(?!\s*:)/g;
 
@@ -231,11 +190,8 @@ function isQuote(ch) {
 }
 
 /**
- * The balanced block starting at `from`, both delimiters included.
- *
- * Strings and line comments are skipped rather than counted, because a label or an
- * authored welcome line may hold either delimiter and a naive count would stop in
- * the middle of the table.
+ * The balanced block starting at `from`, both delimiters included. Strings and line comments
+ * are skipped, since a label may hold either delimiter.
  */
 function blockAt(text, from, open, close) {
   let depth = 0;
@@ -261,11 +217,8 @@ function blockAt(text, from, open, close) {
 }
 
 /**
- * The value text of a top-level `name: value,` line inside a block, or null.
- *
- * The trailing comment is cut before the trailing comma, and it has to be: one zone
- * carries `zMax: 1440, // the northern 180yd is open ocean`, and a comment left on
- * the end swallows the closing parenthesis of the expression this value goes into.
+ * The value text of a top-level `name: value,` line inside a block, or null. A trailing
+ * comment is cut first, or it swallows the closing parenthesis `literal` wraps the value in.
  */
 function propText(block, name) {
   const want = `${name}: `;
@@ -280,12 +233,8 @@ function propText(block, name) {
 }
 
 /**
- * Where a named declaration's literal actually opens.
- *
- * It searches for `= [` rather than for the first bracket, and it has to: every one
- * of these tables is typed `GraveyardDef[] = [`, so the first `[` after the name is
- * the one in the TYPE and a block read from there is the empty pair `[]`. That reads
- * as a table with nothing in it rather than as a failure, which is the quiet kind.
+ * Where a named declaration's literal opens. Searches for `= [`, because the first `[` after
+ * a name typed `GraveyardDef[]` is the TYPE's, and reading from there yields a silent `[]`.
  */
 function openerAt(text, marker, open) {
   const at = text.indexOf(marker);
@@ -309,22 +258,13 @@ function propBlock(block, name, open, close) {
 }
 
 /**
- * Evaluate a pure object or array literal out of the checkout.
+ * Evaluate a pure object or array literal out of the checkout. `new Function` because these
+ * are JS literals (trailing commas, comments, single quotes); anything naming an identifier
+ * throws, which is the loud failure a restructured table should produce.
  *
- * `new Function` rather than a JSON transform, because these are JavaScript
- * literals with trailing commas, comments and single quotes in them, and a
- * transform that handled all three would be a parser. It is deliberately narrow:
- * anything referring to an identifier throws here, which is the loud failure a
- * content release restructuring a table should produce.
- *
- * An ABSENT value is refused here rather than at each call site, because the
- * quiet failure is the one this reader is most exposed to: `propText` answers
- * null for a property the game no longer writes on its own line, and
- * `new Function('return (null);')` evaluates that to null perfectly happily. So
- * a zone that stopped declaring `zMin` inline came out with a null bound instead
- * of a refusal, and the first thing to notice was a mailbox three functions away
- * that fell inside no rectangle. Every caller that has a legitimately optional
- * property (xMin, xMax) already null-checks before calling.
+ * An ABSENT value is refused here: `propText` answers null for a property no longer on its
+ * own line, and `return (null)` would otherwise evaluate happily. Callers with a genuinely
+ * optional property (xMin, xMax) null-check before calling.
  */
 function literal(text, what) {
   if (text === null || text === undefined) {
@@ -397,10 +337,8 @@ function declaredIn(modules, pattern) {
 }
 
 /**
- * A zone's hub, which is where its town stands and what names it.
- *
- * The block form is tried first because a hub whose point comes out of a town layout
- * is written over four lines, and `propText` would hand back the opening brace alone.
+ * A zone's hub, which is where its town stands and what names it. The block form is tried
+ * first, because on a multi-line hub `propText` hands back the opening brace alone.
  */
 function hubOf(block, ident, layouts) {
   const text = propBlock(block, 'hub', '{', '}') ?? propText(block, 'hub');
@@ -411,14 +349,8 @@ function hubOf(block, ident, layouts) {
 }
 
 /**
- * One point of interest, with each flag present only when it is true.
- *
- * `hidden` carries the game's own `hideOnMap`, which drops a label from the world
- * map while leaving the place and its exploration mark alive. Carried rather than
- * dropped because those are two different questions: the deed sweep in
- * `src/sim/deeds.ts` marks a visit without consulting the flag, so a hidden poi
- * still counts toward a zone's exploration, and a table that had left the row out
- * would make that tally short by one forever.
+ * One point of interest, with each flag present only when true. `hidden` is the game's
+ * `hideOnMap`; the row is kept because the deed sweep ignores the flag and still counts it.
  */
 function poiOf(poi, hub) {
   const built = { id: poi.id, label: poi.label, x: poi.x, z: poi.z };
@@ -432,12 +364,8 @@ function poiOf(poi, hub) {
 }
 
 /**
- * One zone.
- *
- * `xMin` and `xMax` are emitted ONLY where the game declares them, because their
- * absence is the fact: a zone without them is the full-width strip rather than a
- * zone with no width, and flattening that away is what would put a player standing
- * on Farshore Isle into Eastbrook Vale.
+ * One zone. `xMin` and `xMax` are emitted ONLY where the game declares them: their absence
+ * means the full-width strip, and flattening it would put Farshore Isle into Eastbrook Vale.
  */
 function zoneOf(root, module, ident) {
   const block = withLocalSpreads(
@@ -478,10 +406,8 @@ function readZones(root, modules) {
 }
 
 /**
- * Every `<NAME>_LAYOUT` a content module imports, mapped to the text declaring it.
- *
- * Read from the module's OWN imports rather than from a list here, so a town moved
- * into a layout file this script has never heard of resolves on the first run.
+ * Every `<NAME>_LAYOUT` a content module imports, mapped to the text declaring it. Read from
+ * the module's own imports, so a town moved into a new layout file resolves unchanged.
  */
 function layoutsFor(root, module) {
   const found = new Map();
@@ -518,10 +444,8 @@ function indirection(text, value) {
 }
 
 /**
- * A key read out of a block the game wrote on ONE line, e.g. `{ x: 0, z: 300 }`.
- *
- * `propText` is line-oriented, so a point authored inline hands it no line beginning
- * `x: ` and it reports the key as gone. A layout writes both forms freely.
+ * A key read out of a block written on ONE line, e.g. `{ x: 0, z: 300 }`, which the
+ * line-oriented `propText` cannot see.
  */
 function inlineKey(block, key) {
   let parsed = null;
@@ -568,16 +492,10 @@ function layoutRef(layouts, whole, ident, dotted) {
 }
 
 /**
- * Where a same-module `const IDENT = {` opens, or null when it is not an object.
- *
- * Not `openerAt`, which searches FORWARD for the first `= {` after its marker and
- * would answer with an unrelated declaration further down the file for a constant
- * that is not one. That is exactly the Willowfen case: `const MOAT = [` is an
- * array, and an unbounded search found the next object in the module and read it
- * as the moat. Null rather than a throw, because an array spread contributes no
- * properties to look up: `...MOAT,` sits inside `lakes`, which this reader does
- * not read, and refusing it would fail the whole table over a property that is
- * none of this script's business.
+ * Where a same-module `const IDENT = {` opens, or null when it is not an object. Not
+ * `openerAt`, whose forward search would find an unrelated object further down for an array
+ * constant like `MOAT`. Null rather than a throw, since array spreads sit under properties
+ * this script does not read.
  */
 function objectConstAt(text, ident) {
   const at = text.indexOf(`const ${ident}`);
@@ -593,17 +511,9 @@ function objectConstAt(text, ident) {
 }
 
 /**
- * Every `...IDENT,` spread of a same-module constant, replaced by its properties.
- *
- * Game 0.40.1 is what this is for: the Proving Shore declares its four zone bounds
- * once, as `const PROVING_SHORE_RECT`, and spreads them into the ZoneDef, because
- * the island's own `isOnProvingShore` predicate reads the same rectangle. Every
- * other zone still writes the four inline.
- *
- * One property PER LINE, because `propText` reads a block line by line and four
- * bounds on one line would hand `zMin` the whole run as its value. Re-emitted
- * through the evaluated object rather than by splicing the source text, so a
- * constant holding anything but scalars still comes out as syntax this can read.
+ * Every `...IDENT,` spread of a same-module constant, replaced by its properties. One per
+ * LINE, because `propText` reads line by line; emitted from the evaluated object so
+ * non-scalar values still come out as readable syntax.
  */
 function withLocalSpreads(text, module) {
   return text.replaceAll(LOCAL_SPREAD, (whole, ident) => {
@@ -619,10 +529,8 @@ function withLocalSpreads(text, module) {
 }
 
 /**
- * Every layout reference in a table or a hub, replaced by the value it reads.
- *
- * The spreads go first, because a spread's own text is a read with three dots in
- * front of it and resolving the read half would leave those dots on a property list.
+ * Every layout reference in a table or a hub, replaced by the value it reads. Spreads go
+ * first, since a spread contains a read and resolving that half would leave the dots behind.
  */
 function withLayoutValues(text, layouts) {
   const spread = text.replaceAll(LAYOUT_SPREAD, (whole, ident, dotted) => {
@@ -638,18 +546,9 @@ function withLayoutValues(text, layouts) {
 }
 
 /**
- * Every same-module SCALAR constant read as a value, replaced by what it holds.
- *
- * The scalar twin of `withLocalSpreads` above, and game 0.43.0 is what it is for:
- * the Last Keep churchyard was appended to OVERWORLD_GRAVEYARDS as
- * `{ id: LAST_KEEP_GRAVEYARD_ID, ... }`, because `spirit.ts` reads the same id to
- * find that yard's reserved healer. Before this the whole table refused, which was
- * the RIGHT failure (a graveyard table quietly short one graveyard sends a ghost
- * 300 yards the wrong way) and is still a failure somebody has to come and fix.
- *
- * Anything it cannot resolve is LEFT ALONE rather than dropped, so `literal` still
- * throws on it. That is the property to keep: this widens what can be read, and
- * must never widen what can be read WRONG.
+ * Every same-module SCALAR constant read as a value, replaced by what it holds. Anything it
+ * cannot resolve is LEFT ALONE so `literal` still throws on it: this widens what can be read
+ * and must never widen what can be read wrong.
  */
 function withLocalConstants(text, module) {
   return text.replaceAll(LOCAL_CONST, (whole, ident) => {
@@ -671,9 +570,7 @@ function readGraveyards(root, modules) {
   const module = moduleNamed(modules, 'graveyards.ts');
   const opener = openerAt(module.text, 'export const OVERWORLD_GRAVEYARDS', '[');
   const block = blockAt(module.text, opener, '[', ']');
-  // Layouts first, for the reason withLayoutValues gives about spreads: its reads
-  // carry dots, which is exactly what LOCAL_CONST's lookbehind refuses, so running
-  // it second leaves the layout references untouched either way.
+  // Layouts first: their reads carry dots, which LOCAL_CONST's lookbehind skips anyway.
   const resolved = withLocalConstants(withLayoutValues(block, layoutsFor(root, module)), module);
   const rows = literal(resolved, 'OVERWORLD_GRAVEYARDS');
   return rows.map((row) => ({ id: row.id, label: row.name, x: row.x, z: row.z }));
@@ -703,11 +600,8 @@ function withHubPoints(text, zones) {
 }
 
 /**
- * The mailboxes, each named for the town it stands in.
- *
- * The game gives a mailbox neither an id nor a name, so both come from the hub of
- * the zone the point falls in. There is exactly one hub per zone and one mailbox per
- * town, which is what makes that a derivation rather than a guess.
+ * The mailboxes, each named for the town it stands in. The game gives a mailbox neither id
+ * nor name, so both come from the hub of the zone the point falls in.
  */
 function readMailboxes(root, modules, zones, strip) {
   const module = moduleNamed(modules, 'mailboxes.ts');
@@ -724,15 +618,7 @@ function readMailboxes(root, modules, zones, strip) {
   });
 }
 
-/**
- * A hub name as an id fragment: `Dawnrest Camp` becomes `dawnrest_camp`.
- *
- * Every hub was one word until game 0.40.1 gave the Proving Shore a two-word one,
- * and a bare `toLowerCase()` emitted `mailbox_dawnrest camp`, an id with a space
- * in it sitting beside `mailbox_eastbrook`. Ids here are this addon's own, so the
- * repair is ours to make; the two the game names itself are single words and are
- * unaffected either way.
- */
+/** A hub name as an id fragment: `Dawnrest Camp` becomes `dawnrest_camp`. */
 function slug(label) {
   return label.toLowerCase().split(' ').join('_');
 }
@@ -787,13 +673,9 @@ function isScalar(value) {
 }
 
 /**
- * An array, inline when it is all scalars and the line has room.
- *
- * That one rule is the whole reason this file is not `JSON.stringify(_, null, 2)`.
- * Biome PRESERVES an object the author expanded but does not preserve an array: it
- * collapses one whose elements fit, so a stringified `"levelRange": [\n 1,\n 7\n]`
- * fails `pnpm lint` on formatting. Emitting what the formatter would emit is what
- * keeps a generated file inside the same gate as everything else.
+ * An array, inline when it is all scalars and the line has room. This is why the output is
+ * not `JSON.stringify(_, null, 2)`: Biome collapses an array that fits, so the stringified
+ * form fails `pnpm lint` on formatting.
  */
 function emitArray(value, indent, used) {
   if (value.length === EMPTY) {

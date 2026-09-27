@@ -1,13 +1,6 @@
 // @vitest-environment happy-dom
 
 // What a player is told when a frameless overlay refuses to move.
-//
-// Three things are worth pinning and none of them is the wording. That EVERY
-// refused gesture is answered, because a player who tries again is asking again
-// and a rule that goes quiet reads as a panel that has broken; that only one
-// message is up at a time, since five copies of one sentence are not five
-// answers; and that it names the combo the player is actually on, which is why
-// the combo is read at the moment it is needed rather than when it was wired.
 
 import { describe, expect, it, vi } from 'vitest';
 import { BY_MENU, createArrangeHint } from '../loader/src/runtime/ui/kit/arrange-hint.ts';
@@ -39,8 +32,7 @@ function toaster(): FakeToaster {
 }
 
 describe('the arrange hint', () => {
-  // Every attempt, because every attempt is the player asking the same question
-  // again, usually minutes later on another panel and having forgotten the answer.
+  // A hint that goes quiet after the first reads as a panel that has broken.
   it('answers every refused gesture rather than only the first', () => {
     const { said, toaster: fake } = toaster();
     const hint = createArrangeHint({ toaster: fake });
@@ -52,8 +44,7 @@ describe('the arrange hint', () => {
     expect(said).toHaveLength(3);
   });
 
-  // The toaster stacks up to five and holds each for four seconds, so without this
-  // a player wiggling a locked overlay builds a column of one repeated sentence.
+  // The toaster stacks five, so repeated tries would build a column of one sentence.
   it('takes the previous message down as it raises the next', () => {
     const fake = toaster();
     const hint = createArrangeHint({ toaster: fake.toaster });
@@ -65,9 +56,7 @@ describe('the arrange hint', () => {
     expect(fake.dismissed()).toBe(2);
   });
 
-  // Before the loader's own binds exist there is no combo to name, and there may
-  // never be one: the bind registers separately from the UI. A message naming a
-  // button that cannot move beats one naming a key that might not be bound.
+  // The bind registers separately from the UI and may never exist, so the menu is named.
   it('names the menu route while no combo has been wired', () => {
     const { said, toaster: fake } = toaster();
 
@@ -86,8 +75,7 @@ describe('the arrange hint', () => {
     expect(said[0]).toContain('Alt+U');
   });
 
-  // Read when it is needed rather than when it was wired, because a player may
-  // rebind the key at any point and a captured combo would then be wrong.
+  // The player may rebind at any point, so a captured combo goes stale.
   it('reads the combo at the moment it says it', () => {
     const { said, toaster: fake } = toaster();
     const hint = createArrangeHint({ toaster: fake });
@@ -100,8 +88,7 @@ describe('the arrange hint', () => {
     expect(said[0]).toContain('Alt+J');
   });
 
-  // A store answers null for an id it does not carry, which is what a failed
-  // hydration looks like. The message still has to work.
+  // A store answers null for an id it does not carry, as after a failed hydration.
   it('falls back to the menu route when the store answers nothing', () => {
     const { said, toaster: fake } = toaster();
     const hint = createArrangeHint({ toaster: fake });

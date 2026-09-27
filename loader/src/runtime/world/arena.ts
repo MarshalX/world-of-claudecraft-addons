@@ -1,8 +1,7 @@
 // Where the player stands in the rated brackets, and what they are queued for.
 //
-// Split from `match.ts` deliberately: the ladder churns whenever any rated
-// player anywhere finishes a bout, and folding it into `match` would fire
-// `world.on('match')` because a stranger won a game.
+// Split from `match.ts`: the ladder churns whenever anyone finishes a bout, and folding it in
+// would fire `world.on('match')` for a stranger's game.
 
 import { fieldArray, fieldNumber, fieldString, fieldValue } from '../net/frames.ts';
 
@@ -27,19 +26,13 @@ interface ArenaLadderRow {
 type ArenaFormat = '1v1' | '2v2' | 'fiesta' | 'yumi3' | 'yumi5';
 
 /**
- * Where you stand and what you are queued for.
+ * Where you stand and what you are queued for. Present for every character, queued or not.
  *
- * Present for every character, queued or not, so this being non-null says
- * nothing about whether you play.
+ * Only '1v1' and '2v2' are readings: the server fills the unranked formats' standings with a
+ * copy of '2v2' and their ladders with an empty list.
  *
- * ONLY '1v1' AND '2v2' MEAN ANYTHING HERE. The three unranked formats keep no
- * standing of their own: the server fills their `standings` entries by copying
- * '2v2' and their `ladders` entries with an empty list, purely to satisfy the
- * record's shape. They are present so a lookup never needs a guard, and they are
- * not readings.
- *
- * Refreshed at 0.1 Hz, so a rating is up to ten seconds behind the bout that
- * changed it. `net.onEvent('arenaEnd')` is the moment.
+ * Refreshed at 0.1 Hz, so a rating can be ten seconds behind; `net.onEvent('arenaEnd')` is the
+ * moment.
  */
 interface ArenaStandings {
   /** The bracket you are in or queued for, or null for neither. */
@@ -52,13 +45,7 @@ interface ArenaStandings {
   ladders: Readonly<Record<ArenaFormat, readonly ArenaLadderRow[]>>;
 }
 
-/**
- * The five brackets, listed once.
- *
- * The record is walked rather than written out as an object literal because
- * every key here is a bracket id the GAME chose, and a literal would have to be
- * spelled the way this repo names things rather than the way the wire does.
- */
+/** The five brackets. Walked rather than spelled as literal keys, which are the game's ids. */
 const FORMATS: readonly ArenaFormat[] = ['1v1', '2v2', 'fiesta', 'yumi3', 'yumi5'];
 
 function formatOf(format: string | null): ArenaFormat | null {
@@ -88,12 +75,8 @@ function ladderOf(rows: readonly unknown[]): readonly ArenaLadderRow[] {
 }
 
 /**
- * A full record over the five brackets, whatever the wire carried.
- *
- * Every bracket gets an entry even when the wire sent none, so a lookup never
- * needs a guard. That is the same promise the server makes by mirroring the 2v2
- * record into the three unranked brackets, and it is why the type says those
- * three are not readings.
+ * A full record over the five brackets, whatever the wire carried, so a lookup never needs a
+ * guard.
  */
 function recordOf<T>(
   source: unknown,
@@ -113,12 +96,8 @@ function laddersOf(source: unknown): Readonly<Record<ArenaFormat, readonly Arena
 }
 
 /**
- * Your standings, queue and ladders, or null before the arena key has arrived.
- *
- * Non-null for every character with a name, so this answering something says
- * nothing about whether they have ever queued. It also arrives at 0.1 Hz and is
- * delta-elided, so an idle session sees it once and then not again until a
- * standing or a ladder actually moves.
+ * Your standings, queue and ladders, or null before the arena key has arrived. Delta-elided, so
+ * an idle session sees it once and again only when something moves.
  */
 function readArena(world: unknown): ArenaStandings | null {
   const arena = fieldValue(world, 'arenaInfo');

@@ -1,10 +1,6 @@
-// What the Dev pane reads, and the three actions it drives.
-//
-// It used to hold the local server's offered list and the installed set too, so
-// the pane could install from it. Browse covers that for every source including
-// this one, so those cases moved to manager-catalog-store and what is left here
-// is the pair of switches nothing else owns, plus the explicit index refresh the
-// watcher deliberately does not do on its own.
+// What the Dev pane reads, and the three actions it drives: the dev-mode and hot-reload switches,
+// and the explicit local index refresh. Installing from the local source is in
+// manager-catalog-store.test.ts.
 
 import { describe, expect, it, vi } from 'vitest';
 import { createDevStore, type DevStoreDeps } from '../loader/src/runtime/ui/manager/dev-store.ts';
@@ -35,8 +31,7 @@ function open(options: Options = {}) {
     refresh: vi.fn<(id?: string) => Promise<void>>(() => Promise.resolve()),
   };
 
-  // Both null together, which is the state the manager is in when the bridge
-  // handshake never completed.
+  // Both null together is a bridge handshake that never completed.
   const deps: DevStoreDeps = { dev: null, market: null, onChange: () => undefined };
   if (options.bridged !== false) {
     deps.dev = {
@@ -72,8 +67,6 @@ describe('loading', () => {
     expect(store.state().dev).toMatchObject({ enabled: true, hotReload: true, polledAt: 42 });
   });
 
-  // What a dev server that is not running looks like, which is the state this
-  // pane exists to make visible.
   it('surfaces the local source own fetch error', async () => {
     const { store } = open({ dev: devState({ error: 'HTTP 404 from http://localhost:5180' }) });
 
@@ -101,8 +94,6 @@ describe('loading', () => {
     expect(store.state()).toMatchObject({ status: 'failed', dev: null });
   });
 
-  // Not just an error: the status has to leave `loading`, or the pane keeps
-  // reporting a read that is never going to finish.
   it('records a rejection as a failure rather than a read still in flight', async () => {
     const { store, calls } = open();
     calls.state.mockImplementation(() => Promise.reject(new Error('the port is closed')));
@@ -155,8 +146,7 @@ describe('the two switches', () => {
     });
   });
 
-  // The host decides what a switch actually became, so the pane re-reads rather
-  // than showing the value it asked for.
+  // The host decides what a switch became, so the pane re-reads.
   it('reloads after the switch lands', async () => {
     const { store, calls } = open();
 
@@ -177,8 +167,7 @@ describe('the two switches', () => {
   });
 });
 
-// The watcher polls addon BODIES and never the index, so a new addon directory
-// or an edited manifest needs an explicit refresh. This is that control.
+// The watcher never polls the index, so a new addon or edited manifest needs this control.
 describe('refresh', () => {
   it('refreshes the local source only', async () => {
     const { store, calls } = open();
@@ -191,8 +180,7 @@ describe('refresh', () => {
 });
 
 describe('without a bridge', () => {
-  // The pane already reports the unreachable state; a rejection out of a click
-  // handler would be a second report of the same fact with nowhere to go.
+  // The pane already reports the unreachable state; a rejection from a click has nowhere to go.
   it('does nothing rather than throwing', async () => {
     const { store, calls } = open({ bridged: false });
 

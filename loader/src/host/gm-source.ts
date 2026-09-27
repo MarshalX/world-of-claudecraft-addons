@@ -1,10 +1,5 @@
-// The shape of the userscript manager, as this loader reads it.
-//
-// Types only, in their own module so the adapter and the capability detection
-// can both depend on them without depending on each other. Naming these here
-// rather than mirroring the global spellings is what keeps the rest of the host
-// free of ambient declarations: host/globals.ts maps the real globals onto this
-// interface and is the only module that names a GM function.
+// The shape of the userscript manager, as this loader reads it. host/globals.ts maps the real
+// globals onto it, which keeps the rest of the host free of ambient GM declarations.
 
 import type { RawRequest } from './http.ts';
 
@@ -29,12 +24,7 @@ interface ValueChange {
   remote: boolean;
 }
 
-/**
- * What each half of the manager's surface turned out to support.
- *
- * Detected rather than looked up by manager name, so one that gains or loses an
- * API is handled without a version check.
- */
+/** What the manager's surface turned out to support, detected rather than looked up by name. */
 interface GmCapabilities {
   valueStore: 'gm4' | 'legacy' | 'none';
   valueChange: 'native' | 'broadcast' | 'none';

@@ -3,71 +3,26 @@
 //   node addons/ledgerline/generate.mjs --game=/path/to/world-of-claudecraft
 //   node addons/ledgerline/generate.mjs --game /path/to/world-of-claudecraft
 //
-// WHAT IT IS FOR. The Merchant's market has no price history and no reference
-// price, so every figure ledgerline draws is inferred from pages its player
-// happened to browse. There is exactly ONE absolute price in the game, and it is
-// not on any wire: `ItemDef.sellValue`, what a vendor pays for the item, applied
-// as a flat `sellValue * count` with no haggling (`src/sim/items.ts`). That makes
-// a listing priced under it the only risk-free trade the game contains, and this
-// table is what lets an addon see one.
-//
-// WHAT IT READS, all of it inside the checkout and none of it written to:
-//
-//   package.json     the game version, stamped into the output
-//   src/sim/data.ts  the `ITEMS` merge, which is the table itself, and `NPCS`,
-//                    which is what proves a shop price is a real ceiling
-//
-// Bundled with esbuild IN MEMORY and imported, so what it reads is the table the
-// game assembles rather than a regex over source. `ITEMS` merges two dozen
-// content modules and several build their entries programmatically, so a textual
-// scrape would silently miss those.
-//
-// THREE FIELDS AND NO MORE. `sellValue` is the floor. `buyValue` is the vendor's
-// shop price, which is a CEILING: an ask above it can never sell, because the
-// buyer walks to the vendor instead. `noVendorSell` is what voids the floor, and
-// it is the field whose absence would make this table lie: a vendor refuses to
-// buy those items, and without the flag the addon would promise guaranteed profit
-// on a stack nobody will take. Every other item fact belongs to `lorebind`, which
-// already ships the whole catalogue; duplicating it here would be a second copy
-// to keep in step for no reader.
-//
-// A `buyValue` IS NOT A CEILING ON ITS OWN, which is the trap this script exists
-// to close. `buyItem` gates on `npc.vendorItems.includes(itemId)` before it ever
-// reads the price (`src/sim/items.ts`), so an item can declare a shop price that
-// no counter in the world stocks, and calling that a ceiling would tell a player
-// their listing can never sell when nobody can buy the thing anywhere else. So
-// the price is emitted only where some NPC actually stocks the id, read from
-// `NPCS` out of the same bundle. The dev vendor is excluded: it sells its stock
-// for free and only on a dev-command realm, so its rows are a ceiling of zero on
-// a realm nobody plays. Vendor ROW GATES are deliberately not consulted, because
-// they are advisory by design and every counter sells ahead freely
-// (`src/sim/content/vendor_row_gates.ts`).
-//
-// WHAT IT DROPS is anything that can never reach the market at all. The server
-// refuses to list a quest item, a `noMarketList` item and a soulbound one, on
-// both listing paths (`src/sim/market.ts`), so a floor for one of those could
-// never be read. It also drops a row that would carry nothing usable: no
-// `sellValue`, no `buyValue` and no `noVendorSell` is an item this addon has
-// nothing to say about, and a lookup miss already means "no floor known".
-//
-// THE GAME PATH IS REQUIRED AND IS NEVER DEFAULTED. Nothing tells you a checkout
-// is stale the way a 404 tells you an endpoint moved, so a remembered path is a
-// silent way to regenerate against a game nobody is running. BOTH argument forms
-// are accepted, because the six generators in this repository had drifted into
-// two and passing the wrong one trips the required-argument error, which reads as
-// a missing flag rather than a wrong one.
-//
-// THE OUTPUT IS BYTE-DETERMINISTIC. Ids sorted by code point, fixed key order,
-// Biome's own formatter over the result. Re-running against an unchanged checkout
-// rewrites the same bytes, so a regeneration with no diff proves content did not
-// move and any diff at all is real.
-//
-// ONE CONTENT ASSUMPTION A RELEASE COULD INVALIDATE, and it shows up as output
-// rather than as a crash: that a vendor pays a flat per-unit price. The day
-// `sellItem` grows a modifier, every floor here is still a number and is no
-// longer the number a vendor pays. The counts printed at the end are what to
-// read; the formula is in `src/sim/items.ts` and is worth re-reading on a
+// `ItemDef.sellValue` is the only absolute price in the game and is on no wire: a vendor pays a
+// flat `sellValue * count` (`src/sim/items.ts`), so a listing priced under it is risk-free. If
+// `sellItem` ever gains a modifier, every floor here is silently wrong; re-read that formula on a
 // release that touches vendors.
+//
+// Reads `package.json` (the stamped version) and `src/sim/data.ts` (`ITEMS` and `NPCS`), bundled
+// with esbuild in memory and imported: several content modules build items programmatically, so a
+// textual scrape would miss them.
+//
+// Three fields only; every other item fact belongs to `lorebind`. `noVendorSell` voids the floor
+// and must be emitted, or the addon promises a vendor sale nobody will take. `buyValue` is a
+// ceiling only where a non-dev NPC stocks the id, because `buyItem` checks `vendorItems` before
+// the price. Vendor row gates are advisory and are not consulted.
+//
+// Items the server refuses to list (quest, `noMarketList`, soulbound; `src/sim/market.ts`) are
+// dropped, as is a row with none of the three fields.
+//
+// `--game` is required and never defaulted: a remembered path silently regenerates against a
+// stale checkout. Output is byte-deterministic (code point order, Biome's formatter), so any diff
+// is real.
 
 import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
@@ -83,7 +38,7 @@ const DATA_MODULE = join('src', 'sim', 'data.ts');
 /** The module the exclusion rule is read from, quoted in the output's `fields`. */
 const MARKET_MODULE = join('src', 'sim', 'market.ts');
 
-/** The one file this script writes, resolved against ITSELF rather than the cwd. */
+/** Resolved against this script, not the cwd. */
 const OUTPUT = join(import.meta.dirname, 'floors.json');
 
 function fail(message) {
@@ -91,12 +46,7 @@ function fail(message) {
   exit(1);
 }
 
-/**
- * The checkout path, which is required and is never guessed.
- *
- * Both `--game=<path>` and `--game <path>`, because this repository's generators
- * ship both spellings and the wrong one fails as though the flag were missing.
- */
+/** Accepts `--game=<path>` and `--game <path>`: the wrong form reads as a missing flag. */
 function gamePathFrom(args) {
   const joined = args.find((arg) => arg.startsWith('--game='));
   if (joined !== undefined) {
@@ -116,12 +66,8 @@ function gamePathFrom(args) {
 }
 
 /**
- * Prove the directory really is the game, and hand back its version.
- *
- * Both halves are checked because they fail differently: a path that is not a
- * checkout at all fails on the manifest, and a checkout whose layout has moved
- * fails on the module, and reporting one for the other sends the next person
- * looking in the wrong place.
+ * Prove the directory is the game and return its version. Not-a-checkout and moved-layout are
+ * reported separately so the error points at the right cause.
  */
 function gameVersionAt(gamePath) {
   const manifest = join(gamePath, 'package.json');
@@ -142,13 +88,7 @@ function gameVersionAt(gamePath) {
   return version;
 }
 
-/**
- * The game's `ITEMS`, bundled in memory and imported.
- *
- * `write: false` plus a data URL because this script may write exactly one file
- * and that file is `floors.json`. A scratch bundle on disk would be a second one,
- * and it would be somewhere neither this directory nor the caller chose.
- */
+/** Bundled in memory (`write: false` plus a data URL): `floors.json` is the only file written. */
 async function readGame(gamePath) {
   const esbuild = await import('esbuild');
   const built = await esbuild.build({
@@ -173,12 +113,7 @@ async function readGame(gamePath) {
   return { items, stocked: stockedBy(npcs) };
 }
 
-/**
- * Every item id some counter in the world actually sells. See the header.
- *
- * Empty is a FAILURE rather than an answer: the field moving would leave every shop ceiling
- * silently unemitted, which reads on screen as a game that stopped selling anything.
- */
+/** Every item id a non-dev NPC sells. Empty fails: it means `vendorItems` moved. */
 function stockedBy(npcs) {
   const stocked = new Set();
   for (const npc of Object.values(npcs)) {
@@ -229,12 +164,8 @@ function shopCeiling(id, def, stocked) {
 }
 
 /**
- * One row, or null for an item this addon has nothing to say about.
- *
- * `noVendorSell` is emitted even with no `sellValue` beside it, because it is the
- * field that REFUSES a claim: an addon reading a row with only that flag on it
- * knows not to promise a vendor sale, and an addon reading no row at all knows
- * only that it does not know.
+ * One row, or null. `noVendorSell` is emitted alone too: it refuses a claim, where a missing row
+ * only means "unknown".
  */
 function rowOf(id, def, stocked) {
   if (unlistable(def)) {
@@ -266,14 +197,7 @@ function rowsOf(game) {
     .filter((row) => row !== null);
 }
 
-/**
- * Biome's own formatter, run over the rendered file.
- *
- * `JSON.stringify` and Biome disagree about whether a short object stays on one
- * line, so a file this script had just written would fail `pnpm check`.
- * Reimplementing that rule here would be a second formatter to keep in step with
- * the real one, so the real one is what runs. Same binary `pnpm lint` calls.
- */
+/** Biome's own formatter: `JSON.stringify` output fails `pnpm lint` on short objects. */
 function formatted(json) {
   return execFileSync('pnpm', ['exec', 'biome', 'format', '--stdin-file-path=floors.json'], {
     input: json,
@@ -294,7 +218,7 @@ function render(gameVersion, rows) {
   return `${JSON.stringify(file, null, 2)}\n`;
 }
 
-/** What a release could change without breaking anything here. See the header. */
+/** Counts to read after a release, since a changed vendor formula shows up only here. */
 function report(rows) {
   const floors = rows.filter((row) => row.sellValue !== undefined).length;
   const ceilings = rows.filter((row) => row.buyValue !== undefined).length;
@@ -304,10 +228,6 @@ function report(rows) {
   console.log(`generate: ${String(refused)} refuse a vendor sale, so they have no floor at all`);
 }
 
-/**
- * A function rather than a run of top-level statements, so the module-scope names
- * this script would otherwise take are free for the parameters that want them.
- */
 async function main() {
   const gamePath = gamePathFrom(argv.slice(2));
   const version = gameVersionAt(gamePath);

@@ -1,15 +1,6 @@
-// The five shared surfaces that put an element on screen, and the band each goes in.
-//
-// Split out of ui/mount.ts because the band choice is one decision made five
-// times and is the only thing these five have in common: what is left in mount.ts
-// is the manager, the loader's own routes into it, and the registries, none of
-// which draw anything and none of which have a band. See ui/root.ts for why there
-// are two of those and what decides which one a thing belongs in.
-//
-// One of each for the whole loader, never one per addon. `api/ui.ts` is a
-// per-addon binding over these, and what it adds is the disposal bag rather than
-// a second copy: two toast stacks would be two columns of toasts, and two tooltip
-// elements would leave one of them on screen whenever the other took over.
+// The five shared surfaces that put an element on screen, and the band each goes in (see
+// ui/root.ts). One of each for the whole loader; `api/ui.ts` wraps them per addon in a
+// disposal bag, never a second copy.
 
 import type { FrameLoop } from '../frame-loop.ts';
 import type { UnitPointResolver } from '../world/anchor-point.ts';
@@ -23,15 +14,12 @@ import type { AddonRoot } from './root.ts';
 
 interface Surfaces {
   toaster: Toaster;
-  /** The one centre-screen warning slot. Shared for the reason toasts are. */
+  /** The one centre-screen warning slot. */
   banner: Banner;
   tooltips: Tooltips;
-  /** The one open context menu. Shared for the reason the banner slot is. */
+  /** The one open context menu. */
   menus: Menus;
-  /**
-   * Elements kept over world points. Shared because they share one frame loop:
-   * ten anchors are one callback, not ten.
-   */
+  /** Elements kept over world points, all on one frame-loop callback. */
   anchors: Anchors;
 }
 
@@ -50,9 +38,8 @@ function buildSurfaces(deps: SurfaceDeps, root: AddonRoot): Surfaces {
   return {
     toaster: createToaster({ doc: deps.doc, root: root.overlay, ...timers }),
     banner: createBanner({ doc: deps.doc, root: root.overlay, ...timers }),
-    // Two elements, deliberately: the tip is drawn in the overlay band so it is
-    // over every frame, and the watcher covers the whole root, since the anchor it
-    // is watching is an addon's own row, down in the hud band.
+    // The tip draws in the overlay band; the watcher covers the whole root, since anchors are
+    // addon rows in the hud band.
     tooltips: createTooltips({
       doc: deps.doc,
       root: root.el,
@@ -60,9 +47,7 @@ function buildSurfaces(deps: SurfaceDeps, root: AddonRoot): Surfaces {
       viewport: deps.viewport,
     }),
     menus: createMenus({ doc: deps.doc, root: root.overlay, viewport: deps.viewport }),
-    // The hud band, because a world anchor is a label over a mob rather than
-    // something the player opened: it belongs under the game's own windows for the
-    // same reason an addon frame does.
+    // The hud band: a label over a mob is HUD furniture, not something the player opened.
     anchors: createAnchors({
       doc: deps.doc,
       root: root.hud,

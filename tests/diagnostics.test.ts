@@ -50,14 +50,12 @@ describe('the diagnostics reading', () => {
     expect(read().game).toEqual({ version: '0.31.0', build: '1a2b3c4d5e6f' });
   });
 
-  // Before world entry there is nothing to read, and that is an ordinary state
-  // rather than a fault the pane should shout about.
+  // Before world entry there is nothing to read, which is an ordinary state.
   it('answers a null game version when the footer is absent', () => {
     expect(read().game).toBeNull();
   });
 
-  // The point of the anchor table is that drift is visible. A report that
-  // silently skipped an anchor would hide exactly the thing it exists to show.
+  // A report that skipped an unresolved anchor would hide the drift it exists to show.
   it('reports every anchor, resolved or not', () => {
     const reading = read();
 

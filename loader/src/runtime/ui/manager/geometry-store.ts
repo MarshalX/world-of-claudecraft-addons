@@ -1,14 +1,6 @@
-// Remembering where the player left the manager window.
-//
-// Held in memory for the session and written through to GM storage so it also
-// survives a reload. The write is fire and forget: a window that reopens
-// centred is a small annoyance, and blocking a drag on a bridge round trip
-// would be a large one.
-//
-// Keyed by channel rather than by character. Window position is a preference
-// about the player's screen, not about which character they are on, and the
-// channels are separate deployments whose windows a player may well want
-// arranged differently.
+// Remembering where the player left the manager window, in memory and written through to GM
+// storage. The write is fire and forget so a drag never waits on the bridge. Keyed by channel,
+// never by character: position is a preference about the player's screen.
 
 import { diagError } from '../../../shared/diag.ts';
 import { type FrameBox, isFrameBox } from '../frame/geometry.ts';
@@ -51,8 +43,7 @@ export function createGeometryStore(deps: GeometryStoreDeps): GeometryStore {
       }
       try {
         const stored = await deps.storage.get(NS, key);
-        // Validated rather than trusted: a NaN reaching a style property drops
-        // the declaration silently, which would strand the window off screen.
+        // Validated: a NaN reaching a style property is dropped silently and strands the window.
         if (isFrameBox(stored)) {
           box = stored;
         }

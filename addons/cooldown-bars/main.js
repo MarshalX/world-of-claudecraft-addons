@@ -15,21 +15,17 @@
 // re-learns its length. UNDETECTABLE: a reset then a re-press onto a shorter cooldown
 // lands below the old remaining, which nothing on the wire tells from draining.
 //
-// Every running cooldown is HELD and only the first few drawn, which is `shown`: a row
-// pushed off the bottom keeps the length it measured rather than re-learning one from
-// mid-cooldown.
+// Every running cooldown is HELD and only the first few drawn (`shown`), so a row pushed
+// off the bottom keeps the length it measured instead of re-learning one mid-cooldown.
 //
 // Charge pools are exact without the spellbook, since `rechargeLength` is on the wire,
 // and are read in the frame loop because the game deletes the cooldown entry while a
 // charge is left. `maxCharges` is present, numeric and permanently zero, so the pool
 // size comes from `AbilityInfo.charges`.
 //
-// Both layouts are the player's to size, in the loader's arrange mode, and each reads its
-// box differently. The strip's height is one icon and its width is only room to grow into,
-// or tiles would resize as more cooldowns started. The column's height is the whole BUDGET
-// of rows divided between them, which is the one thing a column cannot take from the rows
-// currently up: a cooldown starting would then resize every other row under the eye of the
-// player who pressed it.
+// The strip's height is one icon and its width only room to grow into, so tiles do not
+// resize as cooldowns start. The column's height is divided by the whole BUDGET of rows,
+// never the rows currently up, or a cooldown starting would resize every other row.
 
 const DECIMALS = 1;
 const FRAME_WIDTH = 220;
@@ -42,26 +38,20 @@ const NEARLY_READY = 0.25;
 /** What a worked-out ability name is marked with. Foretell's mark, deliberately. */
 const GUESS_MARK = '?';
 /**
- * The tile strip's starting height, which is also its floor and its icon size. 40 is
- * the tap-target floor the game holds its own controls to, and it is the floor on both
- * axes: one square of height, and one square's worth of room to grow from.
+ * The tile strip's starting height, floor on both axes, and icon size. 40 is the
+ * tap-target floor the game holds its own touch controls to.
  */
 const TILE_START = 40;
 /** How wide the strip starts. Only room to grow into. */
 const STRIP_WIDTH = 260;
-/** The gap between two timers, in either direction. The height budget is stated over it. */
+/** The gap between two timers, in either direction. */
 const ROW_GAP = 3;
 /**
- * A bar's natural height, measured in a browser: the kit's own 18px icon inside the 2px of
- * padding `.woc-bar` carries. It is the height the column OPENS at, one row per unit of the
- * budget, which is the panel a player gets on install.
+ * A bar's natural height, measured in a browser: the kit's 18px icon plus `.woc-bar`'s
+ * padding. The column opens at one of these per row of the budget.
  */
 const BAR_HEIGHT = 23;
-/**
- * How thin a row may be dragged. The art scales with the row, so this is about the FIGURE
- * rather than the icon: under this the seconds and the charge count start crowding the name
- * out of a row that was still legible one pixel ago.
- */
+/** How thin a row may be dragged. Under this the figure crowds the name out. */
 const MIN_BAR_HEIGHT = 14;
 /** How far past its natural height a row may be dragged. */
 const MAX_BAR_SCALE = 3;
@@ -106,15 +96,11 @@ function published(abilityId) {
 /**
  * The damage school to tint this timer by, or null for none.
  *
- * Only ever what the spellbook carries. A measured row is measured BECAUSE the game
- * published nothing about that ability, so the honest answer there is no colour: an item
- * cooldown and the anti-relog timer are not made of any kind of damage, and inventing one
- * for them would be a claim about the row that nothing made.
+ * Only ever what the spellbook carries: an item cooldown or the anti-relog timer is made of
+ * no damage, so a row the spellbook does not know gets no colour.
  *
- * The string goes through unchecked on purpose. Which schools exist is the KIT's to hold: it
- * tints nothing for a value it does not know, and the same list written out here would be a
- * second claim about the game's palette, free to drift from the first while both still
- * looked right on their own.
+ * The string goes through unchecked on purpose. The kit owns the list of schools and tints
+ * nothing for a value it does not know; a copy of that list here would drift from it.
  */
 function tintFor(abilityId) {
   if (!woc.settings['tint-school']) {
@@ -146,13 +132,10 @@ function stackHeight(height, count) {
 }
 
 /**
- * How many timers to draw, which is the budget for a STRIP and what fits for a column.
+ * How many timers to draw: the budget for a STRIP and what fits for a column.
  *
- * The two layouts are limited by different things and share this one predicate, which is
- * how the strip lost three of its five tiles the moment the column learned to count: a
- * strip's height is ONE tile, so dividing it by a row's pitch answers about two rows and
- * nothing about how many squares are on screen. A strip is limited by its width, which is
- * deliberately only room to grow into, so its answer is the budget it always was.
+ * Never divide a strip's height by a row's pitch: its height is ONE tile, so that answers
+ * about two rows and nothing about how many squares fit across it.
  */
 function shownCount() {
   if (drawsTiles()) {
@@ -162,16 +145,11 @@ function shownCount() {
 }
 
 /**
- * How many rows the COLUMN has room for.
+ * How many rows the COLUMN has room for, capped at the budget.
  *
- * The budget is a ceiling on this rather than the answer, and that is what lets the panel
- * be dragged down to a single entry: below the budget's worth of rows the height stops
- * making rows thinner (they are already at their floor) and starts showing fewer of them.
- * A bare frame clips rather than scrolls, so the alternative to counting here is a row cut
- * in half at the bottom edge with nothing on screen saying it is there.
- *
- * Never none. A column showing nothing is one a player cannot tell from an addon that has
- * stopped, and the loader's own floor keeps the frame grabbable at that size anyway.
+ * Once rows are at their floor, a shorter box shows fewer of them. A bare frame clips
+ * rather than scrolls, so without this count the bottom row is cut in half silently.
+ * Never none: an empty column looks like an addon that has stopped.
  */
 function rowsThatFit() {
   const pitch = barHeight() + ROW_GAP;
@@ -180,30 +158,20 @@ function rowsThatFit() {
 }
 
 /**
- * The strip's height, which IS the icon size, read from the frame rather than held.
- *
- * The floor is applied here as well as stated on the frame, since the size has to hold for
- * a box from anywhere: a restored one, a viewport clamp, or a height a future bound lets
- * through. It reaches the tiles already up through `paint`, on the next frame, and a tile
- * drops an update repeating a size it holds, so a strip nobody is dragging pays nothing.
- *
- * One unit rather than a division, which is what a strip of squares is: `ui.units` is here
- * for the floor and for the box that has not been measured yet.
+ * The strip's height, which IS the icon size. The floor is applied here as well as on the
+ * frame, because a restored box or a viewport clamp can arrive under it. `paint` carries the
+ * size to tiles already up, and a tile ignores an update repeating the size it holds.
  */
 function tileHeight() {
   return woc.ui.units(frame.box().h, { min: TILE_START });
 }
 
 /**
- * The row height the box works out to, held between the thinnest row and its ceiling.
+ * The row height the box works out to, between the thinnest row and its ceiling.
  *
- * Read from the frame rather than held: `frame.box()` is the box the loader already has,
- * so there is nothing to seed, nothing to keep in step with a drag, and no answer to miss
- * at the one moment `onMove` says nothing about, which is the frame's own first paint.
- *
- * `ui.units` is what divides it: the gaps come out before the division and the share is
- * floored there, since a pixel over the box is a pixel of the bottom row that a bare frame
- * quietly clips.
+ * Read from `frame.box()` rather than held, because `onMove` does not fire for the frame's
+ * first placement. `ui.units` takes the gaps out before dividing and floors the share, so
+ * the bottom row is never a pixel past a box that clips.
  */
 function barHeight() {
   return woc.ui.units(frame.box().h, {
@@ -224,9 +192,8 @@ list.style.gap = `${String(ROW_GAP)}px`;
 /**
  * Ability id to its widget, denominator, whether that was published, and pool size.
  *
- * The bar budget is applied by `shown` rather than before the sync, so a row cut off the
- * bottom keeps the length it measured. Rebuilt when it came back, it would baseline from
- * mid-cooldown and draw a bar that is wrong rather than one that is missing.
+ * The budget is applied by `shown` rather than before the sync, so a row cut off the bottom
+ * keeps the length it measured; rebuilt later, it would baseline from mid-cooldown.
  */
 // #region list
 const rows = woc.ui.list({
@@ -239,12 +206,7 @@ const rows = woc.ui.list({
 });
 // #endregion
 
-/**
- * The strip: bare, because the tiles are the display, and one square tall to start.
- *
- * Both axes take the same floor. One tap-target square is a whole tile whatever the bar
- * budget is set to and however many cooldowns are running.
- */
+/** The strip: bare, because the tiles are the display, and floored at one square each way. */
 function buildStrip() {
   return woc.ui.frame({
     id: 'tiles',
@@ -272,19 +234,11 @@ function buildFrame() {
 }
 
 /**
- * The column: bare for the reason the strip is, and sized for the whole BUDGET of rows
- * rather than for the rows that happen to be running, so the ones a player is watching hold
- * still as cooldowns come and go. What that costs is dead space under a half-full column,
- * and it costs nothing to reach: both gestures live in the loader's arrange mode, which
- * takes the whole box back whatever a bare frame draws.
+ * The column: bare, and sized for the whole BUDGET of rows so the rows a player is watching
+ * hold still as cooldowns come and go. It opens at the budget's worth of natural rows and
+ * may be dragged down to ONE row (see `rowsThatFit`).
  *
- * It OPENS at the budget's worth of natural rows and its floor is ONE row, because a player
- * watching a single cooldown should be able to have a panel the size of one cooldown. Between
- * those the height first makes the rows thinner and then, once they are at their own floor,
- * shows fewer of them: see `rowsThatFit`, which is what keeps a bare frame from clipping the
- * row it can no longer fit.
- *
- * The title is still the frame's accessible name and its label while frames are unlocked.
+ * The title is still the frame's accessible name and its label in arrange mode.
  */
 // #region frame
 function buildColumn() {
@@ -320,8 +274,8 @@ applyLayout();
  * than by position. Not every ability ships art, and the kit hides its icon slot when an
  * image fails, so a URL that may not resolve is intended usage.
  *
- * The school is set once, here, rather than on every paint: it is a fact about the ability
- * and cannot change while the row is up, and the setting that switches it on rebuilds.
+ * The school is set once, here: it cannot change while the row is up, and the setting
+ * that switches it on rebuilds.
  */
 // #region bar
 function createBar(abilityId) {
@@ -389,9 +343,8 @@ function guessLine(abilityId) {
 // #region tooltip
 /**
  * What the row is, and how much of it is measured rather than known. The two hedges are
- * independent: a charge pool's length rides the wire, so such a row is exact and still
- * unnamed. The length line describes the denominator this bar was BUILT against, which a
- * row raised before the spellbook arrived keeps for life.
+ * independent: a charge pool's length rides the wire, so such a row can be exact and still
+ * unnamed. The length line describes the denominator this row was BUILT against.
  */
 function timerTooltip(abilityId) {
   const { label, guessed } = describe(abilityId);
@@ -424,8 +377,7 @@ function createWidget(abilityId) {
 
 /**
  * One row, with the denominator it is measured against for the rest of its life. The
- * spellbook is read here rather than in the reading, so it costs one lookup per row
- * rather than one per running cooldown per frame.
+ * spellbook is read here so it costs one lookup per row, not one per cooldown per frame.
  */
 function createRow(entry) {
   const known = published(entry.abilityId);
@@ -567,13 +519,11 @@ function figure(remaining, charges, pool) {
 }
 
 /**
- * The two widgets take the same three fields, so the only branch is the charge count: a
- * bar carries it in parentheses and a tile has a corner, which is a number, which is why
- * only the bar shows the pool size.
+ * A bar carries the charge count in parentheses with the pool size; a tile's corner holds
+ * one number, so it gets the count alone.
  *
- * `fmt.duration` is the figure with 40 pixels to say it in, rounded up so a tile never
- * reads 0 while the ability is still coming back. The size rides every paint, which is
- * how a drag reaches the tiles already on screen.
+ * `fmt.duration` rounds up, so a tile never reads 0 while the ability is still coming back.
+ * The size rides every paint, which is how a drag reaches the widgets already on screen.
  */
 function paint(row, remaining, charges, fraction) {
   const tone = toneFor(fraction);
@@ -587,8 +537,7 @@ function paint(row, remaining, charges, fraction) {
 
 /**
  * Where one row's timer has got to, and where a measured row re-learns its length. Runs
- * for every row HELD, including a cut one, so a row coming back into view has been
- * following its cooldown all along rather than picking it up from wherever it got to.
+ * for every row HELD, including a cut one, so a row coming back into view is already current.
  */
 function paintRow(row, entry) {
   rebaseline(row, entry.remaining);

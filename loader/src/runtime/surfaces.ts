@@ -1,8 +1,5 @@
-// Wiring the page's globals into the runtime's shared readers.
-//
-// Everything with a decision in it lives in the modules below; this file only
-// says which global each one reads. Reflect.set rather than an assignment cast
-// keeps the WebSocket swap from needing a type that names a global.
+// Wiring the page's globals into the runtime's shared readers; the decisions live in the modules.
+// Reflect.set keeps the WebSocket swap from needing a type that names a global.
 
 import { clearTimer, setTimer } from './dom-timers.ts';
 import { fieldValue } from './net/frames.ts';
@@ -22,13 +19,7 @@ export interface GameSurfaces {
   dispose: () => void;
 }
 
-/**
- * The socket hook goes in first.
- *
- * It has to be installed before ClientWorld opens its socket, and the runtime is
- * at document-start while that happens at world entry, so the ordering has room
- * to spare. Everything else here is lazy.
- */
+/** The socket hook goes in first, before the game opens its socket. Everything else is lazy. */
 export function createGameSurfaces(): GameSurfaces {
   const net = createNetHub({
     now: () => performance.now(),
@@ -50,9 +41,7 @@ export function createGameSurfaces(): GameSurfaces {
     clearTimer,
   });
 
-  // Subscribed here rather than inside the world hub because it reads the SOCKET,
-  // not the game: the player's id is on the hello frame, so it starts counting
-  // from the first frame rather than from world entry.
+  // Outside the world hub because it reads the socket, so it counts from the first frame.
   const combat = createCombatClock({ net, now: () => performance.now() });
 
   const world = createWorldHub({
@@ -62,12 +51,9 @@ export function createGameSurfaces(): GameSurfaces {
     lastDamageAt: combat.lastDamageAt,
     now: () => performance.now(),
     zoneName: createZoneReader(globalThis.document),
-    // Off the snapshot head, and tracked inside the hub rather than by a subscriber
-    // of it. A loader-owned subscription looks exactly like an addon's, so this one
-    // used to keep every snapshot on the freezing path. See world/sim-clock.ts.
+    // Read at the tap, not by subscribing, which would put every snapshot on the freezing path.
     simNow: net.simNow,
-    // Half of the character key, and it comes off the SOCKET rather than the
-    // world: the realm rides the hello frame. See world/character-key.ts.
+    // Half of the character key; the realm rides the hello frame.
     realm: net.realm,
   });
 

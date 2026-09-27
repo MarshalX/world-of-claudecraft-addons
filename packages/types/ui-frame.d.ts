@@ -1,8 +1,4 @@
 // Frames and windows: the panels an addon draws into.
-//
-// Split out of ui.d.ts on the subject axis, the way ui-timers.d.ts and
-// ui-controls.d.ts were: this is one family, it is the largest one, and it is the
-// one that grows on every UI change.
 
 export type FrameDensity = 'comfortable' | 'compact' | 'bare';
 
@@ -23,81 +19,56 @@ export interface FrameOpts {
   /**
    * Draw a close button in the title bar. Since apiMinor 2.
    *
-   * `ui.window` always has one and ignores this. A `ui.frame` does not, because a
-   * frame is ordinarily a HUD readout that lives on screen and is toggled by a
-   * keybind, and a button on every cooldown strip would be chrome nobody asked
-   * for. Ask for one when your frame is a panel the player OPENS: a reference
-   * list, a ledger, anything they would expect to dismiss with the mouse.
+   * `ui.window` always has one and ignores this. A `ui.frame` is usually a
+   * keybind-toggled HUD readout; ask for one when the frame is a panel the player
+   * OPENS and expects to dismiss with the mouse.
    *
-   * Ignored on `density: 'bare'`, which removes the title bar the button would
-   * live in. That is the same refusal `ui.window` makes about `bare`, and for the
-   * same reason: a promise with nowhere to keep it is worse than an ignored
-   * option. Dismiss a bare frame with its keybind or through the unlock mode.
+   * Ignored on `density: 'bare'`, which has no title bar. Dismiss a bare frame
+   * with its keybind or through the unlock mode.
    */
   closable?: boolean;
   /**
-   * How wide it is. A resizable frame opens at this and the player may then drag it; one that
-   * is not is held to it, so a long line wraps inside your column rather than stretching the
-   * panel out to the length of the sentence, and a short one does not pull it back in.
+   * How wide it is. A resizable frame opens at this; one that is not is HELD to it,
+   * so a long line wraps and the panel never grows or shrinks with its text.
+   * Omitting it takes the default width, not a content-sized one.
    *
-   * Both directions matter and the second is the one that surprises people. A frame with no
-   * width follows its content, so a header that gains a clause moves the whole panel out and
-   * back under the player's eye, rows reflowing, exactly while they are doing the thing that
-   * changed the text. Omitting this does not opt out of that; it takes the default width.
-   *
-   * The HEIGHT has no equivalent on purpose. A readout grows and shrinks with what it is
-   * reporting, and a fixed height would clip it with nothing on screen to say a row is below
-   * the fold. Ask for `resizable` and state your bounds if you need one.
+   * The height has no equivalent: a non-resizable frame is as tall as its content.
    */
   width?: number;
   /**
    * How tall it opens.
    *
-   * A frame that is not resizable IGNORES this and is as tall as its content, because a readout
-   * whose text changes would otherwise be padded out one moment and clipped the next. It is the
-   * opening height of a resizable frame, and the floor a drag may not go under unless you set
-   * `minHeight`.
+   * A frame that is not resizable IGNORES this and is as tall as its content. On a
+   * resizable frame it is the opening height, and the floor a drag may not go
+   * under unless you set `minHeight`.
    */
   height?: number;
   /**
    * How far the player may SHRINK it. Defaults to the size it opened at.
    *
-   * That default is the surprise these two options answer: without them a
-   * resizable window cannot be dragged narrower or shorter than the `width` and
-   * `height` it was created with, because the opening size is the floor. Set them
-   * whenever you set a size and mean it as a starting point rather than a limit.
-   *
-   * The loader keeps a structural floor of its own underneath yours, so a frame
-   * can never be resized down to something with no grab area left.
+   * So without these, a resizable frame cannot shrink below its opening `width`
+   * and `height`. Set them when a size is a starting point, not a limit. The
+   * loader keeps a structural floor of its own under yours.
    */
   minWidth?: number;
   minHeight?: number;
   /**
    * How far the player may GROW it. Defaults to the viewport.
    *
-   * The viewport is always the outer limit whatever you pass, and your MINIMUM
-   * wins over your maximum: a max below the min is a contradiction, and the size
-   * a display was built to be readable at is the one worth keeping.
+   * The viewport is always the outer limit, and your MINIMUM wins over a maximum
+   * below it.
    */
   maxWidth?: number;
   maxHeight?: number;
   /**
-   * Whether the edges resize it, and which of them. Defaults to true for `window`
-   * and false for `frame`: a frame is sized by its content, so an explicit height
-   * would leave it padded out or clipped as its text changes.
+   * Whether the edges resize it. Defaults to true for `window` and false for
+   * `frame`.
    *
-   * `'width'` and `'height'` hand the player ONE axis and leave the other following
-   * your content. Since apiMinor 6, and the case it is for is the commonest shape a
-   * HUD list has: the row count is a setting rather than a function of the box, so an
-   * owned height can only clip the rows or leave a gap under them, while the width is
-   * a column of names and figures that a player may well want wider or narrower.
+   * `'width'` and `'height'` (since apiMinor 6) hand the player ONE axis; the other
+   * behaves as on a non-resizable frame. `'width'` suits a HUD list whose row count
+   * is a setting. `minWidth` and the rest apply to the resizable axis.
    *
-   * The axis you do NOT hand over keeps every property a content-sized frame has: the
-   * `width` you declared is written as a width, and the height is whatever the frame
-   * is holding. `minWidth` and the rest still apply to the axis you did.
-   *
-   * A value that is none of these is read as `false`, which is the frame you had
-   * before you asked, rather than as both axes.
+   * Any other value is read as `false`.
    */
   resizable?: boolean | 'width' | 'height';
   /** Persist position and visibility for this character. */
@@ -107,13 +78,9 @@ export interface FrameOpts {
   /**
    * A keybind id from your manifest that shows and hides this frame. Since apiMinor 4.
    *
-   * The id has to be one you declared; the loader warns through your own log and
-   * binds nothing if it is not, rather than failing to build the frame. The bind
-   * is released when the frame is DESTROYED as well as at disable, so rebuilding
-   * a frame under the same key leaves you with exactly one binding either way.
-   *
-   * Bind it yourself with `woc.keys.bind` when the key does more than toggle, or
-   * when one key should reach several frames at once.
+   * An undeclared id logs a warning and binds nothing; the frame is still built.
+   * The bind is released when the frame is destroyed, so rebuilding a frame leaves
+   * exactly one binding. Use `woc.keys.bind` when the key does more than toggle.
    */
   toggleKey?: string;
   /** Added to the frame element, so you can style your own. */
@@ -121,80 +88,48 @@ export interface FrameOpts {
   /**
    * How tightly the loader's own chrome is drawn. Defaults to 'comfortable'.
    *
-   * 'comfortable' is the scale the game draws its own windows at on a desktop:
-   * 13px tabs and buttons under a 15px panel title. 'compact' is tighter still,
-   * for a dense readout the player glances at rather than operates.
+   * 'comfortable' is the scale the game draws its own desktop windows at: 13px
+   * tabs and buttons under a 15px title. 'compact' is tighter, for a dense readout
+   * the player glances at.
    *
-   * Neither gives up the tap-target floor. The loader restores 16px type on a
-   * 40px target under `@media (pointer: coarse)`, whichever density you picked,
-   * which is where the game keeps its own floor. What you must not do is write a
-   * font-size or a min-height onto a kit control yourself: an inline style beats
-   * every stylesheet rule, so hand-sizing a control opts it out of that floor.
+   * Both keep the touch tap-target floor (16px type on a 40px target under
+   * `@media (pointer: coarse)`). Never write a font-size or min-height onto a kit
+   * control: an inline style beats every stylesheet rule and opts it out.
    *
-   * 'bare' removes the chrome altogether: no panel behind your content, no
-   * padding, no title bar. It is for an overlay that IS its content, a row of
-   * timers floating on the HUD rather than a panel holding them. Two things
-   * follow from having no title bar, and both are deliberate:
+   * 'bare' removes the panel, padding and title bar, for an overlay that IS its
+   * content. A bare frame moves and resizes ONLY in the unlock (arrange) mode, so
+   * pressing its rows never drags it. `ui.window` ignores 'bare' and stays
+   * comfortable, since its close button lives in the title bar.
    *
-   *  - The frame is dragged by its own content instead. Buttons, inputs and
-   *    selects inside it stay clickable, so a bare frame full of controls is
-   *    still awkward to move: it suits a readout, not a form.
-   *  - `ui.window` IGNORES it and stays comfortable. A window's close button
-   *    lives in the title bar, and a panel the player cannot dismiss is worse
-   *    than one drawn more heavily than asked for.
-   *
-   * It also reaches your own controls: a `.woc-btn` or `.woc-tab` inside a
-   * compact frame is drawn compact too, so reusing those classes gets you the
-   * matching density for free.
+   * The density reaches `.woc-btn` and `.woc-tab` inside the frame too.
    */
   density?: FrameDensity;
   /**
    * Which parts of your frame take the pointer. Since apiMinor 2.
    *
-   * Defaults to 'content' on a `bare` frame and 'auto' everywhere else, which is
-   * almost always what you want; set it when your overlay is bigger than what it
-   * draws, or when it is a readout the player should never have to click at all.
+   * Defaults to 'content' on a `bare` frame and 'auto' everywhere else.
    *
-   * This matters more here than it would on a web page, because the game binds
-   * the world's `mousedown` and `wheel` to its canvas. An element over the world
-   * does not just cover a click, it takes the whole gesture: selecting a target,
-   * holding right to turn the camera, and scrolling to zoom, all three, for as
-   * long as it is there. Nothing can hand them on afterwards. So the size of your
-   * frame is the size of the hole you have made in the player's controls, and
-   * these are the three ways to shrink it:
+   * The game binds the world's `mousedown` and `wheel` to its canvas, so any
+   * element over the world takes targeting, right-drag camera and wheel zoom for
+   * its whole area, and nothing can pass them on:
    *
-   *  - 'auto' is the whole box, chrome, padding and empty space included. Right
-   *    for a panel the player operates, and for anything with a form in it.
-   *  - 'content' makes the box transparent and leaves what you DREW taking the
-   *    pointer. Gaps, padding and the dead width beside a short row fall through
-   *    to the world; your rows keep their hover, their tooltip and their clicks.
-   *  - 'none' is inert. No hover, no tooltip, no click, nothing to hit. For a
-   *    readout that is purely a readout.
+   *  - 'auto' is the whole box. For a panel the player operates.
+   *  - 'content' lets empty space fall through to the world; what you DREW keeps
+   *    hover, tooltips and clicks.
+   *  - 'none' is inert: no hover, so no tooltips either.
    *
-   * Two consequences worth holding on to. With 'content' you grab the frame by
-   * something it drew, so a drag or an edge resize works over a row and goes to
-   * the game over empty space; with 'none' there is nothing to grab at all. In
-   * both cases the unlock mode is the way in, which is what it is for, and it
-   * hands the whole frame back to the pointer for as long as it is on. And a
-   * tooltip needs hover, so 'none' is a choice to give tooltips up: the browser
-   * has no way to watch a pointer that is passing through.
+   * The unlock mode hands the whole frame back to the pointer while it is on.
    */
   pointer?: FramePointer;
   /**
    * Where the frame ended up, after every move the loader made.
    *
-   * The loader owns the box. It writes the position, and for a `resizable` frame
-   * the size, and it re-clamps both when the viewport changes and when a saved box
-   * is restored. Use this rather than measuring `frame.el`: a measurement forces a
-   * synchronous layout, and a display that scales with its frame would pay for one
-   * on every frame it draws.
+   * The loader owns the box. Use this or `frame.box()` rather than measuring
+   * `frame.el`, which forces a layout.
    *
    * Fires on a drag, on a resize (at pointer rate, so keep it cheap), on the async
-   * restore of a saved box, and when the window is resized under it. NOT for the
-   * initial placement, which is the size you asked for and therefore already hold.
-   *
-   * A throw here is caught and written to your addon's log rather than breaking
-   * the gesture the player is in the middle of.
+   * restore of a saved box, and when the viewport changes. NOT for the initial
+   * placement; read `frame.box()` for that. A throw is caught and logged.
    */
   onMove?: (box: FrameBox) => void;
 }
@@ -208,14 +143,9 @@ export interface Frame {
   /**
    * Where the frame is now, as the loader is holding it. Since apiMinor 6.
    *
-   * The pair of `onMove` rather than a replacement for it. That reports a CHANGE, and
-   * a display laid out against its own box also needs the answer when nothing has
-   * changed: the first of those moments is the one right after you built the frame,
-   * which `onMove` deliberately does not report because it is the size you asked for.
-   *
-   * Cheap, and cheap on purpose. It hands back the box the loader is already holding,
-   * so there is no measurement and no layout: this is what to reach for instead of
-   * `frame.el.getBoundingClientRect()`, which forces one on every call.
+   * The companion to `onMove`, for the moments nothing changed, such as right after
+   * building the frame. Cheap: no measurement and no layout, unlike
+   * `frame.el.getBoundingClientRect()`.
    */
   box: () => FrameBox;
   show: () => void;

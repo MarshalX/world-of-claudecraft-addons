@@ -1,10 +1,7 @@
 /* Reset, document defaults, and the type scale.
  *
- * The note the scale carries is a real constraint rather than a
- * preference: Cinzel has no lowercase and renders as small caps at text
- * sizes, so it is headings, labels and buttons only, never below 16px and never
- * body copy. Every rule here that sets --display also sets a size at or above
- * that floor.
+ * Cinzel has no lowercase and renders as small caps, so --display is for headings,
+ * labels and buttons only, never below 16px and never body copy.
  */
 
 *,
@@ -24,11 +21,9 @@ html {
   scroll-padding-top: 24px;
 }
 
-/* On a page carrying the sticky step bar the offset has to be EXACTLY the bar's
-   height. At 80px against a 58px bar the anchor landed before the bar had stuck,
-   which left a 22px sliver of the site header above it; at less than the height
-   the bar covers the heading it just jumped to. Keyed off the bar's presence
-   rather than off the page, so any future page with one is right by default. */
+/* Under the sticky step bar the offset must be EXACTLY the bar's height: more
+   leaves a sliver of the site header above the stuck bar, less hides the heading.
+   Keyed off the bar's presence, so any page carrying it is right. */
 html:has(.steps-wrap) {
   scroll-padding-top: var(--steps-h);
 }
@@ -37,8 +32,7 @@ body {
   background: var(--bg);
   color: var(--text);
   font-family: var(--ui);
-  /* The landing page sits a step above docs body: players read one paragraph,
-     not twenty. Docs drop to 17.5px in layout.css. */
+  /* A step above docs body, which drops to 17.5px in layout.css. */
   font-size: 18px;
   line-height: 1.6;
   -webkit-font-smoothing: antialiased;
@@ -113,15 +107,15 @@ hr {
   margin: 40px 0;
 }
 
-/* The lead paragraph: one paragraph doing the work of a whole page. */
+/* The lead paragraph. */
 .lead {
   font-size: 21px;
   line-height: 1.55;
   max-width: 34em;
 }
 
-/* Eyebrows, captions and version stamps. The only thing allowed under 15px, and
-   the reason it is allowed is that it is mono and never carries prose. */
+/* Eyebrows, captions and version stamps: the only text under 15px, because it is
+   mono and never carries prose. */
 .eyebrow {
   margin: 0 0 10px;
   font-family: var(--mono);
@@ -151,11 +145,7 @@ hr {
   left: 12px;
 }
 
-/* The reduced-motion floor, over everything the site draws. Same shape and same
-   reasoning as the loader's in runtime/ui/styles/kit.css: an accessibility floor
-   is the one thing that has to outrank every later rule, and !important is the
-   case that exists for. The site has less to animate than the loader does, but
-   shiki's code blocks and the theme toggle both transition. */
+/* The reduced-motion floor, over everything the site draws. */
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

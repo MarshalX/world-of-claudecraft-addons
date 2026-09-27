@@ -22,8 +22,6 @@ describe('html', () => {
     );
   });
 
-  // The whole point of the tag: an addon description out of a third-party
-  // marketplace index reaches a template as a plain string, and cannot inject.
   it('escapes a marketplace-supplied description', () => {
     const description = '"><img src=x onerror=alert(1)>';
     expect(render(html`<p>${description}</p>`)).not.toContain('<img');
@@ -43,8 +41,6 @@ describe('html', () => {
     expect(render(html`<p>${['<b>', '&']}</p>`)).toBe('<p>&lt;b&gt;&amp;</p>');
   });
 
-  // An unset optional field is the common case, and printing "undefined" into a
-  // page is never what a template meant.
   it('renders null, undefined and false as nothing', () => {
     expect(render(html`<p>${null}${undefined}${false}</p>`)).toBe('<p></p>');
   });

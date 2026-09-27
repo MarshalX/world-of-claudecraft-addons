@@ -28,19 +28,17 @@ Seven required fields. Everything else is optional.
 
 ## The id is the one you cannot take back
 
-Everything else on that table is free to change between versions. The `id` is not, and it is worth understanding why rather than just obeying it.
+Everything else on that table is free to change between versions. The `id` is not.
 
 The id is your storage namespace, your keybind scope, and half of every fully-qualified id the loader uses to tell your addon apart from someone else's with the same name. Renaming a published addon is therefore not a rename. Every player who installed it keeps their settings, keybinds and window position filed under the old name, where nothing will ever read them again, and the new name arrives in Browse looking like a different addon that installs alongside the old one.
 
-`combat-meter` was called `dps-meter` until a healing tab made the name wrong. That rename was free, and it was free only because nothing had been released yet.
+An id can only be renamed before its first release.
 
 ## permissions is a disclosure, not a boundary
 
-This is the most important sentence on this page, and it is easy to read the field the wrong way round.
-
 Addon code runs in the page realm with the page's globals in scope. A manifest that declares nothing is not thereby *prevented* from doing anything. The list you write is what you are telling the player your addon is for, and the loader shows it on the install confirmation next to a sentence saying exactly that.
 
-So declare what you use and nothing more, because the value of the list is that it is honest. A permission list presented with nothing beside it reads as a sandbox, and there is not one.
+So declare what you use and nothing more: the value of the list is that it is honest.
 
 ## Settings and keybinds are rendered for you
 
@@ -58,11 +56,11 @@ Declare them and the manager builds the form, the keybind editor, and the confli
 
 Both are hydrated before your first line runs, so `woc.settings['max-rows']` is there immediately rather than arriving later. Changes reach you through `woc.onSettingsChange`, and a rebind moves your live binding for you.
 
-**What you declare here is what you get, so your addon does not check.** The loader coerces every stored value against this declaration before your code sees it: a number is a finite number clamped into the `min` and `max` above, a boolean is a boolean, a `select` is one of the options you still offer, and anything that is none of those falls back to the `default` on this line. `woc.settings['max-rows']` is therefore a number between 3 and 40 on your first line and on every line after it, and a `typeof` guard with a fallback beside it can never fire. [The API page](/docs/api) has the worked version, and the count of how many addons wrote that guard anyway.
+**What you declare here is what you get, so your addon does not check.** The loader coerces every stored value against this declaration before your code sees it: a number is a finite number clamped into the `min` and `max` above, a boolean is a boolean, a `select` is one of the options you still offer, and anything that is none of those falls back to the `default` on this line. `woc.settings['max-rows']` is therefore a number between 3 and 40 on your first line and on every line after it, and a `typeof` guard with a fallback beside it can never fire. [The API page](/docs/api) has the worked version.
 
 You can only bind an id you declared. That is what makes the editor able to list your keys before your addon has run.
 
-A `label` is read in two places, not one. The manager puts it beside the control, and an addon published through the official marketplace gets [its own page](/addons) on this site where every setting and every default binding is printed from this same declaration. So a label is player-facing text rather than a note to yourself: write it as the sentence a checkbox deserves, and the page and the pane cannot disagree about what the setting does.
+A `label` is player-facing text. The manager puts it beside the control, and an addon published through the official marketplace gets [its own page](/addons) on this site that prints every setting and default binding from this same declaration. Write it as the sentence a checkbox deserves.
 
 ## Shipping a table beside your code
 
@@ -96,11 +94,11 @@ Declare `apiMinor: 2` when you use it. An older loader drops a manifest key it h
 
 Up to four bare addon ids, and one short sentence each saying what that addon ADDS to yours. The manager draws them under your description with the name the player would recognise, the state they are in, and the one thing to do about it: installed and running, installed but switched off with an Enable beside it, available in Browse with a Get, or offered by no source they have and nothing to press.
 
-**Write the reason here rather than in your description.** A description is read before the player knows the companion exists and can say nothing about whether they have it; this is read next to the answer to both. The sentence hangs on the companion's name, and a player who follows a Get sees it again on the install confirmation, which is the screen where it decides something.
+**Write the reason here rather than in your description.** A description is read before the player knows the companion exists and cannot say whether they have it; this sentence sits beside that answer, and appears again on the install confirmation after a Get.
 
-`companionReasons` is keyed by an id you also list in `companions`, and a key that is not there fails validation rather than being quietly dropped: two keys describing one relationship is the shape that drifts, so the tie between them is enforced. It is a separate key rather than a richer `companions` on purpose. A marketplace index is parsed as one array of manifests, so one entry an older loader cannot read takes the WHOLE source down for everyone still on that loader; an unrecognised key is dropped instead, which is what lets a manifest carrying reasons still install on a loader that has never heard of them.
+`companionReasons` is keyed by an id you also list in `companions`; any other key fails validation. It is a separate key rather than a richer `companions` on purpose: a marketplace index is parsed as one array, so one entry an older loader cannot read takes the WHOLE source down for everyone on that loader, while an unrecognised key is simply dropped.
 
-It still **gates nothing**. It installs nothing on its own, orders nothing, and stops nothing from starting; every action it offers is a jump into a control that already existed, and an install still goes through the same confirmation any other install does. Bare ids rather than fully-qualified ones, because the same addon installed from a fork is still the companion you meant. Nothing on the `woc` surface changes, so do not raise `apiMinor` for it, and nothing checks the id exists: a companion may legitimately live on a marketplace this repository has never heard of.
+It **gates nothing**: it installs, orders and blocks nothing, and every action it offers jumps to a control that already exists. Bare ids rather than fully-qualified ones, because the same addon installed from a fork is still the companion you meant. Nothing on the `woc` surface changes, so do not raise `apiMinor` for it, and nothing checks the id exists: a companion may legitimately live on a marketplace this repository has never heard of.
 
 ## Checking it
 
@@ -108,4 +106,4 @@ It still **gates nothing**. It installs nothing on its own, orders nothing, and 
 pnpm validate
 ```
 
-Runs the real schema over every `addons/*/addon.json`. The dev server runs the same reader on every request, so a manifest saved mid-session is visible on the next refresh and the dev index cannot diverge from what CI would accept.
+Runs the real schema over every `addons/*/addon.json`. The dev server runs the same reader on every request, so a manifest saved mid-session is visible on the next refresh.

@@ -1,15 +1,9 @@
-// Where world state is read from.
+// Where world state is read from: `__game.world`, the same delta-merged, interest-pruned IWorld
+// the game's HUD reads. The interface would also fit a backend rebuilt from snap frames, if the
+// hook ever went away.
 //
-// Backend A reads __game.world, the same IWorld the game's own renderer and HUD
-// consume, so it is already delta-merged and interest-pruned. It is the only
-// backend built. Backend B, rebuilding state from snap frames, is the
-// contingency if the __game hook ever goes away; addons written against this
-// interface would not notice the swap, which is the point of having it.
-//
-// This is the one place the game's untyped objects become the typed shapes in
-// `game-types.ts`. Every assertion below is a claim about a repository this one
-// cannot compile against, which is why `shape.ts` checks the live player once at
-// world-ready: the types are asserted here and verified there.
+// The one place the game's untyped objects become the shapes in `game-types.ts`; the types are
+// asserted here and verified against the live player by `shape.ts`.
 
 import { fieldValue } from '../net/frames.ts';
 import { type AbilityIndex, createAbilityReader } from './abilities.ts';
@@ -44,11 +38,7 @@ import { readThreat, type ThreatTable } from './threat.ts';
 const NO_ENTITIES: ReadonlyMap<number, Entity> = new Map<number, Entity>();
 
 /**
- * The entity view, rebuilt only when the game swaps the map behind it.
- *
- * The watcher reads this every animation frame and an addon may read it far more
- * often, so building a fresh wrapper per access would allocate for nothing. The
- * game keeps one map for the life of a session, so the cache almost always hits.
+ * The entity view, rebuilt only when the game swaps the map behind it, which it rarely does.
  */
 function entityMapReader(world: unknown): () => ReadonlyMap<number, Entity> {
   let source: unknown = null;
@@ -66,13 +56,7 @@ function entityMapReader(world: unknown): () => ReadonlyMap<number, Entity> {
   };
 }
 
-/**
- * The combat reading, gathered from the three live collections it consults.
- *
- * Its own function rather than an inline getter because it is the one read here
- * that takes several parts of the world at once; the rule it feeds lives in
- * `combat.ts` and knows nothing about the game object.
- */
+/** The combat reading, gathered for `combat.ts`, which knows nothing about the game object. */
 function combatOf(
   world: unknown,
   entities: ReadonlyMap<number, Entity>,
@@ -161,13 +145,8 @@ function coreReads(world: unknown, entities: () => ReadonlyMap<number, Entity>) 
 }
 
 /**
- * The reads the loader ASSEMBLES rather than passes through.
- *
- * Split from `createGameBackend` for the reason `coreReads` was: one object
- * literal holding every getter is past the length a function body is allowed,
- * and the split has to preserve the getters or the facade stops being live.
- * These belong together because none of them is a member of the game's own
- * world object.
+ * The reads the loader ASSEMBLES rather than passes through. Every group must stay getters, or
+ * the facade stops being live.
  */
 function derivedReads(
   world: unknown,
@@ -251,17 +230,13 @@ export interface WorldBackend
   /** Money, in copper. */
   readonly copper: number | null;
   /**
-   * Who is playing, as the key everything per-character is filed under.
-   *
-   * On the backend rather than only on the facade because the watcher reads
-   * `backend[key]` directly, and a character SWITCH inside one page load is a
-   * change an addon has to be told about.
+   * Who is playing, as the key everything per-character is filed under. On the backend so the
+   * watcher can report a character switch within one page load.
    */
   readonly characterKey: string | null;
   /**
-   * The character being spectated, or null when the session is watching itself.
-   *
-   * The reason `characterKey` can be null mid-session: see character-key.ts.
+   * The character being spectated, or null when the session is watching itself. Why
+   * `characterKey` can be null mid-session: see character-key.ts.
    */
   readonly spectating: string | null;
   /** The server's own movement-speed multiplier for the player, or null. See `movement.ts`. */
@@ -274,40 +249,25 @@ export interface WorldBackend
   readonly reaction: (entityId: number) => Reaction | null;
   readonly quests: WorldQuests;
   /**
-   * Ability id to seconds remaining.
-   *
-   * Declared readonly, which is a type-level guard and not a boundary: this is
-   * the game's own live Map, the same one its HUD reads, so a cast defeats it.
-   * `entities` is wrapped for real because addons hold it; this is read fresh.
+   * Ability id to seconds remaining. The game's own live Map, so `readonly` is a type-level guard
+   * only; `entities` is wrapped for real because addons hold it.
    */
   readonly cooldowns: ReadonlyMap<string, number> | null;
   readonly auras: readonly Aura[] | null;
   /**
-   * Everything in scope that is casting, derived rather than read.
-   *
-   * There is no such collection on the game object: cast state lives on each
-   * entity, and the event that would announce it fires for a player only. See
-   * `world/derived.ts` for why that makes this the only way to see a boss cast.
+   * Everything in scope that is casting, derived from each entity's cast fields. The only way to
+   * see a mob's cast: see `world/derived.ts`.
    */
   readonly casts: ReadonlyMap<number, EntityCast>;
   /** The target's auras, which `capture('target')` alone cannot report moving. */
   readonly targetAuras: readonly Aura[] | null;
   /**
-   * The player's own spellbook, projected and memoized.
-   *
-   * Never null, because it is a lookup rather than a reading: an empty index
-   * answers the same questions as a populated one. It is also the only member
-   * here backed by a STATEFUL reader, since the game rebuilds its resolved list
-   * on every snapshot and re-projecting twenty abilities at that rate would
-   * allocate for nothing.
+   * The player's own spellbook, projected and memoized. Never null: an empty index answers the
+   * same questions.
    */
   readonly abilities: AbilityIndex;
   /**
-   * Whether the player is fighting, and which signal said so.
-   *
-   * Derived rather than read: the game sends no combat flag for the self record.
-   * See `world/combat.ts` for the order the signals are consulted in and why the
-   * answer carries its own source.
+   * Whether the player is fighting, and which signal said so. Derived: see `world/combat.ts`.
    */
   readonly combat: CombatState;
   /** The real IWorld the game is running. */
@@ -315,10 +275,8 @@ export interface WorldBackend
 }
 
 /**
- * Read __game.world, or null when the hook does not carry one.
- *
- * Every member is a getter: the game mutates these objects in place, so reading
- * on access is what makes the facade live rather than a stale copy.
+ * Read __game.world, or null when the hook does not carry one. Every member is a getter, since
+ * the game mutates these objects in place.
  */
 export function createGameBackend(game: unknown, deps: BackendDeps): WorldBackend | null {
   const world = fieldValue(game, 'world');
@@ -328,9 +286,7 @@ export function createGameBackend(game: unknown, deps: BackendDeps): WorldBacken
   const entities = entityMapReader(world);
   const abilities = createAbilityReader();
 
-  // Nested `mergeLive` rather than a spread of the groups: a spread READS every
-  // getter once at assembly time, which is the failure the helper's own comment
-  // describes and which would freeze the facade at a world of nulls.
+  // `mergeLive`, never a spread: a spread reads every getter once and freezes a world of nulls.
   return mergeLive(
     mergeLive(
       mergeLive(coreReads(world, entities), derivedReads(world, entities, abilities, deps)),

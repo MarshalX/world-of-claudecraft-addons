@@ -1,32 +1,13 @@
 // Ledgerline on the stage: a ledger somebody has been keeping for three days.
 //
-// The state worth photographing cannot be walked into, since the only history that exists is
-// what this addon wrote down while its player browsed. So the scenario states three browses,
-// with `stage.elapse` putting the first two in the past.
+// The history cannot be walked into, so the scenario states three browses and `stage.elapse`
+// puts the first two in the past. Every item id ships painted art in the deployed item manifest.
 //
-// Every id here ships painted art, from the deployed `/ui/items/mapping.json`, so a missing icon
-// in a shot is a real defect rather than a fixture naming a file that never existed.
+// Names come from `stage.publish` standing in for lorebind, using lorebind's committed table, so
+// the picture is the recommended pair rather than raw ids.
 //
-// The NAMES come from `lorebind`, which this addon names as a companion for exactly that, and
-// the scenario stands in for it: `stage.publish` emits the batch a running lorebind would answer
-// an ask with, taken from lorebind's own committed table so a fixture cannot invent a name the
-// publisher would not give. Without it the picture is what a player with no publisher installed
-// sees, which is a mixture: the art manifest still names most of these and has stopped naming
-// `healing_potion`, `boar_hide` and `ghostly_essence`, so those three rows fall back to raw ids.
-// That mixture is honest and it is not the pair this addon recommends, which is what a Browse
-// thumbnail should be showing.
-//
-// `Stall.name` is what the FIXTURE sorts by and it is the game's display name, which is what
-// the server sorts on. It used to be the art manifest's name, and the two have come apart: the
-// manifest calls `silverleaf_herb` "Sheenleaf Herb", which the game now does too, so the
-// divergence this fixture was built to picture has closed there and opened at `boar_hide`,
-// which the game calls "Bristly Boar Hide". Nothing on screen depends on that any more, since
-// the labels come from the publisher above.
-//
-// The others section is sorted the way the SERVER sorts it, by display name then stack total.
-// The undercut check reads exactly that ordering, so a fixture in any other order would be a
-// page the server could not have sent. All three verdicts are on screen at once, which is the
-// point of the Yours panel.
+// Pages are sorted as the server sorts them, by display name then stack total. The undercut check
+// reads that order, so any other order is a page the server could not send.
 
 import { inSeries } from '../../loader/src/shared/sequence.ts';
 import type { Scenario, Stage, WorldDraft } from '../../stage/src/stage.ts';
@@ -106,7 +87,7 @@ interface Stack {
  */
 interface Stall {
   item: string;
-  /** The game's display name, which is what this fixture sorts by. See the header. */
+  /** The game's display name, which the server sorts by. */
   name: string;
   units: readonly number[];
   stacks: readonly Stack[];
@@ -150,9 +131,7 @@ const STALLS: readonly Stall[] = [
     units: [260, 250, 245],
     stacks: [
       { count: 5, seller: 'Ilvane' },
-      // The Merchant's own shelf, which competes with the player for a buyer and is
-      // therefore in the undercut check, and is priced by a formula rather than by
-      // anybody's judgement, and is therefore out of the price series by default.
+      // The Merchant's own shelf: in the undercut check, out of the price series by default.
       { count: 5, seller: 'Merchant', over: 60, house: true },
     ],
   },
@@ -292,7 +271,7 @@ function pageFor(browse: number): Record<string, unknown> {
     armorClass: '',
     primaryStat: '',
     rarity: '',
-    // The order Browse defaults to, which is what makes these rows a book grouped by name.
+    // Browse's default order, which groups the book by name.
     sort: 'name',
     page: 0,
     pageCount: 1,
@@ -340,20 +319,13 @@ function overCapped(draft: WorldDraft): void {
 }
 
 /**
- * What a scan finds, on top of the book the three browses already recorded.
+ * What a scan finds on top of the recorded book. Each row is a real underpricing against the
+ * shipped floor table, one per kind the panel distinguishes:
  *
- * Every row here is a REAL underpricing of one of the four kinds the panel can tell apart, and
- * each is priced against the shipped floor table at game 0.35.1 rather than against a figure
- * chosen to look good:
- *
- *   The iron is the fat-finger: twenty ore posted for the price of ONE, which is what happens
- *   when a seller types the unit price into the total field. It is the top row because it clears
- *   the most, and the panel names the cause rather than calling it a bargain.
- *   The potions are the case where two answers disagree and the smaller one is the true one: a
- *   vendor pays 32 each whatever happens, and the resale looks like 245 each until the Merchant's
- *   own shelf caps it at the 170 a vendor charges for one.
- *   The hide is an ordinary undercut, firm because three visits stand behind the median.
- *   The silk is the same shape with two visits behind it, so it is drawn and called thin.
+ *   Iron is the fat-finger: twenty ore posted at the price of one.
+ *   Potions are where the vendor shelf caps the resale at the 170 a vendor charges.
+ *   The hide is a firm undercut (three visits behind the median).
+ *   The silk is the same with two visits, so it is called thin.
  */
 const UNDERPRICED: readonly Listing[] = [
   {
@@ -415,16 +387,12 @@ const UNDERPRICED: readonly Listing[] = [
 /** The wire field a page carries its rows under, so reading it needs no literal key. */
 const LISTINGS_FIELD = 'listings';
 
-/** The computed access `noPropertyAccessFromIndexSignature` asks for. See STYLE.md. */
+/** The computed access `noPropertyAccessFromIndexSignature` asks for. */
 function rowsOn(payload: Record<string, unknown>, field: string): Listing[] {
   return (payload[field] ?? []) as Listing[];
 }
 
-/**
- * The page a scan is looking at: the third browse's book with the underpriced rows folded in and
- * re-sorted, because the server sorts by display name then stack total and a fixture in any other
- * order is a page it could not have sent.
- */
+/** The third browse's book with the scan rows folded in, re-sorted into server order. */
 function scanPage(): Record<string, unknown> {
   const base = pageFor(2);
   const listings = [...rowsOn(base, LISTINGS_FIELD), ...UNDERPRICED];
@@ -438,12 +406,8 @@ function noCounter(draft: WorldDraft): void {
 }
 
 /**
- * The book under Browse's "lowest price only", which is one row per item over the WHOLE match.
- *
- * Built by collapsing the fixture the way the server does rather than by listing rows by hand:
- * cheapest per item id, the player's own rows collapsing with everyone else's, so exactly the two
- * things this state is about fall out of it. The rows that survive are floors, and the listings
- * of the player's that lost are simply gone, which is what `myListingCount` is left to report.
+ * The book under "lowest price only": the fixture collapsed to the cheapest row per item id,
+ * the player's own rows included, as the server does it.
  */
 function collapsedPage(): Record<string, unknown> {
   const base = pageFor(2);
@@ -459,26 +423,16 @@ function collapsedPage(): Record<string, unknown> {
     ...base,
     listings,
     collapseLowest: true,
-    // Both counts are over the COLLAPSED rows, which is what the server does and is the half of
-    // this that is easy to get wrong: the listings behind these floors are not on the wire.
+    // Both counts are over the COLLAPSED rows, as the server counts them.
     totalCount: listings.length,
-    // Not collapsed and not filtered: every listing the player has anywhere, which is the only
-    // figure that can see the ones this page dropped.
+    // Every listing the player has anywhere: the only figure that sees the ones collapsed away.
     myListingCount: rowsOn(base, LISTINGS_FIELD).filter((row) => row.mine).length,
   };
 }
 
-/**
- * An item staged on the Sell tab, with the price the server answers a staging with.
- *
- * `spider_silk` because the player has one listed at 62 each and the floor here is 58, so the
- * panel is answering the question a seller actually has: somebody is under you, and this is what
- * being under THEM would net.
- */
+/** `spider_silk`: the player lists at 62 each against a floor of 58, so someone is under them. */
 function stagingToSell(draft: WorldDraft): void {
-  // Over the SCANNED page rather than a quiet one: a player staging something is standing at the
-  // counter with everything else they have read still in front of them, and a picture of the line
-  // over an empty panel is a picture of a state that only happens on the first page of a session.
+  // Over the scanned page: a player staging a sale has already read the rest of the book.
   draft.set(draft.world, 'marketInfo', {
     ...scanPage(),
     sellPriceItemId: 'spider_silk',
@@ -486,21 +440,15 @@ function stagingToSell(draft: WorldDraft): void {
   });
 }
 
-/**
- * In `world` rather than `run`: a player who logs in at the Merchant is reading a page before
- * this addon has drawn anything, and folding that page in is the first thing it does.
- */
+/** In `world`, since a player logging in at the Merchant is reading a page before first draw. */
 function atTheMerchant(draft: WorldDraft): void {
   draft.set(draft.world, 'marketCollectPending', true);
   atCounter(draft, 0);
 }
 
 /**
- * The shipped floor table, on EVERY scenario rather than only the one that draws a deal.
- *
- * A scenario without it is a player whose fetch failed, which is a real state and is not the one
- * any of these picture: the two certain signals go quiet, and the panel that results looks like
- * the ordinary one with a couple of rows missing.
+ * The shipped floor table, on every scenario. Without it the panel shows a failed fetch, which
+ * looks like the ordinary panel with rows missing.
  */
 const FLOOR_DATA = { 'floors.json': JSON.stringify(FLOORS) };
 
@@ -508,13 +456,7 @@ const FLOOR_DATA = { 'floors.json': JSON.stringify(FLOORS) };
 const LOREBIND_FQID = 'official/lorebind';
 const ITEMS_TOPIC = 'items';
 
-/**
- * The companion, standing in.
- *
- * Every field is lorebind's own, read out of the table it ships, so the names on screen are the
- * names a player would get rather than ones this file made up. Narrowed to the ids the fixture
- * names, since the whole table is 837 rows and the panel draws eleven of them.
- */
+/** The companion, standing in, with lorebind's own rows narrowed to the ids this fixture uses. */
 function lorebindSpeaks(stage: Stage): void {
   const wanted = new Set([
     ...STALLS.map((stall) => stall.item),
@@ -534,18 +476,13 @@ function pause(ms: number): Promise<void> {
 }
 
 /**
- * Let the addon's storage round trip and its queued repaint land.
- *
- * A real timer rather than a count of microtasks: the ledger is read back with one
- * `storage.keys()` and then a `get` per item, so its start-up is several promise hops
- * deep, and the repaint that follows rides a real animation frame here.
+ * Let the storage round trip and the queued repaint land. A real timer, since start-up is one
+ * `storage.keys()` plus a `get` per item, several promise hops deep.
  */
 async function drawn(stage: Stage): Promise<void> {
   stage.poll();
   await pause(SETTLE_MS);
-  // The repaint rides `woc.paint`, which runs on the loader's own frame loop, and on the stage
-  // that loop is driven by hand rather than by the browser. Without this the panel holds what
-  // it read and draws none of it.
+  // `woc.paint` runs on the loader's frame loop, which the stage drives by hand.
   stage.frame();
 }
 
@@ -554,11 +491,8 @@ const ART_MS = 5000;
 const ART_POLL_MS = 50;
 
 /**
- * Hold the shot until the art manifest has landed. `ui.icon.item` is optimistic and
- * `ui.icon.itemArtName` answers null until the manifest is read, so a picture taken before it
- * lands is a panel of raw item ids: honest about what the addon does when nothing has published
- * a name, and not what it looks like on a machine that has finished loading. Waited on the fact
- * rather than on a delay, and the first row is enough because one manifest answers for every row.
+ * Hold the shot until the art manifest lands: `ui.icon.itemArtName` answers null until then, so
+ * an early shot is a panel of raw ids. The first row is enough, one manifest answers for all.
  */
 function artLanded(
   stage: Stage,
@@ -568,8 +502,7 @@ function artLanded(
   return new Promise((resolve) => {
     let waited = 0;
     const look = (): void => {
-      // A frame per look, for the reason `drawn` runs one: the manifest landing asks for a
-      // repaint and nothing on the stage performs one unless a scenario says so.
+      // A frame per look: the manifest landing asks for a repaint the stage only runs on demand.
       stage.frame();
       const label = document.querySelector(`[data-list="${list}"] .woc-bar-label`)?.textContent;
       if (label === wanted || waited >= ART_MS) {
@@ -583,15 +516,9 @@ function artLanded(
   });
 }
 
-/**
- * Three days of browsing, in the order they happened. The clock is moved between them, which is
- * what puts the readings at different ages and gives the trend line something to draw: every
- * stamp this addon keeps comes from `woc.wallClock()`.
- */
+/** Three days of browsing, with the clock moved between them so the readings differ in age. */
 async function browsedForDays(stage: Stage): Promise<void> {
-  // Before the first paint, because a row learns its name once and the picture is of a
-  // panel that has been running beside its companion for three days rather than of one
-  // that was told what an item is called a moment before the shutter.
+  // Before the first paint: a row learns its name once.
   lorebindSpeaks(stage);
   await drawn(stage);
   await inSeries(BROWSES.slice(1).entries(), async ([step, ago]) => {
@@ -602,11 +529,7 @@ async function browsedForDays(stage: Stage): Promise<void> {
   });
 }
 
-/**
- * Open one of the panel's tabs, the way a player does. Clicked at the DOM rather than reached
- * for through the stage: the tab strip is the loader's `ui.tabs`, so a click is the same path a
- * player takes and a stage helper would be a second way in that only scenarios use.
- */
+/** Open one of the panel's tabs by clicking it, the same path a player takes. */
 function openTab(label: string): void {
   const button = [...document.querySelectorAll('#woc-addons .woc-tab')].find(
     (el) => el.textContent === label,
@@ -615,27 +538,13 @@ function openTab(label: string): void {
 }
 
 /**
- * A size the frame is genuinely draggable to. The WIDTH is what fits three panes in one sheet:
- * the capture viewport is 1440 and each pane carries 24px a side with 16px between, so three of
- * these come to 1424 and anything wider is silently cropped at the right edge.
- *
- * The HEIGHT came down from 620 when the rows lost the 16px lane they were each carrying for a
- * trend line. A box is not allowed to shrink to fit a thin fixture, since the picture has to be
- * the panel a player gets on install, but a box sized around rows half this tall is a panel with
- * a third of itself empty, which reads as an addon that found nothing. It is set by the FULLEST
- * pane rather than the emptiest: the ledger is nine rows over a search field, and a box that
- * clips the ninth reads as broken in a Browse thumbnail, where a little air under six deal rows
- * does not. It went up again for the Export and Import row, which sits under that pane's
- * sentence and is the only chrome any pane carries that the others do not.
+ * The width fits three panes in the 1440 capture viewport: `3 * (416 + 48) + 2 * 16` is 1424, and
+ * wider is silently cropped. The height is set by the fullest pane, the ledger's nine rows plus
+ * the Export and Import row, since a clipped last row reads as broken in a thumbnail.
  */
 const WIDENED = { x: 80, y: 140, w: 416, h: 560 };
 
-/**
- * THREE panes fit the sheet and a fourth does not: the capture viewport is 1440, each pane
- * carries 24px a side and they sit 16px apart, so `3 * (416 + 48) + 2 * 16` is 1424 and a fourth
- * would be cropped at the right edge with nothing to report it. Deals took the third slot from
- * Sold, because what a player decides on in Browse is whether an addon will find them money.
- */
+/** At most three `preview` scenarios: a fourth pane is silently cropped. See `WIDENED`. */
 const SCENARIOS: readonly Scenario[] = [
   {
     id: 'deals',
@@ -648,9 +557,7 @@ const SCENARIOS: readonly Scenario[] = [
     world: atTheMerchant,
     run: async (stage) => {
       await browsedForDays(stage);
-      // The scan itself, which is a page read AFTER the history exists: a deal is a listing
-      // judged against everything already written down, so a scenario that showed one with no
-      // ledger behind it would be picturing a state the panel cannot reason from.
+      // After the history exists: a deal is judged against what is already recorded.
       stage.set(stage.world, 'marketInfo', scanPage());
       await drawn(stage);
       await artLanded(stage, 'deals', 'Iron Ore x20');
@@ -667,8 +574,7 @@ const SCENARIOS: readonly Scenario[] = [
     world: atTheMerchant,
     run: async (stage) => {
       await browsedForDays(stage);
-      // ASKED for, because the panel opens on Deals while the player is at a counter. Without
-      // this the scenario photographs the Deals pane under a caption that says The ledger.
+      // Asked for, because the panel opens on Deals while at a counter.
       openTab('Prices');
       await artLanded(stage);
     },
@@ -684,9 +590,7 @@ const SCENARIOS: readonly Scenario[] = [
     world: atTheMerchant,
     run: async (stage) => {
       await browsedForDays(stage);
-      // The TAB first, then the art wait on the list that tab shows. Waiting on Prices from here
-      // costs the whole five second timeout, because the panel opens on Deals at a counter and a
-      // pane it has switched away from is not what this shot is of.
+      // The tab first: the panel opens on Deals at a counter, and waiting on Prices would time out.
       openTab('Yours');
       await artLanded(stage, 'mine');
       stage.frame();
@@ -708,10 +612,8 @@ const SCENARIOS: readonly Scenario[] = [
     },
   },
   {
-    // The Merchant's own ledger holds fifty rows and counts what it dropped past that, and their
-    // gold is still inside the total those rows are explaining. So a record read off it is
-    // incomplete by a known amount, and the pane says by how much rather than presenting a short
-    // list as a whole one. Worth looking at rather than photographing: the normal state is none.
+    // The Merchant itemizes fifty sales and counts the rest, whose gold stays in the total. The
+    // pane says how many are missing. Not a preview: the normal state is none.
     id: 'omitted',
     label: 'More sold than the Merchant will itemize',
     data: FLOOR_DATA,
@@ -727,9 +629,7 @@ const SCENARIOS: readonly Scenario[] = [
     },
   },
   {
-    // Away from the counter, holding the last page it read: the state most of a session is spent
-    // in, and the one the whole three-state read exists for. An empty market and a player
-    // standing in a town are different facts and the panel says which.
+    // Away from the counter, holding the last page read. Away is not an empty market.
     id: 'away',
     label: 'Walked away from the Merchant',
     data: FLOOR_DATA,
@@ -742,8 +642,7 @@ const SCENARIOS: readonly Scenario[] = [
     },
   },
   {
-    // Nothing recorded and nowhere near a Merchant, which is what a player meets on the
-    // day they install this and is the state nobody thinks to photograph.
+    // Nothing recorded and no Merchant nearby: the first-install state.
     id: 'empty',
     label: 'Before the first page is read',
     data: FLOOR_DATA,
@@ -752,10 +651,8 @@ const SCENARIOS: readonly Scenario[] = [
     run: drawn,
   },
   {
-    // Browse's "lowest price only", where the pane has to read the other way round: a listing of
-    // the player's that is HERE is one nobody has undercut, and the ones that were undercut are
-    // not on the page at all. Worth looking at because the two sentences under the lists are the
-    // whole feature, and neither of them is a figure.
+    // "Lowest price only": a listing of the player's that is here has not been undercut, and the
+    // undercut ones are not on the page. The two sentences under the lists are the feature.
     id: 'collapsed',
     label: 'Browsing the lowest price of each',
     data: FLOOR_DATA,
@@ -772,9 +669,7 @@ const SCENARIOS: readonly Scenario[] = [
     },
   },
   {
-    // Part-way through listing something, which is the only moment the game states a market-wide
-    // price and therefore the only moment this addon can answer a question about SELLING. The
-    // line above the panes is the whole scenario.
+    // Part-way through listing, the only moment the game states a market-wide price.
     id: 'selling',
     label: 'Staging an item on the Sell tab',
     data: FLOOR_DATA,
@@ -788,10 +683,8 @@ const SCENARIOS: readonly Scenario[] = [
     },
   },
   {
-    // The reconnect blip: the client force-nulls its own market mirror for one snapshot after a
-    // reconnect, so a player standing at the counter reads away. The panel holds the page and
-    // says it is resyncing. It lasts two seconds by design, so this scenario is worth looking at
-    // rather than photographing.
+    // The reconnect blip: the client nulls its market mirror for one snapshot, so the panel holds
+    // the page and says it is resyncing. Not a preview: it lasts two seconds.
     id: 'resync',
     label: 'The reconnect blip',
     data: FLOOR_DATA,

@@ -1,9 +1,5 @@
-// Round-trip time, measured by watching traffic rather than by producing any.
-//
-// The client stamps every outbound input frame with a sequence number and the
-// server echoes the highest one it has processed as `ack` on the next snapshot
-// (src/net/online.ts). Timing that pairing needs nothing sent, which is what
-// keeps net read-only.
+// Round-trip time from observed traffic alone: each input frame carries a `seq` and the server
+// echoes the highest processed as `ack` on a snapshot, so timing the pair sends nothing.
 
 /** Samples kept for the median. Small enough to track a route change quickly. */
 const WINDOW = 8;
@@ -34,11 +30,7 @@ export interface LatencyTracker {
   reset: () => void;
 }
 
-/**
- * The median rather than the mean: a single GC pause or a tab that was
- * backgrounded produces one enormous sample, and a mean would carry it for the
- * whole window.
- */
+/** The median, since one GC pause or backgrounded tab would skew a mean for the whole window. */
 export function createLatencyTracker(): LatencyTracker {
   const pending = new Map<number, number>();
   let samples: number[] = [];

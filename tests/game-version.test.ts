@@ -1,14 +1,11 @@
-// The footer build readout is the only external surface carrying the game's
-// version, and it is FORMATTED: the game strips a trailing ".0" before drawing
-// it. Every case below is a real state that element passes through.
+// The footer build readout is the only external surface carrying the game's version, and the
+// game strips a trailing ".0" before drawing it.
 
 import { describe, expect, it } from 'vitest';
 import { parseGameVersion, restorePatch } from '../loader/src/runtime/game-version.ts';
 
 describe('restorePatch', () => {
-  // The game's formatFooterVersion() drops a trailing ".0", so a two-part
-  // version means patch zero. Left as-is it is not a semver range can match,
-  // which is what the manifest gameVersion check will compare against.
+  // A two-part version means patch zero, and is not semver until the patch is restored.
   it('restores the patch the game dropped', () => {
     expect(restorePatch('0.31')).toBe('0.31.0');
   });
@@ -17,8 +14,6 @@ describe('restorePatch', () => {
     expect(restorePatch('0.31.4')).toBe('0.31.4');
   });
 
-  // Only a trailing .0 is dropped, so a version that genuinely ends in zero
-  // patch is indistinguishable from a two-part one and must not gain a fourth.
   it('does not add a part to a version that already has three', () => {
     expect(restorePatch('1.0.0')).toBe('1.0.0');
   });
@@ -39,8 +34,6 @@ describe('parseGameVersion', () => {
     expect(parseGameVersion('v0.31.0')).toEqual({ version: '0.31.0', build: null });
   });
 
-  // The separator between the two is presentation. A game restyle that changes
-  // it must not cost the reading.
   it('does not depend on the separator', () => {
     expect(parseGameVersion('v1.2.3 :: build abc')?.build).toBe('abc');
   });

@@ -1,31 +1,12 @@
-// `pnpm tables`: regenerate every committed addon data table from a game
-// checkout and say which of them actually MOVED.
-//
-// Run by hand after a game release, for the reason `pnpm aura-kinds` is: it
-// reads a CHECKOUT rather than an endpoint, so nothing will 404 to tell you a
-// table is stale. That is the whole point of it. Game 0.35.0 re-sited 18 gather
-// nodes in one editorial pass, and nothing on the wire says a node moved, no
-// request fails, and no test can catch it: the player walks to a marker and
-// finds an empty field. Regenerating and reading the diff is the only safeguard
-// there is, and the stamp in each table's header is the only thing on disk that
-// says how old its claims are.
+// `pnpm tables`: regenerate every committed addon data table from a game checkout and say which of
+// them actually MOVED. A stale table raises no error anywhere, so this is the only safeguard.
 //
 //   pnpm tables --game /path/to/world-of-claudecraft
 //   pnpm tables --game /path/to/world-of-claudecraft --dry-run
 //
-// `--dry-run` restores every table afterwards, for the reading alone.
-//
-// It answers three states, and the middle one decides a version bump. A table
-// whose CONTENT moved needs its addon's version bumped, because an addon changed
-// without a bump is an addon changed for nobody. A table whose STAMP alone moved
-// must not be bumped, because that ships a download saying nothing changed.
-//
-// The two --game spellings in the tree disagree (`--game=` for most of the
-// generators, `--game ` for some) and the wrong one trips a required-argument
-// error that reads as a missing flag rather than a wrong one, so this tries both
-// before believing a failure.
-//
-// Reading is not modifying. The never-modify-the-game rule is untouched.
+// `--dry-run` restores every table afterwards. The generators disagree on the --game spelling, so
+// each is tried both ways; a real failure is therefore reported as the second spelling's error,
+// and running that generator directly shows the actual cause.
 
 import { execFile } from 'node:child_process';
 import { readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
@@ -119,8 +100,7 @@ function compare(id, before, dryRun) {
       writeFileSync(path, previous);
     }
   }
-  // A generator writing a table that did not exist before is a new table rather
-  // than a silent no-op, so say so rather than letting it pass unmentioned.
+  // A table that did not exist before is new content, not a no-op.
   for (const path of tablesOf(id).keys()) {
     if (!before.has(path)) {
       rows.push({ id, table: `${id}/${basename(path)}`, state: 'content', note: '(new file)' });
@@ -147,7 +127,7 @@ async function main() {
   }
   const rows = [];
   for (const entry of found) {
-    // biome-ignore lint/performance/noAwaitInLoops: the generators share one working tree and one of them holds the whole item table in memory, so these run serially by design rather than for want of a Promise.all.
+    // biome-ignore lint/performance/noAwaitInLoops: the generators share one working tree and one holds the whole item table in memory, so they run serially by design.
     rows.push(...(await readOne(entry, checkout, dryRun)));
   }
   console.log(renderReport(rows));

@@ -1,17 +1,8 @@
-// Filtering auras, on an entity and on a party row.
+// Filtering auras, on an entity and on a party row. "Is MY dot on this target" needs
+// `sourceId`: two players can apply the same debuff.
 //
-// Three filters get written by every addon that watches effects, and one of them
-// is the difference between a working dot tracker and a broken one: "is MY dot
-// on this target" is not the same question as "is this dot on this target",
-// because two hunters in a group both apply the same debuff and only one of them
-// refreshes it. `sourceId` is what separates them, and an addon that forgets it
-// shows a full timer while its own dot expires.
-//
-// A party row's auras are a DIFFERENT and much smaller shape than an entity's:
-// an id, a kind, a whole-second remaining, and a `neg` flag for a debuff. No
-// source, no stacks, no duration. So the two filters cannot be one function, and
-// the query a row accepts is deliberately narrower than the entity one rather
-// than accepting `mine` and quietly ignoring it.
+// A party row's aura is a much smaller shape (id, kind, whole-second remaining, `neg`; no source,
+// stacks or duration), so its query is deliberately narrower rather than ignoring `mine`.
 
 import {
   DEBUFF_AURA_KINDS,
@@ -38,11 +29,8 @@ interface PartyAuraQuery {
   id?: string;
   kind?: string;
   /**
-   * True for debuffs only, false for buffs only, absent for both.
-   *
-   * Runs the game's own classification rather than reading the row's `neg` flag,
-   * which is a SIGN test on a magnitude and not a polarity: a dot carries a
-   * positive per-tick figure and a root carries 0, so neither ever sets it.
+   * True for debuffs only, false for buffs only, absent for both. Runs the game's classification:
+   * the row's `neg` flag alone is a sign test that a dot or a root never sets.
    */
   debuff?: boolean;
 }
@@ -58,29 +46,13 @@ const NO_ROWS: readonly PartyMemberAura[] = Object.freeze([]);
 /**
  * Whether an effect works AGAINST the unit carrying it.
  *
- * A PREDICATE rather than a field on the aura, and that is forced rather than
- * chosen: the loader hands addons the game's OWN aura objects (`readAs` is a
- * cast, `world.entities` is a view), so a `harmful` field could only be written
- * by mutating game state the HUD reads from the same array, or by copying every
- * aura on every read, which allocates per aura per frame and destroys the
- * identity an addon uses to track one effect across frames.
+ * A predicate, not a field: addons get the game's own aura objects, so a field would mean
+ * mutating game state or copying every aura per frame.
  *
- * The game's own rule, in two clauses. A kind in the harmful set is harmful
- * whatever its magnitude, and a `buff_*` kind whose magnitude went negative is a
- * drain reusing the buff kind. The second clause is NOT redundant with the
- * first: `debuff_ap` is the authored drain and is in the set, while a mob sapping
- * attack power with an ordinary `buff_ap` of negative value is not, so a set-only
- * implementation answers correctly for every authored debuff and wrongly for
- * every drain, which is the failure mode that looks fine in testing.
- *
- * It takes either shape. A full aura carries a signed `value`; a party row
- * carries no value at all and carries `neg`, which the server sets from that
- * same sign and nothing else, so the answer for a row is the same function
- * rather than an approximation of it.
- *
- * `value` is used RAW, because the second clause is a sign test. Anything that
- * rounds, clamps or takes a magnitude on the way here reclassifies every drain
- * in the game as a benefit, silently and only for drains.
+ * The game's rule has two clauses: a kind in the harmful set, or a `buff_*` kind with a negative
+ * magnitude (a drain reusing the buff kind, which the set does not list). It takes either
+ * shape: a party row's `neg` is set from the same sign. `value` must stay RAW; rounding or
+ * taking a magnitude reclassifies every drain as a benefit.
  */
 function isHarmful(aura: Pick<Aura, 'kind'> & { value?: number; neg?: 1 }): boolean {
   if (DEBUFF_AURA_KINDS.has(aura.kind)) {
@@ -95,34 +67,17 @@ function isHarmful(aura: Pick<Aura, 'kind'> & { value?: number; neg?: 1 }): bool
 /**
  * Whether an effect can be removed, and in which direction.
  *
- * Six clauses, all the game's (`isDispellableAura` and `isPlayerRemovableAura`
- * in src/sim/aura_classify.ts): not one of the ids the game refuses outright,
- * not permanent, not unbreakable control, not an undispellable penalty, not the
- * physical school, and the polarity the direction asks for. `offensive` strips a
- * BENEFIT off an enemy; the other direction strips a harmful effect off an ally.
- * `UNDISPELLABLE_AURA_IDS` is generated from that file by `pnpm aura-kinds`, never
- * transcribed by hand.
+ * Six of the game's seven clauses (`isDispellableAura` and `isPlayerRemovableAura` in
+ * `src/sim/aura_classify.ts`): not a refused id, not permanent, not unbreakable control, not
+ * undispellable, not physical, and the polarity asked for. `offensive` strips a BENEFIT off an
+ * enemy; otherwise a harmful effect off an ally. `UNDISPELLABLE_AURA_IDS` is generated by
+ * `pnpm aura-kinds`.
  *
- * THE ONE CLAUSE THIS CANNOT IMPLEMENT is `encounterOwned`, added at game
- * 0.41.0 and checked by the game ahead of all of these. `wireAura` never sends
- * it (server/snapshot_timer_wire.ts:526 at game 0.43.2 emits `perm`, `ub`,
- * `und`, `fl` and `bt` and nothing else), so no client can tell one from an
- * ordinary effect, and the game's own source says the omission is deliberate.
- * This therefore answers TRUE for an encounter-owned mechanic the game will
- * refuse. It is set in all THREE raids rather than the two this said for a
- * cycle, and not only on the boss: `nythraxis_soul_rend` goes on each marked
- * RAIDER as a vulnerability (src/sim/encounters/nythraxis.ts:2562) and the
- * Ignivar forge chain aura goes on a `player` (src/sim/ignivar_forge_chains.ts:126),
- * so this is not merely generous in principle, it calls a specific player debuff
- * removable and costs a healer a global cooldown. Reading the flag off the aura
- * would be reading a field that is never present; the only fix is the game
- * sending it. On a game release, diff the game's FUNCTION against this one
- * rather than checking that the fields it reads still exist: a predicate that is
- * too generous costs a global cooldown and never fails a test.
+ * The missing clause is `encounterOwned`, which `wireAura` never sends, so this answers TRUE for
+ * raid mechanics the game refuses, including debuffs on players. On a game release, diff the
+ * game's whole function against this one: a too-generous predicate never fails a test.
  *
- * Deliberately takes the FULL aura only. A party row carries neither a school
- * nor these flags, and those are the clauses whose absence costs a player a
- * global cooldown, so a row is refused rather than answered optimistically.
+ * Takes the FULL aura only: a party row has no school or flags, so it is refused.
  */
 function isDispellable(aura: Aura, offensive: boolean): boolean {
   if (UNDISPELLABLE_AURA_IDS.has(aura.id)) {
@@ -144,29 +99,14 @@ function isDispellable(aura: Aura, offensive: boolean): boolean {
 /**
  * Whether an effect is a MODE rather than a timed one, so its clock means nothing.
  *
- * The game's own `isToggleAura` (src/sim/aura_classify.ts:176), which game 0.43.0
- * hoisted out of `src/ui/auras_view.ts` into the shared classifier this file
- * already mirrors twice. A stance, a druid form, stealth, Ghost Wolf, Beacon of
- * Light, the battleground carried flag and the never-ageing rotation banks are
- * all backed by a long finite duration, 3600s or a whole match, and that number
- * is SCAFFOLDING so the sim has something JSON-safe to serialise. It is not
- * information, and `remaining` counts down through it, so a bar drawn from
- * `remaining / duration` under a Cat Form is a full bar draining over an hour.
+ * The game's whole `isToggleAura` (`src/sim/aura_classify.ts`). Stances, forms, stealth, Ghost
+ * Wolf, Beacon of Light, the carried flag and the rotation banks carry a long placeholder
+ * duration (an hour, or a whole match) that `remaining` counts down through, which is not
+ * information. The sets are generated by `pnpm aura-kinds`. Takes either aura shape, since it
+ * reads only `id` and `kind`.
  *
- * THE WHOLE RULE, unlike `isDispellable` above, and that is the reason this is
- * worth mirroring: it reads `kind` and `id`, `wireAura` sends both as the first
- * two fields of every aura, and there is no clause left over that a client
- * cannot see. The three sets are generated by `pnpm aura-kinds` from the game's
- * own declarations, never transcribed.
- *
- * Takes either aura shape, because a party row carries an id and a kind too and
- * the answer for a row is the same function rather than an approximation. That
- * is the opposite of `isDispellable`, which refuses a row, and the difference is
- * exactly which fields the rule needs.
- *
- * The timed override is the clause to keep last: Greater Invisibility rides the
- * rogue `stealth` kind and IS a fixed 20s buff, so a set-only implementation
- * hides the one countdown in the family that matters.
+ * Check the timed override first: Greater Invisibility rides the `stealth` kind and is a real
+ * 20s buff.
  */
 function isToggle(aura: Pick<Aura, 'id' | 'kind'>): boolean {
   if (TIMED_AURA_IDS.has(aura.id)) {
@@ -182,8 +122,7 @@ function matches(aura: Aura, query: AuraQuery, playerId: number | null): boolean
   if (query.kind !== undefined && aura.kind !== query.kind) {
     return false;
   }
-  // A null player id cannot answer "mine", and answering it anyway would mean
-  // reporting every aura as the player's before world entry.
+  // A null player id matches nothing as "mine", or every aura is the player's before world entry.
   if (query.mine === true && (playerId === null || aura.sourceId !== playerId)) {
     return false;
   }
@@ -207,11 +146,7 @@ function rowMatches(aura: PartyMemberAura, query: PartyAuraQuery): boolean {
 }
 
 /**
- * The effects on an entity that match, in the game's own order.
- *
- * An empty query returns everything, so a caller filtering on nothing does not
- * have to special-case the call.
- */
+/** The effects on an entity that match, in the game's order. An empty query returns all. */
 function filterAuras(
   auras: readonly Aura[] | null,
   query: AuraQuery,

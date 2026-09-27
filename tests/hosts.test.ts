@@ -44,8 +44,6 @@ describe('channelForOrigin', () => {
 });
 
 describe('characterScope', () => {
-  // Character ids are not comparable across deployments, so the channel has to
-  // be part of the key or live and pbe frames would collide.
   it('separates the same character id across channels', () => {
     expect(characterScope('live', 42)).not.toBe(characterScope('pbe', 42));
   });

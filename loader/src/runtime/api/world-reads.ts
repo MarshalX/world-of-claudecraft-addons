@@ -1,9 +1,5 @@
-// The plain state reads on `woc.world`, split from the facade that assembles them.
-//
-// Every one is a getter, and that is load-bearing: the game mutates its objects
-// in place, so reading on access is what makes the surface live rather than a
-// copy taken at assembly. Each answers null before the game exists, so an addon
-// can hold `woc.world` from its first line without guarding every read.
+// The plain state reads on `woc.world`. Every one is a GETTER, which is what keeps the surface live
+// over objects the game mutates in place. Each answers null before the game exists.
 
 import { type AbilityIndex, emptyAbilities } from '../world/abilities.ts';
 import type { ArenaStandings } from '../world/arena.ts';
@@ -23,15 +19,7 @@ import type { MatchInfo } from '../world/match.ts';
 import type { PartyInfo } from '../world/party-types.ts';
 import { readonlyMapView } from '../world/readonly-map.ts';
 
-/**
- * No cast before the game exists.
- *
- * A bare Map is right here where it is wrong for `entities`: this one is built by
- * the loader on every read rather than being the game's own live collection, so a
- * write into it lands in something already discarded and cannot reach another
- * addon. It is not wrapped because wrapping every derived read would be a
- * per-frame allocation to guard a value nobody holds.
- */
+/** A bare Map is fine here, unlike `entities`: it is built per read, so a write reaches nobody. */
 function emptyCasts(): ReadonlyMap<number, EntityCast> {
   return new Map<number, EntityCast>();
 }
@@ -42,19 +30,14 @@ function emptyCorpses(): ReadonlyMap<number, CorpseView> {
 }
 
 /**
- * The roster before the game exists.
- *
- * A read-only view rather than a bare Map, and built per read rather than
- * shared. A bare Map would break the published contract for the whole window
- * between an addon's first line and world entry, so `entities.clear()` would
- * throw after entry and quietly succeed before it. Sharing one would be worse:
- * a write from one addon would land in what every other addon reads.
+ * A read-only view, so `entities.clear()` throws before world entry as it does after. Built per
+ * read, since a shared one would carry one addon's write to the others.
  */
 export function emptyEntities(): ReadonlyMap<number, Entity> {
   return readonlyMapView(new Map<number, Entity>());
 }
 
-/** Every read answers null before the game exists, rather than throwing at an addon. */
+/** Null before the game exists, rather than a throw. */
 export function fromBackend<T>(hub: WorldHub, read: (backend: WorldBackend) => T | null): T | null {
   const backend = hub.backend();
   if (backend === null) {
@@ -104,13 +87,7 @@ export function gameReads(hub: WorldHub) {
   };
 }
 
-/**
- * What the player owns and who they are: their own record rather than the world.
- *
- * Its own group because `gameReads` outgrew a function body, and this is where
- * the seam falls: everything here rides the SELF payload, so it exists for the
- * player and for nobody else.
- */
+/** What rides the self payload: the player's own record, for nobody else. */
 export function selfReads(hub: WorldHub) {
   return {
     get equipment(): Partial<Record<EquipSlot, string>> | null {

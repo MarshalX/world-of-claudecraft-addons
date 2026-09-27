@@ -1,20 +1,14 @@
 // The battleground's events: the live half of everything `world.battleground`
 // and the `battleground` member of `world.match` report.
 //
-// Split from `events.d.ts` the way the combat records are, because a catalogue
-// is one subject per file.
+// PAINT from the key, which is complete and survives a reload; ANNOUNCE from these
+// events, which are the moment (a capture, a kill, a warning, a result). A score
+// summed from events drifts the first time one is missed, and a capture read off
+// the key is up to a second late.
 //
-// THE DIVISION OF LABOUR IS WORTH GETTING RIGHT. The key is the state: the
-// score, the flags, the roster, the clocks, and it is what a display should
-// PAINT from, because it is complete and it survives a reload. These events are
-// the MOMENT: a capture, a kill, a warning, a result. Announce from the event
-// and repaint from the key. An addon that tries to keep its own score by adding
-// up events will drift the first time one is missed; one that polls the key for
-// a capture will announce it up to a second late.
-//
-// Every kind here is PERSONAL, so each carries `pid`. The ones that describe the
-// whole field rather than you (`bgKill`, `bgTimeWarning`) are sent as one copy
-// per match member, so you receive them about other people too.
+// Every kind here is PERSONAL and carries `pid`. The field-wide ones (`bgKill`,
+// `bgTimeWarning`) are sent once per match member, so you receive them about
+// other people too.
 //
 // Added in API minor 6.
 
@@ -33,10 +27,8 @@ export interface BgUnqueuedEvent extends PersonalEvent {
 /**
  * A queue offer opened for you.
  *
- * `seconds` is the whole answer window rather than what is left of it, so a
- * countdown starts from here and continues on `world.battleground.proposal`,
- * which carries the live `remaining`. You cannot accept it: that is a send, and
- * `net` is read-only.
+ * `seconds` is the whole answer window; `world.battleground.proposal.remaining`
+ * carries the live countdown. You cannot accept it: `net` is read-only.
  */
 export interface BgProposedEvent extends PersonalEvent {
   type: 'bgProposed';
@@ -67,8 +59,7 @@ export interface BgStartEvent extends PersonalEvent {
 /**
  * A flag play.
  *
- * It carries the score it produced, so a feed line needs no second read and
- * cannot print a score from before the capture it is announcing.
+ * Carries the score it produced, so a feed line needs no second read.
  */
 export interface BgFlagEvent extends PersonalEvent {
   type: 'bgFlag';
@@ -83,9 +74,8 @@ export interface BgFlagEvent extends PersonalEvent {
 /**
  * One death, delivered to every member of the match.
  *
- * Names rather than ids, because the fighter may be nowhere near you: this is
- * the one channel that reports an enemy you cannot see. `world.match` carries
- * the roster to resolve them against.
+ * Names, not ids, because the fighter may be nowhere near you: this is the one
+ * channel that reports an enemy you cannot see. Resolve against `world.match`.
  */
 export interface BgKillEvent extends PersonalEvent {
   type: 'bgKill';
@@ -99,9 +89,8 @@ export interface BgKillEvent extends PersonalEvent {
 /**
  * The match clock crossed one of the game's warning thresholds.
  *
- * `secondsLeft` is the THRESHOLD rather than a live clock, so an event that
- * arrives late never announces a number that has already gone stale. Read
- * `world.match.timeLeft` for the running figure.
+ * `secondsLeft` is the THRESHOLD, not a live clock. Read `world.match.timeLeft`
+ * for the running figure.
  */
 export interface BgTimeWarningEvent extends PersonalEvent {
   type: 'bgTimeWarning';
@@ -111,9 +100,8 @@ export interface BgTimeWarningEvent extends PersonalEvent {
 /**
  * The result, and the only place a rating DELTA is readable.
  *
- * `world.battleground.rating` is the new figure and this is what it moved from
- * and to. `ended` says whether the match was played out to the capture target,
- * timed out on the clock, or given up, which nothing else can tell apart.
+ * `ended` says whether the match reached the capture target, timed out, or was
+ * forfeited, which nothing else tells apart.
  */
 export interface BgEndEvent extends PersonalEvent {
   type: 'bgEnd';

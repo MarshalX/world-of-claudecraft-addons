@@ -43,8 +43,6 @@ function build() {
     addons,
   };
 
-  // Validate the generated index too, so a generator bug fails here rather than
-  // shipping a broken index.
   const check = validateIndex(index);
   if (!check.ok) {
     console.error('index: generated marketplace.json failed validation');

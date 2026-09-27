@@ -1,8 +1,5 @@
-// The one socket observer every addon shares.
-//
-// The hook is installed once for the page; addons subscribe here. Nothing an
-// addon does can reach the socket, and nothing it does can cost another addon a
-// frame.
+// The one socket observer every addon shares. No addon can reach the socket or cost another one
+// a frame.
 
 import { diagError } from '../../shared/diag.ts';
 import {
@@ -44,12 +41,8 @@ function reportHandlerError(topic: string, err: unknown, quarantined: boolean): 
 }
 
 /**
- * One event, frozen against its OWN subscribers and then delivered.
- *
- * Per event rather than freezing the whole frame once for the list, and the question
- * is asked here rather than hoisted out of the loop: a handler that subscribes to
- * another kind while this event is being delivered must not then be handed an
- * unfrozen one.
+ * Frozen per event and asked per event, not hoisted: a handler may subscribe to another kind
+ * mid-delivery and must not then be handed an unfrozen event.
  */
 function publishEvent(bus: FrameBus, event: unknown): void {
   const anySubscribed = bus.hasSubscribers(ANY_EVENT_TOPIC);
@@ -87,21 +80,12 @@ function createTaps(bus: FrameBus, tracker: NetStateTracker, now: () => number):
       if (frame === null) {
         return;
       }
-      // State is polled through net.state, so it tracks whether or not anything is
-      // subscribed. Everything the loader reads for itself is taken HERE, at the
-      // tap, and never by subscribing: a loader-owned subscription is
-      // indistinguishable from an addon's, and would defeat the gate below.
+      // The loader reads for itself here at the tap, never by subscribing, which would defeat the
+      // freeze gate below.
       tracker.noteFrame(frame, now());
       const topic = frameTopic(frame.t);
-      // Freezing only isolates handlers from each other, so it is worth its walk
-      // over the whole frame only when a handler will actually be handed one. A
-      // snapshot is the frame this matters for: it is the largest thing on the
-      // socket and it arrives 20 times a second, and a player running a meter that
-      // subscribes to combat EVENTS was paying to freeze every one of them.
-      //
-      // Read immediately before the publishes it guards, with nothing between, so
-      // there is no window in which a subscriber could appear and be handed the
-      // frame unfrozen.
+      // Freeze only when a handler will be handed the frame: a 20 Hz snapshot is costly to walk.
+      // Checked immediately before the publishes, so no subscriber gets it unfrozen.
       if (bus.hasSubscribers(RAW_TOPIC) || bus.hasSubscribers(topic)) {
         deepFreeze(frame);
       }
@@ -119,8 +103,7 @@ function createTaps(bus: FrameBus, tracker: NetStateTracker, now: () => number):
       }
       tracker.noteSend(frame, now());
       if (bus.hasSubscribers(SEND_TOPIC)) {
-        // Redact before publishing, never after: the auth frame carries the
-        // account bearer token and an addon must not be handed it.
+        // Redact before publishing: the auth frame carries the account bearer token.
         bus.publish(SEND_TOPIC, deepFreeze(redactOutbound(frame)));
       }
     },
@@ -140,21 +123,9 @@ export interface NetHub {
   onEvent: (kind: string, handler: Handler, opts?: SubscribeOpts) => Unsubscribe;
   onAnyEvent: (handler: Handler, opts?: SubscribeOpts) => Unsubscribe;
   state: () => NetState;
-  /**
-   * The sim's clock in seconds, or null before the first snapshot.
-   *
-   * Off the snapshot HEAD, so it is net state rather than world state. Not on
-   * `state()`, which is the addon-facing reading: see the note in net/state.ts for
-   * why a raw sim time is not something to publish.
-   */
+  /** The sim clock in seconds off the snapshot head, or null. Unpublished; see net/state.ts. */
   simNow: () => number | null;
-  /**
-   * The realm off the hello frame, or null before one has arrived.
-   *
-   * Its own accessor for the reason `simNow` is one: `state()` allocates a
-   * frozen snapshot per call, and the world backend reads this per sample to
-   * derive `world.characterKey`.
-   */
+  /** The hello frame's realm. Its own accessor: `state()` allocates and this is read per sample. */
   realm: () => string | null;
   dispose: () => void;
 }

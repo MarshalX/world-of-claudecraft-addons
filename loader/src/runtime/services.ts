@@ -1,13 +1,5 @@
-// Everything built once and shared by every addon.
-//
-// One storage hub, one sound engine and AudioContext, one keydown listener, one
-// log buffer. The per-addon object in api/index.ts is a facade over these
-// bound to that addon's disposal bag, which is what makes disabling an addon
-// cheap and complete: nothing here is torn down, only the addon's hold on it.
-//
-// Built after the UI kit, because the kit is part of it, and before any addon
-// exists, because the socket hook and the keydown listener both have to be in
-// place before the thing they observe happens.
+// Everything built once and shared by every addon. The per-addon object in api/index.ts binds
+// these to the addon's disposal bag, so disabling an addon releases only its hold on them.
 
 import type { Channel } from '../shared/hosts.ts';
 import type { RegistryApi, StorageApi } from '../shared/protocol.ts';
@@ -36,11 +28,7 @@ interface ServicesDeps {
   registry: Pick<RegistryApi, 'data'> | null;
 }
 
-/**
- * Built before the UI, because the manager reads addon settings and keybinds out
- * of the same storage hub an addon does, and the UI kit is itself a service. The
- * kit is therefore attached afterwards rather than passed in.
- */
+/** Built before the UI, since the manager reads this storage hub, so the kit is attached after. */
 interface RuntimeServices {
   /** Complete the shared services once the UI kit exists. */
   withKit: (kit: UiKit) => SharedServices;
@@ -50,7 +38,7 @@ interface RuntimeServices {
   sound: SoundEngine;
   logs: LogBuffer;
   gameBindings: GameBindings;
-  /** The one animation-frame loop. World anchors and every `woc.onFrame` ride it. */
+  /** The one animation-frame loop, shared by world anchors and every `woc.onFrame`. */
   frames: FrameLoop;
   dispose: () => void;
 }
@@ -73,17 +61,13 @@ function buildSoundEngine(scope: Window): SoundEngine {
       read: () => safeLocalStorage(scope)?.getItem(SETTINGS_KEY) ?? null,
     }),
     now: () => scope.performance.now(),
-    // A family cue picks a variant the way the game does. There is no
-    // determinism requirement here: this is the loader, not the sim.
     pick: (count) => Math.floor(Math.random() * count),
   });
 }
 
 function readGameVersion(doc: Document): { version: string | null; build: string | null } {
   const parsed = parseGameVersion(doc.querySelector(ANCHORS.gameVersion)?.textContent);
-  // `build` is legitimately null on a parsed version, before the game has filled
-  // the footer in, so the two nulls are told apart rather than coalesced into
-  // one shape.
+  // `build` is legitimately null on a parsed version before the footer fills in.
   if (parsed === null) {
     return { version: null, build: null };
   }
@@ -91,26 +75,14 @@ function readGameVersion(doc: Document): { version: string | null; build: string
 }
 
 /**
- * The character in play, or null before world entry.
- *
- * Read off the backend rather than derived here, so the loader has exactly ONE
- * derivation of a character's identity and `world.characterKey` is provably the
- * same value `woc.storage.character` keys on. Resolved per call: the loader
- * boots at document-start, long before there is a character, and every consumer
- * of this reads it lazily for that reason.
+ * Read off the backend, the one derivation, so `world.characterKey` and `woc.storage.character`
+ * agree. Resolved per call: there is no character at document-start.
  */
 function characterKey(surfaces: GameSurfaces): string | null {
   return surfaces.world.backend()?.characterKey ?? null;
 }
 
-/**
- * The host's copy of one addon's data file.
- *
- * A rejection rather than an empty string when the bridge never connected, for
- * the reason storage/hub.ts rejects: an addon handed '' would read it as its own
- * file being broken rather than as a loader with no host, and would go looking
- * in the wrong place.
- */
+/** Rejects without a host rather than returning '', which reads as the addon's own file broken. */
 function addonDataReader(
   registry: Pick<RegistryApi, 'data'> | null,
 ): (fqid: string, name: string) => Promise<string> {
@@ -123,25 +95,12 @@ function addonDataReader(
 }
 
 /**
- * Resolves the first time there is a character to key per-character state on.
+ * Resolves the first time there is a character to key per-character state on. Every `player`
+ * change re-asks, since the realm arrives separately on the hello.
  *
- * The loader boots at document-start and an addon builds its frames on its first
- * line, both of which are long before a player has a character. Everything keyed
- * per character therefore has a moment it becomes READABLE, and this is it.
- *
- * Watched rather than polled: `player` changing is the event, and the subscription
- * drops itself the moment it answers. The name alone is not enough, since the realm
- * comes off the socket's hello, so every change re-asks the same question rather
- * than assuming the first one is it.
- *
- * Built on demand and memoised, never at boot. The world watcher runs a frame loop
- * for as long as anything is subscribed, and `world/watch.ts` promises that an
- * addon which never calls `world.on` costs nothing at all. Subscribing here at
- * startup would quietly make that false for every session, including one with no
- * addons installed; asking for it is what an addon with a SAVED frame does.
- *
- * There is deliberately no timeout, for the reason `waitForGame` has none: a
- * player can sit on the login screen for as long as they like.
+ * Memoised and built on demand, never at boot: a subscription keeps the world watcher's frame
+ * loop running, and a session nobody asked this in must cost nothing. No timeout: a player can sit
+ * on the login screen indefinitely.
  */
 function whenCharacterKnown(surfaces: GameSurfaces): Promise<void> {
   if (characterKey(surfaces) !== null) {
@@ -157,7 +116,7 @@ function whenCharacterKnown(surfaces: GameSurfaces): Promise<void> {
   });
 }
 
-/** The memo behind `characterKnown`, so the subscription is made at most once. */
+/** The memo behind `characterKnown`. */
 function characterWaiter(surfaces: GameSurfaces): () => Promise<void> {
   let waiting: Promise<void> | null = null;
   return () => {
@@ -172,14 +131,7 @@ type BuiltServices = Pick<
   'bus' | 'dispatcher' | 'frames' | 'gameBindings' | 'logs' | 'sound' | 'storage'
 >;
 
-/**
- * The same services, in the shape the addon API reads them through.
- *
- * Every reader here is a FUNCTION rather than a value, and deliberately so: the
- * loader boots at document-start, so the game version, the character and the
- * viewport are all things that do not exist yet at the moment this object is
- * built and would each be captured as null forever.
- */
+/** Every reader is a function: at document-start a captured value would be null forever. */
 function sharedServices(deps: ServicesDeps, built: BuiltServices): Omit<SharedServices, 'kit'> {
   const { scope, surfaces } = deps;
   const doc = scope.document;
@@ -251,8 +203,7 @@ function createRuntimeServices(deps: ServicesDeps): RuntimeServices {
     gameBindings,
     frames,
     dispose: () => {
-      // First, because everything it calls into is torn down below it and a
-      // frame scheduled after those would run against half a runtime.
+      // First, or a scheduled frame runs against half a runtime.
       frames.dispose();
       bus.dispose();
       disarm();

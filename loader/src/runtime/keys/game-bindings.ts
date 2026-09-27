@@ -1,21 +1,9 @@
-// What the player has already bound in the game.
+// What the player has bound in the game, read (never written) so the manager can warn of a clash.
 //
-// Read so the manager can warn before an addon takes a key the game is using.
-// One-way: the loader reads the game's bindings and never writes them.
-//
-// Two sources, and the difference matters more than it looks. The LIVE profile
-// on `__game.input.keybinds` is the game's own matcher, so it answers exactly
-// what the game would do, and it includes every DEFAULT binding. The STORED
-// blob in localStorage holds only what the player explicitly saved, so a player
-// who never opened Key Bindings has an empty one: conflict detection against
-// storage alone would report WASD as free on almost every account. Storage is
-// the fallback, not the source.
-//
-// The game distinguishes held actions (movement, polled per frame against the
-// physical code with modifiers ignored) from edge actions (ability slots and
-// window toggles, matched on the whole chord). The live profile has a matcher
-// for each; the stored blob does not say which kind a row is, so the fallback
-// over-reports rather than under-reports. See shared/combo.ts.
+// The LIVE profile on `__game.input.keybinds` is the source: it includes every default. The
+// localStorage blob holds only what the player saved, so alone it reports WASD as free; it is the
+// fallback. It also cannot tell held actions (bare code, modifiers ignored) from edge actions
+// (whole chord), so the fallback over-reports. See shared/combo.ts.
 
 import { type ComboParts, findConflicts, makeCombo, parseCombo } from '../../shared/combo.ts';
 import { diagError } from '../../shared/diag.ts';
@@ -53,19 +41,10 @@ function callable(value: unknown): value is (arg: string) => string | null {
 }
 
 /**
- * The game's live keybind profile, or null.
+ * The game's live keybind profile, feature-detected so a refactor falls back to storage.
  *
- * Reached through `input`, which is a member the probe already tracks. The
- * profile itself is a TypeScript-private field and a plain property at runtime;
- * both matchers are public API on the class. Feature-detected rather than
- * assumed, so a game refactor costs the live path and falls back to storage
- * instead of throwing at an addon.
- *
- * BOUND TO THE INSTANCE, which is the whole reason this returns wrappers rather
- * than the two functions. They are class METHODS whose bodies read `this.map`,
- * so calling one off any other object throws on an undefined `this`. A live
- * session found that: the manager reads conflicts during render, so the throw
- * unmounted the settings pane and left a blank window.
+ * BOUND TO THE INSTANCE: the matchers are class methods reading `this.map`, and the manager calls
+ * them during render, so an unbound call blanks the settings pane.
  */
 function liveKeybinds(game: unknown): LiveKeybinds | null {
   if (!isRecord(game)) {
@@ -89,14 +68,7 @@ function liveKeybinds(game: unknown): LiveKeybinds | null {
   };
 }
 
-/**
- * Ask the game's matchers, or null if they could not be asked.
- *
- * Guarded because these are methods on an undeclared debug hook with no
- * compatibility promise. A game refactor can leave something callable in place
- * that throws when called, and the caller is a render: losing the live reading
- * costs one warning line, where a throw costs the player the whole pane.
- */
+/** Guarded: the hook has no compatibility promise and the caller is a render. */
 function askLive(live: LiveKeybinds, parts: ComboParts): string[] | null {
   try {
     const matched = [live.heldActionForCode(parts.code), live.edgeActionForCombo(makeCombo(parts))];
@@ -138,8 +110,7 @@ function collectBlob(blob: Record<string, unknown>, out: Record<string, string>)
     if (Array.isArray(slots)) {
       slots.forEach((combo, slot) => {
         if (typeof combo === 'string' && combo.length > 0) {
-          // Slotted so a primary and a secondary on the same action are both
-          // kept, since findConflicts is keyed by the record's own key.
+          // Slotted so a primary and a secondary on one action are both kept.
           out[`${action}#${slot}`] = combo;
         }
       });
@@ -148,13 +119,8 @@ function collectBlob(blob: Record<string, unknown>, out: Record<string, string>)
 }
 
 /**
- * Every stored keybind blob, flattened to action ids and combos.
- *
- * Both slots of every action, and every scope key rather than the active one:
- * the fallback runs precisely when the live profile is unreachable, which is
- * also when there is no reliable way to tell which character is loaded. A
- * binding from another character is a false positive on a warning that never
- * blocks, where missing the active character's would be a silent loss.
+ * Every scope key, not only the active one: the fallback runs when the loaded character cannot be
+ * told, and a false positive on a non-blocking warning beats a silent miss.
  */
 function storedBindings(
   storage: Pick<Storage, 'getItem' | 'key' | 'length'>,
@@ -182,14 +148,10 @@ function createGameBindings(deps: GameBindingDeps): GameBindings {
         return { actions: [], source: 'none' };
       }
 
-      // Resolved per call rather than captured: the loader boots at
-      // document-start and the game does not exist for many seconds, so a
-      // reference taken once would be null for the whole session.
+      // Resolved per call: captured at document-start it would be null forever.
       const live = liveKeybinds(deps.game());
       if (live !== null) {
-        // Null means the profile was there and could not answer, which falls
-        // through to storage rather than reporting an empty live reading: an
-        // empty one would say the key is free when it was never checked.
+        // Null means it could not answer; an empty live reading would claim the key is free.
         const matched = askLive(live, parts);
         if (matched !== null) {
           return { actions: [...new Set(matched)], source: 'live' };

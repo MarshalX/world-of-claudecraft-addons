@@ -1,12 +1,8 @@
 /* Every component the System page names, in the order it names them.
  *
- * The one rule that governs the whole file: only the install button is filled
- * gold, one per page, and never for anything that is not the install. Gold is the
- * single accent, so spending it on a secondary action costs the primary one its
- * meaning.
- *
- * This is the file that will overflow 300 lines first. When it does, split it by
- * component family (controls, surfaces, navigation) rather than raising a limit.
+ * Only the install button is filled gold, one per page. Gold is the single
+ * accent, so spending it on a secondary action costs the install its meaning.
+ * Split by component family when this file reaches 300 lines.
  */
 
 .btn-install {
@@ -37,8 +33,7 @@
 }
 
 /* The version, size and build date, read from the GitHub release at build time.
-   Absent entirely when there is no release rather than showing package.json's
-   0.0.0, which the tag-driven release model leaves permanently unreleased. */
+   Absent when there is no release, instead of showing package.json's 0.0.0. */
 .btn-install-meta {
   font-family: var(--mono);
   font-size: 12.5px;
@@ -91,9 +86,7 @@ kbd {
   background: var(--code-bg);
 }
 
-/* Every screenshot sits on a near-black plate with a gold hairline in BOTH
-   themes. On light that reads as a deliberate window rather than an image that
-   failed to export. */
+/* A near-black plate with a gold hairline in BOTH themes (see --plate). */
 figure {
   margin: 0;
   display: grid;
@@ -183,11 +176,9 @@ figcaption {
   color: var(--muted);
 }
 
-/* Standalone navigational links, which are controls rather than prose and so are
- * held to the same 40px floor as every button. Deliberately NOT applied to links
- * inside a sentence: WCAG 2.5.8 exempts those, and padding one to 40px would open
- * a gap in the line it sits in. The distinction is whether the link is a thing you
- * aim at or a word you are reading. */
+/* Standalone links are controls, so they take the 40px floor. Deliberately NOT
+ * applied to links inside a sentence: WCAG 2.5.8 exempts those, and the padding
+ * would open a gap in the line. */
 .link-more {
   display: inline-flex;
   align-items: center;
@@ -195,19 +186,14 @@ figcaption {
   min-height: var(--tap);
 }
 
-/* The footer's link row is a list rather than a sentence, so it takes the floor
- * too, through padding that does not disturb the line box around it. Scoped to
- * that row: the @handle in the copyright line IS a word in a sentence, and
- * padding it both breaks the exemption above and opened a visible gap between the
- * two legal lines. */
+/* The footer's link row is a list, so it takes the floor too. Scoped to the row:
+ * the @handle in the copyright line is a word in a sentence. */
 .site-footer-links a {
   display: inline-block;
   padding-block: 11px;
 }
 
-/* A screenshot slot that is still empty. Hatched rather than blank, because a
- * step with no illustration reads as finished while a box naming what belongs
- * there reads as a gap. */
+/* An empty screenshot slot, hatched so it reads as a gap and not as finished. */
 .figure-todo {
   aspect-ratio: 16 / 10;
   border-radius: var(--radius-sm);
@@ -223,11 +209,8 @@ figcaption {
   color: var(--muted);
 }
 
-/* The catalog's tag filter, injected by site/assets/site.js from the tags each
- * card declares. A chip and a card's own tag are the same word said twice, so
- * they are the same family: mono, hairline, small. The state is read from
- * aria-pressed rather than from a class, because a class would be a second copy
- * of the same fact and the two would be free to disagree. */
+/* The catalog's tag filter, injected by site/assets/site.js. Styled like a card's
+ * own tag. State is read from aria-pressed, never a second copy in a class. */
 .filter-bar {
   display: flex;
   flex-wrap: wrap;

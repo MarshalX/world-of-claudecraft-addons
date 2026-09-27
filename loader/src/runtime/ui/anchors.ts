@@ -1,34 +1,18 @@
-// Every game DOM selector the loader depends on, in one table.
-//
-// These are the external surface the whole project rests on, and the game owes
-// us no compatibility for any of them. Collecting them here means a game update
-// that moves one is a single edit, and it lets the manager's Diagnostics pane
-// report which anchors still resolve, so drift is visible before an addon
-// author reports it as a bug.
-//
-// Each entry records where the game builds it, so a check against the game
-// source starts from a real file rather than a guess.
+// Every game DOM selector the loader depends on, in one table, so a game update that moves
+// one is a single edit. The manager's Diagnostics pane resolves this table live.
 
 /**
- * The class the game puts on `document.body` while its HUD edit mode is on:
- * `INTERFACE_UNLOCKED_BODY_CLASS` (`src/ui/interface_unlock.ts`), written on every
- * flip and on every `refresh()`. Declared ahead of the table because `interfaceUnlocked`
- * is composed from it, and the observer in ui/game-unlock.ts matches on the class alone.
+ * The class the game puts on `document.body` while its HUD edit mode is on
+ * (`INTERFACE_UNLOCKED_BODY_CLASS`, `src/ui/interface_unlock.ts`). ui/game-unlock.ts
+ * matches on the class alone.
  */
 export const GAME_UNLOCKED_CLASS = 'interface-unlocked';
 
 /**
  * Everything from hudRoot through microOptions lives inside the game's
- * <template id="game-ui-template"> and does NOT exist until world entry clones
- * it into the document. gameVersion and interfaceUnlocked are the two that are
- * not, and they are not alike: the first is in the live DOM from the start, and
- * the second is a MODE the player enters, absent until they do.
- * That is why the in-game injections wait (see ui/hud-mount.ts) rather than
- * looking their anchor up once.
- *
- * The keys are ordered as the loader uses them: the HUD root first, then the
- * game menu, then the micro-button rail, then the version readout, then the
- * game's own arrange mode.
+ * `<template id="game-ui-template">` and does not exist until world entry clones it, which
+ * is why the in-game injections wait (see ui/hud-mount.ts). gameVersion is in the live DOM
+ * from the start; interfaceUnlocked is a mode, absent until the player enters it.
  */
 export const ANCHORS = {
   /** The game's HUD root, and the marker for the whole clone having landed. */
@@ -46,21 +30,13 @@ export const ANCHORS = {
   /** The game-menu micro button, which the Addons button is placed next to. */
   microOptions: '#mm-options',
   /**
-   * The minimap's zone name, written by the minimap painter every frame.
-   *
-   * The one place the loader can read where the player is. The zone table is
-   * content, so there is no id to be had, and the delve painter owns this same
-   * element underground, which is why the reading is "what the game says you are
-   * looking at" rather than an overworld zone.
+   * The minimap's zone name, repainted every frame. It carries no zone id, and the delve
+   * painter owns it underground, so it reads as "what the game says you are looking at".
    */
   zoneLabel: '#zone-label',
   /** The footer build readout, which is in the live DOM from the start. */
   gameVersion: '#game-version',
-  /**
-   * The game's own HUD edit mode ("Edit Frames" in the options menu), on `document.body`
-   * rather than inside the HUD template. It resolves only while the mode is open, so a
-   * false with the mode off says nothing about drift.
-   */
+  /** The game's own HUD edit mode ("Edit Frames"). Resolves only while the mode is open. */
   interfaceUnlocked: `body.${GAME_UNLOCKED_CLASS}`,
 } as const;
 
@@ -69,13 +45,8 @@ export type AnchorKey = keyof typeof ANCHORS;
 export const ANCHOR_KEYS = Object.keys(ANCHORS) as AnchorKey[];
 
 /**
- * The anchors that must resolve once the HUD is in the document.
- *
- * The three menu-internal ones are deliberately absent: `.opt-list` and
- * `.opt-version` exist only while the menu is open on its root view, and
- * `[data-back]` only on a sub-view, so none of them says anything about drift
- * when checked at an arbitrary moment. `interfaceUnlocked` is absent for the same
- * reason: it is a mode the player enters, false almost every time anyone looks.
+ * The anchors that must resolve once the HUD is in the document. The menu-internal ones and
+ * interfaceUnlocked exist only in a particular view or mode, so they say nothing about drift.
  */
 export const ANCHORS_REQUIRED_IN_GAME: readonly AnchorKey[] = [
   'hudRoot',
@@ -88,28 +59,15 @@ export const ANCHORS_REQUIRED_IN_GAME: readonly AnchorKey[] = [
 /**
  * The classes the game puts on a menu entry, reused so ours is styled by the game.
  *
- * `ui-btn` is the game's own button PRIMITIVE, introduced with the interface
- * library (`@layer library`, `src/styles/library.css`) at game 0.43.0, and it is
- * load-bearing twice over: it carries the plate itself, and the game's rule for a
- * menu row is `#options-menu .opt-btn.ui-btn` (`src/styles/components.css:15606`),
- * which sets the positioning host and centres the label. Dropping it does not
- * leave the entry unstyled, which is what makes it easy to miss: the game kept a
- * legacy arm, `.btn:where(:not(.ui-btn))` (`src/styles/components.css:869`), so an
- * entry without it renders in the PRE-0.43 style beside rows that do not.
+ * `ui-btn` carries the plate and is what the game's `#options-menu .opt-btn.ui-btn` row
+ * rule keys on. Without it the entry is still styled, by the game's legacy
+ * `.btn:where(:not(.ui-btn))` arm, so it looks subtly wrong rather than broken.
  */
 export const GAME_MENU_BUTTON_CLASS = 'btn ui-btn opt-btn';
 
 /**
- * The classes the game puts on a rail button (`play.html`, every `#mm-*`).
- *
- * `micro-btn` alone is no longer a button. Game 0.43.0 moved the whole plate
- * (border, radius, background, colour, font size and shadow) out of `.micro-btn`
- * in `src/styles/hud.css` and into the library's `.ui-icon-btn`, leaving
- * `.micro-btn` holding the 34x30 box, the cursor, the weight and the hover
- * flyout. So a button wearing only `micro-btn` draws a bare glyph on the HUD with
- * no plate under it at all, and nothing reports that. `--micro-btn-w`/`-h`
- * (`src/styles/tokens.css:830`) are the same 34x30, so the geometry is unchanged
- * and this is purely the look coming back.
+ * The classes the game puts on a rail button (`play.html`, every `#mm-*`). The plate lives
+ * on `.ui-icon-btn`, so a button wearing only `micro-btn` draws a bare glyph.
  */
 export const GAME_MICRO_BUTTON_CLASS = 'micro-btn ui-icon-btn ui-icon-btn--micro';
 
@@ -120,11 +78,8 @@ export interface AnchorReport {
 }
 
 /**
- * Which anchors resolve right now.
- *
- * A false is not automatically a fault: the game menu exists only while it is
- * open, and the version footer only on the index document. The pane presents it
- * as a reading rather than a verdict.
+ * Which anchors resolve right now. A false is not automatically a fault: the game menu
+ * exists only while it is open, and the version footer only on the index document.
  */
 export function resolveAnchors(doc: Pick<Document, 'querySelector'>): AnchorReport[] {
   return ANCHOR_KEYS.map((key) => ({

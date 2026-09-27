@@ -1,15 +1,5 @@
 // What `world.on` watches, and what each key hands back.
 
-// Its own file for the reason the loader keeps `world/values.ts` and
-// `world/signature.ts` apart from the API that returns them: this is the
-// SUBSCRIPTION surface, one entry per watchable key, and `world.d.ts` is what
-// `woc.world` answers. They grow for different reasons, and the reads outgrew
-// the file limit first.
-//
-// Nothing is re-exported from here through `world.d.ts`, so a split is visible in
-// the import, which is the same rule `ui-timers.d.ts` and `events-combat.d.ts`
-// already follow.
-
 import type { AbilityIndex } from './abilities.js';
 import type { ArenaStandings } from './arena.js';
 import type { BattlegroundStandings } from './battleground.js';
@@ -81,9 +71,8 @@ export interface WorldValues {
   /** Delivered and unread letters. Added in API minor 2. */
   mailUnread: number | null;
   /**
-   * The deposit box, or why there is not one. Never null. Added in API minor 2.
-   * Fires on the pool split and the bag sockets as well as the contents, none of
-   * which moves `capacity`.
+   * The deposit box, or why there is not one. Never null. Fires on the pool split
+   * and the bag sockets as well as the contents. Added in API minor 2.
    */
   bank: BankState;
   /** The Materials Vault, or why there is not one. Never null. Added in API minor 10. */

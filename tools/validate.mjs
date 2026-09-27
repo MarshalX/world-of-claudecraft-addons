@@ -1,8 +1,5 @@
-// Validate every addons/<id>/addon.json against the shared schema, the same
-// module the host uses at install time.
-//
-// The reading lives in manifests.ts so the dev server and the index generator
-// agree with this, and so a Vitest suite can drive it. This file is the CLI.
+// Validate every addons/<id>/addon.json against the schema the host uses at install time. The
+// reading lives in manifests.ts, shared with the dev server and the index generator.
 
 import process from 'node:process';
 import { fileURLToPath } from 'node:url';

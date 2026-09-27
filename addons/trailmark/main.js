@@ -2,33 +2,22 @@
 
 // Trailmark: where the thing your quest wants actually is.
 //
-// The quest log says what is outstanding and never where, and nothing on the wire ever
-// will: the answer is a pure function of content tables inside the client bundle. So this
-// addon carries them (`quests.json`) and runs the game's own derivation over them.
+// Nothing on the wire says where an objective is; the answer is a function of content tables in the
+// client bundle. So this carries them (`quests.json`) and runs the game's own derivation,
+// `questObjectiveAreas` from `src/sim/quest_targets.ts`, with the tables handed in and its padding
+// figures copied. Its node clustering is not copied: this draws a pin per area within a budget and
+// says how many it left out.
 //
-// `areasFor` is `questObjectiveAreas` from `src/sim/quest_targets.ts` with the tables
-// handed in rather than imported, padding figures included. That leaf moves, and following
-// it is the maintenance. Its node CLUSTERING is deliberately not copied: this draws a pin
-// per area with a budget, and the list says how many it left out.
+// The required count is `resolvedCounts?.[i] ?? objectives[i].count`, a per-player override that is
+// not on the published `QuestProgress`. This learns it from the `questProgress` event and otherwise
+// falls back to the definition count, a LOWER BOUND drawn `3/5+` and floored at what is banked.
 //
-// The required count cannot simply be read. The game resolves it as
-// `resolvedCounts?.[i] ?? objectives[i].count`, a per-player override that rides the wire
-// and is not on the published `QuestProgress`, so this learns it from the `questProgress`
-// event and falls back to the definition count. That fallback is a LOWER BOUND and is
-// drawn `3/5+`, floored at what is already banked so a restored row cannot read as over.
+// An authored point has no height and no heightmap is served, so a pin hangs at the player's own
+// height. An NPC's authored position can differ from its live one (the sim nudges NPCs out of
+// buildings), so no NPC coordinate is quoted as fact.
 //
-// An authored pin has no height: every point is an x and a z, terrain height is a module
-// function the renderer imports, and no heightmap is served. A pin hangs at the player's
-// own height, which over sloping ground is approximate by construction, and sampling a
-// nearby entity is not available here because the point is that nobody is standing there.
-//
-// An NPC's authored position and its live one can differ, since the sim nudges static NPCs
-// out of buildings at world init. No display here quotes NPC coordinates as a fact.
-//
-// `questProgress`, `questReady` and `questDone` are not in the published catalogue, so all
-// three arrive as `unknown` and every field is checked. A `required` that is not a
-// positive finite number is DROPPED rather than learned: a bad denominator outlives the
-// session on disk.
+// `questProgress`, `questReady` and `questDone` are unpublished, so all three arrive as `unknown`
+// and every field is checked.
 
 const DATA_FILE = 'quests.json';
 /** The one per-character key: the learned denominators and the focused quest. */
@@ -41,9 +30,8 @@ const CAMP_AREA_PAD = 4;
 const POINT_AREA_RADIUS = 6;
 
 /**
- * How tall one row is and how much of the frame is not rows, calibrated against a drawn
- * panel. FIXED rather than measured: measuring forces a layout, and the row budget is
- * recomputed on every drag frame. The chrome figure reserves the note line too.
+ * One row's height and the non-row chrome (the note line included), calibrated against a drawn
+ * panel. Fixed rather than measured, because the row budget is recomputed on every drag frame.
  */
 const ROW_PX = 33;
 const CHROME_PX = 78;
@@ -96,8 +84,9 @@ const escorts = new Map();
 const dropMobs = new Map();
 let zones = [];
 
-/** Learned denominators, keyed `<questId>#<objectiveIndex>`. Per CHARACTER: the game's
- * override is per player, so an alt needs a different figure for the same quest.
+/**
+ * Learned denominators, keyed `<questId>#<objectiveIndex>`, per CHARACTER because the game's
+ * override is per player.
  */
 const learned = new Map();
 
@@ -156,8 +145,9 @@ function readPoint(value) {
   return { x, z };
 }
 
-/** `woc.data` hands back `unknown`, so the shape is checked here. A count of zero is
- * dropped: it divides the fill by nothing and reads as complete.
+/**
+ * `woc.data` hands back `unknown`, so the shape is checked here. A count of zero is dropped: it
+ * reads as complete.
  */
 function readObjective(value) {
   const type = stringAt(value, 'type');
@@ -176,9 +166,8 @@ function readObjective(value) {
     npc: stringAt(value, 'npc'),
     nodeType: stringAt(value, 'nodeType'),
     escort: stringAt(value, 'escort'),
-    // `patch` is null both when the objective names no patch and when the table is
-    // too old to carry one, and the two are the same answer here: circle every
-    // patch, which is what the game does for a patchless farm objective.
+    // `patch` is null both when the objective names none and when the table predates patches;
+    // either way every patch is circled, as the game does for a patchless farm objective.
     patch: stringAt(value, 'patch'),
   };
 }
@@ -231,9 +220,8 @@ function adoptCamps(listed) {
 }
 
 /**
- * One enclosing circle per ground-object definition, computed once: the game's own bound,
- * being the centroid of the spawn positions plus the distance to the farthest of them,
- * floored at the lone-point radius. Neither the positions nor the answer can change.
+ * One enclosing circle per ground-object definition, computed once: the game's bound, the spawn
+ * centroid plus the farthest spawn, floored at the lone-point radius.
  */
 function clusterOf(positions) {
   let cx = 0;
@@ -314,11 +302,8 @@ function adoptEscorts(listed) {
 }
 
 /**
- * One enclosing circle per farming patch, the same bound the game draws.
- *
- * The circle encloses the BEDS rather than pinning the patch anchor, because a
- * patch is a grid on a 5 yard pitch and its anchor is the centroid, so pinning the
- * centre would put the marker between the beds instead of over them.
+ * One enclosing circle per farming patch, the game's bound. It encloses the BEDS: the anchor is the
+ * grid's centroid, which falls between beds.
  */
 function adoptFarmPatches(listed) {
   for (const row of listed) {
@@ -336,13 +321,9 @@ function adoptFarmPatches(listed) {
 }
 
 /**
- * Every patch a farm objective points at.
- *
- * A patchless objective circles EVERY patch rather than none, which is the game's
- * own rule and not a fallback: the credit arm never reads `patchId`, so such an
- * objective is honestly earned at any bed in the world and a single marker would
- * send the player to one arbitrary hub. A NAMED patch this table does not carry
- * resolves to nothing, because that is a stale table rather than a free choice.
+ * Every patch a farm objective points at. A patchless objective circles EVERY patch, which is the
+ * game's rule: its credit arm never reads `patchId`. A NAMED patch this table lacks resolves to
+ * nothing, since that is a stale table.
  */
 function pushFarm(found, seen, objective) {
   if (typeof objective.patch === 'string') {
@@ -416,8 +397,8 @@ function adopt(file) {
 }
 
 /**
- * The game's STRICT containment test rather than its clamping one: the clamping version
- * always answers, which names an overworld zone for a point on the instance plane.
+ * The game's STRICT containment test: the clamping one always answers, naming an overworld zone for
+ * a point on the instance plane.
  */
 function zoneAt(x, z) {
   for (const zone of zones) {
@@ -470,10 +451,9 @@ function pushNodes(found, seen, listed) {
 }
 
 /**
- * A collect objective: the mobs that drop it, any crate of it, and the nodes that yield it.
- *
- * BASE YIELD ONLY. The game also matches a material's `fine_` grade, which would need the
- * grade ladder in the table; a quest asking for one reads as nowhere rather than wrongly.
+ * A collect objective: the mobs that drop it, any crate of it, and the nodes that yield it. BASE
+ * YIELD ONLY: the game also matches a `fine_` grade, which would need the grade ladder, so such a
+ * quest reads as nowhere rather than wrongly.
  */
 function pushCollect(found, seen, questId, objective) {
   for (const mob of dropMobs.get(`${questId} ${String(objective.item)}`) ?? []) {
@@ -495,8 +475,8 @@ function pushInteract(found, seen, objective) {
 }
 
 /**
- * The nodes of the named type, or the nodes yielding the item. Credit for a gather flows
- * only through a harvest, so an item-only objective pins nodes and never a camp or crate.
+ * The nodes of the named type, or the nodes yielding the item. Gather credit flows only through a
+ * harvest, so an item-only objective pins nodes and never a camp or crate.
  */
 function pushGather(found, seen, objective) {
   if (objective.nodeType !== null) {
@@ -529,8 +509,9 @@ function areasFor(questId, objective) {
   return found;
 }
 
-/** The first turn-in NPC the table has a position for. An NPC the sim walks in has none,
- * which is a real answer rather than a reason to guess.
+/**
+ * The first turn-in NPC the table has a position for. An NPC the sim walks in has none, and that is
+ * the answer.
  */
 function turnInArea(quest) {
   for (const id of quest.turnIn) {
@@ -569,8 +550,8 @@ note.className = 'woc-tm-note';
 note.style.opacity = '0.75';
 
 /**
- * The panel. Resizable with a floor, and the two come together: the row count is computed
- * from the box `onMove` hands over, and anything past it is counted rather than clipped.
+ * Resizable with a floor: the row count comes from the box `onMove` hands over, and anything past
+ * it is counted rather than clipped.
  */
 const frame = woc.ui.frame({
   id: 'objectives',
@@ -590,8 +571,7 @@ const frame = woc.ui.frame({
   },
 });
 frame.body.appendChild(list);
-// Under the rows rather than over them: it is a footnote about what the list is holding
-// back, and a truncation count above the list reads as a heading.
+// Under the rows: a truncation count above the list reads as a heading.
 frame.body.appendChild(note);
 
 /** How many rows fit in the box the player has dragged. At least one, always. */
@@ -613,9 +593,9 @@ function objectiveKey(questId, at) {
 }
 
 /**
- * How many are needed, and whether that figure is exact. The learned denominator wins: it
- * is the server's own resolved figure. Without one the definition count is used, floored
- * at what is already banked: the override the game ships can only push a requirement up.
+ * How many are needed, and whether that figure is exact. A learned denominator wins, being the
+ * server's resolved figure. Otherwise the definition count, floored at what is banked, since the
+ * override can only push a requirement up.
  */
 function requirementOf(questId, at, objective, current) {
   const exact = learned.get(objectiveKey(questId, at));
@@ -640,8 +620,8 @@ function ordered(areas) {
 }
 
 /**
- * One objective as this addon draws it. `areas` is already nearest-first, so the nearest
- * is the one the row measures to and the ones the pins are spent on.
+ * One objective as drawn. `areas` is nearest-first, so the row measures to, and the pins are spent
+ * on, the nearest.
  */
 function viewOf(questId, quest, at, counts) {
   const objective = quest.objectives[at];
@@ -663,10 +643,8 @@ function viewOf(questId, quest, at, counts) {
 }
 
 /**
- * One quest waiting to be handed in. A row of its own rather than an objective, because
- * there is nothing left to count: what the player needs is the name of whoever takes it
- * and where they stand. It carries no denominator, so the lower-bound marking every
- * objective row wears would be a claim about nothing.
+ * One quest waiting to be handed in: a row naming who takes it and where. It carries no
+ * denominator, so it gets no lower-bound marking.
  */
 function readyView(questId, quest) {
   const area = turnInArea(quest);
@@ -788,9 +766,8 @@ function viewsFor(questId, progress) {
 }
 
 /**
- * Rebuilt per draw, which is what lets the zone filter and the distances follow the player
- * with nothing watching a border. Ready quests come FIRST, ahead of the focus: a turn-in
- * buried under a quest still in progress is a turn-in that gets forgotten.
+ * Rebuilt per draw, so the zone filter and distances follow the player with nothing watching a
+ * border. Ready quests come FIRST, ahead of the focus, so a turn-in is not buried.
  */
 function wanted() {
   const log = questLog();
@@ -831,8 +808,9 @@ function fillOf(view) {
   return Math.min(view.current / view.required, FULL);
 }
 
-/** The arrow is TRIMMED rather than left as a trailing space: it is empty exactly when
- * there is no player to measure a bearing from.
+/**
+ * The arrow is TRIMMED rather than left as a trailing space; it is empty when there is no player to
+ * measure from.
  */
 function detailOf(view) {
   if (view.nearest === null) {
@@ -860,8 +838,9 @@ function countLine(view) {
   };
 }
 
-/** A camp and a lone NPC are both one circle here and are not the same thing to ride to,
- * so the width says which. The distance beside it is measured to the centre.
+/**
+ * A camp and a lone NPC are both one circle and are different to ride to, so the width says which.
+ * The distance is to the centre.
  */
 function areaLine(view) {
   if (view.nearest === null) {
@@ -900,10 +879,8 @@ function rowTooltip(view) {
 }
 
 /**
- * One row, holding the view it was last drawn from.
- *
- * The tooltip reads the HELD view: a row outlives every view of it, so one closed over the
- * view it was built with reports the progress this objective had when it arrived.
+ * One row, holding the view it was last drawn from. The tooltip reads the HELD view, because a row
+ * outlives every view and a closure over the first one reports stale progress.
  */
 function createRow(view) {
   const bar = woc.ui.bar({ className: 'woc-tm-row' });
@@ -991,9 +968,7 @@ const pins = woc.ui.list({
   create: createPin,
 });
 
-/** Nearest of EACH objective first, so one with thirty nodes cannot spend the whole
- * budget and leave another objective unpinned.
- */
+/** Nearest of EACH objective first, so one with thirty nodes cannot spend the whole budget. */
 function pinnable(shown) {
   const reach = woc.settings['pin-distance'];
   const first = [];
@@ -1026,9 +1001,8 @@ function syncPins(shown) {
 }
 
 /**
- * `ui.project` answering null means do not draw, which covers more than being off screen:
- * behind the camera and inside the near plane both report finite coordinates. Without the
- * null branch a hidden pin keeps whatever opacity it last had.
+ * `ui.project` answering null means do not draw: behind the camera and inside the near plane also
+ * report finite coordinates. Without the null branch a hidden pin keeps its last opacity.
  */
 function paintPin(pin) {
   const at = woc.ui.project({ x: pin.area.x, y: playerPos()?.y ?? 0, z: pin.area.z });
@@ -1062,9 +1036,9 @@ function emptyReason() {
 }
 
 /**
- * The truncations, or why the panel is bare. Both limits go on SCREEN: a list stopping at
- * the box and a world stopping at twelve pins are the two ways this could look complete
- * while leaving something out. The pin figure counts what is in range, not every area.
+ * The truncations, or why the panel is bare. Both limits go on screen, since a list stopping at the
+ * box and a world stopping at the pin budget otherwise look complete. The pin figure counts what is
+ * in range.
  */
 function paintNote(shown, drawn, pinned) {
   if (shown.length === 0) {
@@ -1086,8 +1060,9 @@ function clearDrawn() {
   pins.clear();
 }
 
-/** The pins are anchors over the world rather than children of the frame, so hiding the
- * frame does not take them down and nothing else would.
+/**
+ * The pins are world anchors rather than children of the frame, so hiding the frame does not take
+ * them down.
  */
 function redraw() {
   if (!frame.visible) {
@@ -1101,8 +1076,9 @@ function redraw() {
   paintNote(shown, drawn.length, syncPins(drawn));
 }
 
-/** Arrives as `unknown`. A `required` that is not positive and finite is DROPPED: a
- * learned figure is written to disk and outlives the session.
+/**
+ * Arrives as `unknown`. A `required` that is not positive and finite is DROPPED, because a learned
+ * figure outlives the session on disk.
  */
 function readProgress(event) {
   const questId = stringAt(event, 'questId');
@@ -1141,8 +1117,8 @@ function announceReady(questId) {
   woc.ui.toast(`${quest.name} is ready. ${where}`);
 }
 
-/** The first PLACED turn-in NPC. One the sim spawns on demand has no point at all, and
- * the line says so rather than papering over it.
+/**
+ * The first PLACED turn-in NPC. One the sim spawns on demand has no point, and the line says so.
  */
 function turnInLine(quest) {
   for (const id of quest.turnIn) {
@@ -1169,8 +1145,9 @@ woc.net.onEvent('questDone', (event) => {
   }
 });
 
-/** Rotates over the LOG's order rather than the drawn list, so a quest filtered out by
- * the zone setting is still reachable.
+/**
+ * Rotates over the LOG's order rather than the drawn list, so a quest the zone setting filters out
+ * is still reachable.
  */
 function cycleFocus() {
   const log = questLog();
@@ -1188,9 +1165,8 @@ function cycleFocus() {
 }
 
 /**
- * Keyed on the id being new to this SESSION rather than on an accept event, which also
- * stops a quest sitting in the log from stealing the focus back on every redraw. The first
- * walk records without focusing, since it is world entry.
+ * Keyed on the id being new to this SESSION, so a quest sitting in the log does not steal focus on
+ * every redraw. The first walk is world entry and records without focusing.
  */
 function noticeArrivals(log) {
   const auto = woc.settings['auto-track'] && !firstWalk;
@@ -1214,8 +1190,8 @@ woc.world.on('quests', () => {
 });
 
 /**
- * A per-character write REJECTS before world entry, so the await is a guard rather than a
- * delay. The stamp is `woc.wallClock()`: `woc.now()` restarts on every page load.
+ * A per-character write REJECTS before world entry, so the await is a guard. The stamp is
+ * `woc.wallClock()`: `woc.now()` restarts on every page load.
  */
 async function save() {
   await woc.world.ready;
@@ -1232,9 +1208,7 @@ function persist() {
   });
 }
 
-/** Fills gaps only: a progress event can land before the read settles, and what this
- * session heard from the server is newer than anything on disk.
- */
+/** Fills gaps only: a progress event heard this session is newer than anything on disk. */
 function reclaim(stored) {
   const { required } = stored;
   if (typeof required !== 'object' || required === null) {
@@ -1266,8 +1240,9 @@ function load() {
   });
 }
 
-/** The game clones its HUD on a switch rather than reloading. The override behind a
- * learned denominator is per player, so keeping one shows it under another's name.
+/**
+ * The game swaps characters without reloading, and the override behind a learned denominator is per
+ * player.
  */
 woc.world.on('characterKey', () => {
   learned.clear();
@@ -1278,25 +1253,23 @@ woc.world.on('characterKey', () => {
   redraw();
 });
 
-// Once a second. Every figure on this panel moves at most that often, and the pins
-// position themselves, since `ui.anchor3d` rides the loader's own frame loop.
+// Once a second: every figure here moves at most that often, and `ui.anchor3d` positions the pins
+// on the loader's frame loop.
 woc.setInterval(redraw, MS_PER_SECOND);
 
-// A pin's fade comes off the camera, which turns between the ticks above. `values()` is
-// creation order, which is fine here: each pin is painted from its own point.
+// A pin's fade comes off the camera, which turns between ticks. `values()` order is fine: each pin
+// paints from its own point.
 woc.onFrame(() => {
   for (const pin of pins.values()) {
     paintPin(pin);
   }
 });
 
-// Bound by hand rather than with the frame's own `toggleKey`, DECLINED because this key
-// does two things: `toggleKey` only toggles, and the pins are anchors over the world that
-// nothing else takes down. No visibility callback on `FrameOpts` to hang the redraw on.
+// Bound by hand because this key does two things: `toggleKey` only toggles the frame, the pins are
+// world anchors nothing else takes down, and `FrameOpts` has no visibility callback.
 woc.keys.bind('toggle', () => {
   frame.toggle();
-  // Now, rather than up to a second from now: somebody who just hid the panel should not
-  // watch its pins hang over the world waiting for the next tick.
+  // Now rather than on the next tick, so hidden panels' pins do not linger.
   redraw();
 });
 
@@ -1305,9 +1278,9 @@ woc.keys.bind('cycle', cycleFocus);
 woc.onSettingsChange(redraw);
 
 /**
- * Every handler above is wired BEFORE this await: subscribing after one would miss whatever
- * landed during it. `load()` rather than `await restore()`, since a per-character read
- * waits for the character and would hold the first draw on the landing page.
+ * Every handler above is wired BEFORE this await, or it would miss what landed during it. `load()`
+ * rather than `await restore()`, since a per-character read waits for the character and would hold
+ * the first draw on the landing page.
  */
 async function boot() {
   const file = await woc.data(DATA_FILE);

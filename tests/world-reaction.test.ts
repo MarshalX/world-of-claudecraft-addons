@@ -1,11 +1,5 @@
-// Which side a unit is on, which no field answers for a player.
-//
-// Every case here is one the flag gets WRONG, which is the whole reason the rule
-// exists: `hostile` is written where the game builds a mob and nowhere else, so
-// an opponent in a duel, an arena and a battleground all carry the same false
-// your own healer does. A suite that set the flag on a player would pass against
-// a game nobody is running, which is exactly what the fixtures below refuse to
-// do: no player here is ever hostile.
+// Which side a unit is on. `hostile` is set only on mobs, so no player fixture here is ever
+// hostile: an opponent in a duel, arena or battleground carries false like your own healer.
 
 import { describe, expect, it } from 'vitest';
 import type { Entity } from '../loader/src/runtime/world/game-types.ts';
@@ -119,11 +113,11 @@ function battleground(myTeam: number): MatchInfo {
 }
 
 describe('reactionOf', () => {
-  it('reads a stranger as friendly, which is what the game draws', () => {
+  it('reads a stranger as friendly', () => {
     expect(reactionOf(rival(), roster(rival()), null)).toBe('friendly');
   });
 
-  it('reads a wild mob as neutral, which is a third answer and not a missing one', () => {
+  it('reads a wild mob as neutral', () => {
     const critter = beast({ hostile: false });
 
     expect(reactionOf(critter, roster(critter), null)).toBe('neutral');
@@ -139,8 +133,7 @@ describe('reactionOf', () => {
     expect(reactionOf(guard, roster(guard), null)).toBe('friendly');
   });
 
-  // The three bouts, which are the three sources the game's own renderer folds
-  // together and the three the flag is silently false for.
+  // The three bouts the game's renderer folds together, and the flag is false for all three.
   it('reads a duel opponent as hostile', () => {
     expect(reactionOf(rival(), roster(rival()), duel(RIVAL_ID))).toBe('hostile');
   });
@@ -174,8 +167,7 @@ describe('reactionOf', () => {
     expect(reactionOf(bystander, roster(rival(), bystander), duel(RIVAL_ID))).toBe('friendly');
   });
 
-  // A pet is the case the flag looks right for and is not: it is a mob, so the
-  // flag is real, and it is somebody's, so the flag is not the answer.
+  // A pet is a mob, so its flag is real, but its side is its owner's.
   it("takes an enemy pet's side from its owner", () => {
     const pet = beast({ id: PET_ID, hostile: false, ownerId: RIVAL_ID });
 

@@ -1,11 +1,5 @@
-// The docs shell: the seven-page sidebar, the on-this-page aside, and the
-// prev/next pagination.
-//
-// All three generate from ONE fact, the `order` in each page's frontmatter, plus
-// the h2s the markdown renderer collected. There is no index file and no nav
-// array to keep in step, so adding a docs page is adding one Markdown file. That
-// is the thing that rots first in a docs section: someone writes the page and
-// forgets the list, and the page exists but is unreachable.
+// The docs shell: the sidebar, the on-this-page aside, and the prev/next pagination, all generated
+// from each page's frontmatter `order` and its h2s. Never add a hand-kept nav list.
 
 import type { Build } from '../build.ts';
 import { type Html, html, raw } from '../html.ts';
@@ -63,12 +57,7 @@ function pager(previous: DocPage | undefined, next: DocPage | undefined): Html {
 </nav>`;
 }
 
-/**
- * Render one docs page inside the shell.
- *
- * `pages` is every page in sidebar order, so this function needs no knowledge of
- * where the current one sits beyond its index.
- */
+/** Render one docs page inside the shell. `pages` is every page in sidebar order. */
 export function docsPage(build: Build, pages: readonly DocPage[], index: number): Page {
   const current = pages[index];
   if (!current) {

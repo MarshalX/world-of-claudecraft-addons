@@ -1,8 +1,4 @@
-// The dev server that stands in for a marketplace.
-//
-// Two things it does that a plain static server does not, and both are tested
-// here rather than by hand: it generates the index from the addon directories on
-// every request, and it refuses to serve anything outside addons/.
+// The dev server: an index generated per request, and nothing served outside addons/.
 
 import { describe, expect, it } from 'vitest';
 import { validateIndex } from '../loader/src/shared/schema.ts';
@@ -18,8 +14,6 @@ import {
 } from '../tools/serve-core.ts';
 
 describe('the generated index', () => {
-  // Generated from addons/*/addon.json rather than read from the committed
-  // marketplace.json, so saving a manifest is visible on the next refresh.
   it('validates against the same schema CI uses', () => {
     const result = validateIndex(buildIndex());
 
@@ -35,7 +29,7 @@ describe('the generated index', () => {
     }
   });
 
-  it('offers the dev harness, which is what the loader is checked with', () => {
+  it('offers the dev harness', () => {
     expect(buildIndex().addons.map((addon) => addon.id)).toContain('dev-harness');
   });
 
@@ -57,9 +51,7 @@ describe('etags', () => {
   });
 });
 
-// This server hands out file contents from the working tree and has no
-// authentication, so the prefix check is the only thing between a request and
-// the repository.
+// No authentication: the prefix check is all that stands between a request and the tree.
 describe('what may be served', () => {
   it('resolves a path inside addons/', () => {
     expect(resolveFile('/addons/dev-harness/main.js')).toBe(`${ROOT}addons/dev-harness/main.js`);
@@ -81,9 +73,7 @@ describe('what may be served', () => {
     expect(resolveFile('/addons/../addons-other/x.js')).toBeNull();
   });
 
-  // A declared data file needs NO new route, which is the answer this pins: the
-  // host fetches it down the same path it fetches the entry body, and a second
-  // tree to walk is exactly what this server must not grow.
+  // A data file rides the entry body's route; this server must not grow a second tree.
   it('resolves a sibling .json under addons/ and names it as JSON', () => {
     expect(resolveFile('/addons/dev-harness/items.json')).toBe(
       `${ROOT}addons/dev-harness/items.json`,
@@ -92,33 +82,26 @@ describe('what may be served', () => {
   });
 });
 
-// The second role on the same socket: a manager installs the loader from here,
-// so `pnpm dev` needs no second port and no file:// permission.
 describe('the loader route', () => {
   it('resolves the built userscript', () => {
     expect(resolveLoader(LOADER_PATH)).toBe(`${ROOT}loader/dist/woc-loader.user.js`);
   });
 
-  // The suffix is not decoration: it is what makes a userscript manager
-  // intercept the URL and offer to install instead of showing the source.
+  // The suffix is what makes a userscript manager offer to install.
   it('is served under a .user.js name', () => {
     expect(LOADER_PATH).toMatch(/\.user\.js$/);
   });
 
-  it('is served as script, or a manager will not offer to install it', () => {
+  it('is served as script', () => {
     expect(contentType(LOADER_PATH)).toBe('text/javascript; charset=utf-8');
   });
 
-  // The manager loads an addon's preview from the local source exactly as it does
-  // from GitHub, so the dev server has to name the type: an image handed over as
-  // application/octet-stream renders by sniffing at best, and not at all behind a
-  // nosniff header.
+  // An image served as application/octet-stream does not render behind nosniff.
   it('names the type of an addon preview', () => {
     expect(contentType('/addons/combat-meter/preview.png')).toBe('image/png');
   });
 
-  // One exact path with no directory behind it, which is the whole difference
-  // from resolveFile: there is nothing here to walk.
+  // One exact path with no directory behind it, so there is nothing to walk.
   it.each([
     ['a sibling in the same directory', '/loader/dist/other.js'],
     ['the directory itself', '/loader/dist/'],
@@ -128,16 +111,14 @@ describe('the loader route', () => {
     expect(resolveLoader(pathname)).toBeNull();
   });
 
-  // Kept out of addons/, or the loader would offer its own userscript as an
-  // addon in Browse: buildIndex reads every directory under addons/.
+  // buildIndex reads every directory under addons/, so the loader must live elsewhere.
   it('is not in the marketplace index', () => {
     expect(buildIndex().addons.map((addon) => addon.id)).not.toContain('woc-loader');
   });
 });
 
 describe('the port', () => {
-  // Pinned in three places that have to agree: here, the loader's LOCAL_ORIGIN,
-  // and the userscript @connect list.
+  // Must agree with the loader's LOCAL_ORIGIN and the userscript @connect list.
   it('is the one the loader looks for', () => {
     expect(PORT).toBe(5180);
   });

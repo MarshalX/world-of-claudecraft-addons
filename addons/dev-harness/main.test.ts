@@ -1,16 +1,8 @@
 // @vitest-environment happy-dom
 
-// The Dev Harness addon, run through the real loader.
-//
-// This is the one test that goes end to end over the path an addon actually
-// takes: the file on disk, its manifest validated by the schema CI uses, and the
-// body evaluated by runtime/loader.ts with the published `woc` object in scope.
-// It catches the class of failure a unit suite cannot: a surface that was never
-// wired to the object an addon is handed, and an addon written against an API
-// that has since moved.
-//
-// It does NOT replace running the harness in the game. Half its checks read the
-// live game and report honestly here that there is none.
+// The Dev Harness run end to end through the real loader: the file on disk, the manifest
+// through the CI schema, and the body evaluated with the published `woc` in scope. It does not
+// replace running the harness in the game, since half its checks read the live game.
 
 import { afterEach, describe, expect, it } from 'vitest';
 import { WORLD_KEYS } from '../../loader/src/runtime/world/signature.ts';
@@ -18,16 +10,11 @@ import { validateManifest } from '../../loader/src/shared/schema.ts';
 import { type AddonHarness, mountAddon, parseManifest } from '../../tests/fakes/addon.ts';
 import { liveEntity } from '../../tests/fakes/entity.ts';
 import { eventsFrame } from '../../tests/fakes/frames.ts';
-// The addon's own two files, read the way the loader reads text it ships: the raw suffix
-// rather than node:fs, so this suite needs no filesystem types and runs under happy-dom, whose
-// URL rejects the file scheme.
-//
-// The manifest arrives as text and is parsed here rather than imported as JSON. It is
-// untrusted input everywhere else in the loader, and `validateManifest` is what this suite
-// checks; a typed JSON import would hand it a shape the compiler had already vouched for.
+// Read with `?raw`, not node:fs, since happy-dom's URL rejects the file scheme. The manifest
+// is parsed as text because a typed JSON import would pre-vouch the shape `validateManifest`
+// is meant to check.
 import MANIFEST_TEXT from './addon.json?raw';
-// The sibling file the manifest declares, read as text for the same reason: this is what the
-// host caches at install and hands back.
+// The declared data file, as text: what the host caches at install.
 import DATA_TEXT from './data.json?raw';
 // biome-ignore lint/correctness/noUnresolvedImports: Vite's ?raw suffix is a loader directive a static resolver does not model, and an addon file is a function BODY with no exports at all. Same reason as the runtime bundle import in host/boot.ts.
 import SOURCE from './main.js?raw';
@@ -52,13 +39,8 @@ function manifest() {
 }
 
 /**
- * The report text, once the harness has finished its run.
- *
- * Ticking while it settles is what a browser does continuously, and it is what makes the
- * paint check do its real work rather than time out: `woc.paint` rides the LOADER'S loop
- * rather than `requestAnimationFrame`, and that loop is hand-driven here, so with nothing
- * ticking it the check waits out its own deadline and then honestly reports that no frame
- * ran. Every case below would pay that wait, for an answer that asserts nothing.
+ * The report text once the run finishes. Ticks the loader's hand-driven loop while polling,
+ * or the paint check waits out its deadline and reports that no frame ran.
  */
 async function reportFrom(harness: AddonHarness): Promise<string> {
   await expect
@@ -71,15 +53,8 @@ async function reportFrom(harness: AddonHarness): Promise<string> {
 }
 
 /**
- * The aura art manifest, shaped as the game serves it.
- *
- * The one art manifest this suite answers, and the others are left as the harness has
- * them, never settling. That asymmetry is the checks themselves: `checkIcons` accepts
- * either the optimistic URL or the withheld null for an ability and an item, and
- * `checkSkillArt` returns before it awaits anything when there is no player. The aura
- * check has neither out, because `icon.aura` answers null until its manifest lands and
- * the family does not depend on a class, so an unanswered read is a check that never
- * resolves and a report that never completes.
+ * The aura art manifest, shaped as the game serves it. It must be answered: unlike the item
+ * and skill checks, the aura check has no fallback, so an unanswered read never completes.
  */
 const AURA_MANIFEST = {
   schemaVersion: 1,
@@ -97,7 +72,7 @@ const SKILL_MANIFEST = {
   assets: [{ abilityId: 'aimed_shot', sourceFile: 'aimed_shot.png', output: 'aimed_shot.webp' }],
 };
 
-/** Answers the aura manifest and leaves every other art read as the harness has it. */
+/** Answers the aura and hunter skill manifests and leaves every other read pending. */
 function readArtManifest(url: string): Promise<unknown> {
   if (url === '/ui/auras/mapping.json') {
     return Promise.resolve(AURA_MANIFEST);
@@ -109,11 +84,8 @@ function readArtManifest(url: string): Promise<unknown> {
 }
 
 /**
- * The harness runs with NO game, which is the state it is most often started in:
- * an addon's first line executes at document-start, on the landing page.
- *
- * `report` is handed back bound to this harness rather than living on its own, so there is
- * no way to await the report without the loop that settles it.
+ * Runs the harness with no game, as at document-start on the landing page. `report` is bound
+ * to this harness so it cannot be awaited without the loop that settles it.
  */
 async function run() {
   const harness = await mountAddon({
@@ -136,27 +108,19 @@ describe('its manifest', () => {
     expect(validateManifest(MANIFEST_JSON).ok).toBe(true);
   });
 
-  // The harness exists to exercise the settings form, so it has to declare one
-  // of each type the form can render.
   it('declares one setting of every type', () => {
     const types = (manifest().settings ?? []).map((setting) => setting.type).sort();
 
     expect(types).toEqual(['boolean', 'number', 'select', 'string']);
   });
 
-  // `probe` is declared and never bound by hand, which is what makes the toggleKey
-  // check mean anything: a registration under that id can only have come from the
-  // frame that named it, so the check is about the member rather than about the
-  // keybind surface underneath it.
+  // `probe` is never bound by hand, so a registration under it can only come from a frame.
   it('declares the keybinds it binds', () => {
     const ids = (manifest().keybinds ?? []).map((bind) => bind.id).sort();
 
     expect(ids).toEqual(['probe', 'run', 'toggle']);
   });
 
-  // The declaration is what makes `woc.data` answerable at all: the host fetches
-  // exactly this list at install, and the surface checks its argument against it
-  // rather than joining anything onto a URL.
   it('declares the data file it ships', () => {
     expect(manifest().data).toEqual(['data.json']);
   });
@@ -169,8 +133,6 @@ describe('loading it', () => {
     expect(addon.fqid).toBe(FQID);
   });
 
-  // The window, the rail button, and the menu entry are all created on the
-  // addon's first pass, so a missing one means a surface it thought it had.
   it('puts its window up', async () => {
     await run();
 
@@ -204,8 +166,6 @@ describe('disabling it', () => {
     expect(Object.keys(harness.shared.dispatcher.bindings())).toEqual([]);
   });
 
-  // It registers an onDispose hook, which is the surface an addon uses for
-  // anything the API did not create.
   it('runs its own teardown hook', async () => {
     const { addon, harness } = await run();
 
@@ -223,10 +183,7 @@ function press(label: string): void {
     ?.click();
 }
 
-// The demonstrations are manual by definition: a suite cannot see whether a nameplate sits
-// over the right shoulder. What it can hold them to is that a button pressed with no game
-// behind it creates nothing, since every one of these runs on the login screen as readily as
-// in the world.
+// The demos are manual; this only holds that a button pressed with no game creates nothing.
 describe('the anchor demonstration', () => {
   it('creates nothing when there is no world to anchor to', async () => {
     await run();
@@ -236,7 +193,7 @@ describe('the anchor demonstration', () => {
     expect(document.querySelector('.woc-anchor3d')).toBeNull();
   });
 
-  it('says why rather than doing nothing visible', async () => {
+  it('toasts why it created nothing', async () => {
     await run();
 
     press('Anchors');
@@ -245,9 +202,7 @@ describe('the anchor demonstration', () => {
   });
 });
 
-// Every check has to pass here. There is no game in this environment and the harness knows it:
-// each check that reads the game reports the no-game case as a pass with a note rather than as
-// a failure, so anything red here is the loader's fault rather than the environment's.
+// Every check reports the no-game case as a pass with a note, so anything red is the loader's.
 describe('what it reports without a game', () => {
   it('passes every check', async () => {
     const { report } = await run();
@@ -261,23 +216,19 @@ describe('what it reports without a game', () => {
     expect(await report()).not.toContain('FAIL');
   });
 
-  // The claim the ticking in `reportFrom` buys: two requests and one draw is something a
-  // broken loader fails here rather than in somebody's game.
   it('coalesces two repaint requests into one draw, once a frame runs', async () => {
     const { report } = await run();
 
     expect(await report()).toContain('two requests before a frame drew once');
   });
 
-  // The half of the movement null the world cases below cannot reach.
-  it('says a null multiplier is nobody having said yet, with no world under it', async () => {
+  it('reports a null multiplier as no world yet', async () => {
     const { report } = await run();
 
     expect(await report()).toContain('no world yet, so the server has sent no multiplier');
   });
 
-  // Named individually as well as counted, so a rename or a dropped check shows
-  // up as a failure here rather than as a total that quietly went down by one.
+  // Named individually so a rename or dropped check fails here, not only in the total.
   it.each([
     'identity',
     'settings',
@@ -325,9 +276,8 @@ describe('what it reports without a game', () => {
   });
 });
 
-// The fixtures below are the game's OWN object, in the game's own field names (`bankInfo`,
-// `vaultInfo`, `craftVaultStock`, `known`): a fixture in the published names would test this
-// suite rather than the loader.
+// Fixtures use the game's own field names (`bankInfo`, `vaultInfo`, `known`), not the published
+// ones, or they would test this suite rather than the loader.
 type World = Record<string, unknown>;
 
 /** The bank, satisfying both sums the published types say a consumer may rely on. */
@@ -351,10 +301,7 @@ const GOOD_BANK = {
   materialsUsed: 1,
 };
 
-/**
- * What is in the vault, and so what crafting may draw. Entry pairs rather than a literal: the
- * keys are the game's own ids, not names this project chose.
- */
+/** What is in the vault, and so what crafting may draw. Entry pairs, since the keys are game ids. */
 const MATERIALS = Object.freeze([
   ['copper_ore', 120],
   ['sheenleaf_herb', 40],
@@ -380,10 +327,7 @@ const GOOD_CHANNEL = {
   channel: { duration: 6, ticks: 6 },
 };
 
-/**
- * A spellbook covering all three ability fields. Entries are `{ def, ... }`, the shape the
- * game resolves a spellbook into, and the fields are read off the DEF.
- */
+/** A spellbook covering all three ability fields, in the game's `{ def, ... }` entry shape. */
 const GOOD_SPELLBOOK = [
   {
     rank: 1,
@@ -406,23 +350,19 @@ function self(): World {
   });
 }
 
-/** Something else in range, auto-attacking, which only game 0.41.0 lets anyone read. */
+/** Something else in range, auto-attacking. */
 function mob(): World {
   return liveEntity({
     set: { id: 902, kind: 'mob', name: 'Sableweb Lurker', autoAttack: true, swingTimer: 1.4 },
   });
 }
 
-/** An hour, the unit the bind-on-pickup window is measured in (the game's own is two of them). */
+/** An hour, well inside the game's two-hour bind-on-pickup window. */
 const HOUR_MS = 60 * 60 * 1000;
 
 /**
- * A soulbound stack carrying a bind-on-pickup trade window that ends at `untilMs`.
- *
- * The deadline is the parameter rather than an offset so a malformed one is a call rather than a
- * mutation, and callers build a live or lapsed one against `Date.now()`: that is the clock the
- * field is stamped from on a live server, and a frozen literal would pass today and lapse under
- * the suite next month.
+ * A soulbound stack with a trade window ending at `untilMs`. Callers build it against
+ * `Date.now()`, the server's clock for the field; a frozen literal would lapse over time.
  */
 function bopStack(untilMs: unknown): { itemId: string; count: number; instance: unknown } {
   return {
@@ -457,10 +397,8 @@ function goodWorld(): World {
 }
 
 /**
- * The report, with a world under it, and exactly what `over` says changed in that world.
- *
- * `zoneName` is what `world.zone` reads, and it is the game's DOM rather than its world
- * object, so it is a mount option rather than a field.
+ * The report with a good world patched by `over`. The zone comes from the game's DOM, so it is
+ * a mount option rather than a field.
  */
 async function inWorld(over: World = {}): Promise<string> {
   const harness = await mountAddon({
@@ -475,8 +413,6 @@ async function inWorld(over: World = {}): Promise<string> {
   return await reportFrom(harness);
 }
 
-// The present arm of the checks that answer "nothing to read" with no world, which is the arm
-// the no-game case above cannot reach.
 describe('what it reports in a world', () => {
   it('names no check as failed', async () => {
     expect(await inWorld()).not.toContain('FAIL');
@@ -510,8 +446,7 @@ describe('what it reports in a world', () => {
     expect(await inWorld()).toContain('of 2 known: 1 empower, 1 channel, 1 off the global');
   });
 
-  // The fields are the game's own: the multiplier rides the self wire as `msm` and lands on
-  // the client's reconciliation state under these names.
+  // The client's reconciliation-state names for the self wire's `msm`.
   it('reads an unslowed player as a real multiplier rather than as no answer', async () => {
     const moving = { movementWireVersion: 2, reconMoveSpeedMult: 1 };
 
@@ -547,10 +482,7 @@ describe('what it reports in a world', () => {
     );
   });
 
-  // The case the readout exists for. The game retires an expired marker only when a character
-  // loads or saves, never on a tick, so a lapsed window is still sitting on the copy in exactly
-  // the shape a live one has. A harness that counted the FIELD would report this as tradeable
-  // and be wrong for as long as the session lasts.
+  // The game retires an expired marker only on load or save, so a lapsed one looks live.
   it('reads an expired window off the clock rather than off the field being there', async () => {
     expect(await inWorld({ inventory: [bopStack(Date.now() - HOUR_MS)] })).toContain(
       '0 in a party-trade window',
@@ -558,12 +490,8 @@ describe('what it reports in a world', () => {
   });
 });
 
-// Each case contradicts what `packages/types` promises about a 0.41.0 surface and requires the
-// harness to name it.
+// Each case contradicts what `packages/types` promises and requires the harness to name it.
 describe('what it refuses in a world', () => {
-  // A deadline that is not a finite number is the failure this check is for: every comparison
-  // against it is false, so the window reads as permanently expired and the addon that would
-  // have counted it down silently shows nothing at all.
   it('names a party-trade window whose deadline is not a number', async () => {
     expect(await inWorld({ inventory: [bopStack(null)] })).toContain(
       'forgefathers_warhammer carries a malformed partyTrade window',
@@ -658,13 +586,8 @@ describe('what it refuses in a world', () => {
   });
 });
 
-// The one check here whose subject is the game rather than the loader.
-//
-// `damage` and `heal2` pass through the loader untouched, so nothing in a unit suite could be
-// wrong about them: a fixture only ever agrees with what it was written to say. That is why
-// the harness watches them in a live session, and it is why this suite can only check that the
-// watch has teeth. Each case below puts a record on the socket that contradicts
-// `packages/types/events-combat.d.ts` and requires the harness to name it.
+// Combat records pass through the loader untouched, so only a live session checks them. This
+// proves the watch has teeth: each case contradicts `packages/types/events-combat.d.ts`.
 describe('watching the combat records', () => {
   /** Land some records, then press the button that re-runs everything. */
   async function afterRecords(list: readonly unknown[]): Promise<void> {
@@ -689,9 +612,7 @@ describe('watching the combat records', () => {
     };
   }
 
-  // Nothing is wrong with these, so the check has to stay green and start counting. A watch
-  // that only ever reported failures would look identical to one wired to nothing at all, for
-  // as long as the game kept behaving.
+  // A watch that only reported faults would look identical to one wired to nothing.
   it('counts ordinary records rather than only reporting faults', async () => {
     await afterRecords([damage({}), { type: 'heal2', sourceId: 1, targetId: 1, amount: 50 }]);
 
@@ -700,8 +621,6 @@ describe('watching the combat records', () => {
       .toContain('1 damage and 1 heal records match the types');
   });
 
-  // A kind the types do not list reaches an addon as an ordinary string, so a display that
-  // groups by kind is silently wrong rather than loudly.
   it('names a damage kind the published union does not carry', async () => {
     await afterRecords([damage({ kind: 'absorbed_entirely' })]);
 
@@ -718,16 +637,12 @@ describe('watching the combat records', () => {
       .toContain('an evade carried 40 damage');
   });
 
-  // Absent rather than 0 is the whole of what tells a heal a shield devoured from a
-  // heal that overhealed: both land at `amount: 0` and nothing else parts them.
   it('names a heal whose absorbed arrived as a zero instead of being absent', async () => {
     await afterRecords([{ type: 'heal2', sourceId: 1, targetId: 1, amount: 0, absorbed: 0 }]);
 
     await expect.poll(() => document.body.textContent ?? '').toContain('a heal carried absorbed 0');
   });
 
-  // An addon builds an icon URL out of this field, so a non-string in it is a
-  // request that cannot succeed rather than a missing picture.
   it('names an abilityId that arrived as something other than a string', async () => {
     await afterRecords([damage({ abilityId: 7 })]);
 
@@ -737,11 +652,8 @@ describe('watching the combat records', () => {
   });
 });
 
-// A declared data file is fetched by the host at install and answered out of that cache, and
-// there is no marketplace behind this document, so the harness reports the read as unavailable
-// rather than failing it. What can be checked with no host is the refusal, which is
-// page-realm; seeding the host's copy and running again covers the manifest declaration, the
-// bridge read, the parse, and the memo behind a second read.
+// With no host copy the read is reported as unavailable; seeding one covers the bridge read,
+// the parse and the memo.
 describe('the data file it ships', () => {
   it('refuses a name the manifest does not declare', async () => {
     const { report } = await run();
@@ -762,13 +674,9 @@ describe('the data file it ships', () => {
   });
 });
 
-// The harness carries its own copy of the world key list, standing in for the published types
-// rather than reading the loader's array, so a key that reached one and not the other throws
-// from `world.on` in a live session instead of passing everywhere. The copy still has to be
-// kept up to date, which is what this pins: a key added to the loader and not to the harness is
-// not checked at all.
+// The harness keeps its own copy of the world keys, which this pins to the loader's list.
 describe('the key list it carries', () => {
-  /** Any total order will do: the sort exists only to make the comparison stable. */
+  /** Any total order: the sort only makes the comparison stable. */
   const byName = (a: string, b: string): number => a.localeCompare(b);
 
   /** The array literal out of the addon source, which is the only place it exists. */

@@ -1,10 +1,5 @@
-// One reading of everything the manager's Diagnostics pane reports.
-//
-// Gathered here rather than in the pane so it is a plain value a Node test can
-// assert on, and so the pane stays a renderer. Every field is a reading rather
-// than a verdict: an anchor that does not resolve, or a game that has not loaded
-// yet, are both ordinary states, and presenting them as faults would train a
-// player to ignore the pane.
+// One reading of everything the Diagnostics pane reports, as a plain value. Every field is a
+// reading, not a verdict: an unresolved anchor or an unloaded game is an ordinary state.
 
 import { type GameVersion, parseGameVersion } from './game-version.ts';
 import type { NetState } from './net/state.ts';

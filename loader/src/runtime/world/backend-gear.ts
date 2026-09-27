@@ -1,9 +1,5 @@
-// What is ON the worn gear, which `equipment` cannot report moving.
-//
-// Its own group and its own module rather than a member of the core reads,
-// because enchanting a piece already worn does not move `equipment` at all: the
-// slot still holds the same item id. The two are watched by one dispatcher in
-// `signature-gear.ts` for the same reason.
+// What is ON the worn gear, which `equipment` cannot report: enchanting a worn piece leaves its
+// item id unchanged.
 
 import { readAs } from './backend-read.ts';
 import type { EquipSlot } from './game-types.ts';

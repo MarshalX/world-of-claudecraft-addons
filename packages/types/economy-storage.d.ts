@@ -10,10 +10,9 @@
 // with one cap shared by every material, so a vault with room for more copper
 // can be full of iron.
 //
-// `woc.world.craftVaultStock` is NOT gated on a banker: it answers what crafting
-// may draw from the vault where you are standing, which is everywhere in the
-// open world and nowhere inside an instance, so it is a record or null rather
-// than a status.
+// `woc.world.craftVaultStock` is NOT banker-gated: it is what crafting may draw
+// from the vault where you stand (anywhere in the open world, nowhere inside an
+// instance), so it is a record or null, not a status.
 
 import type { ProximityState } from './economy.js';
 import type { HeldSlot } from './world-items.js';
@@ -41,10 +40,8 @@ export interface BankInfo {
   /**
    * Total budget: the base allowance, purchased, bonus, and every socketed bag.
    *
-   * A DISPLAY TOTAL, NEVER A FIT ANSWER. The budget is split into two pools, so
-   * `capacity - slots.length` reports free space a general deposit can be refused
-   * from. Use `generalCapacity - generalUsed` for what a non-material stack can
-   * actually go into.
+   * A DISPLAY TOTAL, NEVER A FIT ANSWER: the budget is split into two pools. Use
+   * `generalCapacity - generalUsed` for room a non-material stack can go into.
    */
   capacity: number;
   /** Copper-bought slots. */
@@ -72,9 +69,8 @@ export interface BankInfo {
   /**
    * The Claudium price of the next expansion rung, where there is one.
    *
-   * ABSENT rather than null: the wire omits the key when the price service is
-   * unreachable, and the offline sim never has it. A missing price means the gold
-   * price beside it is the only one to show, not that the rung is unavailable.
+   * ABSENT, not null, when the price service is unreachable or offline. Absence
+   * means show only the copper price; the rung is still available.
    * Added in API minor 10.
    */
   nextRungClaudiumPrice?: number;
@@ -84,10 +80,9 @@ export interface BankInfo {
    * `generalCapacity + materialsCapacity === capacity` always; the game's decoder
    * rejects a snapshot where it does not.
    *
-   * `generalCapacity - generalUsed` is the free room a non-material stack can go
-   * into, and it CAN BE NEGATIVE: unsocketing a bag shrinks a pool without
-   * destroying anything, and the game refuses new deposits rather than clamping.
-   * Floor it at 0 before rendering it as free slots. Added in API minor 10.
+   * `generalCapacity - generalUsed` is the free room for a non-material stack and
+   * CAN BE NEGATIVE after a bag is unsocketed. Floor it at 0 before rendering it
+   * as free slots. Added in API minor 10.
    */
   generalCapacity: number;
   /** The materials half of the split budget. Added in API minor 10. */
@@ -115,9 +110,8 @@ export interface VaultInfo {
   /**
    * Item id to how many are held.
    *
-   * KEY ORDER MEANS NOTHING: the record round-trips through the server's
-   * database, which re-orders keys, so sort before rendering or the rows shuffle
-   * between sessions. A material that is not a key is held at ZERO, not unknown.
+   * KEY ORDER MEANS NOTHING and changes between sessions, so sort before
+   * rendering. A material that is not a key is held at ZERO, not unknown.
    */
   stock: Readonly<Record<string, number>>;
   /**
@@ -141,9 +135,8 @@ export interface VaultInfo {
 /**
  * The Materials Vault, or why there is not one. Read `status` first.
  *
- * Banker-gated like `world.bank` but gated SEPARATELY, so read the one you are
- * about to use. A vault payload the game cannot decode is dropped to null and
- * reaches you as 'away' while the bank keeps its last good reading, so an 'away'
- * vault beside a 'near' bank is a refused decode rather than the player walking off.
+ * Banker-gated like `world.bank` but SEPARATELY, so read the one you are about to
+ * use. A vault payload the game cannot decode reaches you as 'away' while the
+ * bank stays 'near'.
  */
 export type VaultState = ProximityState<VaultInfo>;

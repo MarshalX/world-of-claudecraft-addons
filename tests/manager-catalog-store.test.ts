@@ -1,15 +1,6 @@
-// What the three marketplace panes read, and what their controls do.
-//
-// The property this suite exists for is that the reading path fetches at most
-// once a session. Opening the manager reads the source list, the installed set,
-// and the update rows, and if any of those fetched then every open of the window
-// would cost a request per marketplace before it could draw. `market.ensure` is
-// the one call on that path allowed to go to the network, and only for a source
-// this session has not read at all; Refresh is the one control that always may.
-//
-// The other half is that every action reloads afterwards rather than guessing.
-// The host is what decides whether a write landed, so a pane that predicted the
-// outcome would show a state the host may have refused.
+// What the three marketplace panes read, and what their controls do. The reading path fetches at
+// most once a session: only `market.ensure` reaches the network, and only for an unread source;
+// Refresh always may. Every action reloads afterwards, because the host decides whether it landed.
 
 import { describe, expect, it, vi } from 'vitest';
 import type { CatalogRegistry } from '../loader/src/runtime/ui/manager/catalog-actions.ts';
@@ -48,8 +39,6 @@ interface Options {
 }
 
 function open(options: Options = {}) {
-  // Typed by their real signatures rather than left to inference, so a test that
-  // wants to see which fqid an action was given can say so.
   const calls = {
     install: vi.fn<CatalogRegistry['install']>(() => Promise.resolve()),
     update: vi.fn<CatalogRegistry['update']>(() => Promise.resolve()),
@@ -79,8 +68,7 @@ function open(options: Options = {}) {
     setRef: calls.setRef,
   });
 
-  // Both null together, which is the state the manager is in when the bridge
-  // handshake never completed.
+  // Both null: the bridge handshake never completed.
   const deps: CatalogStoreDeps = { market: null, registry: null, onChange: () => undefined };
   if (options.bridged !== false) {
     deps.market = market;
@@ -90,11 +78,8 @@ function open(options: Options = {}) {
 }
 
 /**
- * Wait for something to become true, rather than for a fixed number of turns.
- *
- * An action is a promise chain with a reload on the end of it, so the number of
- * microtasks between the call and the result is an implementation detail. Every
- * wait below therefore names the observable it is actually waiting for.
+ * Wait for something to become true, since the microtask count of an action's promise chain is an
+ * implementation detail.
  */
 const until = (assertion: () => void): Promise<void> => vi.waitFor(assertion);
 
@@ -105,13 +90,7 @@ function settled(store: ReturnType<typeof open>['store']): Promise<void> {
   });
 }
 
-/**
- * A store that has already read once, which is the state every pane is in.
- *
- * The window loads all three readings on open, so an action always runs against
- * a store that has settled. Driving one straight out of `idle` would exercise an
- * ordering the manager never produces.
- */
+/** A store that has already read once, since the window loads all three readings on open. */
 async function primed(options: Options = {}) {
   const opened = open(options);
   opened.store.load();
@@ -130,13 +109,11 @@ describe('the reading', () => {
     const state = store.state();
     expect(state.status).toBe('ready');
     expect(state.markets.map((market) => market.ref.id)).toEqual(['official']);
-    // A map rather than a set, because "installed but switched off" is a thing
-    // a Browse row and a companion note both have to be able to say.
+    // A map, because a row has to be able to say "installed but switched off".
     expect([...state.installed]).toEqual([[FQID, true]]);
     expect(state.updates.map((row) => row.fqid)).toEqual([FQID]);
   });
 
-  // The whole point of computing update rows against the cached indexes.
   it('does not refresh anything', async () => {
     const { store, calls } = open();
 
@@ -146,8 +123,7 @@ describe('the reading', () => {
     expect(calls.refresh).not.toHaveBeenCalled();
   });
 
-  // Without this the indexes are empty on a fresh session, so Browse has nothing
-  // to list and the update comparison runs against no rows at all.
+  // Without seeding, a fresh session compares updates against no rows: a false all-clear.
   it('seeds the indexes before it reads them', async () => {
     const { store, calls } = open();
 
@@ -157,8 +133,7 @@ describe('the reading', () => {
     expect(calls.ensure).toHaveBeenCalled();
   });
 
-  // Ahead of the three reads rather than beside them: all three answer from the
-  // index cache, and one running alongside would read a cache still being filled.
+  // All three reads answer from the index cache, so they must not run alongside the seeding.
   it('waits for the seeding before reading anything', async () => {
     let seeded = (): void => undefined;
     const seeding = new Promise<void>((resolve) => {
@@ -188,9 +163,7 @@ describe('the reading', () => {
     expect(store.state().markets).toEqual([]);
   });
 
-  // Not just an error: the status has to leave `loading` too, or Refresh, which
-  // is disabled while a read is in flight and is the only way to retry, stays
-  // disabled for the rest of the session.
+  // Refresh is disabled while loading, so a status stuck there leaves no way to retry.
   it('records a rejection as a failure rather than a read still in flight', async () => {
     const { store, calls } = open();
     calls.list.mockImplementation(() => Promise.reject(new Error('the port is closed')));
@@ -202,8 +175,6 @@ describe('the reading', () => {
     expect(store.state().status).toBe('failed');
   });
 
-  // A slow first load landing after a fast second one would reinstate the older
-  // reading, and nothing on screen would say the list was stale.
   it('lets only the newest load write', async () => {
     const { store, calls } = open();
     let release = (): void => undefined;
@@ -276,8 +247,7 @@ describe('the actions', () => {
     ]);
   });
 
-  // Each update re-fetches a body, so a burst is the request pattern a rate
-  // limit answers worst.
+  // Each update re-fetches a body, and a burst is what a rate limit answers worst.
   it('updates one at a time', async () => {
     const { store, calls } = await primed();
     const order: string[] = [];
@@ -350,8 +320,7 @@ describe('the actions', () => {
     expect(calls.refresh.mock.calls).toEqual([['official'], [undefined]]);
   });
 
-  // The pane already reports the unreachable state; a rejection out of a click
-  // handler would be a second report of the same fact with nowhere to go.
+  // The pane already reports the unreachable state.
   it('does nothing rather than throwing with no bridge', async () => {
     const { store, calls } = open({ bridged: false });
 

@@ -1,10 +1,4 @@
-// Timers that clear themselves when the addon is disabled.
-//
-// These exist because disable is HOT: no page reload, so a bare setInterval
-// keeps running forever against DOM the loader has already removed. The other
-// half is the bookkeeping: a one-shot has to unregister itself when it fires, or
-// an addon scheduling one timeout a second accumulates a dead bag entry a second
-// for as long as it is enabled.
+// Timers that clear themselves on disable, which is hot and reloads no page.
 
 import { describe, expect, it, vi } from 'vitest';
 import { createTimers, type TimerHost } from '../loader/src/runtime/api/timers.ts';
@@ -79,8 +73,7 @@ describe('setTimeout', () => {
     expect(clock.cleared).toContain(id);
   });
 
-  // Otherwise an addon scheduling one timeout a second leaks one bag entry a
-  // second for as long as it is enabled.
+  // Otherwise a timeout a second leaks a bag entry a second.
   it('unregisters itself from the bag once it has fired', () => {
     const { bag, clock, timers } = open();
 
@@ -100,8 +93,7 @@ describe('setTimeout', () => {
     expect(bag.size).toBe(0);
   });
 
-  // The registry has to be clean before the handler runs, or a handler that
-  // reschedules leaves the entry of the timer that just fired behind it.
+  // The entry is removed before the handler runs, so a rescheduling handler leaves nothing.
   it('leaves nothing behind when the handler itself throws', () => {
     const { bag, clock, timers } = open();
     const id = timers.setTimeout(() => {
@@ -198,8 +190,7 @@ describe('everything at once', () => {
     expect(clock.cleared).toHaveLength(3);
   });
 
-  // The bag runs an entry added after disposal immediately, so a timer created
-  // by a straggling async callback is cancelled rather than left running.
+  // A timer created by a straggling async callback is cancelled at once.
   it('cancels a timer scheduled after the addon was already disabled', () => {
     const { bag, clock, timers } = open();
     bag.dispose();

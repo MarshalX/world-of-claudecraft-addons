@@ -1,11 +1,6 @@
-// What counts as a change, per world key.
-//
-// Split from `signature.ts`, which owns the key registry and the dispatch. These
-// are the per-key functions themselves, and every one of them deliberately
-// leaves out anything that moves every tick: aura remaining time and cooldown
-// remaining are the clear cases, since including either would fire a
-// subscription at the frame rate and mean nothing. The question each answers is
-// "is this a different set of things", not "has a number moved".
+// What counts as a change, per world key; `signature.ts` owns the registry and dispatch. Each
+// answers "is this a different set of things", so anything that moves every tick (remaining
+// times) is left out.
 
 import { fieldArray, fieldNumber, fieldScalar, fieldString, fieldValue } from '../net/frames.ts';
 
@@ -26,11 +21,8 @@ function byCodePoint(a: string, b: string): number {
   return 1;
 }
 /**
- * The ids on a party row's compact aura strip.
- *
- * Ids alone, not remaining time: a row's strip is redrawn constantly as its auras
- * tick, and what an addon acts on is one arriving or falling off. Order is the
- * game's own, which is stable per row, so this is not sorted.
+ * The ids on a party row's compact aura strip, not remaining time. Unsorted: the game's order is
+ * stable per row.
  */
 function rowAuras(row: unknown): string {
   return fieldArray(row, 'auras')
@@ -47,12 +39,8 @@ function lockMark(slot: unknown): string {
 }
 
 /**
- * Party rows arrive from the wire, so these are the terse names, not the Entity's.
- *
- * `hasAggro` and `connected` are here because raid-frame alerting is the point of
- * watching a party at all, and neither woke a subscriber before: a tank losing
- * threat and a member dropping link are both changes an addon has to paint. The
- * aura strip is handled separately, since it is a list rather than a scalar.
+ * Party rows arrive from the wire, so these are the terse names, not the Entity's. The aura strip
+ * is signed separately, since it is a list.
  */
 const PARTY_MEMBER_FIELDS = [
   'pid',
@@ -72,16 +60,8 @@ export function joinFields(source: unknown, fields: readonly string[]): string {
 }
 
 /**
- * Entity fields worth waking an addon for.
- *
- * These are the Entity's own names, which are not the terse wire names: an
- * entity carries `maxHp` and `resource`, while the snapshot that delivered it
- * used `mhp` and `res`. Position is excluded because it moves constantly.
- *
- * `inCombat` was here and is not on the wire, so it read false for the whole
- * session and this signature never once changed because of it. Watching a field
- * the server does not send is not merely useless: it tells an addon author the
- * loader will report something it cannot.
+ * Entity fields worth waking an addon for, by the Entity's names (`maxHp`, not the wire's
+ * `mhp`). Position is excluded because it moves constantly. List only fields the server sends.
  */
 export const PLAYER_FIELDS = [
   'id',
@@ -119,18 +99,9 @@ export function equipmentSignature(equipment: unknown): string {
 }
 
 /**
- * What one bag, bank or buyback row IS: the item, how many, and whether the
- * player has locked this copy.
- *
- * The lock is the only instance field read here, and the reason is that it is
- * the only one the PLAYER toggles. It moves neither the id nor the count, so
- * without it the one bag change a player makes deliberately is the one change
- * this reading cannot see. Everything else in the payload stays out for the
- * reason an aura's remaining time does: a signature answers "is this a different
- * set of things", and a deep compare of every payload at sample rate is not that
- * question. `locked` rides your own bags and your own bank only, so on a market
- * row or a letter this arm is reading a field the server's public projection
- * never sends, and answers absent for every one of them.
+ * What one bag, bank or buyback row IS: the item, how many, and whether the player has locked
+ * this copy. The lock is the one instance field read, since the player toggles it without moving
+ * the id or count. It is absent on market rows and letters, which the server trims.
  */
 export function inventorySignature(inventory: unknown): string {
   return eachOf(inventory)
@@ -181,11 +152,8 @@ export function auraSignature(auras: unknown): string {
 }
 
 /**
- * The same as `auraSignature`, plus the stack count.
- *
- * A ramping debuff is the case this exists for: a stack landing is the event a
- * boss mod warns on, and on the id and caster alone it is invisible, because a
- * stack is a refresh of the aura already there rather than a new one.
+ * The same as `auraSignature`, plus the stack count, since a stack landing refreshes the existing
+ * aura and is otherwise invisible.
  */
 export function stackedAuraSignature(auras: unknown): string {
   return eachOf(auras)
@@ -199,12 +167,8 @@ export function stackedAuraSignature(auras: unknown): string {
 }
 
 /**
- * Who is casting what, never how far along it is.
- *
- * A cast bar moves every frame, so including the remaining time would fire this
- * at the frame rate. The ability is in the key because a boss that finishes one
- * mechanic and immediately starts another has to read as two casts, and the
- * entity id alone would report that as no change at all.
+ * Who is casting what, never how far along it is. The ability is in the key so back-to-back
+ * casts by one entity read as two.
  */
 export function castSignature(casts: unknown): string {
   if (!(casts instanceof Map)) {
@@ -217,7 +181,7 @@ export function castSignature(casts: unknown): string {
   return running.sort(byCodePoint).join(',');
 }
 
-/** Which hazards are on the ground and where, but not how long they have left. */
+/** Which hazards are on the ground, by id, not how long they have left. */
 export function hazardSignature(hazards: unknown): string {
   return eachOf(hazards)
     .map((hazard) => fieldString(hazard, 'id') ?? '')

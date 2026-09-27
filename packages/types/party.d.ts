@@ -1,13 +1,6 @@
-// The party and raid rows, which read differently from everything else here.
-//
-// These are the terse WIRE names rather than the entity's: a row carries `mhp`
-// where an entity carries `maxHp`, and the flags are 0 or 1 rather than
-// booleans. Party rows come straight off the socket, which is the whole reason
-// they are their own subject.
-//
-// A row also exists for a member who is nowhere near you, which an entity does
-// not. For a raid display read the rows, which are complete, and reach for an
-// entity only when you need something a row does not carry.
+// The party and raid rows. A row exists for a member who is nowhere near you,
+// which an entity does not, so a raid display reads the rows and reaches for an
+// entity only for something a row does not carry.
 
 import type { AuraKind, ResourceType } from './entity.js';
 
@@ -18,12 +11,9 @@ export interface PartyMemberAura {
   /**
    * 1 when the effect's MAGNITUDE is negative. NOT "this is a debuff".
    *
-   * The server sets it from `value < 0` and nothing else, so a damage over time,
-   * a root, a stun and a silence all arrive without it: those are harmful by
-   * KIND rather than by sign. Reading it as a debuff flag is how a dispel
-   * display comes to drop most of what a healer would actually dispel.
-   *
-   * Pass the row to `world.harmful` instead, which puts both clauses together.
+   * It is set from `value < 0` alone, so a damage over time, a root, a stun and a
+   * silence arrive without it: those are harmful by KIND. Pass the row to
+   * `world.harmful`, which checks both.
    */
   neg?: 1;
   /** Whole seconds. Absent on an older snapshot. */
@@ -33,10 +23,8 @@ export interface PartyMemberAura {
 /**
  * One party or raid row.
  *
- * These are the terse wire names, not the entity's: a row carries `mhp` where an
- * entity carries `maxHp`, and the flags are 0 or 1 rather than booleans. Party
- * rows come straight off the socket, which is why they read differently from
- * everything else here.
+ * These are the terse WIRE names, straight off the socket: a row carries `mhp`
+ * where an entity carries `maxHp`, and the flags are 0 or 1, not booleans.
  */
 export interface PartyMember {
   pid: number;
@@ -77,8 +65,7 @@ export interface PartyInfo {
 /**
  * The same over a party row's strip, which is a smaller shape.
  *
- * A row's auras carry an id, a kind, whole seconds, and a debuff flag. No
- * source, so there is no `mine` here rather than one that silently does nothing.
+ * A row's auras carry no source, so there is no `mine` filter.
  */
 export interface PartyAuraQuery {
   id?: string;

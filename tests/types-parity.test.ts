@@ -1,17 +1,7 @@
-// The public API surface against the implementation.
+// The published `packages/types` surface against the loader's implementation.
 //
-// `packages/types` is what addon authors compile against, and nothing links it
-// to the runtime: it is hand-written declarations describing another file's
-// behaviour. That is exactly the shape of thing that drifts silently, and it
-// already had, twice at once: the published `keys.capture()` promised
-// `Promise<string>` where the loader resolves null on a cancelled prompt, and
-// `ui.alert()` promised `Promise<string>` where the loader resolves null when
-// there is no cancel button. An author would have written code that never
-// handled the case that actually happens.
-//
-// The assertions below are TYPE level: they cost nothing at runtime and fail
-// `tsc --noEmit` the moment the two disagree. The `it()` around them exists so
-// the suite reports that the check is present, not to do the checking.
+// Every assertion is TYPE level and fails only `tsc --noEmit`, never the runner; the `it()`
+// blocks exist so the suite reports that the check is present.
 
 import { describe, expect, it } from 'vitest';
 import type { BusApi } from '../loader/src/runtime/api/bus.ts';
@@ -103,26 +93,12 @@ import type {
   WorldValues as PublicWorldValues,
 } from '../packages/types/world-watch.js';
 
-/**
- * True only when every member of `From` satisfies `To`.
- *
- * Asserted in BOTH directions per surface. One direction alone would let the
- * published types promise something the loader does not implement, or hide
- * something it does.
- */
+/** True only when every member of `From` satisfies `To`; asserted both ways per surface. */
 type Assignable<From, To> = [From] extends [To] ? true : false;
 
 /**
- * Which field NAMES a record carries, which assignability alone cannot compare.
- *
- * Two-way `Assignable` is blind to an OPTIONAL field present on one side only: the
- * extra field leaves the record assignable in both directions, so a field added to
- * one catalogue and forgotten in the other typechecks clean. Measured rather than
- * assumed, on the 0.34.0 pass that added these fields: deleting `effectDepleted`
- * from the published `gatherResult`, and `abilityId` from the published `damage`,
- * each left `tsc --noEmit` green while the loader still declared them. Comparing
- * key sets is what sees it, and it matters because every field the game has added
- * to an existing event so far has arrived optional.
+ * Which field NAMES a record carries. Two-way `Assignable` is blind to an OPTIONAL field on
+ * one side only, and fields the game adds to an existing record arrive optional.
  */
 type SameFields<A, B> = [keyof A, keyof B] extends [keyof B, keyof A] ? true : false;
 
@@ -139,35 +115,18 @@ type EventFieldDrift = {
 const uiIsPublished: Assignable<UiApi, PublicUiApi> = true;
 const publishedIsUi: Assignable<PublicUiApi, UiApi> = true;
 
-/**
- * `ui.icon` had no check of its own, which is the silence this file exists to
- * stop rather than a pass. The pair above compares the whole `UiApi`, so it does
- * reach `icon` and would catch a REQUIRED member added to one side alone; what it
- * cannot see is an OPTIONAL one, and that is how every member this surface has
- * gained arrived. Game 0.39.0 added the aura art manifest and `aura` with it,
- * which is what made the gap worth closing.
- */
+/** `SameFields` because the whole-`UiApi` pair cannot see an optional member added to `icon`. */
 const iconsArePublished: Assignable<IconUrls, PublicIconUrls> = true;
 const publishedAreIcons: Assignable<PublicIconUrls, IconUrls> = true;
 const iconFieldsAgree: SameFields<IconUrls, PublicIconUrls> = true;
 
-/**
- * `net` was the one surface with no check at all, which is how its published
- * `onEvent` could have promised a typed payload the loader never narrowed. The
- * two event catalogues are written separately on purpose, so this is also what
- * proves they still describe the same records.
- */
+/** Also proves the two separately written event catalogues describe the same records. */
 const netIsPublished: Assignable<NetApi, PublicNetApi> = true;
 const publishedIsNet: Assignable<PublicNetApi, NetApi> = true;
 
 /**
- * The event catalogues field by field, which the two checks above do not reach.
- *
- * They compare the catalogues only through `onEvent`, which is enough for a kind
- * appearing on one side and for a field whose TYPE moved (dropping `'evade'` from
- * the published `DamageKind` fails `netIsPublished`), and is not enough for a
- * field being added to one side alone. Both halves are pinned here: the kind sets
- * against each other, then every record's fields.
+ * The event catalogues field by field: the `net` pair compares them only through `onEvent`,
+ * which misses a field added to one side alone.
  */
 const kindsArePublished: Assignable<keyof EventPayloads, keyof PublicEventPayloads> = true;
 const publishedAreKinds: Assignable<keyof PublicEventPayloads, keyof EventPayloads> = true;
@@ -182,25 +141,15 @@ const publishedIsKeys: Assignable<PublicKeysApi, KeysApi> = true;
 const storageIsPublished: Assignable<AddonStorageApi, PublicStorageApi> = true;
 const publishedIsStorage: Assignable<PublicStorageApi, AddonStorageApi> = true;
 
-/**
- * `duration`'s style is a named `DurationStyle` here and an inline union in the
- * package, so a third style added to the alias would reach every internal caller
- * and reach an author as an option their editor refuses to offer.
- */
+/** `duration`'s style is a named alias here and an inline union in the package. */
 const fmtIsPublished: Assignable<FmtApi, PublicFmtApi> = true;
 const publishedIsFmt: Assignable<PublicFmtApi, FmtApi> = true;
 
-/**
- * The loader returns `Teardown` and the package `Unsubscribe`, both `() => void`,
- * so nothing structural connects the two subscriber signatures.
- */
+/** `Teardown` and `Unsubscribe` are both `() => void`, so nothing structural links them. */
 const busIsPublished: Assignable<BusApi, PublicBusApi> = true;
 const publishedIsBus: Assignable<PublicBusApi, BusApi> = true;
 
-/**
- * Every field is `readonly` in the package and bare in the loader, which is right
- * on both sides and which assignability is blind to, hence the field comparison.
- */
+/** The package marks every field `readonly`, which assignability is blind to. */
 const addonIsPublished: Assignable<AddonIdentity, AddonInfo> = true;
 const publishedIsAddon: Assignable<AddonInfo, AddonIdentity> = true;
 const addonFieldsAgree: SameFields<AddonIdentity, AddonInfo> = true;
@@ -212,70 +161,25 @@ const worldIsPublished: Assignable<WorldApi, PublicWorldApi> = true;
 const publishedIsWorld: Assignable<PublicWorldApi, WorldApi> = true;
 
 /**
- * The world's own shapes, checked separately from the API that returns them.
- *
- * `WorldApi` compares structurally, so an entity field declared here and dropped
- * there would surface as one confusing error deep inside a map type. Comparing
- * the shapes directly names the thing that actually moved.
- *
- * These declarations are the one part of the published surface that describes
- * ANOTHER repository. Nothing at compile time can confirm the game still looks
- * like this; `loader/src/runtime/world/shape.ts` is what checks it against a
- * live game, and the hub reports drift once per session.
+ * The world's own shapes, compared directly so an error names the shape that moved rather
+ * than surfacing deep inside `WorldApi`. `world/shape.ts` checks them against the live game.
  */
 const entityIsPublished: Assignable<Entity, PublicEntity> = true;
 const publishedIsEntity: Assignable<PublicEntity, Entity> = true;
 /**
- * Every field of an entity is required today, so a one-sided drop already fails
- * one direction above. This is here for the day one arrives OPTIONAL, which is
- * how every field the game has added to an existing EVENT has arrived.
- *
- * `inCombat` is excluded BY NAME rather than the assertion being dropped, and the
- * exclusion is the point of the comment. Game 0.42.0 began sending it for the
- * player's own record alone, so the loader reads it and `world.combat` reports
- * `source: 'self'` when it answered; publishing the raw field would put it on
- * every mob and npc too, where nothing writes it and it is permanently false,
- * which is the exact trap this project already shipped once. So the two shapes
- * legitimately disagree on one key, and `Omit` says which one and keeps the
- * comparison doing its job for the other sixty-odd.
+ * `inCombat` is omitted because it is written only on the player's own record; published, it
+ * would be permanently false on every other entity. `world.combat` exposes it instead.
  */
 const entityFieldsAgree: SameFields<Omit<Entity, 'inCombat'>, PublicEntity> = true;
 /**
- * The aura shape, which had no assertion of its own until game 0.42.0 put
- * `flask` on it.
- *
- * `Entity.auras` reaches it, so a REQUIRED field on one side alone already fails
- * a direction of the entity pair above. That is not enough, and this shape is the
- * clearest case in the file for why: SEVEN of its fields are optional and every
- * one of them arrived that way, so the only thing that can see the eighth land on
- * one side alone is the key-set comparison.
- *
- * Neither ASSIGNABILITY direction can do that job here, which is worth stating
- * because writing the ordinary pair and stopping would look like coverage and be
- * none: every field the two shapes differ on is optional, and an optional field
- * missing from one side leaves both directions assignable. `SameFields` is the
- * whole assertion, and the pair is kept only for a REQUIRED field arriving.
- *
- * The two `Omit`s are the loader's deliberate non-publications: it carries
- * `undispellable` and `permanent` because `world.dispellable` runs the game's
- * whole predicate over them, and publishing a flag beside that verdict is an
- * invitation to re-derive it wrongly and get a raid's dispels subtly out of step.
- * Naming them here is what keeps the comparison exact for everything else.
+ * Only `SameFields` sees an optional field land on one side; the pair covers a required one.
+ * `undispellable` and `permanent` are omitted: they feed `world.dispellable`, and publishing
+ * them invites addons to re-derive that verdict wrongly.
  */
 const auraIsPublished: Assignable<Omit<Aura, 'undispellable' | 'permanent'>, PublicAura> = true;
 const publishedIsAura: Assignable<PublicAura, Aura> = true;
 const auraFieldsAgree: SameFields<Omit<Aura, 'undispellable' | 'permanent'>, PublicAura> = true;
-/**
- * The two ground shapes, which had no assertion of their own until game 0.40.1
- * put a field on one of them.
- *
- * `WorldApi` reaches both through `corpseLoot` and `deathZones`, so a REQUIRED
- * field on one side alone already fails a direction. That is not enough here for
- * the reason the entity pair gives: `LootSlot` next door carries three optional
- * fields already, so this family is one an optional arrival is likely on, and
- * two-way assignability is blind to exactly that. `decayed` was the first field
- * either shape had gained since it was written, and nothing named them.
- */
+/** Compared directly with `SameFields`, since an optional field is invisible to the pair. */
 const corpseIsPublished: Assignable<CorpseView, PublicCorpseView> = true;
 const publishedIsCorpse: Assignable<PublicCorpseView, CorpseView> = true;
 const corpseFieldsAgree: SameFields<CorpseView, PublicCorpseView> = true;
@@ -283,16 +187,8 @@ const deathZoneIsPublished: Assignable<DeathZone, PublicDeathZone> = true;
 const publishedIsDeathZone: Assignable<PublicDeathZone, DeathZone> = true;
 const deathZoneFieldsAgree: SameFields<DeathZone, PublicDeathZone> = true;
 /**
- * The THIRD ground shape, which had no assertion of its own until game 0.41.0
- * put three new kinds on it, and was the silence the two above were written to
- * end.
- *
- * The KIND pair is the load-bearing half and it is separate on purpose. The
- * loader derives `HazardKind` from the `HAZARD_SOURCES` table it actually
- * reads, so the two unions agreeing is the statement that the loader publishes
- * a name for every list it reads and reads a list for every name it publishes.
- * `SameFields` cannot see it, for the reason the reaction union below gives:
- * it compares keys and a union of string literals has none.
+ * The kind pair proves the loader publishes a name for every hazard list it reads and the
+ * reverse. `SameFields` cannot check a union of string literals, which has no keys.
  */
 const hazardIsPublished: Assignable<Hazard, PublicHazard> = true;
 const publishedIsHazard: Assignable<PublicHazard, Hazard> = true;
@@ -303,14 +199,7 @@ const publishedIsHazardKind: Assignable<PublicHazardKind, HazardKind> = true;
 const valuesArePublished: Assignable<WorldValues, PublicWorldValues> = true;
 const publishedAreValues: Assignable<PublicWorldValues, WorldValues> = true;
 
-/**
- * The professions sheet and the tool-effect row it now carries.
- *
- * `WorldApi` reaches `ProfessionInfo` structurally and would report a drop as an
- * error deep inside a `world.professions` return type, naming the sheet rather
- * than the row. Both shapes are compared directly for the reason the entity is:
- * so the message names the thing that moved.
- */
+/** Compared directly so a drop names the row rather than the `world.professions` return. */
 const professionsArePublished: Assignable<ProfessionInfo, PublicProfessionInfo> = true;
 const publishedAreProfessions: Assignable<PublicProfessionInfo, ProfessionInfo> = true;
 const professionFieldsAgree: SameFields<ProfessionInfo, PublicProfessionInfo> = true;
@@ -319,18 +208,9 @@ const publishedIsToolSlot: Assignable<PublicToolEffectSlot, ToolEffectSlot> = tr
 const toolSlotFieldsAgree: SameFields<ToolEffectSlot, PublicToolEffectSlot> = true;
 
 /**
- * The three stack shapes and the market page.
- *
- * They had no pair at all until the 0.37.1 catch-up, which is the silence this
- * file exists to remove: `WorldValues` compares `inventory` as a whole and so
- * catches a slot ARRAY being dropped, and it says nothing about a field arriving
- * on one side of the slot itself. All four had a field added or narrowed in one
- * merge, and only `SameFields` can see the OPTIONAL ones, which is what every
- * field the game has added to an existing shape has been.
- *
- * `HeldSlot` is compared as well as `InvSlot` because it is the narrowing that
- * carries the promise: an `InvSlot`-shaped `HeldSlot` on one side would satisfy
- * both directions of the base pair while quietly dropping the lock.
+ * The stack shapes: `WorldValues` compares `inventory` whole and misses a field on the slot.
+ * `HeldSlot` is checked too, since an `InvSlot`-shaped one would pass the base pair and drop
+ * the lock.
  */
 const slotIsPublished: Assignable<InvSlot, PublicInvSlot> = true;
 const publishedIsSlot: Assignable<PublicInvSlot, InvSlot> = true;
@@ -341,14 +221,8 @@ const heldInstanceIsPublished: Assignable<HeldItemInstance, PublicHeldItemInstan
 const publishedIsHeldInstance: Assignable<PublicHeldItemInstance, HeldItemInstance> = true;
 const heldInstanceFieldsAgree: SameFields<HeldItemInstance, PublicHeldItemInstance> = true;
 /**
- * The OWNER's payload, which had no assertion of its own until game 0.42.0 put
- * `perfecting` and `perfectingBound` on it.
- *
- * `HeldItemInstance` above shares the public base and so cannot see a field added
- * to this one alone, which is the whole gap: the two Perfecting fields are
- * owner-only by the server's own allowlist, so they exist on exactly the shape
- * with no pair. Every field here is optional, so `SameFields` is the only
- * assertion of the three that can see one arrive on one side.
+ * The owner's payload carries owner-only fields `HeldItemInstance` cannot see, and every
+ * field is optional, so `SameFields` is the assertion that matters.
  */
 const instanceIsPublished: Assignable<ItemInstance, PublicItemInstance> = true;
 const publishedIsInstance: Assignable<PublicItemInstance, ItemInstance> = true;
@@ -358,25 +232,17 @@ const publishedIsMarket: Assignable<PublicMarketInfo, MarketInfo> = true;
 const marketFieldsAgree: SameFields<MarketInfo, PublicMarketInfo> = true;
 
 /**
- * The ROW, which the three above do not reach.
- *
- * They compare `MarketInfo`, whose `listings` is an array of these, and an array
- * of a superset is still assignable both ways when the extra member is OPTIONAL,
- * so all three stay green with a field on one side alone. Every field a row has
- * gained has been optional: `instance` and, at game 0.43.0, `craftedRecipeId`.
+ * The market ROW: an array of a superset with an extra optional member stays assignable both
+ * ways, so the `MarketInfo` pair misses it.
  */
 const listingIsPublished: Assignable<MarketListing, PublicMarketListing> = true;
 const publishedIsListing: Assignable<PublicMarketListing, MarketListing> = true;
 const listingFieldsAgree: SameFields<MarketListing, PublicMarketListing> = true;
 
 /**
- * The two stores, and the vault's own state wrapper.
- *
- * `nextRungClaudiumPrice` is OPTIONAL, so dropping it from either side alone
- * leaves the other a superset and only `SameFields` catches it. `VaultState` is
- * asserted as well as `VaultInfo` because a wrapper over the wrong payload, or
- * over a nullable instead of the status union, is a change the `VaultInfo` pair
- * cannot see; `BankState` is reached through `WorldValues` below.
+ * `nextRungClaudiumPrice` is optional, so only `SameFields` catches it leaving one side.
+ * `VaultState` is checked separately because the `VaultInfo` pair cannot see a wrong wrapper;
+ * `BankState` is reached through `WorldValues`.
  */
 const bankIsPublished: Assignable<BankInfo, PublicBankInfo> = true;
 const publishedIsBank: Assignable<PublicBankInfo, BankInfo> = true;
@@ -387,24 +253,12 @@ const vaultFieldsAgree: SameFields<VaultInfo, PublicVaultInfo> = true;
 const vaultStateIsPublished: Assignable<VaultState, PublicVaultState> = true;
 const publishedIsVaultState: Assignable<PublicVaultState, VaultState> = true;
 
-/**
- * The spellbook row. `WorldApi` reaches it only through `AbilityIndex`, which
- * reports a break against the whole world surface rather than the field, and
- * every field this shape gains is OPTIONAL, which only `SameFields` catches.
- */
+/** `WorldApi` reaches this only through `AbilityIndex`, whose errors do not name the field. */
 const abilityIsPublished: Assignable<AbilityInfo, PublicAbilityInfo> = true;
 const publishedIsAbility: Assignable<PublicAbilityInfo, AbilityInfo> = true;
 const abilityFieldsAgree: SameFields<AbilityInfo, PublicAbilityInfo> = true;
 
-/**
- * The three authored content tables.
- *
- * They had no pair at all until the 0.38.2 catch-up added the third, which is the
- * same silence the stack shapes were in: `WorldApi` reaches all three
- * structurally, so an assignability break surfaces as an error about the whole
- * world surface rather than about the row that moved, and nothing at all was
- * comparing key SETS. A recipe grows a field whenever the game's crafting does.
- */
+/** The authored content tables, compared directly so an error names the row that moved. */
 const recipeIsPublished: Assignable<Recipe, PublicRecipe> = true;
 const publishedIsRecipe: Assignable<PublicRecipe, Recipe> = true;
 const recipeFieldsAgree: SameFields<Recipe, PublicRecipe> = true;
@@ -416,16 +270,8 @@ const publishedIsCivicService: Assignable<PublicCivicService, CivicService> = tr
 const civicServiceFieldsAgree: SameFields<CivicService, PublicCivicService> = true;
 
 /**
- * The battleground's two shapes, compared directly like the entity's.
- *
- * `WorldApi` reaches both structurally, but `BattlegroundMatch` is one member of
- * a five-way union, so a field moving on one side alone surfaces as an error
- * about `MatchInfo` naming none of the five. Comparing the shapes says which.
- *
- * `SameFields` on both because this surface is the one most likely to gain an
- * OPTIONAL field: the mode is under active development in the game, and the last
- * two releases each added a member to it. Two-way assignability is blind to
- * exactly that.
+ * `BattlegroundMatch` is one member of a five-way union, so a drift through `WorldApi` names
+ * none of them. `SameFields` because the mode keeps gaining optional fields.
  */
 const bgStandingsArePublished: Assignable<BattlegroundStandings, PublicBattlegroundStandings> =
   true;
@@ -437,29 +283,15 @@ const publishedIsBgMatch: Assignable<PublicBattlegroundMatch, BattlegroundMatch>
 const bgMatchFieldsAgree: SameFields<BattlegroundMatch, PublicBattlegroundMatch> = true;
 
 /**
- * Compared directly although `WorldApi` reaches it, because a union of three
- * string literals is the shape a drift is invisible in: dropping 'neutral' on one
- * side leaves the other a superset, which is still assignable in the direction
- * anybody would have written, and the reading silently narrows.
- *
- * No `SameFields`, which compares KEYS and reads nothing on a union of literals.
+ * Dropping a literal on one side leaves the other a superset, assignable in one direction.
+ * No `SameFields`: it compares keys, and a union of literals has none.
  */
 const reactionIsPublished: Assignable<Reaction, PublicReaction> = true;
 const publishedIsReaction: Assignable<PublicReaction, Reaction> = true;
 
 /**
- * The combat reading, which had no assertion of its own until game 0.42.0 gave
- * `CombatSource` a sixth member.
- *
- * Both directions on the UNION, for the reason the reaction pair gives: a member
- * added to the loader alone leaves the published union a subset and only one
- * direction fails, and adding one to the published side alone is worse, since it
- * promises a source no branch can ever return. `SameFields` is absent here too,
- * because it compares keys and a union of literals has none.
- *
- * The STATE pair beside it is what catches a field arriving on the record: both
- * of its fields are required today, so two-way assignability is enough until one
- * arrives optional, and then this needs `SameFields`.
+ * Both directions on the union: a member on the published side alone promises a source no
+ * branch returns. No `SameFields` on the union; `CombatState` needs it once a field is optional.
  */
 const combatSourceIsPublished: Assignable<CombatSource, PublicCombatSource> = true;
 const publishedIsCombatSource: Assignable<PublicCombatSource, CombatSource> = true;
@@ -468,22 +300,13 @@ const publishedIsCombatState: Assignable<PublicCombatState, CombatState> = true;
 const combatStateFieldsAgree: SameFields<CombatState, PublicCombatState> = true;
 
 /**
- * The watchable keys against the runtime's own list.
- *
- * `signature.ts` owns the keys: it holds the array `world.on` validates against
- * and the capture logic behind each one. The published `WorldKey` derives from
- * `WorldValues` instead, so this is what stops a key being added to one and not
- * the other, which would typecheck everywhere and throw at the addon.
+ * `signature.ts` owns the keys `world.on` validates against, while the published `WorldKey`
+ * derives from `WorldValues`; a key added to one side only would throw at the addon.
  */
 const keysArePublished: Assignable<WorldKey, PublicWorldKey> = true;
 const publishedAreKeys: Assignable<PublicWorldKey, WorldKey> = true;
 
-/**
- * The whole object an addon receives satisfies each published facet.
- *
- * Catches a domain being dropped from the assembly, which the per-facet checks
- * above would not: they compare two type declarations, not what is handed over.
- */
+/** What the assembly hands over, which the per-facet pairs (two declarations) cannot see. */
 const wocCarriesUi: Assignable<WocApi['ui'], PublicUiApi> = true;
 const wocCarriesSound: Assignable<WocApi['sound'], PublicSoundApi> = true;
 const wocCarriesKeys: Assignable<WocApi['keys'], PublicKeysApi> = true;
@@ -496,47 +319,26 @@ const wocCarriesAddon: Assignable<WocApi['addon'], AddonInfo> = true;
 const wocCarriesGame: Assignable<WocApi['game'], GameInfo> = true;
 
 /**
- * ONE direction on purpose. `PaintOpts.frame` is `{ visible: boolean }` where the
- * package publishes the whole `Frame`, so the loader accepts strictly more and
- * the reverse is false and should be. This direction is the load-bearing one: it
- * fails when the package promises a `paint` the loader cannot honour.
+ * One direction on purpose: `PaintOpts.frame` accepts `{ visible: boolean }` where the package
+ * publishes the whole `Frame`, so the reverse is false by design.
  */
 const wocCarriesPaint: Assignable<WocApi['paint'], PublicWocApi['paint']> = true;
 
 /**
- * A backstop for every root member nobody named: `settings`, `onSettingsChange`,
- * `onDispose`, `onFrame`, the timers, the log functions, both version numbers.
- *
- * The reverse is absent because two differences are deliberate rather than drift:
- * `settings` is the schema's three types here and `unknown` in the package, and
- * `paint` is the narrowing above.
+ * A backstop for every unnamed root member. The reverse is absent because `settings` is
+ * `unknown` in the package and `paint` is the narrowing above.
  */
 const wocSatisfiesPublished: Assignable<WocApi, PublicWocApi> = true;
 
-/**
- * The two ROOT members that are not facets, and both are the same kind of trap.
- *
- * `data` and `wallClock` are functions on `woc` itself rather than objects, so
- * the per-facet checks above cannot reach them: a published signature drifting
- * from the loader's would typecheck everywhere and be wrong at the addon.
- *
- * Both directions, like every surface here. One alone would let the published
- * package promise a `data` that resolves something the loader never returns,
- * which is exactly the shape of the `keys.capture()` drift this file was written
- * for.
- */
+/** `data` and `wallClock` are root functions, so no per-facet check reaches them. */
 const wocCarriesData: Assignable<WocApi['data'], PublicWocApi['data']> = true;
 const publishedIsData: Assignable<PublicWocApi['data'], WocApi['data']> = true;
 const wocCarriesWallClock: Assignable<WocApi['wallClock'], PublicWocApi['wallClock']> = true;
 const publishedIsWallClock: Assignable<PublicWocApi['wallClock'], WocApi['wallClock']> = true;
 
 /**
- * The monotonic clock, checked against the wall clock it must NOT be.
- *
- * They are both `() => number`, so nothing structural tells them apart and no
- * assertion here can. What this pins is that the published surface still carries
- * two of them: collapsing them back into one is the change that would make the
- * documented choice meaningless, and it would otherwise pass silently.
+ * Both clocks are `() => number` and cannot be told apart structurally; this pins only that
+ * the package still publishes two of them.
  */
 const publishedHasBothClocks: Assignable<
   PublicWocApi,

@@ -1,23 +1,12 @@
-// The combat records the game's socket carries, as the loader claims them.
-//
-// Split from `events.ts` for the reason `packages/types/events-combat.d.ts` is
-// split from its own catalogue, and the two splits are deliberately the same
-// shape: these are the records an author reaches for first, they carry the traps
-// worth explaining, and keeping them together is what keeps either file under
-// the size a module is allowed to be.
-//
-// The map from a kind to its record stays in `events.ts` and covers both files,
-// so a kind added here is not reachable until it is named there.
+// The combat records the socket carries, split from `events.ts` the way the published types split.
+// A kind added here is unreachable until the map in `events.ts` names it.
 
 import type { School } from '../world/game-types.ts';
 import type { PersonalEvent } from './events.ts';
 
 /**
- * `evade` is a wild mob refusing the hit while immune, and always lands at amount 0.
- *
- * TWO causes since game 0.41.4, and they say opposite things about the fight: a mob that
- * broke leash has dropped its hate table and is walking home, while one pinned in place
- * inside an instance still holds it and resumes the moment it can reach you again.
+ * `evade` is a mob refusing the hit while immune, always at amount 0. Two opposite causes: a
+ * leashed mob has dropped its hate table, while one pinned inside an instance still holds it.
  */
 type DamageKind = 'hit' | 'miss' | 'dodge' | 'parry' | 'block' | 'resist' | 'evade';
 
@@ -35,7 +24,7 @@ interface DamageEvent extends PersonalEvent {
   /** A PLAYER ability's id, on the primary direct hit. Null on a mob, tick or echo. */
   abilityId?: string | null;
   kind: DamageKind;
-  /** Not present on any of 205 records in the session this was written from. */
+  /** Rarely present; read as optional. */
   absorbed?: number;
   attackAnimationStarted?: boolean;
 }
@@ -55,11 +44,8 @@ interface Heal2Event extends PersonalEvent {
   /** Carries no healing. Consumers skip on this flag, never on the amount. */
   cueOnly?: boolean;
   /**
-   * Healing lost to the missing-hp clamp, absent rather than 0, and computed
-   * after absorb so it never double-counts with `absorbed`.
-   *
-   * PARTIAL ONLY: every emit site still gates on `healed > 0`, so a tick that
-   * fully overheals emits no record at all and cannot be reported here.
+   * Healing lost to the missing-hp clamp, after absorb, absent rather than 0. PARTIAL ONLY: a fully
+   * overhealed tick emits no record at all.
    */
   overheal?: number;
 }

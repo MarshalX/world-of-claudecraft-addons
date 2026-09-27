@@ -1,27 +1,10 @@
-// The World Market, as one browsed page.
+// The World Market, as one browsed page, proximity-gated (see `proximity.ts`).
 //
-// Proximity-gated (see `proximity.ts`), so the reading exists only while the
-// player stands at the Merchant.
+// Passed through rather than projected: a page is up to 120 rows sampled many times a second,
+// so the arrays are the game's own and `readonly` is a type-level guard, not a boundary.
 //
-// PASSED THROUGH rather than projected, the way `party` is. A page is up to 120
-// rows, read on every access and sampled up to forty times a second while a
-// player browses; rebuilding 120 objects at that rate to rename nothing would be
-// allocation for its own sake. The cost is that these arrays are the game's own,
-// so `readonly` here is a type-level guard and not a boundary, exactly as it is
-// for `cooldowns` in `backend.ts`.
-//
-// Nothing in a page counts down and no row can change: a listing is immutable
-// once created and a buy takes the whole stack. That is what lets the signature
-// in `signature-economy.ts` be an id list rather than a digest of every field.
-//
-// The server keeps NO price history of the BOOK. Nothing says what an item has
-// sold for in general, so a price series is still something an addon BUILDS by
-// recording the pages its player browses.
-//
-// The one exception is the player's OWN sales: `collectionSales` is a real
-// sold-price record, and it is the only one the game keeps. It is also transient
-// (capped, and drained on collect), so an addon that wants a history of its own
-// sales has to copy rows out before the player collects them.
+// The server keeps no price history of the book. The only sold-price record is the player's own
+// `collectionSales`, which is capped and drained on collect.
 
 import type { InvSlot } from './game-types.ts';
 import type { PublicItemInstance } from './items.ts';
@@ -41,13 +24,7 @@ interface MarketListing {
   house: boolean;
   /** Present only on an instanced listing, trimmed to the public fields. */
   instance?: PublicItemInstance;
-  /**
-   * The recipe that crafted the stack, on a crafted listing only.
-   *
-   * A plain row field rather than part of `instance`, so it does NOT go through
-   * `publicInstanceView` and is honest here: the game writes it straight onto
-   * the wired row (`src/sim/market.ts:1274`, conditional spread).
-   */
+  /** The recipe that crafted the stack, on a crafted listing only. A row field, not trimmed. */
   craftedRecipeId?: string;
 }
 
@@ -66,12 +43,8 @@ interface MarketInfo {
   /** Your own listings first, then one page of everyone else's. */
   listings: readonly MarketListing[];
   /**
-   * Every ROW matching the filter, yours included, across all pages.
-   *
-   * Rows rather than listings, because `collapseLowest` narrows this too: it
-   * collapses before the count is taken, so with it on this counts the distinct
-   * items that matched and the listings standing behind them are not on the wire
-   * at all.
+   * Every ROW matching the filter, yours included, across all pages. Under `collapseLowest` that
+   * is distinct items, not listings.
    */
   totalCount: number;
   /** The search string the server actually applied. */
@@ -83,28 +56,16 @@ interface MarketInfo {
   primaryStat: string;
   rarity: string;
   /**
-   * The ORDER the server applied, which is a different axis from the filters
-   * above: it reorders the matched book and never narrows it.
-   *
-   * `'name'` is the classic default, name then price. `'price'` puts the whole
-   * matched book cheapest first, which means page 0 is the cheap tail rather
-   * than an alphabetical slice, so anything inferring a market-wide figure from
-   * the pages a player happened to read is sampling one end of it.
+   * The ORDER the server applied; it reorders the matched book and never narrows it. `'name'` is
+   * name then price; `'price'` is cheapest first, so its early pages sample only the cheap tail.
    */
   sort: string;
   /**
-   * The server COLLAPSED the matched book to one row per item id, cheapest first.
+   * The server COLLAPSED the matched book to one row per item id, cheapest first. Both counts are
+   * over the collapsed rows, so listing depth is not readable.
    *
-   * It narrows the rows AND both counts: the collapse runs before the page is cut
-   * and before the count is taken, so `totalCount` and `pageCount` are over the
-   * collapsed rows. How many listings stand behind a floor is not on the wire
-   * under this, so depth cannot be read off a page at all here.
-   *
-   * What the page becomes is stronger than what it loses. The filter is a
-   * function of the item id alone, so every listing of one item matches or none
-   * does, which makes a collapsed row that item's cheapest listing in the whole
-   * book rather than on the page. An instanced listing is exempt, because no two
-   * of them are the same goods.
+   * Each collapsed row is that item's cheapest listing in the whole book, since the filter
+   * depends on the item id alone. Instanced listings are never collapsed.
    */
   collapseLowest: boolean;
   /** Clamped by the server against the live match count, so this is the page you got. */
@@ -115,11 +76,7 @@ interface MarketInfo {
   collectionCopper: number;
   /** Returned or expired goods waiting at the Merchant. */
   collectionItems: readonly InvSlot[];
-  /**
-   * The itemized ledger behind `collectionCopper`, oldest first. Capped at 50,
-   * and DRAINED when the player collects, so it is a pickup queue rather than a
-   * history.
-   */
+  /** The itemized ledger behind `collectionCopper`, oldest first. Capped; drained on collect. */
   collectionSales: readonly MarketSaleRecord[];
   /** How many older rows the cap dropped. Their copper is still in the total. */
   collectionSalesOmitted: number;
@@ -129,42 +86,26 @@ interface MarketInfo {
   maxListings: number;
   myListingCount: number;
   /**
-   * The item the Sell tab's price reference was computed for, or null for none.
-   *
-   * Read it BEFORE `sellLowestPrice`: the pair is the answer to a question the
-   * player asked by staging an item, and it arrives a round trip later, so a
-   * snapshot taken across an item switch carries the previous item's price under
-   * the new one's form. Comparing this against what is staged is what makes that
-   * visible.
+   * The item the Sell tab's price reference was computed for, or null for none. Check it against
+   * what is staged before reading `sellLowestPrice`: the pair lags an item switch by a round trip.
    */
   sellPriceItemId: string | null;
   /**
    * The cheapest active listing of `sellPriceItemId`, per unit, or null when that
    * item has none. Null with a null id means nothing was ever asked for.
    *
-   * The only market-wide price the game will state, and it exists because the
-   * player asked: it is filled by a request the Sell tab sends, which is a SEND
-   * and therefore outside what an addon may do. So an addon reads it when the
-   * player has staged an item and reads null the rest of the time, and it cannot
-   * make the reading happen. `sellValue` is still the only reference always
-   * there, and a price series is still something an addon builds from the pages
-   * its player browses.
+   * Filled only while the player has an item staged on the Sell tab; an addon cannot request it.
    *
-   * It counts EVERY active listing, the Merchant's own stock and the player's own
-   * rows included, because a buyer can take either instead. So it is what nothing
-   * resells above, and it is NOT the cheapest rival. It is also the whole stack's
-   * price divided by the stack and rounded UP, so it sits at or just above the
-   * true per-unit price and never under it.
+   * It counts EVERY active listing, the Merchant's and the player's own included, so it is not
+   * the cheapest rival. It is the stack price over the count rounded UP, never under the true
+   * unit price.
    */
   sellLowestPrice: number | null;
 }
 
 /**
- * The market page, or why there is not one.
- *
- * `'away'` is also what you see for one snapshot after a reconnect even while
- * standing at the Merchant: the client clears its own market mirror on reconnect
- * and refills it from the next snapshot, about fifty milliseconds later.
+ * The market page, or why there is not one. It reads `'away'` for one snapshot after a
+ * reconnect even at the Merchant.
  */
 type MarketState = ProximityState<MarketInfo>;
 

@@ -1,12 +1,8 @@
 // @vitest-environment happy-dom
 
-// An addon's own page in the manager, as it actually renders: how a player reaches it,
-// the settings form, and the log tail. The keybind editor is its own suite, in
-// manager-detail-keybinds.test.tsx, standing on the same scaffolding.
-//
-// The case worth proving is that it works for a DISABLED addon: one that misbehaves is
-// one a player turns off first and reconfigures second, so a settings screen needing the
-// addon running would be unavailable exactly then. Nothing here runs any addon code.
+// An addon's own page in the manager. The keybind editor is manager-detail-keybinds.
+// The fixture addon is disabled: a misbehaving addon is turned off before it is
+// reconfigured, so the page must work without running any addon code.
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { DiagnosticsReading } from '../loader/src/runtime/diagnostics.ts';
@@ -85,11 +81,7 @@ function addonWithoutSettings(): InstalledAddon {
   return { ...full, manifest };
 }
 
-/**
- * Preact batches state into a microtask, and the stores load asynchronously.
- * The turns chain rather than resolve together, because each one releases the
- * continuation the next is waiting on.
- */
+/** Preact batches into a microtask and the stores load async; each turn frees the next. */
 async function settle(turns = SETTLE_TURNS): Promise<void> {
   if (turns > 0) {
     await Promise.resolve();
@@ -107,8 +99,7 @@ interface OpenOptions {
 function open(options: OpenOptions = {}) {
   const hub = options.hub ?? createFakeStorage();
   const logs = options.logs ?? createLogBuffer();
-  // Held in a variable rather than read from the options, so a test can replace
-  // the row the way an update does and re-read it through `manager.invalidate`.
+  // Mutable so `update` can replace the row the way an update does.
   let installed = options.installed ?? addon();
   const registry: ManagerRegistry = fakeRegistry({
     list: async () => [installed],
@@ -182,13 +173,8 @@ afterEach(() => {
   document.body.innerHTML = '';
 });
 
-// An addon updated while its page is open, which is the reported failure.
-//
-// The pane renders its controls from the ROW read fresh and writes them through
-// stores built when the page was opened. With nothing re-checking that pair, an
-// update that declared a new setting drew its control over stores that had never
-// heard of it, and choosing a value answered "no setting declared with id
-// 'layout'". Nothing about it was stored, so reinstalling did not clear it.
+// The pane draws controls from the fresh row but writes through stores built at open, so
+// an update that adds a setting must rebuild the stores too.
 describe('an addon updated while its page is open', () => {
   function withLayout(): InstalledAddon {
     const full = addon();
@@ -220,12 +206,8 @@ describe('an addon updated while its page is open', () => {
   }
 
   /**
-   * Choose a value in one setting's dropdown, through the real menu.
-   *
-   * It used to assign `.value` on the element and dispatch a change, which is what a native
-   * `<select>` takes. That degraded silently the day the control became a button and a menu,
-   * because a button carries a `value` property too: the assignment landed on the DOM, the
-   * assertion read it back, and the case passed without the manager ever being told anything.
+   * Choose a value through the real menu. Assigning `.value` would pass without the manager
+   * hearing anything, because the picker is a button and a button has a `value` too.
    */
   function pick(id: string, value: string): void {
     const field = document.getElementById(`woc-setting-official-combat-meter-${id}`);
@@ -241,7 +223,7 @@ describe('an addon updated while its page is open', () => {
     expect(text()).toContain('How the timers are drawn');
   });
 
-  it('accepts a value for it rather than refusing its own field', async () => {
+  it('accepts a value for it', async () => {
     const harness = await openPage();
     harness.update(withLayout());
     await settle();
@@ -258,8 +240,6 @@ describe('an addon updated while its page is open', () => {
     ).toBe('tiles');
   });
 
-  // The settings already on screen belong to the same addon and the same storage,
-  // so a rebuild must not read as a reset.
   it('keeps what the player had already set', async () => {
     const hub = createFakeStorage();
     await hub.set(configNamespace(FQID), SETTINGS_KEY, { window: 30 });
@@ -301,9 +281,7 @@ describe('reaching an addon page', () => {
     expect(text()).toContain('Rolling damage per second.');
   });
 
-  // Reopening on a page the player did not choose is disorienting, especially
-  // when they closed the window to go and look at a different addon.
-  it('reopens on the list rather than the page it was closed on', async () => {
+  it('reopens on the list, not the page it was closed on', async () => {
     const { manager } = open();
     await settle();
     clickLabelled(UI_TEXT.configure);
@@ -333,8 +311,7 @@ describe('the settings form', () => {
     expect(document.querySelector('input[type="checkbox"].woc-input')).toBeNull();
     expect(document.querySelector('.woc-field input[type="checkbox"]')).not.toBeNull();
     expect(document.querySelector('input[type="text"]')).not.toBeNull();
-    // A select declaration renders the loader's own dropdown rather than a native control, so
-    // what there is to find is the button: its menu is not in the document until it is opened.
+    // A select renders the kit's picker button; its menu is absent until opened.
     expect(document.querySelector('button.woc-picker')).not.toBeNull();
   });
 
@@ -417,11 +394,7 @@ describe('the log tail', () => {
   });
 });
 
-// Found in the game, on the first real install. Installing does not enable, so
-// the addon's own page opens reading STOPPED; before this it had Reload and
-// Uninstall and no way to start the thing, and Reload itself is a no-op on a
-// stopped addon because there is no running copy to re-evaluate. The page was a
-// dead end that looked like a broken loader.
+// Reload is a no-op on a stopped addon, so the page needs its own enable toggle.
 describe('starting a stopped addon from its own page', () => {
   it('offers an enable toggle', async () => {
     open({ installed: addon({ enabled: false }) });
@@ -454,8 +427,7 @@ describe('starting a stopped addon from its own page', () => {
     expect(box?.checked).toBe(true);
   });
 
-  // A button that answers a click with no visible effect reads as a broken
-  // loader, which is exactly how this was reported.
+  // A button that does nothing visible on click reads as a broken loader.
   it('disables Reload while the addon is stopped, and says why', async () => {
     open({ installed: addon({ enabled: false }) });
     await settle();

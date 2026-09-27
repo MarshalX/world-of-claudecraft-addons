@@ -1,82 +1,39 @@
 // The #woc-addons root element, its two stacking bands, and the loader stylesheet.
 //
-// Addon DOM lives here rather than under the game's #ui, which the HUD rebuilds.
-// The root is a sibling of #ui and a direct child of body, so nothing the game
-// re-renders is an ancestor of it and no re-render can take it away.
+// The root is a direct child of body and a sibling of #ui, so no HUD re-render can take it
+// away. The stylesheet is injected UNLAYERED: an unlayered rule outranks every game rule
+// (all layered) whatever the specificity.
 //
-// The stylesheet is injected UNLAYERED. Every game rule lives inside @layer base
-// or @layer components, and an unlayered rule outranks any layered one whatever
-// the specificity, so addon styling survives a game update that adds another
-// layer or reorders the ones it has.
-//
-// THE ROOT DRAWS NOTHING AND IS NOT A LAYER. It used to be one, fixed and
-// inset:0 at a z-index above the game's own ceiling, and that single number was
-// the whole reason the game menu opened UNDERNEATH an addon frame: `#options-menu`
-// is a `.window` inside `#ui`, so one z-index above `#ui` is one z-index above
-// every window the game has. There is no slotting into `#ui` from outside it,
-// since it is one stacking context, so the answer is two bands and a root that is
-// neither. `display: contents` is what makes that possible: `position: fixed`
-// ALWAYS creates a stacking context whatever its z-index, so a root that had a box
-// would trap both bands inside one layer again.
+// THE ROOT DRAWS NOTHING AND IS NOT A LAYER. `#options-menu` is a window inside `#ui`, one
+// stacking context, so a single z-index above `#ui` would put addon frames over every game
+// window. Hence two bands and a `display: contents` root: `position: fixed` always creates a
+// stacking context, so a root with a box would trap both bands in one layer again.
 
 const ROOT_ID = 'woc-addons';
 const STYLE_ID = 'woc-addons-style';
 /**
  * The two layers everything the loader draws goes into.
  *
- * Both are `position: fixed; inset: 0`, so each is its own stacking context in
- * the document's, competing directly with `#game-canvas` (0), `#nameplates` (1)
- * and `#ui` (10, and 80 or 90 in the game's other layouts).
+ * Both are `position: fixed; inset: 0`, so each is its own stacking context competing with
+ * `#game-canvas` (0), `#nameplates` (1) and `#ui` (10, or 80 to 90 in other layouts). The game
+ * also mounts body-level dialogs between 90 and 120 (the armory inspector, store prompts),
+ * which land between the two bands; place any new band against those, not `#ui` alone.
  *
- * `#ui` is NOT the whole of the game's UI, which is easy to assume from the
- * sentence above it and from the menu argument below. The game also mounts
- * dialogs as siblings of it on `document.body`, above the whole `#ui` context
- * precisely because nothing inside a stacking context can paint above one:
- * `.armory-inspect-overlay` at 90 (`src/styles/components.css:3706`) and, since
- * game 0.43.3, `#store-prompt-stack` at 96 (`src/styles/hud.css:10218`, 120 under
- * `body.mobile-touch`), minted and dropped per prompt by
- * `src/ui/store_prompt_host.ts`. That family lands BETWEEN the two bands, which
- * is where it belongs and needs nothing from us: above the hud band, so a dialog
- * the player opened covers addon HUD furniture the way `#ui` itself does, and
- * below the overlay band, so the manager and the toaster still reach over it.
- * The reason to write the numbers down is that a future band would have to be
- * placed against them rather than against `#ui` alone.
- *
- * The split is the frame/window distinction the kit already draws, made visible:
- * a frame is HUD FURNITURE and belongs among the game's own HUD, under any window
- * the player deliberately opened, so the hud band sits below `#ui`. Everything the
- * player opened or the loader raised (the manager, a menu, a toast, a modal, a
- * tooltip, a banner) belongs above all of it, so the overlay band stays where the
- * old single root was.
- *
- * What follows and is worth being deliberate about: an addon frame is now covered
- * by the game's bags, spellbook, map and menu, and that is the point. It is also
- * covered by the game's chat and action bars, which is the price, and the right
- * one: those are controls the player needs and an addon overlay is not.
+ * The split is the frame/window distinction: a frame is HUD furniture and goes in the hud
+ * band, below `#ui`, so game windows (and the chat and action bars) cover it. Whatever the
+ * player opened or the loader raised (manager, menu, toast, modal, tooltip, banner) goes in
+ * the overlay band above everything.
  */
 const HUD_BAND_CLASS = 'woc-hud-band';
 const OVERLAY_BAND_CLASS = 'woc-overlay-band';
 /**
- * On the root while the game HUD is not in the document.
- *
- * The stylesheet hides addon frames under it, and only addon frames: the manager
- * has to stay reachable from the start screen, since it is how a player finds out
- * the loader is broken and one of its three routes in is host-side and works with
- * no game at all.
- *
- * Exported rather than written twice. `ui/mount.ts` is what clears and re-sets it
- * from the HUD presence signal, and a second copy of the string there would be a
- * class one file sets and another styles with nothing holding them together.
+ * On the root while the game HUD is not in the document. It hides addon frames only: the
+ * manager must stay reachable from the start screen. `ui/mount.ts` toggles it.
  */
 const NO_HUD_CLASS = 'woc-no-hud';
 /**
- * On the root while the Dev tab's freeze is on.
- *
- * The callback gates in `runtime/freeze.ts` stop every addon that repaints on a
- * cadence, and they cannot stop a CSS animation, which has no callback to hold.
- * This is the half of the freeze the stylesheet owns. Here rather than in
- * freeze.ts for the same reason NO_HUD_CLASS is here: one home for a class one
- * module writes and another styles.
+ * On the root while the Dev tab's freeze is on: the stylesheet's half of the freeze, for CSS
+ * animations, which `runtime/freeze.ts` has no callback to hold.
  */
 const FROZEN_CLASS = 'woc-frozen';
 
@@ -88,11 +45,8 @@ interface RootDeps {
 
 interface AddonRoot {
   /**
-   * The `#woc-addons` element, which contains both bands and draws nothing.
-   *
-   * Still the handle for everything that is about ALL of the loader's DOM: the
-   * two mode classes, the window-order listener, and the tooltip's watcher, none
-   * of which care which band a node is in.
+   * The `#woc-addons` element, which contains both bands and draws nothing. The handle for
+   * what spans both bands: the mode classes, the window-order listener, the tooltip watcher.
    */
   el: HTMLElement;
   /** Addon frames and world anchors. Below the game's HUD. */
@@ -115,12 +69,8 @@ function band(doc: Document, root: HTMLElement, className: string): HTMLElement 
 }
 
 /**
- * Create the root and inject the stylesheet, or adopt them if they already exist.
- *
- * Adoption matters because a userscript manager can run the loader twice against
- * one document, through a soft navigation or a second matching @match rule. A
- * second root would leave the first orphaned and still styled, which reads to a
- * player as a duplicated, unresponsive manager rather than as the bug it is.
+ * Create the root and inject the stylesheet, or adopt them if they already exist: a userscript
+ * manager can run the loader twice against one document, and a second root orphans the first.
  */
 function mountRoot(deps: RootDeps): AddonRoot {
   const { doc } = deps;
@@ -138,18 +88,13 @@ function mountRoot(deps: RootDeps): AddonRoot {
   const el = doc.getElementById(ROOT_ID) ?? doc.createElement('div');
   if (el.id !== ROOT_ID) {
     el.id = ROOT_ID;
-    // Addon frames are hidden until the HUD is seen. The safe default, not a
-    // waiting state: a frame with a saved visibility is restored as soon as its
-    // addon starts, which is at document-start on the landing page, and the
-    // failure that produced this was a meter window sitting over the PLAY
-    // button. ui/mount.ts clears it on the first presence report.
+    // Hidden by default: a frame with saved visibility is restored at document-start, on the
+    // landing page. ui/mount.ts clears it on the first presence report.
     el.classList.add(NO_HUD_CLASS);
     doc.body.appendChild(el);
   }
 
-  // Order matters only for the two bands that carry no z-index of their own in a
-  // browser that has not applied the sheet yet: hud first, so even then the
-  // manager is on top rather than behind the frames.
+  // Hud first, so the overlay is on top even before the sheet applies.
   return {
     el,
     hud: band(doc, el, HUD_BAND_CLASS),

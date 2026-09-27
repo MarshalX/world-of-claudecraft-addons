@@ -1,9 +1,5 @@
-// Waiting for the game to reach the point where __game exists.
-//
-// The sequence the client goes through is body.game-active, then #ui mounts,
-// then __game is assigned a fade's worth of time after first paint (src/main.ts).
-// Only the first of those raises anything observable, so one poll covering all
-// three is simpler than a MutationObserver that still has to poll for the last.
+// Waiting for __game. The client sets body.game-active, mounts #ui, then assigns __game a fade
+// later; only the first is observable, so one poll covers all three.
 
 import { ANCHORS } from './ui/anchors.ts';
 
@@ -20,12 +16,7 @@ export interface ReadyDeps {
 }
 
 export interface GameWait {
-  /**
-   * Resolves with the __game object.
-   *
-   * There is deliberately no timeout: a player can sit on the login screen for
-   * as long as they like, and that is not an error to report.
-   */
+  /** No timeout: a player can sit on the login screen indefinitely. */
   ready: Promise<unknown>;
   cancel: () => void;
 }
@@ -45,12 +36,8 @@ export interface DocumentReadyDeps {
 }
 
 /**
- * Resolves once the document has been parsed.
- *
- * The loader's own root and manager mount here rather than at world entry,
- * because the manager has to be reachable from the start screen too. It says
- * nothing about the game's HUD, which is cloned out of a template later: the two
- * in-game injection points wait separately, in ui/hud-mount.ts.
+ * The manager mounts here so it is reachable from the start screen. Says nothing about the HUD,
+ * cloned from a template later; see ui/hud-mount.ts.
  */
 export function waitForDocument(deps: DocumentReadyDeps): Promise<void> {
   if (deps.doc.readyState !== 'loading') {

@@ -1,9 +1,4 @@
 // Deciding whether a marketplace offers something newer than what is installed.
-//
-// The case that earns this its own module is 1.10.0 against 1.9.0. A string
-// comparison gets it backwards, and the symptom is not an error: the badge
-// simply never appears for the tenth release of a minor line, which nobody
-// reports because nothing looks broken.
 
 import { describe, expect, it } from 'vitest';
 import { isNewerVersion } from '../loader/src/shared/version.ts';
@@ -34,8 +29,7 @@ describe('isNewerVersion', () => {
     expect(isNewerVersion('1.2.0-rc2', '1.2.0-rc1')).toBe(true);
   });
 
-  // The badge is a one-click invitation to re-fetch code. "I cannot compare
-  // these two" is not a reason to offer that.
+  // The badge invites a re-fetch of code, which an unparseable version does not justify.
   it('reports nothing when either side does not parse', () => {
     expect(isNewerVersion('nightly', '1.2.0')).toBe(false);
     expect(isNewerVersion('1.2.0', 'nightly')).toBe(false);

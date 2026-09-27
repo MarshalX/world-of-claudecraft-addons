@@ -1,8 +1,7 @@
 // @vitest-environment happy-dom
 
-// Following the game's own HUD edit mode, ONE WAY: the game's mode freezes the
-// camera and every world click, so a loader switch that drove it would take the
-// game away from the player.
+// Following the game's HUD edit mode one way only: the game's mode freezes the camera and
+// every world click, so the loader must never drive it.
 
 import { afterEach, describe, expect, it } from 'vitest';
 import { GAME_UNLOCKED_CLASS } from '../loader/src/runtime/ui/anchors.ts';
@@ -38,7 +37,7 @@ describe('following the game HUD edit mode', () => {
     stop();
   });
 
-  it('starts locked when the class is not there, which is every other case', () => {
+  it('starts locked when the class is not there', () => {
     const unlock = createUnlockMode(root());
 
     const stop = followGameUnlock({ doc: document, unlock });
@@ -66,7 +65,7 @@ describe('following the game HUD edit mode', () => {
     stop();
   });
 
-  it('tells the mode subscribers, which is what the manager checkbox follows', async () => {
+  it('tells the mode subscribers', async () => {
     const unlock = createUnlockMode(root());
     const seen: boolean[] = [];
     unlock.onChange((on) => seen.push(on));
@@ -95,10 +94,8 @@ describe('following the game HUD edit mode', () => {
     stop();
   });
 
-  // The case above starts locked, where re-asserting the reading is a no-op whether
-  // or not anything is edge triggered. Body carries game classes that flip in
-  // ordinary play (`pad-active`, `src/game/input_hint_mode.ts`, on every controller
-  // input), and each would otherwise write false over a player's own switch mid-drag.
+  // Body classes like `pad-active` flip in ordinary play, and a level-triggered reading would
+  // write false over the player's own switch mid-drag.
   it('leaves the loader mode alone when an unrelated class flips', async () => {
     const unlock = createUnlockMode(root());
     const stop = followGameUnlock({ doc: document, unlock });

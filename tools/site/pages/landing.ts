@@ -1,22 +1,6 @@
-// The landing page: what it is, what ships with it, the trust section, and how
-// small an addon is. One screen for a player who will not read.
-//
-// Three corrections to the copy this page was first drafted from, which was
-// written against screenshots rather than against the repository. All three are
-// the kind of thing the generated-from-truth rule exists to prevent:
-//
-//   - Its code sample used an API that does not exist (`woc.addon(...)`,
-//     `api.ui.panel`, `api.on('cooldown:tick')`). The real surface has no
-//     registration call at all. The block is now included from a real file.
-//   - It listed `window.woc` as a surface the GAME exposes. The game exposes
-//     `window.__game`; `woc` is what the LOADER hands an addon. Backwards.
-//   - Addon versions were invented (1.2.0, 1.1.0). They come from the index now.
-//
-// The fourth is the one this file used to be: a heading, a body and a note
-// hand-written per featured addon, which described the first two addons long
-// after there were thirty. A featured block is now the addon's own name, tags,
-// version and description, and the only thing decided here is WHICH addons get
-// one, which lives in tools/featured.ts because the README shows the same set.
+// The landing page: what it is, what ships with it, the trust section, and how small an addon is.
+// Never hand-write addon copy or code samples here: the sample is included from a real file and a
+// featured block is the addon's own manifest. Which addons are featured lives in tools/featured.ts.
 
 import type { CatalogAddon } from '../../catalog.ts';
 import { FEATURED, spellOut } from '../../featured.ts';
@@ -101,14 +85,7 @@ function feature(item: Feature, index: number): Html {
 </article>`;
 }
 
-/**
- * One featured addon, said in the addon's own words.
- *
- * The eyebrow carries the version and the tags rather than a slogan, because both
- * are facts the manifest already states and a slogan is the thing this page kept
- * getting wrong. The heading is the name a player sees in Browse, so the card on
- * screen and the row in the game read the same.
- */
+/** One featured addon, in the manifest's own words: version and tags, name, description. */
 function featureOf(build: Build, addon: CatalogAddon): Feature {
   return {
     eyebrow: [addon.version, ...addon.tags].join(' · '),
@@ -118,13 +95,7 @@ function featureOf(build: Build, addon: CatalogAddon): Feature {
   };
 }
 
-/**
- * Every addon that is not featured above, as a link into its catalog card.
- *
- * Names only. The point of the strip is the SIZE of the catalog, which a visitor
- * cannot get from a handful of cards, and thirty descriptions on a landing page is
- * the catalog page with a different heading on it.
- */
+/** Every addon not featured above, names only: the strip shows the catalog's size. */
 function strip(rest: readonly CatalogAddon[]): Html {
   return html`<p class="eyebrow addon-strip-head">The other ${rest.length}</p>
 <ul class="addon-strip">
@@ -132,13 +103,7 @@ function strip(rest: readonly CatalogAddon[]): Html {
 </ul>`;
 }
 
-/**
- * The featured rows, or a failed build naming the id that is gone.
- *
- * Loud rather than skipped, for the reason `Context.preview` throws: a featured
- * addon that has been renamed would otherwise take its block off the landing page
- * and nothing would say so, which is a page that quietly shows three cards.
- */
+/** The featured rows. A missing id fails the build, or a renamed addon silently drops its block. */
 function chosen(catalog: readonly CatalogAddon[]): CatalogAddon[] {
   return FEATURED.map((id) => {
     const found = catalog.find((one) => one.id === id);

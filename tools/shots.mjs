@@ -1,31 +1,10 @@
-// `pnpm shots`: capture every addon's preview.png from its own stage scenario.
+// `pnpm shots`: capture every addon's preview.png from its own stage scenario. Run by hand; the
+// output is a committed artifact CI never regenerates.
 //
-// Run by hand, like `pnpm cues`, `pnpm icons`, `pnpm items` and `pnpm theme`. The
-// output is a committed artifact and CI never regenerates it, which is why this
-// drives a browser without apology: nothing about it has to work anywhere but on
-// the machine of somebody who is looking at the result.
-//
-// It retires the sentence in ADDON-ROADMAP.md saying a screenshot is added later,
-// by hand, from a real session, because the state worth photographing could not
-// be summoned on demand. On the stage it can: a scenario states the world and the
-// addon draws it.
-//
-// THREE THINGS IT REFUSES TO GUESS.
-//
-// WHICH SCENARIO. Exactly one per addon carries `preview: true`. None or two is
-// an error rather than a choice, because the alternative is position deciding,
-// and `idle` is first in more than one file.
-//
-// WHEN THE PANEL IS DONE. It waits for `data-stage="ready"` on the root element,
-// which the page writes once the scenario's own `run` has resolved. Scenarios
-// take genuinely different times (`combat-meter` waits out a real 500ms repaint
-// interval), and a sleep long enough for the slowest is still a guess whose
-// failure mode is a plausible photograph of a half-drawn panel.
-//
-// WHAT THE PICTURE SHOWS. `alt` comes off the scenario and is written into
-// `addon.json` verbatim. It is never generated: it is the sentence a screen
-// reader reads instead of the image, and inventing one is worse than having none,
-// which is why `pnpm validate` only checks a preview somebody declared.
+// It refuses to guess three things. WHICH scenario: the ones marked `preview: true`, never position.
+// WHEN the panel is done: `data-stage="ready"`, written once the scenario's `run` resolves, because
+// a sleep fails as a plausible photograph of a half-drawn panel. WHAT the picture shows: `alt` is
+// copied from the scenario verbatim and never generated.
 
 import { execFile as execFileCb } from 'node:child_process';
 import { existsSync } from 'node:fs';
@@ -34,7 +13,7 @@ import { join } from 'node:path';
 import process from 'node:process';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
-// biome-ignore lint/correctness/noUnresolvedImports: playwright re-exports chromium from playwright-core through an exports map Biome's resolver does not follow. The named import is what the package documents and what runs: `chromium.launch()` is verified working above.
+// biome-ignore lint/correctness/noUnresolvedImports: playwright re-exports chromium from playwright-core through an exports map Biome's resolver does not follow; the named import is what the package documents and what runs.
 import { chromium } from 'playwright';
 import sharp from 'sharp';
 import { buildStage } from '../loader/build-stage.mjs';
@@ -72,22 +51,15 @@ const STATUS_ID = 'stage-status';
 const SERVER_ERROR = 500;
 
 /**
- * The window every capture is taken in.
- *
- * Big enough that no addon's default frame is clamped to fit, since a clamped
- * frame is a picture of the viewport rather than of the addon. Nothing about
- * these numbers reaches the output: the crop is taken from the frame.
+ * The window every capture is taken in: big enough that no default frame is clamped to fit. The
+ * width is also a sheet's budget, and a pane past it is cropped at the right edge with no error.
  */
 const VIEWPORT = { width: 1440, height: 1000 };
 
 /**
- * Where the whole sheet landed, in CSS pixels.
- *
- * A string rather than a function, because it runs in the PAGE and this file is
- * a Node module: written as a function it would put `document` in a scope that
- * has no DOM, which reads as a mistake to everything that lints this tree. Each
- * PANE is cropped to its own frames inside the page, by `stage/src/sheet.ts`, so
- * by the time this reads it there is nothing left to trim.
+ * Where the whole sheet landed, in CSS pixels. A string because it runs in the PAGE, and as a
+ * function it would put `document` in a Node module's scope. Each pane is already cropped to its
+ * own frames by `stage/src/sheet.ts`.
  */
 const SHEET_RECT = `(() => {
   const el = document.getElementById('stage-sheet');
@@ -108,12 +80,8 @@ function reason(err) {
 }
 
 /**
- * The panels an addon is photographed as, left to right.
- *
- * One is the ordinary case. Several is an addon whose LAYOUT is a setting, where
- * a picture of one configuration is a picture of half the addon, and then every
- * panel needs a caption: a sheet of untitled panels does not say that they are
- * two configurations of one thing rather than two things.
+ * The panels an addon is photographed as, left to right. With several, every panel needs a caption
+ * to say they are configurations of one addon.
  */
 async function previewPanels(dir) {
   const module = await import(join(ADDONS_DIR, dir, SCENARIO_FILE));
@@ -143,13 +111,9 @@ function capturable(only) {
 }
 
 /**
- * Collect the requests that failed for a reason the GAME did not choose.
- *
- * A 404 is deliberately not one of them: the game genuinely ships no art for some
- * abilities, `kit/readout.ts` hides that slot on error, and a preview showing the
- * gap is telling the truth. A transport failure or a 5xx is the opposite, and it
- * produces a picture indistinguishable from the honest one, so it has to stop the
- * run rather than be photographed.
+ * Collect the requests that failed for a reason the GAME did not choose. A 404 is not one: the
+ * game ships no art for some abilities and the kit hides that slot honestly. A transport failure or
+ * a 5xx looks identical in the picture, so it stops the run.
  */
 function watchForBrokenRequests(page) {
   const broken = [];
@@ -165,11 +129,8 @@ function watchForBrokenRequests(page) {
 }
 
 /**
- * Load one addon's preview sheet and hand back where it landed, in CSS pixels.
- *
- * Always the sheet, even for a single panel, so there is one page to reason about
- * and one thing to crop to. A one-panel sheet is the panel plus the sheet's own
- * padding, which is what every preview looked like before sheets existed.
+ * Load one addon's preview sheet and hand back where it landed, in CSS pixels. Always the sheet,
+ * even for one panel, so there is one page and one crop.
  */
 async function openSheet(page, dir) {
   await page.goto(`${BASE}/?addon=${dir}&sheet=1&bare=1`, {
@@ -179,10 +140,8 @@ async function openSheet(page, dir) {
     timeout: READY_MS,
   });
   if ((await page.getAttribute('html', 'data-stage')) === 'failed') {
-    // Bounded, and defaulted. The page writes its own reason into the status line
-    // on either route, but a read that WAITED for it would turn a page that
-    // failed before writing one into a locator timeout, which is what this whole
-    // branch exists to avoid reporting.
+    // Bounded and defaulted: a page that failed before writing its reason would otherwise turn
+    // into a locator timeout.
     const said = await page
       .locator(`#${STATUS_ID}`)
       .textContent({ timeout: STATUS_MS })
@@ -192,23 +151,15 @@ async function openSheet(page, dir) {
   return await page.evaluate(SHEET_RECT);
 }
 
-/**
- * One page at one scale, cropped to the frames and compressed.
- *
- * `job` bundles what every step below needs unchanged (the browser, the addon and
- * its scenario), so the two recursive passes carry one parameter each rather than
- * threading three through calls that only forward them.
- */
+/** One page at one scale, cropped to the frames and compressed. */
 async function captureAt(job, scale) {
   const page = await job.browser.newPage({ viewport: VIEWPORT, deviceScaleFactor: scale });
   const broken = watchForBrokenRequests(page);
   try {
-    // No margin: every pane already carries its own, applied when the sheet
-    // cropped it to its frames.
+    // No margin: every pane already carries its own.
     const crop = cropAround(await openSheet(page, job.dir), 0);
-    // Checked after the page has settled and before anything is written. A failed
-    // icon leaves a COLLAPSED slot rather than a gap, so a preview missing three
-    // of its four icons does not read as broken, and it would be committed.
+    // A failed icon leaves a COLLAPSED slot rather than a gap, so a broken preview would not look
+    // broken; refuse before anything is written.
     if (broken.length > 0) {
       throw new Error(`could not load ${broken.join(', ')}`);
     }
@@ -221,13 +172,8 @@ async function captureAt(job, scale) {
 }
 
 /**
- * Step the scale UP until the shot fills the card slot it will be shown in.
- *
- * Measured from what came back rather than from the 1x probe, because a frame
- * sized by its own content lays out slightly differently at another scale factor
- * and the prediction can undershoot. Stops at the largest scale, which is the
- * honest end of the road: an addon whose panel is genuinely tiny cannot be made
- * to fill a 700px slot without inventing pixels.
+ * Step the scale UP until the shot fills the card slot, measured from what came back since a frame
+ * sized by its content lays out differently at another scale. Stops at the largest scale.
  */
 async function captureWide(job, scale) {
   const taken = await captureAt(job, scale);
@@ -241,15 +187,8 @@ async function captureWide(job, scale) {
 /**
  * Step the scale DOWN until the shot fits what the manager will load in game.
  *
- * After the width pass, never interleaved with it: growing for width and
- * shrinking for bytes pull opposite ways, and a single loop doing both can
- * oscillate. The byte cap is a hard limit and the slot width is a target, so this
- * one wins where they disagree.
- *
- * Recursive rather than a loop: it steps at most twice, and `noAwaitInLoops` is
- * right that a loop of awaits usually means serialized work that need not be.
- * Downscaling beats quantising, because a palette PNG bands the panel's own
- * gradient, which is the one part of the picture the loader did not draw.
+ * Runs after the width pass, never interleaved with it: the two pull opposite ways and one loop
+ * doing both can oscillate. The byte cap is hard and the slot width a target, so this one wins.
  */
 async function captureWithin(job, taken) {
   if (withinCap(taken.png.length)) {
@@ -266,15 +205,9 @@ async function captureWithin(job, taken) {
 }
 
 /**
- * Write the preview into the manifest, leaving every other key where it was.
- *
- * Validated first and then written from the RAW parsed text, never from what
- * validation returned: a schema applies defaults, so writing the validated object
- * back would add every optional field this manifest chose to leave out.
- *
- * The path is handed back so the caller can format it. `JSON.stringify` puts one
- * array element per line and Biome keeps a short array inline, so writing without
- * that pass turns a one-line alt-text change into a whole-file diff.
+ * Write the preview into the manifest from the RAW parsed text, since the validated object carries
+ * schema defaults. The path is handed back for Biome to format, or `JSON.stringify`'s one element
+ * per line turns a one-line change into a whole-file diff.
  */
 async function declarePreview(dir, alt) {
   const result = readAddon(dir);
@@ -287,12 +220,7 @@ async function declarePreview(dir, alt) {
   return path;
 }
 
-/**
- * Hand the manifests this run touched to Biome, which is the formatter of record.
- *
- * Once at the end rather than per addon: it is a process launch, and the shape of
- * the file does not depend on which order they were written in.
- */
+/** Hand the manifests this run touched to Biome, once at the end. */
 async function formatManifests(paths) {
   if (paths.length === 0) {
     return;
@@ -304,8 +232,7 @@ async function formatManifests(paths) {
 /** One addon, end to end. */
 async function capture(browser, dir) {
   const job = { browser, dir, panels: await previewPanels(dir) };
-  // A first pass at 1x only to measure: the scale a capture wants is chosen from
-  // the frame's CSS width, and the width is not knowable until it has been drawn.
+  // A first pass at 1x only to measure the frame's CSS width, which picks the scale.
   const measured = await captureAt(job, 1);
   const taken = await captureWithin(job, await captureWide(job, scaleFor(measured.crop.width)));
 
@@ -323,23 +250,16 @@ async function main() {
     throw new Error('no addon has a stage.ts to photograph');
   }
 
-  // Its own server rather than a second terminal. The whole run is one command
-  // somebody types a few times a year, and "start the stage first" is a step that
-  // fails as a connection refused three layers down inside Playwright.
-  //
-  // The bind comes FIRST and the bundle second, which is the whole of what makes
-  // two captures exclusive. `stage/stage.js` is one file every scenario shares,
-  // so a build ahead of the bind, which is where a `&&` in the script put it,
-  // rewrites the bundle under a run already serving it and only then discovers
-  // the port is taken. Nothing requests the bundle until a page opens below.
+  // Bind FIRST and bundle second: the bind is what makes two captures exclusive, and a build ahead
+  // of it would rewrite the shared `stage/stage.js` under a run already serving it.
   const server = await serveStage(hostFor(process.argv));
   await buildStage();
   const browser = await chromium.launch();
   const failures = [];
   const written = [];
   try {
-    // In series on purpose: every page reads one dev server over the working
-    // tree, and a failure that names the addon it happened on beats a heap.
+    // In series: every page reads one server over the working tree, and a failure should name
+    // its addon.
     await inSeries(dirs, async (dir) => {
       try {
         written.push(await capture(browser, dir));

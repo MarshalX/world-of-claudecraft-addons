@@ -13,12 +13,8 @@ const ZOD_IMPORT = /^zod$/;
 const HOST_MODULE = /(^|\/)loader\/src\/host\//;
 
 /**
- * Anything Node-only, by import specifier.
- *
- * `node:` covers the prefixed form and the bare list covers the legacy one.
- * @types/node is ambient project-wide because tools/*.ts needs it, which means
- * the compiler will happily accept `readFileSync` in a runtime module; this is
- * what stops it, the same way HOST_MODULE stops a GM reference.
+ * Anything Node-only, prefixed or bare. @types/node is ambient project-wide for tools/*.ts, so
+ * the compiler accepts `readFileSync` in a runtime module and only this check refuses it.
  */
 const NODE_IMPORT =
   /^(node:|(fs|path|url|crypto|http|https|os|child_process|worker_threads|process|util|stream|buffer|events|zlib|net|tls|dns|readline|assert|module|v8|vm|perf_hooks)$)/;
@@ -27,54 +23,27 @@ const COMMENT = /\/\*[\s\S]*?\*\//g;
 const WHITESPACE = /\s+/g;
 
 /**
- * A whole `@keyframes` block, removed before selectors are read out of a sheet.
- *
- * Its interior is `from`, `to` and percentages, which are positions on a timeline
- * rather than selectors: they match no element, so the scoping rule below has
- * nothing to say about them and reading them as selectors only produces a false
- * failure. The interior is exactly one level of nesting deep, which is what makes
- * this matchable without a parser.
+ * A whole `@keyframes` block, stripped before selectors are read: its `from`, `to` and
+ * percentages match no element and would fail the scoping check falsely. The interior is
+ * exactly one level deep, which is what makes it matchable without a parser.
  */
 const KEYFRAMES_BLOCK = /@keyframes[^{]*\{(?:[^{}]*\{[^{}]*\})*\s*\}/g;
 
-/**
- * The NAME of a keyframes rule, which does need checking.
- *
- * An animation name is global to the document rather than scoped to a subtree, so an
- * unprefixed one can shadow a game animation of the same name and the symptom is the
- * game's own element animating wrongly. That is the same class of bug the selector
- * rule prevents, reached by the one route a selector check cannot see.
- */
+/** The NAME of a keyframes rule, which is global to the document and so is checked instead. */
 const KEYFRAMES_NAME = /@keyframes\s+([^\s{]+)/g;
 
 /**
- * A selector the loader owns.
- *
- * Three shapes. Its root, and anything under it. The fixed ids it creates for the
- * overlay surfaces, which live under the root but are addressed by id alone because
- * each is one element for the whole loader rather than one per addon. And the id
- * namespace it uses inside the game's own DOM, which is where the rail buttons go.
- *
- * Adding an overlay surface means adding it here, and the failure if you forget is
- * the build refusing rather than a rule quietly restyling the game.
+ * A selector the loader owns: its root and anything under it, the fixed overlay ids (addressed
+ * by id alone), and the `woc-` id namespace it injects into the game's DOM. A new overlay
+ * surface must be added here or the build refuses its rules.
  */
 const LOADER_OWNED =
   /^(#woc-addons\b|#woc-tooltip\b|#woc-toasts\b|#woc-banner\b|#woc-addons-|\[id\^=["']woc-)/;
 
 /**
- * Source maps are opt-in, and inline when asked for.
- *
- * Inline is the only form that can work here: the host injects this bundle as
- * <script> textContent, so the script has no src and an external .map has no URL
- * to resolve against. That constraint is real, but it does not follow that the
- * map should always be there. It costs 8x the bundle (149 kB to 1.18 MB), and
- * that is not a download-once cost: the host re-injects the whole string on
- * every page load, so every player pays it on every visit to run a map nobody
- * reads. Pass --sourcemap when debugging the runtime.
- *
- * Read from argv rather than an env var on purpose. This script deliberately has
- * no process.env dependency (see AGENTS.md), and a flag is what a build script
- * takes anyway.
+ * Source maps are opt-in via --sourcemap, and inline because the bundle is injected as
+ * textContent with no URL for an external .map. Off by default: the map is 8x the bundle and
+ * the host re-injects the whole string on every page load. Read from argv, never process.env.
  */
 const sourcemap = argv.includes('--sourcemap') && 'inline';
 
@@ -86,19 +55,17 @@ const result = await build({
   format: 'iife',
   target: 'es2022',
   platform: 'browser',
-  // The manager UI is preact. Kept in step with the same pair of settings in
-  // tsconfig.json and vitest.config.ts.
+  // Must match the JSX settings in tsconfig.json and vitest.config.ts.
   jsx: 'automatic',
   jsxImportSource: 'preact',
-  // The loader stylesheet is bundled as text and injected as one <style>, rather
-  // than emitted as a CSS file the userscript would have no way to ship.
+  // Bundled as text and injected as one <style>: a userscript cannot ship a CSS file.
   loader: { '.css': 'text' },
   minify: true,
   sourcemap,
   legalComments: 'none',
   logLevel: 'info',
-  // A value import from shared/schema.ts would pull zod into the page realm.
-  // Fail the build rather than ship it.
+  // Bundle bans: zod (the runtime may import only types from shared/schema.ts) and every Node
+  // builtin. Host modules are checked on the module graph below.
   plugins: [
     {
       name: 'forbid-host-only-deps',
@@ -126,10 +93,8 @@ if (result.errors.length > 0) {
   throw new Error('runtime bundle failed');
 }
 
-// The GM_* globals are declared ambient project-wide so the host can reference
-// them, which removes the compiler's protection against the runtime doing the
-// same. Nothing under host/ may reach the page realm, so the module graph is
-// what enforces it.
+// The GM_* globals are ambient project-wide, so the compiler cannot stop the runtime reaching
+// host/; the module graph does.
 const hostModules = Object.keys(result.metafile.inputs).filter((input) => HOST_MODULE.test(input));
 if (hostModules.length > 0) {
   throw new Error(
@@ -139,29 +104,17 @@ if (hostModules.length > 0) {
 }
 
 /**
- * The stylesheet's three invariants, checked here because no test can reach it.
+ * The stylesheet's four invariants, checked here because Vitest reads every `.css` as `''`.
  *
- * The sheets are imported as TEXT, which Vite hands back processed rather than
- * raw, so a Vitest cannot read what actually ships. This script already fails
- * the build on what must not reach the bundle, and the same argument applies:
- *
- *  1. NO CASCADE LAYER. The sheet is injected unlayered so it outranks every
- *     game rule whatever the specificity. One `@layer` here and that rule loses
- *     to the game silently.
- *  2. EVERY RULE SCOPED to a loader-owned element. The flip side of being
- *     unlayered is that these rules also beat the game's, so an unscoped one
- *     restyles the game itself.
- *  3. NO SELECTOR IN TWO SHEETS UNDER THE SAME CONDITION. `styles/index.ts`
- *     concatenates them, so a selector defined twice at equal specificity makes
- *     the result depend on the join order, which is exactly the kind of coupling
- *     splitting the file was meant to avoid. The condition is part of the
- *     identity because touch.css exists: it overrides a selector that panes.css
- *     also declares, from inside `@media (pointer: coarse)`, and that is the
- *     cascade doing its job rather than two sheets disagreeing. Order still
- *     decides which wins, which is why that sheet is joined LAST and says so.
- *  4. EVERY KEYFRAMES NAME PREFIXED. An animation name is global to the document
- *     rather than scoped to a subtree, so this is what rule 2 means for a
- *     keyframes rule: its steps match nothing, and its name can collide.
+ *  1. NO CASCADE LAYER. The sheet is injected unlayered so it outranks every game rule; one
+ *     `@layer` and it silently loses to the game.
+ *  2. EVERY RULE SCOPED to a loader-owned element, since an unlayered rule also beats the
+ *     game's and an unscoped one restyles the game itself.
+ *  3. NO SELECTOR IN TWO SHEETS UNDER THE SAME CONDITION. `styles/index.ts` concatenates them,
+ *     so a duplicate makes the result depend on join order. The enclosing at-rules are part of
+ *     the identity, so touch.css may override panes.css from `@media (pointer: coarse)`; it is
+ *     joined LAST for that reason.
+ *  4. EVERY KEYFRAMES NAME PREFIXED `woc-`, since an animation name is global to the document.
  */
 const cssDir = `${root}src/runtime/ui/styles/`;
 const sheetNames = (await readdir(cssDir)).filter((name) => name.endsWith('.css'));
@@ -173,14 +126,8 @@ const sheets = await Promise.all(
 );
 
 /**
- * Every rule in a sheet, with the conditional at-rules it sits inside.
- *
- * A scan rather than a regex over rule heads, for two reasons the regex got wrong.
- * It anchored each head to the `}` or the start of file before it, so the FIRST
- * rule inside any `@media` was invisible: an unscoped one there would have passed
- * the scoping check silently. And it reported a selector's name alone, which
- * conflates a rule with the same selector under a different CONDITION, which is
- * not a duplicate at all but the cascade being used for what it is for.
+ * Every rule in a sheet, with the conditional at-rules it sits inside. A character scan, since
+ * a regex over rule heads misses the first rule inside an `@media` and loses its condition.
  */
 const rulesOf = ({ name, css }) => {
   const found = [];
@@ -189,8 +136,7 @@ const rulesOf = ({ name, css }) => {
   for (const char of css.replaceAll(KEYFRAMES_BLOCK, '')) {
     if (char === '{') {
       const head = prelude.trim().replaceAll(WHITESPACE, ' ');
-      // Pushed whether or not it is an at-rule, so the depth stays in step with the
-      // closing braces; only an at-rule contributes a condition.
+      // Pushed for every block so depth tracks the braces; only an at-rule adds a condition.
       if (head.startsWith('@')) {
         enclosing.push(head);
       } else {
@@ -227,10 +173,7 @@ const unscoped = rules
   .filter(({ selector }) => !selector.split(',').every((one) => LOADER_OWNED.test(one.trim())))
   .map(({ sheet, selector }) => `${sheet}: ${selector}`);
 
-// Keyed on the CONDITION as well as the selector, so `.woc-input` at the top level
-// and `.woc-input` inside `@media (pointer: coarse)` are two different rules rather
-// than a collision. Two sheets styling the same selector under the same condition
-// still fails, which is the accident this check is for.
+// Keyed on condition plus selector: the same selector under another `@media` is no collision.
 const definedIn = new Map();
 for (const { sheet, selector, when } of rules) {
   let key = selector;
@@ -256,7 +199,7 @@ if (unscoped.length > 0) {
 if (unprefixed.length > 0) {
   throw new Error(
     `every keyframes name must start with woc-:\n  ${unprefixed.join('\n  ')}\n` +
-      'An animation name is global to the document, so an unprefixed one can shadow the game"s own.',
+      "An animation name is global to the document, so an unprefixed one can shadow the game's own.",
   );
 }
 if (duplicated.length > 0) {

@@ -1,9 +1,5 @@
-// Which character per-character UI state is keyed on.
-//
-// The obvious candidate, the pid from the `hello` frame, is wrong: it is the
-// sim's entity id for one session and is reissued on the next, so a frame
-// position keyed on it would scatter across a new set of storage keys every
-// login and look to the player like nothing was ever saved.
+// Which character per-character UI state is keyed on. Never the `hello` pid, which is reissued
+// every session and would scatter saved state across new keys on each login.
 
 import { describe, expect, it } from 'vitest';
 import { characterId, OFFLINE_REALM } from '../loader/src/runtime/character.ts';
@@ -19,8 +15,7 @@ describe('characterId', () => {
     expect(characterId(null, 'Marshal')).toBe(`${OFFLINE_REALM}/Marshal`);
   });
 
-  // Null, never a placeholder. A placeholder would be one shared key that every
-  // character wrote its window layout into.
+  // A placeholder would be one shared key every character wrote into.
   it.each([
     ['no player yet', undefined],
     ['a nameless entity', ''],
@@ -30,8 +25,7 @@ describe('characterId', () => {
     expect(characterId('Claudemoon', name)).toBeNull();
   });
 
-  // Character ids are issued per deployment, so the same name on two channels is
-  // two different characters and must not share a saved layout.
+  // Character ids are issued per deployment, so one name on two channels is two characters.
   it('produces a scope that separates the same name across channels', () => {
     const id = characterId('Claudemoon', 'Marshal') as string;
 
@@ -39,10 +33,8 @@ describe('characterId', () => {
   });
 });
 
-// The read over the live world, as opposed to the string arithmetic above.
-//
-// The case that matters is a SPECTATE, because it is the one moment the game
-// hands over a player entity that is not the person at the keyboard.
+// The read over the live world. A spectate is the one time the player entity is not the person at
+// the keyboard.
 describe('readCharacterKey', () => {
   it('is the live player when nobody is being spectated', () => {
     expect(readCharacterKey('Claudemoon', { player: { name: 'Marshal' }, spectating: null })).toBe(
@@ -50,19 +42,15 @@ describe('readCharacterKey', () => {
     );
   });
 
-  // A moderator spectate repoints the client's own playerId at the WATCHED
-  // character (src/net/online.ts applySnapshot), so `world.player` stops being
-  // the session owner while it runs. Keyed off that name, this addon's storage,
-  // the loader's frame state and the `characterKey` watchers would all quietly
-  // move to somebody else's file, and move back when the spectate ended.
+  // A spectate repoints the client's playerId at the WATCHED character (src/net/online.ts
+  // applySnapshot), which would move every per-character store to somebody else's key.
   it('refuses to answer with the watched character while spectating', () => {
     expect(
       readCharacterKey('Claudemoon', { player: { name: 'Someone' }, spectating: 'Someone' }),
     ).toBeNull();
   });
 
-  // Offline carries the field as an explicit null, so a world that has it and a
-  // world too old to have it must read the same.
+  // Offline carries an explicit null, so a missing field must read the same.
   it('is unaffected by a world that carries no spectating field', () => {
     expect(readCharacterKey('Claudemoon', { player: { name: 'Marshal' } })).toBe(
       'Claudemoon/Marshal',

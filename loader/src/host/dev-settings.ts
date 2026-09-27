@@ -1,13 +1,7 @@
-// The two dev-mode switches, and reading them back safely.
+// The two dev-mode switches, persisted so they survive a reload.
 //
-// Persisted in the loader's own namespace, so they survive a page reload the way
-// every other setting does: hot reload that had to be turned on again after each
-// refresh would not be worth having.
-//
-// The read is defensive because this is a GM value a player can edit. Anything
-// that is not a boolean reads as OFF rather than as on, which is the direction
-// that cannot surprise: the switched-on state polls localhost on a timer and
-// puts an unreviewed source in the marketplace list.
+// Anything stored that is not a boolean reads as OFF: on means polling localhost and listing
+// an unreviewed source.
 
 import type { StorageApi } from '../shared/protocol.ts';
 

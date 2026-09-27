@@ -1,11 +1,5 @@
-// The one module in the site generator that touches the filesystem or the
-// network. Everything it calls is pure, which is what makes the rest testable.
-//
-// This is also the local build, and it is the REAL build: the same generator, the
-// same inputs, the same output tree, with no dev-only branch anywhere in it. The
-// site is not deployed until it is finished, so a generator that behaved
-// differently under `site:dev` would move the first honest render of a page to
-// the deploy, which is exactly what deferring the deploy is meant to prevent.
+// The one module in the site generator that touches the filesystem or the network; everything
+// it calls is pure. `site:dev` runs this same build, so never add a dev-only branch here.
 
 import { mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
@@ -38,21 +32,13 @@ const LANGS = ['javascript', 'typescript', 'json', 'css', 'html', 'yaml', 'bash'
 
 const LEADING_SLASH = /^\//;
 
-/** Quality settings, picked so a screenshot's text stays crisp rather than by size. */
+/** Picked so a screenshot's text stays crisp. */
 const AVIF_Q = 62;
 const WEBP_Q = 82;
 
-/**
- * The file a route is written to.
- *
- * Directory-style, so `/docs/patterns` resolves identically here, under
- * `site:dev`, and on Pages. A local pass that checked a different URL shape from
- * the one that ships would be the exact failure deferring the deploy is meant to
- * prevent.
- */
+/** The file a route is written to, directory-style so it resolves the same here and on Pages. */
 function outputPath(route: string): string {
-  // Pages looks for exactly this filename at the artifact root; a directory-style
-  // /404/index.html would never be served for a miss.
+  // Pages serves a miss from exactly this filename; /404/index.html would never be served.
   if (route === '/404') {
     return '404.html';
   }
@@ -72,7 +58,7 @@ function write(out: string, relative: string, body: string | Buffer): void {
   writeFileSync(target, body);
 }
 
-/** The six sheets, concatenated in the order tools/site/build.ts declares. */
+/** The stylesheets, concatenated in STYLE_ORDER. */
 function styles(): string {
   return STYLE_ORDER.map((name) => read('site', 'assets', 'styles', name)).join('\n');
 }
@@ -87,39 +73,20 @@ async function shots(out: string): Promise<Map<string, Measured>> {
 }
 
 /**
- * The card slot an addon preview is shown in, in device pixels.
+ * The catalog card slot an addon preview is shown in, in device pixels, one figure for the
+ * uniform grid.
  *
- * One figure for every addon rather than a tuned one each, because these sit in a
- * uniform card grid: the slot is the same for all of them, so a per-addon number
- * would be the same number written thirty times.
- *
- * Previews are deliberately left OUT of the undersize report, and this is the
- * carve-out `site/content/shots.json` already describes for a fixed-size HUD
- * panel. An addon's preview is nearly always a picture of its own panel, which
- * cannot be captured wider without zooming the whole game, so measuring it
- * against a column reports a shortfall its author cannot act on. Both shipped
- * previews are exactly that, and the alternative that was tried first is worse:
- * declaring each one's own width as its target, which the comment on `measure`
- * calls out as a number that can only ever agree with itself. The figure still
- * caps at natural size, so a small panel renders small and sharp either way, and
- * what is lost is a warning nobody could have used.
+ * Previews stay out of the undersize report: a preview pictures a fixed-size panel that cannot be
+ * captured wider without zooming the game, so a shortfall is not actionable.
  */
 const PREVIEW_MIN_WIDTH = 700;
 
 /**
- * The same preview on the addon's OWN page, in device pixels.
+ * The same preview on the addon's own page, in device pixels: the 1120px content column less its
+ * 24px gutters, times two.
  *
- * The content column at 1120px less its 24px gutters, times two. That page has
- * one addon on it and the picture is the point of it, so the figure runs the
- * width of the column rather than sitting in a card slot: a two-panel sheet like
- * Satchel or Ledgerline is 1900px of captured detail, and at the 350 CSS px a
- * catalog cell allows, none of it can be read.
- *
- * A second encode rather than one file for both, because the two slots differ by
- * a factor of three: serving the page's file to the catalog would triple what
- * that grid of thirteen pictures costs to load, and serving the catalog's file
- * to the page is the blur this number exists to prevent. Both variants share the
- * PNG of record, so the second width costs derivatives and nothing else.
+ * It is a second encode because the slots differ threefold: one file would either triple the
+ * catalog's load or blur the page.
  */
 const PREVIEW_PAGE_WIDTH = 2144;
 
@@ -164,11 +131,7 @@ function previewShot(dir: string, wide: boolean): { shot: Shot; source: Source }
 /**
  * The addon previews, encoded from each addon's own directory.
  *
- * They are NOT in `site/content/shots.json` and must not be: an addon's preview
- * is declared by its `addon.json`, beside the file, which is the same manifest
- * the loader validates and the manager reads. Listing them again here would be a
- * second place for the alt text to go stale, and the whole point of the catalog
- * page is that nothing about an addon is written twice.
+ * Never list them in `site/content/shots.json`: the preview is declared once, in `addon.json`.
  */
 async function previews(out: string, wide: boolean): Promise<Map<string, Measured>> {
   const declared = addonDirs()
@@ -191,14 +154,9 @@ async function encode(out: string, shot: Shot, source: Source): Promise<[string,
   const sized = measure(shot, { width, height });
   // The PNG is copied through as the last fallback and as what the README links.
   write(out, `shots/${shot.file}`, readFileSync(path));
-  // One derivative each, at the SERVED width rather than the file's: a shot is
-  // never sent wider than its slot needs. The figure caps at half of that, so what
-  // arrives is exactly the 2x asset and a second density would be a third copy of
-  // a file nothing asks for.
-  // `measure` resolved which stem this variant writes under, so the two widths of
-  // one preview cannot land on the same file: deriving it from the PNG here again
-  // is exactly that bug, and it is silent, since the second encode simply
-  // overwrites the first and every page then loads whichever ran last.
+  // One derivative each at the SERVED width, which is exactly the 2x asset. Take the stem from
+  // `measure`: deriving it from the PNG would let the two preview widths silently overwrite
+  // each other.
   const { stem } = sized;
   const fit = image.resize({ width: sized.served, withoutEnlargement: true });
   write(out, `shots/${stem}.avif`, await fit.clone().avif({ quality: AVIF_Q }).toBuffer());
@@ -271,21 +229,13 @@ export interface Build {
   readonly styles: string;
   readonly shots: ReadonlyMap<string, Measured>;
   /**
-   * One addon's preview, by addon id.
-   *
-   * Separate from `shots` rather than merged into it, because the two have
-   * different owners: a shot is declared in `site/content/shots.json` and is the
-   * site's own, while a preview is declared in an `addon.json` and belongs to the
-   * addon. Merging them would let a prose page reference a preview by id and so
-   * make an addon's screenshot load-bearing for a docs page.
+   * One addon's preview, by addon id. Kept apart from `shots` so a docs page cannot reference an
+   * addon's screenshot by id.
    */
   readonly previews: ReadonlyMap<string, Measured>;
   /**
-   * The same previews, encoded for a slot three times as wide.
-   *
-   * The catalog grid reads `previews`; an addon's own page and the landing
-   * page's feature rows read this one, because both show ONE addon at a time
-   * with room to show it properly. See PREVIEW_PAGE_WIDTH.
+   * The same previews at PREVIEW_PAGE_WIDTH, for an addon's own page and the landing page's
+   * feature rows.
    */
   readonly previewsWide: ReadonlyMap<string, Measured>;
   readonly markdown: Renderer;
@@ -298,10 +248,8 @@ export interface Build {
 /**
  * Prepare a build: clear the output, process images, load the highlighter.
  *
- * Returns the handle every page builder writes through, plus the warnings
- * collected on the way. Undersized screenshots are REPORTED, never fatal: a hard
- * failure on a small shot fires during ordinary work and gets switched off, while
- * a list printed at the end of a build is a signal that survives.
+ * Undersized screenshots are reported, never fatal: a hard failure fires during ordinary work
+ * and gets switched off.
  */
 export async function prepare(outDir: string): Promise<Build> {
   const out = join(ROOT, outDir);
@@ -328,16 +276,11 @@ export async function prepare(outDir: string): Promise<Build> {
 }
 
 /**
- * Copy the two asset trees.
+ * Copy the two asset trees: `site/assets` under /assets, `site/static` at the root, where a
+ * favicon, robots.txt and CNAME have to be.
  *
- * `site/assets` lands under /assets. `site/static` lands at the ROOT, because
- * some files only work there: a favicon by convention, robots.txt and CNAME by
- * requirement, and 404.html because that is where Pages looks for it.
- *
- * CNAME is emitted into the ARTIFACT rather than kept only at the repository
- * root, because the artifact is what Pages serves. A CNAME that exists in the
- * tree but not in the upload is a custom domain that silently stops resolving on
- * the next deploy.
+ * CNAME must be in the uploaded artifact; without it the custom domain stops resolving on the next
+ * deploy.
  */
 export function copyAssets(outDir: string): void {
   const out = join(ROOT, outDir);

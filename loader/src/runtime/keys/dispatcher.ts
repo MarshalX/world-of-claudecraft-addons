@@ -1,16 +1,8 @@
-// The loader's one keydown listener, and what it dispatches to.
+// The loader's one keydown listener, capture phase on window so it runs before the game's handler.
+// It calls `stopImmediatePropagation` ONLY when a bind matched; an unclaimed key reaches the game.
 //
-// Capture phase on window, so the loader sees a key before the game's own
-// bubble-phase handler. That ordering is the whole mechanism, and it comes with
-// the obligation attached to it: `stopImmediatePropagation` is called ONLY when
-// a bind actually matched. An unclaimed key has to reach the game untouched, or
-// installing an addon would degrade the controls of a game the player is still
-// playing.
-//
-// The editable-element guard is deliberately WIDER than the game's own, which
-// checks only input and textarea. Declining where the game would act costs the
-// addon one keystroke; acting where the game declines eats a character out of
-// something the player is typing. Only one of those is recoverable.
+// The editable guard is deliberately WIDER than the game's (input and textarea): declining costs
+// one keystroke, acting eats a character the player is typing.
 
 import { isBindable, isModifierCode, makeCombo, normalizeCombo } from '../../shared/combo.ts';
 import { diagError } from '../../shared/diag.ts';
@@ -18,23 +10,14 @@ import type { Teardown } from '../disposal.ts';
 
 const EDITABLE_TAGS = new Set(['input', 'textarea', 'select']);
 
-/** The two attribute values that actually make a region editable. */
 const CONTENTEDITABLE_VALUES = ['', 'true'];
 
-/** Derived from the tag set rather than written out, so the two cannot drift. */
 const EDITABLE_SELECTOR = [
   ...EDITABLE_TAGS,
   ...CONTENTEDITABLE_VALUES.map((value) => `[contenteditable="${value}"]`),
 ].join(', ');
 
-/**
- * The capture flag, in its OBJECT form rather than the boolean shorthand.
- *
- * Node's EventTarget accepts a boolean on addEventListener and then ignores it
- * on removeEventListener, so the shorthand leaves the listener attached and
- * dispose() silently does nothing. Browsers honour both, which is exactly what
- * makes the shorthand the version that looks fine until it is not.
- */
+/** The object form: Node's EventTarget ignores a boolean on remove, so dispose would do nothing. */
 const CAPTURE = { capture: true } as const;
 
 interface Registration {
@@ -43,23 +26,13 @@ interface Registration {
 }
 
 interface KeyCapture {
-  /**
-   * The canonical combo of the next non-modifier key press, or null if the
-   * capture was cancelled or superseded.
-   *
-   * Null rather than a rejection or a never-settling promise: the caller is a
-   * "press a key" prompt that the player can close, and both of those leave its
-   * await hanging in the one case it most needs to clean up after itself.
-   */
+  /** The next non-modifier combo, or null when cancelled or superseded, so a prompt can close. */
   done: Promise<string | null>;
   cancel: () => void;
 }
 
 interface KeyDispatcher {
-  /**
-   * Bind a handler. `key` is '<fqid>:<bindId>' and identifies the registration
-   * for rebinding and unbinding. Rejects a combo the loader will not take.
-   */
+  /** `key` is '<fqid>:<bindId>'. Throws on a combo the loader will not take. */
   register: (key: string, combo: string, handler: () => void) => Teardown;
   /** Move an existing registration to another combo. */
   rebind: (key: string, combo: string) => void;
@@ -100,9 +73,7 @@ function isEditing(doc: Pick<Document, 'activeElement'>): boolean {
   if ((el as Partial<HTMLElement>).isContentEditable === true) {
     return true;
   }
-  // A field inside a custom element or a wrapper still has focus on itself, but
-  // a contenteditable region focuses its container, so the ancestor walk is what
-  // covers a caret sitting in a nested node.
+  // A contenteditable region focuses its container, so walk up for a caret in a nested node.
   return el.closest?.(EDITABLE_SELECTOR) !== null;
 }
 
@@ -116,7 +87,6 @@ interface CaptureSlot {
 }
 
 function createCaptureSlot(): CaptureSlot {
-  /** Non-null while the "press a key" UI is waiting. It claims every press. */
   let pending: ((combo: string | null) => void) | null = null;
 
   return {
@@ -131,9 +101,7 @@ function createCaptureSlot(): CaptureSlot {
     },
 
     begin: () => {
-      // A capture already waiting is superseded rather than queued: two "press a
-      // key" prompts cannot both be on screen, so a second one means the first
-      // was abandoned and its awaiter needs releasing.
+      // Superseded, not queued: a second prompt means the first was abandoned.
       pending?.(null);
 
       let resolve: (combo: string | null) => void = () => undefined;
@@ -145,8 +113,7 @@ function createCaptureSlot(): CaptureSlot {
       return {
         done,
         cancel: () => {
-          // Guarded, so cancelling an already-superseded capture does not
-          // cancel the one that replaced it.
+          // Guarded, so cancelling a superseded capture spares its replacement.
           if (pending === resolve) {
             pending = null;
             resolve(null);
@@ -190,9 +157,7 @@ function handleKeyDown(deps: KeyDownDeps, event: KeyboardEvent): void {
     return;
   }
 
-  // Capture claims the press before every other rule, including the editable
-  // guard: the manager's own combo field is focused while it waits, so
-  // declining there would make the feature unable to read anything.
+  // Before the editable guard: the manager's combo field is focused while it waits.
   if (deps.capture.claim(combo)) {
     event.preventDefault();
     event.stopImmediatePropagation();
@@ -202,8 +167,7 @@ function handleKeyDown(deps: KeyDownDeps, event: KeyboardEvent): void {
   if (isEditing(deps.doc)) {
     return;
   }
-  // Auto-repeat would fire a command once per repeat interval while the key is
-  // simply held down. Addon binds are all edge actions.
+  // Addon binds are edge actions, so auto-repeat is ignored.
   if (event.repeat) {
     return;
   }
@@ -213,8 +177,7 @@ function handleKeyDown(deps: KeyDownDeps, event: KeyboardEvent): void {
     return;
   }
 
-  // Claimed, so the game does not also act on it, and the browser does not
-  // either: a player who bound Ctrl+KeyS meant the addon, not a page save.
+  // Neither the game nor the browser acts: Ctrl+KeyS bound here means the addon, not a save.
   event.preventDefault();
   event.stopImmediatePropagation();
   for (const registration of matched) {

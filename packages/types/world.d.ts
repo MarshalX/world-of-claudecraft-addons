@@ -1,8 +1,4 @@
-// The world around the entity: the group, the bags, the quest log, the ground,
-// and every read `woc.world` answers.
-//
-// The entity and its parts live in `entity.d.ts` and are re-exported through
-// `index.d.ts` alongside these, so an addon author sees one surface either way.
+// Every read `woc.world` answers. The entity and its parts are in `entity.d.ts`.
 
 import type { AbilityIndex } from './abilities.js';
 import type { Unsubscribe } from './addon.js';
@@ -40,25 +36,14 @@ export interface WorldQuests {
 /**
  * What a cast bar says, on any entity rather than only on you.
  *
- * Read this rather than listening for a cast event. `net.onEvent('castStart')`
- * fires for a PLAYER cast, a pet's cast, and the timed ACTIVITIES the game runs
- * through the same machinery, and never for a mob: a mob's mechanic sets its cast
- * state directly, so a boss mod built on the event receives silence and has no way
- * to tell that from a boss that never casts. `world.casts` and
- * `world.on('casts', ...)` are the surface that closes that gap.
+ * Read this rather than `net.onEvent('castStart')`, which never fires for a mob.
  */
 export interface EntityCast {
   /**
    * An ability ID, or an ACTIVITY SENTINEL.
    *
-   * The sentinel is a fixed marker naming a timed activity rather than any
-   * ability, and the set grows with the game, so match the ones you care about
-   * by name and let anything else fall through as an ability id.
-   * `CastStartEvent.ability` carries the full note and the current members.
-   *
-   * Neither resolves in `world.abilities` here, and for two different reasons: a
-   * sentinel is not an ability at all, and the casts worth watching on this
-   * surface are mobs', whose abilities are never in your spellbook.
+   * `CastStartEvent.ability` lists the sentinels. A mob's ability is never in
+   * `world.abilities`.
    */
   ability: string;
   /** Seconds left, against `total`. */
@@ -71,29 +56,22 @@ export interface EntityCast {
 /**
  * Which signal answered a combat reading.
  *
- * It travels with the answer because the branches are not equally trustworthy.
- * `self` is the sim's own flag for you, `party` and `threat` are the server's
- * opinion about the fight, `pvp` is a field the server fills, and `recent` is a
- * five second timer over damage that involved you. An addon that only acts on a
- * certain reading can check; one that does not care can ignore this entirely.
+ * `self` is the server's own flag for you, `party` and `threat` are the server's
+ * view of the fight, `pvp` is a server-filled attacker, and `recent` is a five
+ * second timer over damage involving you. Ignore it unless you only act on
+ * certain readings.
  *
- * `self` was added in API minor 11, for game 0.42.0. A loader talking to an older
- * server never reports it and answers exactly as before, so a `switch` written
- * without it still runs; it is a new member on a union you only ever READ.
+ * `self` was added in API minor 11; an older server never reports it.
  */
 export type CombatSource = 'self' | 'party' | 'threat' | 'pvp' | 'recent' | 'none';
 
 /**
  * Whether you are fighting.
  *
- * Since game 0.42.0 the server sends its own combat flag for you, and `source`
- * is `'self'` when that is what answered. It is still derived, because that bit
- * is read positive-only: it lives on a field the client defaults to false, so a
- * false cannot be told from a server that never sent one, and the older ladder
- * (your party row, a mob's hate table, a PvP attacker, then recent damage) is
- * what answers underneath. Reading the raw `inCombat` yourself is the trap that
- * once had a shipped meter conclude every fight had ended on every hit: on every
- * unit but you it is still permanently false.
+ * The server's own flag for you answers first (`source: 'self'`), but only a
+ * true can be trusted, so a ladder answers underneath: your party row, a mob's
+ * hate table, a PvP attacker, then recent damage. Never read a raw `inCombat`
+ * off an entity: on every unit but you it is permanently false.
  */
 export interface CombatState {
   active: boolean;
@@ -103,23 +81,19 @@ export interface CombatState {
 /**
  * How a unit stands toward you, from `world.reaction`.
  *
- * `neutral` is a real answer rather than a way of saying the question could not
- * be answered: a wild boar is neither on your side nor fighting you until
- * somebody makes it. A unit nothing in scope holds is null instead.
+ * `neutral` is a real answer (a wild boar nobody has pulled). An id nothing in
+ * scope holds gives null.
  */
 export type Reaction = 'hostile' | 'friendly' | 'neutral';
 
 /**
  * A unit you can name.
  *
- * `partyN` counts the OTHER members, 1-based, so `party1` is the first person
- * who is not you and the tokens line up with how a party display is laid out.
- * `raidN` counts every member including you, in the roster's own order.
+ * `partyN` counts the OTHER members, 1-based. `raidN` counts every member
+ * including you, in roster order.
  *
- * Both resolve to an ENTITY, so both answer null for someone too far away to
- * have one, even while `world.party` still lists them. For a raid display read
- * the party rows, which are complete, and reach for an entity only when you need
- * something a row does not carry.
+ * Both resolve to an ENTITY, so both are null for someone too far away, even
+ * while `world.party` lists them. A raid display reads the party rows.
  */
 export type UnitToken =
   | 'player'
@@ -138,9 +112,8 @@ export interface AuraQuery {
   /**
    * Only effects YOU applied.
    *
-   * The filter a dot tracker needs and the one most likely to be forgotten: two
-   * players can carry the same debuff on one target, and without this a display
-   * shows a full timer while your own dot quietly expires.
+   * Two players can put the same debuff on one target, so a dot tracker needs
+   * this.
    */
   mine?: boolean;
 }
@@ -149,9 +122,7 @@ export interface WorldApi {
   /**
    * Resolves once the game is readable.
    *
-   * Every read below answers null until then, so an addon can hold `woc.world`
-   * from its first line and await this separately. It never times out: a player
-   * may sit on the login screen for as long as they like.
+   * Every read below answers null until then. It never times out.
    */
   readonly ready: Promise<void>;
 
@@ -161,9 +132,8 @@ export interface WorldApi {
   /**
    * Everything in interest scope.
    *
-   * A read-only view of the game's live roster: reads pass through, and set,
-   * delete, and clear throw. The entities themselves are the game's own live
-   * objects, so this stops a slip rather than being a boundary.
+   * A read-only view of the game's live roster: set, delete and clear throw. The
+   * entities are the game's own live objects, so do not mutate them.
    */
   readonly entities: ReadonlyMap<number, Entity>;
 
@@ -173,23 +143,18 @@ export interface WorldApi {
   /**
    * Worn gear by slot, item ids only. A slot with nothing in it is absent.
    *
-   * An item id does not resolve to a NAME, a quality or any stats: that content
-   * ships inside the client bundle and is reachable from nothing the loader can
-   * see. What you can do with an id is show its icon, through `ui.icon.item`,
-   * and tell one from another.
+   * An item id does not resolve to a name, a quality or stats; only to an icon,
+   * through `ui.icon.item`.
    */
   readonly equipment: Partial<Record<EquipSlot, string>> | null;
 
   /**
    * What is ON your worn gear: enchants, masterwork and rift rolls, signers.
    *
-   * Keyed like `equipment` and sparse: a plain piece has no key, so an absent
-   * slot means nothing is on it rather than nothing is worn. This is the
-   * untrimmed payload, unlike `world.player.equippedInstances`, which is the
-   * public projection the server sends about you to everybody else.
+   * Sparse: an absent slot means nothing is on it, not that nothing is worn. The
+   * untrimmed payload, unlike `world.player.equippedInstances`.
    *
-   * It rides the heavy half of your own payload, so a change lands within a
-   * couple of seconds rather than on the next tick. Added in API minor 2.
+   * A change can take a couple of seconds to land. Added in API minor 2.
    */
   readonly equipmentInstances: Partial<Record<EquipSlot, ItemInstance>> | null;
 
@@ -199,8 +164,8 @@ export interface WorldApi {
   /**
    * Total slots across the backpack and every equipped bag.
    *
-   * Derived from `bags`, so watch `bags` rather than this: there is no separate
-   * key for it. Used slots is `inventory.length`.
+   * Derived from `bags`, which is the key to watch. Used slots is
+   * `inventory.length`.
    */
   readonly bagCapacity: number | null;
 
@@ -210,58 +175,32 @@ export interface WorldApi {
   /**
    * The zone name the game is displaying, or null before the HUD exists.
    *
-   * Localized DISPLAY TEXT, never an id, and that limit is not an oversight: the
-   * zone table is content inside the client bundle behind a pure function of
-   * your position, and nothing the loader can reach exposes either the table or
-   * the id. This is read off the game's own minimap label, so it is what the game
-   * says you are looking at, which underground is the delve rather than a zone.
-   *
-   * Show it, or watch it change. Comparing it against a hardcoded string works
-   * only for players running your language.
-   *
-   * There is no subzone here. The game announces a landmark once as a banner
-   * when you walk into one and never clears it when you leave, so a reading
-   * taken from it would name somewhere you left an hour ago.
+   * Localized DISPLAY TEXT from the minimap label, never an id (underground, the
+   * delve name). Show it or watch it change; comparing it against a hardcoded
+   * string works only in your language. There is no subzone.
    */
   readonly zone: string | null;
 
   /**
    * Who is playing, as the key per-character state is filed under.
    *
-   * The value `woc.storage.character` derives its keys from, published so two
-   * addons keeping their own per-character records cannot disagree about whose
-   * they are. OPAQUE: do not parse it. Null before world entry.
+   * The identity `woc.storage.character` files under. OPAQUE: do not parse it.
+   * Null before world entry and WHILE SPECTATING.
    *
-   * Watchable, because a character SWITCH inside one page load is real: the game
-   * clones and removes its HUD rather than reloading, so an addon holding a
-   * per-character view has to be told when it is looking at somebody else. Added
-   * in API minor 2.
-   *
-   * ALSO NULL WHILE SPECTATING, for the reason `spectating` gives. There is no
-   * key for a moderator watching somebody else, because the only name in reach
-   * is the watched character's.
+   * Watch it: a character switch happens without a page reload. Added in API
+   * minor 2.
    */
   readonly characterKey: string | null;
 
   /**
    * The character this session is watching, or null when it is watching itself.
    *
-   * Read this before you trust `world.player` to describe the person at the
-   * keyboard. A moderator spectate repoints the client's own player at the
-   * watched character, so for as long as it runs `player`, the class on it and
-   * everything derived from either answer for somebody else. The game carries
-   * the same field for the same reason.
+   * While a moderator spectates, `world.player` and everything derived from it
+   * describe the watched character. Most addons can ignore that; one filing
+   * anything under an identity must not, and `woc.storage.character` already
+   * refuses writes while this is non-null.
    *
-   * Almost every addon can ignore it, because almost every addon shows what is
-   * in front of the player and that IS the watched character. The ones that
-   * cannot are the ones filing something under an identity: a per-character
-   * record, a session total, anything a player would be upset to find under the
-   * wrong name. `woc.storage.character` already refuses to write while this is
-   * non-null, so an addon using it inherits the rule rather than implementing
-   * it.
-   *
-   * Null on offline play, where there is nobody else to watch. Added in game
-   * 0.41.0 and in API minor 10.
+   * Null in offline play. Added in API minor 10.
    */
   readonly spectating: string | null;
 
@@ -275,17 +214,14 @@ export interface WorldApi {
    * that negotiated the older movement wire. Guard with `mult === null`, never a
    * falsy test, and never substitute 1 for an unknown.
    *
-   * Self only: the field rides the self wire alone, and `Entity.moveSpeed` is not
-   * published because the server never sends it. Added in game 0.41.0 and in API
-   * minor 10.
+   * Yours only; no entity carries a move speed. Added in API minor 10.
    */
   readonly moveSpeedMult: number | null;
 
   /**
    * Your progression, deeds and title. Null before world entry.
    *
-   * All of it rides your own self payload, so there is no equivalent for another
-   * player: nothing here can be read about anyone else.
+   * Yours only: nothing here can be read about another player.
    */
   readonly character: CharacterInfo | null;
 
@@ -304,16 +240,11 @@ export interface WorldApi {
   /**
    * The competitive bout you are in, or null.
    *
-   * One union over all seven formats, discriminated on `format`, so a display
-   * asks what kind of bout this is rather than reading three unrelated members.
-   * A duel is a member of it, and so is a battleground.
+   * One union over all seven formats, discriminated on `format`.
    *
-   * THE CADENCE IS PER FORMAT. A duel rides every tick. A battleground rides at
-   * 1 Hz and is forced fresh on every transition worth acting on. The four arena
-   * formats are UP TO TEN SECONDS OLD, because that key is gated to 0.1 Hz on
-   * the server. That is the game's own cadence, so a Fiesta ring drawn from this
-   * agrees with the ring the game draws; a Yumi health bar does not, and the
-   * type says which events carry the live figures. Added in API minor 2, and the
+   * THE CADENCE IS PER FORMAT: a duel every tick, a battleground at 1 Hz and on
+   * every transition, and the four arena formats UP TO TEN SECONDS OLD. The Yumi
+   * type names the events carrying live figures. Added in API minor 2, the
    * battleground member in 6.
    */
   readonly match: MatchInfo | null;
@@ -321,9 +252,7 @@ export interface WorldApi {
   /**
    * Your competitive standings, your queue and the live ladders.
    *
-   * Present for every character, so this being non-null says nothing about
-   * whether you have ever played. Only the two ranked brackets mean anything:
-   * the unranked three carry a copy of the 2v2 record and an empty ladder. Added
+   * Present for every character. Only the two ranked brackets mean anything. Added
    * in API minor 2.
    */
   readonly arena: ArenaStandings | null;
@@ -331,13 +260,8 @@ export interface WorldApi {
   /**
    * Your battleground record, your queue and the live ladder.
    *
-   * Present for every character, so a non-null reading says nothing about
-   * whether you have ever fought one. Only `world.match` says a match is on.
-   *
-   * The match itself is NOT here: it is the `format: 'battleground'` member of
-   * `world.match`, because you ask what bout you are in before you ask what
-   * mode it is. This member is the standing that outlives it. Added in API
-   * minor 6.
+   * Present for every character. The match itself is the `format: 'battleground'`
+   * member of `world.match`. Added in API minor 6.
    */
   readonly battleground: BattlegroundStandings | null;
 
@@ -347,24 +271,20 @@ export interface WorldApi {
   /**
    * The realm's open premade listings, or null before the first sync.
    *
-   * Realm-shared and capped by the server, so it is what is offered rather than
-   * everything that exists. Added in API minor 2.
+   * Realm-shared and capped by the server, so not necessarily every listing.
+   * Added in API minor 2.
    */
   readonly finderBoard: readonly FinderListingRow[] | null;
 
   /**
    * One mob's hate table, sorted and measured against you.
    *
-   * The server's own threat model, so a pull warning built on it agrees with the
-   * decision the mob is about to make. Empty for anything that is not a mob in
+   * The server's own threat numbers. Empty for anything that is not a mob in
    * combat.
    *
-   * A row can vanish without anyone having lost threat. Since game 0.41.4 the
-   * server drops an attacker off the table when they leave the fight: past 100
-   * yards from an open-world mob, or on leaving the dungeon or raid room an
-   * instance mob fights in, where distance never drops anyone however far the
-   * pull is kited. Nothing distinguishes that from a threat wipe here, so read a
-   * disappearance as "no longer in this fight" rather than as a drop.
+   * A row vanishes when its attacker leaves the fight: past 100 yards from an
+   * open-world mob, or on leaving an instance mob's room (distance never counts
+   * inside one). Read a disappearance as "no longer in this fight", not a wipe.
    *
    * ```js
    * const table = woc.world.threat(woc.world.target.id);
@@ -376,20 +296,11 @@ export interface WorldApi {
   /**
    * Which side one unit is on, or null for an id nothing in scope holds.
    *
-   * READ THIS RATHER THAN `entity.hostile`. That flag is written where the game
-   * builds a MOB and nowhere else, so it is false on every player in the world
-   * for the whole of every session, including the five trying to kill you in a
-   * battleground. It is sent, it is correctly typed, and it is never true for
-   * the kind you are asking about, so a display built on it paints every duel,
-   * arena and battleground opponent friendly and nothing anywhere complains.
+   * READ THIS RATHER THAN `entity.hostile`, which is set only on mobs and is
+   * false on every player, enemies in a duel, arena or battleground included.
    *
-   * The answer comes from the bout instead, the same three sources the game's
-   * own nameplates use: the duel's other player, the arena's enemy list, and a
-   * battleground fighter whose team is not yours. Outside a bout every player
-   * reads friendly, which is what the game draws.
-   *
-   * A PET is asked about its OWNER, one level deep, so an enemy player's pet
-   * reads hostile and your own never reads as a wild mob.
+   * For a player the answer comes from the bout, as the game's nameplates do;
+   * outside a bout every player reads friendly. A PET answers as its OWNER.
    *
    * ```js
    * if (woc.world.reaction(entity.id) === 'hostile') paintRed(entity);
@@ -408,51 +319,37 @@ export interface WorldApi {
   /**
    * Entity id to what it is casting, for everything near you.
    *
-   * Built on each read from live entity state, so it is never stale and there is
-   * nothing to hold on to: read it again rather than keeping the map.
+   * Built fresh on each read: read it again rather than keeping the map.
    */
   readonly casts: ReadonlyMap<number, EntityCast>;
 
   /**
    * The effects on your current target, or null when nothing is targeted.
    *
-   * `world.on('target', ...)` reports which entity is selected and nothing else,
-   * so watching a debuff you applied to a boss means watching this key.
+   * Watch this key, not `target`, for the debuffs on a boss.
    */
   readonly targetAuras: readonly Aura[] | null;
 
   /**
    * Ground effects near you, or null on a game carrying none of the lists.
    *
-   * Null and empty are different answers and both matter: null is a game whose
-   * world object has not one of these families on it, and an empty list is clean
-   * ground. The families are not delta-gated, so a list that stops carrying an
-   * entry means that entry is gone rather than unmentioned.
-   *
-   * Read `HazardKind` before building on this. It is CLOSED, it grew to eight at
-   * API minor 12, and three ground effects the game draws are refused outright
-   * for reasons the union documents one by one.
+   * Empty is clean ground. An entry missing from a later reading is gone. Read
+   * `Hazard` for the ground effects this does not cover.
    */
   readonly hazards: readonly Hazard[] | null;
 
   /**
    * Lethal rings on a rift boss floor, or null outside one.
    *
-   * NOT `hazards`, and the difference is worth knowing before you draw either. A
-   * hazard's geometry rides the snapshot and is complete for everything near
-   * you. A death zone is mirrored from a spawn event and counted down on your
-   * own client, so a zone placed before you came into range is missing and stays
-   * missing. The game's own rings have the same hole. Added in API minor 2.
+   * Not complete like `hazards`: see `DeathZone`. Added in API minor 2.
    */
   readonly deathZones: readonly DeathZone[] | null;
 
   /**
    * Every lootable corpse in scope, with what you could take off each.
    *
-   * Never null, like `casts`: it is a reading the loader assembles rather than a
-   * value the game hands over. Watch this rather than `entities` for a corpse
-   * becoming lootable, which is a field change on an entity that already existed
-   * and so is invisible to the entity set. Added in API minor 2.
+   * Never null. Watch this, not `entities`, for a corpse becoming lootable. Added
+   * in API minor 2.
    */
   readonly corpses: ReadonlyMap<number, CorpseView>;
 
@@ -467,38 +364,31 @@ export interface WorldApi {
   /**
    * Where your own body lies while your spirit is a ghost, or null.
    *
-   * Yours alone: the server sends it to you and to nobody else, so there is no
-   * way to ask where another player's corpse is. Added in API minor 2.
+   * Yours only. Added in API minor 2.
    */
   readonly corpse: Vec3 | null;
 
   /**
    * One corpse's contents, filtered to what YOU could take.
    *
-   * The wire carries a corpse's whole contents to every player in range,
-   * personal slots included, and the game's own loot window filters on read.
-   * This applies the same filter, so it is what a loot display should use;
-   * `Entity.loot` is the unfiltered list and shows people things they cannot
-   * have. Added in API minor 2.
+   * Applies the game's own loot filter; `Entity.loot` is unfiltered. Added in API
+   * minor 2.
    */
   corpseLoot: (entityId: number) => CorpseView | null;
 
   /**
    * The Merchant's book, one browsed page at a time, or why there is not one.
    *
-   * Never null: read `status` first. `'near'` carries `info`; `'away'` and
-   * `'unknown'` carry null and no page to reach for. The distinction is the
-   * point of the shape, because "the filter matched nothing" and "you are not at
-   * the Merchant" are opposite facts that a nullable value collapses into one.
-   * Added in API minor 2.
+   * Never null: read `status` first. Only `'near'` carries `info`. Added in API
+   * minor 2.
    */
   readonly market: MarketState;
 
   /**
    * Whether gold or goods wait at the Merchant.
    *
-   * Ungated, so it is readable anywhere in the world. This is the badge; the
-   * page above is the pane. Added in API minor 2.
+   * Readable anywhere: the badge, where `market` is the pane. Added in API minor
+   * 2.
    */
   readonly marketCollectPending: boolean | null;
 
@@ -508,10 +398,8 @@ export interface WorldApi {
   /**
    * Delivered letters you have not read.
    *
-   * Ungated, so it is readable anywhere in the world. `world.mail` carries its
-   * own `unread` over the same letters; that one is the mailbox pane's figure
-   * and this one is the badge. Do not derive either from the other. Added in API
-   * minor 2.
+   * Readable anywhere: the badge. `world.mail.info.unread` is the pane's figure;
+   * do not derive either from the other. Added in API minor 2.
    */
   readonly mailUnread: number | null;
 
@@ -528,25 +416,19 @@ export interface WorldApi {
    * What crafting may draw FROM the vault where you are standing, or null where
    * it may draw nothing.
    *
-   * An EMPTY record means the draw is allowed and the vault holds nothing; NULL
-   * means the draw is refused where you are, which is inside a battleground,
-   * arena, delve, dungeon, raid or rift. A "you have no reagents" message built
-   * on emptiness is wrong for a player in a dungeon.
+   * EMPTY means the draw is allowed and the vault holds nothing; NULL means it is
+   * refused where you are (a battleground, arena, delve, dungeon, raid or rift),
+   * and also before the first snapshot: gate on `world.ready` if that matters.
    *
-   * Not a `ProximityState`: it is live everywhere in the open world, where
-   * `world.vault` is closed, and no amount of walking fixes its null. Null also
-   * before the first snapshot, which the wire cannot separate from a refusal;
-   * gate on `world.ready` if the difference matters. Key order means nothing, as
-   * on `VaultInfo.stock`, and a material that is not a key is held at zero.
-   * Added in API minor 10.
+   * Live everywhere in the open world, no banker needed. Key order means nothing;
+   * a material that is not a key is held at zero. Added in API minor 10.
    */
   readonly craftVaultStock: Readonly<Record<string, number>> | null;
 
   /**
    * The buyback ring: what you have sold to a vendor and can still take back.
    *
-   * MOST RECENT FIRST. Ungated, unlike the three above: standing at a vendor is
-   * what lets you USE the ring, not what lets you see it. Added in API minor 2.
+   * MOST RECENT FIRST. Readable anywhere. Added in API minor 2.
    */
   readonly buyback: readonly InvSlot[] | null;
 
@@ -554,30 +436,24 @@ export interface WorldApi {
    * Your spellbook, and the one way to turn an ability id into its display name
    * or a display name back into an id.
    *
-   * Never null, unlike most reads here: it is a lookup, so an empty one answers
-   * the same questions a populated one does and you need no guard before asking.
-   * Covers your OWN kit only. See `AbilityIndex`.
+   * Never null; empty before world entry. Covers your OWN kit only. See
+   * `AbilityIndex`.
    */
   readonly abilities: AbilityIndex;
 
   /**
    * Whether you are fighting, and which signal said so.
    *
-   * Never null: it is derived rather than handed over, so before world entry it
-   * is simply inactive. Watch it with `world.on('combat', ...)`, which reports a
-   * fight starting and ending, and also reports the SOURCE changing while a
-   * fight continues, so an addon that acts only on a certain reading hears the
-   * moment it becomes one.
+   * Never null; inactive before world entry. `world.on('combat', ...)` also fires
+   * when the SOURCE changes mid-fight.
    */
   readonly combat: CombatState;
 
   /**
    * The entity a token names, or null when there is nothing there.
    *
-   * Worth using rather than open-coding, because one of these is a trap:
-   * `targettarget` reads whichever field the target's kind actually fills. A
-   * mob never carries `targetId`, so the obvious lookup gives you a
-   * target-of-target that works on players and is blank on every mob.
+   * `targettarget` reads `targetId` or `aggroTargetId` by the target's kind; a
+   * mob's `targetId` is always null.
    *
    * ```js
    * const boss = woc.world.unit('target');
@@ -589,8 +465,7 @@ export interface WorldApi {
   /**
    * The effects on a unit that match, in the game's own order.
    *
-   * Empty rather than null when the unit resolves to nothing, so a display can
-   * render the answer without a guard first.
+   * Empty, never null, when the unit resolves to nothing.
    *
    * ```js
    * const mine = woc.world.aurasOn('target', { mine: true, kind: 'dot' });
@@ -601,119 +476,66 @@ export interface WorldApi {
   /**
    * The same over one party row's compact strip.
    *
-   * Separate because a row's auras are a different, smaller shape than an
-   * entity's, and because a row exists for a member who is nowhere near you.
+   * A row exists for a member who is nowhere near you.
    */
   partyAuras: (pid: number, query?: PartyAuraQuery) => readonly PartyMemberAura[];
 
   /**
    * Whether an effect is working AGAINST the unit carrying it.
    *
-   * The game's own rule, not a heuristic: a kind in the harmful set, or a
-   * `buff_*` kind whose magnitude went negative, because a drain reuses the buff
-   * kind and flips the sign. Nothing on the wire answers this, and `value`
-   * cannot stand in for it: a damage-over-time's per-tick figure is positive
-   * exactly as a heal-over-time's is.
+   * The game's own rule: a kind in the harmful set, or a `buff_*` kind with a
+   * negative magnitude (a drain). `value` alone cannot answer it: a
+   * damage-over-time tick is positive too.
    *
-   * A FUNCTION rather than a field on the aura, and that is not a style choice.
-   * The loader hands you the game's own aura objects rather than copies, so a
-   * field could only exist by mutating state the game's own HUD reads or by
-   * copying every aura on every read, which would break the object identity you
-   * use to track one effect across frames.
-   *
-   * Accepts either aura shape. A party row carries no `value`, and its `neg`
-   * flag is the server's own sign test on that value, so the answer for a row is
-   * the same function rather than an approximation of it.
-   *
-   * The harmful kind set is game CONTENT, so a kind added by a release these
-   * types predate reads as not harmful. That is the conservative direction: an
-   * unknown effect is not offered as something to remove. Added in API minor 2.
+   * Accepts either aura shape, with the same answer. A kind newer than these
+   * types reads as not harmful. Added in API minor 2.
    */
   harmful: (aura: Aura | PartyMemberAura) => boolean;
 
   /**
    * Whether an effect can be removed, and in which direction.
    *
-   * Six clauses, all from the game: not one of the two auras it refuses BY ID,
-   * not permanent, not unbreakable control, not an undispellable penalty, not
-   * the physical school, and the polarity the direction asks for. `offensive`
-   * strips a BENEFIT off an enemy; the default, false, strips a harmful effect
-   * off an ally.
+   * The game's rule, minus one clause: not one of the auras it refuses BY ID (a
+   * paladin's Divine Ascension charges, a shaman's Stormsurge window), not
+   * permanent, not unbreakable control, not undispellable, not physical, and the
+   * polarity asked for. `offensive` strips a BENEFIT off an enemy; the default
+   * strips a harmful effect off an ally.
    *
-   * The ids refused are states the game surfaces AS an aura rather than
-   * transferable effects (a paladin's Divine Ascension charges, a shaman's
-   * Stormsurge proc window drawn on the debuff surface), and nothing else on
-   * them says so: neither carries a permanent, unbreakable or undispellable
-   * mark. The set grows with the game.
+   * IT ANSWERS TRUE FOR RAID MECHANICS THE GAME WILL REFUSE: the game's
+   * `encounterOwned` flag is not on the wire. In the Ignivar, Varkhul and
+   * Nythraxis fights a true means "nothing the client can see forbids it", and
+   * some of those auras are player debuffs a healer will reach for (Nythraxis's
+   * Soul Rend, Ignivar's forge chains).
    *
-   * IT ANSWERS TRUE FOR A RAID MECHANIC THE GAME WILL REFUSE, and no client can
-   * do better. Game 0.41.0 added an `encounterOwned` class of aura, checked by
-   * the game ahead of every clause above, and the wire does not carry it: the
-   * aura the server sends has room for permanent, unbreakable and undispellable
-   * and nothing for this one. So inside an affected fight a true here means
-   * "nothing the client can see forbids it" rather than "it will work".
-   *
-   * THREE ENCOUNTERS, not the two this said until game 0.42.2, and the third is
-   * the one that matters most. Nythraxis carries ten `encounterOwned` sites to
-   * Varkhul's ten and Ignivar's three, and it was never a new use: the count is
-   * identical at 0.42.1, so this sentence was simply incomplete from the day it
-   * was written. What makes the correction worth more than a name is WHO the
-   * aura lands on. Nine of Nythraxis's ten are on the boss, where no player
-   * would try a dispel; the tenth is Soul Rend, applied to the marked RAIDERS,
-   * and it is a `vulnerability`, which is to say exactly the kind of harmful
-   * effect a healer reaches for. Ignivar's forge chains are player-applied too.
-   * So the honest reading is not "somewhere in two raids": there are player
-   * debuffs in these fights that this function calls removable and the game
-   * will not remove, and one of them is a mechanic a raid answers every pull.
-   *
-   * A party ROW cannot answer this at all and is refused rather than guessed
-   * at: a row carries neither a school nor any of the flags, and those are the
-   * clauses that cost a player a global cooldown when skipped. Read the member's
-   * entity through `world.aurasOn('partyN')` for a member near enough to have
-   * one. Added in API minor 2; the permanent and undispellable clauses in
-   * minor 10.
+   * A party ROW is refused: it carries neither a school nor the flags. Use
+   * `world.aurasOn('partyN')` for a member near enough to have an entity. Added in
+   * API minor 2; the permanent and undispellable clauses in minor 10.
    */
   dispellable: (aura: Aura, offensive?: boolean) => boolean;
 
   /**
    * Whether an effect is a MODE rather than a timed one, so its clock is fiction.
    *
-   * A stance, a druid form, stealth, Ghost Wolf, Beacon of Light, the
-   * battleground carried flag, and the rotation banks a spec fills and spends.
-   * The game backs each with a long finite duration, 3600 seconds or a whole
-   * match, purely so the sim has a JSON-safe number to serialise, and
-   * `remaining` counts down through it like any other aura. So the two fields
-   * are present, well typed, and say nothing: a bar drawn from `remaining /
-   * duration` under a Cat Form is a full bar draining over an hour, and a label
-   * under a Battle Stance reads `59:59`.
+   * A stance, a druid form, stealth, Ghost Wolf, Beacon of Light, the carried
+   * battleground flag, a spec's rotation banks. The game gives each a long fake
+   * duration (3600 seconds, or a whole match) that `remaining` counts down, so a
+   * timer drawn from it is wrong. ASK THIS BEFORE DRAWING A TIMER, and draw none
+   * where it answers true.
    *
-   * ASK THIS BEFORE DRAWING A TIMER, and draw nothing where it answers true.
-   * That is what the game's own surfaces do, and the game's source records them
-   * having drifted apart once already, with the aura overlay showing a 3,599
-   * countdown on a stance the buff bar was correctly showing none for.
+   * The game's WHOLE rule: it needs only the id and kind, so it takes either aura
+   * shape, a party row included. Greater Invisibility shares stealth's kind but
+   * is a real 20 second buff, and answers false. A mode newer than these types
+   * answers false.
    *
-   * Unlike `dispellable` this is the game's WHOLE rule with nothing left over:
-   * it reads an id and a kind, the wire carries both on every aura, so there is
-   * no clause a client cannot see. For the same reason it takes either aura
-   * shape, a party row included.
-   *
-   * The inverse case is real and is handled: Greater Invisibility reuses the
-   * rogue stealth machinery and IS a fixed 20 second buff, so it answers false
-   * despite its kind. The sets are game CONTENT, so a mode added by a release
-   * these types predate answers false, which is the conservative direction here:
-   * a timer drawn where none was wanted, rather than one withheld from an effect
-   * that has a real clock.
-   *
-   * Added in game 0.43.0 and in API minor 12.
+   * Added in API minor 12.
    */
   toggle: (aura: Pick<Aura, 'id' | 'kind'>) => boolean;
 
   /**
    * Flat distance from the player to a point, in yards, IGNORING HEIGHT.
    *
-   * The distance you would walk, which is what the game's own range gates
-   * measure. Null before the world is up, where your first line runs. Added in
-   * API minor 4.
+   * What the game's own range checks measure. Null before the world is up. Added
+   * in API minor 4.
    */
   distanceTo: (at: { x: number; z: number }) => number | null;
 
@@ -721,9 +543,8 @@ export interface WorldApi {
    * Which way to turn to face a point: degrees CLOCKWISE from where you are
    * looking, with -180 <= turn < 180. 0 is straight ahead, 90 is to your right.
    *
-   * Null before the world is up, and null for a facing that is not finite, which
-   * is a real state rather than a defensive one. `fmt.compass` takes this
-   * convention and this null, so the two compose:
+   * Null before the world is up and for a non-finite facing. `fmt.compass` takes
+   * this convention and this null:
    *
    * ```js
    * const arrow = woc.fmt.compass(woc.world.bearingTo(node));
@@ -736,22 +557,16 @@ export interface WorldApi {
   /**
    * The game's own recipe table, copied and frozen.
    *
-   * A COPY: the game renders its own crafting window from the original, so a
-   * `.sort()` on the real array would reorder what the game draws.
-   *
-   * Static content, which is why there is no `world.on('recipes')` and never
-   * will be: a signature over the table would walk every recipe on every
-   * snapshot to report that nothing moved. What changes is on
-   * `world.professions`, including which of these you have learned. Empty rather
-   * than null before world entry. Added in API minor 2.
+   * Static for the session, so not a watch key; which you have learned is on
+   * `world.professions`. Empty, never null, before world entry. Added in API minor
+   * 2.
    */
   readonly recipes: readonly Recipe[];
 
   /**
    * The authored crafting stations, copied and frozen.
    *
-   * Static, like `recipes`, and not a watch key for the same reason. Most
-   * recipes name a `stationType`; this is what turns that into a place. Added in
+   * Static, like `recipes`. Turns a recipe's `stationType` into a place. Added in
    * API minor 2.
    */
   readonly stations: readonly Station[];
@@ -759,36 +574,26 @@ export interface WorldApi {
   /**
    * The authored mailboxes and noticeboards, copied and frozen.
    *
-   * Static, like `recipes` and `stations`, and not a watch key for the same
-   * reason. It answers where a counter IS, from the game's own authored list,
-   * which is the question a committed data table would otherwise have to be
-   * hand-typed to answer. What it does not answer is whether the player is
-   * standing at one: that is `world.mail`, which is proximity-gated and says why
-   * there is no mailbox when there is not.
-   *
-   * Empty rather than null before world entry, and empty on a client too old to
-   * carry the list. Added in API minor 7.
+   * Static, like `recipes`. Where a counter IS; whether you stand at one is
+   * `world.mail`. Empty before world entry and on a client too old to carry the
+   * list. Added in API minor 7.
    */
   readonly civicServices: readonly CivicService[];
 
   /**
    * Entity id to raid target marker, 0 through 7.
    *
-   * Empty when you are not in a party, because the game sends markers only to a
-   * grouped player. That is indistinguishable from a group that has marked
-   * nothing, so read `world.party` if the difference matters. There is no way to
-   * SET one: placing a marker is a command, and the loader never sends.
+   * Empty when you are not in a party, which looks the same as a group that has
+   * marked nothing; check `world.party`. An addon cannot set a marker.
    */
   readonly markers: ReadonlyMap<number, number> | null;
 
   /**
    * Watch a key for change, sampled once per animation frame.
    *
-   * Fires on change rather than on every sample, and only for a change worth
-   * acting on: `auras` reports one arriving or falling off, not its remaining
-   * time ticking down, `cooldowns` reports one starting or ending rather than
-   * counting down, and `casts` reports a cast starting, ending or being replaced
-   * rather than its bar moving. Count down yourself if you need to draw it.
+   * Fires on a change worth acting on, never on a countdown: `auras` on one
+   * arriving or leaving, `cooldowns` on one starting or ending, `casts` on a cast
+   * starting, ending or being replaced. Count down yourself to draw it.
    *
    * The handler's argument is typed from the key, so `world.on('party', ...)`
    * receives a `PartyInfo` without narrowing.

@@ -1,33 +1,13 @@
 // A game-styled tooltip on any element.
 //
-// One tooltip element for the whole loader, moved and refilled, rather than one
-// per attachment. Addons attach these to rows in a list, and a per-element node
-// would mean a hundred hidden divs for a hundred rows.
+// One tooltip element for the whole loader, moved and refilled. Attached to focus as well as
+// hover, so keyboard users get it too. WHAT is drawn lives in kit/tooltip-content.ts.
 //
-// Attached to focus as well as hover. A tooltip that only answers the mouse is
-// invisible to a keyboard, and the game's own tooltips have the same gap; this
-// is the one place the kit is deliberately better than what it is matching,
-// because the alternative is shipping the gap to every addon.
-//
-// WHAT is drawn lives in kit/tooltip-content.ts. This file is the element, its
-// placement and the attachment lifecycle, and it takes either a string or the
-// structured form without caring which.
-//
-// A shown tooltip is dismissed by THREE things, and each covers a hole the others
-// leave. `pointerleave` is the ordinary one. The removal observer covers an anchor
-// taken out of the document while the pointer is over it, which fires no leave at
-// all. And a pointer move away from the anchor covers the case those two miss
-// together: an anchor that is still in the document but which the browser has
-// stopped considering hovered.
-//
-// That third case is not hypothetical and is the second stuck tooltip reported
-// from a live session, both times from Cooldown Bars. Re-appending an element that
-// is already in the DOM MOVES it, which is a removal and an insertion, and the
-// browser drops the hover state on the removal without firing a leave. The list
-// re-appends its rows on every animation frame to keep them in order, so a
-// tooltip shown at 60fps was near-certain to be orphaned within a frame or two:
-// the pointer was never again "over" the anchor as far as the browser was
-// concerned, so no event it could listen for was ever coming.
+// A shown tooltip is dismissed by THREE things, each covering a hole the others leave:
+// `pointerleave`; a removal observer, for an anchor removed while hovered (no leave fires);
+// and a pointer move off the anchor, for an anchor the browser silently stopped considering
+// hovered. Re-appending an element MOVES it, which drops hover without a leave, so a list that
+// reorders rows every frame orphans a tooltip without the third.
 
 import type { Teardown } from '../../disposal.ts';
 import type { TooltipInput } from './tooltip-content.ts';
@@ -42,13 +22,8 @@ const EDGE_MARGIN_PX = 8;
 interface TooltipDeps {
   doc: Document;
   /**
-   * The #woc-addons root, which is what the anchor watcher covers.
-   *
-   * The root rather than the band the tip is drawn in, because the anchor being
-   * watched is an addon's own row, and those are down in the hud band. Still
-   * scoped rather than the document: addon DOM is all under here and the game's
-   * HUD is not, and a body-level subtree observer would wake on every HUD change
-   * at snapshot rate to answer a question about our own elements.
+   * The #woc-addons root, which the anchor watcher covers: anchors are addon rows in the hud
+   * band, and a document-level observer would wake on every game HUD change.
    */
   root: HTMLElement;
   /** The band the tip element is drawn in, which has to be over every frame. */
@@ -76,11 +51,7 @@ function ensureTip(deps: TooltipDeps): HTMLElement {
   return tip;
 }
 
-/**
- * Above the anchor by preference and below when there is no room, which is what
- * keeps a tooltip on a bottom-of-screen HUD element readable rather than
- * clipped.
- */
+/** Above the anchor by preference and below when there is no room. */
 function topFor(rect: { top: number; bottom: number }, height: number): number {
   const above = rect.top - height - OFFSET_PX;
   if (above >= EDGE_MARGIN_PX) {
@@ -108,12 +79,8 @@ interface Attachment {
   el: Element;
   detach: Teardown;
   /**
-   * True once the anchor has been seen connected.
-   *
-   * Load-bearing. An addon may attach BEFORE inserting the element, which is the
-   * natural order when building a row: create it, describe it, then append it.
-   * Reaping anything disconnected would kill exactly those, so nothing is reaped
-   * until it has been seen in the document at least once.
+   * True once the anchor has been seen connected. An addon may attach BEFORE inserting the
+   * element, so nothing is reaped until it has been in the document once.
    */
   seen: boolean;
 }
@@ -127,13 +94,8 @@ interface Attachments {
 }
 
 /**
- * The live attachments, and the reaping of the dead ones.
- *
- * Swept rather than observed continuously. The removal observer in
- * `createTooltips` runs only while a tooltip is visible, and running one
- * permanently to catch a leak would be a standing cost against a set that only
- * grows when rows are created; so `attach` sweeps, because that is the one moment
- * a rebuild is definitely happening.
+ * The live attachments, and the reaping of the dead ones. Swept on `attach`, the moment a
+ * rebuild is definitely happening, rather than by a standing observer.
  */
 function createAttachments(): Attachments {
   const live = new Set<Attachment>();
@@ -188,8 +150,7 @@ function attachTooltip(ctx: AttachContext, el: Element, content: TooltipInput): 
     el.removeEventListener('focusin', show);
     el.removeEventListener('focusout', ctx.hide);
     ctx.attachments.drop(entry);
-    // Only if it is THIS anchor's tooltip on screen. Detaching one row while
-    // another row's tooltip is up would otherwise blank the wrong one.
+    // Only if it is THIS anchor's tooltip on screen, or another row's would blank.
     if (ctx.isShown(el)) {
       ctx.hide();
     }
@@ -208,26 +169,14 @@ interface DismissDeps {
   reap: () => void;
 }
 
-/**
- * Everything that takes a shown tooltip down, started and stopped together.
- *
- * Both watchers exist only while something is on screen, which is what makes them
- * affordable: a pointer move is a `contains` call on one element, and the observer
- * is scoped to the loader's own root rather than the document, so it does not wake
- * on every change the game's HUD makes at snapshot rate.
- */
+/** Everything that takes a shown tooltip down. Both watchers run only while one is shown. */
 function createDismissal(own: DismissDeps): { start: () => void; stop: () => void } {
   const { doc } = own.deps;
   let watcher: MutationObserver | null = null;
 
   /**
-   * The pointer is somewhere the anchor is not.
-   *
-   * Capture phase and on the document, because the move that matters may be over
-   * the game's own DOM, and a bubbling listener never sees an event whose handler
-   * stops propagation. This is the watcher that covers an anchor the browser has
-   * stopped considering hovered while it is still in the document: see the note at
-   * the top of this file.
+   * The pointer is somewhere the anchor is not. Capture phase on the document, since the move
+   * may be over game DOM that stops propagation.
    */
   const onPointerMove = (event: Event): void => {
     const anchor = own.shown();
@@ -285,8 +234,7 @@ function createTooltips(deps: TooltipDeps): Tooltips {
     const tip = ensureTip(deps);
     renderTooltip(deps.doc, tip, content);
     tip.hidden = false;
-    // Placed after unhiding: a hidden element measures as zero, so the first
-    // placement would put every tooltip in the same wrong spot.
+    // Placed after unhiding: a hidden element measures as zero.
     place(tip, el, deps.viewport());
     shown = el;
     dismissal.start();

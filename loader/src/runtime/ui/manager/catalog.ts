@@ -1,10 +1,5 @@
-// Turning every source's index into the one list Browse draws.
-//
-// Pure, and tested as such. What makes it worth its own module is that the
-// interesting decisions are all about the merge rather than about rendering:
-// two marketplaces may legitimately publish the same addon id, so the row's
-// identity is the fqid and never the id, and an addon is "installed" against
-// the source it came from rather than against its name.
+// Turning every source's index into the one list Browse draws. Two marketplaces may publish the
+// same addon id, so a row's identity is the fqid, and "installed" is judged per source.
 
 import { fileUrl, type MarketplaceRef, fqid as makeFqid } from '../../../shared/marketplace.ts';
 import type { MarketplaceEntry, MarketplaceState, UpdateRow } from '../../../shared/protocol.ts';
@@ -37,13 +32,7 @@ function haystack(entry: MarketplaceEntry): string {
     .toLowerCase();
 }
 
-/**
- * Every word has to appear somewhere, in any order.
- *
- * Rather than one substring match on the whole query, so "meter dps" finds the
- * DPS Meter. A player typing two words is naming two things they remember about
- * an addon, not quoting its title.
- */
+/** Every word has to appear somewhere, in any order, so "meter dps" finds the DPS Meter. */
 function matchesQuery(entry: MarketplaceEntry, query: string): boolean {
   const words = query.toLowerCase().split(WORDS_RE).filter(Boolean);
   if (words.length === 0) {
@@ -61,11 +50,8 @@ function matchesTag(entry: MarketplaceEntry, tag: string | null): boolean {
 }
 
 /**
- * Every tag any source in the list offers, sorted and without repeats.
- *
- * Built from what is actually on offer rather than from a fixed vocabulary, so
- * a third-party marketplace's own categories are filterable too. Sorted by code
- * unit so the control's order does not vary with the machine's locale.
+ * Every tag any source offers, deduplicated, so a third-party marketplace's own categories are
+ * filterable too. Sorted by code unit so the order does not vary with the machine's locale.
  */
 function catalogTags(markets: readonly MarketplaceState[]): string[] {
   const tags = new Set<string>();
@@ -80,26 +66,14 @@ function catalogTags(markets: readonly MarketplaceState[]): string[] {
 }
 
 /**
- * Whether the screenshot column is worth drawing at all.
- *
- * Asked of every source rather than of the filtered rows, so that typing in the
- * search box cannot make the column appear and disappear under the player's
- * hands. Where nothing on offer has a screenshot the list is text and lines up
- * without a column; where anything does, every row reserves one so the rows
- * still line up, and the ones with nothing to show say so.
+ * Whether the screenshot column is drawn at all. Asked of every source rather than the filtered
+ * rows, so typing in the search box cannot make the column appear and disappear.
  */
 function catalogHasPreviews(markets: readonly MarketplaceState[]): boolean {
   return markets.some((market) => market.addons.some((entry) => entry.preview !== undefined));
 }
 
-/**
- * An addon's screenshot as a page can load it.
- *
- * Resolved in the RUNTIME rather than carried over the bridge, which is the
- * opposite of what an update row does and is not an inconsistency: an update row
- * is computed in the host because comparing versions needs semver, and a
- * marketplace URL needs nothing the runtime may not import.
- */
+/** An addon's screenshot as a page can load it, resolved in the runtime. */
 interface AddonShot {
   url: string;
   alt: string;
@@ -126,19 +100,11 @@ function shotOf(row: BrowseRow): AddonShot | null {
 }
 
 /**
- * Every offered addon's screenshot, by fqid.
+ * Every offered addon's screenshot, by fqid, for the Installed pane. The registry does not persist
+ * the addon's directory, so an addon its source no longer offers draws no thumbnail.
  *
- * What the Installed pane draws from, because the registry cannot answer this on
- * its own: it persists the manifest but not the addon's directory in the
- * repository, and without that directory there is no URL to build. So an
- * installed addon whose source has been removed, or which its source no longer
- * offers, draws no thumbnail. That is the honest answer rather than a gap:
- * nothing the loader still holds says where that picture is.
- *
- * The declaration taken is the INDEX's rather than the installed manifest's, and
- * they can differ by a version. A marketplace serves one version per ref, so the
- * bytes at that URL are the index's either way, and taking the alt text from the
- * same place keeps the sentence matched to the picture it describes.
+ * The INDEX's declaration is taken over the installed manifest's: the bytes at that URL are the
+ * index's version, and the alt text has to describe the same picture.
  */
 function catalogShots(markets: readonly MarketplaceState[]): Map<string, AddonShot> {
   const shots = new Map<string, AddonShot>();
@@ -154,11 +120,8 @@ function catalogShots(markets: readonly MarketplaceState[]): Map<string, AddonSh
 }
 
 /**
- * Every offered addon, in source order, filtered.
- *
- * Source order rather than sorted by name: the official marketplace is first in
- * the list because it is the trust anchor, and a browse list that mixed a third
- * party's rows in among it by alphabet would lose that.
+ * Every offered addon, filtered, in source order: the official marketplace comes first as the trust
+ * anchor, and sorting by name would mix third-party rows in among it.
  */
 function browseRows(
   markets: readonly MarketplaceState[],
@@ -178,15 +141,9 @@ function browseRows(
 }
 
 /**
- * Why Browse has nothing to draw, which is three different facts.
- *
- * `unread` stopped being the ordinary case when the catalog store started
- * seeding the indexes on its first read, so the note that says to press Refresh
- * has to stop being the ordinary answer with it: what is left when a seeded list
- * is still empty is usually a source that could not be READ, and telling a player
- * to refresh an index that just answered 404 sends them at the one control that
- * will not help. `unreadable` names it and points at the pane that says which
- * source and why.
+ * Why Browse has nothing to draw. The store seeds the indexes on first read, so an empty list is
+ * usually a source that could not be read, and `unreadable` points at the pane that says why rather
+ * than at Refresh.
  */
 type BrowseEmptiness = 'unread' | 'unreadable' | 'empty';
 
@@ -200,29 +157,14 @@ function browseEmptiness(markets: readonly MarketplaceState[]): BrowseEmptiness 
   return 'empty';
 }
 
-/**
- * The update rows nothing is holding back.
- *
- * A pinned addon is left out of "update all" and out of the count beside the
- * tab. The pin is the player having already decided, and an action labelled
- * "all" that overrode it would make the pin advisory rather than a decision.
- */
+/** The update rows no pin holds back; "update all" and the tab count both skip a pinned addon. */
 function pendingUpdates(updates: readonly UpdateRow[]): UpdateRow[] {
   return updates.filter((row) => row.pin === null);
 }
 
 /**
- * Every addon any source in the list offers, by bare id.
- *
- * Bare rather than fully qualified, because it answers a question asked in bare
- * ids: a `companions` entry names the addon the author meant, whichever source a
- * player happens to have it from. See manager/companions.ts.
- *
- * The NAME and the fqid ride along because a companion note needs both and can
- * derive neither: a bare id is what the manifest wrote down, "Lorebind" is what
- * a player is looking for, and an install has to name one source. FIRST source
- * wins on a duplicate id, which is the order the market list is already in, so
- * a note points at the same row Browse would have shown first.
+ * Every offered addon by BARE id, because a `companions` entry names an addon whichever source it
+ * comes from. The first source wins a duplicate id, so a note points at the row Browse shows first.
  */
 function offeredAddons(markets: readonly MarketplaceState[]): Map<string, OfferedAddon> {
   const offered = new Map<string, OfferedAddon>();

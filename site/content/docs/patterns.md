@@ -1,10 +1,10 @@
 ---
 title: Patterns
 order: 4
-summary: The things nobody derives from the API surface, each learned the expensive way.
+summary: The things nobody derives from the API surface.
 ---
 
-Everything on this page is invisible in a signature. Most of it shipped as a bug first.
+Everything on this page is invisible in a signature.
 
 ## Subscribe for the set, animate from the read
 
@@ -20,19 +20,17 @@ The same shape applies to anything that animates: subscribe for the change, anim
 
 ## The guard you are about to write around a setting cannot fire
 
-This one is measured rather than argued. Fifteen of the sixteen addons then in this marketplace shipped a helper like this, and between them called it 64 times:
-
 ```js
-// Dead code. Every one of the 64 call sites resolved to the manifest default.
+// Dead code: this always returns the setting, never the fallback.
 function settingNumber(id, fallback) {
   const value = woc.settings[id];
   return typeof value === 'number' ? value : fallback;
 }
 ```
 
-Not one of those fallbacks could ever be reached. The loader hydrates `woc.settings` from your manifest before your first line runs and the result is total over what you declared: present, of the declared type, finite if it is a number, clamped into your declared range, and one of the options a `select` still offers, with your own default standing in wherever storage held something that was none of those. So `woc.settings['max-rows']` is a number you can divide by.
+The fallback can never be reached. The loader hydrates `woc.settings` from your manifest before your first line runs and the result is total over what you declared: present, of the declared type, finite if it is a number, clamped into your declared range, and one of the options a `select` still offers, with your own default standing in wherever storage held something that was none of those. So `woc.settings['max-rows']` is a number you can divide by.
 
-Fifteen authors wrote it anyway, which is the interesting part: nothing on the surface says the coercion happened, and defensive code around an unknown-shaped read is the correct instinct everywhere else on this API. It is wrong here, and only here, because this is the one input the loader has already validated against a schema you wrote.
+Defensive code around an unknown-shaped read is the right instinct everywhere else on this API. It is wrong here because this is the one input the loader has already validated against a schema you wrote.
 
 Read the setting. The case actually worth a check is the opposite one, an id your manifest does not declare, which reads `undefined` and is a bug in the manifest rather than a value to defend against.
 
@@ -40,19 +38,16 @@ Read the setting. The case actually worth a check is the opposite one, an id you
 
 The game builds every entity with defaults and fills in whatever the snapshot carried. A field the server never sends is therefore **present, of the right type, and holding that default for the entire session**. Nothing throws. Nothing warns.
 
-`inCombat` is the worked example, and game 0.42.0 made it a better one rather than retiring it. It is on the entity, it is a boolean, and until that release it was never on the wire, so it read `false` forever: the first version of the combat meter used it to decide a fight had ended, concluded that every fight had ended, and reset the total on every hit.
-
-That release began sending it **for your own record only**. So the field is now correct on exactly one entity and still permanently false on every mob, npc and other player, which is the harder version of the same trap: a reading that works perfectly while you test it on yourself and is silently wrong the moment you point it at a target. `world.combat` is the published answer for your own state, and it reports `source: 'self'` when the server's flag is what replied.
+`inCombat` is the worked example. It is sent **for your own record only**, so it is correct on exactly one entity and permanently `false` on every mob, npc and other player. A reading that works while you test it on yourself is silently wrong the moment you point it at a target: an addon that used it to decide a fight had ended would conclude every fight had ended. `world.combat` is the published answer for your own state, and it reports `source: 'self'` when the server's flag is what replied.
 
 The published types mark which fields ride the self record and omit the ones that are never sent, but the types are a claim about another repository rather than a derivation from it. When a value matters, check it against a live session before you build on it.
 
-Game 0.42.0 added two more, both of which the game's own source settles in a line: `corpseHarvestState` (the corpse-harvest reservation window) and `craftedCollectionId` (a set bonus derived from two worn pieces) are each declared with a comment saying they are never persisted and never wired, and neither is named anywhere in the server.
+Others that are never sent, so never build on them:
 
-Game 0.41.4 added one before them, and it is the cheapest to check. A mob that cannot reach you inside a dungeon or raid room now holds in place immune with its hate table intact instead of walking home, and the seconds it has been held sit on the entity as `evadeInPlace`. Nothing sends it: the client mirror builds every mob with the field set to `undefined` and the server names it nowhere, so a pinned-mob timer built on it reads "not pinned" through every pin there will ever be. What you CAN see is the evade record the pinned mob emits for each direct hit it refuses, which is the same `kind: 'evade'` a mob walking home emits and carries nothing to tell them apart.
-
-Game 0.42.1 added one more, and it is the cheapest of the lot. A soulbound raid drop now pins its trade group at the instant loot rolls, and the group sits on the mob as `lootPartyTradeEligibility`. The game's own comment calls it runtime-only, the server names it nowhere, and unlike the others the client does not even build a default for it, so it reads `undefined` on every mob rather than as an empty answer. Nothing about who could have traded a drop is reachable from the corpse.
-
-The game's two spell queues are the version of this that survives a careful reading. The melee on-next-swing queue is sent and you can see it; the cast queue, which the game finished building in 0.41.1 so that a press during the tail of a global cooldown fires when the cooldown clears, is sent by nothing. They are declared eleven lines apart, they are both called a queue, and exactly one of them reaches you. So "I checked, the queue is on the wire" is not a finding about the queue you meant, and a next-cast display built on the wrong one is blank in every session forever without ever raising anything.
+- `corpseHarvestState` and `craftedCollectionId`.
+- `evadeInPlace`, the seconds a mob that cannot reach you in a dungeon or raid room has been held in place. It reads `undefined` on every mob, so a pinned-mob timer built on it never fires. The evade records the mob emits for refused hits are the same `kind: 'evade'` a mob walking home emits, with nothing to tell them apart.
+- `lootPartyTradeEligibility`, a raid drop's trade group. It reads `undefined`; nothing about who could have traded a drop is reachable from the corpse.
+- The CAST queue (`queuedCastAbility`, `queuedCastAim`, `queuedCastTargetId`). The melee on-next-swing queue IS sent, so "the queue is on the wire" is true of the wrong queue, and a next-cast display built on the cast one stays blank forever.
 
 ## A field that IS sent can still lie by being there
 
@@ -115,7 +110,7 @@ for (const row of sorted) parent.appendChild(row.el);
 
 The churn is the smaller cost. The one that bites is that **a browser drops an element's hover state when it is removed, and fires no leave event for it**. Anything attached to that row on hover is then stranded: as far as the browser is concerned the pointer was never over it, so moving away produces nothing.
 
-`woc.ui.list` is the answer, and this is the failure it was built out of. Eleven addons had each written the same reconcile pass by hand, and the part every one of them wrote identically was the lifecycle: destroy what left, build what arrived, paint everything, and move a row only when it is not already in that slot. Describe one row, hand `sync` the whole set in the order you want it, and a sync that changes nothing writes nothing to the document at all.
+`woc.ui.list` is the answer. It owns the lifecycle: destroy what left, build what arrived, paint everything, and move a row only when it is not already in that slot. Describe one row, hand `sync` the whole set in the order you want it, and a sync that changes nothing writes nothing to the document at all.
 
 Two things about it are judgement rather than API, which is why they are here as well as on [the API page](/docs/api).
 
@@ -123,13 +118,13 @@ Two things about it are judgement rather than API, which is why they are here as
 
 **Hold more than you draw, with `shown`, rather than slicing before you sync.** A cooldown display keeps every running cooldown and draws the ten soonest ready. Slice first and the eleventh row is destroyed, so when it comes back it is a new row with nothing measured: an addon that learned a cooldown's real length by watching it now has to baseline from the middle of the cooldown it is already in, and it draws a fill that is confidently wrong. Pass everything to `sync` and answer false from `shown` instead, and the row stays alive off screen with what it measured. That is the difference between a missing row and a wrong one.
 
-Cooldown Bars does both, and its whole list is now the declaration:
+Cooldown Bars does both:
 
 <!-- include: addons/cooldown-bars/main.js#list -->
 
 `sync` then takes every running cooldown, soonest ready first, and `shown` decides how many of them are on screen.
 
-The loader now takes a tooltip down when the pointer moves anywhere its anchor is not, so the stranded tooltip above is handled for you. The fact underneath it has not changed: an element you move is an element that loses whatever the browser was tracking about it, and the cheapest move is the one you do not make.
+The loader takes a kit tooltip down when the pointer leaves its anchor, so that case is handled for you. Anything else the browser tracks about an element (hover, focus, a running transition) is still lost when you move it.
 
 ## Reuse the kit before styling your own
 
@@ -139,13 +134,13 @@ Do not hand-roll a timer row either. `woc.ui.bar` is one: an icon, a name that t
 
 <!-- include: addons/cooldown-bars/main.js#bar -->
 
-The combat meter hand-rolled inline button styles first, and the two addons ended up drawing the same row two slightly different ways. That is what the kit exists to prevent.
+Hand-rolled styles drift: two addons end up drawing the same row two slightly different ways.
 
 ## An event's ability is a name, not an id
 
-An event's `ability` field is a display **name**, not an ability id. Every `damage` and `heal2` emit fills it from `ability.name`. `spellfx` carries an id, and `castStart` carries an id **or an activity sentinel**: a fixed marker naming a timed activity rather than any ability, such as `gathering` or `crafting`. The set grows with the game, so match the sentinels you care about by name and let anything you do not recognise fall through as an ability id, rather than enumerating them and assuming your list is complete. A sentinel never resolves in `world.abilities` and never has icon art. The declared type is `string | null` for both, so nothing tells you which you have.
+An event's `ability` field is a display **name**, not an ability id. Every `damage` and `heal2` emit fills it from a name. `spellfx` carries an id, and `castStart` carries an id **or an activity sentinel**: a fixed marker naming a timed activity rather than any ability, such as `gathering` or `crafting`. The set grows with the game, so match the sentinels you care about by name and let anything you do not recognise fall through as an ability id, rather than enumerating them and assuming your list is complete. A sentinel never resolves in `world.abilities` and never has icon art. The declared type is `string | null` for both, so nothing tells you which you have.
 
-This shipped a bug: the meter built an icon URL from the field and asked the game for `Measured Shot.webp`. An id is only safe to assume where the field is a map **key**, as in `cooldowns` and `abilityCharges`, or where the emit site says `.id`.
+Building an icon URL from it asks the game for a file like `Measured Shot.webp`. An id is only safe to assume where the field is a map **key**, as in `cooldowns` and `abilityCharges`, or where the emit site says `.id`.
 
 Healing has its own version of the same trap:
 
@@ -153,19 +148,17 @@ Healing has its own version of the same trap:
 
 ## An item's art name is not the item's name
 
-`woc.ui.icon.itemArtName(id)` answers the name the item's icon FILE was filed under. That is provenance metadata for the art, and the game gates it on being non-empty and on nothing else, so it drifts every time content is renamed and the art is not. Measured against game 0.33.0: of the 303 items whose art carried a name, 281 agreed with the game's own display name and 21 did not. `baked_bread` was filed as "Freshly Baked Bread" while the game called it "Cottage Loaf".
-
-It now answers for far less. The manifest keeps a name only for a curated entry, and game 0.36.0 moved the catalogue into unnamed generated batches, taking 307 named entries down to 39 reagents and bags. All 39 agree with the game today. That is not a reason to promote it: nothing in the game compares the two, so the next content rename can put them back out of step with nothing to announce it.
+`woc.ui.icon.itemArtName(id)` answers the name the item's icon FILE was filed under. That is provenance metadata for the art, and nothing in the game compares it with the display name, so a content rename leaves it out of step with nothing to announce it. It answers only for a small curated set (mostly reagents and bags) and is null for everything else.
 
 So it is a labelled fallback and never the item's name. Showing it beside the game's own tooltip is worse than showing nothing, because it looks like an answer. Nothing on this API can give you an item's real name: the item table is bundled into the game's own chunk and is not served. The one authoritative spelling that reaches a client is `itemName` on a loot roll.
 
-`woc.ui.icon.item(id)` is a different matter and is exact. The game serves a manifest of which item ids ship a file, so the builder returns null once it knows there is none rather than handing you a URL that 404s. Weapons used to be permanently absent from it and are not any more: game 0.36.0 gave every authored weapon its own painting, and at that release every item in the game ships a file. Still write the null branch. Art is commissioned behind content, so an item can ship before its picture does, and the gap empties and refills with every release. A heroic weapon variant is the one case that looks like a gap and is not: it ships no file of its own and the loader answers with its base weapon's painting, which is what the game draws for it too.
+`woc.ui.icon.item(id)` is a different matter and is exact. The game serves a manifest of which item ids ship a file, so the builder returns null once it knows there is none rather than handing you a URL that 404s. Write the null branch: art is commissioned behind content, so an item can ship before its picture does. A heroic weapon variant is the one case that looks like a gap and is not: it ships no file of its own and the loader answers with its base weapon's painting, which is what the game draws for it too.
 
-Until the manifest has been read the answer stays optimistic, so the first grid you draw is never worse off than it was before the manifest existed. `await woc.ui.icon.preloadItems()` first when a flash of broken images on the first paint would be worse than a frame's delay. It is one request for every item in the game.
+Until the manifest has been read the answer stays optimistic. `await woc.ui.icon.preloadItems()` first when a flash of broken images on the first paint would be worse than a frame's delay. It is one request for every item in the game.
 
 ## Progress past the level cap is on a different field
 
-`character.xp` is progress within the CURRENT level, and it is frozen at 0 once you hit the cap. The game returns before touching that bar for a capped character and zeroes the remainder on the award that dings you to the cap, so a capped character reads 0 there for the rest of the character's life. It is the obvious field to reach for and it is the wrong one.
+`character.xp` is progress within the CURRENT level, and it reads 0 for the rest of a character's life once it reaches the cap. It is the obvious field to reach for and it is the wrong one.
 
 `character.lifetimeXp` is the counter that carries post-cap progression. It is credited on every award including at the cap, which is what makes virtual levels work, and it is monotonic across the whole life of the character. A post-cap display reads that and computes its own virtual level from it.
 
@@ -177,7 +170,7 @@ Until the manifest has been read the answer stays optimistic, so the first grid 
 
 `woc.wallClock()` is epoch milliseconds, the same clock `Date.now` reads. It is the right clock for exactly two things, and both of them cross a page load: a timestamp you are going to store, and a comparison against a value the server sent as an absolute stamp. `GroupInfo.lockouts` is the second kind, and its own documentation says to compare it against `Date.now()`.
 
-Storing a `woc.now()` reading is the trap. It is a number of milliseconds since **this** page load, so on the next one it is a stamp in the future by however long the last session ran, and nothing raises. Three addons written in one batch each worked this out separately, which is why it is written here.
+Storing a `woc.now()` reading is the trap. It is a number of milliseconds since **this** page load, so on the next one it is a stamp in the future by however long the last session ran, and nothing raises.
 
 ## A subscriber that waits hears nothing
 
@@ -185,7 +178,7 @@ An addon that reads another addon's bus topic has to work with no publisher at a
 
 The convention that works: emit `<topic>:ask` once, render immediately without an answer, upgrade the display if answers arrive, and never treat silence as an error. A publisher answers an ask by emitting its topic as usual.
 
-`woc.bus.publish` and `woc.bus.follow` are those two halves with the parts named, and they are what to reach for rather than writing the dance again. `follow` emits the ask for you, once, and `publish` answers it by calling your `produce`. Everything below is what those two put on the wire, which is also what an addon written before they existed is already speaking.
+`woc.bus.publish` and `woc.bus.follow` are those two halves: `follow` emits the ask for you, once, and `publish` answers it by calling your `produce`. Use them rather than writing the exchange by hand.
 
 Subscribe with `woc.bus.anySender` unless you genuinely mean one specific installation. Naming `official/lorebind` is correct only on the official marketplace: the same addon installed from a fork publishes under a different fqid, and a subscriber that hardcoded the source silently stops working for everyone not on it.
 
@@ -193,7 +186,7 @@ If you want to say in your manifest that you work better with another addon, tha
 
 ## The topics addons already publish
 
-There is no namespace on the bus and no registry the loader enforces. A topic is a bare string, so two addons picking the same name with different payloads is a collision nobody is warned about, and the only defence is writing down what the shipped ones use. This is that list. Read it before naming a topic, and treat a name on it as taken.
+There is no namespace on the bus and no registry the loader enforces, so two addons picking one topic name with different payloads collide with no warning. This list is the registry: read it before naming a topic, and treat a name on it as taken.
 
 `from` is stamped by the loader from the publisher's own fqid and the message is frozen, so a sender cannot claim to be somebody else. What it can do is publish a payload that is not the shape below, so validate before you use it: every consumer here drops a bad row rather than throwing, because one malformed entry in a batch must not cost the other eight hundred.
 
@@ -213,17 +206,17 @@ There is no namespace on the bus and no registry the loader enforces. A topic is
 
 **`item`** carries `{ id, name, source }` plus whichever of `quality`, `kind`, `slot`, `sellValue`, `itemLevel` and `requiredLevel` the publisher actually knows. Fields are absent rather than null when unknown, because an item table is learned a piece at a time. **`items`** is the batch form and is what an ask is answered with: a publisher holding a whole table sends it as one message rather than one emit per row. Subscribe to both. A consumer subscribed to `item` alone hears its own catch-up answered and takes nothing out of it, which looks exactly like a publisher that is not installed.
 
-**The item protocol has two ask names for one release, and this is the only place that says so.** It was written before `publish` and `follow` existed and it named its ask `item:ask` while what an ask actually triggers is a re-emit of `items`. `follow('items', ...)` derives `items:ask` from the topic, so the two names now both mean the same request. `lorebind` answers both: `items:ask` because that is what `publish` listens for, and `item:ask` with one extra line, kept so that an addon speaking the shipped protocol does not go quiet on the release that migrated it. Use `items:ask`. Do not build anything new on `item:ask`, and expect it to go one release later.
+**Use `items:ask`, never `item:ask`.** Both trigger a re-emit of `items` and `lorebind` answers both, but `item:ask` is a deprecated spelling that will be removed.
 
-The incremental `item` topic has no ask half at all and never did. It is a push, one row at a time as the publisher learns them, so `follow` is the wrong tool for it and a plain `on` with `bus.anySender` is the right one.
+The incremental `item` topic has no ask half. It is a push, one row at a time as the publisher learns them, so subscribe with a plain `on` and `bus.anySender`, not `follow`.
 
-**`mobs`** is the answer to a question the wire never answers: which mob templates the game counts as **elite**, as **bosses**, and as **rare**, plus the one gate that hides a template from anybody not on its quest. None of it is on any snapshot, so it can only come from a table generated out of the game's own content, and `longwatch` carries that table because it already evaluates the same `MOBS` to build its rare roster. A second addon shipping its own copy would be a second thing to regenerate on a game release.
+**`mobs`** answers a question the wire never does: which mob templates the game counts as **elite**, as **bosses**, and as **rare**, plus the gate that hides a template from anybody not on its quest. It comes from a table `longwatch` generates from the game's own content; subscribe instead of shipping a second copy.
 
-A row is `{ id, name }` plus whichever of `rank` (`'elite'` or `'boss'`), `rare` (`true`) and `requiresQuestId` applies. Three things to know. **Absence means false here**, not unknown as it does for `item`: the table is read from the whole of `MOBS`, so an id you do not find in it is an ordinary mob rather than one nobody has looked up. **`rank` and `rare` are separate** because the game's flags are independent and a rare elite is an ordinary thing to be. And **`name` rides every row** because a mob's id and its display name have already diverged in this game, so title-casing an id prints a name no player will ever see.
+A row is `{ id, name }` plus whichever of `rank` (`'elite'` or `'boss'`), `rare` (`true`) and `requiresQuestId` applies. Three things to know. **Absence means false here**, not unknown as it does for `item`: the table is read from the whole of `MOBS`, so an id you do not find in it is an ordinary mob rather than one nobody has looked up. **`rank` and `rare` are separate** because the game's flags are independent and a rare elite is an ordinary thing to be. And **`name` rides every row** because a mob's id and its display name diverge, so title-casing an id prints a name no player will ever see.
 
 **`alert`** fires on an aura rule matching. `state` is `'active'` when the rule is met and `'cleared'` when it stops being met, so a consumer can pair them; `unit` is a unit key rather than an entity id.
 
-If you are adding a topic, prefer a noun for the fact and let `publish` and `follow` name the ask, publish one shape in every state rather than a payload that vanishes, and add the row here in the same change. The loader ships no topic constants and will not: these names are content, and a loader that owned them would own a protocol it has no way to keep true. This table is the registry, and it is editorial rather than enforced.
+If you are adding a topic, prefer a noun for the fact and let `publish` and `follow` name the ask, publish one shape in every state rather than a payload that vanishes, and add the row here in the same change. The loader ships no topic constants.
 
 ## The global cooldown's length is computable, and the obvious version is wrong
 
@@ -253,7 +246,7 @@ There is no subscription for this and there should not be: it is four published 
 
 The melee swing period looks like the same kind of arithmetic and is not. It divides by `meleeHaste`, which is a third stat that is **not on the wire**, and `spellHaste` cannot stand in for it.
 
-The game's own comment says set-bonus haste is one stat, so the two are equal. That is true of the shared term and false of the total: two melee specs carry a 10 percent `meleeHastePct` that never reaches `spellHaste`. So substituting is exactly 10 percent low on the specs whose swing bar matters most, which is a bar that finishes early on every single swing. Ranged is worse: it divides by `rangedHaste`, a third stat again.
+Two melee specs carry a 10 percent melee haste that never reaches `spellHaste`, so substituting finishes the bar early on every swing for exactly the specs whose swing bar matters most. Ranged divides by `rangedHaste`, which is not on the wire either.
 
 What works is to seed and then correct:
 
@@ -272,7 +265,7 @@ Then watch the remaining time. A remaining that goes **up** is the swing landing
 
 ## Some numbers are not on the surface at all, and guessing one is worse than saying so
 
-The combo point maximum is the clearest case. It is an inline literal in the award path, it is not a named constant, not on a content table, not class-conditional, and not sent. The game's current cap is 5 and its own interface draws a fixed strip rather than reading a maximum from anywhere.
+The combo point maximum is the clearest case. It is an inline literal in the game's award path and is not sent. The game's own interface draws a fixed strip of 5.
 
 So do not hardcode 5. Size a strip to the largest count you have **seen this session** and say in the tooltip that that is what you are doing. A hardcoded number reads as authoritative and is silently wrong the release it changes; a learned one is right by construction and admits what it is.
 
@@ -298,16 +291,16 @@ If you track a diminishing-returns ladder, the reset window starts when the effe
 
 Anchoring at fade puts the expiry a whole duration late: a 10 second polymorph on a 60 second window reads as still diminishing for 10 seconds after the game has cleared it, so a player who trusts the display holds a cast they could have landed at full length.
 
-Four more things a ladder display has to know, all of them the game's own rules:
+What else a ladder display has to know, all of it the game's own rules:
 
 - **Roots and interrupt lockouts** run 100 / 50 / 25 percent on an 18 second window and then become **immune**. An immune application produces no aura at all, so there is nothing to observe: keep counting the stage you can no longer see.
-- **Polymorph** runs absolute seconds, 10 / 5 / 1 on a 60 second window, and **never** becomes immune. It is the only absolute ladder, and it can afford to be: exactly one ability rides it, so the 10 second first rung reads as a deliberate cap on a longer value rather than as a number that fits one ability and no other.
-- **Fear** runs 100 / 50 / 25 / 12.5 percent of the ability's own duration, on the same 60 second window, and never becomes immune either. Read it as a multiplier and never as a table of seconds: five abilities across three classes share this ladder, so seconds can only ever be right for one of them. Before game 0.37.1 the game itself had that bug, and every fear in the game lasted 8 seconds on first application whatever its tooltip said.
+- **Polymorph** runs absolute seconds, 10 / 5 / 1 on a 60 second window, and **never** becomes immune. It is the only absolute ladder.
+- **Fear** runs 100 / 50 / 25 / 12.5 percent of the ability's own duration, on the same 60 second window, and never becomes immune either. Read it as a multiplier, never as a table of seconds: several abilities across classes share this ladder.
 - **Stuns do not diminish at all**, and do not even stamp a window.
 - **It is player versus player only.** A mob never diminishes and is never diminished.
 - **An item set can shorten any of them**, on top of whatever the ladder decided and including the stuns the ladder skips. So a duration you compute is what the ability asks for rather than what the target will get, and the target's own reduction is not on the wire.
 
-The ladder's own state is not readable. The entity carries a `ccDr` map and the client builds it empty and is never sent one, which is the trap two sections up wearing different clothes: it is present, it is a Map, and it stays empty for the whole session. A ladder display is therefore something your addon TRACKS from the applications it watches, and it can be wrong in one direction it cannot detect, since an immune application produces no aura to observe.
+The ladder's own state is not readable. The entity carries a `ccDr` map that is never sent, so it is present, a Map, and empty for the whole session. A ladder display is therefore something your addon TRACKS from the applications it watches, and it can be wrong in one direction it cannot detect, since an immune application produces no aura to observe.
 
 And death clears the whole ladder, as does an arena or match reset. Drop everything you are tracking for a target when that target dies, or you will report a target as immune to a root that is about to land at full duration.
 
@@ -319,7 +312,7 @@ And death clears the whole ladder, as does an arena or match reset. Drop everyth
 
 **Join it for anything that has to move smoothly**: a sweep, a bar's fill, a decay curve, an anchor following a point. The loader positions every `ui.anchor3d` after your handler has run, so a point you move here is followed in the same frame rather than the next one.
 
-**Do not join it for a panel whose figures change once a second.** Wayline is the worked example, and it is deliberately on a one-second `woc.setInterval` calling its own draw function: every figure on that panel moves at most once a second, so joining a 60Hz loop would rewrite six identical strings sixty times a second to display nothing new. `woc.paint` would be the wrong answer there too, for the opposite reason: nothing HAPPENS to ask it for a repaint, the figures simply move with the clock. "The loader runs one loop" is not an instruction to put everything in it.
+**Do not join it for a panel whose figures change once a second.** Use `woc.setInterval` there: a 60Hz loop would rewrite identical strings sixty times a second. `woc.paint` is wrong there too, since nothing HAPPENS to ask for a repaint; the figures move with the clock.
 
 **Keep it running while your frames are hidden**, unless you have a reason not to. `onFrame` does not stand down when your UI is not on screen, which is deliberate: a timer whose window is closed still has to know how much of an 18 second window has elapsed when the window opens again. If your handler is expensive, check whether the frame is visible inside it rather than unsubscribing.
 
@@ -335,17 +328,15 @@ woc.world.on('inventory', repaint);
 woc.bus.follow('prices', (payload) => { prices = payload; repaint(); });
 ```
 
-Three addons wrote this by hand before it existed, byte for byte: a boolean, a `requestAnimationFrame` armed only when the boolean was clear, and the boolean cleared inside the callback. What none of them wrote is the half that `{ frame }` buys, and one of them wrote a piece of it: a request made while that frame is hidden is held rather than performed, and one repaint runs on the first frame after the panel comes back. So a hidden panel stops drawing and is still correct the instant it returns.
+With `{ frame }`, a request made while that frame is hidden is held, and one repaint runs on the first frame after the panel comes back, so a hidden panel stops drawing and is still correct the instant it returns. The cost: a repaint owed to a hidden panel checks visibility once a frame until the panel returns, which for a panel never reopened is the rest of the session.
 
-That is not free, and the cost is worth knowing rather than assuming: a repaint owed to a hidden panel keeps a seat on the loader's loop, because a frame publishes `visible` and no change event, so the only way to notice the panel returning is to look once a frame. It is a boolean read, and a panel with nothing owed keeps no seat at all, but a panel closed and never reopened holds one for the rest of the session.
+The three primitives are not interchangeable, and the wrong one is invisible in review. Something moving continuously is `woc.onFrame`. A figure that moves on its own clock, like a countdown, is `woc.setInterval`. A panel that changes when the world does is `woc.paint`.
 
-The distinction is worth holding on to, because the three primitives are not interchangeable and the wrong one is invisible in review. Something moving continuously is `woc.onFrame`. A figure that moves on its own clock, like a countdown, is `woc.setInterval`. A panel that changes when the world does is `woc.paint`.
-
-**And `{ frame }` is a fourth decision, about the HANDLER rather than the panel.** Pass it only when the handler does nothing but draw. If it also records something the addon needs whether or not anybody is looking, a closed panel records nothing for the rest of the session and nothing anywhere says so: no throw, no warning, just a table that turns out to be empty when something reads it. Split the recording out and give `paint` the drawing. [The API page](/docs/api) has the two shipped addons that decided this opposite ways and were both right.
+**And `{ frame }` is a fourth decision, about the HANDLER rather than the panel.** Pass it only when the handler does nothing but draw. If it also records something the addon needs whether or not anybody is looking, a closed panel records nothing for the rest of the session and nothing anywhere says so: no throw, no warning, just a table that turns out to be empty when something reads it. Split the recording out and give `paint` the drawing.
 
 ## An aura's icon comes from its own family, then from the caster's class, then from nowhere
 
-This page used to say there is no `ui.icon.aura` and that no version of this API would change that. Game **0.39.0** changed it: the game began serving an aura art manifest, and `ui.icon.aura` reads it. Ask the two builders in the order the game's own resolver does.
+`ui.icon.aura` reads the game's aura art manifest. Ask the two builders in the order the game's own resolver does.
 
 ```js
 // The effect's own painting, for the auras no ability id names: a mob's, an

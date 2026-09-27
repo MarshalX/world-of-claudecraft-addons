@@ -1,8 +1,8 @@
 # Style
 
-Biome runs with `preset: "all"` and `--error-on-warnings`, and the TypeScript config turns on every strictness flag that exists. Both are deliberate. The cost is that a lot of ordinary-looking code is rejected, and finding that out at the end of a change is expensive: the fix is usually a real restructuring, not a formatting pass.
+Biome runs with `preset: "all"` and `--error-on-warnings`, and the TypeScript config turns on every strictness flag that exists. A lot of ordinary-looking code is rejected, and the fix is usually a real restructuring, so finding out at the end of a change is expensive.
 
-This file is the list of rules that actually fire here, with the idiom that satisfies each. It is written from the violations real work produced, not from Biome's rule index. Read it before writing a module, not after.
+This file lists the rules that actually fire here, with the idiom that satisfies each. Read it before writing a module, not after.
 
 `pnpm fix` formats and applies the safe fixes. Everything below is what it cannot fix for you.
 
@@ -16,7 +16,7 @@ This file is the list of rules that actually fire here, with the idiom that sati
 | Cognitive complexity | **15** | everywhere |
 | Parameters | **4** | everywhere |
 
-The two that shape the code most are the function and file limits. A `createX` factory that closes over state and returns an object hits 50 lines fast. Plan for it: when a factory needs more than about three closures, the state it holds is usually two concerns rather than one, and splitting it is the fix Biome is asking for. `runtime/supervisor.ts` is the worked example, split into a status board, a running set, a queue, and the coordinator over them.
+The function and file limits shape the code most. A `createX` factory that closes over state hits 50 lines fast; when it needs more than about three closures, the state it holds is usually two concerns, and splitting it is the fix. `runtime/supervisor.ts` is the worked example, split into a status board, a running set, a queue, and the coordinator over them.
 
 ## Module shape
 
@@ -34,7 +34,7 @@ export { helper };
 
 **Do not end a file with a run of re-exports** (`noBarrelFile`). A tail of `export { a } from './a'; export { b } from './b';` makes the file a barrel and is rejected. Barrels are only for a directory's `index.ts` public surface.
 
-Both of these bite the same way: you split a module, tests import a constant from the old path, and the tempting fix is a re-export. Update the test's import instead.
+When a split leaves tests importing a constant from the old path, update the test's import; do not add a re-export.
 
 ## Control flow
 
@@ -57,9 +57,9 @@ function StatusBadge(props: { status: StatusView | null }) {
 }
 ```
 
-A small named component per conditional branch, rather than `{x ? <A /> : <B />}` inline. It reads better anyway; treat the rule as a prompt to name the thing.
+Write a small named component per conditional branch instead of `{x ? <A /> : <B />}` inline.
 
-For `noAwaitInLoops`, be honest about which you mean. `Promise.all` when the work is independent; `inSeries` when order or one-at-a-time matters and you can say why (rate limits, claim order, a single-process server). Writing `inSeries` is a claim that the serialization is intentional.
+For `noAwaitInLoops`, use `Promise.all` when the work is independent and `inSeries` only when order or one-at-a-time matters and you can say why (rate limits, claim order, a single-process server).
 
 ## Values and names
 
@@ -71,7 +71,7 @@ const MS_PER_SECOND = 1000;
 const MIN_FIELD_FONT_PX = 16;
 ```
 
-**Object keys follow `useNamingConvention` too.** This catches you whenever the keys are not yours: game cue names (`ui_ready_check`), DOM globals (`XMLHttpRequest`), manifest ids (`open-on-load`), key codes (`KeyW`). The fix is entry pairs, never an exemption, and it documents the ownership:
+**Object keys follow `useNamingConvention` too**, which fires whenever the keys are not yours: game cue names (`ui_ready_check`), DOM globals (`XMLHttpRequest`), manifest ids (`open-on-load`), key codes (`KeyW`). Use entry pairs, never an exemption:
 
 ```ts
 // Entry pairs because every key here is a name the PAGE owns, not one this
@@ -90,9 +90,7 @@ const ALTERNATIVES: Record<string, string> = Object.fromEntries(SHADOW_PAIRS);
 
 ## Where Biome and TypeScript disagree
 
-These are the subtle ones. Both tools are configured strictly and in two places they want opposite things.
-
-**`useLiteralKeys` vs `noPropertyAccessFromIndexSignature`.** Biome wants `headers.etag` rather than `headers['etag']`. TypeScript forbids dotting into an index signature. Neither is wrong; the resolution is a helper that does the computed access, so the call site has no literal key at all:
+**`useLiteralKeys` vs `noPropertyAccessFromIndexSignature`.** Biome wants `headers.etag` rather than `headers['etag']`; TypeScript forbids dotting into an index signature. Use a helper that does the computed access, so the call site has no literal key:
 
 ```ts
 function header(headers: Record<string, string>, name: string): string | undefined {
@@ -119,7 +117,7 @@ if (opts.glyph !== undefined) {
 const server: { issuesEtags: boolean } = { issuesEtags: true };
 ```
 
-**`verbatimModuleSyntax` means `import type` is load-bearing, not cosmetic.** A value import is emitted; a type import is erased. That is what keeps zod out of the page bundle, and it is what let a single `API_VERSION` value import drag the whole library in once already. If you only need the type, say `import type`.
+**`verbatimModuleSyntax` makes `import type` load-bearing.** A value import is emitted; a type import is erased. That keeps zod out of the page bundle, where a single value import from a zod module drags in the whole library. If you only need the type, say `import type`.
 
 ## Errors and async
 
@@ -129,7 +127,7 @@ const server: { issuesEtags: boolean } = { issuesEtags: true };
 throw new Error(`${url} did not return JSON: ${String(err)}`, { cause: err });
 ```
 
-**Anything returning a promise rejects rather than throwing synchronously.** This is a repo rule, not a Biome one, and it is in AGENTS.md: Comlink turns a synchronous throw into a rejection, so the bridge hides the difference and a direct caller does not.
+**Anything returning a promise rejects rather than throwing synchronously** (an AGENTS.md rule): Comlink turns a synchronous throw into a rejection, so the bridge hides the difference and a direct caller does not.
 
 ## Regex
 
@@ -139,15 +137,15 @@ throw new Error(`${url} did not return JSON: ${String(err)}`, { cause: err });
 const HEADER_LINE_RE = /^([^:]+):\s*(.*)$/;
 ```
 
-This fires constantly in tests, where `.toThrow(/some message/)` is the natural thing to write. `tests/**` has the rule off for exactly that reason; in `loader/src` and `tools`, hoist.
+`tests/**` has the rule off because `.toThrow(/some message/)` is the natural assertion; in `loader/src` and `tools`, hoist.
 
 ## Imports
 
-Biome sorts imports, and it sorts by the **local** name, so a renamed import moves: `import { LOCAL_ID, fqid as makeFqid }` is ordered on `makeFqid`, not on `fqid`. The exact ordering beyond that is Biome's and is not worth reproducing by hand. Run `pnpm fix` and take what it gives you rather than arguing with it in review.
+Biome sorts imports, and it sorts by the **local** name, so a renamed import moves: `import { LOCAL_ID, fqid as makeFqid }` is ordered on `makeFqid`, not on `fqid`. Run `pnpm fix` and take the order it gives you.
 
 ## What is relaxed, and why
 
-Three relaxations exist in `biome.json`. Each is a rule that is structurally impossible to satisfy in that location, not one that was inconvenient.
+Every relaxation in `biome.json` is a rule that is structurally impossible to satisfy in that location. The full table is in AGENTS.md; these are the ones ordinary work meets.
 
 In `addons/**`, `noExcessiveLinesPerFile` is off. An addon is one file by definition: the manifest names a single `entry` and the loader evaluates it with `new Function`. There is nothing to split into.
 
@@ -155,7 +153,7 @@ In `tests/**`, `noExcessiveLinesPerFile` is off, `noExcessiveLinesPerFunction` i
 
 In `loader/src/host/**`, the GM globals are declared. `host/globals.ts` is the only module allowed to name one.
 
-Adding a fourth needs the same standard: the rule has to be impossible there, not merely annoying. "I would have to restructure this" is the rule working.
+Adding one needs the same standard: the rule has to be impossible there, not merely annoying. "I would have to restructure this" is the rule working.
 
 ## Suppressions
 
@@ -168,7 +166,7 @@ import SOURCE from '../addons/dev-harness/main.js?raw';
 
 **An unused suppression is itself an error** (`suppressions/unused`). Do not add one speculatively. In particular, `new Function` is not flagged by `noGlobalEval` in Biome 2.5.5, so a suppression for it is dead weight that fails the check.
 
-A suppression can also be used in one tree and unused in another, which reads as a lint failure that only CI sees. `noUnresolvedImports` is the case: Biome reports a `?raw` import of a git-ignored build artifact when the artifact is on disk (the path resolves but the file is outside Biome's module graph, since `biome.json` sets `vcs.useIgnoreFile`) and reports nothing when it is missing (it declines to judge a specifier carrying a loader query it cannot resolve). `host/boot.ts` imports the runtime bundle exactly that way, so `pnpm lint` builds the bundle first if it is missing. The fix for this shape is to make the artifact's presence deterministic, never to turn the rule off for the file: the rule stays on and the suppression stays true everywhere.
+A suppression can be used in one tree and unused in another, which shows up as a lint failure only CI sees. `noUnresolvedImports` is the case: Biome reports a `?raw` import of a git-ignored build artifact when the artifact is on disk (the path resolves but the file is outside Biome's module graph, since `biome.json` sets `vcs.useIgnoreFile`) and reports nothing when it is missing (it declines to judge a specifier carrying a loader query it cannot resolve). `host/boot.ts` imports the runtime bundle exactly that way, so `pnpm lint` builds the bundle first if it is missing. The fix for this shape is to make the artifact's presence deterministic, never to turn the rule off for the file: the rule stays on and the suppression stays true everywhere.
 
 ## Before you run Biome
 
@@ -192,4 +190,4 @@ pnpm lint loader/src/host/fetcher.ts  # one file, while you are still in it
 pnpm lint                             # the whole tree, before you call it done
 ```
 
-`pnpm lint` fails on info-level findings, not just errors. That is the point of `tools/lint.mjs` existing rather than calling Biome directly: `--diagnostic-level` controls what Biome DISPLAYS, not what it fails on, and most of the rules above report at info. Without the gate they accumulate silently until someone reads the output, which is exactly the expensive-at-the-end problem this file exists to prevent.
+`pnpm lint` fails on info-level findings, not just errors, which is why `tools/lint.mjs` wraps Biome: `--diagnostic-level` controls what Biome DISPLAYS, not what it fails on, and most of the rules above report at info.

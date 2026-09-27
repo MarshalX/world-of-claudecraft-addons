@@ -1,14 +1,7 @@
-// Which halves of the GM surface a given manager actually granted.
+// Which halves of the GM surface a given manager actually granted, by feature detection.
 //
-// Feature detection, never a manager name and never a version check: the
-// ambient tampermonkey types declare the full surface, so they say nothing about
-// what is really there, and a direct call to something ungranted is what breaks
-// Greasemonkey on a browser nobody tested.
-//
-// Separate from gm.ts because the detection decides which PATH the adapter
-// takes, and the adapter then has to agree with it. Keeping the decision in one
-// place is what stops subscribing and setValue disagreeing about whether the
-// broadcast fallback is live and delivering a change twice.
+// The adapter's paths all read this one decision, so subscribing and setValue cannot disagree
+// about whether the broadcast fallback is live and deliver a change twice.
 
 import type { GmCapabilities, GmSource } from './gm-source.ts';
 

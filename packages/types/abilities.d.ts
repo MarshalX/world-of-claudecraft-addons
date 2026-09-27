@@ -1,31 +1,25 @@
 /**
  * One ability you know.
  *
- * `cost`, `castTime` and `cooldown` are the RESOLVED values, after your talents,
- * rather than the ability's base figures. A hunter with the relevant point spent
- * reads a 5.4 second cooldown on `arcane_shot` where the base is 6, and the
- * resolved number is the one a cooldown display has to count down from.
+ * `cost`, `castTime` and `cooldown` are RESOLVED after your talents, which is
+ * what a cooldown display counts down from.
  *
- * There is no `icon`, because art needs a per-class manifest and is fetched
- * asynchronously. Join it yourself, which is one line:
+ * There is no `icon`, because art is fetched asynchronously. Join it yourself:
  *
  * ```js
  * const url = woc.ui.icon.ability(info.id, woc.world.player.templateId);
  * ```
  *
- * There is no `description` either: the authored text carries placeholders the
- * game substitutes when it renders, so it would reach you as a template rather
- * than as a sentence.
+ * There is no `description`: the authored text is a template the game fills in
+ * when it renders.
  */
 export interface AbilityInfo {
   id: string;
   /**
    * The display name.
    *
-   * This is the string combat events carry in their `ability` field, which is
-   * what makes `byName` a reliable way back to an id. It is the game's own name
-   * rather than a localized one, so it does not change with the client's
-   * language, and neither does the event field it matches.
+   * The string combat events carry in their `ability` field, so `byName` maps it
+   * back to an id. Not localized: it does not change with the client's language.
    */
   name: string;
   school: string;
@@ -46,72 +40,50 @@ export interface AbilityInfo {
   /**
    * How long the effect this ability applies lasts, in seconds.
    *
-   * The RANK-resolved base, not the figure a cast will produce. Talent duration
-   * modifiers are applied at cast time and are deliberately not folded in,
-   * because the use this exists for is a denominator: a diminishing-returns
-   * ladder expresses an observed duration as a fraction of the undiminished
-   * base, and a base that already moved is the wrong one to divide by.
+   * The RANK-resolved base, with no talent modifiers, so it is the right
+   * denominator for a diminishing-returns ratio of observed to undiminished
+   * duration. The game's own tooltip does not show it.
    *
-   * ABSENT rather than zero in three cases, and they are different questions
-   * rather than one missing number. An ability that applies no timed effect has
-   * no answer. An ability that applies several of different lengths (a stun and
-   * a slow) has two, and picking one would be a guess about which you meant. And
-   * a combo-point finisher's length is `base + perCombo * spent`, which has no
-   * value at all until the cast that spends the points.
-   *
-   * The game's own ability tooltip does not show this figure, so there is no
-   * on-screen number to check it against: it comes off the resolved effect the
-   * ability applies.
+   * ABSENT in three cases: the ability applies no timed effect; it applies
+   * several of different lengths (a stun and a slow); or it is a combo-point
+   * finisher, whose length depends on the points spent.
    */
   auraDuration?: number;
 
   /**
    * Bonus threat this ability adds on a successful use, flat.
    *
-   * Resolved per rank like `cost` and `cooldown`, and overridden per rank where
-   * the ability says so. Absent, not 0, when the ability adds none: absent means
-   * nobody said and 0 would read as a measurement.
-   *
-   * `world.threat` answers how close you are to pulling. This answers which of
-   * your own abilities is doing it, which nothing in the game's own interface
-   * shows. Added in API minor 2.
+   * Resolved per rank. Absent, not 0, when the ability adds none. Added in API
+   * minor 2.
    */
   threatFlat?: number;
 
   /**
    * Multiplier on the threat this ability's damage generates.
    *
-   * The classic tanking figure: an ability that deals ordinary damage and
-   * generates more threat than it should carries it here. Absent rather than 1
-   * when the ability is plain, so a caller can tell "no modifier" from "a
-   * modifier that happens to be neutral". Added in API minor 2.
+   * Absent, not 1, when the ability has no modifier. Added in API minor 2.
    */
   threatMult?: number;
 
   /**
    * How many charge stages a hold-to-charge ability has. Absent when it has none.
    *
-   * THE COUNT, NOT THE LIVE STAGE. The stage is on no wire; the game derives it
-   * from `castTotal` and `castRemaining`, which ride every entity record, in two
-   * functions in its `combat/glacial_front.ts`. Keep both of their guards: progress
-   * answers 1 when the total is not positive (the client zero-fills `castTotal`,
-   * and a 0 total divides to a NaN that a style property drops silently), and the
-   * stage answers 1 when the count is not above one.
+   * THE COUNT, NOT THE LIVE STAGE. The stage is on no wire: derive it from
+   * `castTotal` and `castRemaining` on the caster's entity. Treat progress as 1
+   * when `castTotal` is not positive (the client zero-fills it, and dividing by 0
+   * gives NaN), and the stage as 1 when the count is not above one.
    *
-   * Nothing on the wire marks a cast as empowered, so a cast with no stage count
-   * cannot be told from a plain cast. `AbilityIndex` is YOUR OWN spellbook, so a
-   * hostile caster charging an ability you have not learned gives you a cast
-   * clock and no divisor. `Aura.empowerAbilities` is the scope of a next-cast
-   * empowerment buff, not a charge stage.
+   * Nothing on the wire marks a cast as empowered, and this is YOUR OWN
+   * spellbook, so a hostile caster charging an ability you have not learned has no
+   * divisor. `Aura.empowerAbilities` is a next-cast buff's scope, not a stage.
    *
    * Added in API minor 10.
    */
   empowerStages?: number;
 
   /**
-   * The channel's length and tick count. Absent when the ability is not channelled;
-   * presence is the flag, and `castTime` is 0 on a channel, so do not read that as
-   * instant.
+   * The channel's length and tick count. Absent when the ability is not channelled.
+   * `castTime` is 0 on a channel, which does not mean instant.
    *
    * DO NOT DRIVE A LIVE BAR FROM `duration`. It is PRE-HASTE: the haste-resolved
    * length is `castTotal` on the caster's entity record, counting down in
@@ -120,17 +92,15 @@ export interface AbilityInfo {
   channel?: AbilityChannel;
 
   /**
-   * Usable without spending the global cooldown. ABSENT rather than false when
-   * the ability is ordinary, so test for presence; a false never arrives, which
-   * is what the `true` type says. Added in API minor 10.
+   * Usable without spending the global cooldown. ABSENT, never false, when the
+   * ability is ordinary. Added in API minor 10.
    */
   offGcd?: true;
 }
 
 /**
  * How long a channel runs and how many times it ticks, as AUTHORED: haste
- * shortens the whole channel, and at least one ability fires more ticks than its
- * authored count under the right resource state. For anything live, read
+ * shortens it, and some abilities can fire extra ticks. For anything live, read
  * `castTotal` and `castRemaining` off the caster. Added in API minor 10.
  */
 export interface AbilityChannel {
@@ -141,10 +111,9 @@ export interface AbilityChannel {
 /**
  * What `describe` answers: a label for an ability id, and where it came from.
  *
- * `known: false` means the name was derived from the id and is very likely
- * wrong, because ids and display names have diverged. The guess mark is yours to
- * add: the same string also reaches an `aria-label` and a tooltip title, where a
- * glued-on `?` reads as part of the name. Added in API minor 4.
+ * `known: false` means the name was derived from the id and is likely wrong,
+ * since ids and display names diverge. Mark the guess yourself; the name carries
+ * no marker. Added in API minor 4.
  */
 export interface AbilityDescription {
   /** The game's own display name where you know the ability, derived from the id where you do not. */
@@ -157,11 +126,9 @@ export interface AbilityDescription {
 /**
  * Your spellbook: the abilities you know, and three ways to look one up.
  *
- * This is the ONLY bridge between an ability's id and its display name, and you
- * need it because the two have diverged and nothing else connects them. Skill
- * art is filed under the id (`arcane_shot`), while combat events name the
- * ability (`Fell Shot`). So a meter reading events can find the icon, and a
- * cooldown display holding ids can find the label:
+ * The bridge between an ability's id and its display name, which diverge: skill
+ * art is filed under the id (`arcane_shot`), while combat events carry the name
+ * (`Fell Shot`).
  *
  * ```js
  * // an event gave you a name; get the id, then the art
@@ -172,18 +139,13 @@ export interface AbilityDescription {
  * const label = woc.world.abilities.describe(id).name;
  * ```
  *
- * `describe` is the third of the three, and the one that always answers: `byId`
- * is null for an id that is not yours, where `describe` derives a name and marks
- * it as derived.
+ * `describe` always answers: where `byId` is null, it derives a name and says so.
  *
- * TWO LIMITS WORTH KNOWING. It covers YOUR OWN known kit, so an ability a mob
- * casts is not in here and `byName` answers null for it. And it is empty until
- * the world is up, so a lookup on the landing page finds nothing rather than
- * throwing.
+ * It covers YOUR OWN kit only, so `byName` is null for a mob's ability. It is
+ * empty until the world is up.
  *
- * The objects it hands out are frozen and are the loader's own, so one stays
- * valid to hold. The list itself is replaced whenever your spellbook genuinely
- * changes, which `woc.world.on('abilities', ...)` reports.
+ * The objects are frozen and safe to hold. The list is replaced when your
+ * spellbook changes, which `woc.world.on('abilities', ...)` reports.
  */
 export interface AbilityIndex {
   readonly known: readonly AbilityInfo[];

@@ -1,13 +1,7 @@
 // @vitest-environment happy-dom
 
-// The context menu.
-//
-// What makes this a kit surface rather than something each addon draws is the
-// DISMISSAL, so that is what this suite is mostly about. A menu has to close on
-// select, on Escape, on a click anywhere else, and when the addon that opened it
-// is disabled, and every one of those listens to something the addon does not
-// own. An addon that hand-rolls it gets three of the four right and leaves the
-// fourth floating over the HUD.
+// The context menu. Mostly dismissal: select, Escape, a click elsewhere, and disable
+// of the addon that opened it.
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createMenus, MENU_ID } from '../loader/src/runtime/ui/kit/menu.ts';
@@ -50,15 +44,13 @@ describe('what it draws', () => {
     expect(items().map((el) => el.textContent)).toEqual(['Reset', 'Ignore']);
   });
 
-  it('draws a disabled item unusable rather than absent', () => {
+  it('draws a disabled item as present and unusable', () => {
     openMenu([{ label: 'Reset', onSelect: vi.fn(), disabled: true }]);
 
     expect(items()[0]?.disabled).toBe(true);
   });
 
-  // A rule above the first item draws a lid on the menu rather than separating
-  // anything, and an addon building its items from a filtered list cannot easily
-  // know which one ended up first.
+  // An addon building items from a filtered list cannot easily know which is first.
   it('ignores a separator on the first item', () => {
     openMenu([
       { label: 'Reset', onSelect: vi.fn(), separator: true },
@@ -69,9 +61,8 @@ describe('what it draws', () => {
     expect(items()[1]?.classList.contains('woc-menu-cut')).toBe(true);
   });
 
-  // A label carries ability and player names, both of which reach an addon from
-  // the wire.
-  it('writes a label as text, never as markup', () => {
+  // Labels carry names from the wire.
+  it('writes a label as text', () => {
     openMenu([{ label: '<img src=x onerror=alert(1)>', onSelect: vi.fn() }]);
 
     expect(menu()?.querySelector('img')).toBeNull();
@@ -96,8 +87,7 @@ describe('choosing an item', () => {
     expect(menu()).toBeNull();
   });
 
-  // Closed BEFORE the handler runs, so a handler that opens another menu is not
-  // immediately shut by the teardown of the one that launched it.
+  // Closed before the handler runs, so the new menu survives the old one's teardown.
   it('lets a handler open another menu', () => {
     const host = root();
     const menus = createMenus({ doc: document, root: host, viewport: () => VIEW });
@@ -125,9 +115,7 @@ describe('dismissal', () => {
     expect(menu()).toBeNull();
   });
 
-  // In the CAPTURE phase, because a click on one of the game's own controls has
-  // to dismiss the menu as well as reach the game, and the game's controls stop
-  // propagation.
+  // Capture phase: the game's own controls stop propagation.
   it('closes on a pointer press that stops propagating', () => {
     openMenu([{ label: 'Reset', onSelect: vi.fn() }]);
     const elsewhere = document.createElement('button');
@@ -161,9 +149,7 @@ describe('dismissal', () => {
   });
 });
 
-// One menu for the whole loader, like the banner slot. Two open context menus is
-// not a state anyone means to be in, and a stack would be a dismissal order to be
-// wrong about.
+// One menu for the whole loader, like the banner slot.
 describe('the single slot', () => {
   it('closes the first when a second opens', () => {
     const host = root();
@@ -175,8 +161,7 @@ describe('the single slot', () => {
     expect(items().map((el) => el.textContent)).toEqual(['Second']);
   });
 
-  // The teardown an addon holds is for ITS menu. Calling it late, after someone
-  // else has opened one, must not take theirs down.
+  // An addon's teardown closes only its own menu.
   it('ignores a close called after another menu replaced it', () => {
     const host = root();
     const menus = createMenus({ doc: document, root: host, viewport: () => VIEW });
@@ -205,9 +190,7 @@ describe('placement', () => {
     expect(menu()?.style.top).toBe('60px');
   });
 
-  // happy-dom measures every element as zero, so what this pins is the clamp
-  // being applied at all rather than the arithmetic: a point past the edge comes
-  // back inside it.
+  // happy-dom measures every element as zero, so this pins that the clamp applies.
   it('keeps a menu opened past the edge on screen', () => {
     const host = root();
     const menus = createMenus({ doc: document, root: host, viewport: () => VIEW });

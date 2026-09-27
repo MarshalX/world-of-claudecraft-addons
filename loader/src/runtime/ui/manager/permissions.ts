@@ -1,19 +1,8 @@
-// What an addon's declared permissions mean, in a sentence each.
-//
-// Shown before an install is confirmed. The wording is deliberately about what
-// the addon can SEE and DO rather than about the API it calls, because the
-// player reading it has no reason to know what `net.read` names.
-//
-// These are a disclosure, not an enforcement. Addon source runs in the page
-// realm with the page's globals in scope, so a manifest that declares nothing
-// is not thereby prevented from doing anything: what the list says is what the
-// author says their addon is for. The pane states that alongside it rather than
-// letting the list imply a boundary the loader does not have.
-// site/content/docs/manifest.md says the same thing to the author writing the
-// list, so neither side of it can read as a sandbox.
+// What an addon's declared permissions mean, a sentence each, shown before an install. Word them
+// as what the addon can see and do, never as API names. They are a disclosure, not enforcement.
 
-// From shared/permissions.ts, never from shared/schema.ts: this is a value
-// import, and one out of a zod module would pull the library into the page.
+// From shared/permissions.ts, never shared/schema.ts: a value import from a zod module pulls zod
+// into the page bundle.
 import { PERMISSIONS, type Permission } from '../../../shared/permissions.ts';
 
 const DESCRIPTIONS: Record<Permission, string> = {
@@ -30,12 +19,8 @@ function isPermission(value: string): value is Permission {
 }
 
 /**
- * One line per declared permission, in the order the manifest lists them.
- *
- * A value this loader does not know is kept and shown verbatim rather than
- * dropped. It means the addon was written against a newer loader, and hiding
- * the one entry that could not be explained would understate what is being
- * installed at exactly the moment the player is deciding.
+ * One line per declared permission, in manifest order. An unknown value (from a newer loader) is
+ * shown verbatim, never dropped, so the confirmation never understates what is being installed.
  */
 function describePermissions(declared: readonly string[] | undefined): string[] {
   return (declared ?? []).map((value) => {

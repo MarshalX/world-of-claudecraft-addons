@@ -1,50 +1,22 @@
-// What one addon's `companions` list means right now.
+// What one addon's `companions` list means right now: whether each named addon is here and
+// switched on, and what the manifest's `companionReasons` says it adds.
 //
-// Pure, and separate from catalog.ts because it is a different question: catalog
-// merges sources into a browse list, and this answers "is the thing this addon
-// says it works with actually here". The answer is STATE, which is half the
-// reason the field exists at all: "works better with Lorebind" could be written
-// into a description, and "Lorebind is installed but switched off" can only come
-// from here.
+// A companion is a bare addon id, never an fqid: the same addon from a fork is still the one the
+// author meant, so resolution prefers the naming addon's own marketplace, then any source.
 //
-// The other half is WHY, off the same manifest's `companionReasons`. It used to
-// have nowhere to live and went into descriptions instead, which is the wrong
-// place twice over: a description is read before a player knows the companion
-// exists, and it cannot say a word about state.
-//
-// A companion is a bare addon id, never an fqid. The same addon installed from a
-// fork is a different fqid and is still the companion the author meant, so
-// resolution prefers the marketplace the naming addon came from and then accepts
-// any source in the list.
-//
-// It gates NOTHING. Nothing here is read by an install control, an enable
-// toggle, or the supervisor, and that is the design rather than an omission: a
-// hard dependency was weighed and refused, and the bus refuses waiting on
-// purpose. A note now carries an fqid, and that is a TARGET rather than a gate:
-// the panes point an existing control at it, and nothing in this file decides
-// whether that control may be pressed.
+// It gates NOTHING. No install control, toggle or supervisor reads this; a note's fqid is only a
+// target the panes point an existing control at.
 
 import { fqid as makeFqid, splitFqid } from '../../../shared/marketplace.ts';
 import type { OfferedAddon } from './catalog.ts';
 
-/**
- * What a player would have to do about one named companion.
- *
- * `enabled` is deliberately a state and not the absence of one: a row that says
- * nothing when everything is fine is a row nobody learns to read.
- */
+/** What a player would have to do about one companion. `enabled` is drawn as a state too. */
 type CompanionState = 'enabled' | 'disabled' | 'offered' | 'unknown';
 
 interface CompanionNote {
   /** The bare id the manifest named. */
   id: string;
-  /**
-   * The display name, or the bare id when nothing here knows one.
-   *
-   * The fallback is not a shrug. An id nobody offers and nobody has installed is
-   * an addon this loader has never seen, so the id is genuinely all that is
-   * known about it; every other state has a real name to draw.
-   */
+  /** The display name, or the bare id for an addon nobody offers or has installed. */
   name: string;
   state: CompanionState;
   /** What the naming addon says this one adds, or empty when it did not say. */
@@ -101,11 +73,8 @@ function stateFor(ctx: CompanionContext, id: string, fqid: string | null): Compa
 }
 
 /**
- * The registry's name, the offered name, then the bare id.
- *
- * The registry answers first because it keeps its own copy of the manifest: an
- * addon whose source has since left the list still has the name the player
- * installed, and no source is left to say otherwise.
+ * The installed addon's name from the registry, which keeps its own copy of the manifest and so
+ * still answers after the source has left the list.
  */
 function nameFor(ctx: CompanionContext, installed: string | null): string | null {
   if (installed === null) {
@@ -115,11 +84,8 @@ function nameFor(ctx: CompanionContext, installed: string | null): string | null
 }
 
 /**
- * One companion, resolved.
- *
- * The installed record answers first for both the name and the target, because
- * an addon a player HAS is the one they mean whichever source offers a copy.
- * What is on offer answers second, and neither answering is `unknown`.
+ * One companion, resolved. The installed record answers first for both name and target, because an
+ * addon a player HAS is the one they mean; what is on offer answers second.
  */
 function noteFor(ctx: CompanionContext, id: string, reason: string): CompanionNote {
   const installed = installedFqid(ctx, id);

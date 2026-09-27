@@ -1,10 +1,5 @@
-// The three static content tables, read off the client's world object.
-//
-// Its own group rather than three more getters in `coreReads`, because these are
-// unlike every other read on the backend in the one way that matters: they
-// cannot change during a session. Nothing watches them, no signature covers
-// them, and the reader behind each caches on the source array rather than
-// answering fresh. Grouping them says so.
+// The three static content tables. They cannot change during a session, so nothing watches them
+// and each reader caches on its source array.
 
 import {
   type CivicService,

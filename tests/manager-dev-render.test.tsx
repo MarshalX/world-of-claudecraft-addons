@@ -1,18 +1,8 @@
 // @vitest-environment happy-dom
 
-// The Dev pane as it actually renders.
-//
-// A separate suite from manager-render because it needs the market and dev
-// halves of the bridge, which every other pane passes as null.
-//
-// The pane no longer lists what the local server offers: dev mode merges that
-// source into the marketplace list, so Browse shows those rows with the same
-// confirmation and the same badge as every other source. What is checked here is
-// what is left, which is what nothing else owns.
-//
-// It exists because of how the settings pane failed: the code was right in
-// isolation and the pane came up blank in the game, because a read that threw
-// during render unmounted it. Nothing catches that except rendering.
+// The Dev pane as it renders. Separate from manager-render because it needs the market
+// and dev halves of the bridge; a read that throws during render blanks a pane, and only
+// rendering catches that.
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { DiagnosticsReading } from '../loader/src/runtime/diagnostics.ts';
@@ -171,7 +161,7 @@ describe('the tab', () => {
 });
 
 describe('the pane', () => {
-  it('renders rather than coming up blank', async () => {
+  it('renders', async () => {
     await open();
 
     expect(document.querySelector('.woc-dev')).not.toBeNull();
@@ -193,9 +183,7 @@ describe('the pane', () => {
     });
   });
 
-  // Two lists of one thing go out of step, and the one with fewer eyes on it is
-  // the one that rots. The pane points at the list that is maintained.
-  it('points at Browse for what the server offers rather than listing it again', async () => {
+  it('points at Browse for what the server offers', async () => {
     await open();
 
     await vi.waitFor(() => {
@@ -216,8 +204,7 @@ describe('the pane', () => {
     await open({ dev: devState({ polledAt: 42 }) });
 
     await vi.waitFor(() => {
-      // managerServices supplies a fixed formatter, so this does not depend on
-      // the machine's locale.
+      // managerServices supplies a fixed, locale-independent formatter.
       expect(text()).toContain('t+42');
     });
   });
@@ -237,8 +224,6 @@ describe('the controls', () => {
     });
   });
 
-  // Refresh has nothing to refresh with the source switched off, and offering it
-  // reads as a way to turn the source on, which it is not.
   it('disables Refresh while dev mode is off', async () => {
     await open({ dev: devState({ enabled: false }) });
 
@@ -248,9 +233,7 @@ describe('the controls', () => {
   });
 });
 
-// What the switch DOES is tests/freeze.test.ts. This is the half that suite
-// cannot see: that the control is on the pane, that clicking it reaches the
-// runtime, and that it goes nowhere near the bridge.
+// What the freeze does is tests/freeze.test.ts; this is the control and its wiring.
 describe('the freeze', () => {
   it('freezes every addon window from the toggle', async () => {
     await open();
@@ -278,10 +261,7 @@ describe('the freeze', () => {
     expect(isFrozen()).toBe(false);
   });
 
-  // The switch must never be persisted: a freeze that survived the session that
-  // set it would be a loader booting dead with no visible cause, and a player
-  // has no reason to look in a Dev tab for it. Nothing reaching the host is what
-  // makes a page reload the recovery path.
+  // Never persisted, so a page reload always recovers from a freeze.
   it('reaches neither the host nor a store', async () => {
     const { calls } = await open();
 
@@ -317,7 +297,7 @@ describe('with no bridge', () => {
     await clickTab('Dev');
   }
 
-  it('says the loader is not connected rather than rendering empty controls', async () => {
+  it('says the loader is not connected', async () => {
     await openUnbridged();
 
     await vi.waitFor(() => {
@@ -325,9 +305,7 @@ describe('with no bridge', () => {
     });
   });
 
-  // Freezing is pure runtime and works with no host at all, and a loader whose
-  // handshake failed is one of the times a still window is most worth having. So
-  // the switch is NOT behind the note that says dev mode is unavailable.
+  // Freezing is pure runtime, so it stays available when the handshake failed.
   it('still offers the freeze', async () => {
     await openUnbridged();
 

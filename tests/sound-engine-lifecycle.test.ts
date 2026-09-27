@@ -1,19 +1,12 @@
 // What surrounds a cue: the gesture gate, warming, and teardown.
-//
-// Driven against the same fake sink the playback suite uses, because these are
-// engine state rather than pure functions. Each one is a failure a player hears
-// rather than reads: a browser that refuses audio until the first click, a cue
-// that has to fetch before it can be heard, and an addon whose sounds keep
-// playing after it was disabled.
 
 import { describe, expect, it, vi } from 'vitest';
 import { createSoundEngine } from '../loader/src/runtime/sound/engine.ts';
 import { PACK, soundHarness } from './fakes/sound-harness.ts';
 
 describe('the user-gesture requirement', () => {
-  // A suspended context does not discard what was started on it, so queueing
-  // means every dropped cue fires at once the moment the player finally clicks.
-  it('drops a cue requested before any gesture rather than queueing it', async () => {
+  // A suspended context keeps what was started on it, so queued cues would fire at once.
+  it('drops a cue requested before any gesture', async () => {
     const { engine, started, sink } = soundHarness({ running: false });
     await engine.ready();
 
@@ -36,7 +29,7 @@ describe('the user-gesture requirement', () => {
     expect(resume).toHaveBeenCalledOnce();
   });
 
-  it('also resumes on a key press, for a keyboard-only player', () => {
+  it('resumes on a key press', () => {
     const target = new EventTarget();
     const { engine, sink } = soundHarness({ running: false });
     const resume = vi.spyOn(sink, 'resume');
@@ -107,16 +100,8 @@ describe('dispose', () => {
   });
 });
 
-// When the 119 kB pack is read, which used to be "whenever the engine was built"
-// and therefore on every page load, for every player, whether or not a single
-// installed addon ever made a sound. It is the game's own audio manifest and it is
-// fetched alongside the game's own boot assets, so a player who never hears a cue
-// was still waiting behind it.
-//
-// The cost of moving it is that a `play` arriving before the read lands falls back
-// to a guessed URL, which for a family cue is not a file that exists. That is why
-// `warm` is on the engine and why the addon API calls it from a manifest that
-// declares sound: an addon starts long before it plays anything.
+// The 119 kB pack is read lazily, never on page load. A `play` before the read lands takes a
+// guessed URL, which for a family cue is no real file, so `warm` exists for sound addons.
 describe('reading the pack', () => {
   it('does not read it just because the engine was built', () => {
     expect(soundHarness().packReads()).toBe(0);
@@ -147,8 +132,6 @@ describe('reading the pack', () => {
     expect(h.packReads()).toBe(1);
   });
 
-  // One read per session however many callers ask for it, which is the whole point
-  // of it being memoised rather than merely deferred.
   it('reads it once however many times it is asked for', async () => {
     const h = soundHarness();
 
@@ -161,10 +144,8 @@ describe('reading the pack', () => {
     expect(h.packReads()).toBe(1);
   });
 
-  // Warming is what keeps the first cue off the fallback path: by the time a cue is
-  // played the pack has landed, so it resolves to the URL the pack NAMES, cache
-  // buster and all. That query string is the tell, since nothing could guess it.
-  it('plays a warmed cue from the pack rather than from a guessed URL', async () => {
+  // The pack's cache-busting query string is the tell, since nothing could guess it.
+  it('plays a warmed cue from the pack URL', async () => {
     const h = soundHarness();
 
     h.engine.warm();
@@ -174,9 +155,6 @@ describe('reading the pack', () => {
     expect(h.fetched).toEqual(['/audio/sfx/ui_click.mp3?v=aabb']);
   });
 
-  // The other half of the same fact, and the reason `warm` exists rather than the
-  // read simply being left to the first `play`. A cue played while the read is still
-  // in flight takes a guessed URL, which for a family cue is not a file that exists.
   it('falls back to a guessed URL for a cue played before the read lands', () => {
     const h = soundHarness();
 

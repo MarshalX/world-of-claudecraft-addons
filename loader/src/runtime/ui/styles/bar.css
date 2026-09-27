@@ -1,14 +1,5 @@
-/* The timer bar, one sheet per kit module: this one is kit/bar.ts.
- *
- * Split out of kit.css when the banner's rules pushed that file past the length a
- * sheet is allowed. The seam is worth having anyway. kit.css holds the surfaces the
- * LOADER owns and an addon merely uses (frames, toasts, modals, the tooltip); a bar
- * is a thing an addon assembles a screenful of, so its rules change for different
- * reasons and at a different rate.
- *
- * The layout note that matters is in kit/bar.ts: the label is the only part allowed
- * to shrink, and `min-width: 0` is what lets it, which is the difference between an
- * ellipsis and the figure being overlapped by a long name.
+/* The timer bar (kit/bar.ts). The label is the only part allowed to shrink, and its
+ * `min-width: 0` is what gives an ellipsis instead of an overlap.
  */
 #woc-addons .woc-bar {
   position: relative;
@@ -16,31 +7,17 @@
   overflow: hidden;
   flex-shrink: 0;
   border-radius: var(--radius-sm, 4px);
-  /* Its own stacking context, so the fill sits behind this row's text and not
-     behind a neighbouring row that happens to come later in the DOM. */
+  /* Its own stacking context, so the fill sits behind this row's text, not a neighbour's. */
   isolation: isolate;
 }
 
-/* A row whose height the caller decided, from `ui.bar`'s `size`.
+/* A row whose height the caller decided, from `ui.bar`'s `size`, derived from ONE unitless
+ * custom property behind the `woc-bar-sized` class, so an unsized row keeps its line box.
  *
- * Everything here is derived from ONE unitless custom property, and every rule is
- * behind the `woc-bar-sized` class rather than a fallback, because a row that never
- * asked for a height must keep being sized by its own line box.
- *
- * 23 is that natural height: an 18px icon inside the 2px of padding above, measured
- * in a browser. It appears twice below as the number the derivation is against, so a
- * row asked for 23 looks exactly like a row that asked for nothing.
- *
- * The text is an `em` and that is the load-bearing part. A pixel figure here would
- * be a figure calibrated on whatever font the machine that wrote it inherited, and
- * the game runs 11px to 13px on a desktop against a browser default of 16. As a
- * ratio, a natural row is `1em`, which is the game's own size whatever it is set to,
- * and a row dragged to twice that reads at twice that. It is also why the property
- * is unitless: calc cannot divide a length by a length to reach a ratio.
- *
- * The three flex declarations are what make the height the truth rather than a
- * request: a kit row is a block sized by its own line box, and `min-height: 0` is
- * what lets it go under that when an addon asks for a thin strip. */
+ * 23 is the natural height (an 18px icon in 2px of padding, measured in a browser), so a row
+ * sized 23 matches an unsized one. The text is an `em` ratio, so a natural row reads at the
+ * game's own font size; calc cannot divide a length by a length, hence the unitless property.
+ * `min-height: 0` lets the row go under its line box for a thin strip. */
 #woc-addons .woc-bar-sized {
   box-sizing: border-box;
   display: flex;
@@ -49,16 +26,12 @@
   min-height: 0;
   height: calc(var(--woc-bar-size) * 1px);
   padding: 0 6px;
-  /* The ratio, with a floor under it. A strip driven down to 8px a row would
-     otherwise reach text nothing can read, and a row that clips a legible figure is
-     a better answer than one that shows an illegible whole one: this is what
-     `cadence` had already settled on by hand before the kit could carry it. */
+  /* The ratio, with a legibility floor: clipping a legible figure beats an illegible one. */
   font-size: max(9px, calc(var(--woc-bar-size) / 23 * 1em));
   line-height: 1;
 }
 
-/* The head line. The row itself is a block so the fill can span the head and the
-   detail together, which is what makes a share read as the whole row's. */
+/* The head line. The row is a block so the fill spans the head and the detail together. */
 #woc-addons .woc-bar-head {
   display: flex;
   align-items: center;
@@ -78,20 +51,12 @@
   background: rgb(120 160 255 / 30%);
 }
 
-/* School tints, from the game's OWN palette: --color-debuff-* is what it uses for the
-   school border on a debuff icon, so a row tinted this way matches the colour the player
-   already reads for the same school elsewhere. Nothing is invented here, and each var
-   carries the token's current value as a fallback, in the sheet's own rgb() notation,
-   in case the game renames one.
+/* School tints, from the game's own --color-debuff-* palette, each with its current value as a
+   fallback. `opacity` on the fill element, since the tokens are opaque and a var() takes no
+   alpha without color-mix.
 
-   `opacity` on the fill rather than a translucent colour, because the tokens are opaque
-   hexes and a var() cannot be given alpha without color-mix. The fill is its own
-   element, so this dims the fill and never the text over it.
-
-   These come FIRST and the tone rules follow, which is what makes tone win where an
-   addon sets both: tone is urgency and school is damage type, and a row that is about
-   to matter has to say so over what kind of damage it was. Same specificity, so the
-   order is the mechanism. Do not reorder these two groups. */
+   These come FIRST and the tone rules follow, so tone wins where both are set. Same
+   specificity, so the order is the mechanism. Do not reorder these two groups. */
 #woc-addons .woc-bar-school-physical .woc-bar-fill {
   background: var(--color-debuff, rgb(192 57 43));
   opacity: 0.32;
@@ -144,15 +109,11 @@
   width: 18px;
   height: 18px;
   border-radius: 3px;
-  /* The art is square; a row that is shorter than the icon must crop rather than
-     squash it, since a squashed ability icon is harder to recognise than a cropped
-     one at this size. */
+  /* Cropped, not squashed, on a row shorter than the icon. */
   object-fit: cover;
 }
 
-/* The art follows a row the caller sized, in the same ratio: 18 of the natural 23.
-   After the base rule rather than beside the other sized declarations, because it is
-   the more specific of the two and a sheet reads in one direction. */
+/* The art follows a sized row in the same ratio, 18 of the natural 23. */
 #woc-addons .woc-bar-sized .woc-bar-icon {
   width: calc(var(--woc-bar-size) * 18 / 23 * 1px);
   height: calc(var(--woc-bar-size) * 18 / 23 * 1px);
@@ -173,14 +134,8 @@
   font-variant-numeric: tabular-nums;
 }
 
-/* Money, drawn as the game draws it: a disc per unit and its figure beside it. See
- * kit/money.ts, which builds these and says why the loader keeps its own classes
- * rather than wearing the game's `.coin`.
- *
- * The three gradients are the game's own, read off `.coin.g`, `.coin.s` and
- * `.coin.c` in its stylesheet, so a coin here is the coin a player already knows.
- * They are values rather than tokens because the game declares no money custom
- * property to inherit: nothing to fall back to, and nothing that a theme moves. */
+/* Money, drawn as the game draws it (kit/money.ts). The three gradients are transcribed from
+ * the game's `.coin.g`, `.coin.s` and `.coin.c`, since it declares no money tokens. */
 #woc-addons .woc-coin-part {
   display: inline-flex;
   align-items: center;
@@ -215,8 +170,7 @@
   background: radial-gradient(circle at 35% 30%, rgb(232 168 122), rgb(139 69 19));
 }
 
-/* A compact frame's rows are read at a glance rather than operated, so they give
-   up the tap-target floor the same way the frame's own chrome does. */
+/* A compact frame's rows are tighter, like its chrome. */
 #woc-addons .woc-density-compact .woc-bar {
   padding: 1px 4px;
   font-size: 12px;

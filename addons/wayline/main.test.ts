@@ -1,16 +1,8 @@
 // @vitest-environment happy-dom
 
-// Wayline, run through the real loader.
-//
-// The claim worth pinning is a negative one: after a stretch with nothing earned, the panel
-// stops reporting a rate at all rather than reporting a smaller and smaller one forever. That is
-// the case an average since the addon started passes for the first few minutes and fails
-// permanently afterwards, which is why "earn, then wait out the window" is the first thing in
-// this file and why it asserts on the exact string.
-//
-// Almost everything here is driven by `advance`, because the subject is a rate. The addon's own
-// clock is `woc.now()`, which `advance` moves, and its timers are `woc.setInterval`, which
-// vitest's fake timers move, so the harness moves both together.
+// Wayline, run through the real loader. After a stretch with nothing earned the panel reports no
+// rate at all, never a shrinking one. `advance` moves both `woc.now()` and the fake timers that
+// drive `woc.setInterval`.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { validateManifest } from '../../loader/src/shared/schema.ts';
@@ -41,21 +33,13 @@ const LEVEL_5_NEED = 2800;
 /** The level 20 entry, which is the cap requirement and the virtual curve's base. */
 const CAP_NEED = 23_200;
 /**
- * Lifetime experience needed to reach the cap: the sum of every level's own requirement below
- * it.
- *
- * The virtual curve is a function of `lifetimeXp` and not of `xp`, which is the correction these
- * cases exist to hold. `xp` is progress within the current level and is frozen at 0 once the cap
- * is reached, so a virtual level derived from it reads as the first one for the life of the
- * character. Every capped fixture below therefore states `xp: 0` explicitly.
+ * Lifetime experience needed to reach the cap. `xp` is frozen at 0 at the cap, so every capped
+ * fixture states `xp: 0` to catch a virtual curve read from it instead of `lifetimeXp`.
  */
 const CAP_LIFETIME = 167_200;
 /**
- * The lifetime total that stands exactly at virtual 40. A literal rather than the addon's own
- * loop run a second time: a curve checked against a repetition of itself agrees with a wrong one
- * as readily as with a right one. The post-cap step is rounded on its way into the total and not
- * in place, and the two orders produce identical thresholds through virtual 30; they first part
- * at 31, and by 40 the wrong one is 21 experience low.
+ * The lifetime total that stands exactly at virtual 40, as a literal: a curve checked against a
+ * rerun of itself agrees with a wrong one. Rounding the step in place is 21 low here.
  */
 const VIRTUAL_40_LIFETIME = 1_495_979;
 
@@ -112,12 +96,7 @@ interface WaylineHarness extends SharedHarness {
   stored: () => unknown;
 }
 
-/**
- * One of the three figures, read out of the kit row it is drawn in. `.woc-bar-value` rather than
- * a class of the addon's own, because these three rows are kit bars whose fill is never set:
- * they are rows rather than fractions, and asking the kit for the row is what keeps them the
- * same size as the bars they sit between.
- */
+/** One of the three figures, read out of the kit bar it is drawn in. */
 function figureOf(key: string): string {
   return document.querySelector(`[data-wayline="${key}"] .woc-bar-value`)?.textContent ?? '';
 }
@@ -134,11 +113,7 @@ function partOf(row: string, part: string): string {
   return barOf(row)?.querySelector(`.woc-bar-${part}`)?.textContent ?? '';
 }
 
-/**
- * Let the async restore land before reading what the addon drew. The per-character read waits
- * for the character and then goes through the storage hub, so it settles several microtasks
- * after the body has finished running.
- */
+/** Let the per-character restore land, several microtasks after the body has run. */
 async function settle(): Promise<void> {
   let chain = Promise.resolve();
   for (let at = 0; at < MICROTASK_TICKS; at += 1) {
@@ -147,11 +122,7 @@ async function settle(): Promise<void> {
   await chain;
 }
 
-/**
- * Mount with or without a world, without a ternary over the options object. Two calls rather
- * than one, for the reason `mountAddon` itself makes two: `exactOptionalPropertyTypes` refuses a
- * `game: undefined`, so the difference has to be which object is built.
- */
+/** Mount with or without a world: `exactOptionalPropertyTypes` refuses a `game: undefined`. */
 function mount(
   base: MountInput,
   world: Record<string, unknown>,
@@ -177,8 +148,7 @@ async function start(
 ): Promise<WaylineHarness> {
   const player = liveEntity({ set: { level: opts.level ?? 5 } });
   const entities = new Map<number, unknown>([[PLAYER_ID, player]]);
-  // The character sheet rides the game's own world object, which is where
-  // `world.character` reads every one of these from.
+  // The character sheet rides the game's own world object, where `world.character` reads it.
   const world: Record<string, unknown> = {
     entities,
     player,
@@ -206,10 +176,8 @@ async function start(
       Object.assign(player, { level });
     },
     award: (amount, rested) => {
-      // Rebuilt rather than mutated. Assigning a member of a Record is an index access, and the
-      // two linters want opposite things about one: TypeScript's
-      // noPropertyAccessFromIndexSignature forbids the dot and Biome's useLiteralKeys forbids the
-      // bracket. A fresh object with a literal key is neither.
+      // Rebuilt rather than mutated: TypeScript forbids the dot on an index signature and Biome
+      // forbids the bracket on a literal key.
       let event: Record<string, unknown> = { type: 'xp', amount };
       if (rested !== undefined) {
         event = { ...event, rested };
@@ -249,8 +217,7 @@ async function run(
 ): Promise<WaylineHarness> {
   const harness = await start(settings, opts);
   await settle();
-  // The one sample that carries the world from "not there" to live, which is what the character
-  // subscription reports. Deliberately not a clock advance: every case below measures a rate.
+  // The sample that takes the world live. Not a clock advance: the cases below measure a rate.
   harness.poll();
   return harness;
 }
@@ -271,9 +238,6 @@ describe('its manifest', () => {
   });
 });
 
-// A rate over "everything since the addon started" keeps answering forever: the numerator stops
-// and the denominator does not, so it decays toward zero while still printing a figure, and the
-// time to level grows without limit. The window is what makes the display stop instead.
 describe('the rate', () => {
   it('measures what was earned against the stretch it was earned over', async () => {
     const h = await run();
@@ -284,8 +248,7 @@ describe('the rate', () => {
     expect(h.rate()).toBe('12,000 xp/hr');
   });
 
-  // The case a since-start average fails. Nothing is earned for longer than the window, so the
-  // last award falls out of it and there is nothing left to divide.
+  // The case a since-start average fails.
   it('stops claiming a rate once the window has emptied', async () => {
     const h = await run();
     h.award(1000);
@@ -297,9 +260,6 @@ describe('the rate', () => {
     expect(h.rate()).toBe(`nothing in ${String(WINDOW_MINUTES)}m`);
   });
 
-  // The other half of the same claim, and the one that is actually acted on: a
-  // player reads the time, not the rate. It must go blank rather than to an hour,
-  // then a day, then a week.
   it('stops projecting a time once the window has emptied', async () => {
     const h = await run({}, { sheet: { xp: 800 } });
     h.award(1000);
@@ -311,8 +271,6 @@ describe('the rate', () => {
     expect(h.time()).toBe('--');
   });
 
-  // A shorter window empties sooner, which is the whole point of the setting: a
-  // rate over a session that changed is a rate about a session that is over.
   it('empties on the window the player chose', async () => {
     const h = await run({ 'window-minutes': 2 });
     h.award(1000);
@@ -324,8 +282,7 @@ describe('the rate', () => {
     expect(h.rate()).toBe('nothing in 2m');
   });
 
-  // Without the floor the first award of a window divides by however long ago it
-  // landed, so an award a second old reads in the millions.
+  // Without the floor, an award a second old reads in the millions.
   it('refuses to call ten seconds an hourly rate', async () => {
     const h = await run();
 
@@ -347,8 +304,7 @@ describe('the rate', () => {
   });
 });
 
-// The bonus rides INSIDE the amount rather than on top of it, so leaving it out
-// is a subtraction rather than an omission.
+// The bonus rides INSIDE the amount, so leaving it out is a subtraction.
 describe('the rested bonus in the rate', () => {
   it('counts the whole award by default, which is what actually landed', async () => {
     const h = await run();
@@ -369,8 +325,7 @@ describe('the rested bonus in the rate', () => {
   });
 });
 
-// An xp event does not say what earned it, so a kill is one that landed just
-// after a death this player's group is owed for.
+// A kill is an award that landed just after a death this player's group is owed for.
 describe('kills to go', () => {
   it('counts an award that followed a kill of the player’s own', async () => {
     const h = await run({}, { sheet: { xp: 800 } });
@@ -397,8 +352,6 @@ describe('kills to go', () => {
     expect(h.kills()).toBe('4');
   });
 
-  // A quest turn-in and a kill are the same record, so the only thing separating
-  // them is that one of them followed a death.
   it('does not count an award that followed no kill at all', async () => {
     const h = await run({}, { sheet: { xp: 800 } });
 
@@ -447,8 +400,6 @@ describe('the level row', () => {
     expect(h.barDetail('level')).toBe('700 / 2,800');
   });
 
-  // It fills as you earn, which is the opposite of what the kit's timer rows mean
-  // by a fraction and is the only reading anyone has of an experience bar.
   it('fills as the level is earned rather than draining', async () => {
     const h = await run({}, { sheet: { xp: 2100 } });
 
@@ -462,9 +413,7 @@ describe('the level row', () => {
     expect(h.barDetail('level')).toBe('5,000 past the cap');
   });
 
-  // At the cap the game returns before touching that bar at all, so `xp` is not a number that
-  // moves slowly, it is 0 forever. A detail read from it says `0 past the cap` on day one and on
-  // day two hundred.
+  // At the cap `xp` is 0 forever.
   it('counts the lifetime past the cap rather than this level’s own progress', async () => {
     const h = await run({}, { level: 20, sheet: { xp: 0, lifetimeXp: CAP_LIFETIME + 40_000 } });
 
@@ -488,10 +437,6 @@ describe('the rested pool', () => {
     expect(h.barDetail('rested')).toBe('10 bubbles, 1,400 xp');
   });
 
-  // The breakdown is what the pool is MADE of, and an empty pool is made of
-  // nothing. It matters at the cap, where the pool stops filling and stays at zero
-  // for the life of the character: the row would otherwise carry a second line
-  // saying `0 bubbles, 0 xp` under a first one already reading `0.0 levels`.
   it('drops the breakdown when there is no pool to break down', async () => {
     const h = await run({}, { level: 20, sheet: { restedXp: 0 } });
 
@@ -507,17 +452,13 @@ describe('the rested pool', () => {
     expect(h.barFill('rested')).toBe('66.67%');
   });
 
-  // The pool fills only inside an inn, which is a place rather than a state, so
-  // the row can never say whether it is filling and the tooltip says as much.
+  // Nothing published says where the character is logged out, so filling is unknowable.
   it('refuses to say whether it is filling', async () => {
     const h = await run({}, { sheet: { restedXp: 1400 } });
 
     expect(h.hover(barOf('rested'))).toContain('never how fast it is filling');
   });
 
-  // The one thing about the filling that CAN be said, and it applies to exactly the
-  // players a post-cap panel is drawn for: a capped character accrues no rested at
-  // all, so the row is a pool that will not move rather than one that might be.
   it('says the pool stops filling at the cap', async () => {
     const capped = await run({}, { level: 20, sheet: { restedXp: 1400 } });
     expect(capped.hover(barOf('rested'))).toContain('stops filling entirely');
@@ -537,10 +478,7 @@ describe('the virtual level past the cap', () => {
     expect(h.shown('virtual')).toBe(false);
   });
 
-  // Derived here, because nothing on the wire carries one. Reaching the cap is
-  // virtual 20 by construction, since the game's own curve reuses the real table
-  // below the cap; the first level past it costs the cap requirement and each one
-  // after asks a tenth more.
+  // Below the cap the curve reuses the real table, so reaching it is virtual 20.
   it('reads as the cap itself for a character who has just reached it', async () => {
     const h = await run({}, { level: 20, sheet: { lifetimeXp: CAP_LIFETIME } });
 
@@ -556,10 +494,7 @@ describe('the virtual level past the cap', () => {
     expect(h.barDetail('virtual')).toBe('5,000 / 25,520');
   });
 
-  // The reason the fixture holds `xp` at 0 throughout rather than leaving it out. At the cap `xp`
-  // is frozen there by the game, so a target derived from it names virtual 2 and sits 400
-  // experience away for the life of the character. The lifetime total is the only number that
-  // moves, so it is the only one moved here.
+  // Only the lifetime total moves; a target read from `xp` would sit at virtual 2 forever.
   it('counts toward the next virtual level as the lifetime total climbs', async () => {
     const h = await run({}, { level: 20, sheet: { xp: 0, lifetimeXp: CAP_LIFETIME } });
     h.slay();
@@ -574,9 +509,7 @@ describe('the virtual level past the cap', () => {
     expect(h.kills()).toBe('10');
   });
 
-  // Where the rounding goes is part of the curve, and the wrong place is invisible for eleven
-  // virtual levels. Crossing the boundary at 40 is what tells the two apart: a curve that rounds
-  // the step in place reaches 40 twenty-one experience early.
+  // A curve that rounds the step in place reaches virtual 40 twenty-one experience early.
   it('steps the curve where the game steps it rather than one rounding earlier', async () => {
     const h = await run({}, { level: 20, sheet: { xp: 0, lifetimeXp: VIRTUAL_40_LIFETIME - 1 } });
 
@@ -586,9 +519,7 @@ describe('the virtual level past the cap', () => {
     h.poll();
 
     expect(h.barLabel('virtual')).toBe('Virtual 40');
-    // Spelled out rather than formatted from the constant: the addon groups by hand
-    // so the panel reads the same in every locale, and an assertion that went
-    // through `toLocaleString` would agree with a version that did not.
+    // Spelled out, since an assertion through `toLocaleString` would pass a locale-dependent panel.
     expect(h.barDetail('virtual')).toBe('0 / 156,078');
   });
 
@@ -598,8 +529,6 @@ describe('the virtual level past the cap', () => {
     expect(h.hover(barOf('virtual'))).toContain('Nothing on the wire carries a virtual level');
   });
 
-  // Switching the display off leaves nothing to count toward, and the two derived
-  // figures say nothing rather than quietly counting to a number nobody asked for.
   it('takes the two projections with it when it is switched off', async () => {
     const h = await run(
       { 'show-virtual': false },
@@ -615,12 +544,9 @@ describe('the virtual level past the cap', () => {
   });
 });
 
-// The samples are the session's, and a page reload in the middle of one must not
-// be the same thing as having earned nothing.
+// A page reload mid-session must not read as having earned nothing.
 describe('what it remembers', () => {
-  // The stamp is `woc.wallClock()` rather than `Date.now()`, which the fake pins to a fixed
-  // reading nowhere near the real one, so this fails if the page global comes back. The two would
-  // be the same value in a browser, and a suite is the only place they can be told apart.
+  // The fake pins `woc.wallClock()` far from `Date.now()`, so reading the page global fails here.
   it('writes the awards for this character, without the monotonic stamp', async () => {
     const h = await run();
     h.award(1000, 250);
@@ -631,9 +557,6 @@ describe('what it remembers', () => {
     expect(h.stored()).toEqual([{ wallAt: WALL_CLOCK_MS, amount: 1000, rested: 250, kill: false }]);
   });
 
-  // The stored stamp is a WALL clock reading, because `woc.now()` restarts at every
-  // page load. The restore turns it back into a monotonic one by subtracting the
-  // wall time that has passed, which is what makes a rate survive a reload.
   it('puts a stored award back at the age it actually has', async () => {
     const hub = createFakeStorage();
     await hub.set('char:official/wayline', 'pbe:Claudemoon/Marshal:samples', [
@@ -645,13 +568,8 @@ describe('what it remembers', () => {
     expect(h.rate()).toBe('12,000 xp/hr');
   });
 
-  // The reload itself, which is the only case the two-clock conversion exists for and the one the
-  // case above cannot express: there, both clocks stand still, so a restore that ignored the wall
-  // reading entirely would pass it.
-  //
-  // The wall clock is four hours on and the monotonic clock is a fresh page's. The sample is
-  // stamped five minutes before the wall reading, so five minutes is the age it must come back
-  // at; both ways of dropping the conversion land on 60,000.
+  // The wall clock is four hours on and the monotonic clock is a fresh page's. The sample must
+  // come back five minutes old; both ways of dropping the conversion land on 60,000.
   it('restores an award across a reload that moved one clock and reset the other', async () => {
     const wallNow = WALL_CLOCK_MS + 4 * HOUR;
     const hub = createFakeStorage();
@@ -660,9 +578,7 @@ describe('what it remembers', () => {
     ]);
 
     const h = await start({}, { storage: hub });
-    // Ahead of the restore settling, which is what the addon reads it at. A sample
-    // stamped after the reading the restore actually used would be refused as
-    // being in the future, so an ordering slip fails here rather than passing.
+    // Before the restore settles, so an ordering slip refuses the sample as future-dated.
     h.setWallClock(wallNow);
     await settle();
     h.poll();
@@ -670,9 +586,7 @@ describe('what it remembers', () => {
     expect(h.rate()).toBe('12,000 xp/hr');
   });
 
-  // The half a levelling display is judged on: an addon that came back after a night away must
-  // not present last night's rate as this morning's. Nothing moved the monotonic clock, so the
-  // window can only know the sample is stale through the wall reading.
+  // Nothing moved the monotonic clock, so only the wall reading can say the sample is stale.
   it('drops an award the reload outlived, however new the monotonic clock is', async () => {
     const hub = createFakeStorage();
     await hub.set('char:official/wayline', 'pbe:Claudemoon/Marshal:samples', [
@@ -698,9 +612,7 @@ describe('what it remembers', () => {
     expect(h.rate()).toBe(`nothing in ${String(WINDOW_MINUTES)}m`);
   });
 
-  // A per-character write refuses to wait for a character, so there is nothing to
-  // do before world entry but decline. An addon's first line runs on the landing
-  // page, which is where this case is.
+  // A per-character write rejects before world entry, so the addon must decline.
   it('writes nothing at all before world entry', async () => {
     const h = await start({}, { offline: true });
     await settle();
@@ -725,9 +637,6 @@ describe('its controls', () => {
     expect(el?.classList.contains('woc-hidden')).toBe(false);
   });
 
-  // The window is what makes a stale reading go away on its own, and the button is
-  // what makes it go away now, which is what a player who has just changed what
-  // they are doing wants.
   it('throws the recorded awards away on request', async () => {
     const h = await run();
     h.award(1000);
@@ -739,9 +648,6 @@ describe('its controls', () => {
     expect(h.rate()).toBe(`nothing in ${String(WINDOW_MINUTES)}m`);
   });
 
-  // A control offering to do nothing is the same class of dishonesty as a rate
-  // measured over a window that holds nothing, and the panel spends every break in
-  // play in exactly this state.
   it('turns the button off while there is nothing recorded to throw away', async () => {
     const h = await run();
     expect(resetButton()?.disabled).toBe(true);
@@ -756,8 +662,7 @@ describe('its controls', () => {
 });
 
 describe('changing a setting under it', () => {
-  // A frame's density is decided when it is built, so that one setting is the only
-  // one that needs a new frame.
+  // A frame's density is decided when it is built.
   it('rebuilds the frame for the density and leaves exactly one behind', async () => {
     const h = await run();
     expect(document.querySelector('[data-woc-frame="panel"]')?.className).toContain(
@@ -797,7 +702,6 @@ describe('what a row says under the pointer', () => {
     expect(h.hover(h.rowEl('rate'))).toContain('no rate to report');
   });
 
-  // The trap the window exists for, in words, on the row the window governs.
   it('names the party split and the grey band on the rate row', async () => {
     const h = await run();
     h.award(1000);

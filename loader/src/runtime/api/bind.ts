@@ -1,14 +1,5 @@
-// Which shared thing each surface is bound to.
-//
-// One function per domain, and every one of them says the same three things: the
-// hub or engine it reads, the addon's fqid, and the addon's disposal bag. That
-// repetition is the point of the file existing: it is the ONE place to look for
-// "what is this surface actually connected to", and a surface wired to the wrong
-// hub or given nobody's bag is visible here as an odd line rather than buried in
-// a two-hundred-line constructor.
-//
-// The contract these build against is api/context.ts, and the assembly that calls
-// them is api/index.ts. Nothing here knows the order they are built in.
+// Which shared hub, fqid and disposal bag each surface is bound to, one function per domain, so a
+// miswired surface shows here as an odd line. Contract in context.ts, assembly in index.ts.
 
 import { createKeybindStore, type KeybindStore } from '../keys/store.ts';
 import { CONSOLE_SINK } from '../log/console.ts';
@@ -61,15 +52,7 @@ function createNetTimers(shared: SharedServices): NetTimers {
   };
 }
 
-/**
- * The ui surface, with the per-character frame store it persists through.
- *
- * `onError` is the addon's own logger. The one callback the ui surface hands back
- * to addon code, a frame's `onMove`, runs inside a pointer gesture the LOADER is
- * in the middle of, so a throw there must cost a warning rather than a window that
- * stops following the pointer. Reported through the addon's log rather than
- * swallowed, so it reaches the manager's log tail where a player can quote it.
- */
+/** `onError` reports addon callback throws to the addon's own log, where a player can quote it. */
 function createUiSurface(
   shared: SharedServices,
   addon: AddonContext,
@@ -80,7 +63,6 @@ function createUiSurface(
     doc: shared.doc,
     kit: shared.kit,
     fqid: addon.fqid,
-    // For the arrange-mode chip alone. See api/ui.ts.
     addonName: addon.manifest.name,
     bag: addon.bag,
     onError: (where, err) => {
@@ -99,14 +81,7 @@ function createUiSurface(
   });
 }
 
-/**
- * The bus surface.
- *
- * `onError` is the addon's OWN log rather than the sender's, because the throw it
- * reports happened in a handler this addon wrote: the addon that published the
- * message has nothing it could do about somebody else's bug, and telling it would
- * be reporting a fault against the wrong author.
- */
+/** `onError` is this addon's log: the throw is in a handler it wrote, not in the sender. */
 function createBusSurface(shared: SharedServices, addon: AddonContext, log: LogApi): BusApi {
   return createBus({
     hub: shared.bus,
@@ -118,7 +93,6 @@ function createBusSurface(shared: SharedServices, addon: AddonContext, log: LogA
   });
 }
 
-/** The storage surface: the account-wide store, and the per-character one on it. */
 function createStorageSurface(shared: SharedServices, addon: AddonContext): AddonStorageApi {
   return createStorage({
     hub: shared.storage,
@@ -129,12 +103,7 @@ function createStorageSurface(shared: SharedServices, addon: AddonContext): Addo
   });
 }
 
-/**
- * The data surface: a declared JSON file from the addon's own directory.
- *
- * Bound to the manifest's own list rather than to anything the addon can supply,
- * which is what makes the name a membership test instead of a path join.
- */
+/** Bound to the manifest's list, so a name is a membership test, never a path join. */
 function createDataSurface(shared: SharedServices, addon: AddonContext): WocApi['data'] {
   return createData({
     fqid: addon.fqid,
@@ -167,17 +136,8 @@ function createKeysSurface(
 }
 
 /**
- * The sound surface, plus the pack read for an addon that says it makes sound.
- *
- * The pack is 119 kB and is read once per session, lazily, so a player whose addons
- * never touch sound never fetches it. The cost of lazy is that the FIRST cue would
- * fall back to a guessed URL while the read is in flight, and a guessed URL does not
- * resolve for a family cue: `warm` is what closes that, since an addon starts long
- * before it plays anything.
- *
- * Keyed on the declared permission, which is a DISCLOSURE and not a boundary. That
- * is the right shape here: an addon that plays a cue without declaring one still
- * works, and pays the same in-flight first cue it would have paid anyway.
+ * An addon declaring `sound` warms the lazy pack read at start, so its first cue does not take a
+ * guessed URL. An undeclared addon still plays; the permission is a disclosure.
  */
 function createSoundSurface(shared: SharedServices, addon: AddonContext): SoundApi {
   if (addon.manifest.permissions?.includes('sound') === true) {
@@ -186,7 +146,7 @@ function createSoundSurface(shared: SharedServices, addon: AddonContext): SoundA
   return createSound(shared.sound, addon.bag);
 }
 
-/** The domain surfaces, every one of them bound to the same addon and the same bag. */
+/** The domain surfaces, all bound to one addon and one bag. */
 type AddonSurfaces = Pick<
   WocApi,
   'bus' | 'data' | 'keys' | 'net' | 'sound' | 'storage' | 'ui' | 'world'
@@ -198,8 +158,7 @@ function createSurfaces(
   keybinds: KeybindStore,
   log: LogApi,
 ): AddonSurfaces {
-  // Keys before ui: a frame's `toggleKey` goes through the addon's own
-  // `keys.bind`, or a rebind from the manager would not move it.
+  // Keys before ui: a frame's `toggleKey` goes through `keys.bind`, so a rebind moves it.
   const keys = createKeysSurface(shared, addon, keybinds);
   const toggles = createFrameToggles({
     bind: keys.bind,

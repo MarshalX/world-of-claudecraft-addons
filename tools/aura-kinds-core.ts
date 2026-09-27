@@ -1,27 +1,12 @@
-// Turning the game's harmful-aura kind set into a value module and a union.
+// Turns the game's aura classifier sets into a runtime value module and a published union. Pure,
+// so a Vitest suite can drive it; `tools/aura-kinds.mjs` is the CLI around it.
 //
-// The parse and the rendering live here, apart from the file reads, so a Vitest
-// suite can drive both without a checkout. `tools/aura-kinds.mjs` is the CLI
-// around them, the same split as cues-core.ts and icons-core.ts.
+// It reads a CHECKOUT because the classifier is bundled into the play chunk and served nowhere, so
+// nothing 404s when the input is stale: hence the required `--game` and the version in both
+// headers. The runtime carries the VALUE as well as the types, having no endpoint to re-read.
 //
-// WHY THIS READS A CHECKOUT rather than an endpoint, which is where it departs
-// from its two precedents. The classifier is a sim module bundled into the play
-// chunk and no object on `__game` exposes it, and nothing aura-shaped is served
-// under `/ui/`. So the set exists only in the game's source, and the price of
-// that is the one thing an endpoint gives for free: nothing 404s to say the
-// checkout is stale. `--game` is therefore required and never defaulted, and the
-// game version is written into both headers so a regenerate diff says which
-// release the set describes.
-//
-// TWO OUTPUTS, which is the other departure. `cues` and `icons` generate types
-// only, because the runtime re-reads the same manifest over HTTP at run time.
-// There is no endpoint here, so the runtime has to carry the VALUE as well.
-//
-// The parse is over the source TEXT rather than an import of the module. The
-// game's imports are extensionless and one of them is a value import, so Node's
-// type stripping cannot resolve them without the game's own resolver config. A
-// text parse also fails LOUDLY on a refactor, where an import would fail
-// obscurely.
+// The parse is over source TEXT: the game's extensionless imports do not resolve under Node's type
+// stripping, and a text parse fails loudly on a refactor where an import would fail obscurely.
 
 import type { ToggleRule } from './aura-toggle-core.ts';
 import { byCodePoint } from './icons-core.ts';
@@ -54,14 +39,8 @@ function kindOnLine(line: string): string[] {
 }
 
 /**
- * Every kind the game classifies as harmful by nature, in source order, deduped.
- *
- * Throws on anything unexpected rather than answering short, for the reason the
- * cue reader does: a set that quietly loses names generates a file that
- * compiles, publishes, and misclassifies effects in every addon that filters on
- * polarity. A line inside the block that carries no quoted name and is neither
- * blank nor a comment is a parse FAILURE rather than something to skip, because
- * that is what a refactor looks like from in here.
+ * Every kind the game classifies as harmful by nature, in source order, deduped. Throws on any
+ * unrecognised line rather than skipping it: a short set compiles and misclassifies silently.
  */
 function debuffKinds(source: string): string[] {
   const open = source.indexOf(OPEN);
@@ -80,14 +59,7 @@ function debuffKinds(source: string): string[] {
   return unique;
 }
 
-/**
- * What both headers record: which release of the game the set was read out of.
- *
- * The version is the whole staleness story here. A served manifest answers 404
- * when it moves; a checkout answers whatever was last pulled into it, so the
- * only thing a reviewer can check on a regenerate diff is which release this
- * claims to describe.
- */
+/** What both headers record: the source file and the game release it was read from. */
 function readFrom(version: string): string {
   return `${SOURCE} in world-of-claudecraft ${version}`;
 }
@@ -100,13 +72,7 @@ function members(names: readonly string[]): string {
     .join('\n');
 }
 
-/**
- * The TOGGLE rule's three sets, appended to the same module.
- *
- * Here rather than in a module of their own because they are read from the same
- * classifier in the same pass by the same generator, and a second generated file
- * is a second thing to forget to regenerate.
- */
+/** The TOGGLE rule's three sets, appended to the same generated module. */
 function renderToggleValues(rule: ToggleRule): string {
   return `
 // The game's TOGGLE rule (\`isToggleAura\` in the same classifier, plus the

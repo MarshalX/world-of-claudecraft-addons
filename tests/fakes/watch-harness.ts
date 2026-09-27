@@ -1,8 +1,5 @@
-// A world watcher over a backend whose reads follow a mutable object, the way
-// the real one follows the game's live state.
-//
-// The frame clock is manual: the sampler schedules itself, so a real one would
-// make every assertion a race.
+// A world watcher over a backend whose reads follow a mutable object, as the real one follows the
+// game. The frame clock is manual, since a real one would make every assertion a race.
 
 import {
   type AbilityIndex,
@@ -51,14 +48,7 @@ export interface WatchHarness {
   errors: unknown[];
   /** Frames currently scheduled. Zero means the sampler is not running. */
   frames: () => number;
-  /**
-   * Run the scheduled frame, having moved the clock on by one.
-   *
-   * The clock moves because a real animation frame carries a new timestamp, and the
-   * sampler has a floor between samples: a `frame()` that did not advance time would
-   * model a browser that fires rAF twice in the same instant, which is a thing no
-   * browser does and would make the floor untestable.
-   */
+  /** Run the scheduled frame, advancing the clock one frame so the sampler's floor is testable. */
   frame: () => void;
   /** Stands in for the game arriving or never having arrived. */
   setAttached: (on: boolean) => void;
@@ -81,9 +71,8 @@ export function watchHarness(): WatchHarness {
   let nextFrame = 1;
   let clock = 0;
 
-  // `live` stays loose so a test can move one field at a time, including into a
-  // shape the game would never produce, which is half of what these suites are
-  // for. The backend asserts at its own boundary exactly as the real one does.
+  // `live` stays loose so a test can move one field at a time, including into a shape the game
+  // would never produce. The backend asserts at its own boundary as the real one does.
   const backend = {
     kind: 'test',
     get player(): Entity | null {
@@ -116,8 +105,7 @@ export function watchHarness(): WatchHarness {
     get zone(): string | null {
       return live.zone;
     },
-    // Through the real readers, like `abilities` and `combat`: a test that moves
-    // a progression field on the fixture has to see what an addon would.
+    // Derived getters below go through the real readers, so a test sees what an addon would.
     get character(): CharacterInfo | null {
       return readCharacter(live);
     },
@@ -147,8 +135,6 @@ export function watchHarness(): WatchHarness {
     get auras(): readonly Aura[] | null {
       return null;
     },
-    // Derived from `live.entities` through the real function, not stubbed: a test
-    // that moves a cast field on a fixture entity has to see what an addon would.
     get casts(): ReadonlyMap<number, EntityCast> {
       return castsOf(live.entities as ReadonlyMap<number, Entity>);
     },
@@ -161,16 +147,11 @@ export function watchHarness(): WatchHarness {
     get markers(): ReadonlyMap<number, number> | null {
       return live.markers;
     },
-    // Through the real reader, like `casts` and for the same reason: a test that
-    // moves the fixture's known list has to see what an addon would, including
-    // the memoization, since that is the part with behaviour worth regressing on.
+    // Includes the reader's memoization.
     get abilities(): AbilityIndex {
       return readAbilities(live);
     },
-    // Read through the real rule, so a test that puts a hate table on a fixture
-    // mob sees the same answer an addon would. No party and no damage clock, so
-    // what this exercises is the entity branches, which are the ones a watcher
-    // test can actually move.
+    // No party and no damage clock, so this exercises the entity branches.
     get combat(): CombatState {
       return readCombat({
         player: live.player as unknown as Entity,
@@ -181,10 +162,7 @@ export function watchHarness(): WatchHarness {
         now: 0,
       });
     },
-    // The keys this harness carries no fixture for. Plain values rather than
-    // getters because nothing here moves: a suite that wants one of them moving
-    // should give `live` a field for it and turn the entry into a getter, the
-    // way `hazards` and `markers` already are.
+    // No fixture for these. To make one move, give `live` a field and turn it into a getter.
     equipmentInstances: null,
     characterKey: null,
     spectating: null,
@@ -199,9 +177,7 @@ export function watchHarness(): WatchHarness {
     nodeCooldowns: null,
     corpse: null,
     corpseLoot: (): CorpseView | null => null,
-    // Through the real rule for the reason `combat` is: a suite that puts a pet
-    // or a bout in `live` sees the answer an addon would. No bout here, so every
-    // player reads friendly, which is what a world with no match is.
+    // No bout here, so every player reads friendly.
     reaction: (entityId: number): Reaction | null => {
       const roster = live.entities as ReadonlyMap<number, Entity>;
       const entity = roster.get(entityId);

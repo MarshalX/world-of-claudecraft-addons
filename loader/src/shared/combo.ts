@@ -1,9 +1,6 @@
-// Keybind combo parsing, formatting, and conflict detection.
-//
-// The canonical form matches the game's own: modifiers in the fixed order Ctrl,
-// Alt, Shift, Meta, then the KeyboardEvent `code`. Keeping that byte-identical
-// is what lets conflict detection compare strings against the player's own
-// bindings in localStorage.
+// Keybind combo parsing, formatting, and conflict detection. The canonical form must stay
+// byte-identical to the game's (Ctrl, Alt, Shift, Meta, then the `code`) so conflict detection
+// can compare strings against the player's stored bindings.
 
 /** The modifier TOKEN names used in a combo string, distinct from the physical codes. */
 const MODIFIER_TOKENS = new Set(['Ctrl', 'Alt', 'Shift', 'Meta']);
@@ -30,20 +27,10 @@ const MODIFIER_CODES = new Set([
 /**
  * Whether a stored game binding would also fire on `target`.
  *
- * The game has two kinds of action and the stored string does not say which one
- * it belongs to. An EDGE action (an ability slot, a window toggle) matches the
- * whole chord, so 'Shift+Digit1' and 'Digit1' are distinct bindings. A HELD
- * action (movement) is polled per frame against the physical code with the
- * modifiers deliberately ignored, so a game binding of 'KeyW' still walks the
- * player forward while Alt is held.
- *
- * Held actions are saved bare, but so is an ability slot sitting on its default
- * key, so bareness does not identify the kind. Matching on either rule
- * over-reports rather than under-reports, which is the safe direction for a
- * warning that never blocks: the cost of a false positive is a sentence the
- * player can ignore, and the cost of a false negative is an addon silently
- * eating a movement key. `runtime/keys/game-bindings.ts` uses the game's own
- * matcher when the live profile is reachable and only falls back to this.
+ * An EDGE action matches the whole chord; a HELD action (movement) matches the bare code with
+ * modifiers ignored, and the stored string does not say which it is. So this matches on either
+ * rule and over-reports on purpose: a false positive is an ignorable warning, a false negative
+ * an addon eating a movement key. Only the fallback when the game's live matcher is unreachable.
  */
 function bindingMatches(target: ComboParts, stored: string): boolean {
   const parts = parseCombo(stored);
@@ -156,12 +143,9 @@ export interface ConflictReport {
 }
 
 /**
- * Find everything already bound to `combo`.
- *
- * `gameBindings` maps the game's action ids to combos, read from the game's own
- * keybind profile and never written back. `addonBindings` maps '<fqid>:<bindId>'
- * to combo, and compares on exact normalized form: the loader's own dispatcher
- * matches the whole chord, so it has none of the ambiguity above.
+ * Find everything already bound to `combo`. `gameBindings` maps game action ids to combos and is
+ * never written back; `addonBindings` maps '<fqid>:<bindId>' to combos and compares exactly,
+ * since the loader's dispatcher matches the whole chord.
  */
 export function findConflicts(
   combo: string,

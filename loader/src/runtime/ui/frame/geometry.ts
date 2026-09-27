@@ -1,26 +1,11 @@
-// Where a movable window is allowed to be.
-//
-// Pure, so the rules a player actually notices (a window cannot be dragged
-// somewhere it can never be dragged back from, a restored position survives a
-// smaller monitor) are decided somewhere a Node test can reach, rather than
-// inside a pointer handler.
+// Where a movable window is allowed to be. Pure, so every placement rule is reachable from a
+// Node test rather than living inside a pointer handler.
 
-/**
- * Below this the manager is not usable, and its tab strip starts wrapping badly.
- *
- * A default rather than the law: an addon frame is often far smaller (a DPS
- * readout is a number and a label), so clampBox takes its own minimum and falls
- * back to these only when none is given.
- */
+/** The manager's usable minimum, and clampBox's default when a caller gives none. */
 const MIN_WIDTH = 360;
 const MIN_HEIGHT = 220;
 
-/**
- * The floor no frame may go below whatever it asks for.
- *
- * A frame smaller than this cannot be reliably grabbed by its title bar, which
- * on a frame with no other chrome means it cannot be moved again.
- */
+/** The floor no frame may go below whatever it asks for: smaller cannot be reliably grabbed. */
 const FLOOR_WIDTH = 72;
 const FLOOR_HEIGHT = 28;
 
@@ -31,11 +16,8 @@ const DEFAULT_TOP_SHARE = 0.08;
 const HALF = 2;
 
 /**
- * How much of the window has to stay on screen.
- *
- * Enough of the title bar to grab, horizontally, and its full height
- * vertically: a window dragged past the top edge could never be grabbed again,
- * because the drag handle is the thing that went off screen.
+ * How much of the window has to stay on screen: enough title bar to grab horizontally, and
+ * its full height vertically, since a title bar past the top edge can never be grabbed again.
  */
 const KEEP_VISIBLE_X = 120;
 const TITLE_BAR_HEIGHT = 44;
@@ -66,25 +48,15 @@ interface Viewport {
   h: number;
 }
 
-/**
- * Which axes the BOX owns, and therefore which of them anything writes.
- *
- * An axis the box does not own follows the content, which is what a frame with no
- * `resizable` has always done on both. Kept here beside the size rules rather than
- * with the gesture layer, because it is what every clamp is answering about.
- */
+/** Which axes the box owns and anything writes. An axis it does not own follows the content. */
 interface SizeAxes {
   w: boolean;
   h: boolean;
 }
 
 /**
- * What a caller may pin a frame's size between.
- *
- * Both are the CALLER's numbers, stated before anything knows how big the screen
- * is. Reconciling them with a viewport that may be smaller than either is
- * clampSize's job, and keeping that in one place is the point of passing the
- * request around rather than a pre-resolved pair.
+ * What a caller may pin a frame's size between, stated before the viewport is known.
+ * clampSize alone reconciles them with it.
  */
 interface SizeBounds {
   min?: Viewport;
@@ -92,17 +64,13 @@ interface SizeBounds {
 }
 
 function clampNumber(value: number, low: number, high: number): number {
-  // Written low-last so a viewport smaller than the minimum still yields the
-  // low bound rather than an inverted range.
+  // Low-last, so an inverted range still yields the low bound.
   return Math.max(low, Math.min(high, value));
 }
 
 /**
- * A persisted box is untrusted input.
- *
- * It comes back out of GM storage, which the player can edit and which an older
- * loader may have written differently, and a NaN reaching a style property
- * silently drops the whole declaration rather than raising.
+ * A persisted box is untrusted input: GM storage is player-editable, and a NaN reaching a
+ * style property silently drops the whole declaration.
  */
 function isFrameBox(value: unknown): value is FrameBox {
   if (typeof value !== 'object' || value === null) {
@@ -115,23 +83,13 @@ function isFrameBox(value: unknown): value is FrameBox {
 }
 
 /**
- * The size half of clampBox, which is where every bound meets every other one.
+ * The size half of clampBox. Four bounds claim each axis, and they win in this order:
  *
- * FOUR numbers claim the same axis and they contradict each other freely, so the
- * order they win in is the whole rule:
+ *  1. The FLOOR beats everything, since a frame that cannot be grabbed cannot be fixed.
+ *  2. The VIEWPORT beats the caller's minimum, or a frame wider than a phone stays that wide.
+ *  3. The caller's MINIMUM beats its maximum, since only the minimum is about usability.
  *
- *  1. The FLOOR beats everything. A frame below it cannot be reliably grabbed,
- *     and a frame that cannot be grabbed cannot be fixed, so this is the one
- *     bound no caller is allowed to argue with.
- *  2. The VIEWPORT beats the caller's minimum. Without that a frame asking to be
- *     wider than the screen makes that width its own floor, and a 900-pixel frame
- *     stays 900 pixels wide on a phone.
- *  3. The caller's MINIMUM beats its maximum. A max below the min is a
- *     contradiction someone has to break, and only one of the two is about the
- *     frame staying usable.
- *
- * An absent maximum is the viewport, which is where the size was already capped
- * before there was a maximum to state.
+ * An absent maximum is the viewport.
  */
 function clampSize(box: FrameBox, viewport: Viewport, bounds?: SizeBounds): Viewport {
   const wanted = bounds?.min ?? { w: MIN_WIDTH, h: MIN_HEIGHT };
@@ -145,20 +103,14 @@ function clampSize(box: FrameBox, viewport: Viewport, bounds?: SizeBounds): View
 }
 
 /**
- * Fit a box to the viewport, keeping it grabbable.
- *
- * Size is clamped before position, since the position bounds depend on the
- * clamped size: doing it the other way lets a too-wide window pin itself to the
- * left edge and then keep its width.
+ * Fit a box to the viewport, keeping it grabbable. Size is clamped before position, since
+ * the position bounds depend on the clamped size.
  */
 function clampBox(box: FrameBox, viewport: Viewport, bounds?: SizeBounds): FrameBox {
   const { w, h } = clampSize(box, viewport, bounds);
 
-  // Leftward, the window may hang off screen as long as a grabbable strip of
-  // title bar remains; rightward it may not pass the edge by more than that.
-  // The strip is capped at the frame's own width: without that cap a frame
-  // narrower than the strip could never touch either edge, so a small addon
-  // readout would refuse to sit in the corner every HUD element wants.
+  // The window may hang off either side as long as a grabbable strip remains. The strip is
+  // capped at the frame's width, or a narrow frame could never touch either edge.
   const keepX = Math.min(KEEP_VISIBLE_X, w);
   const minX = Math.min(0, keepX - w);
   const maxX = Math.max(minX, viewport.w - keepX);
@@ -183,11 +135,8 @@ function defaultBox(viewport: Viewport): FrameBox {
 }
 
 /**
- * Where an addon frame opens the first time, given the size it asked for.
- *
- * Centred horizontally and near the top, the same placement the manager uses,
- * so a frame with no saved position lands somewhere the player will see it
- * rather than under the HUD's own furniture at an edge.
+ * Where an addon frame opens the first time: centred near the top like the manager, clear of
+ * the HUD furniture at the edges.
  */
 function initialBox(viewport: Viewport, size: Viewport, bounds?: SizeBounds): FrameBox {
   return clampBox(
@@ -202,7 +151,7 @@ function initialBox(viewport: Viewport, size: Viewport, bounds?: SizeBounds): Fr
   );
 }
 
-/** Whether the name chip hangs below the frame. Above is the default, where it covers nothing the frame drew. */
+/** Whether the name chip hangs below the frame. Above is the default, where it covers nothing. */
 function labelBelow(top: number, clearance: number = LABEL_CLEARANCE): boolean {
   return top < clearance;
 }

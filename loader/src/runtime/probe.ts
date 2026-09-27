@@ -1,17 +1,8 @@
-// window.__game shape probe.
-//
-// Results are recorded per host: PBE runs ahead of live, so a member missing
-// there is the earliest signal that a game update will break addons.
+// window.__game shape probe, recorded per host since channels diverge.
 
 import { isRecord } from './net/frames.ts';
 
-/**
- * The members the game assigns, from the one assignment site in src/main.ts.
- *
- * `__game` is an undeclared debug hook with no compatibility promise, so this
- * list is a record of what was seen, not a contract. Drift against it is the
- * signal the probe exists to produce.
- */
+/** What src/main.ts assigns. A record of what was seen, not a contract; drift is the signal. */
 const KNOWN_MEMBERS = [
   'sim',
   'world',
@@ -30,18 +21,15 @@ const KNOWN_MEMBERS = [
 ] as const;
 
 /**
- * What the loader itself cannot work without.
- *
- * Only `world`: it backs the whole world API. Everything else degrades a
- * specific surface rather than the loader, and `online` is deliberately absent
- * because its drainEvents is destructive and we read the socket instead.
+ * Only `world`, which backs the world API. `online` is deliberately absent: its drainEvents is
+ * destructive, so the loader reads the socket instead.
  */
 const REQUIRED_MEMBERS: readonly string[] = ['world'];
 
 export interface GameProbe {
   readonly present: readonly string[];
   readonly missing: readonly string[];
-  /** Members the game has grown since KNOWN_MEMBERS was written. */
+  /** Members not in KNOWN_MEMBERS. */
   readonly added: readonly string[];
   /** Whether every member the loader depends on is there. */
   readonly ok: boolean;

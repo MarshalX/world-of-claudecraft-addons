@@ -1,43 +1,12 @@
-// Turning the game's item-art manifest into a union authors can autocomplete.
+// Turning the game's item-art manifest into a union authors can autocomplete. The fetch lives in
+// tools/items.mjs so a Vitest suite can drive this without a network.
 //
-// The reading and the rendering live here, apart from the fetch, so a Vitest suite
-// can drive both without a network. `tools/items.mjs` is the CLI around them, the
-// same split cues-core.ts and icons-core.ts use.
+// Generated rather than probed, so a blank icon slot means "no file" rather than possibly "wrong
+// id". Heroic weapon VARIANTS ship no file and are resolved to their base at run time
+// (`ui/kit/item-art.ts`), so they must not be added here.
 //
-// WHY THIS IS GENERATED rather than probed. It is the icon argument one content
-// table over: only some items ship a painted `.webp`, so an item icon URL is either
-// a real file or nothing, and without the manifest the only way to find out is to
-// load the image and watch it fail. That made a blank slot ambiguous between "the
-// game has no file for this" and "the loader built the wrong id", which a 404
-// cannot tell apart.
-//
-// The gap it describes used to be most of the catalogue and is currently almost
-// nothing. WEAPONS were its permanent half, filed under a MODEL name rather than an
-// item id, until game 0.36.0 gave every authored weapon its own painting and listed
-// it here; at that release every item in the game ships a file. What is left is art
-// the game has not commissioned yet, which it enumerates itself rather than leaving
-// silent, and which refills whenever content lands ahead of its painting.
-//
-// One thing is deliberately NOT in the manifest and is not a gap: a heroic weapon
-// VARIANT ships no file and reuses its base weapon's painting. That resolution is
-// the runtime's (`ui/kit/item-art.ts`), not this generator's, because a union of
-// ids-with-a-file is exactly what it should stay: the sixteen variants have no file
-// of their own and autocompleting them here would say they do.
-//
-// LIVE ONLY, like the cue and icon generators, because the published types describe
-// what most players are running. The channels diverge for items too, and in both
-// directions: measured 2026-08-11, live carried 822 ids on v0.36.0 while both pbe
-// channels sat under 700 on v0.35.0, the reverse of the usual assumption. The size
-// of the gap is not the argument, the DIRECTION is: unioning would autocomplete an
-// id most players' games 404 on, and narrowing costs autocomplete and nothing else,
-// since the RUNTIME reads the manifest from whichever host the player is on
-// (`ui/kit/item-art.ts`) and the union is open where it is used.
-//
-// One thing differs from the skill manifests and shapes the shape check below.
-// There is no per-class fan-out here and so no `class` field to catch a path that
-// resolved to the wrong file. `iconSize` stands in for it: it is 128 on every
-// channel, and a payload that is not this manifest fails on that and on the
-// non-empty union both.
+// LIVE ONLY: the channels diverge in both directions, so a union would autocomplete ids most
+// players' games 404 on. `iconSize` is the shape check, since there is no `class` field here.
 
 const GENERATED = 'packages/types/items.generated.d.ts';
 
@@ -85,18 +54,9 @@ function idsFromBatches(batches: readonly unknown[]): string[] {
 }
 
 /**
- * Every item id the manifest names a committed file for, sorted and deduplicated.
- *
- * Two lists, because the manifest keeps its provenance apart: `entries` are curated
- * art and carry a source name, `generatedBatches` are generated art and carry only
- * ids. Both have a file, so both belong in the union; only the first can answer a
- * name, which is why the name is read at RUN TIME and never generated.
- *
- * Lenient about one malformed entry and strict about the shape, matching the runtime
- * reader: one bad entry loses one id, whereas rejecting the payload loses the
- * certainty for all of them. Throws rather than answering empty, for the reason the
- * cue and icon readers do: an empty union generates a file that compiles, publishes,
- * and quietly takes autocomplete away from every author.
+ * Every item id the manifest names a file for, from both `entries` and `generatedBatches`, sorted
+ * and deduplicated. Lenient about one malformed entry, strict about the shape, and throws rather
+ * than answering empty, since an empty union compiles and silently removes autocomplete.
  */
 function itemIconIds(manifest: unknown): string[] {
   if (typeof manifest !== 'object' || manifest === null) {
@@ -118,13 +78,7 @@ function itemIconIds(manifest: unknown): string[] {
   return unique;
 }
 
-/**
- * The generated module's text.
- *
- * The count is in the header rather than folded away, because it is what a reviewer
- * reads on a regenerate diff: a count going up is art landing, and one going DOWN is
- * art moving, which is the change that would otherwise be silent.
- */
+/** The generated module's text. The count is in the header so a drop shows on a regenerate diff. */
 function renderItemTypes(ids: readonly string[], source: string): string {
   return `// Generated by tools/items.mjs from ${source}. Do not hand-edit.
 //

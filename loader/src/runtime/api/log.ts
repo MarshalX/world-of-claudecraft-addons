@@ -1,13 +1,5 @@
-// The woc.log surface handed to addons. Mirrors packages/types/log.d.ts.
-//
-// Two destinations for one call: the browser console, where an author is
-// already looking, and a bounded per-addon buffer the manager shows, where a
-// PLAYER can read what an addon said without opening devtools. The second is
-// the point. "It stopped working" is the whole bug report a player can give,
-// and the manager's log tail is what turns it into one an author can act on.
-//
-// The console line carries the addon's fqid rather than the loader's own
-// prefix, so a page with several addons running says which one spoke.
+// The woc.log surface, mirroring packages/types/log.d.ts. One call goes to the console, prefixed
+// with the fqid, and to the manager's per-addon tail, where a player can read it without devtools.
 
 import type { LogBuffer, LogLevel } from '../log/buffer.ts';
 import { formatArgs } from '../log/buffer.ts';
@@ -31,9 +23,7 @@ function createLog(deps: LogDeps): LogApi {
   const prefix = `[${deps.fqid}]`;
 
   const write = (level: LogLevel, args: readonly unknown[]): void => {
-    // The console gets the original arguments, so an object is still
-    // inspectable; the buffer gets text, so nothing is retained. See
-    // log/buffer.ts.
+    // The console gets the originals to inspect; the buffer gets text, retaining nothing.
     deps.sink[level](prefix, ...args);
     deps.buffer.append(deps.fqid, level, deps.now(), formatArgs(args));
   };

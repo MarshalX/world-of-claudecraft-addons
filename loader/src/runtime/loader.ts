@@ -1,15 +1,6 @@
-// Per-addon lifecycle: build the API, hydrate it, evaluate the source, and hand
-// back the one function that undoes all of it.
-//
-// Addon source is a function BODY, not a module. There is no export to call and
-// no registration step: the file runs top to bottom with `woc` in scope, and
-// everything it creates through that object is already registered in this
-// addon's disposal bag by the time the last line runs. That is what makes
-// disable hot, and it is why an addon needs no cleanup code of its own.
-//
-// Settings and keybinds are hydrated BEFORE evaluation, so `woc.settings.window`
-// on the addon's first line is the player's stored value rather than the default
-// it would briefly be if hydration raced the code.
+// Per-addon lifecycle: build the API, hydrate it, evaluate the source, return the one undo.
+// Addon source is a function BODY with `woc` in scope; everything it creates lands in its disposal
+// bag, which is what makes disable hot. Hydration precedes evaluation.
 
 import { describeError } from '../shared/diag.ts';
 import type { InstalledAddon } from '../shared/protocol.ts';
@@ -17,24 +8,14 @@ import { type AddonApi, createAddonApi, type SharedServices } from './api/index.
 import { DisposalBag } from './disposal.ts';
 import { createShadows } from './shadow.ts';
 
-/**
- * Makes the addon show up in devtools and in stack traces under its own name
- * rather than as `<anonymous>`, which is otherwise what a `new Function` body is
- * called in every trace an addon author will ever be sent.
- */
+/** Names the addon in devtools and stack traces instead of `<anonymous>`. */
 function sourceUrl(fqid: string): string {
   return `\n//# sourceURL=woc-addon://${fqid}`;
 }
 
 /**
- * Compile the body.
- *
- * Strict mode is prepended rather than left to the author. A sloppy-mode
- * function body turns an undeclared assignment into a property of the page's
- * global object, which is one addon's typo becoming another addon's mystery
- * variable, and the game's page is shared with the game.
- *
- * A syntax error surfaces here, at compile, with the addon's own name attached.
+ * Strict mode is prepended, or an undeclared assignment becomes a global on the page every addon
+ * and the game share.
  */
 function compile(
   fqid: string,
@@ -59,15 +40,7 @@ interface LoadRequest {
   source: string;
 }
 
-/**
- * Evaluate one addon.
- *
- * Rejects with a described error if the source does not compile or throws while
- * running, and drains the bag before it does, so a partially-constructed addon
- * never leaves a frame or a keybind behind. The caller decides what a failure
- * means for the enable flag; this function only guarantees it leaves nothing
- * running.
- */
+/** Drains the bag before rejecting, so a half-built addon leaves no frame or keybind behind. */
 async function loadAddon(request: LoadRequest): Promise<LoadedAddon> {
   const { shared, row, source } = request;
   const bag = new DisposalBag();

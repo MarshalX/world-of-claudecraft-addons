@@ -48,13 +48,12 @@ describe('parseFrontmatter', () => {
     expect(result.body).toContain('below');
   });
 
-  // Every failure below is a build failure on purpose: a docs page that silently
-  // defaults is one that lands in the wrong place in the sidebar and stays there.
+  // A page that silently defaults lands in the wrong place in the sidebar.
   it('rejects a file with no frontmatter', () => {
     expect(() => parseFrontmatter('# Just a heading\n', AT)).toThrow(/missing frontmatter/);
   });
 
-  it('rejects an unknown key, which is how a typo is caught', () => {
+  it('rejects an unknown key', () => {
     expect(() => parseFrontmatter(page('title: A\norder: 1\nsummary: B\nsumary: C'), AT)).toThrow(
       /unknown frontmatter key `sumary`/,
     );

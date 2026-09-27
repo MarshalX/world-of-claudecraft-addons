@@ -1,10 +1,5 @@
-// The character sheet projections.
-//
-// These read a game object the loader cannot compile against, so what is worth
-// testing is the DEFENSIVE half: what each reader does when the game hands over
-// nothing, something of the wrong kind, or a method that throws. A projection
-// that passes on a complete fixture and dies on a partial one is the failure
-// mode here, because the partial one is what a client looks like at login.
+// The character sheet projections, mostly their defensive half: a partial game object is
+// what a client looks like at login.
 
 import { describe, expect, it } from 'vitest';
 import type {
@@ -18,13 +13,7 @@ import {
   readTalents,
 } from '../loader/src/runtime/world/character.ts';
 
-/**
- * A computed read, which is how a constant key into a Record is written here.
- *
- * Biome wants `counters.kills` and TypeScript forbids dotting into an index
- * signature; a helper satisfies both by having no literal key at the call site.
- * See STYLE.md.
- */
+/** A computed read: Biome and TypeScript disagree on a literal key into a Record (STYLE.md). */
 function counter(counters: Readonly<Record<string, number>>, key: string): number | undefined {
   return counters[key];
 }
@@ -86,9 +75,7 @@ describe('readCharacter', () => {
     expect(counter(sheet.deedStats.dungeonClears, 'thornpeak:heroic')).toBe(1);
   });
 
-  // What a client looks like before the first heavy self payload lands. Every
-  // one of these fields is absent then, and an addon reading the sheet on its
-  // first line must not get an exception for it.
+  // Before the first heavy self payload lands, every one of these fields is absent.
   it('answers zeroes and empties for a world carrying none of it', () => {
     const sheet = sheetOf({});
 
@@ -104,9 +91,7 @@ describe('readCharacter', () => {
     expect(readCharacter(null)).toBeNull();
   });
 
-  // The sets survive the wire as real Sets because the client rebuilds them, and
-  // a game that ever handed over the raw arrays instead must not become a Set of
-  // one array.
+  // Raw arrays must not become a Set of one array.
   it('does not mistake an array for a set', () => {
     const sheet = sheetOf({ deedStats: { itemsDiscovered: ['a', 'b'] } });
 
@@ -146,7 +131,7 @@ describe('readTalents', () => {
     expect(talents.rows[5]).toBe('steady_aim');
   });
 
-  it('reports no active loadout as -1 rather than as index zero', () => {
+  it('reports no active loadout as -1', () => {
     expect(talentsOf({}).activeLoadout).toBe(-1);
   });
 });
@@ -162,10 +147,7 @@ describe('readProfessions', () => {
     expect(counter(skills.gathering, 'mining')).toBe(12);
   });
 
-  // Empty maps rather than undefined, and an UNSYNCED identity rather than a
-  // synced-looking one: the whole point of the flag is that these zeroes are a
-  // client-side default and not a character with no craft skill. The identity's own
-  // fields are covered in world-crafting.test.ts.
+  // These zeroes are a client default, so the identity must read unsynced.
   it('answers empty maps and an unsynced identity before either exists', () => {
     const professions = professionsOf({});
 

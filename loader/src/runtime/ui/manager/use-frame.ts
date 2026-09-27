@@ -1,8 +1,5 @@
-// Wiring the manager window to the shared frame primitive.
-//
-// The window unmounts on close, so the interact instance is set up and torn down
-// with it and the geometry itself is held by the caller. That split is what lets
-// a reopened window come back where the player left it.
+// Wiring the manager window to the shared frame primitive. The interact instance lives and dies
+// with the mounted window; the caller holds the geometry, so a reopen comes back where it was.
 
 import { useEffect, useRef } from 'preact/hooks';
 import { clampBox, defaultBox, type FrameBox, type Viewport } from '../frame/geometry.ts';
@@ -34,9 +31,7 @@ export function useInteractiveFrame(deps: UseFrameDeps): FrameRefs {
   const frame = useRef<HTMLElement | null>(null);
   const handle = useRef<HTMLElement | null>(null);
 
-  // Deliberately empty deps: the effect runs once per mount, and the geometry it
-  // starts from is read at that moment. Re-running it on every box change would
-  // tear down the interact instance mid-gesture.
+  // Runs once per mount: re-running on a box change tears down interact mid-gesture.
   // biome-ignore lint/correctness/useExhaustiveDependencies: see above, this is a mount-scoped effect over refs and the box is an initial value rather than a reactive input
   useEffect(() => {
     const el = frame.current;
@@ -54,8 +49,7 @@ export function useInteractiveFrame(deps: UseFrameDeps): FrameRefs {
       onCommit: deps.onGeometry,
     });
 
-    // A window left off the edge by a resized browser could never be grabbed
-    // back, since the title bar is the handle.
+    // Refit on resize, or a title bar left off screen can never be grabbed back.
     const onResize = (): void => {
       interactive.refit();
     };

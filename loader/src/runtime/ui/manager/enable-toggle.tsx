@@ -1,16 +1,5 @@
-// The enable switch, which two panes render identically.
-//
-// It is on the Installed row AND on the addon's own page. That is not
-// redundancy: an addon reaches its own page in whatever state it is in, and a
-// page that shows a STOPPED or FAILED badge with no control to change it is a
-// dead end. The control that answers the badge belongs next to the badge.
-//
-// It stopped being the step that gets a freshly installed addon running, since
-// install now lands enabled, and is what turns one off and back on again.
-//
-// What it reports is the player's INTENT, which is not the same as the run
-// status beside it: an addon can be enabled and still not running because it
-// failed to load or cannot run on this channel. See status.ts.
+// The enable switch, drawn identically on the Installed row and the addon's own page. It reports
+// the player's INTENT: an enabled addon can still be not running (see status.ts).
 
 import { UI_TEXT } from './strings.ts';
 

@@ -1,14 +1,5 @@
-// The group's view of an open loot roll, and the vote landing on it.
-//
-// Its own file rather than a section of `world-group.test.ts` because it is the
-// first read on this API that is a CALL rather than a field, and three of the
-// cases below exist only because of that. The client's mirror field is private
-// and can be renamed by a game release without anything noticing; the accessor
-// is the member the game's own parity suite pins, so the loader calls it and
-// guards the call in all three ways it can fail.
-//
-// The fourth case is the semantic a display gets wrong silently: a candidate
-// with no answer is what the group is WAITING ON, and is not someone who passed.
+// The group's view of an open loot roll. The read is a call on the game's accessor, since the
+// mirror field is private, so the loader guards each way the call can fail.
 
 import { describe, expect, it } from 'vitest';
 import { readGroup } from '../loader/src/runtime/world/group.ts';
@@ -43,7 +34,7 @@ const UNDECIDED = worldWith([
 ]);
 
 describe('readGroup rollStatus', () => {
-  it('turns the sim deadline into seconds remaining, as the prompt already does', () => {
+  it('turns the sim deadline into seconds remaining', () => {
     expect(readGroup(UNDECIDED, NOW)?.rollStatus[0]?.remaining).toBe(30);
     expect(readGroup(UNDECIDED, null)?.rollStatus[0]?.remaining).toBeNull();
   });
@@ -57,22 +48,20 @@ describe('readGroup rollStatus', () => {
     ]);
   });
 
-  // The one semantic a vote strip gets wrong silently: null is the group still
-  // waiting on somebody, and a pass is an answer.
-  it('reads an unanswered candidate as undecided rather than as a pass', () => {
+  // Null is the group still waiting on somebody; a pass is an answer.
+  it('reads an unanswered candidate as undecided, not as a pass', () => {
     const passed = worldWith([statusRow([{ pid: MATE, name: 'Mate', choice: 'pass' }])]);
 
     expect(readGroup(UNDECIDED, NOW)?.rollStatus[0]?.votes[1]?.choice).toBeNull();
     expect(readGroup(passed, NOW)?.rollStatus[0]?.votes[0]?.choice).toBe('pass');
   });
 
-  it('reads a choice the union does not have as undecided, never into the union', () => {
+  it('reads a choice outside the union as undecided', () => {
     const future = worldWith([statusRow([{ pid: MATE, name: 'Mate', choice: 'disenchant' }])]);
 
     expect(readGroup(future, NOW)?.rollStatus[0]?.votes[0]?.choice).toBeNull();
   });
 
-  // The read is a CALL, and these two are why it is guarded rather than made.
   it('answers an empty list for a world that has no such member', () => {
     expect(readGroup({}, NOW)?.rollStatus).toEqual([]);
   });
@@ -94,8 +83,7 @@ describe('readGroup rollStatus', () => {
 });
 
 describe('groupSignature over rollStatus', () => {
-  // Without this the whole feature is invisible to `world.on('group')`: `rolls`
-  // reports only that a roll opened.
+  // `rolls` reports only that a roll opened.
   it('reports a vote landing', () => {
     const before = readGroup(UNDECIDED, NOW);
     const after = readGroup(
@@ -111,8 +99,7 @@ describe('groupSignature over rollStatus', () => {
     expect(groupSignature(after)).not.toBe(groupSignature(before));
   });
 
-  // The existing contract, re-pinned now that a second timer rides this key.
-  it('still ignores the seconds left on a roll', () => {
+  it('ignores the seconds left on a roll', () => {
     expect(groupSignature(readGroup(UNDECIDED, NOW))).toBe(
       groupSignature(readGroup(UNDECIDED, NOW + 10)),
     );

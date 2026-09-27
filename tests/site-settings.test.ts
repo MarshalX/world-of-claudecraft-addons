@@ -1,10 +1,4 @@
-// How a declared setting reads on an addon's page.
-//
-// Each of these is a small decision that is invisible when it is wrong: a
-// boolean default printed as `true` beside a checkbox, an empty string default
-// printed as nothing at all, a number with a floor and no ceiling rendering a
-// stray separator. The page decides none of them, which is why they are testable
-// here rather than only visible in a screenshot.
+// How a declared setting reads on an addon's site page.
 
 import { describe, expect, it } from 'vitest';
 import type { SettingDecl } from '../loader/src/shared/schema.ts';
@@ -20,8 +14,7 @@ function number(bounds: { min?: number; max?: number }): SettingDecl {
 
 describe('a declared setting', () => {
   it('says on or off rather than true or false', () => {
-    // The manager draws a checkbox from this declaration, and a checkbox is on or
-    // off. `true` is what the file says and is not what the player is shown.
+    // The manager draws a checkbox, which is on or off.
     expect(describeSetting(boolean(true))).toMatchObject({ kind: 'on or off', fallback: 'on' });
     expect(describeSetting(boolean(false)).fallback).toBe('off');
   });
@@ -30,17 +23,15 @@ describe('a declared setting', () => {
     expect(describeSetting(boolean(true)).detail).toBeNull();
   });
 
-  it('reads a number range four ways, one per set of bounds it declares', () => {
+  it('reads a number range four ways, one per set of bounds', () => {
     expect(describeSetting(number({ min: 0, max: 20 })).detail).toBe('0 to 20');
     expect(describeSetting(number({ min: 3 })).detail).toBe('at least 3');
     expect(describeSetting(number({ max: 60 })).detail).toBe('at most 60');
     expect(describeSetting(number({})).detail).toBeNull();
   });
 
-  it('treats a zero bound as a bound rather than as an absent one', () => {
-    // The trap this pins: `min: 0` is falsy, and a truthiness check here would
-    // report an unbounded number for every setting that floors at zero, which is
-    // most of them.
+  it('treats a zero bound as a bound', () => {
+    // `min: 0` is falsy, and most settings floor at zero.
     expect(describeSetting(number({ min: 0 })).detail).toBe('at least 0');
     expect(describeSetting(number({ max: 0 })).detail).toBe('at most 0');
   });

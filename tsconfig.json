@@ -5,20 +5,13 @@
     "module": "ESNext",
     "moduleResolution": "bundler",
     "moduleDetection": "force",
-    // The manager UI is preact. The automatic runtime keeps component files free
-    // of a factory import, and jsxImportSource aims the generated import at
-    // preact, since react is not a dependency here. Kept in step with the same
-    // two settings in vitest.config.ts and loader/build-runtime.mjs.
+    // Preact's automatic runtime. Keep in step with vitest.config.ts and
+    // loader/build-runtime.mjs.
     "jsx": "react-jsx",
     "jsxImportSource": "preact",
-    // tampermonkey declares the GM_* and GM globals. They land ambient
-    // project-wide, so loader/build-runtime.mjs enforces at build time that no
-    // host module reaches the page-realm bundle.
-    // `node` is here for tools/*.ts only. Those run under Node's built-in type
-    // stripping so the manifest schema has one definition across CI, the dev
-    // server, and the loader; typing them means the node builtins have to
-    // resolve. loader/build-runtime.mjs is what keeps a node import out of the
-    // page-realm bundle, since ambient types cannot.
+    // `tampermonkey` (for the host) and `node` (for tools/*.ts) are ambient
+    // project-wide, so the compiler cannot keep them out of the page realm;
+    // loader/build-runtime.mjs fails the build if either reaches the runtime bundle.
     "types": ["vitest/globals", "tampermonkey", "node"],
 
     "strict": true,
@@ -35,9 +28,7 @@
 
     "verbatimModuleSyntax": true,
     "isolatedModules": true,
-    // Relative imports carry an explicit .ts extension so the same source runs
-    // under Node's type stripping, which tools/*.mjs relies on, as well as under
-    // esbuild and vitest.
+    // Explicit .ts extensions let the same source run under Node's type stripping.
     "allowImportingTsExtensions": true,
     "esModuleInterop": true,
     "resolveJsonModule": true,
@@ -45,16 +36,9 @@
 
     "noEmit": true
   },
-  // An addon directory carries two TypeScript files and they are listed one by
-  // one: its own suite, and its stage scenario. The addon ITSELF is plain
-  // JavaScript evaluated as a function body, and `allowJs` is off, so a `main.js`
-  // is never compiled here even though its directory is listed. The globs are
-  // what say so out loud.
-  //
-  // `stage.ts` has to be here for the same reason `main.test.ts` did: it is only
-  // reached through an entry `loader/build-stage.mjs` generates at build time, so
-  // a scenario left out of this list would compile against nothing and nobody
-  // would notice until it was run.
+  // An addon's suite and stage scenario are listed explicitly: both are reached
+  // only through generated entries, so a file left out here is never typechecked.
+  // `main.js` is plain JS and `allowJs` is off.
   "include": [
     "loader/src",
     "packages",

@@ -1,27 +1,9 @@
-// Wayline on the stage: a rate, which is a thing that takes time to exist.
+// Wayline on the stage. A rate is measured from awards over time, so this plays the session out:
+// kills arrive on the wire with `stage.advance` between them. Keep them a minute apart; compressed
+// into one minute the rate would be a burst the addon itself refuses to report (MIN_SPAN_MS).
 //
-// Every other scenario in this repository states a world and photographs it. This one has to play
-// a stretch of the session out, because the panel's subject is not a number the game carries
-// anywhere: the rate is measured from awards that landed at particular moments, so a fixture that
-// sets a field cannot produce one. The kills below are delivered on the wire with `stage.advance`
-// between them.
-//
-// So the minutes are load-bearing. Eight kills a minute apart is 450 seconds of span inside a ten
-// minute window, which is a real grind seen from the middle of it. Compress the same eight into
-// one minute and the rate is eight times higher and the panel is a picture of a claim the addon
-// would never make: the floor under the denominator (see MIN_SPAN_MS in main.js) exists exactly
-// so a burst cannot report as an hourly pace.
-//
-// Each award carries its rested half, and the pool below says why. A character sitting on 0.8 of
-// a level of rested earns the bonus on every kill until it runs out, so an award with no `rested`
-// beside a pool that is nearly full is two halves of a session that never happened. It is also
-// what makes the rate row's second setting mean anything.
-//
-// Two panels, and the game decides it rather than a setting. Below the cap the panel counts
-// toward the next level; at the cap that whole reading is gone, since `xp` freezes at 0 and the
-// level bar can only say `max` forever, and what takes its place is the virtual level worked out
-// from the lifetime total. No one character is both, and a shot of the first alone would sell the
-// addon as something that stops being useful at level 20.
+// Each award carries its rested half, consistent with the nearly full pool. Two panels, levelling
+// and capped, because no one character shows both readings.
 
 import type { Scenario, Stage, WorldDraft } from '../../stage/src/stage.ts';
 import { eventsFrame, PLAYER_ENTITY } from '../../tests/fakes/frames.ts';
@@ -40,20 +22,10 @@ const RESTED = 8080;
 
 /** The level cap, past which the panel counts virtual levels instead. */
 const CAP = 20;
-/**
- * A capped character's lifetime total, standing 44 percent into virtual 23. Chosen against the
- * addon's own curve rather than picked round, because the interesting part of that bar is that it
- * is a long way past the cap and still moving: 90,379 earned since level 20 is four virtual
- * levels, which is a state nothing in the game itself would show you.
- */
+/** A capped character's lifetime total, standing 44 percent into virtual 23. */
 const CAPPED_LIFETIME = 257_579;
 
-/**
- * The eight kills, in experience, oldest first. Uneven on purpose: the Kills left figure divides
- * what is left by the average award in the window, so a column of identical numbers would
- * photograph an estimate that is really a division. A camp of mobs a level or two apart is what a
- * grind actually is.
- */
+/** The eight kills, in experience, oldest first. Uneven, like mobs a level or two apart. */
 const KILLS: readonly number[] = [148, 132, 155, 141, 128, 160, 137, 149];
 
 /** How far apart the kills land, which is what makes the rate an hourly one. */
@@ -65,11 +37,7 @@ const QUIET_MS = 11 * 60 * MS_PER_SECOND;
 
 /** Long enough for the frame's stored box and visibility to come back. */
 const SETTLE_MS = 60;
-/**
- * Longer than the panel's own once-a-second repaint, which every shot has to wait. The last thing
- * each scenario does is let time pass, and time passing is exactly what no award reports: the
- * rate ages between kills and only the clock redraws it.
- */
+/** Longer than the panel's once-a-second repaint, which is what redraws an ageing rate. */
 const REDRAW_MS = 1200;
 
 function wait(ms: number): Promise<void> {
@@ -79,9 +47,8 @@ function wait(ms: number): Promise<void> {
 }
 
 /**
- * The character sheet, where the game keeps it: on the world object rather than the entity. In
- * `world` rather than in `run`, and here it is the whole shape of the panel: the level row, the
- * rested row and whether the virtual row exists at all are read on the addon's first paint.
+ * The character sheet, where the game keeps it: on the world object rather than the entity. It
+ * belongs in `world`, because the addon's first paint decides the panel's shape from it.
  */
 function sheet(draft: WorldDraft, fields: Record<string, number>): void {
   for (const [field, value] of Object.entries(fields)) {
@@ -101,11 +68,7 @@ function aLevellingHunter(draft: WorldDraft): void {
   });
 }
 
-/**
- * The same hunter at the cap, with the rested pool empty. Empty because that is the truth rather
- * than a simplification: rested stops accruing entirely at level 20, so a capped character with a
- * pool is a character who has not killed anything since they dinged.
- */
+/** The same hunter at the cap, with the rested pool empty: rested stops accruing at the cap. */
 function aCappedHunter(draft: WorldDraft): void {
   draft.set(draft.player, 'templateId', 'hunter');
   draft.set(draft.player, 'level', CAP);
@@ -118,11 +81,9 @@ function aCappedHunter(draft: WorldDraft): void {
 }
 
 /**
- * One kill, the way the wire reports one: a death, then the award it paid. Both, and in that
- * order, because an award does not say what earned it. The addon counts an award as a kill's only
- * when a death credited to this player landed within a couple of seconds of it.
- *
- * The rested half is inside the amount rather than on top of it, which is where the game puts it.
+ * One kill, the way the wire reports one: a death, then the award it paid. The order matters,
+ * since the addon infers a kill from a credited death just before the award. The rested half is
+ * inside the amount, as the game puts it.
  */
 function killOne(stage: Stage, amount: number): void {
   stage.inbound(eventsFrame([{ type: 'death', entityId: 900, killerId: PLAYER_ID }]));
@@ -172,9 +133,7 @@ const SCENARIOS: readonly Scenario[] = [
     run: eightMinutes,
   },
   {
-    // The state the whole addon is built around: a player who stopped. The window empties, and
-    // the panel says so rather than dividing what was earned by a stretch that keeps growing.
-    // Every figure derived from a rate goes to a dash instead of decaying toward zero.
+    // A player who stopped: the window empties and every rate figure goes to a dash.
     id: 'quiet',
     label: 'Nothing earned in the window',
     world: aLevellingHunter,

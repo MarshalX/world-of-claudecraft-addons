@@ -1,14 +1,5 @@
-// What `pnpm shots` decides: the crop, the scale, and the manifest edit.
-//
-// The browser half is not testable from here and is not worth faking: a
-// screenshot either happens or it does not, and a fake Playwright would be a test
-// of the fake. What CAN be wrong is the arithmetic around it, and all of it is in
-// `tools/shots-core.ts` for that reason.
-//
-// Two groups carry incidents rather than intentions. The scale pass grew a
-// verification step because a prediction made at 1x undershot the real capture,
-// and the manifest group exists because writing a file back through
-// `JSON.stringify` reformats parts of it nobody asked to change.
+// What `pnpm shots` decides: the crop, the scale, and the manifest edit. The browser half is
+// not faked; the arithmetic around it lives in `tools/shots-core.ts` so it can be tested here.
 
 import { describe, expect, it } from 'vitest';
 import {
@@ -35,13 +26,7 @@ function rect(x: number, y: number, width: number, height: number) {
   return { x, y, width, height };
 }
 
-/**
- * Read one key off a manifest.
- *
- * The computed access STYLE.md prescribes: Biome wants `built.preview` and
- * TypeScript forbids dotting into an index signature, so neither call site
- * carries a literal key.
- */
+/** Read one key off a manifest, by computed access so neither Biome nor TypeScript objects. */
 function at(record: Record<string, unknown>, name: string): unknown {
   return record[name];
 }
@@ -61,8 +46,6 @@ describe('cropping to what was drawn', () => {
     });
   });
 
-  // An addon may legitimately put up more than one frame, and a crop around the
-  // first would cut the others out of their own preview.
   it('takes the union of every frame on screen', () => {
     const crop = cropAround([rect(100, 100, 200, 100), rect(400, 300, 100, 200)]);
     expect(crop.x).toBe(100 - CROP_MARGIN);
@@ -70,31 +53,25 @@ describe('cropping to what was drawn', () => {
     expect(crop.height).toBe(300 + 200 - 100 + CROP_MARGIN * 2);
   });
 
-  // A browser rejects a negative clip rather than clamping it, so a frame pushed
-  // against the edge would fail the capture instead of losing its margin.
+  // A browser rejects a negative clip rather than clamping it.
   it('never asks for a crop off the top left of the page', () => {
     const crop = cropAround([rect(4, 2, 200, 100)]);
     expect(crop.x).toBe(0);
     expect(crop.y).toBe(0);
   });
 
-  // A sheet has already had a margin applied per pane, inside the browser.
-  // Adding it again out here put a second one around the outside only, which is
-  // what left the first sheet with its panels adrift in the middle of the image.
+  // A sheet already has a margin per pane, and a second one leaves its panels adrift.
   it('adds no margin when asked for none', () => {
     expect(cropAround([rect(100, 200, 340, 320)], 0)).toEqual(rect(100, 200, 340, 320));
   });
 
-  // The alternative is a zero-byte PNG of nothing, committed, and a Browse row
-  // showing an empty box that reads as a picture that failed to load.
   it('refuses to photograph a scenario that drew nothing', () => {
     expect(() => cropAround([])).toThrow(/drew no frame/);
   });
 });
 
 describe('choosing a scale', () => {
-  // It takes the CROP width, which is the frame plus both margins, because that
-  // is what ends up in the file and what the card slot is measured against.
+  // Measured on the crop width, frame plus both margins, which is what fills the card slot.
   it('picks the smallest that fills the card slot', () => {
     // The combat meter's 340px panel crops to 388, and 2x clears 700.
     expect(scaleFor(340 + CROP_MARGIN * 2)).toBe(2);
@@ -106,9 +83,7 @@ describe('choosing a scale', () => {
     expect(scaleFor(4000)).toBe(SCALES[0]);
   });
 
-  // Capping rather than continuing: an addon whose panel is genuinely tiny cannot
-  // be made to fill the slot without inventing pixels, and a preview upscaled
-  // past its own resolution is a blurrier picture, not a bigger one.
+  // Past its own resolution an upscale is only blurrier.
   it('stops at the largest scale rather than growing without limit', () => {
     expect(scaleFor(1)).toBe(SCALES.at(-1));
     expect(largerScale(SCALES.at(-1) as number)).toBeNull();
@@ -120,17 +95,14 @@ describe('choosing a scale', () => {
     expect(smallerScale(2)).toBeNull();
   });
 
-  // `indexOf` answers -1 for a scale that is not in the list, and reading one
-  // past that is the FIRST entry. Without the guard an unrecognised scale would
-  // read as "step up to 2x", which is a step down dressed as a step up.
+  // `indexOf` answers -1 for an unknown scale, and one past that is the first entry.
   it('refuses to step from a scale it does not know', () => {
     expect(largerScale(2.5)).toBeNull();
     expect(smallerScale(2.5)).toBeNull();
   });
 
-  // The reason the width is verified against the OUTPUT rather than the
-  // prediction: cooldown-bars measured 245 CSS px at 1x and captured 228 at 3x,
-  // which is 684 device pixels against a 700 slot.
+  // The width is verified against the output because a capture can lay out narrower than the
+  // 1x prediction: 245 CSS px predicted, 228 captured, 684 device px against a 700 slot.
   it('reads a shortfall the prediction did not see', () => {
     expect(scaleFor(245)).toBe(3);
     expect(fillsSlot(228, 3)).toBe(false);
@@ -152,17 +124,13 @@ describe('choosing a scale', () => {
 });
 
 describe('describing a sheet of panels', () => {
-  // One panel is every preview that existed before sheets, and its own sentence
-  // is already a whole description. Wrapping it would be adding words nobody
-  // needs to hear before the picture.
   it('leaves a single panel to speak for itself', () => {
     expect(previewAlt([{ alt: 'the Cooldowns overlay, five bars.' }])).toBe(
       'the Cooldowns overlay, five bars.',
     );
   });
 
-  // Positional, because that is what a reader who cannot see the image needs:
-  // "on the left" locates a panel and "the first one" does not.
+  // Positional, because "on the left" locates a panel and "the first one" does not.
   it('places two panels left and right, by caption', () => {
     expect(
       previewAlt([
@@ -193,12 +161,8 @@ describe('describing a sheet of panels', () => {
 });
 
 describe('which game a capture is a picture of', () => {
-  // The default is LIVE and not the stage's pbe, and this pins the difference
-  // rather than the value: a preview is a committed artifact of what a player
-  // reads in Browse, and the player is on live. Pbe is normally AHEAD, which is
-  // why `pnpm run stage` points there, but at game 0.34.0 the two swapped and pbe
-  // served a release BEHIND live. Inheriting the stage's default that week would
-  // have recaptured `cooldown-bars` without art it already had.
+  // A preview pictures what a player reads in Browse, and players are on live, so the default
+  // must not follow the stage's pbe.
   it('defaults to live rather than to the stage host', () => {
     expect(hostFor(['node', 'shots.mjs'])).toBe(DEFAULT_HOST);
     expect(DEFAULT_HOST).not.toContain('pbe');
@@ -213,9 +177,7 @@ describe('which game a capture is a picture of', () => {
     expect(() => hostFor(['node', 'shots.mjs', '--host'])).toThrow(/needs a value/);
   });
 
-  // The value is a bare word sitting where an addon id would be. Left in, it
-  // narrows the run to a directory that cannot exist, and the run then fails
-  // saying no addon has a stage.ts, which is true about the wrong problem.
+  // Left in, the host would narrow the run to an addon directory that cannot exist.
   it('keeps the host value out of the addon ids', () => {
     const argv = ['node', 'shots.mjs', '--host', 'https://example.com', 'cadence'];
     expect(onlyFor(argv)).toEqual(['cadence']);
@@ -234,9 +196,7 @@ describe('which game a capture is a picture of', () => {
 });
 
 describe('the byte cap', () => {
-  // The manager loads this INSIDE the running game, over whatever connection the
-  // player has, which is what the cap is about. Equal is allowed because that is
-  // what `pnpm validate` accepts.
+  // Equal is allowed because that is what `pnpm validate` accepts.
   it('allows exactly the cap and refuses one byte more', () => {
     expect(withinCap(MAX_BYTES)).toBe(true);
     expect(withinCap(MAX_BYTES + 1)).toBe(false);
@@ -244,9 +204,7 @@ describe('the byte cap', () => {
 });
 
 describe('declaring the preview in the manifest', () => {
-  // Every shipped manifest carries preview directly after entry. Appending it
-  // instead would move it to the end of the file on the first capture and leave
-  // the two shipped addons looking different from every addon captured later.
+  // Every shipped manifest carries preview directly after entry.
   it('inserts it directly after entry when there is none', () => {
     const built = withPreview(manifest(), 'a description', 'preview.png');
     expect(Object.keys(built)).toEqual(['id', 'name', 'version', 'entry', 'preview', 'tags']);
@@ -259,8 +217,6 @@ describe('declaring the preview in the manifest', () => {
     expect(at(built, 'preview')).toEqual({ file: 'preview.png', alt: 'new' });
   });
 
-  // The alt is the sentence a screen reader reads instead of the image, so it is
-  // carried through exactly as written rather than trimmed or sentence-cased.
   it('writes the alt verbatim', () => {
     const built = withPreview(manifest(), 'Two rows, 4.4s and 5.8s.', 'preview.png');
     expect(at(built, 'preview')).toEqual({ file: 'preview.png', alt: 'Two rows, 4.4s and 5.8s.' });
