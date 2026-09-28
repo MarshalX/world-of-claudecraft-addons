@@ -102,6 +102,18 @@ describe('player', () => {
     expect(changed('player', entity({ dead: false }), entity({ dead: true }))).toBe(true);
   });
 
+  // Both move while the player stands still: typing /pvp, and a respec or loadout swap.
+  it('notices the /pvp flag being raised', () => {
+    expect(changed('player', entity({ pvpFlag: false }), entity({ pvpFlag: true }))).toBe(true);
+  });
+
+  it('notices a change of spec', () => {
+    expect(changed('player', entity({ specId: null }), entity({ specId: 'holy' }))).toBe(true);
+    expect(changed('player', entity({ specId: 'holy' }), entity({ specId: 'shadow' }))).toBe(
+      true,
+    );
+  });
+
   it('does not confuse a false flag with a missing one', () => {
     const withFlag = entity({ dead: false });
     const withoutFlag = entity();
@@ -200,6 +212,13 @@ describe('party', () => {
   it('notices a member dropping link', () => {
     const before = party([{ pid: 1, connected: 1 }]);
     const after = party([{ pid: 1, connected: 0 }]);
+
+    expect(changed('party', before, after)).toBe(true);
+  });
+
+  it('notices a member changing spec', () => {
+    const before = party([{ pid: 1, role: 'dps', spec: 'arms' }]);
+    const after = party([{ pid: 1, role: 'dps', spec: 'fury' }]);
 
     expect(changed('party', before, after)).toBe(true);
   });

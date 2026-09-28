@@ -21,7 +21,10 @@ interface DamageEvent extends PersonalEvent {
   school: School;
   /** A display NAME, or null for an auto-attack. Never an ability id. */
   ability: string | null;
-  /** A PLAYER ability's id, on the primary direct hit. Null on a mob, tick or echo. */
+  /**
+   * The id on a player's primary direct hit and the few other hits the game names (a pet's ranged
+   * bolt, a guardian, some procs, sourceless hazards). Null on a mob, tick or echo.
+   */
   abilityId?: string | null;
   kind: DamageKind;
   /** Rarely present; read as optional. */

@@ -1,11 +1,11 @@
 {
   "id": "purelight",
   "name": "Purelight",
-  "version": "1.3.1",
+  "version": "1.3.2",
   "apiVersion": 1,
   "apiMinor": 6,
   "author": "MarshalX",
-  "description": "Every effect in front of you that can be removed, worst first: on you, your pet, your group and your target, each tile naming who carries it. What a raid encounter owns is held back and counted.",
+  "description": "Every effect in front of you that can be removed, worst first: on you, your pet, your group and your target, each tile naming who carries it. What a boss encounter owns is held back and counted.",
   "entry": "main.js",
   "data": ["refused.json"],
   "preview": {

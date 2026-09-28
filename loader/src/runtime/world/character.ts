@@ -78,7 +78,11 @@ interface ProfessionInfo {
   gathering: Readonly<Record<string, number>>;
   /** Archetype, pairs, and what has been learned. Read `identity.synced` first. */
   identity: CraftingIdentity;
-  /** The active mobile station's craft id, or null when none is placed. */
+  /**
+   * The first craft id in the game's `activeMobileStationCrafts`, or null when it is empty. That
+   * list is sorted and deduped over your own active station and every party member's shared one
+   * in range, so the first entry is not necessarily yours.
+   */
   mobileStation: string | null;
   /** Slotted tool effects, sorted by profession. Empty is the common case. */
   toolEffectSlots: readonly ToolEffectSlot[];
@@ -226,7 +230,7 @@ function readProfessions(world: unknown): ProfessionInfo | null {
     craftSkills: recordAt(world, 'craftSkills'),
     gathering: recordAt(world, 'gatheringProficiency'),
     identity: readCraftingIdentity(world),
-    mobileStation: fieldString(world, 'activeMobileStationCraft'),
+    mobileStation: stringsAt(world, 'activeMobileStationCrafts')[0] ?? null,
     toolEffectSlots: toolEffectSlotsOf(world),
   };
 }

@@ -27,6 +27,7 @@ import { createSharedServices } from '../../tests/fakes/shared-services.ts';
 import { createFakeStorage } from '../../tests/fakes/storage.ts';
 import MANIFEST_TEXT from './addon.json?raw';
 import TABLE_TEXT from './items.json?raw';
+import PART_TWO_TEXT from './items-2.json?raw';
 // biome-ignore lint/correctness/noUnresolvedImports: Vite's ?raw suffix is a loader directive a static resolver does not model, and an addon file is a function BODY with no exports at all.
 import SOURCE from './main.js?raw';
 
@@ -60,6 +61,7 @@ interface TableRow {
 interface TableFile {
   gameVersion: string;
   fields: string;
+  parts: string[];
   items: TableRow[];
 }
 
@@ -67,7 +69,14 @@ function readHeader(): TableFile {
   return JSON.parse(TABLE_TEXT) as TableFile;
 }
 
-const TABLE: readonly TableRow[] = readHeader().items;
+function readPartTwo(): TableFile {
+  return JSON.parse(PART_TWO_TEXT) as TableFile;
+}
+
+/** Every part the manifest declares, by the name the addon asks for it under. */
+const PARTS: Record<string, string> = { 'items.json': TABLE_TEXT, 'items-2.json': PART_TWO_TEXT };
+
+const TABLE: readonly TableRow[] = [...readHeader().items, ...readPartTwo().items];
 /** How many rows the shipped file holds, the base of every count on screen. */
 const TABLE_SIZE = TABLE.length;
 
@@ -244,7 +253,10 @@ async function start(options: StartOptions = {}): Promise<Harness> {
     game: Promise.resolve({ world: fakeWorld(state, player) }),
   };
   if (options.table !== null) {
-    input.data = { 'items.json': options.table ?? TABLE_TEXT };
+    input.data = PARTS;
+  }
+  if (typeof options.table === 'string') {
+    input.data = { 'items.json': options.table };
   }
   const harness = await mountAddon(input);
   teardown.push(harness.dispose);
@@ -501,7 +513,7 @@ describe('its manifest', () => {
 
   // Without the data file the art file is the only source left to name an item from.
   it('declares the item table as its data file', () => {
-    expect(parseManifest(MANIFEST_TEXT).data).toEqual(['items.json']);
+    expect(parseManifest(MANIFEST_TEXT).data).toEqual(['items.json', 'items-2.json']);
   });
 
   it('asks only for the world, a frame and a key', () => {
@@ -520,6 +532,15 @@ describe('the shipped table', () => {
   // what would break a reader: a header with no stamp, and ids that are not a key.
   it('stamps the game version it was derived from', () => {
     expect(readHeader().gameVersion).toMatch(/^\d+\.\d+\.\d+$/);
+  });
+
+  // A part the manifest does not declare is refused at install, and one the list omits is never
+  // read, so both sides must name the same files.
+  it('names every declared part in every part, at one game version', () => {
+    const declared = parseManifest(MANIFEST_TEXT).data;
+    expect(readHeader().parts).toEqual(declared);
+    expect(readPartTwo().parts).toEqual(declared);
+    expect(readPartTwo().gameVersion).toBe(readHeader().gameVersion);
   });
 
   // The id is the addon's Map key, so a duplicate silently gives one item another's stats.
@@ -828,7 +849,9 @@ describe('the coverage line', () => {
       }
       return null;
     });
-    shared.addonData(FQID, 'items.json', TABLE_TEXT);
+    for (const [name, text] of Object.entries(PARTS)) {
+      shared.addonData(FQID, name, text);
+    }
 
     const addon = await loadAddon({ shared: shared.shared, row: installedRow(), source: SOURCE });
     teardown.push(() => {
@@ -888,6 +911,19 @@ describe('the filters', () => {
     expect(drawnIds()).toContain(HELMET.id);
   });
 
+  // The game added the trinket slot; a slot missing from the dropdown hides a whole shelf.
+  it('narrows to trinkets', async () => {
+    const trinkets = TABLE.filter((row) => row.slot === 'trinket');
+    const h = await start();
+    await h.tick();
+    chooseSlot('trinket');
+    await h.settle();
+
+    expect(trinkets.length).toBeGreaterThan(0);
+    expect(drawnIds()).toHaveLength(trinkets.length);
+    expect(drawnIds()).toContain('gamblers_die');
+  });
+
   // An id is seen when the world, not the file, proves it exists.
   it('narrows to what this character has actually laid eyes on', async () => {
     const h = await start({ world: { inventory: [{ itemId: JUNK.id, count: 3 }] } });
@@ -926,7 +962,7 @@ describe('the filters', () => {
   it('says nothing matches rather than drawing an empty grid', async () => {
     const h = await start();
     await h.tick();
-    pressTab('Quest');
+    pressTab('Food');
     pressChip('legendary');
     await h.settle();
 

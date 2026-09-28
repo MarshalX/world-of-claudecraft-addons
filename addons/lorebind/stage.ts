@@ -1,6 +1,7 @@
 // Lorebind on the stage: the codex asked about the den the group is standing in.
 //
-// The table is the shipped `items.json`, imported so no fixture can invent an item.
+// The table is the shipped `items.json` and its later parts, imported so no fixture can invent an
+// item.
 // `webwood_silk` proves the ranking: its art file names it "Webwood Silk Gland" and the table
 // "Sableweb Silk Gland", so a reversed ranking draws a different word.
 //
@@ -10,9 +11,9 @@
 
 import type { Scenario, Stage } from '../../stage/src/stage.ts';
 import TABLE from './items.json' with { type: 'json' };
+import PART_TWO from './items-2.json' with { type: 'json' };
 
-const TABLE_FILE = 'items.json';
-const DATA = { [TABLE_FILE]: JSON.stringify(TABLE) };
+const DATA = { 'items.json': JSON.stringify(TABLE), 'items-2.json': JSON.stringify(PART_TWO) };
 
 /** What the player types, and the word the whole fixture is built around. */
 const QUERY = 'sable';

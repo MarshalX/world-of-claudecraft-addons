@@ -20,7 +20,7 @@
 //   paladin: 51
 //   priest: 26
 //   rogue: 39
-//   shaman: 29
+//   shaman: 32
 //   warlock: 29
 //   warrior: 63
 
@@ -244,12 +244,14 @@ export type KnownSkillIcon =
   | 'kick'
   | 'kidney_shot'
   | 'knockout_blow'
+  | 'lava_burst'
   | 'lay_on_hands'
   | 'lesser_heal'
   | 'life_covenant'
   | 'life_tap'
   | 'lifespring_weapon'
   | 'lightning_bolt'
+  | 'lightning_overload'
   | 'lightning_shield'
   | 'lingering_dread'
   | 'mark_of_the_wild'
@@ -403,6 +405,7 @@ export type KnownSkillIcon =
   | 'thorns'
   | 'thunder_clap'
   | 'thunder_reservoir'
+  | 'thunderstorm'
   | 'tidecall'
   | 'tigers_fury'
   | 'trailbreak'

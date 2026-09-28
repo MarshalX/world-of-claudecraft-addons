@@ -8,7 +8,7 @@
 /** Every member the loader reads off `__game.world`. */
 const WORLD_MEMBERS: readonly string[] = [
   'activeLoadout',
-  'activeMobileStationCraft',
+  'activeMobileStationCrafts',
   'activeTitle',
   'arenaInfo',
   'bagCapacity',

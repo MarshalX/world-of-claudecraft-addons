@@ -1,6 +1,6 @@
 {
   "source": {
-    "game": "0.43.3",
+    "game": "0.44.0",
     "files": [
       "src/sim/data.ts (ZONES, WORLD_SIZE, INSTANCE_X_BASE, PORTALS)",
       "src/sim/content/*.ts (one ZoneDef and one PortalDef[] per zone)",
@@ -822,6 +822,12 @@
           "label": "The Riftfields",
           "x": 434,
           "z": 58
+        },
+        {
+          "id": "the_wreck",
+          "label": "The Wreck",
+          "x": 306,
+          "z": 123.05
         }
       ]
     },

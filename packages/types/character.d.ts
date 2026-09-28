@@ -161,10 +161,19 @@ export interface ProfessionInfo {
   /** Archetype, pairs, and what has been learned. Read `identity.synced` first. */
   identity: CraftingIdentity;
   /**
-   * The craft id of the mobile station you have placed, or null when none is.
+   * The craft id of a mobile station currently serving you, or null when none is.
+   *
+   * The game tracks a LIST: your own active station at any distance, plus every
+   * party member's shared station in range, deduped and sorted by craft id. This
+   * is the FIRST entry of that list, so it is not necessarily the station you
+   * placed, and a second station serving you at the same time is not reported.
+   * Nothing the client receives says which entry is yours.
    *
    * A recipe naming a `stationType` can be crafted beside a mobile station whose
    * craft maps to that type, as well as at an authored one in `world.stations`.
+   *
+   * Loaders before API minor 13 read a member the game never carried, so there
+   * this is null always.
    */
   mobileStation: string | null;
   /**

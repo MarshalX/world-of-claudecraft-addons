@@ -1,4 +1,4 @@
-// Regenerate `items.json` from a World of ClaudeCraft checkout.
+// Regenerate `items.json` and its sibling parts from a World of ClaudeCraft checkout.
 //
 //   node addons/lorebind/generate.mjs --game=/path/to/world-of-claudecraft
 //
@@ -24,6 +24,11 @@
 // The output is byte-deterministic (ids in code point order, fixed key order), so any diff after
 // a regeneration is real content.
 //
+// The table outgrew one data file, so it is written as PARTS: `items.json`, then `items-2.json`
+// and on, each under `PART_BUDGET`, every one stamped and naming the whole list in `parts`. The
+// manifest must declare exactly that list, and a mismatch fails the run rather than shipping a
+// part the loader would refuse to hand over. Tests and the stage import each part by name.
+//
 // Two content assumptions a release can break silently, which the printed report is for:
 //
 //   KINDS. `main.js` drops a row whose kind is not in its own `KINDS`, so a new kind quietly
@@ -33,9 +38,10 @@
 //   mandatory the printed counts go to zero and the codex's "unknown" rows disappear.
 
 import { execFileSync } from 'node:child_process';
-import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { argv, exit } from 'node:process';
+import { DATA_MAX_BYTES } from '../../loader/src/shared/addon-data.ts';
 
 /** What the checkout's own `package.json` has to call itself to be the game. */
 const GAME_PACKAGE_NAME = 'world-of-claudecraft';
@@ -51,8 +57,14 @@ const EQUIP_RULES_MODULE = join('src', 'sim', 'equipment_rules.ts');
 /** Where `data.ts` sits, for resolving the relative specifiers it imports. */
 const SIM_DIR = 'src/sim';
 
-/** The one file this script writes, resolved against ITSELF rather than the cwd. */
-const OUTPUT = join(import.meta.dirname, 'items.json');
+/** The first part's name; the rest are `items-<n>.json`. Resolved against this script, never the cwd. */
+const FIRST_PART = 'items.json';
+/** No part may be a data file the loader refuses, and a part fills a little before it reports. */
+const PART_HEADROOM = 0.85;
+const PART_BUDGET = Math.floor(DATA_MAX_BYTES * PART_HEADROOM);
+/** More parts than the loader lets one addon declare is a table this format cannot carry. */
+const MAX_PARTS = 8;
+const MANIFEST = join(import.meta.dirname, 'addon.json');
 
 /** `import { A, B } from './x'`, including the multi-line form. */
 const IMPORT_RE = /import\s*\{([\s\S]*?)\}\s*from\s*'([^']+)'/g;
@@ -104,7 +116,7 @@ function gameVersionAt(gamePath) {
   return version;
 }
 
-/** One game module, bundled in memory and imported: `items.json` is the only file written. */
+/** One game module, bundled in memory and imported: the table parts are the only files written. */
 async function bundle(gamePath, entry) {
   const esbuild = await import('esbuild');
   const built = await esbuild.build({
@@ -379,8 +391,62 @@ function formatted(json) {
   });
 }
 
-/** The file. `name` gets its own line, so a rename stays a one-line diff. */
-function render(gameVersion, provenance, rows) {
+/** The file name of part `n`, 1-based. */
+function partName(n) {
+  if (n === 1) {
+    return FIRST_PART;
+  }
+  return `items-${String(n)}.json`;
+}
+
+/** `rows` cut into `count` runs of near-equal length, in order. */
+function chunked(rows, count) {
+  const size = Math.ceil(rows.length / count);
+  return Array.from({ length: count }, (_, i) => rows.slice(i * size, (i + 1) * size));
+}
+
+/**
+ * The fewest parts that each fit the budget, formatted. Starts from the whole table's weight and
+ * adds a part until every one fits, since rows are not all the same size.
+ */
+function partsOf(gameVersion, provenance, rows) {
+  const whole = formatted(render(gameVersion, provenance, [FIRST_PART], rows));
+  let count = Math.max(1, Math.ceil(Buffer.byteLength(whole) / PART_BUDGET));
+  while (count <= MAX_PARTS) {
+    const names = Array.from({ length: count }, (_, i) => partName(i + 1));
+    const texts = chunked(rows, count).map((run) =>
+      formatted(render(gameVersion, provenance, names, run)),
+    );
+    if (texts.every((text) => Buffer.byteLength(text) <= PART_BUDGET)) {
+      return names.map((name, i) => ({ name, text: texts[i] }));
+    }
+    count += 1;
+  }
+  console.error(`generate: the table does not fit ${String(MAX_PARTS)} parts`);
+  return exit(1);
+}
+
+/** The manifest must declare exactly the parts written, in order, or the loader refuses one. */
+function checkDeclared(names) {
+  const declared = JSON.parse(readFileSync(MANIFEST, 'utf8')).data ?? [];
+  if (JSON.stringify(declared) !== JSON.stringify(names)) {
+    console.error(
+      `generate: addon.json declares ${JSON.stringify(declared)} but the table is ` +
+        `${JSON.stringify(names)}; update "data", the suite's and the stage's part imports`,
+    );
+    exit(1);
+  }
+}
+
+/** Parts a larger table wrote and this one does not, so no stale part is left to be shipped. */
+function removeStaleParts(count) {
+  for (let n = count + 1; n <= MAX_PARTS; n += 1) {
+    rmSync(join(import.meta.dirname, partName(n)), { force: true });
+  }
+}
+
+/** One part. `name` gets its own line, so a rename stays a one-line diff. */
+function render(gameVersion, provenance, parts, rows) {
   const fields =
     "what the game's own item tooltip draws, plus the two prices it does not: id, name and kind " +
     'always, then quality, slot, armorType, heroicOf, uniqueEquipped, itemLevel, stats, ' +
@@ -388,7 +454,7 @@ function render(gameVersion, provenance, rows) {
     'blockValue, foodHp, drinkMana, potionHp, potionMana, elixir, bagSlots, requiredLevel, ' +
     'requiredClass, set, soulbound, sellValue and priceHonor wherever the game declares or ' +
     'derives one';
-  const file = { gameVersion, generatedFrom: provenance, fields, items: rows };
+  const file = { gameVersion, generatedFrom: provenance, fields, parts, items: rows };
   return `${JSON.stringify(file, null, 2)}\n`;
 }
 
@@ -416,9 +482,14 @@ async function main() {
   const version = gameVersionAt(gamePath);
   const source = readFileSync(join(gamePath, DATA_MODULE), 'utf8');
   const rows = rowsOf(await readGame(gamePath));
-  writeFileSync(OUTPUT, formatted(render(version, provenanceFrom(source), rows)));
+  const parts = partsOf(version, provenanceFrom(source), rows);
+  for (const part of parts) {
+    writeFileSync(join(import.meta.dirname, part.name), part.text);
+  }
+  removeStaleParts(parts.length);
   report(rows);
-  console.log(`generate: wrote ${OUTPUT} for game ${version}`);
+  console.log(`generate: wrote ${parts.map((part) => part.name).join(', ')} for game ${version}`);
+  checkDeclared(parts.map((part) => part.name));
 }
 
 await main();

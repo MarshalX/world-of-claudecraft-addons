@@ -1,5 +1,5 @@
 {
-  "gameVersion": "0.43.3",
+  "gameVersion": "0.44.0",
   "source": "src/sim/data.ts, src/ui/i18n.resolved.generated/en.ts",
   "mobs": [
     {
@@ -169,6 +169,26 @@
     {
       "id": "heroic_boss_dummy",
       "name": "Heroic Boss Dummy",
+      "rank": "boss"
+    },
+    {
+      "id": "hoard_boss_bat",
+      "name": "Colossal Bat",
+      "rank": "boss"
+    },
+    {
+      "id": "hoard_boss_mimic",
+      "name": "Voracious Chest",
+      "rank": "boss"
+    },
+    {
+      "id": "hoard_boss_mole",
+      "name": "Deeprake",
+      "rank": "boss"
+    },
+    {
+      "id": "hoard_boss_mushroom",
+      "name": "Mother of Mushrooms",
       "rank": "boss"
     },
     {
@@ -425,6 +445,11 @@
     {
       "id": "rift_magma_brute",
       "name": "Magma Brute",
+      "rank": "elite"
+    },
+    {
+      "id": "rift_marrow_golem",
+      "name": "Marrow Golem",
       "rank": "elite"
     },
     {

@@ -51,6 +51,7 @@ const PARTY_MEMBER_FIELDS = [
   'hasAggro',
   'connected',
   'role',
+  'spec',
   'absorb',
   'incomingHeal',
 ];
@@ -74,6 +75,8 @@ export const PLAYER_FIELDS = [
   'savedMana',
   'dead',
   'targetId',
+  'pvpFlag',
+  'specId',
 ];
 
 export function partySignature(party: unknown): string {

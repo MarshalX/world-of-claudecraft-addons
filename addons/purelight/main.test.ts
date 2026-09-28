@@ -27,6 +27,7 @@ const MANIFEST_JSON: unknown = JSON.parse(MANIFEST_TEXT);
 interface RefusedRow {
   id: string;
   reason: string;
+  perEntity: boolean;
 }
 
 interface RefusedTable {
@@ -38,7 +39,7 @@ interface RefusedTable {
 const TABLE = JSON.parse(TABLE_TEXT) as RefusedTable;
 
 function firstRefused(reason: string): string {
-  const row = TABLE.auras.find((one) => one.reason === reason);
+  const row = TABLE.auras.find((one) => one.reason === reason && !one.perEntity);
   if (row === undefined) {
     throw new Error(`refused.json carries no ${reason} row to write a case against`);
   }
@@ -670,6 +671,28 @@ describe('an effect the game will refuse for a reason the wire does not carry', 
     expect(h.drawn()).toEqual([]);
   });
 
+  // The Rift hoard bosses stamp their own entity id onto some mechanics, so the table carries the
+  // head and the addon matches the head followed by an entity id.
+  it('holds a mechanic whose id carries the boss entity id', async () => {
+    const h = await run();
+
+    h.afflict(NEAR, { ...GRAVEBIND, id: 'hoard_bat_screech_4172' });
+    h.frame();
+
+    expect(h.drawn()).toEqual([]);
+    expect(h.heldCount()).toBe('1');
+  });
+
+  // Hoarfrost's Ice Age is a cast id beginning with a refused head; only an entity id may follow.
+  it('does not hold an id that merely begins with a per-entity head', async () => {
+    const h = await run();
+
+    h.afflict(NEAR, { ...GRAVEBIND, id: 'hoard_ice_age' });
+    h.frame();
+
+    expect(h.drawn()).toEqual([key(NEAR, 'hoard_ice_age')]);
+  });
+
   it('purges the same benefit under an ordinary id', async () => {
     const h = await run();
     h.select(RIVAL);
@@ -749,7 +772,18 @@ describe('the table it reads', () => {
       expect(typeof row.id).toBe('string');
       expect(row.id.length).toBeGreaterThan(0);
       expect(['encounter', 'display']).toContain(row.reason);
+      expect(typeof row.perEntity).toBe('boolean');
     }
+  });
+
+  // By id in both directions: a per-entity row read as exact never matches, and an exact row
+  // read as a head holds every aura that happens to share it.
+  it('marks the Rift hoard heads per entity and the raid ids exact', () => {
+    const perEntity = (id: string) => TABLE.auras.find((row) => row.id === id)?.perEntity;
+    expect(perEntity('hoard_bat_screech_')).toBe(true);
+    expect(perEntity('hoard_ice_')).toBe(true);
+    expect(perEntity('hoard_blizzard_')).toBe(true);
+    expect(perEntity('nythraxis_soul_rend')).toBe(false);
   });
 
   // No held tile over an unreadable table: a tile saying nothing was held is a claim.
