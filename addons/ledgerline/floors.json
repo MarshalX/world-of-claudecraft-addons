@@ -1,5 +1,5 @@
 {
-  "gameVersion": "0.43.3",
+  "gameVersion": "0.44.0",
   "generatedFrom": ["src/sim/data.ts"],
   "fields": "the three item facts that decide what a market listing is worth against something other than another listing: sellValue, the flat per-unit copper a vendor pays, which is the only absolute price in the game; buyValue, the vendor shop price, present ONLY where some NPC actually stocks the id, which makes it a ceiling an ask above can never sell over; and noVendorSell, which voids the floor. An item the server refuses to list (quest, noMarketList, soulbound) is absent, as is one declaring none of the three. See src/sim/market.ts for the listing gate.",
   "items": [
@@ -18,6 +18,10 @@
     {
       "id": "acolytes_circlet",
       "sellValue": 120
+    },
+    {
+      "id": "allied_hearthstone",
+      "sellValue": 20000
     },
     {
       "id": "amber_hide",
@@ -102,6 +106,10 @@
       "buyValue": 25
     },
     {
+      "id": "band_mountains_weight",
+      "sellValue": 11000
+    },
+    {
       "id": "band_of_marked_strikes",
       "sellValue": 8000
     },
@@ -159,6 +167,10 @@
     {
       "id": "bone_fragments",
       "sellValue": 7
+    },
+    {
+      "id": "bone_studded_pauldrons",
+      "sellValue": 12000
     },
     {
       "id": "bonechill_cord",
@@ -233,6 +245,10 @@
       "sellValue": 12000
     },
     {
+      "id": "breastplate_tectonic_might",
+      "sellValue": 14000
+    },
+    {
       "id": "briarroot_staff",
       "sellValue": 320
     },
@@ -274,6 +290,10 @@
     {
       "id": "broodmother_carapace",
       "sellValue": 6000
+    },
+    {
+      "id": "broodmother_chitin_cowl",
+      "sellValue": 13000
     },
     {
       "id": "broodmother_silk_robe",
@@ -323,6 +343,14 @@
       "sellValue": 170
     },
     {
+      "id": "chained_ember_choker",
+      "sellValue": 11000
+    },
+    {
+      "id": "chalice_of_living_tides",
+      "sellValue": 11000
+    },
+    {
       "id": "chipped_tusk",
       "sellValue": 15
     },
@@ -337,6 +365,10 @@
     {
       "id": "cinder_of_the_first_design",
       "sellValue": 12000
+    },
+    {
+      "id": "cinder_stitched_robes",
+      "sellValue": 14000
     },
     {
       "id": "cinderbark_cinch",
@@ -363,12 +395,24 @@
       "sellValue": 375
     },
     {
+      "id": "clockwork_shock_bomb",
+      "sellValue": 25
+    },
+    {
+      "id": "clockwork_target_dummy",
+      "sellValue": 6250
+    },
+    {
       "id": "cogwheel_blank",
       "sellValue": 18
     },
     {
       "id": "coiled_copper_torc",
       "sellValue": 36
+    },
+    {
+      "id": "collapsar_band_of_nyxaris",
+      "sellValue": 11000
     },
     {
       "id": "compost",
@@ -405,6 +449,10 @@
       "sellValue": 40
     },
     {
+      "id": "coral_encrusted_girdle",
+      "sellValue": 11000
+    },
+    {
       "id": "cord_of_the_last_flame",
       "sellValue": 10000
     },
@@ -415,6 +463,10 @@
     {
       "id": "courtiers_bonefang",
       "sellValue": 14000
+    },
+    {
+      "id": "cowl_of_event_horizon",
+      "sellValue": 12000
     },
     {
       "id": "cracked_fetish",
@@ -651,6 +703,10 @@
       "sellValue": 5
     },
     {
+      "id": "dawn_battle_standard",
+      "sellValue": 6250
+    },
+    {
       "id": "dawnhold_posy",
       "sellValue": 25
     },
@@ -697,6 +753,10 @@
     {
       "id": "deepfen_pearl",
       "sellValue": 600
+    },
+    {
+      "id": "dense_sharpening_stone",
+      "sellValue": 20
     },
     {
       "id": "dewfall_moccasins",
@@ -803,6 +863,10 @@
       "sellValue": 9000
     },
     {
+      "id": "earthshaker_warboots",
+      "sellValue": 11000
+    },
+    {
       "id": "eastbrook_arming_sword",
       "sellValue": 140
     },
@@ -873,6 +937,10 @@
       "sellValue": 40
     },
     {
+      "id": "elixir_of_mana_regeneration",
+      "sellValue": 20
+    },
+    {
       "id": "elixir_of_the_bear",
       "sellValue": 20
     },
@@ -887,6 +955,10 @@
     {
       "id": "ember_wardens_barrier",
       "sellValue": 12000
+    },
+    {
+      "id": "ember_wrought_crown",
+      "sellValue": 13000
     },
     {
       "id": "emberfang_warblade",
@@ -1148,7 +1220,23 @@
       "sellValue": 10000
     },
     {
+      "id": "formula_dawnfire_etching",
+      "noVendorSell": true
+    },
+    {
+      "id": "formula_dawns_benediction",
+      "noVendorSell": true
+    },
+    {
       "id": "formula_lastflame_zeal",
+      "noVendorSell": true
+    },
+    {
+      "id": "formula_piston_drive",
+      "noVendorSell": true
+    },
+    {
+      "id": "formula_riftwalkers_grace",
       "noVendorSell": true
     },
     {
@@ -1178,6 +1266,10 @@
       "buyValue": 32
     },
     {
+      "id": "frostbitten_rime_slippers",
+      "sellValue": 11000
+    },
+    {
       "id": "frostgill_chowder",
       "sellValue": 40
     },
@@ -1188,6 +1280,10 @@
     {
       "id": "furnace_march_greaves",
       "sellValue": 10000
+    },
+    {
+      "id": "gale_strider_boots",
+      "sellValue": 11000
     },
     {
       "id": "game_meat",
@@ -1214,6 +1310,10 @@
       "id": "gilded_yam_seed",
       "sellValue": 8,
       "buyValue": 64
+    },
+    {
+      "id": "glacier_hewn_bulwark",
+      "sellValue": 13000
     },
     {
       "id": "glacier_melt",
@@ -1416,6 +1516,10 @@
     {
       "id": "harvest_feast",
       "sellValue": 250
+    },
+    {
+      "id": "hauberk_tempest_gale",
+      "sellValue": 14000
     },
     {
       "id": "healing_potion",
@@ -1942,6 +2046,138 @@
       "sellValue": 5000
     },
     {
+      "id": "legendary_band_mountains_weight",
+      "sellValue": 15400
+    },
+    {
+      "id": "legendary_bone_studded_pauldrons",
+      "sellValue": 16800
+    },
+    {
+      "id": "legendary_breastplate_tectonic_might",
+      "sellValue": 19600
+    },
+    {
+      "id": "legendary_broodmother_chitin_cowl",
+      "sellValue": 18200
+    },
+    {
+      "id": "legendary_chained_ember_choker",
+      "sellValue": 15400
+    },
+    {
+      "id": "legendary_chalice_of_living_tides",
+      "sellValue": 15400
+    },
+    {
+      "id": "legendary_cinder_stitched_robes",
+      "sellValue": 19600
+    },
+    {
+      "id": "legendary_collapsar_band_of_nyxaris",
+      "sellValue": 15400
+    },
+    {
+      "id": "legendary_coral_encrusted_girdle",
+      "sellValue": 15400
+    },
+    {
+      "id": "legendary_cowl_of_event_horizon",
+      "sellValue": 16800
+    },
+    {
+      "id": "legendary_earthshaker_warboots",
+      "sellValue": 15400
+    },
+    {
+      "id": "legendary_ember_wrought_crown",
+      "sellValue": 18200
+    },
+    {
+      "id": "legendary_frostbitten_rime_slippers",
+      "sellValue": 15400
+    },
+    {
+      "id": "legendary_gale_strider_boots",
+      "sellValue": 15400
+    },
+    {
+      "id": "legendary_glacier_hewn_bulwark",
+      "sellValue": 18200
+    },
+    {
+      "id": "legendary_hauberk_tempest_gale",
+      "sellValue": 19600
+    },
+    {
+      "id": "legendary_legguards_of_the_ossuary",
+      "sellValue": 19600
+    },
+    {
+      "id": "legendary_mantle_of_singularity",
+      "sellValue": 16800
+    },
+    {
+      "id": "legendary_molten_clinker_girdle",
+      "sellValue": 15400
+    },
+    {
+      "id": "legendary_monolithic_shoulderguards",
+      "sellValue": 16800
+    },
+    {
+      "id": "legendary_orb_collapsing_void",
+      "sellValue": 15400
+    },
+    {
+      "id": "legendary_ossuary_bone_crown",
+      "sellValue": 18200
+    },
+    {
+      "id": "legendary_pendant_continuous_flow",
+      "sellValue": 15400
+    },
+    {
+      "id": "legendary_permafrost_legguards",
+      "sellValue": 19600
+    },
+    {
+      "id": "legendary_rime_crusted_grips",
+      "sellValue": 15400
+    },
+    {
+      "id": "legendary_riptide_handwraps",
+      "sellValue": 15400
+    },
+    {
+      "id": "legendary_seal_of_the_cryptwalker",
+      "sellValue": 15400
+    },
+    {
+      "id": "legendary_silkstalker_woven_vest",
+      "sellValue": 19600
+    },
+    {
+      "id": "legendary_spun_venom_spaulders",
+      "sellValue": 16800
+    },
+    {
+      "id": "legendary_storm_tuned_buckler",
+      "sellValue": 18200
+    },
+    {
+      "id": "legendary_tempest_strike_grips",
+      "sellValue": 15400
+    },
+    {
+      "id": "legendary_venom_etched_waistcord",
+      "sellValue": 15400
+    },
+    {
+      "id": "legguards_of_the_ossuary",
+      "sellValue": 14000
+    },
+    {
       "id": "lesser_healing_potion",
       "sellValue": 16,
       "buyValue": 85
@@ -2032,6 +2268,10 @@
       "id": "mana_potion",
       "sellValue": 32,
       "buyValue": 170
+    },
+    {
+      "id": "mantle_of_singularity",
+      "sellValue": 12000
     },
     {
       "id": "mantle_of_the_meredark",
@@ -2226,8 +2466,16 @@
       "sellValue": 180
     },
     {
+      "id": "molten_clinker_girdle",
+      "sellValue": 11000
+    },
+    {
       "id": "monarch_crown_helm",
       "sellValue": 320
+    },
+    {
+      "id": "monolithic_shoulderguards",
+      "sellValue": 12000
     },
     {
       "id": "moonbark_vestments",
@@ -2375,6 +2623,10 @@
       "sellValue": 300
     },
     {
+      "id": "orb_collapsing_void",
+      "sellValue": 11000
+    },
+    {
       "id": "orb_of_the_last_spring",
       "sellValue": 12000
     },
@@ -2385,6 +2637,10 @@
     {
       "id": "osmium_hoe",
       "sellValue": 60
+    },
+    {
+      "id": "ossuary_bone_crown",
+      "sellValue": 13000
     },
     {
       "id": "outrider_brigandine",
@@ -2632,12 +2888,20 @@
       "sellValue": 1700
     },
     {
+      "id": "pendant_continuous_flow",
+      "sellValue": 11000
+    },
+    {
       "id": "pendant_of_the_first_tempering",
       "sellValue": 8000
     },
     {
       "id": "peppered_deepbarb_catfish",
       "sellValue": 75
+    },
+    {
+      "id": "permafrost_legguards",
+      "sellValue": 14000
     },
     {
       "id": "pilgrims_leggings",
@@ -2650,6 +2914,10 @@
     {
       "id": "polished_copper_loop",
       "sellValue": 32
+    },
+    {
+      "id": "potion_of_invisibility",
+      "sellValue": 35
     },
     {
       "id": "precision_chassis",
@@ -2690,6 +2958,134 @@
     {
       "id": "quilted_trousers",
       "sellValue": 90
+    },
+    {
+      "id": "rare_band_mountains_weight",
+      "sellValue": 4950
+    },
+    {
+      "id": "rare_bone_studded_pauldrons",
+      "sellValue": 5400
+    },
+    {
+      "id": "rare_breastplate_tectonic_might",
+      "sellValue": 6300
+    },
+    {
+      "id": "rare_broodmother_chitin_cowl",
+      "sellValue": 5850
+    },
+    {
+      "id": "rare_chained_ember_choker",
+      "sellValue": 4950
+    },
+    {
+      "id": "rare_chalice_of_living_tides",
+      "sellValue": 4950
+    },
+    {
+      "id": "rare_cinder_stitched_robes",
+      "sellValue": 6300
+    },
+    {
+      "id": "rare_collapsar_band_of_nyxaris",
+      "sellValue": 4950
+    },
+    {
+      "id": "rare_coral_encrusted_girdle",
+      "sellValue": 4950
+    },
+    {
+      "id": "rare_cowl_of_event_horizon",
+      "sellValue": 5400
+    },
+    {
+      "id": "rare_earthshaker_warboots",
+      "sellValue": 4950
+    },
+    {
+      "id": "rare_ember_wrought_crown",
+      "sellValue": 5850
+    },
+    {
+      "id": "rare_frostbitten_rime_slippers",
+      "sellValue": 4950
+    },
+    {
+      "id": "rare_gale_strider_boots",
+      "sellValue": 4950
+    },
+    {
+      "id": "rare_glacier_hewn_bulwark",
+      "sellValue": 5850
+    },
+    {
+      "id": "rare_hauberk_tempest_gale",
+      "sellValue": 6300
+    },
+    {
+      "id": "rare_legguards_of_the_ossuary",
+      "sellValue": 6300
+    },
+    {
+      "id": "rare_mantle_of_singularity",
+      "sellValue": 5400
+    },
+    {
+      "id": "rare_molten_clinker_girdle",
+      "sellValue": 4950
+    },
+    {
+      "id": "rare_monolithic_shoulderguards",
+      "sellValue": 5400
+    },
+    {
+      "id": "rare_orb_collapsing_void",
+      "sellValue": 4950
+    },
+    {
+      "id": "rare_ossuary_bone_crown",
+      "sellValue": 5850
+    },
+    {
+      "id": "rare_pendant_continuous_flow",
+      "sellValue": 4950
+    },
+    {
+      "id": "rare_permafrost_legguards",
+      "sellValue": 6300
+    },
+    {
+      "id": "rare_rime_crusted_grips",
+      "sellValue": 4950
+    },
+    {
+      "id": "rare_riptide_handwraps",
+      "sellValue": 4950
+    },
+    {
+      "id": "rare_seal_of_the_cryptwalker",
+      "sellValue": 4950
+    },
+    {
+      "id": "rare_silkstalker_woven_vest",
+      "sellValue": 6300
+    },
+    {
+      "id": "rare_spun_venom_spaulders",
+      "sellValue": 5400
+    },
+    {
+      "id": "rare_storm_tuned_buckler",
+      "sellValue": 5850
+    },
+    {
+      "id": "rare_tempest_strike_grips",
+      "sellValue": 4950
+    },
+    {
+      "id": "rare_venom_etched_waistcord",
+      "sellValue": 4950
     },
     {
       "id": "raw_bog_eel",
@@ -2750,6 +3146,10 @@
       "buyValue": 1800
     },
     {
+      "id": "reinforced_armor_kit",
+      "sellValue": 30
+    },
+    {
       "id": "reinforced_pauldrons",
       "sellValue": 140
     },
@@ -2758,11 +3158,20 @@
       "noVendorSell": true
     },
     {
+      "id": "reins_avian_strider",
+      "buyValue": 1000000,
+      "noVendorSell": true
+    },
+    {
       "id": "reins_drakemaw_raptor",
       "noVendorSell": true
     },
     {
       "id": "reins_grag_bear",
+      "noVendorSell": true
+    },
+    {
+      "id": "reins_lanternback_troll",
       "noVendorSell": true
     },
     {
@@ -2855,12 +3264,24 @@
       "sellValue": 600
     },
     {
+      "id": "rift_feather_glider",
+      "sellValue": 6250
+    },
+    {
+      "id": "rime_crusted_grips",
+      "sellValue": 11000
+    },
+    {
       "id": "rimefang",
       "sellValue": 9000
     },
     {
       "id": "riptide_dirk",
       "sellValue": 1200
+    },
+    {
+      "id": "riptide_handwraps",
+      "sellValue": 11000
     },
     {
       "id": "riveted_copper_girdle",
@@ -2957,6 +3378,10 @@
       "sellValue": 14000
     },
     {
+      "id": "seal_of_the_cryptwalker",
+      "sellValue": 11000
+    },
+    {
       "id": "seal_of_the_forgewall",
       "sellValue": 8000
     },
@@ -3023,6 +3448,10 @@
     {
       "id": "silkspun_satchel",
       "sellValue": 150
+    },
+    {
+      "id": "silkstalker_woven_vest",
+      "sellValue": 14000
     },
     {
       "id": "siltguard_helm",
@@ -3193,6 +3622,10 @@
       "sellValue": 10000
     },
     {
+      "id": "spun_venom_spaulders",
+      "sellValue": 12000
+    },
+    {
       "id": "staff_of_drowned_prayers",
       "sellValue": 300
     },
@@ -3228,6 +3661,10 @@
     {
       "id": "stonepot_stew",
       "sellValue": 90
+    },
+    {
+      "id": "storm_tuned_buckler",
+      "sellValue": 13000
     },
     {
       "id": "stormbark_mantle",
@@ -3397,6 +3834,10 @@
       "id": "tanning_agent",
       "sellValue": 4,
       "buyValue": 16
+    },
+    {
+      "id": "tempest_strike_grips",
+      "sellValue": 11000
     },
     {
       "id": "thorium_mining_pick",
@@ -3588,6 +4029,10 @@
     {
       "id": "veilsteel_blade",
       "sellValue": 950
+    },
+    {
+      "id": "venom_etched_waistcord",
+      "sellValue": 11000
     },
     {
       "id": "venom_gland",

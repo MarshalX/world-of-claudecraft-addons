@@ -300,7 +300,10 @@ export interface WorldApi {
    * false on every player, enemies in a duel, arena or battleground included.
    *
    * For a player the answer comes from the bout, as the game's nameplates do;
-   * outside a bout every player reads friendly. A PET answers as its OWNER.
+   * outside a bout every player reads friendly, INCLUDING an open-world PvP
+   * opponent the game paints red: its verdict pairs both players' /pvp flags with
+   * the zone rules under each, and those rules are not on the wire. A PET answers
+   * as its OWNER.
    *
    * ```js
    * if (woc.world.reaction(entity.id) === 'hostile') paintRed(entity);
@@ -501,11 +504,12 @@ export interface WorldApi {
    * polarity asked for. `offensive` strips a BENEFIT off an enemy; the default
    * strips a harmful effect off an ally.
    *
-   * IT ANSWERS TRUE FOR RAID MECHANICS THE GAME WILL REFUSE: the game's
+   * IT ANSWERS TRUE FOR BOSS MECHANICS THE GAME WILL REFUSE: the game's
    * `encounterOwned` flag is not on the wire. In the Ignivar, Varkhul and
-   * Nythraxis fights a true means "nothing the client can see forbids it", and
-   * some of those auras are player debuffs a healer will reach for (Nythraxis's
-   * Soul Rend, Ignivar's forge chains).
+   * Nythraxis fights and the Buried Hoards rift boss rooms a true means "nothing
+   * the client can see forbids it", and some of those auras are player debuffs a
+   * healer will reach for (Nythraxis's Soul Rend, Ignivar's forge chains, a hoard
+   * boss's frost slows).
    *
    * A party ROW is refused: it carries neither a school nor the flags. Use
    * `world.aurasOn('partyN')` for a member near enough to have an entity. Added in

@@ -95,6 +95,7 @@ const SLOTS = [
   'feet',
   'gloves',
   'ring',
+  'trinket',
   'mainhand',
   'offhand',
 ];
@@ -110,7 +111,10 @@ const SORTS = [
 ];
 const SORT_NAMES = SORTS.map((sort) => sort.label);
 
-/** The data file, the first-ranked source. */
+/**
+ * The data file, the first-ranked source. It is written in parts, each naming the whole list in
+ * `parts`, so this one is read first and the rest after it.
+ */
 const TABLE_FILE = 'items.json';
 
 const ITEM_TOPIC = 'item';
@@ -439,6 +443,14 @@ function readTable(value) {
     }
   }
   return rows;
+}
+
+/** The other parts the first one names. A file with no list is the whole table. */
+function laterParts(value) {
+  if (typeof value !== 'object' || value === null || !Array.isArray(value.parts)) {
+    return [];
+  }
+  return value.parts.filter((name) => typeof name === 'string' && name !== TABLE_FILE);
 }
 
 /** The version of the game the file was derived from, for the coverage line. */
@@ -1668,6 +1680,15 @@ async function boot() {
   if (listed === null) {
     throw new Error(`${TABLE_FILE} carries no "items" array`);
   }
+  const later = laterParts(file);
+  const read = await Promise.all(later.map((part) => woc.data(part)));
+  read.forEach((value, i) => {
+    const rows = readTable(value);
+    if (rows === null) {
+      throw new Error(`${later[i]} carries no "items" array`);
+    }
+    listed.push(...rows);
+  });
   for (const row of listed) {
     table.set(row.id, row);
   }

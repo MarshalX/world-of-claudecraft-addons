@@ -40,11 +40,15 @@ export interface DamageEvent extends PersonalEvent {
    */
   ability: string | null;
   /**
-   * The ability's stable content ID, on a PLAYER's primary direct hit only.
+   * The ability's stable content ID, on a PLAYER's primary direct hit, and on the
+   * few other hits the game names: a player pet's ranged bolt, a guardian's
+   * strike, some named procs, and sourceless environmental hazards. A pet bolt's
+   * id is the pet's own and has no icon art.
    *
    * NULL, not absent, on everything else (auto-attacks, periodic ticks, echoed or
-   * fanned-out copies, every mob and pet record), so test the value, not the key,
-   * and fall back to `school`. Absent only from a server predating the field.
+   * fanned-out copies, a pet's melee, every mob record), so test the value, not
+   * the key, and fall back to `school`. Absent only from a server predating the
+   * field.
    */
   abilityId?: string | null;
   kind: DamageKind;
@@ -194,6 +198,7 @@ export interface CastStartEvent extends PersonalEvent {
    *   'tool_recharge',
    *   'corpse_harvest',
    *   'demon_heal',
+   *   'allied_hearthstone',
    * ]);
    * ```
    *

@@ -10,6 +10,10 @@
 // and the module-private `DEBUFF_DISPLAY_AURA_IDS`. Both are answerable from the aura's id,
 // which is on the wire. The table lists what the game REFUSES, never what it allows.
 //
+// Some encounters stamp the boss's entity id onto an aura (`id: \`hoard_ice_${boss.id}\``). Such a
+// row carries the literal head with `perEntity: true`, and the addon matches the head followed by
+// an entity id. Any other template shape fails, since there is no id a row could name.
+//
 // Every `.ts` under src/sim is scanned rather than named, so a new encounter file is picked up.
 // Every reading fails hard when it finds nothing: writing what was found is a stale table under
 // a green run. Rows are objects rather than bare ids because Biome collapses an array of
@@ -41,8 +45,13 @@ const TS_SUFFIX = '.ts';
 const OWNED_FLAG = 'encounterOwned: true';
 /** `export const NAME = 'literal';` and its module-private form, on one line. */
 const STRING_CONST = /^(?:export )?const ([A-Za-z_$][\w$]*) = '([^']*)';$/gm;
-/** An object literal's own `id:`, whether it names a constant or spells the id out. */
-const ID_KEY = /(?:^|[^\w$.])id:\s*(?:'([^']*)'|([A-Za-z_$][\w$]*))/g;
+/**
+ * An object literal's own `id:`, whether it names a constant, spells the id out, or is a template
+ * (captured whole, head and placeholders, so its shape can be checked).
+ */
+const ID_KEY = /(?:^|[^\w$.])id:\s*(?:'([^']*)'|([A-Za-z_$][\w$]*)|`([^`]*)`)/g;
+/** The one template shape a row can express: a literal head, then an entity's own id, then nothing. */
+const PER_ENTITY_TEMPLATE = /^([a-z0-9_]+)\$\{\s*[A-Za-z_$][\w$]*\.id\s*\}$/;
 
 /** The first capture of the first match, or null. */
 function firstGroup(re, source) {
@@ -142,7 +151,7 @@ function literalStart(source, at) {
 function idTokenIn(span) {
   let token = null;
   for (const match of span.matchAll(ID_KEY)) {
-    token = { quoted: match[1], name: match[2] };
+    token = { quoted: match[1], name: match[2], template: match[3] };
   }
   return token;
 }
@@ -171,28 +180,46 @@ function lineAt(source, at) {
   return source.slice(NONE, at).split('\n').length;
 }
 
+/** The literal head of a per-entity template id, or a failure naming where. */
+function perEntityHead(template, where) {
+  const head = PER_ENTITY_TEMPLATE.exec(template)?.[ONE];
+  if (head === undefined) {
+    return fail(
+      `${where}: the template id \`${template}\` is not a literal head then an entity id`,
+    );
+  }
+  return head;
+}
+
+/** The row one encounter-owned flag stands for: the id its literal gives, and whether it is a head. */
+function ownedIdAt(source, at, where, consts) {
+  const start = literalStart(source, at);
+  if (start === null) {
+    return fail(`${where}: this ${OWNED_FLAG} sits in no object literal`);
+  }
+  const token = idTokenIn(source.slice(start, at));
+  if (token === null) {
+    return fail(`${where}: the literal carrying ${OWNED_FLAG} declares no id`);
+  }
+  if (token.template !== undefined) {
+    return { id: perEntityHead(token.template, where), perEntity: true };
+  }
+  if (token.quoted === undefined && consts.ambiguous.has(token.name)) {
+    return fail(`${where}: ${token.name} is declared more than once under ${SIM_DIR}`);
+  }
+  const id = token.quoted ?? consts.values.get(token.name);
+  if (id === undefined) {
+    return fail(`${where}: ${String(token.name)} is not a string constant under ${SIM_DIR}`);
+  }
+  return { id, perEntity: false };
+}
+
 /** Every aura id one file applies with the encounter-owned flag on it. */
 function ownedIdsIn(file, source, consts) {
   const found = [];
   let at = source.indexOf(OWNED_FLAG);
   while (at !== -ONE) {
-    const where = `${file}:${String(lineAt(source, at))}`;
-    const start = literalStart(source, at);
-    if (start === null) {
-      return fail(`${where}: this ${OWNED_FLAG} sits in no object literal`);
-    }
-    const token = idTokenIn(source.slice(start, at));
-    if (token === null) {
-      return fail(`${where}: the literal carrying ${OWNED_FLAG} declares no id`);
-    }
-    if (token.quoted === undefined && consts.ambiguous.has(token.name)) {
-      return fail(`${where}: ${token.name} is declared more than once under ${SIM_DIR}`);
-    }
-    const id = token.quoted ?? consts.values.get(token.name);
-    if (id === undefined) {
-      return fail(`${where}: ${String(token.name)} is not a string constant under ${SIM_DIR}`);
-    }
-    found.push(id);
+    found.push(ownedIdAt(source, at, `${file}:${String(lineAt(source, at))}`, consts));
     at = source.indexOf(OWNED_FLAG, at + OWNED_FLAG.length);
   }
   return found;
@@ -218,19 +245,20 @@ function displayIds(root) {
 
 /** One row per refused id, sorted so a regeneration diffs as content rather than as order. */
 function rowsFrom(owned, display) {
-  const reasons = new Map();
-  for (const id of owned) {
-    reasons.set(id, 'encounter');
+  const rows = new Map();
+  for (const { id, perEntity } of owned) {
+    if (rows.get(id)?.perEntity === !perEntity) {
+      return fail(`'${id}' is applied both as an exact id and as a per-entity head`);
+    }
+    rows.set(id, { id, reason: 'encounter', perEntity });
   }
   for (const id of display) {
     // Not overwritten: an id that is both is recorded as an encounter's.
-    if (!reasons.has(id)) {
-      reasons.set(id, 'display');
+    if (!rows.has(id)) {
+      rows.set(id, { id, reason: 'display', perEntity: false });
     }
   }
-  return [...reasons.entries()]
-    .map(([id, reason]) => ({ id, reason }))
-    .sort((a, b) => a.id.localeCompare(b.id));
+  return [...rows.values()].sort((a, b) => a.id.localeCompare(b.id));
 }
 
 function render(table) {

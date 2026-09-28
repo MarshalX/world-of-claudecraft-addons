@@ -102,15 +102,31 @@ describe('the professions reading', () => {
       craftSkills: { blacksmithing: 30 },
       gatheringProficiency: { mining: 12 },
       craftingIdentity: SYNCED,
-      activeMobileStationCraft: 'cooking',
+      activeMobileStationCrafts: Object.freeze(['cooking']),
     });
 
     expect(professions.identity.archetype).toBe('forgewright');
     expect(professions.mobileStation).toBe('cooking');
   });
 
+  // The game's member is a sorted, deduped LIST of every station serving you (your own plus a
+  // party member's shared one in range), and nothing on it says which is yours.
+  it('reads the first craft when more than one station serves you', () => {
+    const professions = professionsOf({
+      activeMobileStationCrafts: Object.freeze(['alchemy', 'cooking']),
+    });
+
+    expect(professions.mobileStation).toBe('alchemy');
+  });
+
   it('reads no mobile station as null', () => {
     expect(professionsOf({}).mobileStation).toBeNull();
+    expect(professionsOf({ activeMobileStationCrafts: Object.freeze([]) }).mobileStation).toBeNull();
+  });
+
+  // The singular name was never a member of the game's world, so reading it found nothing.
+  it('does not read a singular station member the game does not carry', () => {
+    expect(professionsOf({ activeMobileStationCraft: 'cooking' }).mobileStation).toBeNull();
   });
 
   it('answers unsynced zeroes for a world that has received nothing', () => {
@@ -159,10 +175,10 @@ describe('what counts as a change', () => {
   });
 
   it('covers the counters, the identity and the station in the professions key', () => {
-    const base = readProfessions({ craftingIdentity: SYNCED, activeMobileStationCraft: null });
+    const base = readProfessions({ craftingIdentity: SYNCED, activeMobileStationCrafts: [] });
     const moved = readProfessions({
       craftingIdentity: SYNCED,
-      activeMobileStationCraft: 'cooking',
+      activeMobileStationCrafts: ['cooking'],
     });
     const skilled = readProfessions({ craftingIdentity: SYNCED, craftSkills: { cooking: 1 } });
 

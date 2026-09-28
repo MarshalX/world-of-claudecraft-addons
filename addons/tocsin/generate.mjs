@@ -75,6 +75,7 @@ const SOURCES = {
   // pointed at an import line finds the name and no value behind it.
   nythraxisDreadCurse: 'src/sim/nythraxis_dread_curse.ts',
   nythraxisKingsWrath: 'src/sim/nythraxis_kings_wrath.ts',
+  nythraxisSoulRend: 'src/sim/nythraxis_soul_rend.ts',
   ignivar: 'src/sim/encounters/ignivar.ts',
   varkhul: 'src/sim/encounters/varkhul.ts',
 };
@@ -83,6 +84,7 @@ const SOURCE_NOTE =
   'src/sim/data.ts, src/sim/content/dungeons.ts, src/sim/types.ts, ' +
   'src/sim/mob/healer_channel.ts, src/sim/encounters/nythraxis.ts, ' +
   'src/sim/nythraxis_dread_curse.ts, src/sim/nythraxis_kings_wrath.ts, ' +
+  'src/sim/nythraxis_soul_rend.ts, ' +
   'src/sim/encounters/ignivar.ts, src/sim/encounters/varkhul.ts, ' +
   'src/sim/ignivar_arena.ts, src/sim/ignivar_meteors.ts, src/sim/ignivar_forge_wave.ts, ' +
   'src/sim/ignivar_forge_judgment.ts, src/sim/ignivar_raid_ids.ts, ' +
@@ -524,6 +526,11 @@ const NYTHRAXIS_KINGS_WRATH_AURA_IDS = {
   kingsWrath: 'nythraxis_kings_wrath',
 };
 
+/** Soul Rend's aura id is declared by its release module, which the encounter imports. */
+const NYTHRAXIS_SOUL_REND_AURA_IDS = {
+  soulRend: 'nythraxis_soul_rend',
+};
+
 const NYTHRAXIS_KINGS_WRATH_AURA_NAMES = {
   kingsWrath: "King's Wrath",
 };
@@ -534,7 +541,6 @@ const NYTHRAXIS_AURA_IDS = {
   transitionStun: 'nythraxis_transition_stun',
   deathlessStun: 'nythraxis_deathless_stun',
   wardstoneLit: 'nythraxis_wardstone_lit',
-  soulRend: 'nythraxis_soul_rend',
 };
 
 /**
@@ -737,7 +743,7 @@ function nythraxisBlocks(t, deps) {
     {
       kind: 'marks',
       label: 'Soul Rend',
-      aura: NYTHRAXIS_AURA_IDS.soulRend,
+      aura: NYTHRAXIS_SOUL_REND_AURA_IDS.soulRend,
       durationSeconds: t.soulRendDuration,
       stackRange: t.soulRendStackRange,
       count: t.soulRendMarks,
@@ -798,6 +804,11 @@ function nythraxisChecked(deps, source, constants) {
     deps.sources.nythraxisKingsWrath,
     NYTHRAXIS_KINGS_WRATH_AURA_IDS,
     NYTHRAXIS_KINGS_WRATH_AURA_NAMES,
+  );
+  extractedMechanic(
+    SOURCES.nythraxisSoulRend,
+    deps.sources.nythraxisSoulRend,
+    NYTHRAXIS_SOUL_REND_AURA_IDS,
   );
   return nythraxisTuning(constants, dreadCurseConstants, kingsWrathConstants);
 }

@@ -1,5 +1,5 @@
 {
-  "gameVersion": "0.43.3",
+  "gameVersion": "0.44.0",
   "source": "src/sim/data.ts, src/sim/quest_targets.ts, src/sim/types.ts, src/sim/content/farm_patches.ts, src/sim/content/*.ts",
   "zones": [
     {
@@ -4526,8 +4526,8 @@
     },
     {
       "mob": "hedge_knight",
-      "x": 414,
-      "z": 1079.5,
+      "x": 402,
+      "z": 1110,
       "radius": 3
     },
     {
@@ -4862,7 +4862,7 @@
     },
     {
       "item": "sprung_trap",
-      "positions": [[-92, 1750], [-116, 1756], [-80, 1770], [-72, 1756]]
+      "positions": [[-90, 1733], [-111, 1754], [-87, 1781], [-69, 1766]]
     },
     {
       "item": "amberfall_sap_bucket",
@@ -4935,6 +4935,38 @@
     {
       "item": "ps_ferry_bell",
       "positions": [[-279, -10], [-7.5, -100]]
+    },
+    {
+      "item": "eastbrook_freight_crate",
+      "positions": [[-63, -90], [-66, -94], [-70, -89], [-76, -95], [-86, -90], [-68, -78]]
+    },
+    {
+      "item": "eastbrook_freight_wagon",
+      "positions": [[-80, -82]]
+    },
+    {
+      "item": "leyline_cache",
+      "positions": [[482, 306]]
+    },
+    {
+      "item": "confection_game_box",
+      "positions": [[-325, 820]]
+    },
+    {
+      "item": "wreckfield_flotsam_crate",
+      "positions": [
+        [326.2, 140.6],
+        [344, 144.7],
+        [369.9, 136.3],
+        [322.1, 108.2],
+        [324.1, 108.2],
+        [387.1, 126.5],
+        [381.6, 126],
+        [342.2, 126.7],
+        [320.6, 130.05],
+        [366.1, 112.5],
+        [392.5, 125.3]
+      ]
     }
   ],
   "npcs": [
@@ -5537,6 +5569,30 @@
       "name": "Tidewarden Nel",
       "x": -371,
       "z": -13
+    },
+    {
+      "id": "npc_rift_watch_quartermaster",
+      "name": "Quartermaster Vaelen",
+      "x": -302,
+      "z": 812
+    },
+    {
+      "id": "npc_church_order_quartermaster",
+      "name": "Templar Althea",
+      "x": 8,
+      "z": -80
+    },
+    {
+      "id": "npc_automaton_quartermaster",
+      "name": "Artificer Tobrin",
+      "x": 402,
+      "z": 1912
+    },
+    {
+      "id": "npc_wq_taskmaster",
+      "name": "Taskmaster Kaelen",
+      "x": -5,
+      "z": -95
     }
   ],
   "nodes": [
@@ -6611,6 +6667,21 @@
       "id": "esc_fs_bram",
       "x": 252,
       "z": -8
+    },
+    {
+      "id": "esc_wq_eastbrook_caravan",
+      "x": -92,
+      "z": -32
+    },
+    {
+      "id": "esc_wq_willowfen_caravan",
+      "x": -412,
+      "z": 442
+    },
+    {
+      "id": "esc_wq_frostveil_caravan",
+      "x": -12,
+      "z": 1578
     }
   ],
   "drops": [

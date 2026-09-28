@@ -62,7 +62,7 @@ It carries TWO rules: the harmful kinds and refused ids behind `world.harmful`/`
 
 ### `addons/*/generate.mjs`
 
-`emberwatch/rules.json`, `ledgerline/floors.json`, `longwatch/mobs.json`, `longwatch/rares.json`, `lorebind/items.json`, `purelight/refused.json`, `satchel/bags.json`, `tocsin/bosses.json`, `trailmark/quests.json`, `veinsight/nodes.json`, `wayfarer/atlas.json`. The list goes stale when an addon lands; `ls addons/*/generate.mjs` and the outputs `pnpm tables` names are the authority.
+`emberwatch/rules.json`, `ledgerline/floors.json`, `longwatch/mobs.json`, `longwatch/rares.json`, `lorebind/items.json` (with `items-2.json` and on: the generator splits it into parts under the per-file cap and checks the manifest declares them), `purelight/refused.json`, `satchel/bags.json`, `tocsin/bosses.json`, `trailmark/quests.json`, `veinsight/nodes.json`, `wayfarer/atlas.json`. The list goes stale when an addon lands; `ls addons/*/generate.mjs` and the outputs `pnpm tables` names are the authority.
 
 **The flag forms disagree.** Five take `--game=<path>` only (`longwatch`, `lorebind`, `trailmark`, `veinsight`, `wayfarer`); five accept both (`emberwatch`, `ledgerline`, `purelight`, `satchel`, `tocsin`). The wrong one trips the required-argument error. Classify a generator by RUNNING it both ways, never by reading its source: the parsers do not share an idiom (`emberwatch` matches the inline form with a regex) and the refusal wording differs per generator, so grepping for one phrase misclassifies the rest.
 

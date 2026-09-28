@@ -13,7 +13,8 @@
 // `dispellable` answers true for encounter effects the game will not remove. `refused.json`,
 // written by `generate.mjs` from a checkout, lists every id refused for a reason the wire cannot
 // carry; those are held back, and a held tile says so and names the game version the table was read
-// at, so a strip that empties mid-fight does not read as zero.
+// at, so a strip that empties mid-fight does not read as zero. A `perEntity` row is the head of an id
+// the encounter finishes with the boss's entity id, so it matches that head followed by digits.
 //
 // Only an ENTITY is read, never a party row: a row carries neither school nor `unbreakableControl`,
 // the two clauses whose absence costs a global. An aura's `value` and a row's `neg` are magnitudes
@@ -99,7 +100,20 @@ let arrived = false;
  * at. Empty until the table lands.
  */
 const refused = new Set();
+/** The heads of refused ids an encounter finishes with an entity id. */
+const refusedHeads = [];
 let refusedAt = null;
+
+const ENTITY_ID_TAIL = /^\d+$/;
+
+function isRefused(id) {
+  if (refused.has(id)) {
+    return true;
+  }
+  return refusedHeads.some(
+    (head) => id.startsWith(head) && ENTITY_ID_TAIL.test(id.slice(head.length)),
+  );
+}
 
 /**
  * Take the table in. A malformed one is logged and the strip goes back to offering encounter
@@ -112,7 +126,9 @@ function readRefused(table) {
     return;
   }
   for (const row of rows) {
-    if (typeof row?.id === 'string') {
+    if (typeof row?.id === 'string' && row.perEntity === true) {
+      refusedHeads.push(row.id);
+    } else if (typeof row?.id === 'string') {
       refused.add(row.id);
     }
   }
@@ -332,7 +348,7 @@ function removableOn(unit, floor, tally) {
   const found = [];
   for (const aura of unit.auras ?? []) {
     if (woc.world.dispellable(aura, unit.hostile) && aura.remaining >= floor) {
-      if (refused.has(aura.id)) {
+      if (isRefused(aura.id)) {
         tally.held += 1;
       } else {
         found.push(effectFrom(unit, aura, keyFor(unit, aura, seen)));

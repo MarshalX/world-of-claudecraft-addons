@@ -139,8 +139,18 @@ export interface Entity {
    * guild for a player who has pledged to one. Display only.
    */
   guildTier: number;
-  /** A Book of Deeds deed id, never display text. Absent for the untitled. */
+  /**
+   * The worn title as an id, never display text, null or absent for the untitled. A Book of Deeds
+   * deed id, or a developer-badge rung under the game's `DEV_BADGE_TITLE_PREFIX` (`dev:<rung>`,
+   * `src/sim/dev_badge_titles.ts`), which is not a deed.
+   */
   title?: string | null;
+  /**
+   * The chosen talent spec as an id (`'arms'`, never its display name), null for a player with no
+   * spec yet and on every mob, npc and object. Sent by `writePlayerIdentityWire`
+   * (`server/player_identity_wire.ts`), a player-identity line.
+   */
+  specId: string | null;
 
   pos: Vec3;
   /** The position before this tick, which the game interpolates from. */
@@ -265,6 +275,12 @@ export interface Entity {
   /** The /afk display bit. The game draws an `<AFK>` prefix on the nameplate. */
   afk: boolean;
   /**
+   * The /pvp world PvP flag. Sent as `pvp` by `dynamicFields` (`server/game.ts`) on every
+   * entity's record, and decoded on every one, so it is false, not stale, on anything unflagged.
+   * Only players raise it.
+   */
+  pvpFlag: boolean;
+  /**
    * Sitting, EATING or DRINKING: the wire folds all three into one bit, so they cannot be told
    * apart.
    */
@@ -339,7 +355,8 @@ export type EquipSlot =
   | 'gloves'
   | 'feet'
   | 'ring1'
-  | 'ring2';
+  | 'ring2'
+  | 'trinket';
 
 /** One stack, wherever a stack is read: bags, bank, a letter, a corpse, a page. */
 export interface InvSlot {

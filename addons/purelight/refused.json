@@ -1,114 +1,186 @@
 {
-  "gameVersion": "0.43.3",
+  "gameVersion": "0.44.0",
   "source": "src/sim (every applyAura literal carrying encounterOwned), src/sim/aura_classify.ts",
   "auras": [
     {
+      "id": "hoard_bat_screech_",
+      "reason": "encounter",
+      "perEntity": true
+    },
+    {
+      "id": "hoard_blizzard_",
+      "reason": "encounter",
+      "perEntity": true
+    },
+    {
+      "id": "hoard_boulder_stagger",
+      "reason": "encounter",
+      "perEntity": false
+    },
+    {
+      "id": "hoard_bound_pulsars",
+      "reason": "encounter",
+      "perEntity": false
+    },
+    {
+      "id": "hoard_harvested_soul",
+      "reason": "encounter",
+      "perEntity": false
+    },
+    {
+      "id": "hoard_ice_",
+      "reason": "encounter",
+      "perEntity": true
+    },
+    {
+      "id": "hoard_pulsar_ward",
+      "reason": "encounter",
+      "perEntity": false
+    },
+    {
+      "id": "hoard_soul_burden",
+      "reason": "encounter",
+      "perEntity": false
+    },
+    {
+      "id": "hoard_storm_surge",
+      "reason": "encounter",
+      "perEntity": false
+    },
+    {
       "id": "ignivar_brand_of_the_pyre",
-      "reason": "encounter"
+      "reason": "encounter",
+      "perEntity": false
     },
     {
       "id": "ignivar_forge_chains",
-      "reason": "encounter"
+      "reason": "encounter",
+      "perEntity": false
     },
     {
       "id": "ignivar_last_inferno",
-      "reason": "encounter"
+      "reason": "encounter",
+      "perEntity": false
     },
     {
       "id": "ignivar_molten_armor",
-      "reason": "encounter"
+      "reason": "encounter",
+      "perEntity": false
     },
     {
       "id": "nythraxis_ascension",
-      "reason": "encounter"
+      "reason": "encounter",
+      "perEntity": false
     },
     {
       "id": "nythraxis_ascension_haste",
-      "reason": "encounter"
+      "reason": "encounter",
+      "perEntity": false
     },
     {
       "id": "nythraxis_bone_storm",
-      "reason": "encounter"
+      "reason": "encounter",
+      "perEntity": false
     },
     {
       "id": "nythraxis_bound",
-      "reason": "encounter"
+      "reason": "encounter",
+      "perEntity": false
     },
     {
       "id": "nythraxis_bound_stun",
-      "reason": "encounter"
+      "reason": "encounter",
+      "perEntity": false
     },
     {
       "id": "nythraxis_crown_endures",
-      "reason": "encounter"
+      "reason": "encounter",
+      "perEntity": false
     },
     {
       "id": "nythraxis_crown_endures_haste",
-      "reason": "encounter"
+      "reason": "encounter",
+      "perEntity": false
     },
     {
       "id": "nythraxis_dread_curse",
-      "reason": "encounter"
+      "reason": "encounter",
+      "perEntity": false
     },
     {
       "id": "nythraxis_impaled",
-      "reason": "encounter"
+      "reason": "encounter",
+      "perEntity": false
     },
     {
       "id": "nythraxis_kings_wrath",
-      "reason": "encounter"
+      "reason": "encounter",
+      "perEntity": false
     },
     {
       "id": "nythraxis_soul_rend",
-      "reason": "encounter"
+      "reason": "encounter",
+      "perEntity": false
     },
     {
       "id": "nythraxis_unbound",
-      "reason": "encounter"
+      "reason": "encounter",
+      "perEntity": false
     },
     {
       "id": "shaman_stormsurge_ready",
-      "reason": "display"
+      "reason": "display",
+      "perEntity": false
     },
     {
       "id": "varkhul_cinder_orbs",
-      "reason": "encounter"
+      "reason": "encounter",
+      "perEntity": false
     },
     {
       "id": "varkhul_crucible_exposure",
-      "reason": "encounter"
+      "reason": "encounter",
+      "perEntity": false
     },
     {
       "id": "varkhul_forge_shattered",
-      "reason": "encounter"
+      "reason": "encounter",
+      "perEntity": false
     },
     {
       "id": "varkhul_makers_brand",
-      "reason": "encounter"
+      "reason": "encounter",
+      "perEntity": false
     },
     {
       "id": "varkhul_masterpiece_unbound",
-      "reason": "encounter"
+      "reason": "encounter",
+      "perEntity": false
     },
     {
       "id": "varkhul_masters_assembly",
-      "reason": "encounter"
+      "reason": "encounter",
+      "perEntity": false
     },
     {
       "id": "varkhul_red_hot_metal",
-      "reason": "encounter"
+      "reason": "encounter",
+      "perEntity": false
     },
     {
       "id": "varkhul_red_hot_metal_absorb",
-      "reason": "encounter"
+      "reason": "encounter",
+      "perEntity": false
     },
     {
       "id": "varkhul_shared_pyre",
-      "reason": "encounter"
+      "reason": "encounter",
+      "perEntity": false
     },
     {
       "id": "varkhul_tempered_wound",
-      "reason": "encounter"
+      "reason": "encounter",
+      "perEntity": false
     }
   ]
 }

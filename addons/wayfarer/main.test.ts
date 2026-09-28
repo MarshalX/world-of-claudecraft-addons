@@ -30,7 +30,7 @@ const SETTLE_TURNS = 12;
 
 /** What the shipped atlas carries. Update on a regeneration that changes the content. */
 const ZONE_COUNT = 15;
-const POI_COUNT = 112;
+const POI_COUNT = 113;
 const GRAVEYARD_COUNT = 20;
 const MAILBOX_COUNT = 15;
 const PORTAL_COUNT = 1;
@@ -402,6 +402,12 @@ describe('the atlas it carries', () => {
 
   // By id as well as by count: a count cannot say WHICH row moved. This row is read through
   // a same-module constant, the case `withLocalConstants` in the generator handles.
+  it('carries The Wreck on the Farshore isle, at the point the game authored it', () => {
+    const isle = ATLAS.zones.find((zone) => zone.id === 'farshore_isle');
+
+    expect(isle?.pois).toContainEqual({ id: 'the_wreck', label: 'The Wreck', x: 306, z: 123.05 });
+  });
+
   it('carries the Last Keep churchyard, at the point the game authored it', () => {
     const yard = ATLAS.graveyards.find((one) => one.id === 'gy_last_keep');
 

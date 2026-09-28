@@ -1,15 +1,27 @@
 {
-  "gameVersion": "0.43.3",
+  "gameVersion": "0.44.0",
   "source": "src/sim/data.ts (ITEMS), src/sim/bags.ts (BACKPACK_SLOTS, BAG_SOCKETS), src/sim/bag_pools.ts (isMaterialsOnlyBag, bagSlotsOf), src/sim/material_ids.ts (MATERIAL_ITEM_IDS)",
   "note": "The carried pool split. A general pool is backpackSlots plus every non-materialsOnly equipped bag; a materials pool is every materialsOnly one. A non-material item can only take general headroom; a material takes materials headroom first and spills into general. materials lists every id the game counts as one, derived rather than approximated by kind.",
   "backpackSlots": 16,
   "bagSockets": 4,
   "bags": [
     {
+      "id": "allied_vanguard_duffel",
+      "name": "Allied Vanguard Duffel",
+      "slots": 16,
+      "materialsOnly": false
+    },
+    {
       "id": "burlap_reagent_pouch",
       "name": "Burlap Reagent Pouch",
       "slots": 8,
       "materialsOnly": true
+    },
+    {
+      "id": "clockwork_tinkers_pack",
+      "name": "Clockwork Tinker's Pack",
+      "slots": 14,
+      "materialsOnly": false
     },
     {
       "id": "duskweave_bag",
@@ -57,6 +69,12 @@
       "id": "resonant_weave_bag",
       "name": "Resonantweave Bag",
       "slots": 16,
+      "materialsOnly": false
+    },
+    {
+      "id": "rift_surveyors_satchel",
+      "name": "Rift Surveyor's Satchel",
+      "slots": 14,
       "materialsOnly": false
     },
     {
